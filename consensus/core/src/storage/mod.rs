@@ -13,8 +13,8 @@ use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    block::{BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitIndex, TrustedCommit},
+    block::{BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    commit::{CommitIndex, CommitRef, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -58,8 +58,11 @@ pub(crate) trait Store: Send + Sync {
     /// Reads all blocks voting on a particular commit.
     fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>>;
 
-    /// Reads the last commit info, including last committed round per authority.
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>>;
+    /// Reads the commit info at the given commit index.
+    fn read_commit_info(&self, commit_index: CommitIndex) -> ConsensusResult<Option<CommitInfo>>;
+
+    /// Reads the last commit info, written atomically with the last commit.
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>>;
 }
 
 /// Represents data to be written to the store together atomically.
@@ -67,19 +70,19 @@ pub(crate) trait Store: Send + Sync {
 pub(crate) struct WriteBatch {
     pub(crate) blocks: Vec<VerifiedBlock>,
     pub(crate) commits: Vec<TrustedCommit>,
-    pub(crate) last_committed_rounds: Vec<Round>,
+    pub(crate) last_commit_info: Option<CommitInfo>,
 }
 
 impl WriteBatch {
     pub(crate) fn new(
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
-        last_committed_rounds: Vec<Round>,
+        last_commit_info: Option<CommitInfo>,
     ) -> Self {
         WriteBatch {
             blocks,
             commits,
-            last_committed_rounds,
+            last_commit_info,
         }
     }
 
@@ -100,9 +103,20 @@ impl WriteBatch {
 
 /// Per-commit properties that can be derived and do not need to be part of the Commit struct.
 /// Only the latest version is needed for CommitInfo, but more versions are stored for
-/// debugging and potential recovery.
+/// debugging and potentially restoring from an earlier state.
 // TODO: version this struct.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(crate) struct CommitInfo {
-    pub(crate) last_committed_rounds: Vec<Round>,
+    pub(crate) committed_rounds: Vec<Round>,
+    pub(crate) timestamp_ms: BlockTimestampMs,
+}
+
+impl CommitInfo {
+    // Returns an new CommitInfo.
+    pub(crate) fn new(committed_rounds: Vec<Round>, timestamp_ms: BlockTimestampMs) -> Self {
+        CommitInfo {
+            committed_rounds,
+            timestamp_ms,
+        }
+    }
 }

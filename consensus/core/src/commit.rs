@@ -18,7 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
-    storage::Store,
+    storage::{CommitInfo, Store},
 };
 
 /// Index of a commit among all consensus commits.
@@ -286,7 +286,7 @@ impl CommittedSubDag {
     pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        timestamp_ms: u64,
+        timestamp_ms: BlockTimestampMs,
         commit_index: CommitIndex,
     ) -> Self {
         Self {
@@ -337,11 +337,12 @@ impl fmt::Debug for CommittedSubDag {
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
 pub fn load_committed_subdag_from_store(
-    block_store: &dyn Store,
+    store: &dyn Store,
     commit: TrustedCommit,
+    commit_info: CommitInfo,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
-    let commit_blocks = block_store
+    let commit_blocks = store
         .read_blocks(commit.blocks())
         .expect("We should have the block referenced in the commit data");
     let blocks = commit_blocks
@@ -358,8 +359,12 @@ pub fn load_committed_subdag_from_store(
         .collect::<Vec<_>>();
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
-    let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-    CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit.index())
+    CommittedSubDag::new(
+        leader_block_ref,
+        blocks,
+        commit_info.timestamp_ms,
+        commit.index(),
+    )
 }
 
 pub struct CommitConsumer {
@@ -518,7 +523,7 @@ mod tests {
     };
 
     #[test]
-    fn test_new_subdag_from_commit_data() {
+    fn test_new_subdag_from_commit() {
         let store = Arc::new(MemStore::new());
         let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
@@ -579,8 +584,11 @@ mod tests {
             leader_ref,
             blocks.clone(),
         );
-
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
+        let commit_info = CommitInfo {
+            committed_rounds: vec![0; num_authorities as usize],
+            timestamp_ms: leader_block.timestamp_ms(),
+        };
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit, commit_info);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(

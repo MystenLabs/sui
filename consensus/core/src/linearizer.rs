@@ -34,7 +34,10 @@ impl Linearizer {
         let mut to_commit = Vec::new();
         let mut committed = HashSet::new();
 
-        let timestamp_ms = leader_block.timestamp_ms();
+        let dag_state = self.dag_state.read();
+        let timestamp_ms = leader_block
+            .timestamp_ms()
+            .max(dag_state.last_commit_timestamp_ms());
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
         assert!(committed.insert(leader_block_ref));
@@ -42,9 +45,7 @@ impl Linearizer {
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
 
-            let ancestors: Vec<VerifiedBlock> = self
-                .dag_state
-                .read()
+            let ancestors: Vec<VerifiedBlock> = dag_state
                 .get_blocks(
                     &x.ancestors()
                         .iter()

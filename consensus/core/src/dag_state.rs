@@ -15,13 +15,13 @@ use tracing::{debug, error};
 
 use crate::{
     block::{
-        genesis_blocks, timestamp_utc_ms, BlockAPI, BlockDigest, BlockRef, Round, Slot,
-        VerifiedBlock, GENESIS_ROUND,
+        genesis_blocks, timestamp_utc_ms, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round,
+        Slot, VerifiedBlock, GENESIS_ROUND,
     },
     commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
     context::Context,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    storage::{Store, WriteBatch},
+    storage::{CommitInfo, Store, WriteBatch},
 };
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
@@ -57,6 +57,9 @@ pub(crate) struct DagState {
     // Last committed rounds per authority.
     last_committed_rounds: Vec<Round>,
 
+    // Last commit timestamp.
+    last_commit_timestamp_ms: BlockTimestampMs,
+
     // Commit votes pending to be included in new blocks.
     // TODO: limit to 1st commit per round with multi-leader.
     pending_commit_votes: VecDeque<CommitVote>,
@@ -86,16 +89,17 @@ impl DagState {
         let last_commit = store
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-        let last_committed_rounds = {
-            let commit_info = store
-                .read_last_commit_info()
-                .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-            if let Some(commit_info) = commit_info {
-                commit_info.last_committed_rounds
+        let (last_committed_rounds, last_commit_timestamp_ms) =
+            if let Some(commit) = last_commit.as_ref() {
+                let (commit_ref, commit_info) = store
+                    .read_last_commit_info()
+                    .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
+                    .unwrap_or_else(|| panic!("Last commit info should be available."));
+                assert_eq!(commit_ref, commit.reference());
+                (commit_info.committed_rounds, commit_info.timestamp_ms)
             } else {
-                vec![0; num_authorities]
-            }
-        };
+                (vec![0; num_authorities], 0)
+            };
 
         let mut state = Self {
             context,
@@ -106,6 +110,7 @@ impl DagState {
             last_commit,
             last_commit_round_advancement_time: None,
             last_committed_rounds: last_committed_rounds.clone(),
+            last_commit_timestamp_ms,
             pending_commit_votes: VecDeque::new(),
             blocks_to_write: vec![],
             commits_to_write: vec![],
@@ -542,6 +547,12 @@ impl DagState {
             );
         }
 
+        // Ensure commit timestamp cannot go backwards.
+        let leader_block = self.get_block(&commit.leader()).unwrap();
+        self.last_commit_timestamp_ms = self
+            .last_commit_timestamp_ms
+            .max(leader_block.timestamp_ms());
+
         self.pending_commit_votes.push_back(commit.reference());
         self.commits_to_write.push(commit);
     }
@@ -597,6 +608,11 @@ impl DagState {
         self.last_committed_rounds.clone()
     }
 
+    /// Timestamp of the last commit.
+    pub(crate) fn last_commit_timestamp_ms(&self) -> BlockTimestampMs {
+        self.last_commit_timestamp_ms
+    }
+
     /// After each flush, DagState becomes persisted in storage and it expected to recover
     /// all internal states from storage after restarts.
     pub(crate) fn flush(&mut self) {
@@ -620,12 +636,20 @@ impl DagState {
             commits.len(),
             commits.iter().map(|c| c.reference().to_string()).join(","),
         );
+        let last_commit_info = if commits.is_empty() {
+            None
+        } else {
+            Some(CommitInfo::new(
+                self.last_committed_rounds.clone(),
+                self.last_commit_timestamp_ms,
+            ))
+        };
         self.store
             .write(WriteBatch::new(
                 blocks,
                 commits,
                 // TODO: limit to write at most once per commit round with multi-leader.
-                self.last_committed_rounds.clone(),
+                last_commit_info,
             ))
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
         self.context
@@ -1228,7 +1252,7 @@ mod test {
         }
 
         // Add the blocks from first 5 rounds and first 5 commits to the dag state
-        let i = blocks.iter().position(|b| b.round() == 5).unwrap();
+        let i = blocks.iter().position(|b| b.round() == 6).unwrap();
         let temp_blocks = blocks.split_off(i);
         dag_state.accept_blocks(blocks.clone());
         let temp_commits = commits.split_off(5);
