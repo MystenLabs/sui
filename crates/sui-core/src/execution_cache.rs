@@ -70,7 +70,22 @@ pub trait ExecutionCacheCommit: Send + Sync {
     fn commit_transaction_outputs<'a>(
         &'a self,
         epoch: EpochId,
-        digest: &'a [TransactionDigest],
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult>;
+
+    /// Durably commit transactions (but not their outputs) to the database.
+    /// Called before writing a locally built checkpoint to the CheckpointStore, so that
+    /// the inputs of the checkpoint cannot be lost.
+    /// These transactions are guaranteed to be final unless this validator
+    /// forks (i.e. constructs a checkpoint which will never be certified). In this case
+    /// some non-final transactions could be left in the database.
+    ///
+    /// This is an intermediate solution until we delay commits to the epoch db. After
+    /// we have done that, crash recovery will be done by re-processing consensus commits
+    /// and pending_consensus_transactions, and this method can be removed.
+    fn persist_transactions<'a>(
+        &'a self,
+        digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult>;
 }
 

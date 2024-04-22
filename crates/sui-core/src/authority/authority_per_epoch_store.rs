@@ -1374,9 +1374,9 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Deletes one pending certificate.
+    /// Deletes many pending certificates.
     #[instrument(level = "trace", skip_all)]
-    pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
+    pub fn multi_remove_pending_execution(&self, digests: &[TransactionDigest]) -> SuiResult<()> {
         let tables = match self.tables() {
             Ok(tables) => tables,
             // After Epoch ends, it is no longer necessary to remove pending transactions
@@ -1384,7 +1384,9 @@ impl AuthorityPerEpochStore {
             Err(SuiError::EpochEnded(_)) => return Ok(()),
             Err(e) => return Err(e),
         };
-        tables.pending_execution.remove(digest)?;
+        let mut batch = tables.pending_execution.batch();
+        batch.delete_batch(&tables.pending_execution, digests)?;
+        batch.write()?;
         Ok(())
     }
 

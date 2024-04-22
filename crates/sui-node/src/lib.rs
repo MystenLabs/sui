@@ -641,6 +641,10 @@ impl SuiNode {
                 .unwrap();
         }
 
+        checkpoint_store
+            .reexecute_local_checkpoints(&state, &epoch_store)
+            .await;
+
         // Start the loop that receives new randomness and generates transactions for it.
         RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);
 
