@@ -241,6 +241,7 @@ where
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            dag_state.clone(),
         );
 
         let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
@@ -428,6 +429,7 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
@@ -502,6 +504,7 @@ mod tests {
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            dag_state.clone(),
         );
         let authority_service = Arc::new(AuthorityService::new(
             context.clone(),

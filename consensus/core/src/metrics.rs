@@ -19,6 +19,11 @@ const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
     4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5, 9.0, 9.5, 10.,
 ];
 
+const COMMITTED_BLOCKS_BUCKETS: &[f64] = &[
+    1.0, 2.0, 4.0, 8.0, 10.0, 20.0, 40.0, 80.0, 100.0, 150.0, 200.0, 400.0, 800.0, 1000.0, 2000.0,
+    3000.0,
+];
+
 const LATENCY_SEC_BUCKETS: &[f64] = &[
     0.001, 0.005, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6, 0.7, 0.8, 0.9,
     1.0, 1.2, 1.4, 1.6, 1.8, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0, 5.5, 6.0, 6.5, 7.0, 7.5, 8.0, 8.5,
@@ -100,13 +105,15 @@ pub(crate) struct NodeMetrics {
     pub commit_round_advancement_interval: Histogram,
     pub last_decided_leader_round: IntGauge,
     pub leader_timeout_total: IntCounter,
-    pub missing_blocks_total: IntGauge,
+    pub missing_blocks_total: IntCounter,
+    pub missing_blocks_after_fetch_total: IntCounter,
     pub quorum_receive_latency: Histogram,
     pub reputation_scores: IntGaugeVec,
     pub scope_processing_time: HistogramVec,
     pub sub_dags_per_commit_count: Histogram,
     pub block_suspensions: IntCounterVec,
     pub block_unsuspensions: IntCounterVec,
+    pub suspended_block_time: HistogramVec,
     pub block_manager_suspended_blocks: IntGauge,
     pub block_manager_missing_ancestors: IntGauge,
     pub block_manager_missing_blocks: IntGauge,
@@ -130,6 +137,7 @@ impl NodeMetrics {
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
                 "The time taken between block creation and block commit.",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             block_proposed: register_int_counter_vec_with_registry!(
@@ -159,6 +167,7 @@ impl NodeMetrics {
             blocks_per_commit_count: register_histogram_with_registry!(
                 "blocks_per_commit_count",
                 "The number of blocks per commit.",
+                COMMITTED_BLOCKS_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             broadcaster_rtt_estimate_ms: register_int_gauge_vec_with_registry!(
@@ -271,9 +280,14 @@ impl NodeMetrics {
                 "Total number of leader timeouts",
                 registry,
             ).unwrap(),
-            missing_blocks_total: register_int_gauge_with_registry!(
+            missing_blocks_total: register_int_counter_with_registry!(
                 "missing_blocks_total",
-                "Total number of missing blocks",
+                "Total cumulative number of missing blocks",
+                registry,
+            ).unwrap(),
+            missing_blocks_after_fetch_total: register_int_counter_with_registry!(
+                "missing_blocks_after_fetch_total",
+                "Total number of missing blocks after fetching blocks from peer",
                 registry,
             ).unwrap(),
             quorum_receive_latency: register_histogram_with_registry!(
@@ -308,6 +322,12 @@ impl NodeMetrics {
             block_unsuspensions: register_int_counter_vec_with_registry!(
                 "block_unsuspensions",
                 "The number of block unsuspensions.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            suspended_block_time: register_histogram_vec_with_registry!(
+                "suspended_block_time",
+                "The time for which a block remains suspended",
                 &["authority"],
                 registry,
             ).unwrap(),

@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
@@ -22,6 +23,7 @@ use crate::{
 struct SuspendedBlock {
     block: VerifiedBlock,
     missing_ancestors: BTreeSet<BlockRef>,
+    timestamp: Instant,
 }
 
 impl SuspendedBlock {
@@ -29,6 +31,7 @@ impl SuspendedBlock {
         Self {
             block,
             missing_ancestors,
+            timestamp: Instant::now(),
         }
     }
 }
@@ -74,7 +77,7 @@ impl BlockManager {
 
     /// Tries to accept the provided blocks assuming that all their causal history exists. The method
     /// returns all the blocks that have been successfully processed in round ascending order, that includes also previously
-    /// suspended blocks that have now been able to get accepted. Method also returns a set with the new missing ancestor blocks.
+    /// suspended blocks that have now been able to get accepted. Method also returns a set with the missing ancestor blocks.
     pub(crate) fn try_accept_blocks(
         &mut self,
         mut blocks: Vec<VerifiedBlock>,
@@ -88,87 +91,86 @@ impl BlockManager {
         );
 
         let mut accepted_blocks = vec![];
-        let missing_blocks_before = self.missing_blocks.clone();
+        let mut missing_blocks = BTreeSet::new();
 
         for block in blocks {
-            if let Some(block) = self.try_accept_one_block(block) {
-                // Try to unsuspend any children blocks.
-                let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
+            // Try to accept the input block.
+            let block = match self.try_accept_one_block(block) {
+                TryAcceptResult::Accepted(block) => block,
+                TryAcceptResult::Suspended(ancestors_to_fetch) => {
+                    missing_blocks.extend(ancestors_to_fetch);
+                    continue;
+                }
+                TryAcceptResult::Processed => continue,
+            };
 
-                // Try to verify the block with ancestor blocks.
-                let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
-                let mut blocks_to_reject: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
-                {
-                    'block: for b in iter::once(block).chain(unsuspended_blocks) {
-                        let ancestors = self.dag_state.read().get_blocks(b.ancestors());
-                        assert_eq!(b.ancestors().len(), ancestors.len());
-                        let mut ancestor_blocks = vec![];
-                        'ancestor: for (ancestor_ref, found) in
-                            b.ancestors().iter().zip(ancestors.into_iter())
-                        {
-                            if let Some(found_block) = found {
-                                // This invariant should be guaranteed by DagState.
-                                assert_eq!(ancestor_ref, &found_block.reference());
-                                ancestor_blocks.push(found_block);
-                                continue 'ancestor;
-                            }
-                            // blocks_to_accept have not been added to DagState yet, but they
-                            // can appear in ancestors.
-                            if blocks_to_accept.contains_key(ancestor_ref) {
-                                ancestor_blocks.push(blocks_to_accept[ancestor_ref].clone());
-                                continue 'ancestor;
-                            }
-                            // If an ancestor is already rejected, reject this block as well.
-                            if blocks_to_reject.contains_key(ancestor_ref) {
-                                blocks_to_reject.insert(b.reference(), b);
-                                continue 'block;
-                            }
-                            panic!("Unsuspended block {:?} has a missing ancestor! Ancestor not found in DagState: {:?}", b, ancestor_ref);
+            // If the block is accepted, try to unsuspend its children blocks if any.
+            let unsuspended_blocks = self.try_unsuspend_children_blocks(&block);
+
+            // Try to verify the block and its children for timestamp, with ancestor blocks.
+            let mut blocks_to_accept: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
+            let mut blocks_to_reject: BTreeMap<BlockRef, VerifiedBlock> = BTreeMap::new();
+            {
+                'block: for b in iter::once(block).chain(unsuspended_blocks) {
+                    let ancestors = self.dag_state.read().get_blocks(b.ancestors());
+                    assert_eq!(b.ancestors().len(), ancestors.len());
+                    let mut ancestor_blocks = vec![];
+                    'ancestor: for (ancestor_ref, found) in
+                        b.ancestors().iter().zip(ancestors.into_iter())
+                    {
+                        if let Some(found_block) = found {
+                            // This invariant should be guaranteed by DagState.
+                            assert_eq!(ancestor_ref, &found_block.reference());
+                            ancestor_blocks.push(found_block);
+                            continue 'ancestor;
                         }
-                        if let Err(e) = self.block_verifier.check_ancestors(&b, &ancestor_blocks) {
-                            warn!("Block {:?} failed to verify ancestors: {}", b, e);
+                        // blocks_to_accept have not been added to DagState yet, but they
+                        // can appear in ancestors.
+                        if blocks_to_accept.contains_key(ancestor_ref) {
+                            ancestor_blocks.push(blocks_to_accept[ancestor_ref].clone());
+                            continue 'ancestor;
+                        }
+                        // If an ancestor is already rejected, reject this block as well.
+                        if blocks_to_reject.contains_key(ancestor_ref) {
                             blocks_to_reject.insert(b.reference(), b);
-                        } else {
-                            blocks_to_accept.insert(b.reference(), b);
+                            continue 'block;
                         }
+                        panic!("Unsuspended block {:?} has a missing ancestor! Ancestor not found in DagState: {:?}", b, ancestor_ref);
+                    }
+                    if let Err(e) = self.block_verifier.check_ancestors(&b, &ancestor_blocks) {
+                        warn!("Block {:?} failed to verify ancestors: {}", b, e);
+                        blocks_to_reject.insert(b.reference(), b);
+                    } else {
+                        blocks_to_accept.insert(b.reference(), b);
                     }
                 }
-                for (block_ref, block) in blocks_to_reject {
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .invalid_blocks
-                        .with_label_values(&[&block_ref.author.to_string(), "accept_block"])
-                        .inc();
-                    warn!("Invalid block {:?} is rejected", block);
-                }
-
-                // TODO: report blocks_to_reject to peers.
-
-                // Insert the accepted blocks into DAG state so future blocks including them as
-                // ancestors do not get suspended.
-                let blocks_to_accept: Vec<_> = blocks_to_accept.into_values().collect();
-                self.dag_state
-                    .write()
-                    .accept_blocks(blocks_to_accept.clone());
-
-                accepted_blocks.extend(blocks_to_accept);
             }
-        }
+            for (block_ref, block) in blocks_to_reject {
+                self.context
+                    .metrics
+                    .node_metrics
+                    .invalid_blocks
+                    .with_label_values(&[&block_ref.author.to_string(), "accept_block"])
+                    .inc();
+                warn!("Invalid block {:?} is rejected", block);
+            }
 
-        // Newly missed blocks
-        // TODO: make sure that the computation here is bounded either in the byzantine or node fall
-        // back scenario.
-        let missing_blocks_after = self
-            .missing_blocks
-            .difference(&missing_blocks_before)
-            .cloned()
-            .collect::<BTreeSet<_>>();
+            // TODO: report blocks_to_reject to peers.
+
+            // Insert the accepted blocks into DAG state so future blocks including them as
+            // ancestors do not get suspended.
+            let blocks_to_accept: Vec<_> = blocks_to_accept.into_values().collect();
+            self.dag_state
+                .write()
+                .accept_blocks(blocks_to_accept.clone());
+
+            accepted_blocks.extend(blocks_to_accept);
+        }
 
         let metrics = &self.context.metrics.node_metrics;
         metrics
             .missing_blocks_total
-            .set(missing_blocks_after.len() as i64);
+            .inc_by(missing_blocks.len() as u64);
         metrics
             .block_manager_suspended_blocks
             .set(self.suspended_blocks.len() as i64);
@@ -180,20 +182,21 @@ impl BlockManager {
             .set(self.missing_blocks.len() as i64);
 
         // Figure out the new missing blocks
-        (accepted_blocks, missing_blocks_after)
+        (accepted_blocks, missing_blocks)
     }
 
     /// Tries to accept the provided block. To accept a block its ancestors must have been already successfully accepted. If
     /// block is accepted then Some result is returned. None is returned when either the block is suspended or the block
     /// has been already accepted before.
-    fn try_accept_one_block(&mut self, block: VerifiedBlock) -> Option<VerifiedBlock> {
+    fn try_accept_one_block(&mut self, block: VerifiedBlock) -> TryAcceptResult {
         let block_ref = block.reference();
         let mut missing_ancestors = BTreeSet::new();
+        let mut ancestors_to_fetch = BTreeSet::new();
         let dag_state = self.dag_state.read();
 
         // If block has been already received and suspended, or already processed and stored, or is a genesis block, then skip it.
         if self.suspended_blocks.contains_key(&block_ref) || dag_state.contains_block(&block_ref) {
-            return None;
+            return TryAcceptResult::Processed;
         }
 
         let ancestors = block.ancestors();
@@ -217,6 +220,7 @@ impl BlockManager {
                 // that we already have its payload.
                 if !self.suspended_blocks.contains_key(ancestor) {
                     self.missing_blocks.insert(*ancestor);
+                    ancestors_to_fetch.insert(*ancestor);
                 }
             }
         }
@@ -240,10 +244,10 @@ impl BlockManager {
                 .inc();
             self.suspended_blocks
                 .insert(block_ref, SuspendedBlock::new(block, missing_ancestors));
-            return None;
+            return TryAcceptResult::Suspended(ancestors_to_fetch);
         }
 
-        Some(block)
+        TryAcceptResult::Accepted(block)
     }
 
     /// Given an accepted block `accepted_block` it attempts to accept all the suspended children blocks assuming such exist.
@@ -264,19 +268,21 @@ impl BlockManager {
                     // For each dependency try to unsuspend it. If that's successful then we add it to the queue so
                     // we can recursively try to unsuspend its children.
                     if let Some(block) = self.try_unsuspend_block(&r, &block.reference()) {
-                        unsuspended_blocks.push(block.block.clone());
-                        to_process_blocks.push(block.block);
+                        to_process_blocks.push(block.block.clone());
+                        unsuspended_blocks.push(block);
                     }
                 }
             }
         }
+
+        let now = Instant::now();
 
         // Report the unsuspended blocks
         for block in &unsuspended_blocks {
             let hostname = self
                 .context
                 .committee
-                .authority(block.author())
+                .authority(block.block.author())
                 .hostname
                 .as_str();
             self.context
@@ -285,9 +291,18 @@ impl BlockManager {
                 .block_unsuspensions
                 .with_label_values(&[hostname])
                 .inc();
+            self.context
+                .metrics
+                .node_metrics
+                .suspended_block_time
+                .with_label_values(&[hostname])
+                .observe(now.saturating_duration_since(block.timestamp).as_secs_f64());
         }
 
         unsuspended_blocks
+            .into_iter()
+            .map(|block| block.block)
+            .collect()
     }
 
     /// Attempts to unsuspend a block by checking its ancestors and removing the `accepted_dependency` by its local set.
@@ -335,6 +350,17 @@ impl BlockManager {
             && self.missing_ancestors.is_empty()
             && self.missing_blocks.is_empty()
     }
+}
+
+// Result of trying to accept one block.
+enum TryAcceptResult {
+    // The block is accepted. Wraps the block itself.
+    Accepted(VerifiedBlock),
+    // The block is suspended. Wraps ancestors to be fetched.
+    Suspended(BTreeSet<BlockRef>),
+    // The block has been processed before and already exists in BlockManager (and is suspended) or
+    // in DagState (so has been already accepted). No further processing has been done at this point.
+    Processed,
 }
 
 #[cfg(test)]
@@ -400,7 +426,7 @@ mod tests {
     }
 
     #[test]
-    fn try_accept_block_returns_missing_blocks_once() {
+    fn try_accept_block_returns_missing_blocks() {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -414,11 +440,10 @@ mod tests {
 
         // Take the blocks from round 4 up to 2 (included). Only the first block of each round should return missing
         // ancestors when try to accept
-        for (i, block) in all_blocks
+        for block in all_blocks
             .into_iter()
             .rev()
             .take_while(|block| block.round() >= 2)
-            .enumerate()
         {
             // WHEN
             let (accepted_blocks, missing) = block_manager.try_accept_blocks(vec![block.clone()]);
@@ -426,13 +451,8 @@ mod tests {
             // THEN
             assert!(accepted_blocks.is_empty());
 
-            // Only the first block for each round should return missing blocks. Every other shouldn't
-            if i % 4 == 0 {
-                let block_ancestors = block.ancestors().iter().cloned().collect::<BTreeSet<_>>();
-                assert_eq!(missing, block_ancestors);
-            } else {
-                assert!(missing.is_empty());
-            }
+            let block_ancestors = block.ancestors().iter().cloned().collect::<BTreeSet<_>>();
+            assert_eq!(missing, block_ancestors);
         }
     }
 

@@ -243,9 +243,20 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
+        const MAX_ADDITIONAL_BLOCKS: usize = 10;
         if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
+        }
+
+        if !highest_accepted_rounds.is_empty()
+            && highest_accepted_rounds.len() != self.context.committee.size()
+        {
+            return Err(ConsensusError::InvalidSizeOfHighestAcceptedRounds(
+                highest_accepted_rounds.len(),
+                self.context.committee.size(),
+            ));
         }
 
         // Some quick validation of the requested block refs
@@ -264,9 +275,27 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // For now ask dag state directly
         let blocks = self.dag_state.read().get_blocks(&block_refs);
 
-        // Return the serialised blocks
+        // Now check if an ancestor's round is higher than the one that the peer has. If yes, then serve
+        // that ancestor blocks up to `MAX_ADDITIONAL_BLOCKS`.
+        let mut ancestor_blocks = vec![];
+        if !highest_accepted_rounds.is_empty() {
+            let all_ancestors = blocks
+                .iter()
+                .flatten()
+                .flat_map(|block| block.ancestors().to_vec())
+                .filter(|block_ref| highest_accepted_rounds[block_ref.author] < block_ref.round)
+                .take(MAX_ADDITIONAL_BLOCKS)
+                .collect::<Vec<_>>();
+
+            if !all_ancestors.is_empty() {
+                ancestor_blocks = self.dag_state.read().get_blocks(&all_ancestors);
+            }
+        }
+
+        // Return the serialised blocks & the ancestor blocks
         let result = blocks
             .into_iter()
+            .chain(ancestor_blocks)
             .flatten()
             .map(|block| block.serialized().clone())
             .collect::<Vec<_>>();
