@@ -24,7 +24,6 @@ use crate::{
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
         unique_map::UniqueMap,
-        string_utils::debug_print,
         *,
     },
     sui_mode,
@@ -1574,14 +1573,21 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 "Invalid 'for' subject",
                 subject.ty.clone(),
             );
-            debug_print!(context.debug.for_syntax_lowering,
-                         ("subject" => subject; verbose));
             let readied = core::ready_tvars(&context.subst, subject.ty.clone());
+            debug_print!(context.debug.for_syntax_lowering,
+                         ("subject" => subject; verbose),
+                         ("readied ty" => subject));
             if let Some(for_fun) = find_for_funs(context, eloc, &readied) {
                 let (m, f) = for_fun.target_function;
                 let param_loc = for_lambda.parameters.loc;
-                let nargs_ = vec![sp(eloc, N::Exp_::Lambda(for_lambda))];
-                macro_module_call(context, eloc, m, f, eloc, None, param_loc, nargs_)
+                let lambda_arg = sp(eloc, N::Exp_::Lambda(for_lambda));
+                debug_print!(
+                    context.debug.for_syntax_lowering,
+                    ("calling fun" => format!("{}::{}", m, f); fmt),
+                    ("lambda arg" => lambda_arg; verbose));
+                let result = macro_for_call(context, eloc, m, f, eloc, param_loc, *subject, lambda_arg);
+                debug_print!(context.debug.for_syntax_lowering, ("after expansion" => result.1));
+                result
             } else {
                 assert!(context.env.has_errors());
                 (context.error_type(eloc), TE::UnresolvedError)
@@ -4188,6 +4194,26 @@ fn macro_module_call(
         .into_iter()
         .map(|e| macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, e)))
         .collect();
+    let (type_arguments, args, return_ty) =
+        macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
+    expand_macro(context, loc, m, f, type_arguments, args, return_ty)
+}
+
+fn macro_for_call(
+    context: &mut Context,
+    loc: Loc,
+    m: ModuleIdent,
+    f: FunctionName,
+    macro_call_loc: Loc,
+    argloc: Loc,
+    subject_arg: T::Exp,
+    lambda_arg: N::Exp,
+) -> (Type, T::UnannotatedExp_) {
+    let fty = core::make_function_type(context, loc, &m, &f, None);
+    let args = vec![
+        macro_expand::EvalStrategy::ByValue(subject_arg),
+        macro_expand::EvalStrategy::ByName(convert_macro_arg_to_block(context, lambda_arg)),
+    ];
     let (type_arguments, args, return_ty) =
         macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
     expand_macro(context, loc, m, f, type_arguments, args, return_ty)
