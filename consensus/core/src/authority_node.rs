@@ -391,7 +391,7 @@ mod tests {
             Ok(block_refs)
         }
 
-        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
             unimplemented!()
         }
 

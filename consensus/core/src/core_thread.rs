@@ -23,7 +23,7 @@ enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
     /// Called when a leader timeout occurs and a block should be produced
-    ForceNewBlock(Round, oneshot::Sender<()>),
+    NewBlock(Round, oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
 }
@@ -41,7 +41,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
         -> Result<BTreeSet<BlockRef>, CoreError>;
 
-    async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
+    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
 }
@@ -77,8 +77,8 @@ impl CoreThread {
                     let missing_blocks = self.core.add_blocks(blocks)?;
                     sender.send(missing_blocks).ok();
                 }
-                CoreThreadCommand::ForceNewBlock(round, sender) => {
-                    self.core.force_new_block(round)?;
+                CoreThreadCommand::NewBlock(round, sender, force) => {
+                    self.core.new_block(round, force)?;
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
@@ -159,9 +159,9 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         receiver.await.map_err(Shutdown)
     }
 
-    async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
+    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
+        self.send(CoreThreadCommand::NewBlock(round, sender, force))
             .await;
         receiver.await.map_err(Shutdown)
     }

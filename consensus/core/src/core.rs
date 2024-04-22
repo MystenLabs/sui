@@ -236,15 +236,23 @@ impl Core {
             .set(self.threshold_clock.get_round() as i64);
     }
 
-    /// Force creating a new block for the dictated round. This is used when a leader timeout occurs.
-    pub(crate) fn force_new_block(
+    /// Creating a new block for the dictated round. This is used when a leader timeout occurs, either
+    /// when the min timeout expires or max. When `force = true` , then any checks like previous round
+    /// leader existence will get skipped.
+    pub(crate) fn new_block(
         &mut self,
         round: Round,
+        force: bool,
     ) -> ConsensusResult<Option<VerifiedBlock>> {
-        let _scope = monitored_scope("Core::force_new_block");
+        let _scope = monitored_scope("Core::new_block");
         if self.last_proposed_round() < round {
-            self.context.metrics.node_metrics.leader_timeout_total.inc();
-            return self.try_propose(true);
+            self.context
+                .metrics
+                .node_metrics
+                .leader_timeout_total
+                .with_label_values(&[&format!("{force}")])
+                .inc();
+            return self.try_propose(force);
         }
         Ok(None)
     }
@@ -1081,7 +1089,7 @@ mod test {
         // Now try to create the blocks for round 4 via the leader timeout method which should
         // ignore any leader checks or min round delay.
         for (core, _, _, _, store) in cores.iter_mut() {
-            assert!(core.force_new_block(4).unwrap().is_some());
+            assert!(core.new_block(4, true).unwrap().is_some());
             assert_eq!(core.last_proposed_round(), 4);
 
             // Check commits have been persisted to store
@@ -1195,7 +1203,7 @@ mod test {
 
                 // try to propose to ensure that we are covering the case where we miss the leader authority 3
                 core.add_blocks(last_round_blocks.clone()).unwrap();
-                core.force_new_block(round).unwrap();
+                core.new_block(round, true).unwrap();
 
                 let block = core.last_proposed_block();
                 assert_eq!(block.round(), round);
