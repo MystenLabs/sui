@@ -136,12 +136,12 @@ mod tests {
 
     #[derive(Clone, Default)]
     struct MockCoreThreadDispatcher {
-        force_new_block_calls: Arc<Mutex<Vec<(Round, bool, Instant)>>>,
+        new_block_calls: Arc<Mutex<Vec<(Round, bool, Instant)>>>,
     }
 
     impl MockCoreThreadDispatcher {
-        async fn get_force_new_block_calls(&self) -> Vec<(Round, bool, Instant)> {
-            let mut binding = self.force_new_block_calls.lock();
+        async fn get_new_block_calls(&self) -> Vec<(Round, bool, Instant)> {
+            let mut binding = self.new_block_calls.lock();
             let all_calls = binding.drain(0..);
             all_calls.into_iter().collect()
         }
@@ -157,7 +157,7 @@ mod tests {
         }
 
         async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
-            self.force_new_block_calls
+            self.new_block_calls
                 .lock()
                 .push((round, force, Instant::now()));
             Ok(())
@@ -192,7 +192,7 @@ mod tests {
 
         // wait enough until the min round delay has passed and a new_block call is triggered
         sleep(2 * min_round_delay).await;
-        let all_calls = dispatcher.get_force_new_block_calls().await;
+        let all_calls = dispatcher.get_new_block_calls().await;
         assert_eq!(all_calls.len(), 1);
 
         let (round, force, timestamp) = all_calls[0];
@@ -205,9 +205,9 @@ mod tests {
             timestamp - start
         );
 
-        // wait enough until a force_new_block has been received
+        // wait enough until a new_block has been received
         sleep(2 * leader_timeout).await;
-        let all_calls = dispatcher.get_force_new_block_calls().await;
+        let all_calls = dispatcher.get_new_block_calls().await;
         assert_eq!(all_calls.len(), 1);
 
         let (round, force, timestamp) = all_calls[0];
@@ -222,7 +222,7 @@ mod tests {
 
         // now wait another 2 * leader_timeout, no other call should be received
         sleep(2 * leader_timeout).await;
-        let all_calls = dispatcher.get_force_new_block_calls().await;
+        let all_calls = dispatcher.get_new_block_calls().await;
 
         assert_eq!(all_calls.len(), 0);
     }
@@ -256,7 +256,7 @@ mod tests {
         sleep(2 * leader_timeout).await;
 
         // only the last one should be received
-        let all_calls = dispatcher.get_force_new_block_calls().await;
+        let all_calls = dispatcher.get_new_block_calls().await;
         let (round, force, timestamp) = all_calls[0];
         assert_eq!(round, 15);
         assert!(!force);
