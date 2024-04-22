@@ -104,7 +104,7 @@ pub(crate) struct NodeMetrics {
     pub last_committed_leader_round: IntGauge,
     pub commit_round_advancement_interval: Histogram,
     pub last_decided_leader_round: IntGauge,
-    pub leader_timeout_total: IntCounter,
+    pub leader_timeout_total: IntCounterVec,
     pub missing_blocks_total: IntCounter,
     pub missing_blocks_after_fetch_total: IntCounter,
     pub quorum_receive_latency: Histogram,
@@ -275,9 +275,10 @@ impl NodeMetrics {
                 "The last round where a commit decision was made.",
                 registry,
             ).unwrap(),
-            leader_timeout_total: register_int_counter_with_registry!(
+            leader_timeout_total: register_int_counter_vec_with_registry!(
                 "leader_timeout_total",
-                "Total number of leader timeouts",
+                "Total number of leader timeouts, either when the min round time has passed, or max leader timeout",
+                &["timeout_type"],
                 registry,
             ).unwrap(),
             missing_blocks_total: register_int_counter_with_registry!(

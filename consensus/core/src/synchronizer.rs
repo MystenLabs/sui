@@ -824,7 +824,7 @@ mod tests {
             Ok(BTreeSet::new())
         }
 
-        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
             todo!()
         }
 
