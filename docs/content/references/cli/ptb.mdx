@@ -44,6 +44,20 @@ All the following examples were tested using a `bash` shell environment and your
 
 :::
 
+### Strings
+
+CLI PTBs support string literals as inputs, which will be encoded as pure values that can be used as inputs to `vector<u8>`, `std::ascii::String` and `std::string::String` parameters. The following example previews a transaction block that passes the string `"Hello, world"` to a function `m::f` in a package `$PKG` (its ID is held in an environment variable).
+
+```bash
+sui client ptb --move-call "$PKG::m::f" '"Hello, world"' --gas-budget 10000000 --preview
+```
+
+:::warning
+
+Double-quoted string literals tend to also be valid syntax for shells (like `bash`), so when inputting PTBs on the command-line, remember to wrap the entire string in single-quotes so that its double-quotes are interpreted literally, as in the previous example.
+
+:::
+
 ### Addresses and Object IDs
 
 {@include: ../../snippets/address-prefix.mdx}
@@ -51,7 +65,7 @@ All the following examples were tested using a `bash` shell environment and your
 Here are some examples for `transfer-objects` and `gas-coin`:
 
 ```bash
-sui client ptb transfer-objects [ARRAY_OF_OBJECTS] @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
+sui client ptb --transfer-objects [ARRAY_OF_OBJECTS] @0x02a212de6a9dfa3a69e22387acfbafbb1a9e591bd9d636e7895dcfc8de05f331 --gas-coin @0x00002819ee07a66e53800495ccf5eeade8a02054a2e0827546c70e4b226f0495
 ```
 
 ### Assign
