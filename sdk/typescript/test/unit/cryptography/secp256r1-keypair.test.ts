@@ -12,7 +12,10 @@ import {
 	Secp256r1Keypair,
 } from '../../../src/keypairs/secp256r1';
 import { TransactionBlock } from '../../../src/transactions';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import {
+	verifyPersonalMessageSignature,
+	verifyTransactionBlockSignature,
+} from '../../../src/verify';
 
 const VALID_SECP256R1_SECRET_KEY = [
 	66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30, 70, 202, 144, 81,
@@ -175,7 +178,7 @@ describe('secp256r1-keypair', () => {
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+		expect(!!(await verifyTransactionBlockSignature(bytes, serializedSignature))).toEqual(true);
 	});
 
 	it('signs PersonalMessages', async () => {
@@ -187,6 +190,6 @@ describe('secp256r1-keypair', () => {
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
-		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
+		expect(!!(await verifyPersonalMessageSignature(message, serializedSignature))).toEqual(true);
 	});
 });

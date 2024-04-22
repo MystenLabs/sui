@@ -269,7 +269,7 @@ function testType<T, Input>(
 		const deserialized = schema.parse(bytes);
 		expect(deserialized).toEqual(expected);
 
-		const writer = new BcsWriter({ size: bytes.length });
+		const writer = new BcsWriter({ initialSize: bytes.length });
 		schema.write(value, writer);
 		expect(toHEX(writer.toBytes())).toBe(hex);
 

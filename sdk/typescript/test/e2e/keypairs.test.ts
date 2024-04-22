@@ -4,7 +4,7 @@
 import { blake2b } from '@noble/hashes/blake2b';
 import { describe, expect, it } from 'vitest';
 
-import { IntentScope, messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
+import { messageWithIntent, parseSerializedSignature } from '../../src/cryptography';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../src/keypairs/secp256k1';
 import { fromB64, toB64 } from '../../src/utils';
@@ -70,7 +70,8 @@ const TEST_CASES_SECP256K1 = [
 describe('Keypairs', () => {
 	it('Ed25519 keypair signData', async () => {
 		const tx_bytes = fromB64(TX_BYTES);
-		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
+		const intentMessage = messageWithIntent('TransactionData', tx_bytes);
+
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 		expect(toB64(digest)).toEqual(DIGEST);
 
@@ -113,7 +114,7 @@ describe('Keypairs', () => {
 
 	it('Secp256k1 keypair signData', async () => {
 		const tx_bytes = fromB64(TX_BYTES);
-		const intentMessage = messageWithIntent(IntentScope.TransactionData, tx_bytes);
+		const intentMessage = messageWithIntent('TransactionData', tx_bytes);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
 		expect(toB64(digest)).toEqual(DIGEST);
 

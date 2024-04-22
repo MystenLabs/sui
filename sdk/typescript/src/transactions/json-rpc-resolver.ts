@@ -19,34 +19,13 @@ const MAX_OBJECTS_PER_FETCH = 50;
 
 // An amount of gas (in gas units) that is added to transactions as an overhead to ensure transactions do not fail.
 const GAS_SAFE_OVERHEAD = 1000n;
-
-const LIMITS = {
-	// The maximum gas that is allowed.
-	maxTxGas: 'max_tx_gas',
-	// The maximum number of gas objects that can be selected for one transaction.
-	maxGasObjects: 'max_gas_payment_objects',
-	// The maximum size (in bytes) that the transaction can be:
-	maxTxSizeBytes: 'max_tx_size_bytes',
-	// The maximum size (in bytes) that pure arguments can be:
-	maxPureArgumentSize: 'max_pure_argument_size',
-} as const;
-
-type Limits = Partial<Record<keyof typeof LIMITS, number>>;
-
-const DefaultOfflineLimits = {
-	maxPureArgumentSize: 16 * 1024,
-	maxTxGas: 50_000_000_000,
-	maxGasObjects: 256,
-	maxTxSizeBytes: 128 * 1024,
-} satisfies Limits;
+const MAX_GAS = 50_000_000_000;
 
 export interface BuildTransactionBlockOptions {
 	client?: SuiClient;
 	onlyTransactionKind?: boolean;
 	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
 	protocolConfig?: ProtocolConfig;
-	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
-	limits?: Limits;
 }
 
 export interface SerializeTransactionBlockOptions extends BuildTransactionBlockOptions {
@@ -72,7 +51,7 @@ export async function resolveTransactionBlockData(
 		await setGasBudget(blockData, options);
 		await setGasPayment(blockData, options);
 	}
-	await validate(blockData, options);
+	await validate(blockData);
 	return next();
 }
 
@@ -95,10 +74,9 @@ async function setGasBudget(
 
 	const dryRunResult = await getClient(options).dryRunTransactionBlock({
 		transactionBlock: blockData.build({
-			maxSizeBytes: getLimit(options, 'maxTxSizeBytes'),
 			overrides: {
 				gasData: {
-					budget: String(getLimit(options, 'maxTxGas')),
+					budget: String(MAX_GAS),
 					payment: [],
 				},
 			},
@@ -132,7 +110,6 @@ async function setGasPayment(
 	blockData: TransactionBlockDataBuilder,
 	options: BuildTransactionBlockOptions,
 ) {
-	const maxGasObjects = getLimit(options, 'maxGasObjects');
 	if (!blockData.gasConfig.payment) {
 		const coins = await getClient(options).getCoins({
 			owner: blockData.gasConfig.owner || blockData.sender!,
@@ -152,7 +129,6 @@ async function setGasPayment(
 
 				return !matchingInput;
 			})
-			.slice(0, maxGasObjects - 1)
 			.map((coin) => ({
 				objectId: coin.coinObjectId,
 				digest: coin.digest,
@@ -164,10 +140,6 @@ async function setGasPayment(
 		}
 
 		blockData.gasConfig.payment = paymentCoins.map((payment) => parse(ObjectRef, payment));
-	}
-
-	if (blockData.gasConfig.payment.length > maxGasObjects) {
-		throw new Error(`Payment objects exceed maximum amount: ${maxGasObjects}`);
 	}
 }
 
@@ -393,20 +365,8 @@ async function normalizeInputs(
 	}
 }
 
-async function validate(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
-) {
+function validate(blockData: TransactionBlockDataBuilder) {
 	blockData.inputs.forEach((input, index) => {
-		if (input.Pure) {
-			const maxPureArgumentSize = getLimit(options, 'maxPureArgumentSize');
-			if (input.Pure.length > maxPureArgumentSize) {
-				throw new Error(
-					`Input at index ${index} is too large, max pure input size is ${maxPureArgumentSize} bytes, got ${input.Pure.length} bytes`,
-				);
-			}
-		}
-
 		if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
 			throw new Error(
 				`Input at index ${index} has not been resolved.  Expected a Pure or Object input, but found ${JSON.stringify(
@@ -460,37 +420,4 @@ function chunk<T>(arr: T[], size: number): T[][] {
 	return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
 		arr.slice(i * size, i * size + size),
 	);
-}
-
-export function getLimit(options: BuildTransactionBlockOptions, key: keyof typeof LIMITS): number {
-	// Use the limits definition if that exists:
-	if (options.limits && typeof options.limits[key] === 'number') {
-		return options.limits[key]!;
-	}
-
-	if (!options.protocolConfig) {
-		return DefaultOfflineLimits[key];
-	}
-
-	// Fallback to protocol config:
-	const attribute = options.protocolConfig?.attributes[LIMITS[key]];
-	if (!attribute) {
-		throw new Error(`Missing expected protocol config: "${LIMITS[key]}"`);
-	}
-
-	const value =
-		'u64' in attribute
-			? attribute.u64
-			: 'u32' in attribute
-			? attribute.u32
-			: 'u16' in attribute
-			? attribute.u16
-			: attribute.f64;
-
-	if (!value) {
-		throw new Error(`Unexpected protocol config value found for: "${LIMITS[key]}"`);
-	}
-
-	// NOTE: Technically this is not a safe conversion, but we know all of the values in protocol config are safe
-	return Number(value);
 }

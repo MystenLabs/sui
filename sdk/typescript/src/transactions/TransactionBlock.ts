@@ -18,7 +18,7 @@ import type {
 	SerializeTransactionBlockOptions,
 	TransactionBlockPlugin,
 } from './json-rpc-resolver.js';
-import { getLimit, resolveTransactionBlockData } from './json-rpc-resolver.js';
+import { resolveTransactionBlockData } from './json-rpc-resolver.js';
 import { createPure } from './pure.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { TransactionArgument } from './Transactions.js';
@@ -449,12 +449,10 @@ export class TransactionBlock {
 
 	/** Build the transaction to BCS bytes. */
 	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
-		const buildOptions = await this.#addProtocolConfigToOptions(options);
-		await this.#prepareForSerialization(buildOptions);
-		await this.#prepareBuild(buildOptions);
+		await this.#prepareForSerialization(options);
+		await this.#prepareBuild(options);
 		return this.#blockData.build({
-			maxSizeBytes: getLimit(buildOptions, 'maxTxSizeBytes'),
-			onlyTransactionKind: buildOptions.onlyTransactionKind,
+			onlyTransactionKind: options.onlyTransactionKind,
 		});
 	}
 
@@ -539,17 +537,5 @@ export class TransactionBlock {
 		}
 
 		await this.#runPlugins(steps, options);
-	}
-
-	async #addProtocolConfigToOptions(options: SerializeTransactionBlockOptions = {}) {
-		let protocolConfig = options.protocolConfig;
-		if (!options.protocolConfig && !options.limits && options.client) {
-			protocolConfig = await options.client.getProtocolConfig();
-		}
-
-		return {
-			...options,
-			protocolConfig,
-		};
 	}
 }

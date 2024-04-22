@@ -17,6 +17,8 @@
   TypeTag instead of String
 - `Transaction` enumKind to enum\, replaced nested structs with tuples to align with Rust
   definitions
+- Removed some type exports
+- Use typeof bcs.XYZ.$inferType instead
 
 ## /transactions
 
@@ -32,6 +34,8 @@
 
 - `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
 - added getBlockData that returns new v2 blockData
+- removed txb.pure(rawValue)
+- Added support for (txb) => input as transaction arguments
 
 ### exports
 
@@ -51,6 +55,10 @@ Removed `is` and `assert` helpers
 - verifyTransactionBlock -> verifyTransactionBlockSignature
 - verifyPersonalMessage -> verifyPersonalMessageSignature
 
+## /cryptography
+
+- Removed intent enum exports (use bcs instead)
+
 # TODO
 
 - Move helpers in inputs.ts
@@ -61,3 +69,9 @@ Removed `is` and `assert` helpers
 - Use valibot parser in TypeTagSerializer
 - Should fromB64, toB64, fromHEX, toHEX still be exported from utils?
 - Parse typeArguments from string in input
+
+# @mysten/bcs
+
+- removed registry
+- default maxSize of writer = Infinity
+- renamed `size` to `initialSize` in writer
