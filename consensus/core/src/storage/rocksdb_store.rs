@@ -10,6 +10,7 @@ use std::{
 
 use bytes::Bytes;
 use consensus_config::AuthorityIndex;
+use sui_macros::fail_point;
 use typed_store::{
     metrics::SamplingInterval,
     reopen,
@@ -99,6 +100,8 @@ impl RocksDBStore {
 
 impl Store for RocksDBStore {
     fn write(&self, write_batch: WriteBatch) -> ConsensusResult<()> {
+        fail_point!("consensus-store-before-write");
+
         let mut batch = self.blocks.batch();
         for block in write_batch.blocks {
             let block_ref = block.reference();
@@ -149,6 +152,7 @@ impl Store for RocksDBStore {
             }
         }
         batch.write()?;
+        fail_point!("consensus-store-after-write");
         Ok(())
     }
 

@@ -7,6 +7,7 @@ use consensus_config::ProtocolKeyPair;
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
+use sui_macros::fail_point;
 use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
@@ -263,6 +264,9 @@ impl Core {
     fn try_propose(&mut self, force: bool) -> ConsensusResult<Option<VerifiedBlock>> {
         if let Some(block) = self.try_new_block(force) {
             self.signals.new_block(block.clone())?;
+
+            fail_point!("consensus-after-propose");
+
             // The new block may help commit.
             self.try_commit()?;
             return Ok(Some(block));

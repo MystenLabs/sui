@@ -37,6 +37,8 @@ pub(crate) struct CommitObserver {
     sender: UnboundedSender<CommittedSubDag>,
     /// Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
+    /// The last committed sub dag
+    last_sub_dag: Option<CommittedSubDag>,
 }
 
 impl CommitObserver {
@@ -54,6 +56,7 @@ impl CommitObserver {
             commit_interpreter: Linearizer::new(dag_state.clone()),
             sender: commit_consumer.sender,
             store,
+            last_sub_dag: None,
         };
 
         observer.recover_and_send_commits(commit_consumer.last_processed_commit_index);
@@ -68,6 +71,15 @@ impl CommitObserver {
         let mut sent_sub_dags = vec![];
 
         for committed_sub_dag in committed_sub_dags.into_iter() {
+            // ensure that commits do monotonically increment
+            if let Some(prev_sub_dag) = &self.last_sub_dag {
+                if committed_sub_dag.timestamp_ms < prev_sub_dag.timestamp_ms {
+                    panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", prev_sub_dag, committed_sub_dag);
+                }
+            }
+
+            self.last_sub_dag = Some(committed_sub_dag.clone());
+
             // Failures in sender.send() are assumed to be permanent
             if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
                 tracing::error!(
@@ -116,8 +128,17 @@ impl CommitObserver {
         for commit in unsent_commits {
             // Commit index must be continuous.
             assert_eq!(commit.index(), last_sent_commit_index + 1);
-            let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
-            self.sender.send(committed_subdag).unwrap_or_else(|e| {
+            let committed_sub_dag = load_committed_subdag_from_store(self.store.as_ref(), commit);
+
+            // ensure that commits do monotonically increment
+            if let Some(prev_sub_dag) = &self.last_sub_dag {
+                if committed_sub_dag.timestamp_ms < prev_sub_dag.timestamp_ms {
+                    panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", prev_sub_dag, committed_sub_dag);
+                }
+            }
+
+            self.last_sub_dag = Some(committed_sub_dag.clone());
+            self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
                 panic!(
                     "Failed to send commit during recovery, probably due to shutdown: {:?}",
                     e

@@ -27,6 +27,7 @@ use crate::error::{ConsensusError, ConsensusResult};
 use crate::network::NetworkClient;
 use crate::{BlockAPI, Round};
 use consensus_config::AuthorityIndex;
+use sui_macros::fail_point_async;
 
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
@@ -599,6 +600,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         )
         .await;
 
+        fail_point_async!("consensus-delay");
+
         let resp = match resp {
             Ok(Err(err)) => {
                 // Add a delay before retrying - if that is needed. If request has timed out then eventually
@@ -641,6 +644,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let _scope = monitored_scope("FetchMissingBlocksScheduler");
                 context.metrics.node_metrics.fetch_blocks_scheduler_inflight.inc();
                 let total_requested = missing_blocks.len();
+
+                fail_point_async!("consensus-delay");
 
                 // Fetch blocks from peers
                 let results = Self::fetch_blocks_from_authorities(context.clone(), blocks_to_fetch.clone(), network_client, missing_blocks, core_dispatcher.clone(), dag_state).await;
