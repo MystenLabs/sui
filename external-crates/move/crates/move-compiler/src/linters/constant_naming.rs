@@ -10,24 +10,24 @@ use crate::{
         codes::{custom, DiagnosticInfo, Severity},
         WarningFilters,
     },
+    expansion::ast::ModuleIdent,
+    parser::ast::ConstantName,
     shared::{program_info::TypingProgramInfo, CompilationEnv},
     typing::{
         ast as T,
         visitor::{TypingVisitorConstructor, TypingVisitorContext},
     },
 };
-use move_ir_types::location::Loc;
-use move_symbol_pool::Symbol;
 
-use super::{LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX};
+use super::{LinterDiagCategory, CONSTANT_NAMING_DIAG_CODE, LINT_WARNING_PREFIX};
 
 /// Diagnostic information for constant naming violations.
 const CONSTANT_NAMING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::ConstantNaming as u8,
-    LINTER_DEFAULT_DIAG_CODE,
-    "Constant name should be in all caps, snake case, pascal case or upper camel case.",
+    LinterDiagCategory::Style as u8,
+    CONSTANT_NAMING_DIAG_CODE,
+    "constant should follow naming convention",
 );
 
 pub struct ConstantNamingVisitor;
@@ -47,26 +47,20 @@ impl TypingVisitorConstructor for ConstantNamingVisitor {
 }
 
 impl TypingVisitorContext for Context<'_> {
-    fn visit(&mut self, program: &mut T::Program_) {
-        for module_def in program
-            .modules
-            .iter()
-            .filter(|(_, _, mdef)| !mdef.attributes.is_test_or_test_only())
-        {
-            self.env
-                .add_warning_filter_scope(module_def.2.warning_filter.clone());
-            module_def
-                .2
-                .constants
-                .iter()
-                .for_each(|(loc, name, _constant)| {
-                    if !is_valid_name(name.as_str()) {
-                        let uid_msg = format!("'{}' should be named using UPPER_CASE_WITH_UNDERSCORES or PascalCase/UpperCamelCase",name.as_str());
-                        let diagnostic = diag!(CONSTANT_NAMING_DIAG, (loc, uid_msg));
-                        self.env.add_diag(diagnostic);
-                    }
-                });
+    fn visit_constant_custom(
+        &mut self,
+        _module: ModuleIdent,
+        constant_name: ConstantName,
+        cdef: &mut T::Constant,
+    ) -> bool {
+        let name = constant_name.0.value.as_str();
+        if !is_valid_name(name) {
+            let uid_msg =
+                format!("'{name}' should be ALL_CAPS. Or for error constants, use PascalCase",);
+            let diagnostic = diag!(CONSTANT_NAMING_DIAG, (cdef.loc, uid_msg));
+            self.env.add_diag(diagnostic);
         }
+        false
     }
 
     fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
@@ -80,15 +74,29 @@ impl TypingVisitorContext for Context<'_> {
 
 /// Returns `true` if the string is in all caps snake case, including numeric characters.
 fn is_valid_name(name: &str) -> bool {
-    if name
-        .chars()
-        .all(|c| c.is_uppercase() || c == '_' || c.is_numeric())
-    {
-        return true;
-    }
-    // Check for PascalCase/UpperCamelCase
-    // The string must start with an uppercase letter, and only contain alphanumeric characters,
-    // with every new word starting with an uppercase letter.
     let mut chars = name.chars();
-    chars.next().unwrap().is_uppercase() && chars.all(|c| c.is_alphanumeric())
+    let Some(start) = chars.next() else {
+        return false; /* ice? */
+    };
+    if !start.is_uppercase() {
+        return false;
+    }
+
+    let mut all_uppers = true;
+    let mut has_underscore = false;
+    while let Some(char) = chars.next() {
+        if char.is_lowercase() {
+            all_uppers = false;
+        } else if char == '_' {
+            has_underscore = true;
+        } else if !char.is_alphanumeric() {
+            return false; // bail if it's not alphanumeric ?
+        }
+
+        // We have an underscore but we have non-uppercase letters
+        if has_underscore && !all_uppers {
+            return false;
+        }
+    }
+    true
 }

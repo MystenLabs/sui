@@ -22,18 +22,20 @@ pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 pub const CONSTANT_NAMING_FILTER_NAME: &str = "constant_naming";
 
-pub enum LinterDiagCategory {
-    ConstantNaming,
-}
+pub const CONSTANT_NAMING_DIAG_CODE: u8 = 2;
 pub const LINTER_DEFAULT_DIAG_CODE: u8 = 1;
+
+pub enum LinterDiagCategory {
+    Style,
+}
 
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     (
         Some(ALLOW_ATTR_CATEGORY.into()),
         vec![WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::ConstantNaming as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Style as u8,
+            CONSTANT_NAMING_DIAG_CODE,
             Some(CONSTANT_NAMING_FILTER_NAME),
         )],
     )
