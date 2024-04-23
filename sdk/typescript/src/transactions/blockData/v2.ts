@@ -40,7 +40,7 @@ type EnumSchema<T extends Record<string, BaseSchema<any>>> = BaseSchema<
 	>
 >;
 
-function safeEnum<T extends Record<string, BaseSchema<any>>>(options: T): EnumSchema<T> {
+export function safeEnum<T extends Record<string, BaseSchema<any>>>(options: T): EnumSchema<T> {
 	const unionOptions = Object.entries(options).map(([key, value]) => object({ [key]: value }));
 
 	return transform(union(unionOptions), (value) => ({
@@ -53,7 +53,7 @@ const SuiAddress = transform(string(), (value) => normalizeSuiAddress(value), [
 	custom(isValidSuiAddress),
 ]);
 const ObjectID = SuiAddress;
-const BCSBytes = array(number([integer()]));
+const BCSBytes = string();
 const JsonU64 = union(
 	[string(), number([integer()])],
 	[
@@ -246,7 +246,7 @@ export type Transaction<Arg = Argument> = EnumOutputShape<{
 		sources: Arg[];
 	};
 	Publish: {
-		modules: number[][];
+		modules: string[];
 		dependencies: string[];
 	};
 	MakeMoveVec: {
@@ -254,7 +254,7 @@ export type Transaction<Arg = Argument> = EnumOutputShape<{
 		objects: Arg[];
 	};
 	Upgrade: {
-		modules: number[][];
+		modules: string[];
 		dependencies: string[];
 		package: string;
 		ticket: Arg;
@@ -267,7 +267,7 @@ export type Transaction<Arg = Argument> = EnumOutputShape<{
 }>;
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
-const ObjectArg = safeEnum({
+export const ObjectArg = safeEnum({
 	ImmOrOwnedObject: ObjectRef,
 	SharedObject: object({
 		objectId: ObjectID,
@@ -281,7 +281,9 @@ const ObjectArg = safeEnum({
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L75-L80
 const CallArg = safeEnum({
 	Object: ObjectArg,
-	Pure: BCSBytes,
+	Pure: object({
+		bytes: BCSBytes,
+	}),
 	UnresolvedPure: object({
 		value: unknown(),
 	}),
@@ -298,7 +300,9 @@ export type CallArg = Output<typeof CallArg>;
 
 export const NormalizedCallArg = safeEnum({
 	Object: ObjectArg,
-	Pure: BCSBytes,
+	Pure: object({
+		bytes: BCSBytes,
+	}),
 });
 
 export const TransactionExpiration = safeEnum({
@@ -321,20 +325,20 @@ export type TransactionBlockState = Output<typeof TransactionBlockState>;
 
 export const example1: Input<typeof TransactionBlockState> = {
 	version: 2,
-	sender: '0x123',
-	expiration: { Epoch: 123 }, // { None: true } | null
+	sender: '0x123', // or null
+	expiration: { Epoch: '123' }, // or { None: true } or null
 	// All properties of gasData are optional
 	gasData: {
-		budget: '123',
-		owner: '0x123',
-		price: '123',
+		budget: '123', // or null
+		owner: '0x123', // or null
+		price: '123', // or null
 		payment: [
 			{
 				objectId: '0x123',
-				version: '123',
-				digest: 'abc',
+				version: '123', // or null
+				digest: 'abc', // or null
 			},
-		],
+		], // or null
 	},
 	inputs: [
 		{
@@ -365,7 +369,10 @@ export const example1: Input<typeof TransactionBlockState> = {
 			},
 		},
 		{
-			Pure: [1, 2, 3],
+			Pure: {
+				// base64 encoded bcs bytes
+				bytes: 'cHVyZSB2YWx1ZSBieXRlcw==',
+			},
 		},
 		{
 			// Don't know schema to encode pure value to bcs
@@ -402,5 +409,141 @@ export const example1: Input<typeof TransactionBlockState> = {
 			},
 		},
 	],
-	transactions: [],
+	transactions: [
+		{
+			MoveCall: {
+				package: '0x123',
+				module: 'module',
+				function: 'function',
+				typeArguments: ['0x2::coin::Coin<0x2:sui::SUI>'],
+				arguments: [
+					{
+						GasCoin: true,
+					},
+					{
+						Result: 1,
+					},
+					{
+						NestedResult: [1, 2],
+					},
+					{
+						Input: 0,
+					},
+				],
+				// Returned by resolve
+				argumentTypes: [
+					{
+						ref: '&',
+						body: {
+							datatype: {
+								package: '0x2',
+								module: 'coin',
+								type: 'coin',
+								typeParameters: [
+									{
+										datatype: {
+											package: '0x2',
+											module: 'sui',
+											type: 'SUI',
+											typeParameters: [],
+										},
+									},
+								],
+							},
+						},
+					},
+					{
+						ref: '&mut',
+						body: {
+							datatype: {
+								package: '0x2',
+								module: 'something',
+								type: 'mutable',
+								typeParameters: [],
+							},
+						},
+					},
+					{
+						ref: null,
+						body: 'u8',
+					},
+				],
+			},
+		},
+		{
+			TransferObjects: {
+				objects: [
+					{
+						GasCoin: true,
+					},
+				],
+				recipient: {
+					Input: 0,
+				},
+			},
+		},
+		{
+			SplitCoins: {
+				coin: {
+					GasCoin: true,
+				},
+				amounts: [
+					{
+						Input: 0,
+					},
+				],
+			},
+		},
+		{
+			MergeCoins: {
+				destination: {
+					Input: 0,
+				},
+				sources: [
+					{
+						Input: 1,
+					},
+				],
+			},
+		},
+		{
+			Publish: {
+				modules: ['bW9kdWxlIGJ5dGVz'],
+				dependencies: ['0x123'],
+			},
+		},
+		{
+			MakeMoveVec: {
+				type: 'Ox2::coin::Coin<0x2:sui::SUI>',
+				objects: [
+					{
+						Input: 0,
+					},
+				],
+			},
+		},
+		{
+			Upgrade: {
+				modules: ['bW9kdWxlIGJ5dGVz'],
+				dependencies: ['0x123'],
+				package: '0x123',
+				ticket: {
+					Input: 0,
+				},
+			},
+		},
+		{
+			Intent: {
+				name: 'CoinWithBalance',
+				inputs: {
+					someInput: { Input: 0 },
+					SomeOtherArg: { Result: 1 },
+					ListOfArgs: [{ Input: 2 }, { Input: 3 }],
+				},
+				data: {
+					amount: 123,
+				},
+			},
+		},
+	],
 };

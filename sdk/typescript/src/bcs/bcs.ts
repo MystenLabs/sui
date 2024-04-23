@@ -58,7 +58,12 @@ export const ObjectArg = bcs.enum('ObjectArg', {
 });
 
 export const CallArg = bcs.enum('CallArg', {
-	Pure: bcs.vector(bcs.u8()),
+	Pure: bcs.struct('Pure', {
+		bytes: bcs.vector(bcs.u8()).transform({
+			input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+			output: (val) => toB64(new Uint8Array(val)),
+		}),
+	}),
 	Object: ObjectArg,
 });
 
@@ -129,7 +134,12 @@ export const Transaction = bcs.enum('Transaction', {
 	//  * Publish a Move module.
 	//  */
 	Publish: bcs.struct('Publish', {
-		modules: bcs.vector(bcs.vector(bcs.u8())),
+		modules: bcs.vector(
+			bcs.vector(bcs.u8()).transform({
+				input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+				output: (val) => toB64(new Uint8Array(val)),
+			}),
+		),
 		dependencies: bcs.vector(Address),
 	}),
 	// /**
@@ -152,7 +162,12 @@ export const Transaction = bcs.enum('Transaction', {
 		objects: bcs.vector(Argument),
 	}),
 	Upgrade: bcs.struct('Upgrade', {
-		modules: bcs.vector(bcs.vector(bcs.u8())),
+		modules: bcs.vector(
+			bcs.vector(bcs.u8()).transform({
+				input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+				output: (val) => toB64(new Uint8Array(val)),
+			}),
+		),
 		dependencies: bcs.vector(Address),
 		package: Address,
 		ticket: Argument,

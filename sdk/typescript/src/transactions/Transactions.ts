@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
+import { toB64 } from '@mysten/bcs';
 import { parse } from 'valibot';
 import type { Input } from 'valibot';
 
@@ -106,7 +106,7 @@ export const Transactions = {
 			$kind: 'Publish',
 			Publish: {
 				modules: modules.map((module) =>
-					typeof module === 'string' ? Array.from(fromB64(module)) : module,
+					typeof module === 'string' ? module : toB64(new Uint8Array(module)),
 				),
 				dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
 			},
@@ -127,7 +127,7 @@ export const Transactions = {
 			$kind: 'Upgrade',
 			Upgrade: {
 				modules: modules.map((module) =>
-					typeof module === 'string' ? Array.from(fromB64(module)) : module,
+					typeof module === 'string' ? module : toB64(new Uint8Array(module)),
 				),
 				dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
 				package: packageId,

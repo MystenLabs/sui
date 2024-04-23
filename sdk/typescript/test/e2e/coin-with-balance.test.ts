@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromHEX } from '@mysten/bcs';
+import { fromHEX, toB64 } from '@mysten/bcs';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../src/bcs';
@@ -47,7 +47,9 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					$kind: 'Pure',
-					Pure: Array.from(fromHEX(receiver.toSuiAddress())),
+					Pure: {
+						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+					},
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
@@ -101,11 +103,15 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					$kind: 'Pure',
-					Pure: Array.from(fromHEX(receiver.toSuiAddress())),
+					Pure: {
+						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+					},
 				},
 				{
 					$kind: 'Pure',
-					Pure: Array.from(bcs.u64().serialize(12345).toBytes()),
+					Pure: {
+						bytes: toB64(bcs.u64().serialize(12345).toBytes()),
+					},
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
@@ -196,7 +202,9 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					$kind: 'Pure',
-					Pure: Array.from(fromHEX(receiver.toSuiAddress())),
+					Pure: {
+						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+					},
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
@@ -250,7 +258,9 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					$kind: 'Pure',
-					Pure: Array.from(fromHEX(receiver.toSuiAddress())),
+					Pure: {
+						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+					},
 				},
 				{
 					$kind: 'Object',
@@ -268,7 +278,9 @@ describe('coinWithBalance', () => {
 				},
 				{
 					$kind: 'Pure',
-					Pure: Array.from(bcs.u64().serialize(1).toBytes()),
+					Pure: {
+						bytes: toB64(bcs.u64().serialize(1).toBytes()),
+					},
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
@@ -381,7 +393,9 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					$kind: 'Pure',
-					Pure: Array.from(fromHEX(receiver.toSuiAddress())),
+					Pure: {
+						bytes: toB64(fromHEX(receiver.toSuiAddress())),
+					},
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),
@@ -480,13 +494,8 @@ describe('coinWithBalance', () => {
 			inputs: [
 				{
 					$kind: 'Pure',
-					Pure: Array.from(fromHEX(receiver.toSuiAddress())),
-				},
-				{
-					$kind: 'Object',
-					Object: {
-						$kind: 'ImmOrOwnedObject',
-						ImmOrOwnedObject: expect.anything(),
+					Pure: {
+						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
 				},
 				{
@@ -497,20 +506,35 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'Pure',
-					Pure: Array.from(bcs.u64().serialize(1).toBytes()),
+					$kind: 'Object',
+					Object: {
+						$kind: 'ImmOrOwnedObject',
+						ImmOrOwnedObject: expect.anything(),
+					},
 				},
 				{
 					$kind: 'Pure',
-					Pure: Array.from(bcs.u64().serialize(2).toBytes()),
+					Pure: {
+						bytes: toB64(bcs.u64().serialize(1).toBytes()),
+					},
 				},
 				{
 					$kind: 'Pure',
-					Pure: Array.from(bcs.u64().serialize(3).toBytes()),
+					Pure: {
+						bytes: toB64(bcs.u64().serialize(2).toBytes()),
+					},
 				},
 				{
 					$kind: 'Pure',
-					Pure: Array.from(bcs.u64().serialize(4).toBytes()),
+					Pure: {
+						bytes: toB64(bcs.u64().serialize(3).toBytes()),
+					},
+				},
+				{
+					$kind: 'Pure',
+					Pure: {
+						bytes: toB64(bcs.u64().serialize(4).toBytes()),
+					},
 				},
 			],
 			sender: publishToolbox.keypair.toSuiAddress(),

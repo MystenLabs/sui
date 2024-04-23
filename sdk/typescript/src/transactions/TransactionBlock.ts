@@ -117,16 +117,17 @@ export class TransactionBlock {
 	 * - A string returned from `Transaction#serialize`. The serialized format must be compatible, or it will throw an error.
 	 * - A byte array (or base64-encoded bytes) containing BCS transaction data.
 	 */
-	static from(serialized: string | Uint8Array) {
+	static from(txb: string | Uint8Array | TransactionBlock) {
 		const tx = new TransactionBlock();
 
-		// Check for bytes:
-		if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
+		if (isTransactionBlock(txb)) {
+			tx.#blockData = new TransactionBlockDataBuilder(txb.getBlockData());
+		} else if (typeof txb !== 'string' || !txb.startsWith('{')) {
 			tx.#blockData = TransactionBlockDataBuilder.fromBytes(
-				typeof serialized === 'string' ? fromB64(serialized) : serialized,
+				typeof txb === 'string' ? fromB64(txb) : txb,
 			);
 		} else {
-			tx.#blockData = TransactionBlockDataBuilder.restore(JSON.parse(serialized));
+			tx.#blockData = TransactionBlockDataBuilder.restore(JSON.parse(txb));
 		}
 
 		return tx;
@@ -202,7 +203,9 @@ export class TransactionBlock {
 				if (isSerializedBcs(value)) {
 					return this.#blockData.addInput('pure', {
 						$kind: 'Pure',
-						Pure: Array.from(value.toBytes()),
+						Pure: {
+							bytes: value.toBase64(),
+						},
 					});
 				}
 
@@ -221,10 +224,8 @@ export class TransactionBlock {
 		return this.pure;
 	}
 
-	constructor(transaction?: TransactionBlock) {
-		this.#blockData = new TransactionBlockDataBuilder(
-			transaction ? transaction.getBlockData() : undefined,
-		);
+	constructor() {
+		this.#blockData = new TransactionBlockDataBuilder();
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
@@ -321,7 +322,7 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.SplitCoins(
-				typeof coin === 'string' ? this.object(coin) : this.resolveArgument(coin),
+				typeof coin === 'string' ? this.object(coin) : this.#resolveArgument(coin),
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
 						? this.pure.u64(amount)

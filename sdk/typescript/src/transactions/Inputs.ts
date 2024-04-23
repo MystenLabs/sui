@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/bcs';
 import type { SerializedBcs } from '@mysten/bcs';
 
 import { normalizeSuiAddress } from '../utils/sui-types.js';
@@ -9,7 +10,9 @@ import type { CallArg, ObjectRef } from './blockData/v2.js';
 function Pure(data: Uint8Array | SerializedBcs<any>): Extract<CallArg, { Pure: unknown }> {
 	return {
 		$kind: 'Pure',
-		Pure: Array.from(data instanceof Uint8Array ? data : data.toBytes()),
+		Pure: {
+			bytes: data instanceof Uint8Array ? toB64(data) : data.toBase64(),
+		},
 	};
 }
 

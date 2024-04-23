@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { fromB64, toB64 } from '@mysten/bcs';
 import type { BaseSchema, Input, Output } from 'valibot';
 import {
 	array,
@@ -24,7 +25,12 @@ import {
 import { TypeTagSerializer } from '../../bcs/index.js';
 import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/types.js';
 import type { Argument } from './v2.js';
-import { NormalizedCallArg, TransactionBlockState } from './v2.js';
+import { ObjectArg, safeEnum, TransactionBlockState } from './v2.js';
+
+export const NormalizedCallArg = safeEnum({
+	Object: ObjectArg,
+	Pure: array(number([integer()])),
+});
 
 export const ObjectRef = object({
 	digest: string(),
@@ -216,7 +222,7 @@ export function v1BlockDataFromTransactionBlockState(
 				kind: 'Input',
 				index,
 				value: {
-					Pure: input.Pure,
+					Pure: Array.from(fromB64(input.Pure.bytes)),
 				},
 				type: 'pure',
 			};
@@ -294,7 +300,7 @@ export function v1BlockDataFromTransactionBlockState(
 			if (transaction.Publish) {
 				return {
 					kind: 'Publish',
-					modules: transaction.Publish.modules,
+					modules: transaction.Publish.modules.map((mod) => Array.from(fromB64(mod))),
 					dependencies: transaction.Publish.dependencies,
 				};
 			}
@@ -320,7 +326,7 @@ export function v1BlockDataFromTransactionBlockState(
 			if (transaction.Upgrade) {
 				return {
 					kind: 'Upgrade',
-					modules: transaction.Upgrade.modules,
+					modules: transaction.Upgrade.modules.map((mod) => Array.from(fromB64(mod))),
 					dependencies: transaction.Upgrade.dependencies,
 					packageId: transaction.Upgrade.package,
 					ticket: convertTransactionArgument(transaction.Upgrade.ticket, inputs),
@@ -377,7 +383,19 @@ export function transactionBlockStateFromV1BlockData(
 		inputs: data.inputs.map((input) => {
 			if (input.kind === 'Input') {
 				if (is(NormalizedCallArg, input.value)) {
-					return input.value;
+					const value = parse(NormalizedCallArg, input.value);
+
+					if (value.Object) {
+						return {
+							Object: value.Object,
+						};
+					}
+
+					return {
+						Pure: {
+							bytes: toB64(new Uint8Array(value.Pure)),
+						},
+					};
 				}
 
 				if (input.type === 'object') {
@@ -432,7 +450,7 @@ export function transactionBlockStateFromV1BlockData(
 				case 'Publish': {
 					return {
 						Publish: {
-							modules: transaction.modules,
+							modules: transaction.modules.map((mod) => toB64(Uint8Array.from(mod))),
 							dependencies: transaction.dependencies,
 						},
 					};
@@ -456,7 +474,7 @@ export function transactionBlockStateFromV1BlockData(
 				case 'Upgrade': {
 					return {
 						Upgrade: {
-							modules: transaction.modules,
+							modules: transaction.modules.map((mod) => toB64(Uint8Array.from(mod))),
 							dependencies: transaction.dependencies,
 							package: transaction.packageId,
 							ticket: parseV1TransactionArgument(transaction.ticket),

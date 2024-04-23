@@ -79,7 +79,7 @@ describe('offline build', () => {
 
 	it('breaks reference equality', () => {
 		const tx = setup();
-		const tx2 = new TransactionBlock(tx);
+		const tx2 = TransactionBlock.from(tx);
 
 		tx.setGasBudget(999);
 
