@@ -33,7 +33,7 @@ pub fn verify_sender_signed_data_message_signatures(
     );
 
     // 3. Each signer must provide a signature.
-    let present_sigs = txn.get_signer_sig_mapping(true)?;
+    let present_sigs = txn.get_signer_sig_mapping(verify_params.verify_legacy_zklogin_address)?;
     for s in signers {
         if !present_sigs.contains_key(&s) {
             return Err(SuiError::SignerSignatureAbsent {
