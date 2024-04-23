@@ -101,7 +101,7 @@ pub async fn start_test_indexer_impl(
 
     if let Some(new_database) = new_database {
         // Switch to default to create a new database
-        let (default_db_url, _) = replace_db_name(&parsed_url.expose_secret(), "postgres");
+        let (default_db_url, _) = replace_db_name(parsed_url.expose_secret(), "postgres");
 
         // Open in default mode
         let blocking_pool =
@@ -117,13 +117,13 @@ pub async fn start_test_indexer_impl(
         default_conn
             .batch_execute(&format!("CREATE DATABASE {}", new_database))
             .unwrap();
-        parsed_url = replace_db_name(&parsed_url.expose_secret(), &new_database)
+        parsed_url = replace_db_name(parsed_url.expose_secret(), &new_database)
             .0
             .into();
     }
 
     let blocking_pool =
-        new_pg_connection_pool_with_config(&parsed_url.expose_secret(), Some(5), pool_config)
+        new_pg_connection_pool_with_config(parsed_url.expose_secret(), Some(5), pool_config)
             .unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
