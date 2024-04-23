@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use sui_rest_api::Client;
@@ -16,6 +17,7 @@ pub struct ObjectsSnapshotProcessor<S> {
     pub store: S,
     metrics: IndexerMetrics,
     pub config: SnapshotLagConfig,
+    cancel: CancellationToken,
 }
 
 #[derive(Clone)]
@@ -70,12 +72,14 @@ where
         store: S,
         metrics: IndexerMetrics,
         config: SnapshotLagConfig,
+        cancel: CancellationToken,
     ) -> ObjectsSnapshotProcessor<S> {
         Self {
             client,
             store,
             metrics,
             config,
+            cancel,
         }
     }
 
@@ -104,52 +108,52 @@ where
         // with MAX and MIN, the CSR range will vary from MIN cps to MAX cps
         let snapshot_window =
             self.config.snapshot_max_lag as u64 - self.config.snapshot_min_lag as u64;
-        let mut latest_cp = self
-            .store
-            .get_latest_checkpoint_sequence_number()
-            .await?
-            .unwrap_or_default();
-        // when backfill_mode is true, objects_snapshot will be updated with the latest
-        // in the checkpoint handler instead, because the async update in this processor
-        // is slower than other tables during the backfilling process.
-        let mut backfill_mode = true;
         let mut latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
 
-        loop {
-            if backfill_mode && latest_fn_cp > start_cp + self.config.snapshot_max_lag as u64 {
-                // backfill mode is true, and the lag is too high, so we need to wait for the lag to be reduced
-                // before we can update the snapshot.
-                tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration))
-                    .await;
-                latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
-                start_cp = self
-                    .store
-                    .get_latest_object_snapshot_checkpoint_sequence_number()
-                    .await?
-                    .unwrap_or_default();
-                continue;
-            } else if backfill_mode {
-                // flip the backfill mode to false, so that later objects_snapshot will be updated
-                // via this processor instead of the checkpoint handler.
-                backfill_mode = false;
+        // While the below is true, we are in backfill mode, and so `ObjectsSnapshotProcessor` will
+        // no-op. Once we exit the loop, this task will then be responsible for updating the
+        // `objects_snapshot` table.
+        while latest_fn_cp > start_cp + self.config.snapshot_max_lag as u64 {
+            tokio::select! {
+                _ = self.cancel.cancelled() => {
+                    info!("Shutdown signal received, terminating object snapshot processor");
+                    return Ok(());
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration)) => {
+                    latest_fn_cp = self.client.get_latest_checkpoint().await?.sequence_number;
+                    start_cp = self
+                        .store
+                        .get_latest_object_snapshot_checkpoint_sequence_number()
+                        .await?
+                        .unwrap_or_default();
+                }
             }
+        }
 
-            while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration))
-                    .await;
-                latest_cp = self
-                    .store
-                    .get_latest_checkpoint_sequence_number()
-                    .await?
-                    .unwrap_or_default();
+        loop {
+            tokio::select! {
+                _ = self.cancel.cancelled() => {
+                    info!("Shutdown signal received, terminating object snapshot processor");
+                    return Ok(());
+                }
+                _ = tokio::time::sleep(std::time::Duration::from_secs(self.config.sleep_duration)) => {
+                    let latest_cp = self
+                        .store
+                        .get_latest_checkpoint_sequence_number()
+                        .await?
+                        .unwrap_or_default();
+
+                    if latest_cp > start_cp + self.config.snapshot_max_lag as u64 {
+                        self.store
+                            .update_objects_snapshot(start_cp, start_cp + snapshot_window)
+                            .await?;
+                        start_cp += snapshot_window;
+                        self.metrics
+                            .latest_object_snapshot_sequence_number
+                            .set(start_cp as i64);
+                    }
+                }
             }
-            self.store
-                .update_objects_snapshot(start_cp, start_cp + snapshot_window)
-                .await?;
-            start_cp += snapshot_window;
-            self.metrics
-                .latest_object_snapshot_sequence_number
-                .set(start_cp as i64);
         }
     }
 }

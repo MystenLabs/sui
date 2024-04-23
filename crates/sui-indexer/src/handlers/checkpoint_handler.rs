@@ -21,6 +21,7 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
 };
 use sui_types::object::Object;
+use tokio_util::sync::CancellationToken;
 
 use tokio::sync::watch;
 
@@ -64,6 +65,7 @@ pub async fn new_handlers<S>(
     client: Client,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    cancel: CancellationToken,
 ) -> Result<CheckpointHandler<S>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -92,6 +94,7 @@ where
         indexed_checkpoint_receiver,
         tx,
         next_checkpoint_sequence_number,
+        cancel.clone()
     ));
     Ok(CheckpointHandler::new(
         state,
