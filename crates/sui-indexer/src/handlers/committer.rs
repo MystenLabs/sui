@@ -51,9 +51,6 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         if cancel.is_cancelled() {
             break;
         }
-        if indexed_checkpoint_batch.is_empty() {
-            continue;
-        }
 
         let mut latest_fn_cp_res = client.get_latest_checkpoint().await;
         while latest_fn_cp_res.is_err() {

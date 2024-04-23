@@ -10,7 +10,6 @@ use tokio_util::sync::CancellationToken;
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
