@@ -3349,13 +3349,9 @@ async fn test_cluster_helper() -> (
     TestCluster,
     SuiClient,
     u64,
-    ObjectID,
-    ObjectID,
-    ObjectID,
-    KeyIdentity,
-    KeyIdentity,
-    SuiAddress,
-    SuiAddress,
+    [ObjectID; 3],
+    [KeyIdentity; 2],
+    [SuiAddress; 2],
 ) {
     let mut test_cluster = TestClusterBuilder::new().build().await;
     let rgp = test_cluster.get_reference_gas_price().await;
@@ -3393,30 +3389,19 @@ async fn test_cluster_helper() -> (
         test_cluster,
         client,
         rgp,
-        object_id1,
-        object_id2,
-        object_id3,
-        recipient1,
-        recipient2,
-        address2,
-        address3,
+        [object_id1, object_id2, object_id3],
+        [recipient1, recipient2],
+        [address2, address3],
     )
 }
 
 #[sim_test]
 async fn test_pay() -> Result<(), anyhow::Error> {
-    let (
-        mut test_cluster,
-        client,
-        rgp,
-        object_id1,
-        object_id2,
-        object_id3,
-        recipient1,
-        recipient2,
-        address2,
-        address3,
-    ) = test_cluster_helper().await;
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2, object_id3) = (objects[0], objects[1], objects[2]);
+    let (recipient1, recipient2) = (&recipients[0], &recipients[1]);
+    let (address2, address3) = (addresses[0], addresses[1]);
     let context = &mut test_cluster.wallet;
     let pay = SuiClientCommands::Pay {
         input_coins: vec![object_id1, object_id2],
@@ -3438,7 +3423,7 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     // we expect this to be the gas coin used
     let pay = SuiClientCommands::Pay {
         input_coins: vec![object_id1, object_id2],
-        recipients: vec![recipient1, recipient2],
+        recipients: vec![recipient1.clone(), recipient2.clone()],
         gas: None, // will select the first available gas coin
         amounts: amounts.into(),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -3514,23 +3499,16 @@ async fn test_pay() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_pay_sui() -> Result<(), anyhow::Error> {
-    let (
-        mut test_cluster,
-        client,
-        rgp,
-        object_id1,
-        object_id2,
-        _object_id3,
-        recipient1,
-        recipient2,
-        address2,
-        address3,
-    ) = test_cluster_helper().await;
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let (recipient1, recipient2) = (&recipients[0], &recipients[1]);
+    let (address2, address3) = (addresses[0], addresses[1]);
     let context = &mut test_cluster.wallet;
     let amounts = [1000, 5000];
     let pay_sui = SuiClientCommands::PaySui {
         input_coins: vec![object_id1, object_id2],
-        recipients: vec![recipient1, recipient2],
+        recipients: vec![recipient1.clone(), recipient2.clone()],
         amounts: amounts.into(),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         dry_run: false,
@@ -3603,22 +3581,15 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
-    let (
-        mut test_cluster,
-        client,
-        rgp,
-        object_id1,
-        object_id2,
-        _object_id3,
-        recipient1,
-        _recipient2,
-        address2,
-        _address3,
-    ) = test_cluster_helper().await;
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
     let pay_all_sui = SuiClientCommands::PayAllSui {
         input_coins: vec![object_id1, object_id2],
-        recipient: recipient1,
+        recipient: recipient1.clone(),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
         dry_run: false,
         serialize_unsigned_transaction: false,
@@ -3658,18 +3629,11 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_transfer() -> Result<(), anyhow::Error> {
-    let (
-        mut test_cluster,
-        client,
-        rgp,
-        object_id1,
-        object_id2,
-        _object_id3,
-        recipient1,
-        _recipient2,
-        address2,
-        _address3,
-    ) = test_cluster_helper().await;
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let (object_id1, object_id2) = (objects[0], objects[1]);
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
     let transfer = SuiClientCommands::Transfer {
         to: KeyIdentity::Address(address2),
@@ -3687,7 +3651,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     assert!(transfer.is_err());
 
     let transfer = SuiClientCommands::Transfer {
-        to: recipient1,
+        to: recipient1.clone(),
         object_id: object_id1,
         gas: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -3730,18 +3694,11 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_transfer_sui() -> Result<(), anyhow::Error> {
-    let (
-        mut test_cluster,
-        client,
-        rgp,
-        object_id1,
-        _object_id2,
-        _object_id3,
-        recipient1,
-        _recipient2,
-        address2,
-        _address3,
-    ) = test_cluster_helper().await;
+    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
+        test_cluster_helper().await;
+    let object_id1 = objects[0];
+    let recipient1 = &recipients[0];
+    let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
     let amount = 1000;
     let transfer_sui = SuiClientCommands::TransferSui {
@@ -3789,7 +3746,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     }
     // transfer the whole object by not passing an amount
     let transfer_sui = SuiClientCommands::TransferSui {
-        to: recipient1,
+        to: recipient1.clone(),
         sui_coin_object_id: object_id1,
         amount: None,
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
