@@ -8,7 +8,7 @@ module sui::token_config_tests {
     use sui::token_test_utils::{Self as test, TEST};
     use sui::token;
 
-    /// Rule witness to store confuration for
+    /// Rule witness to store configuration for
     public struct Rule1 has drop {}
 
     /// Configuration for the Rule1.
