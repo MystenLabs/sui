@@ -253,21 +253,12 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		if (sizeDiff !== 0) {
 			this.mapArguments((arg) => {
 				switch (arg.$kind) {
-					case 'IntentResult':
-						if (arg.IntentResult > index) {
-							arg.IntentResult += sizeDiff;
-						}
-						break;
 					case 'Result':
 						if (arg.Result > index) {
 							arg.Result += sizeDiff;
 						}
 						break;
-					case 'NestedIntentResult':
-						if (arg.NestedIntentResult[0] > index) {
-							arg.NestedIntentResult[0] += sizeDiff;
-						}
-						break;
+
 					case 'NestedResult':
 						if (arg.NestedResult[0] > index) {
 							arg.NestedResult[0] += sizeDiff;

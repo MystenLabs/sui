@@ -84,8 +84,6 @@ export const Argument = transform(
 		object({ Input: number([integer()]), type: optional(literal('object')) }),
 		object({ Result: number([integer()]) }),
 		object({ NestedResult: tuple([number([integer()]), number([integer()])]) }),
-		object({ IntentResult: number([integer()]) }),
-		object({ NestedIntentResult: tuple([number([integer()]), number([integer()])]) }),
 	]),
 	(value) => ({
 		...value,
@@ -97,17 +95,13 @@ export const Argument = transform(
 	| { GasCoin: true }
 	| { Input: number; type?: 'pure' | 'object' }
 	| { Result: number }
-	| { NestedResult: [number, number] }
-	| { IntentResult: number }
-	| { NestedIntentResult: [number, number] },
+	| { NestedResult: [number, number] },
 	// Output
 	| { $kind: 'GasCoin'; GasCoin: true }
 	| { $kind: 'Input'; Input: number; type?: 'pure' }
 	| { $kind: 'Input'; Input: number; type?: 'object' }
 	| { $kind: 'Result'; Result: number }
 	| { $kind: 'NestedResult'; NestedResult: [number, number] }
-	| { $kind: 'IntentResult'; IntentResult: number }
-	| { $kind: 'NestedIntentResult'; NestedIntentResult: [number, number] }
 >;
 
 export type Argument = Output<typeof Argument>;
