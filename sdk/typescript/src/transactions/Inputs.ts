@@ -3,7 +3,6 @@
 
 import type { SerializedBcs } from '@mysten/bcs';
 
-import type { SharedObjectRef } from '../bcs/types.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { CallArg, ObjectRef } from './blockData/v2.js';
 
@@ -33,7 +32,11 @@ export const Inputs = {
 		objectId,
 		mutable,
 		initialSharedVersion,
-	}: SharedObjectRef): Extract<CallArg, { Object: unknown }> {
+	}: {
+		objectId: string;
+		mutable: boolean;
+		initialSharedVersion: string;
+	}): Extract<CallArg, { Object: unknown }> {
 		return {
 			$kind: 'Object',
 			Object: {
@@ -79,20 +82,8 @@ export function getIdFromCallArg(arg: string | CallArg) {
 	}
 
 	if (arg.UnresolvedObject) {
-		return normalizeSuiAddress(arg.UnresolvedObject.id);
+		return normalizeSuiAddress(arg.UnresolvedObject.objectId);
 	}
 
 	return undefined;
-}
-
-export function getSharedObjectInput(arg: CallArg): SharedObjectRef | undefined {
-	return typeof arg === 'object' && arg.Object?.SharedObject ? arg.Object.SharedObject : undefined;
-}
-
-export function isSharedObjectInput(arg: CallArg): boolean {
-	return !!getSharedObjectInput(arg);
-}
-
-export function isMutableSharedObjectInput(arg: CallArg): boolean {
-	return getSharedObjectInput(arg)?.mutable ?? false;
 }

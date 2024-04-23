@@ -196,7 +196,19 @@ describe('TXB v1 JSON serialization', () => {
 			}),
 		);
 
-		expect(tx.getBlockData()).toMatchObject(deserializedTxnBuilder.getBlockData());
+		const blockData = tx.getBlockData();
+		const blockDataFromJson = deserializedTxnBuilder.getBlockData();
+
+		if (json) {
+			// Argument types aren't in v1 JSON
+			blockDataFromJson.transactions.forEach((txn) => {
+				if (txn.MoveCall?.argumentTypes) {
+					delete txn.MoveCall.argumentTypes;
+				}
+			});
+		}
+
+		expect(blockData).toMatchObject(blockDataFromJson);
 	}
 
 	it('Move Shared Object Call with mutable reference', async () => {

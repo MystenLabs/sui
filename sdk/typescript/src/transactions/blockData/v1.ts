@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BaseSchema, Output } from 'valibot';
+import type { BaseSchema, Input, Output } from 'valibot';
 import {
 	array,
 	bigint,
@@ -191,9 +191,7 @@ export function v1BlockDataFromTransactionBlockState(
 				index,
 				value: input.Object.ImmOrOwnedObject
 					? {
-							ImmOrOwnedObject: {
-								objectId: input.Object.ImmOrOwnedObject.objectId,
-							},
+							ImmOrOwnedObject: input.Object.ImmOrOwnedObject,
 					  }
 					: input.Object.Receiving
 					? {
@@ -224,21 +222,21 @@ export function v1BlockDataFromTransactionBlockState(
 			};
 		}
 
+		if (input.UnresolvedPure) {
+			return {
+				kind: 'Input',
+				type: 'pure',
+				index,
+				value: input.UnresolvedPure.value,
+			};
+		}
+
 		if (input.UnresolvedObject) {
 			return {
 				kind: 'Input',
 				type: 'object',
 				index,
-				value: input.UnresolvedObject.id,
-			};
-		}
-
-		if (input.RawValue) {
-			return {
-				kind: 'Input',
-				type: 'pure',
-				index,
-				value: input.RawValue.value,
+				value: input.UnresolvedObject.objectId,
 			};
 		}
 
@@ -265,26 +263,29 @@ export function v1BlockDataFromTransactionBlockState(
 			if (transaction.MakeMoveVec) {
 				return {
 					kind: 'MakeMoveVec',
-					type: transaction.MakeMoveVec[0].Some
-						? { Some: transaction.MakeMoveVec[0].Some }
-						: { None: true },
-					objects: transaction.MakeMoveVec[1].map((arg) => convertTransactionArgument(arg, inputs)),
+					type:
+						transaction.MakeMoveVec.type === null
+							? { None: true }
+							: { Some: TypeTagSerializer.parseFromStr(transaction.MakeMoveVec.type) },
+					objects: transaction.MakeMoveVec.objects.map((arg) =>
+						convertTransactionArgument(arg, inputs),
+					),
 				};
 			}
 			if (transaction.MergeCoins) {
 				return {
 					kind: 'MergeCoins',
-					destination: convertTransactionArgument(transaction.MergeCoins[0], inputs),
-					sources: transaction.MergeCoins[1].map((arg) => convertTransactionArgument(arg, inputs)),
+					destination: convertTransactionArgument(transaction.MergeCoins.destination, inputs),
+					sources: transaction.MergeCoins.sources.map((arg) =>
+						convertTransactionArgument(arg, inputs),
+					),
 				};
 			}
 			if (transaction.MoveCall) {
 				return {
 					kind: 'MoveCall',
 					target: `${transaction.MoveCall.package}::${transaction.MoveCall.module}::${transaction.MoveCall.function}`,
-					typeArguments: transaction.MoveCall.typeArguments.map((arg) =>
-						TypeTagSerializer.tagToString(arg),
-					),
+					typeArguments: transaction.MoveCall.typeArguments,
 					arguments: transaction.MoveCall.arguments.map((arg) =>
 						convertTransactionArgument(arg, inputs),
 					),
@@ -293,34 +294,36 @@ export function v1BlockDataFromTransactionBlockState(
 			if (transaction.Publish) {
 				return {
 					kind: 'Publish',
-					modules: transaction.Publish[0],
-					dependencies: transaction.Publish[1],
+					modules: transaction.Publish.modules,
+					dependencies: transaction.Publish.dependencies,
 				};
 			}
 			if (transaction.SplitCoins) {
 				return {
 					kind: 'SplitCoins',
-					coin: convertTransactionArgument(transaction.SplitCoins[0], inputs),
-					amounts: transaction.SplitCoins[1].map((arg) => convertTransactionArgument(arg, inputs)),
+					coin: convertTransactionArgument(transaction.SplitCoins.coin, inputs),
+					amounts: transaction.SplitCoins.amounts.map((arg) =>
+						convertTransactionArgument(arg, inputs),
+					),
 				};
 			}
 			if (transaction.TransferObjects) {
 				return {
 					kind: 'TransferObjects',
-					objects: transaction.TransferObjects[0].map((arg) =>
+					objects: transaction.TransferObjects.objects.map((arg) =>
 						convertTransactionArgument(arg, inputs),
 					),
-					address: convertTransactionArgument(transaction.TransferObjects[1], inputs),
+					address: convertTransactionArgument(transaction.TransferObjects.recipient, inputs),
 				};
 			}
 
 			if (transaction.Upgrade) {
 				return {
 					kind: 'Upgrade',
-					modules: transaction.Upgrade[0],
-					dependencies: transaction.Upgrade[1],
-					packageId: transaction.Upgrade[2],
-					ticket: convertTransactionArgument(transaction.Upgrade[3], inputs),
+					modules: transaction.Upgrade.modules,
+					dependencies: transaction.Upgrade.dependencies,
+					packageId: transaction.Upgrade.package,
+					ticket: convertTransactionArgument(transaction.Upgrade.ticket, inputs),
 				};
 			}
 
@@ -354,7 +357,6 @@ export function transactionBlockStateFromV1BlockData(
 ): TransactionBlockState {
 	return parse(TransactionBlockState, {
 		version: 2,
-		features: [],
 		sender: data.sender ?? null,
 		expiration: data.expiration
 			? 'Epoch' in data.expiration
@@ -378,9 +380,16 @@ export function transactionBlockStateFromV1BlockData(
 					return input.value;
 				}
 
+				if (input.type === 'object') {
+					return {
+						UnresolvedObject: {
+							objectId: input.value as string,
+						},
+					};
+				}
+
 				return {
-					RawValue: {
-						type: input.type ? (input.type === 'pure' ? 'Pure' : 'Object') : null,
+					UnresolvedPure: {
 						value: input.value,
 					},
 				};
@@ -392,23 +401,20 @@ export function transactionBlockStateFromV1BlockData(
 			switch (transaction.kind) {
 				case 'MakeMoveVec':
 					return {
-						MakeMoveVec: [
-							'Some' in transaction.type
-								? {
-										Some: transaction.type.Some,
-								  }
-								: {
-										None: true,
-								  },
-							transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
-						],
+						MakeMoveVec: {
+							type:
+								'Some' in transaction.type
+									? TypeTagSerializer.tagToString(transaction.type.Some)
+									: null,
+							objects: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
+						},
 					};
 				case 'MergeCoins': {
 					return {
-						MergeCoins: [
-							parseV1TransactionArgument(transaction.destination),
-							transaction.sources.map((arg) => parseV1TransactionArgument(arg)),
-						],
+						MergeCoins: {
+							destination: parseV1TransactionArgument(transaction.destination),
+							sources: transaction.sources.map((arg) => parseV1TransactionArgument(arg)),
+						},
 					};
 				}
 				case 'MoveCall': {
@@ -418,52 +424,55 @@ export function transactionBlockStateFromV1BlockData(
 							package: pkg,
 							module: mod,
 							function: fn,
-							typeArguments: transaction.typeArguments.map((arg) =>
-								TypeTagSerializer.parseFromStr(arg),
-							),
+							typeArguments: transaction.typeArguments,
 							arguments: transaction.arguments.map((arg) => parseV1TransactionArgument(arg)),
 						},
 					};
 				}
 				case 'Publish': {
 					return {
-						Publish: [transaction.modules, transaction.dependencies],
+						Publish: {
+							modules: transaction.modules,
+							dependencies: transaction.dependencies,
+						},
 					};
 				}
 				case 'SplitCoins': {
 					return {
-						SplitCoins: [
-							parseV1TransactionArgument(transaction.coin),
-							transaction.amounts.map((arg) => parseV1TransactionArgument(arg)),
-						],
+						SplitCoins: {
+							coin: parseV1TransactionArgument(transaction.coin),
+							amounts: transaction.amounts.map((arg) => parseV1TransactionArgument(arg)),
+						},
 					};
 				}
 				case 'TransferObjects': {
 					return {
-						TransferObjects: [
-							transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
-							parseV1TransactionArgument(transaction.address),
-						],
+						TransferObjects: {
+							objects: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
+							recipient: parseV1TransactionArgument(transaction.address),
+						},
 					};
 				}
 				case 'Upgrade': {
 					return {
-						Upgrade: [
-							transaction.modules,
-							transaction.dependencies,
-							transaction.packageId,
-							parseV1TransactionArgument(transaction.ticket),
-						],
+						Upgrade: {
+							modules: transaction.modules,
+							dependencies: transaction.dependencies,
+							package: transaction.packageId,
+							ticket: parseV1TransactionArgument(transaction.ticket),
+						},
 					};
 				}
 			}
 
 			throw new Error(`Unknown transaction ${Object.keys(transaction)}`);
 		}),
-	});
+	} satisfies Input<typeof TransactionBlockState>);
 }
 
-function parseV1TransactionArgument(arg: Output<typeof TransactionArgument>) {
+function parseV1TransactionArgument(
+	arg: Output<typeof TransactionArgument>,
+): Input<typeof Argument> {
 	switch (arg.kind) {
 		case 'GasCoin': {
 			return { GasCoin: true };

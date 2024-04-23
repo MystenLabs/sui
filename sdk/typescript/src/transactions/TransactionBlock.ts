@@ -10,7 +10,7 @@ import type { SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
-import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
+import type { CallArg, Transaction } from './blockData/v2.js';
 import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
 import { getIdFromCallArg, Inputs } from './Inputs.js';
 import type {
@@ -135,6 +135,10 @@ export class TransactionBlock {
 		this.#serializationPlugins.push(step);
 	}
 
+	addBuildPlugin(step: TransactionBlockPlugin) {
+		this.#buildPlugins.push(step);
+	}
+
 	addIntentResolver(intent: string, resolver: TransactionBlockPlugin) {
 		if (this.#intentResolvers.has(intent) && this.#intentResolvers.get(intent) !== resolver) {
 			throw new Error(`Intent resolver for ${intent} already exists`);
@@ -208,7 +212,7 @@ export class TransactionBlock {
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
 						? Inputs.Pure(value)
-						: { $kind: 'RawValue', RawValue: { value } },
+						: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
 				);
 			}),
 		});
@@ -256,7 +260,7 @@ export class TransactionBlock {
 					typeof value === 'string'
 						? {
 								$kind: 'UnresolvedObject',
-								UnresolvedObject: { id: normalizeSuiAddress(value) },
+								UnresolvedObject: { objectId: normalizeSuiAddress(value) },
 						  }
 						: value,
 			  );
@@ -373,12 +377,12 @@ export class TransactionBlock {
 				module: string;
 				function: string;
 				arguments?: (TransactionArgument | SerializedBcs<any>)[];
-				typeArguments?: (string | TypeTag)[];
+				typeArguments?: string[];
 		  }
 		| {
 				target: string;
 				arguments?: (TransactionArgument | SerializedBcs<any>)[];
-				typeArguments?: (string | TypeTag)[];
+				typeArguments?: string[];
 		  }) {
 		return this.add(
 			Transactions.MoveCall({
@@ -494,6 +498,7 @@ export class TransactionBlock {
 					if (calledNext) {
 						throw new Error(`next() was call multiple times in TransactionBlockPlugin ${i}`);
 					}
+
 					calledNext = true;
 
 					await next();
@@ -517,8 +522,8 @@ export class TransactionBlock {
 	async #prepareForSerialization(options: SerializeTransactionBlockOptions) {
 		const intents = new Set<string>();
 		for (const transaction of this.#blockData.transactions) {
-			if (transaction.TransactionIntent && options.supportedIntents) {
-				intents.add(transaction.TransactionIntent.name);
+			if (transaction.Intent && options.supportedIntents) {
+				intents.add(transaction.Intent.name);
 			}
 		}
 

@@ -30,6 +30,7 @@ export class TypeTagSerializer {
 		} else if (str === 'signer') {
 			return { signer: null };
 		}
+
 		const vectorMatch = str.match(VECTOR_REGEX);
 		if (vectorMatch) {
 			return {

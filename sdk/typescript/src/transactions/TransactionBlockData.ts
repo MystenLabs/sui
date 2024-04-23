@@ -134,7 +134,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		onlyTransactionKind?: boolean;
 	} = {}) {
 		// TODO validate that inputs and intents are actually resolved
-		const inputs = this.inputs as Extract<CallArg, { Object: unknown } | { Pure: unknown }>[];
+		const inputs = this.inputs as (typeof bcs.CallArg.$inferInput)[];
 		const transactions = this.transactions as Extract<
 			Transaction<Exclude<Argument, { IntentResult: unknown } | { NestedIntentResult: unknown }>>,
 			{ Upgrade: unknown }
@@ -207,31 +207,29 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 					tx.MoveCall.arguments = tx.MoveCall.arguments.map((arg) => fn(arg));
 					break;
 				case 'TransferObjects':
-					tx.TransferObjects[0] = tx.TransferObjects[0].map((arg) => fn(arg));
-					tx.TransferObjects[1] = fn(tx.TransferObjects[1]);
+					tx.TransferObjects.objects = tx.TransferObjects.objects.map((arg) => fn(arg));
+					tx.TransferObjects.recipient = fn(tx.TransferObjects.recipient);
 					break;
 				case 'SplitCoins':
-					tx.SplitCoins[0] = fn(tx.SplitCoins[0]);
-					tx.SplitCoins[1] = tx.SplitCoins[1].map((arg) => fn(arg));
+					tx.SplitCoins.coin = fn(tx.SplitCoins.coin);
+					tx.SplitCoins.amounts = tx.SplitCoins.amounts.map((arg) => fn(arg));
 					break;
 				case 'MergeCoins':
-					tx.MergeCoins[0] = fn(tx.MergeCoins[0]);
-					tx.MergeCoins[1] = tx.MergeCoins[1].map((arg) => fn(arg));
+					tx.MergeCoins.destination = fn(tx.MergeCoins.destination);
+					tx.MergeCoins.sources = tx.MergeCoins.sources.map((arg) => fn(arg));
 					break;
 				case 'MakeMoveVec':
-					tx.MakeMoveVec = [tx.MakeMoveVec[0], tx.MakeMoveVec[1].map((arg) => fn(arg))];
+					tx.MakeMoveVec.objects = tx.MakeMoveVec.objects.map((arg) => fn(arg));
 					break;
 				case 'Upgrade':
-					tx.Upgrade[3] = fn(tx.Upgrade[3]);
+					tx.Upgrade.ticket = fn(tx.Upgrade.ticket);
 					break;
-				case 'TransactionIntent':
-					const inputs = tx.TransactionIntent.inputs;
-					tx.TransactionIntent.inputs = {};
+				case 'Intent':
+					const inputs = tx.Intent.inputs;
+					tx.Intent.inputs = {};
 
 					for (const [key, value] of Object.entries(inputs)) {
-						tx.TransactionIntent.inputs[key] = Array.isArray(value)
-							? value.map((arg) => fn(arg))
-							: fn(value);
+						tx.Intent.inputs[key] = Array.isArray(value) ? value.map((arg) => fn(arg)) : fn(value);
 					}
 
 					break;

@@ -146,8 +146,71 @@ export class ObjectCache {
 	}
 
 	asPlugin(): TransactionBlockPlugin {
-		return async (_blockData, _options, next) => {
+		return async (blockData, _options, next) => {
+			const unresolvedObjects = blockData.inputs
+				.filter((input) => input.UnresolvedObject)
+				.map((input) => input.UnresolvedObject!.objectId);
+
+			const cached = (await this.#cache.getObjects(unresolvedObjects)).filter(
+				(obj) => obj !== null,
+			);
+
+			const byId = new Map(cached.map((obj) => [obj!.objectId, obj]));
+
+			for (const input of blockData.inputs) {
+				if (!input.UnresolvedObject) {
+					continue;
+				}
+
+				const cached = byId.get(input.UnresolvedObject.objectId);
+
+				if (!cached) {
+					continue;
+				}
+
+				if (cached.initialSharedVersion && !input.UnresolvedObject.initialSharedVersion) {
+					input.UnresolvedObject.initialSharedVersion = cached.initialSharedVersion;
+				}
+
+				if (cached.version && !input.UnresolvedObject.version) {
+					input.UnresolvedObject.version = cached.version;
+				}
+
+				if (cached.digest && !input.UnresolvedObject.digest) {
+					input.UnresolvedObject.digest = cached.digest;
+				}
+			}
+
+			await Promise.all(
+				blockData.transactions.map(async (tx) => {
+					if (tx.MoveCall) {
+						const def = await this.getMoveFunctionDefinition({
+							package: tx.MoveCall.package,
+							module: tx.MoveCall.module,
+							function: tx.MoveCall.function,
+						});
+
+						if (def) {
+							tx.MoveCall.argumentTypes = def.parameters;
+						}
+					}
+				}),
+			);
+
 			await next();
+
+			await Promise.all(
+				blockData.transactions.map(async (tx) => {
+					if (tx.MoveCall?.argumentTypes) {
+						await this.#cache.addMoveFunctionDefinition({
+							package: tx.MoveCall.package,
+							module: tx.MoveCall.module,
+							function: tx.MoveCall.function,
+							parameters: tx.MoveCall.argumentTypes,
+						});
+					}
+				}),
+			);
 		};
 	}
 
@@ -276,7 +339,7 @@ export class CachingTransactionBlockExecutor {
 
 		signer: Signer;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
-		transactionBlock.addSerializationPlugin(this.cache.asPlugin());
+		transactionBlock.addBuildPlugin(this.cache.asPlugin());
 		const results = await this.#client.signAndExecuteTransactionBlock({
 			...input,
 			transactionBlock: await transactionBlock.build({

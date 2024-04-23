@@ -4,8 +4,8 @@
 import { toB58 } from '@mysten/bcs';
 import { expect, it } from 'vitest';
 
-import { bcs, TypeTagSerializer } from '../../bcs/index.js';
-import { normalizeSuiAddress } from '../../utils/sui-types.js';
+import { bcs } from '../../bcs/index.js';
+import { normalizeStructTag, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 // Oooh-weeee we nailed it!
 it('can serialize simplified programmable call struct', () => {
@@ -13,7 +13,7 @@ it('can serialize simplified programmable call struct', () => {
 		package: '0x2',
 		module: 'display',
 		function: 'new',
-		typeArguments: [TypeTagSerializer.parseFromStr('0x6::capy::Capy', true)],
+		typeArguments: [normalizeStructTag('0x6::capy::Capy')],
 		arguments: [
 			{
 				$kind: 'GasCoin',
@@ -114,7 +114,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 								package: sui,
 								module: 'display',
 								function: 'new',
-								typeArguments: [TypeTagSerializer.parseFromStr(`${sui}::capy::Capy`)],
+								typeArguments: [`${sui}::capy::Capy`],
 								arguments: [
 									// publisher object
 									{
@@ -130,7 +130,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 								package: sui,
 								module: 'display',
 								function: 'add_multiple',
-								typeArguments: [TypeTagSerializer.parseFromStr(`${sui}::capy::Capy`)],
+								typeArguments: [`${sui}::capy::Capy`],
 								arguments: [
 									// result of the first transaction
 									{
@@ -156,7 +156,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 								package: sui,
 								module: 'display',
 								function: 'update_version',
-								typeArguments: [TypeTagSerializer.parseFromStr(`${sui}::capy::Capy`)],
+								typeArguments: [`${sui}::capy::Capy`],
 								arguments: [
 									// result of the first transaction again
 									{
@@ -168,8 +168,8 @@ it('can serialize transaction data with a programmable transaction', () => {
 						},
 						{
 							$kind: 'TransferObjects',
-							TransferObjects: [
-								[
+							TransferObjects: {
+								objects: [
 									// the display object
 									{
 										$kind: 'Result',
@@ -177,11 +177,11 @@ it('can serialize transaction data with a programmable transaction', () => {
 									},
 								],
 								// address is also an input
-								{
+								recipient: {
 									$kind: 'Input',
 									Input: 3,
 								},
-							],
+							},
 						},
 					],
 				},

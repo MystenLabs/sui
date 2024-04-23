@@ -17,7 +17,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 	beforeAll(async () => {
 		const packagePath = __dirname + '/./data/tto';
-		packageId = normalizeSuiAddress((await publishPackage(packagePath)).packageId);
+		packageId = (await publishPackage(packagePath)).packageId;
 	});
 
 	beforeEach(async () => {
@@ -27,7 +27,6 @@ describe('CachingTransactionBlockExecutor', async () => {
 			address: toolbox.address(),
 		});
 		const txb = new TransactionBlock();
-		vi.spyOn(toolbox.client, 'getProtocolConfig');
 		vi.spyOn(toolbox.client, 'getNormalizedMoveFunction');
 		vi.spyOn(toolbox.client, 'multiGetObjects');
 		txb.moveCall({
@@ -81,16 +80,14 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 		expect(result.effects?.status.status).toBe('success');
 		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledOnce();
-		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledWith([
-			{
-				package: packageId,
-				module: 'tto',
-				function: 'receiver',
-			},
-		]);
+		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledWith({
+			package: packageId,
+			module: 'tto',
+			function: 'receiver',
+		});
 
 		const receiver = await executor.cache.getMoveFunctionDefinition({
-			package: packageId,
+			package: normalizeSuiAddress(packageId),
 			module: 'tto',
 			function: 'receiver',
 		});
@@ -100,7 +97,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 		expect(receiver).toEqual({
 			module: 'tto',
 			function: 'receiver',
-			package: packageId,
+			package: normalizeSuiAddress(packageId),
 			parameters: [
 				{
 					body: {
@@ -156,7 +153,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 		txb.setSender(toolbox.address());
 		const loadedIds: string[] = [];
 
-		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
 		const result = await executor.signAndExecuteTransactionBlock({
 			transactionBlock: txb,
@@ -165,7 +162,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 				showEffects: true,
 			},
 		});
-		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
 		expect(result.effects?.status.status).toBe('success');
 		expect(loadedIds).toEqual([]);
@@ -174,7 +171,7 @@ describe('CachingTransactionBlockExecutor', async () => {
 		txb2.transferObjects([txb2.object(receiveObjectId.reference.objectId)], toolbox.address());
 		txb2.setSender(toolbox.address());
 
-		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
 		const result2 = await executor.signAndExecuteTransactionBlock({
 			transactionBlock: txb2,
@@ -183,42 +180,17 @@ describe('CachingTransactionBlockExecutor', async () => {
 				showEffects: true,
 			},
 		});
-		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 		expect(result2.effects?.status.status).toBe('success');
-	});
-
-	it('caches protocol config', async () => {
-		const txb = new TransactionBlock();
-
-		txb.setSender(toolbox.address());
-
-		const result = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
-			signer: toolbox.keypair,
-			options: {
-				showEffects: true,
-			},
-		});
-		expect(result.effects?.status.status).toBe('success');
-		expect(toolbox.client.getProtocolConfig).toHaveBeenCalledTimes(1);
-
-		const txb2 = new TransactionBlock();
-		txb2.setSender(toolbox.address());
-
-		const result2 = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb2,
-			signer: toolbox.keypair,
-			options: {
-				showEffects: true,
-			},
-		});
-		expect(result2.effects?.status.status).toBe('success');
-		expect(toolbox.client.getProtocolConfig).toHaveBeenCalledTimes(1);
-
-		const txb3 = new TransactionBlock();
-		txb3.setSender(toolbox.address());
 
 		await executor.reset();
+
+		const txb3 = new TransactionBlock();
+		txb3.transferObjects([txb3.object(receiveObjectId.reference.objectId)], toolbox.address());
+		txb3.setSender(toolbox.address());
+
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
+
 		const result3 = await executor.signAndExecuteTransactionBlock({
 			transactionBlock: txb3,
 			signer: toolbox.keypair,
@@ -226,9 +198,8 @@ describe('CachingTransactionBlockExecutor', async () => {
 				showEffects: true,
 			},
 		});
-
+		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(1);
 		expect(result3.effects?.status.status).toBe('success');
-		expect(toolbox.client.getProtocolConfig).toHaveBeenCalledTimes(2);
 	});
 });
 

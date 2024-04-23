@@ -19,8 +19,8 @@ export function coinWithBalance(type: string, balance: bigint | number) {
 		txb.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
 
 		return txb.add({
-			$kind: 'TransactionIntent',
-			TransactionIntent: {
+			$kind: 'Intent',
+			Intent: {
 				name: COIN_WITH_BALANCE,
 				inputs: {},
 				data: {
@@ -45,11 +45,8 @@ async function resolveCoinBalance(
 	}
 
 	for (const transaction of blockData.transactions) {
-		if (
-			transaction.$kind === 'TransactionIntent' &&
-			transaction.TransactionIntent.name === COIN_WITH_BALANCE
-		) {
-			const { type, balance } = transaction.TransactionIntent.data as {
+		if (transaction.$kind === 'Intent' && transaction.Intent.name === COIN_WITH_BALANCE) {
+			const { type, balance } = transaction.Intent.data as {
 				type: string;
 				balance: bigint;
 			};
@@ -65,8 +62,6 @@ async function resolveCoinBalance(
 	for (const input of blockData.inputs) {
 		if (input.Object?.ImmOrOwnedObject) {
 			usedIds.add(input.Object.ImmOrOwnedObject.objectId);
-		} else if (input.UnresolvedObject) {
-			usedIds.add(input.UnresolvedObject.id);
 		}
 	}
 
@@ -91,14 +86,11 @@ async function resolveCoinBalance(
 	mergedCoins.set('0x2::sui::SUI', { $kind: 'GasCoin', GasCoin: true });
 
 	for (const [index, transaction] of blockData.transactions.entries()) {
-		if (
-			transaction.$kind !== 'TransactionIntent' ||
-			transaction.TransactionIntent.name !== COIN_WITH_BALANCE
-		) {
+		if (transaction.$kind !== 'Intent' || transaction.Intent.name !== COIN_WITH_BALANCE) {
 			continue;
 		}
 
-		const { type, balance } = transaction.TransactionIntent.data as {
+		const { type, balance } = transaction.Intent.data as {
 			type: string;
 			balance: bigint;
 		};

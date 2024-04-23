@@ -5,10 +5,9 @@ import { fromB64 } from '@mysten/bcs';
 import { parse } from 'valibot';
 import type { Input } from 'valibot';
 
-import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
 import type { CallArg, Transaction } from './blockData/v2.js';
-import { Argument, TypeTag } from './blockData/v2.js';
+import { Argument } from './blockData/v2.js';
 import type { TransactionBlock } from './TransactionBlock.js';
 
 export type TransactionArgument = Argument | ((txb: TransactionBlock) => Argument);
@@ -37,12 +36,12 @@ export const Transactions = {
 					module: string;
 					function: string;
 					arguments?: Argument[];
-					typeArguments?: (string | TypeTag)[];
+					typeArguments?: string[];
 			  }
 			| {
 					target: string;
 					arguments?: Argument[];
-					typeArguments?: (string | TypeTag)[];
+					typeArguments?: string[];
 			  },
 	): TransactionShape<'MoveCall'> {
 		const [pkg, mod, fn] =
@@ -51,13 +50,10 @@ export const Transactions = {
 		return {
 			$kind: 'MoveCall',
 			MoveCall: {
-				package: pkg,
+				package: normalizeSuiObjectId(pkg),
 				module: mod,
 				function: fn,
-				typeArguments:
-					input.typeArguments?.map((arg) =>
-						typeof arg === 'string' ? parse(TypeTag, TypeTagSerializer.parseFromStr(arg)) : arg,
-					) ?? [],
+				typeArguments: input.typeArguments ?? [],
 				arguments: input.arguments ?? [],
 			},
 		};
@@ -69,7 +65,10 @@ export const Transactions = {
 	): TransactionShape<'TransferObjects'> {
 		return {
 			$kind: 'TransferObjects',
-			TransferObjects: [objects.map((o) => parse(Argument, o)), parse(Argument, address)],
+			TransferObjects: {
+				objects: objects.map((o) => parse(Argument, o)),
+				recipient: parse(Argument, address),
+			},
 		};
 	},
 	SplitCoins(
@@ -78,7 +77,10 @@ export const Transactions = {
 	): TransactionShape<'SplitCoins'> {
 		return {
 			$kind: 'SplitCoins',
-			SplitCoins: [parse(Argument, coin), amounts.map((o) => parse(Argument, o))],
+			SplitCoins: {
+				coin: parse(Argument, coin),
+				amounts: amounts.map((o) => parse(Argument, o)),
+			},
 		};
 	},
 	MergeCoins(
@@ -87,7 +89,10 @@ export const Transactions = {
 	): TransactionShape<'MergeCoins'> {
 		return {
 			$kind: 'MergeCoins',
-			MergeCoins: [parse(Argument, destination), sources.map((o) => parse(Argument, o))],
+			MergeCoins: {
+				destination: parse(Argument, destination),
+				sources: sources.map((o) => parse(Argument, o)),
+			},
 		};
 	},
 	Publish({
@@ -99,12 +104,12 @@ export const Transactions = {
 	}): TransactionShape<'Publish'> {
 		return {
 			$kind: 'Publish',
-			Publish: [
-				modules.map((module) =>
+			Publish: {
+				modules: modules.map((module) =>
 					typeof module === 'string' ? Array.from(fromB64(module)) : module,
 				),
-				dependencies.map((dep) => normalizeSuiObjectId(dep)),
-			],
+				dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
+			},
 		};
 	},
 	Upgrade({
@@ -120,14 +125,14 @@ export const Transactions = {
 	}): TransactionShape<'Upgrade'> {
 		return {
 			$kind: 'Upgrade',
-			Upgrade: [
-				modules.map((module) =>
+			Upgrade: {
+				modules: modules.map((module) =>
 					typeof module === 'string' ? Array.from(fromB64(module)) : module,
 				),
-				dependencies.map((dep) => normalizeSuiObjectId(dep)),
-				packageId,
-				parse(Argument, ticket),
-			],
+				dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
+				package: packageId,
+				ticket: parse(Argument, ticket),
+			},
 		};
 	},
 	MakeMoveVec({
@@ -139,12 +144,10 @@ export const Transactions = {
 	}): TransactionShape<'MakeMoveVec'> {
 		return {
 			$kind: 'MakeMoveVec',
-			MakeMoveVec: [
-				type
-					? { $kind: 'Some', Some: parse(TypeTag, TypeTagSerializer.parseFromStr(type)) }
-					: { $kind: 'None', None: true },
-				objects.map((o) => parse(Argument, o)),
-			],
+			MakeMoveVec: {
+				type: type ?? null,
+				objects: objects.map((o) => parse(Argument, o)),
+			},
 		};
 	},
 };

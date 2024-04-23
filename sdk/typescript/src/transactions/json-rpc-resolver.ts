@@ -52,7 +52,7 @@ export async function resolveTransactionBlockData(
 		await setGasPayment(blockData, options);
 	}
 	await validate(blockData);
-	return next();
+	return await next();
 }
 
 async function setGasPrice(
@@ -156,100 +156,94 @@ async function resolveObjectReferences(
 		);
 	}) as Extract<CallArg, { UnresolvedObject: unknown }>[];
 
-	if (objectsToResolve.length) {
-		const dedupedIds = [
-			...new Set(objectsToResolve.map((input) => normalizeSuiObjectId(input.UnresolvedObject.id))),
-		];
+	const dedupedIds = [
+		...new Set(
+			objectsToResolve.map((input) => normalizeSuiObjectId(input.UnresolvedObject.objectId)),
+		),
+	];
 
-		const objectChunks = chunk(dedupedIds, MAX_OBJECTS_PER_FETCH);
-		const resolved = (
-			await Promise.all(
-				objectChunks.map((chunk) =>
-					getClient(options).multiGetObjects({
-						ids: chunk,
-						options: { showOwner: true },
-					}),
-				),
-			)
-		).flat();
+	const objectChunks = dedupedIds.length ? chunk(dedupedIds, MAX_OBJECTS_PER_FETCH) : [];
+	const resolved = (
+		await Promise.all(
+			objectChunks.map((chunk) =>
+				getClient(options).multiGetObjects({
+					ids: chunk,
+					options: { showOwner: true },
+				}),
+			),
+		)
+	).flat();
 
-		const responsesById = new Map(
-			dedupedIds.map((id, index) => {
-				return [id, resolved[index]];
-			}),
-		);
+	const responsesById = new Map(
+		dedupedIds.map((id, index) => {
+			return [id, resolved[index]];
+		}),
+	);
 
-		const invalidObjects = Array.from(responsesById)
-			.filter(([_, obj]) => obj.error)
-			.map(([id, _obj]) => id);
+	const invalidObjects = Array.from(responsesById)
+		.filter(([_, obj]) => obj.error)
+		.map(([id, _obj]) => id);
 
-		if (invalidObjects.length) {
-			throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
+	if (invalidObjects.length) {
+		throw new Error(`The following input objects are invalid: ${invalidObjects.join(', ')}`);
+	}
+
+	const objects = resolved.map((object) => {
+		if (object.error || !object.data) {
+			throw new Error(`Failed to fetch object: ${object.error}`);
+		}
+		const owner = object.data.owner;
+		const initialSharedVersion =
+			owner && typeof owner === 'object' && 'Shared' in owner
+				? owner.Shared.initial_shared_version
+				: null;
+
+		return {
+			objectId: object.data.objectId,
+			digest: object.data.digest,
+			version: object.data.version,
+			initialSharedVersion,
+		};
+	});
+
+	const objectsById = new Map(
+		dedupedIds.map((id, index) => {
+			return [id, objects[index]];
+		}),
+	);
+
+	for (const input of blockData.inputs) {
+		if (!input.UnresolvedObject) {
+			continue;
 		}
 
-		const objects = resolved.map((object) => {
-			if (object.error || !object.data) {
-				throw new Error(`Failed to fetch object: ${object.error}`);
-			}
-			const owner = object.data.owner;
-			const initialSharedVersion =
-				owner && typeof owner === 'object' && 'Shared' in owner
-					? owner.Shared.initial_shared_version
-					: null;
+		let updated: CallArg | undefined;
+		const id = normalizeSuiAddress(input.UnresolvedObject.objectId);
+		const object = objectsById.get(id);
 
-			const ownerAddress =
-				owner && typeof owner === 'object'
-					? 'AddressOwner' in owner
-						? owner.AddressOwner
-						: 'ObjectOwner' in owner
-						? owner.ObjectOwner
-						: null
-					: null;
-
-			return {
-				objectId: object.data.objectId,
-				digest: object.data.digest,
-				version: object.data.version,
-				owner: ownerAddress,
-				initialSharedVersion,
-			};
-		});
-
-		const objectsById = new Map(
-			dedupedIds.map((id, index) => {
-				return [id, objects[index]];
-			}),
-		);
-
-		objectsToResolve.forEach((input) => {
-			let updated: CallArg | undefined;
-			const id = normalizeSuiAddress(input.UnresolvedObject.id);
-			const object = objectsById.get(id)!;
-
-			if (object.initialSharedVersion) {
-				updated = Inputs.SharedObjectRef({
+		if (object?.initialSharedVersion) {
+			updated = Inputs.SharedObjectRef({
+				objectId: id,
+				initialSharedVersion: object.initialSharedVersion,
+				mutable: !!input.UnresolvedObject.mutable,
+			});
+		} else if (input.UnresolvedObject.receiving) {
+			updated = Inputs.ReceivingRef(
+				{
 					objectId: id,
-					initialSharedVersion: object.initialSharedVersion,
-					mutable: !!input.UnresolvedObject.mutable,
-				});
-			} else if (input.UnresolvedObject.receiving) {
-				updated = Inputs.ReceivingRef(
-					{
-						objectId: id,
-						digest: object.digest,
-						version: object.version,
-					}!,
-				);
-			}
+					digest: input.UnresolvedObject.digest ?? object?.digest!,
+					version: input.UnresolvedObject.version ?? object?.version!,
+				}!,
+			);
+		}
 
-			blockData.inputs[blockData.inputs.indexOf(input)] =
-				updated ??
-				Inputs.ObjectRef({
-					objectId: id,
-					digest: object.digest,
-					version: object.version,
-				});
-		});
+		blockData.inputs[blockData.inputs.indexOf(input)] =
+			updated ??
+			Inputs.ObjectRef({
+				objectId: id,
+				digest: input.UnresolvedObject.digest ?? object?.digest!,
+				version: input.UnresolvedObject.version ?? object?.version!,
+			});
 	}
 }
 
@@ -258,7 +252,8 @@ async function normalizeInputs(
 	options: BuildTransactionBlockOptions,
 ) {
 	const { inputs, transactions } = blockData;
-	const moveModulesToResolve: Extract<Transaction, { MoveCall: unknown }>['MoveCall'][] = [];
+	const moveCallsToResolve: Extract<Transaction, { MoveCall: unknown }>['MoveCall'][] = [];
+	const moveFunctionsToResolve = new Set<string>();
 
 	transactions.forEach((transaction) => {
 		// Special case move call:
@@ -267,6 +262,11 @@ async function normalizeInputs(
 			// - If they don't, then this is good to go.
 			// - If they do, then we need to fetch the normalized move module.
 
+			// If we already know the argument types, we don't need to resolve them again
+			if (transaction.MoveCall.argumentTypes) {
+				return;
+			}
+
 			const inputs = transaction.MoveCall.arguments.map((arg) => {
 				if (arg.$kind === 'Input') {
 					return blockData.inputs[arg.Input];
@@ -274,11 +274,13 @@ async function normalizeInputs(
 				return null;
 			});
 			const needsResolution = inputs.some(
-				(input) => input && (input.RawValue || input.UnresolvedObject),
+				(input) => input?.UnresolvedPure || input?.UnresolvedObject,
 			);
 
 			if (needsResolution) {
-				moveModulesToResolve.push(transaction.MoveCall);
+				const functionName = `${transaction.MoveCall.package}::${transaction.MoveCall.module}::${transaction.MoveCall.function}`;
+				moveFunctionsToResolve.add(functionName);
+				moveCallsToResolve.push(transaction.MoveCall);
 			}
 		}
 
@@ -286,22 +288,44 @@ async function normalizeInputs(
 		// This should only happen when transaction block data was hydrated from an old version of the SDK
 		switch (transaction.$kind) {
 			case 'SplitCoins':
-				transaction.SplitCoins[1].forEach((amount) => {
+				transaction.SplitCoins.amounts.forEach((amount) => {
 					normalizeRawArgument(amount, bcs.U64, blockData);
 				});
 				break;
 			case 'TransferObjects':
-				normalizeRawArgument(transaction.TransferObjects[1], bcs.Address, blockData);
+				normalizeRawArgument(transaction.TransferObjects.recipient, bcs.Address, blockData);
 				break;
 		}
 	});
 
-	if (moveModulesToResolve.length) {
+	const client = getClient(options);
+	const moveFunctionParameters = new Map<string, OpenMoveTypeSignature[]>();
+	await Promise.all(
+		[...moveFunctionsToResolve].map(async (functionName) => {
+			const [packageId, moduleId, functionId] = functionName.split('::');
+			const def = await client.getNormalizedMoveFunction({
+				package: packageId,
+				module: moduleId,
+				function: functionId,
+			});
+
+			moveFunctionParameters.set(
+				functionName,
+				def.parameters.map((param) => normalizedTypeToMoveTypeSignature(param)),
+			);
+		}),
+	);
+
+	if (moveCallsToResolve.length) {
 		await Promise.all(
-			moveModulesToResolve.map(async (moveCall) => {
-				const parameters = (
-					await getClient(options).getNormalizedMoveFunction(moveCall)
-				).parameters.map((param) => normalizedTypeToMoveTypeSignature(param));
+			moveCallsToResolve.map(async (moveCall) => {
+				const parameters = moveFunctionParameters.get(
+					`${moveCall.package}::${moveCall.module}::${moveCall.function}`,
+				);
+
+				if (!parameters) {
+					return;
+				}
 
 				// Entry functions can have a mutable reference to an instance of the TxContext
 				// struct defined in the TxContext module as the last parameter. The caller of
@@ -309,60 +333,78 @@ async function normalizeInputs(
 				const hasTxContext = parameters.length > 0 && isTxContext(parameters.at(-1)!);
 				const params = hasTxContext ? parameters.slice(0, parameters.length - 1) : parameters;
 
-				if (params.length !== moveCall.arguments.length) {
-					throw new Error('Incorrect number of arguments.');
-				}
-
-				params.forEach((param, i) => {
-					const arg = moveCall.arguments[i];
-					if (arg.$kind !== 'Input') return;
-					const input = inputs[arg.Input];
-
-					// Skip if the input is already resolved
-					if (!input.RawValue && !input.UnresolvedObject) {
-						return;
-					}
-
-					const inputValue = input.RawValue?.value ?? input.UnresolvedObject?.id!;
-
-					const schema = getPureBcsSchema(param.body);
-					if (schema) {
-						inputs[inputs.indexOf(input)] = Inputs.Pure(schema.serialize(inputValue));
-						return;
-					}
-
-					if (typeof inputValue !== 'string') {
-						throw new Error(
-							`Expect the argument to be an object id string, got ${JSON.stringify(
-								inputValue,
-								null,
-								2,
-							)}`,
-						);
-					}
-
-					const unresolvedObject: typeof input = input.RawValue
-						? {
-								$kind: 'UnresolvedObject',
-								UnresolvedObject: {
-									id: inputValue,
-								},
-						  }
-						: input;
-
-					inputs[arg.Input] = unresolvedObject;
-
-					if (param.ref === '&mut') {
-						unresolvedObject.UnresolvedObject.mutable = true;
-					}
-
-					if (isReceivingType(param)) {
-						unresolvedObject.UnresolvedObject.receiving = true;
-					}
-				});
+				moveCall.argumentTypes = params;
 			}),
 		);
 	}
+
+	transactions.forEach((transaction) => {
+		if (!transaction.MoveCall) {
+			return;
+		}
+
+		const moveCall = transaction.MoveCall;
+		const fnName = `${moveCall.package}::${moveCall.module}::${moveCall.function}`;
+		const params = moveCall.argumentTypes;
+
+		if (!params) {
+			return;
+		}
+
+		if (params.length !== transaction.MoveCall.arguments.length) {
+			throw new Error(`Incorrect number of arguments for ${fnName}`);
+		}
+
+		params.forEach((param, i) => {
+			const arg = moveCall.arguments[i];
+			if (arg.$kind !== 'Input') return;
+			const input = inputs[arg.Input];
+
+			// Skip if the input is already resolved
+			if (!input.UnresolvedPure && !input.UnresolvedObject) {
+				return;
+			}
+
+			const inputValue = input.UnresolvedPure?.value ?? input.UnresolvedObject?.objectId!;
+
+			const schema = getPureBcsSchema(param.body);
+			if (schema) {
+				arg.type = 'pure';
+				inputs[inputs.indexOf(input)] = Inputs.Pure(schema.serialize(inputValue));
+				return;
+			}
+
+			if (typeof inputValue !== 'string') {
+				throw new Error(
+					`Expect the argument to be an object id string, got ${JSON.stringify(
+						inputValue,
+						null,
+						2,
+					)}`,
+				);
+			}
+
+			arg.type = 'object';
+			const unresolvedObject: typeof input = input.UnresolvedPure
+				? {
+						$kind: 'UnresolvedObject',
+						UnresolvedObject: {
+							objectId: inputValue,
+						},
+				  }
+				: input;
+
+			inputs[arg.Input] = unresolvedObject;
+
+			if (param.ref === '&mut' || !param.ref) {
+				unresolvedObject.UnresolvedObject.mutable = true;
+			}
+
+			if (isReceivingType(param)) {
+				unresolvedObject.UnresolvedObject.receiving = true;
+			}
+		});
+	});
 }
 
 function validate(blockData: TransactionBlockDataBuilder) {
@@ -387,11 +429,11 @@ function normalizeRawArgument(
 	}
 	const input = blockData.inputs[arg.Input];
 
-	if (input.$kind !== 'RawValue') {
+	if (input.$kind !== 'UnresolvedPure') {
 		return;
 	}
 
-	blockData.inputs[arg.Input] = Inputs.Pure(schema.serialize(input.RawValue.value));
+	blockData.inputs[arg.Input] = Inputs.Pure(schema.serialize(input.UnresolvedPure.value));
 }
 
 function isReceivingType(type: OpenMoveTypeSignature): boolean {

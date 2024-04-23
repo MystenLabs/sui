@@ -23,7 +23,6 @@ import {
 	unknown,
 } from 'valibot';
 
-import type { TypeTag as TypeTagType } from '../../bcs/types.js';
 import { isValidSuiAddress, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 type Merge<T> = T extends object ? { [K in keyof T]: T[K] } : never;
@@ -71,9 +70,9 @@ const JsonU64 = union(
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/base_types.rs#L138
 // Implemented as a tuple in rust
 export const ObjectRef = object({
-	digest: string(),
 	objectId: SuiAddress,
 	version: JsonU64,
+	digest: string(),
 });
 export type ObjectRef = Output<typeof ObjectRef>;
 
@@ -122,103 +121,15 @@ export const GasData = object({
 });
 export type GasData = Output<typeof GasData>;
 
-// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L33-L59
-export const TypeTag = safeEnum({
-	bool: literal(true),
-	u8: literal(true),
-	u64: literal(true),
-	u128: literal(true),
-	address: literal(true),
-	signer: literal(true),
-	vector: recursive(() => TypeTag),
-	struct: recursive(() => StructTag),
-	u16: literal(true),
-	u32: literal(true),
-	u256: literal(true),
-}) as BaseSchema<
-	TypeTagType,
-	TypeTagType extends infer Tag
-		? Tag extends unknown
-			? Merge<{ [K in keyof Tag]: NonNullable<Tag[K]> } & { $kind: keyof Tag }>
-			: never
-		: never
->;
-
-export type TypeTag = Output<typeof TypeTag>;
-
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/external-crates/move/crates/move-core-types/src/language_storage.rs#L140-L147
 export const StructTag = object({
 	address: string(),
 	module: string(),
 	name: string(),
 	// type_params in rust, should be updated to use camelCase
-	typeParams: array(TypeTag),
+	typeParams: array(string()),
 });
 export type StructTag = Output<typeof StructTag>;
-
-// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L707-L718
-const ProgrammableMoveCall = object({
-	package: ObjectID,
-	module: string(),
-	function: string(),
-	// snake case in rust
-	typeArguments: array(TypeTag),
-	arguments: array(Argument),
-});
-export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
-
-export const TransactionIntent = object({
-	name: string(),
-	inputs: record(string(), union([Argument, array(Argument)])),
-	data: record(string(), unknown()),
-});
-
-const TypeTagOption = safeEnum({ None: literal(true), Some: TypeTag });
-
-// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
-export const Transaction = safeEnum({
-	MoveCall: ProgrammableMoveCall,
-	TransferObjects: tuple([array(Argument), Argument]),
-	SplitCoins: tuple([Argument, array(Argument)]),
-	MergeCoins: tuple([Argument, array(Argument)]),
-	Publish: tuple([array(BCSBytes), array(ObjectID)]),
-	MakeMoveVec: tuple([TypeTagOption, array(Argument)]),
-	Upgrade: tuple([array(BCSBytes), array(ObjectID), ObjectID, Argument]),
-	TransactionIntent,
-});
-
-export type Transaction<Arg = Argument> = EnumOutputShape<{
-	MoveCall: {
-		package: string;
-		module: string;
-		function: string;
-		typeArguments: TypeTag[];
-		arguments: Arg[];
-	};
-	TransferObjects: [Arg[], Arg];
-	SplitCoins: [Arg, Arg[]];
-	MergeCoins: [Arg, Arg[]];
-	Publish: [number[][], string[]];
-	MakeMoveVec: [Output<typeof TypeTagOption>, Arg[]];
-	Upgrade: [number[][], string[], string, Arg];
-	TransactionIntent: {
-		name: string;
-		inputs: Record<string, Argument | Argument[]>;
-		data: Record<string, unknown>;
-	};
-}>;
-
-// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
-const ObjectArg = safeEnum({
-	ImmOrOwnedObject: ObjectRef,
-	SharedObject: object({
-		objectId: ObjectID,
-		// snake case in rust
-		initialSharedVersion: JsonU64,
-		mutable: boolean(),
-	}),
-	Receiving: ObjectRef,
-});
 
 // https://github.com/MystenLabs/sui/blob/cea8742e810142a8145fd83c4c142d61e561004a/crates/sui-graphql-rpc/schema/current_progress_schema.graphql#L1614-L1627
 export type OpenMoveTypeSignatureBody =
@@ -269,22 +180,124 @@ const OpenMoveTypeSignature = object({
 });
 export type OpenMoveTypeSignature = Output<typeof OpenMoveTypeSignature>;
 
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L707-L718
+const ProgrammableMoveCall = object({
+	package: ObjectID,
+	module: string(),
+	function: string(),
+	// snake case in rust
+	typeArguments: array(string()),
+	arguments: array(Argument),
+	argumentTypes: optional(nullable(array(OpenMoveTypeSignature))),
+});
+export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
+
+export const Intent = object({
+	name: string(),
+	inputs: record(string(), union([Argument, array(Argument)])),
+	data: record(string(), unknown()),
+});
+
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
+export const Transaction = safeEnum({
+	MoveCall: ProgrammableMoveCall,
+	TransferObjects: object({
+		objects: array(Argument),
+		recipient: Argument,
+	}),
+	SplitCoins: object({
+		coin: Argument,
+		amounts: array(Argument),
+	}),
+	MergeCoins: object({
+		destination: Argument,
+		sources: array(Argument),
+	}),
+	Publish: object({
+		modules: array(BCSBytes),
+		dependencies: array(ObjectID),
+	}),
+	MakeMoveVec: object({
+		type: nullable(string()),
+		objects: array(Argument),
+	}),
+	Upgrade: object({
+		modules: array(BCSBytes),
+		dependencies: array(ObjectID),
+		package: ObjectID,
+		ticket: Argument,
+	}),
+	Intent,
+});
+
+export type Transaction<Arg = Argument> = EnumOutputShape<{
+	MoveCall: {
+		package: string;
+		module: string;
+		function: string;
+		typeArguments: string[];
+		arguments: Arg[];
+		argumentTypes?: OpenMoveTypeSignature[] | null;
+	};
+	TransferObjects: {
+		objects: Arg[];
+		recipient: Arg;
+	};
+	SplitCoins: {
+		coin: Arg;
+		amounts: Arg[];
+	};
+	MergeCoins: {
+		destination: Arg;
+		sources: Arg[];
+	};
+	Publish: {
+		modules: number[][];
+		dependencies: string[];
+	};
+	MakeMoveVec: {
+		type: string | null;
+		objects: Arg[];
+	};
+	Upgrade: {
+		modules: number[][];
+		dependencies: string[];
+		package: string;
+		ticket: Arg;
+	};
+	Intent: {
+		name: string;
+		inputs: Record<string, Argument | Argument[]>;
+		data: Record<string, unknown>;
+	};
+}>;
+
+// https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
+const ObjectArg = safeEnum({
+	ImmOrOwnedObject: ObjectRef,
+	SharedObject: object({
+		objectId: ObjectID,
+		// snake case in rust
+		initialSharedVersion: JsonU64,
+		mutable: nullable(boolean()),
+	}),
+	Receiving: ObjectRef,
+});
+
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L75-L80
 const CallArg = safeEnum({
 	Object: ObjectArg,
 	Pure: BCSBytes,
-	// // added for sui:unresolvedObjectIds
+	UnresolvedPure: object({
+		value: unknown(),
+	}),
 	UnresolvedObject: object({
-		id: string(),
+		objectId: ObjectID,
 		version: optional(nullable(JsonU64)),
 		digest: optional(nullable(string())),
 		initialSharedVersion: optional(nullable(JsonU64)),
 		mutable: optional(nullable(boolean())),
 		receiving: optional(nullable(boolean())),
-	}),
-	// added for sui:rawValues
-	RawValue: object({
-		value: unknown(),
 	}),
 });
 export type CallArg = Output<typeof CallArg>;
@@ -311,3 +324,89 @@ export const TransactionBlockState = object({
 	transactions: array(Transaction),
 });
 export type TransactionBlockState = Output<typeof TransactionBlockState>;
+
+export const example1: Input<typeof TransactionBlockState> = {
+	version: 2,
+	sender: '0x123',
+	expiration: { Epoch: 123 }, // { None: true } | null
+	// All properties of gasData are optional
+	gasData: {
+		budget: '123',
+		owner: '0x123',
+		price: '123',
+		payment: [
+			{
+				objectId: '0x123',
+				version: '123',
+				digest: 'abc',
+			},
+		],
+	},
+	inputs: [
+		{
+			Object: {
+				ImmOrOwnedObject: {
+					objectId: '0x123',
+					version: 123,
+					digest: 'abc',
+				},
+			},
+		},
+		{
+			Object: {
+				SharedObject: {
+					objectId: '0x123',
+					initialSharedVersion: '123',
+					mutable: true,
+				},
+			},
+		},
+		{
+			Object: {
+				Receiving: {
+					objectId: '0x123',
+					version: 123,
+					digest: 'abc',
+				},
+			},
+		},
+		{
+			Pure: [1, 2, 3],
+		},
+		{
+			// Don't know schema to encode pure value to bcs
+			UnresolvedPure: {
+				value: 123,
+			},
+		},
+		{
+			// Only know ID
+			UnresolvedObject: {
+				objectId: '0x123',
+			},
+		},
+		{
+			// know its receiving, but don't know its version/digest
+			UnresolvedObject: {
+				objectId: '0x123',
+				receiving: true,
+			},
+		},
+		{
+			// Know its shared, but not if its mutable
+			UnresolvedObject: {
+				objectId: '0x123',
+				initialSharedVersion: '123',
+			},
+		},
+		{
+			// Don't know if its receiving
+			UnresolvedObject: {
+				objectId: '0x123',
+				digest: 'abc',
+				version: 123,
+			},
+		},
+	],
+	transactions: [],
+};

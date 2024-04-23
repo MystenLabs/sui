@@ -38,7 +38,6 @@ describe('coinWithBalance', () => {
 			),
 		).toEqual({
 			expiration: null,
-			features: [],
 			gasData: {
 				budget: null,
 				owner: null,
@@ -54,8 +53,8 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'TransactionIntent',
-					TransactionIntent: {
+					$kind: 'Intent',
+					Intent: {
 						data: {
 							balance: '12345',
 							type: '0x2::sui::SUI',
@@ -66,19 +65,19 @@ describe('coinWithBalance', () => {
 				},
 				{
 					$kind: 'TransferObjects',
-					TransferObjects: [
-						[
+					TransferObjects: {
+						objects: [
 							{
 								$kind: 'Result',
 								Result: 0,
 							},
 						],
-						{
+						recipient: {
 							$kind: 'Input',
 							Input: 0,
 							type: 'pure',
 						},
-					],
+					},
 				},
 			],
 			version: 2,
@@ -93,7 +92,6 @@ describe('coinWithBalance', () => {
 			),
 		).toEqual({
 			expiration: null,
-			features: [],
 			gasData: {
 				budget: null,
 				owner: null,
@@ -114,35 +112,35 @@ describe('coinWithBalance', () => {
 			transactions: [
 				{
 					$kind: 'SplitCoins',
-					SplitCoins: [
-						{
+					SplitCoins: {
+						coin: {
 							$kind: 'GasCoin',
 							GasCoin: true,
 						},
-						[
+						amounts: [
 							{
 								$kind: 'Input',
 								Input: 1,
 								type: 'pure',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'TransferObjects',
-					TransferObjects: [
-						[
+					TransferObjects: {
+						objects: [
 							{
 								$kind: 'NestedResult',
 								NestedResult: [0, 0],
 							},
 						],
-						{
+						recipient: {
 							$kind: 'Input',
 							Input: 0,
 							type: 'pure',
 						},
-					],
+					},
 				},
 			],
 			version: 2,
@@ -189,7 +187,6 @@ describe('coinWithBalance', () => {
 			),
 		).toEqual({
 			expiration: null,
-			features: [],
 			gasData: {
 				budget: null,
 				owner: null,
@@ -205,8 +202,8 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'TransactionIntent',
-					TransactionIntent: {
+					$kind: 'Intent',
+					Intent: {
 						data: {
 							balance: '1',
 							type: testType,
@@ -217,19 +214,19 @@ describe('coinWithBalance', () => {
 				},
 				{
 					$kind: 'TransferObjects',
-					TransferObjects: [
-						[
+					TransferObjects: {
+						objects: [
 							{
 								$kind: 'Result',
 								Result: 0,
 							},
 						],
-						{
+						recipient: {
 							$kind: 'Input',
 							Input: 0,
 							type: 'pure',
 						},
-					],
+					},
 				},
 			],
 			version: 2,
@@ -244,7 +241,6 @@ describe('coinWithBalance', () => {
 			),
 		).toEqual({
 			expiration: null,
-			features: [],
 			gasData: {
 				budget: null,
 				owner: null,
@@ -279,48 +275,48 @@ describe('coinWithBalance', () => {
 			transactions: [
 				{
 					$kind: 'MergeCoins',
-					MergeCoins: [
-						{
+					MergeCoins: {
+						destination: {
 							$kind: 'Input',
 							Input: 1,
 							type: 'object',
 						},
-						[
+						sources: [
 							{
 								$kind: 'Input',
 								Input: 2,
 								type: 'object',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'SplitCoins',
-					SplitCoins: [
-						{
+					SplitCoins: {
+						coin: {
 							$kind: 'Input',
 							Input: 1,
 							type: 'object',
 						},
-						[
+						amounts: [
 							{
 								$kind: 'Input',
 								Input: 3,
 								type: 'pure',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'TransferObjects',
-					TransferObjects: [
-						[{ $kind: 'NestedResult', NestedResult: [1, 0] }],
-						{
+					TransferObjects: {
+						objects: [{ $kind: 'NestedResult', NestedResult: [1, 0] }],
+						recipient: {
 							$kind: 'Input',
 							Input: 0,
 							type: 'pure',
 						},
-					],
+					},
 				},
 			],
 			version: 2,
@@ -376,7 +372,6 @@ describe('coinWithBalance', () => {
 			),
 		).toEqual({
 			expiration: null,
-			features: [],
 			gasData: {
 				budget: null,
 				owner: null,
@@ -392,8 +387,8 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'TransactionIntent',
-					TransactionIntent: {
+					$kind: 'Intent',
+					Intent: {
 						data: {
 							balance: '1',
 							type: testType,
@@ -403,8 +398,8 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'TransactionIntent',
-					TransactionIntent: {
+					$kind: 'Intent',
+					Intent: {
 						data: {
 							balance: '2',
 							type: testType,
@@ -414,8 +409,8 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'TransactionIntent',
-					TransactionIntent: {
+					$kind: 'Intent',
+					Intent: {
 						data: {
 							balance: '3',
 							type: '0x2::sui::SUI',
@@ -425,8 +420,8 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'TransactionIntent',
-					TransactionIntent: {
+					$kind: 'Intent',
+					Intent: {
 						data: {
 							balance: '4',
 							type: '0x2::sui::SUI',
@@ -437,8 +432,8 @@ describe('coinWithBalance', () => {
 				},
 				{
 					$kind: 'TransferObjects',
-					TransferObjects: [
-						[
+					TransferObjects: {
+						objects: [
 							{
 								$kind: 'Result',
 								Result: 0,
@@ -456,12 +451,12 @@ describe('coinWithBalance', () => {
 								Result: 3,
 							},
 						],
-						{
+						recipient: {
 							$kind: 'Input',
 							Input: 0,
 							type: 'pure',
 						},
-					],
+					},
 				},
 			],
 			version: 2,
@@ -476,7 +471,6 @@ describe('coinWithBalance', () => {
 			),
 		).toEqual({
 			expiration: null,
-			features: [],
 			gasData: {
 				budget: null,
 				owner: null,
@@ -523,102 +517,102 @@ describe('coinWithBalance', () => {
 			transactions: [
 				{
 					$kind: 'MergeCoins',
-					MergeCoins: [
-						{
+					MergeCoins: {
+						destination: {
 							$kind: 'Input',
 							Input: 1,
 							type: 'object',
 						},
-						[
+						sources: [
 							{
 								$kind: 'Input',
 								Input: 2,
 								type: 'object',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'SplitCoins',
-					SplitCoins: [
-						{
+					SplitCoins: {
+						coin: {
 							$kind: 'Input',
 							Input: 1,
 							type: 'object',
 						},
-						[
+						amounts: [
 							{
 								$kind: 'Input',
 								Input: 3,
 								type: 'pure',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'SplitCoins',
-					SplitCoins: [
-						{
+					SplitCoins: {
+						coin: {
 							$kind: 'Input',
 							Input: 1,
 							type: 'object',
 						},
-						[
+						amounts: [
 							{
 								$kind: 'Input',
 								Input: 4,
 								type: 'pure',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'SplitCoins',
-					SplitCoins: [
-						{
+					SplitCoins: {
+						coin: {
 							$kind: 'GasCoin',
 							GasCoin: true,
 						},
-						[
+						amounts: [
 							{
 								$kind: 'Input',
 								Input: 5,
 								type: 'pure',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'SplitCoins',
-					SplitCoins: [
-						{
+					SplitCoins: {
+						coin: {
 							$kind: 'GasCoin',
 							GasCoin: true,
 						},
-						[
+						amounts: [
 							{
 								$kind: 'Input',
 								Input: 6,
 								type: 'pure',
 							},
 						],
-					],
+					},
 				},
 				{
 					$kind: 'TransferObjects',
-					TransferObjects: [
-						[
+					TransferObjects: {
+						objects: [
 							{ $kind: 'NestedResult', NestedResult: [1, 0] },
 							{ $kind: 'NestedResult', NestedResult: [2, 0] },
 							{ $kind: 'NestedResult', NestedResult: [3, 0] },
 							{ $kind: 'NestedResult', NestedResult: [4, 0] },
 						],
-						{
+						recipient: {
 							$kind: 'Input',
 							Input: 0,
 							type: 'pure',
 						},
-					],
+					},
 				},
 			],
 			version: 2,
