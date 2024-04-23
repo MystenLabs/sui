@@ -302,10 +302,10 @@ export class TransactionBlock {
 			return this.pure(arg);
 		}
 
-		return this.resolveArgument(arg as TransactionArgument);
+		return this.#resolveArgument(arg as TransactionArgument);
 	}
 
-	resolveArgument(arg: TransactionArgument): Argument {
+	#resolveArgument(arg: TransactionArgument): Argument {
 		if (typeof arg === 'function') {
 			return arg(this);
 		}
