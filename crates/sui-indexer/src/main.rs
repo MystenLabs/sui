@@ -19,7 +19,13 @@ async fn main() -> Result<(), IndexerError> {
         .with_env()
         .init();
 
-    let indexer_config = IndexerConfig::parse();
+    let mut indexer_config = IndexerConfig::parse();
+    // TODO: remove. Temporary safeguard to migrate to `rpc_client_url` usage
+    if indexer_config.rpc_client_url.contains("testnet") {
+        indexer_config.remote_store_url = Some("https://checkpoints.testnet.sui.io".to_string());
+    } else if indexer_config.rpc_client_url.contains("mainnet") {
+        indexer_config.remote_store_url = Some("https://checkpoints.mainnet.sui.io".to_string());
+    }
     info!("Parsed indexer config: {:#?}", indexer_config);
 
     let db_url = indexer_config.get_db_url().map_err(|e| {

@@ -23,6 +23,7 @@ mod tests {
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+    use tempfile::tempdir;
     use tokio::time::sleep;
 
     #[tokio::test]
@@ -72,6 +73,8 @@ mod tests {
     async fn test_simple_client_simulator_cluster() {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
+        let data_ingestion_path = tempdir().unwrap().into_path();
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -93,6 +96,7 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            data_ingestion_path,
         )
         .await;
         cluster
@@ -117,7 +121,9 @@ mod tests {
     #[serial]
     async fn test_graphql_client_response() {
         let rng = StdRng::from_seed([12; 32]);
+        let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -128,6 +134,7 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            data_ingestion_path,
         )
         .await;
         cluster
@@ -162,7 +169,9 @@ mod tests {
     #[serial]
     async fn test_graphql_client_variables() {
         let rng = StdRng::from_seed([12; 32]);
+        let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -173,6 +182,7 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            data_ingestion_path,
         )
         .await;
         cluster
