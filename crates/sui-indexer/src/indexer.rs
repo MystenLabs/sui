@@ -4,6 +4,7 @@
 use std::env;
 
 use anyhow::Result;
+use diesel::r2d2::R2D2Connection;
 use prometheus::Registry;
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
@@ -33,13 +34,16 @@ const CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT: usize = 20000000;
 pub struct Indexer;
 
 impl Indexer {
-    pub async fn start_writer<S: IndexerStore + Sync + Send + Clone + 'static>(
+    pub async fn start_writer<
+        S: IndexerStore + Sync + Send + Clone + 'static,
+        T: R2D2Connection + 'static,
+    >(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config(
+        Indexer::start_writer_with_config::<S, T>(
             config,
             store,
             metrics,
@@ -49,7 +53,10 @@ impl Indexer {
         .await
     }
 
-    pub async fn start_writer_with_config<S: IndexerStore + Sync + Send + Clone + 'static>(
+    pub async fn start_writer_with_config<
+        S: IndexerStore + Sync + Send + Clone + 'static,
+        T: R2D2Connection + 'static,
+    >(
         config: &IndexerConfig,
         store: S,
         metrics: IndexerMetrics,
@@ -104,7 +111,8 @@ impl Indexer {
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(store, rest_client, metrics, watermark, cancel.clone()).await?;
+        let worker =
+            new_handlers::<S, T>(store, rest_client, metrics, watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
         let extra_reader_options = ReaderOptions {
             batch_size: download_queue_size,
@@ -128,7 +136,7 @@ impl Indexer {
         Ok(())
     }
 
-    pub async fn start_reader(
+    pub async fn start_reader<T: R2D2Connection + 'static>(
         config: &IndexerConfig,
         registry: &Registry,
         db_url: String,
@@ -137,7 +145,7 @@ impl Indexer {
             "Sui Indexer Reader (version {:?}) started...",
             env!("CARGO_PKG_VERSION")
         );
-        let indexer_reader = IndexerReader::new(db_url)?;
+        let indexer_reader = IndexerReader::<T>::new(db_url)?;
         let handle = build_json_rpc_server(registry, indexer_reader, config, None)
             .await
             .expect("Json rpc server should not run into errors upon start.");

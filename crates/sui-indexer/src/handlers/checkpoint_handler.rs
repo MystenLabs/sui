@@ -25,6 +25,7 @@ use tokio_util::sync::CancellationToken;
 
 use tokio::sync::watch;
 
+use diesel::r2d2::R2D2Connection;
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
 use sui_data_ingestion_core::Worker;
@@ -44,7 +45,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 use crate::errors::IndexerError;
 use crate::metrics::IndexerMetrics;
 
-use crate::db::PgConnectionPool;
+use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
@@ -60,15 +61,16 @@ use super::TransactionObjectChangesToCommit;
 
 const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
-pub async fn new_handlers<S>(
+pub async fn new_handlers<S, T>(
     state: S,
     client: Client,
     metrics: IndexerMetrics,
     next_checkpoint_sequence_number: CheckpointSequenceNumber,
     cancel: CancellationToken,
-) -> Result<CheckpointHandler<S>, IndexerError>
+) -> Result<CheckpointHandler<S, T>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection,
 {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -104,20 +106,21 @@ where
     ))
 }
 
-pub struct CheckpointHandler<S> {
+pub struct CheckpointHandler<S, T: R2D2Connection + 'static> {
     state: S,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
     // buffers for packages that are being indexed but not committed to DB,
     // they will be periodically GCed to avoid OOM.
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-    package_resolver: Arc<Resolver<InterimPackageResolver>>,
+    package_resolver: Arc<Resolver<InterimPackageResolver<T>>>,
 }
 
 #[async_trait]
-impl<S> Worker for CheckpointHandler<S>
+impl<S, T> Worker for CheckpointHandler<S, T>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
         let checkpoint_data = Self::index_one_checkpoint(
@@ -142,9 +145,10 @@ where
     }
 }
 
-impl<S> CheckpointHandler<S>
+impl<S, T> CheckpointHandler<S, T>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection + 'static,
 {
     fn new(
         state: S,
@@ -670,9 +674,9 @@ where
             .collect()
     }
 
-    fn pg_blocking_cp(state: S) -> Result<PgConnectionPool, IndexerError> {
+    fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
         let state_as_any = state.as_any();
-        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore>() {
+        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore<T>>() {
             return Ok(pg_state.blocking_cp());
         }
         Err(IndexerError::UncategorizedError(anyhow::anyhow!(
