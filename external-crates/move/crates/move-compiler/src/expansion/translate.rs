@@ -2964,7 +2964,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     (
                         name.loc,
                         "Unexpected name access. \
-                        Expected a valid 'enum' variant, 'struct' name, or constant."
+                        Expected a valid 'enum' variant, 'struct', or 'const'."
                     )
                 ));
                 None
@@ -3087,7 +3087,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                         if is_pascal_case(&name_value) || is_upper_snake_case(&name_value) {
                             diag.add_note(
                                 "The compiler may have failed to \
-                                          resolve this constant's name",
+                                resolve this constant's name",
                             );
                         }
                         context.env().add_diag(diag);
@@ -3105,7 +3105,8 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                 head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
                     if let Some(mloc) = mut_ {
                         let msg = "'mut' can only be used with variable bindings in patterns";
-                        let nmsg = "This refers to an enum, struct, or constant, not a variable";
+                        let nmsg =
+                            "Expected a valid 'enum' variant, 'struct', or 'const', not a variable";
                         context.env().add_diag(diag!(
                             Declarations::InvalidName,
                             (mloc, msg),

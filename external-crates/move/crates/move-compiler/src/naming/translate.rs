@@ -528,33 +528,9 @@ impl<'env> Context<'env> {
             .resolve_module_type_opt(m, n)
             .map(ResolvedModuleAccess::Datatype);
         match expected_access_type {
-            ModuleAccessKind::Function => {
-                if function_opt.is_some() {
-                    function_opt
-                } else if datatype_opt.is_some() {
-                    datatype_opt
-                } else {
-                    constant_opt
-                }
-            }
-            ModuleAccessKind::Constant => {
-                if constant_opt.is_some() {
-                    constant_opt
-                } else if datatype_opt.is_some() {
-                    datatype_opt
-                } else {
-                    function_opt
-                }
-            }
-            ModuleAccessKind::Datatype => {
-                if datatype_opt.is_some() {
-                    datatype_opt
-                } else if constant_opt.is_some() {
-                    constant_opt
-                } else {
-                    function_opt
-                }
-            }
+            ModuleAccessKind::Function => function_opt.or(datatype_opt).or(constant_opt),
+            ModuleAccessKind::Constant => constant_opt.or(datatype_opt).or(function_opt),
+            ModuleAccessKind::Datatype => datatype_opt.or(constant_opt).or(function_opt),
         }
     }
 

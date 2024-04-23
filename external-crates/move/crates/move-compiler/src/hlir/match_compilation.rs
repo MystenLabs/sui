@@ -698,13 +698,13 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
 
 // Assumes `flatten_or` has already been performed.
 //
-// A BRIEF OVERFIEW OF CONSTANT MATCH HANDLING
+// A BRIEF OVERVIEW OF CONSTANT MATCH HANDLING
 // To handle constants, we need to do two things: first, we need to replace all of the constants in
 // the patterns with _something_, and then we need to push the constant checks into guards in the
 // right-hand side. We take advantage of existing assumptions for match compilation to accomplish
 // this, allowing us to reuse the existing match compilation machinery:
 //
-// 1. We traverse the pattern mutably, replacing all constants with a new, fresh variables.
+// 1. We traverse the pattern mutably, replacing all constants with new, fresh variables.
 // 2. We generate a second 'guard' variable that acts as the "guard variable map" entry for that
 //    binder, indicating that this guard variable should be bound during match decision tree
 //    compilation for guard checking. This guard variable, as all, is typed as an immutable
@@ -713,7 +713,7 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
 //
 // Finally, we hand back:
 //
-// 1. a gaurd binder map that maps the new pattern variable to their new guard versions;
+// 1. a guard binder map that maps the new pattern variable to their new guard versions;
 // 2. and a new guard expression made up of the new guards plus the old guard (if any).
 //
 // As an example:
@@ -2011,11 +2011,6 @@ fn make_match_lit(subject: FringeEntry) -> T::Exp {
             make_deref_exp(*inner, loc, frozen_exp)
         }
         _ty => unreachable!(),
-        /*
-         * {
-            let loc = var.loc;
-            make_copy_exp(ty, loc, var)
-        }*/
     }
 }
 

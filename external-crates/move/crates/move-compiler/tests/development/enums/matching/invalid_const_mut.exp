@@ -2,7 +2,7 @@ error[E02010]: invalid name
   ┌─ tests/development/enums/matching/invalid_const_mut.move:9:26
   │
 9 │             Box { value: mut ZERO } => ZERO,
-  │                          ^^^ ---- This refers to an enum, struct, or constant, not a variable
+  │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
   │                          │    
   │                          'mut' can only be used with variable bindings in patterns
 
@@ -31,7 +31,7 @@ error[E02010]: invalid name
    ┌─ tests/development/enums/matching/invalid_const_mut.move:16:26
    │
 16 │             Box { value: mut ZERO } => ZERO,
-   │                          ^^^ ---- This refers to an enum, struct, or constant, not a variable
+   │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
    │                          │    
    │                          'mut' can only be used with variable bindings in patterns
 
@@ -48,7 +48,7 @@ error[E02010]: invalid name
    ┌─ tests/development/enums/matching/invalid_const_mut.move:23:26
    │
 23 │             Box { value: mut ZERO } => ZERO,
-   │                          ^^^ ---- This refers to an enum, struct, or constant, not a variable
+   │                          ^^^ ---- Expected a valid 'enum' variant, 'struct', or 'const', not a variable
    │                          │    
    │                          'mut' can only be used with variable bindings in patterns
 
