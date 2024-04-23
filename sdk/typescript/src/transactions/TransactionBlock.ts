@@ -12,7 +12,7 @@ import { normalizeSuiAddress } from '../utils/sui-types.js';
 import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
 import type { CallArg, Transaction } from './blockData/v2.js';
 import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
-import { getIdFromCallArg, Inputs } from './Inputs.js';
+import { Inputs } from './Inputs.js';
 import type {
 	BuildTransactionBlockOptions,
 	SerializeTransactionBlockOptions,
@@ -23,6 +23,7 @@ import { createPure } from './pure.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
+import { getIdFromCallArg } from './utils.js';
 
 export type TransactionObjectArgument =
 	| Exclude<Argument, { Input: unknown; type?: 'pure' }>

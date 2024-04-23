@@ -63,27 +63,3 @@ export const Inputs = {
 		};
 	},
 };
-
-export function getIdFromCallArg(arg: string | CallArg) {
-	if (typeof arg === 'string') {
-		return normalizeSuiAddress(arg);
-	}
-
-	if (arg.Object) {
-		if (arg.Object.ImmOrOwnedObject) {
-			return normalizeSuiAddress(arg.Object.ImmOrOwnedObject.objectId);
-		}
-
-		if (arg.Object.Receiving) {
-			return normalizeSuiAddress(arg.Object.Receiving.objectId);
-		}
-
-		return normalizeSuiAddress(arg.Object.SharedObject.objectId);
-	}
-
-	if (arg.UnresolvedObject) {
-		return normalizeSuiAddress(arg.UnresolvedObject.objectId);
-	}
-
-	return undefined;
-}
