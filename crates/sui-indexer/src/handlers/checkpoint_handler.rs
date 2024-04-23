@@ -12,6 +12,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 use tap::tap::TapFallible;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, warn};
 
 use sui_types::base_types::ObjectID;
@@ -45,6 +46,7 @@ pub fn new_handlers<S>(
     state: S,
     metrics: IndexerMetrics,
     config: &IndexerConfig,
+    cancel: CancellationToken,
 ) -> (CheckpointProcessor<S>, ObjectsProcessor<S>)
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
@@ -84,6 +86,7 @@ where
         metrics_clone,
         config_clone,
         tx_indexing_receiver,
+        cancel.clone()
     ));
 
     let state_clone = state.clone();
@@ -92,6 +95,7 @@ where
         state_clone,
         metrics_clone,
         epoch_indexing_receiver,
+        cancel.clone()
     ));
 
     let state_clone = state.clone();
@@ -102,6 +106,7 @@ where
         metrics_clone,
         config_clone,
         object_indexing_receiver,
+        cancel.clone()
     ));
 
     let checkpoint_processor = CheckpointProcessor {
@@ -545,6 +550,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     metrics: IndexerMetrics,
     config: IndexerConfig,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<TemporaryCheckpointStore>,
+    cancel: CancellationToken,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -561,6 +567,10 @@ pub async fn start_tx_checkpoint_commit_task<S>(
         .ready_chunks(checkpoint_commit_batch_size);
 
     while let Some(indexed_checkpoint_batch) = stream.next().await {
+        if cancel.is_cancelled() {
+            break;
+        }
+
         let mut checkpoint_batch = vec![];
         let mut tx_batch = vec![];
 
@@ -697,6 +707,7 @@ pub async fn start_epoch_commit_task<S>(
     state: S,
     metrics: IndexerMetrics,
     epoch_indexing_receiver: mysten_metrics::metered_channel::Receiver<TemporaryEpochStore>,
+    cancel: CancellationToken,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -706,6 +717,10 @@ pub async fn start_epoch_commit_task<S>(
     let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(epoch_indexing_receiver);
 
     while let Some(indexed_epoch) = stream.next().await {
+        if cancel.is_cancelled() {
+            break;
+        }
+
         if indexed_epoch.last_epoch.is_some() {
             let epoch_db_guard = metrics.epoch_db_commit_latency.start_timer();
             let mut epoch_commit_res = state.persist_epoch(&indexed_epoch).await;
@@ -736,6 +751,7 @@ pub async fn start_object_checkpoint_commit_task<S>(
         sui_types::messages_checkpoint::CheckpointSequenceNumber,
         Vec<crate::store::TransactionObjectChanges>,
     )>,
+    cancel: CancellationToken,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -751,6 +767,10 @@ pub async fn start_object_checkpoint_commit_task<S>(
         .ready_chunks(checkpoint_commit_batch_size);
 
     while let Some(object_change_batch) = stream.next().await {
+        if cancel.is_cancelled() {
+            break;
+        }
+
         let last_checkpoint_seq = object_change_batch.last().map(|b| b.0).unwrap();
         let first_checkpoint_seq = object_change_batch.first().map(|b| b.0).unwrap();
 

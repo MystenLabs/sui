@@ -22,6 +22,7 @@ use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
+use tokio::join;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -106,6 +107,8 @@ pub async fn serve_executor(
     snapshot_config: Option<SnapshotLagConfig>,
 ) -> ExecutorCluster {
     let db_url = graphql_connection_config.db_url.clone();
+    // Creates a cancellation token and adds this to the ExecutorCluster, so that we can send a
+    // cancellation token on cleanup
     let cancellation_token = CancellationToken::new();
 
     let executor_server_url: SocketAddr = format!("127.0.0.1:{}", internal_data_source_rpc_port)
@@ -122,6 +125,7 @@ pub async fn serve_executor(
         true,
         ReaderWriterConfig::writer_mode(snapshot_config.clone()),
         Some(graphql_connection_config.db_name()),
+        cancellation_token.clone(),
     )
     .await;
 
@@ -305,11 +309,11 @@ impl ExecutorCluster {
         latest_cp, latest_snapshot_cp));
     }
 
-    /// Deletes the database created for the test and sends a cancellation signal to the graphql
-    /// service. When this function is awaited on, the callsite will wait for the graphql service to
-    /// terminate its background task and then itself.
+    /// Sends a cancellation signal to the graphql and indexer services, waits for them to complete,
+    /// and then deletes the database created for the test.
     pub async fn cleanup_resources(self) {
         self.cancellation_token.cancel();
+        let _ = join!(self.graphql_server_join_handle, self.indexer_join_handle);
         let db_url = self.graphql_connection_config.db_url.clone();
         force_delete_database(db_url).await;
     }
