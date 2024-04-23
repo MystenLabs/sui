@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeSet, iter, sync::Arc, time::Duration};
+use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
 
 use consensus_config::ProtocolKeyPair;
 use itertools::Itertools as _;
@@ -348,6 +348,7 @@ impl Core {
             ancestors.iter().map(|b| b.reference()).collect(),
             transactions,
             commit_votes,
+            vec![],
         ));
         let signed_block =
             SignedBlock::new(block, &self.block_signer).expect("Block signing failed.");
