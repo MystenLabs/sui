@@ -1073,7 +1073,7 @@ impl SuiClientCommands {
                         tx_kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
@@ -1173,7 +1173,7 @@ impl SuiClientCommands {
                         tx_kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
@@ -1375,7 +1375,7 @@ impl SuiClientCommands {
                         tx_kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
@@ -1424,7 +1424,7 @@ impl SuiClientCommands {
                         tx_kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
@@ -1550,7 +1550,7 @@ impl SuiClientCommands {
                         kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
@@ -1817,7 +1817,7 @@ impl SuiClientCommands {
                         tx_kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
@@ -1864,7 +1864,7 @@ impl SuiClientCommands {
                         tx_kind,
                         gas_budget,
                         gas_price,
-                        gas.map(|x| vec![x]).unwrap_or_default(),
+                        gas.into_iter().collect(),
                         None,
                     )
                     .await?;
