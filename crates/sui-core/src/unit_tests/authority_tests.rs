@@ -4680,7 +4680,7 @@ async fn make_test_transaction(
             CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
         {
             return cert
-                .verify_authenticated(&committee, &Default::default())
+                .try_into_verified(&committee, &Default::default())
                 .unwrap();
         }
     }

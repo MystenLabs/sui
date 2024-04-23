@@ -285,7 +285,7 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
         } else {
             // Download the checkpoint from the server
             let summary = download_checkpoint_summary(config, *ckp_id).await?;
-            summary.clone().verify(&prev_committee)?;
+            summary.clone().try_into_verified(&prev_committee)?;
             // Write the checkpoint summary to a file
             write_checkpoint(config, &summary)?;
             summary

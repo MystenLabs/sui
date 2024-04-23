@@ -2578,7 +2578,7 @@ impl Transaction {
         verify_sender_signed_data_message_signatures(self.data(), current_epoch, verify_params)
     }
 
-    pub fn verify(
+    pub fn try_into_verified(
         self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
@@ -2607,7 +2607,7 @@ impl SignedTransaction {
         )
     }
 
-    pub fn verify_authenticated(
+    pub fn try_into_verified(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
@@ -2650,7 +2650,7 @@ impl CertifiedTransaction {
         )
     }
 
-    pub fn verify_authenticated(
+    pub fn try_into_verified(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,

@@ -306,7 +306,7 @@ impl CertifiedCheckpointSummary {
         )
     }
 
-    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCheckpoint> {
+    pub fn try_into_verified(self, committee: &Committee) -> SuiResult<VerifiedCheckpoint> {
         self.verify_authority_signatures(committee)?;
         Ok(VerifiedCheckpoint::new_from_verified(self))
     }
@@ -349,7 +349,7 @@ impl SignedCheckpointSummary {
         )
     }
 
-    pub fn verify(
+    pub fn try_into_verified(
         self,
         committee: &Committee,
     ) -> SuiResult<VerifiedEnvelope<CheckpointSummary, AuthoritySignInfo>> {
