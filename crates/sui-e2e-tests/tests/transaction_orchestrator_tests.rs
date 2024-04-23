@@ -14,8 +14,8 @@ use sui_test_transaction_builder::{
     batch_make_transfer_transactions, make_transfer_sui_transaction,
 };
 use sui_types::quorum_driver_types::{
-    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    FinalizedEffects, QuorumDriverError,
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionRequestV3,
+    ExecuteTransactionResponse, FinalizedEffects, QuorumDriverError,
 };
 use sui_types::transaction::Transaction;
 use test_cluster::TestClusterBuilder;
@@ -59,7 +59,10 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let digest = *txn.digest();
     orchestrator
         .quorum_driver()
-        .submit_transaction_no_ticket(txn, Some(make_socket_addr()))
+        .submit_transaction_no_ticket(
+            ExecuteTransactionRequestV3::new_v2(txn),
+            Some(make_socket_addr()),
+        )
         .await?;
 
     // Wait for data sync to catch up
