@@ -79,12 +79,3 @@ impl Loader<PackageKey> for Db {
         Ok(id_to_package)
     }
 }
-
-// impl From<Error> for PackageResolverError {
-//     fn from(source: Error) -> Self {
-//         Self::Store {
-//             store: STORE,
-//             source: Arc::new(source),
-//         }
-//     }
-// }
