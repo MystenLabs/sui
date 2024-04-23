@@ -1585,7 +1585,8 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                     context.debug.for_syntax_lowering,
                     ("calling fun" => format!("{}::{}", m, f); fmt),
                     ("lambda arg" => lambda_arg; verbose));
-                let result = macro_for_call(context, eloc, m, f, eloc, param_loc, *subject, lambda_arg);
+                let result =
+                    macro_for_call(context, eloc, m, f, eloc, param_loc, *subject, lambda_arg);
                 debug_print!(context.debug.for_syntax_lowering, ("after expansion" => result.1));
                 result
             } else {

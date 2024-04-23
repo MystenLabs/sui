@@ -76,23 +76,25 @@ module std::vector {
 // Correct usage
 module a::valid {
 
+    public struct Pair(u64, u64) has drop;
+
     public fun test(): u64 {
 
         let mut sum = 0;
-        let v1 = vector[1,2,3];
-        let v2 = vector[1,2,3];
-        let mut v3 = vector[1,2,3];
+        let v1 = vector[Pair(1,2)];
+        let v2 = vector[Pair(1,2)];
+        let mut v3 = vector[Pair(1,2)];
 
-        for (x in v1) {
-            sum = sum + x;
+        for (Pair(x, y) in v1) {
+            sum = sum + x + y;
         };
 
-        for (x in &v2) {
-            sum = sum + *x;
+        for (Pair(x, y) in &v2) {
+            sum = sum + *x + *y;
         };
 
-        for (x in &mut v3) {
-            sum = sum + *x;
+        for (Pair(x, y) in &mut v3) {
+            sum = sum + *x + *y;
         };
 
         sum

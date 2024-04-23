@@ -223,6 +223,17 @@ fn match_token(tokens: &mut Lexer, tok: Tok) -> Result<bool, Box<Diagnostic>> {
     }
 }
 
+// Check for the specified token and consume it if it matches.
+// Returns true if the token matches.
+fn match_token_and_advance(context: &mut Context, tok: Tok) -> bool {
+    if context.tokens.peek() == tok {
+        context.advance();
+        true
+    } else {
+        false
+    }
+}
+
 // Check for the specified token and return an error if it does not match.
 fn consume_token(tokens: &mut Lexer, tok: Tok) -> Result<(), Box<Diagnostic>> {
     consume_token_(tokens, tok, tokens.start_loc(), "")
@@ -1945,26 +1956,8 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
         }
         Tok::For => {
             context.tokens.advance()?;
-
-            let args = sp_with_loc!(
-                context,
-                parse_comma_list(
-                    context,
-                    Tok::LParen,
-                    Tok::As,
-                    &PARAM_START_SET,
-                    |context| {
-                        let b = parse_bind_list(context)?;
-                        let ty_opt = if match_token(context.tokens, Tok::Colon)? {
-                            Some(parse_type(context)?)
-                        } else {
-                            None
-                        };
-                        Ok((b, ty_opt))
-                    },
-                    "a binding",
-                )
-            );
+            consume_token(context.tokens, Tok::LParen)?;
+            let args = parse_for_args(context);
             let subject = parse_exp(context)?;
             consume_token(context.tokens, Tok::RParen)?;
             let (loop_body, ends_in_block) = parse_exp_or_sequence(context)?;
@@ -1978,6 +1971,55 @@ fn parse_control_exp(context: &mut Context) -> Result<(Exp, bool), Box<Diagnosti
     let end_loc = context.tokens.previous_end_loc();
     let exp = spanned(context.tokens.file_hash(), start_loc, end_loc, exp_);
     Ok((exp, ends_in_block))
+}
+
+fn parse_for_args(context: &mut Context) -> LambdaBindings {
+    let mut args = vec![];
+
+    sp_with_loc!(context, {
+        while !(matches!(context.tokens.peek(), Tok::Identifier)
+            && context.tokens.content() == "in")
+        {
+            println!("parsing at {}", context.tokens.peek());
+            if context.tokens.at_set(&PARAM_START_SET) {
+                let arg_opt = match parse_bind_list(context) {
+                    Ok(arg) => {
+                        let ty_opt = if match_token_and_advance(context, Tok::Colon) {
+                            match parse_type(context) {
+                                Ok(ty) => Some(ty),
+                                Err(err) => {
+                                    context.env.add_diag(*err);
+                                    None
+                                }
+                            }
+                        } else {
+                            None
+                        };
+                        Some((arg, ty_opt))
+                    }
+                    Err(err) => {
+                        context.env.add_diag(*err);
+                        context.advance();
+                        None
+                    }
+                };
+                if let Some((arg, ty_opt)) = arg_opt {
+                    args.push((arg, ty_opt));
+                    if context.tokens.at(Tok::Comma) {
+                        context.advance();
+                    }
+                }
+            } else if context.at_stop_set() {
+                    break;
+            } else {
+                context.advance();
+            }
+        }
+        if matches!(context.tokens.peek(), Tok::Identifier) && context.tokens.content() == "in" {
+            context.advance();
+        }
+        args
+    })
 }
 
 // Parse a pack, call, or other reference to a name:
