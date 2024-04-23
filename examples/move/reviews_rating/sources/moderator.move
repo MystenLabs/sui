@@ -1,4 +1,7 @@
-module poc::moderator {
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+module reviews_rating::moderator {
     use sui::tx_context::{sender};
 
     /// Represents a moderator that can be used to delete reviews

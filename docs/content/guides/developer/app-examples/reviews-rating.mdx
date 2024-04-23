@@ -237,7 +237,7 @@ fun find_idx(service: &Service, total_score: u64): u64 {
     let mut idx = 0;
     while (i < len) {
         idx = len - i - 1;
-        let review_id = service.top_reviews[idx];
+        let review_id = *vector::borrow(&service.top_reviews, idx);
         if (get_total_score(service, review_id) > total_score) {
             return idx + 1
         };

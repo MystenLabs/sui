@@ -1,4 +1,7 @@
-module poc::service {
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+module reviews_rating::service {
     use std::string::String;
 
     use sui::balance::{Self, Balance};
@@ -8,8 +11,8 @@ module poc::service {
     use sui::sui::SUI;
     use sui::object_table::{Self, ObjectTable};
     
-    use poc::moderator::{Moderator};
-    use poc::review::{Self, Review};
+    use reviews_rating::moderator::{Moderator};
+    use reviews_rating::review::{Self, Review};
 
     const EInvalidPermission: u64 = 1;
     const ENotEnoughBalance: u64 = 2;
@@ -184,7 +187,7 @@ module poc::service {
         let mut idx = 0;
         while (i < len) {
             idx = len - i - 1;
-            let review_id = service.top_reviews[idx];
+            let review_id = *vector::borrow(&service.top_reviews, idx);
             if (get_total_score(service, review_id) > total_score) {
                 return idx + 1
             };
