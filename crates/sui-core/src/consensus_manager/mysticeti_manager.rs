@@ -114,6 +114,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         // TODO(mysticeti): Fill in the other fields
         let parameters = Parameters {
             db_path: Some(self.get_store_path(epoch)),
+            min_round_delay: std::time::Duration::from_millis(120),
             ..Default::default()
         };
 
