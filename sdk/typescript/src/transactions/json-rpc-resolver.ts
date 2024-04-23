@@ -6,7 +6,6 @@ import { parse } from 'valibot';
 import type { BcsType } from '../bcs/index.js';
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
-import type { ProtocolConfig } from '../client/index.js';
 import { normalizeSuiAddress, normalizeSuiObjectId, SUI_TYPE_ARG } from '../utils/index.js';
 import type { Argument, CallArg, OpenMoveTypeSignature, Transaction } from './blockData/v2.js';
 import { ObjectRef } from './blockData/v2.js';
@@ -24,8 +23,6 @@ const MAX_GAS = 50_000_000_000;
 export interface BuildTransactionBlockOptions {
 	client?: SuiClient;
 	onlyTransactionKind?: boolean;
-	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
-	protocolConfig?: ProtocolConfig;
 }
 
 export interface SerializeTransactionBlockOptions extends BuildTransactionBlockOptions {
@@ -298,23 +295,25 @@ async function normalizeInputs(
 		}
 	});
 
-	const client = getClient(options);
 	const moveFunctionParameters = new Map<string, OpenMoveTypeSignature[]>();
-	await Promise.all(
-		[...moveFunctionsToResolve].map(async (functionName) => {
-			const [packageId, moduleId, functionId] = functionName.split('::');
-			const def = await client.getNormalizedMoveFunction({
-				package: packageId,
-				module: moduleId,
-				function: functionId,
-			});
+	if (moveFunctionsToResolve.size > 0) {
+		const client = getClient(options);
+		await Promise.all(
+			[...moveFunctionsToResolve].map(async (functionName) => {
+				const [packageId, moduleId, functionId] = functionName.split('::');
+				const def = await client.getNormalizedMoveFunction({
+					package: packageId,
+					module: moduleId,
+					function: functionId,
+				});
 
-			moveFunctionParameters.set(
-				functionName,
-				def.parameters.map((param) => normalizedTypeToMoveTypeSignature(param)),
-			);
-		}),
-	);
+				moveFunctionParameters.set(
+					functionName,
+					def.parameters.map((param) => normalizedTypeToMoveTypeSignature(param)),
+				);
+			}),
+		);
+	}
 
 	if (moveCallsToResolve.length) {
 		await Promise.all(

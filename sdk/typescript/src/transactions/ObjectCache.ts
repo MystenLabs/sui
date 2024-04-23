@@ -3,7 +3,7 @@
 
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
-import type { ExecuteTransactionBlockParams, ProtocolConfig } from '../client/index.js';
+import type { ExecuteTransactionBlockParams } from '../client/index.js';
 import type { Signer } from '../cryptography/keypair.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature } from './blockData/v2.js';
@@ -264,7 +264,6 @@ export class ObjectCache {
 
 export class CachingTransactionBlockExecutor {
 	#client: SuiClient;
-	#protocolConfig: ProtocolConfig | null = null;
 	cache: ObjectCache;
 
 	constructor({
@@ -278,27 +277,16 @@ export class CachingTransactionBlockExecutor {
 	}
 
 	/**
-	 * Clears the cached protocol config and all owned objects
+	 * Clears all Owned objects
 	 * Immutable objects, Shared objects, and Move function definitions will be preserved
 	 */
 	async reset() {
-		this.#protocolConfig = null;
 		await this.cache.clearOwnedObjects();
-	}
-
-	async #getProtocolConfig() {
-		if (!this.#protocolConfig) {
-			this.#protocolConfig = await this.#client.getProtocolConfig();
-		}
-
-		return this.#protocolConfig;
 	}
 
 	async buildTransactionBlock({ transactionBlock }: { transactionBlock: TransactionBlock }) {
 		return transactionBlock.build({
 			client: this.#client,
-
-			protocolConfig: await this.#getProtocolConfig(),
 		});
 	}
 
@@ -314,7 +302,6 @@ export class CachingTransactionBlockExecutor {
 			...input,
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
-				protocolConfig: await this.#getProtocolConfig(),
 			}),
 			options: {
 				...options,
@@ -344,7 +331,6 @@ export class CachingTransactionBlockExecutor {
 			...input,
 			transactionBlock: await transactionBlock.build({
 				client: this.#client,
-				protocolConfig: await this.#getProtocolConfig(),
 			}),
 			options: {
 				...options,
