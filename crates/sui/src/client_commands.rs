@@ -1342,10 +1342,24 @@ impl SuiClientCommands {
                 serialize_unsigned_transaction,
                 serialize_signed_transaction,
             } => {
-                let tx_kind = construct_move_call_transaction_kind(
-                    package, &module, &function, type_args, args, context,
-                )
-                .await?;
+                // Convert all numeric input to String, this will allow number input from the CLI
+                // without failing SuiJSON's checks.
+                let args = args
+                    .into_iter()
+                    .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
+                    .collect::<Result<_, _>>()?;
+
+                let type_args = type_args
+                    .into_iter()
+                    .map(|arg| arg.into())
+                    .collect::<Vec<_>>();
+
+                let tx_kind = context
+                    .get_client()
+                    .await?
+                    .transaction_builder()
+                    .move_call_tx_kind(package, &module, &function, type_args, args)
+                    .await?;
 
                 let gas_owner = context.try_get_object_owner(&gas).await?;
                 let signer = gas_owner.unwrap_or(context.active_address()?);
@@ -2634,34 +2648,6 @@ fn write_obj_changes<T: Display>(
         }
     }
     Ok(())
-}
-
-async fn construct_move_call_transaction_kind(
-    package: ObjectID,
-    module: &str,
-    function: &str,
-    type_args: Vec<TypeTag>,
-    args: Vec<SuiJsonValue>,
-    context: &mut WalletContext,
-) -> Result<TransactionKind, anyhow::Error> {
-    // Convert all numeric input to String, this will allow number input from the CLI without failing SuiJSON's checks.
-    let args = args
-        .into_iter()
-        .map(|value| SuiJsonValue::new(convert_number_to_string(value.to_json_value())))
-        .collect::<Result<_, _>>()?;
-
-    let type_args = type_args
-        .into_iter()
-        .map(|arg| arg.into())
-        .collect::<Vec<_>>();
-
-    let tx_kind = context
-        .get_client()
-        .await?
-        .transaction_builder()
-        .move_call_tx_kind(package, module, function, type_args, args)
-        .await?;
-    Ok(tx_kind)
 }
 
 fn convert_number_to_string(value: Value) -> Value {
