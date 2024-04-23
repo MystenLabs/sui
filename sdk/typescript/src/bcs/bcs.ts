@@ -114,7 +114,7 @@ export const Transaction = bcs.enum('Transaction', {
 	 */
 	TransferObjects: bcs.struct('TransferObjects', {
 		objects: bcs.vector(Argument),
-		recipient: Argument,
+		address: Argument,
 	}),
 	// /**
 	//  * Split `amount` from a `coin`.

@@ -6,7 +6,7 @@ import type { SuiClient } from '../client/client.js';
 import type { ExecuteTransactionBlockParams } from '../client/index.js';
 import type { Signer } from '../cryptography/keypair.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { OpenMoveTypeSignature } from './blockData/v2.js';
+import type { OpenMoveTypeSignature } from './blockData/internal.js';
 import type { TransactionBlockPlugin } from './json-rpc-resolver.js';
 import type { TransactionBlock } from './TransactionBlock.js';
 

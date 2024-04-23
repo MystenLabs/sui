@@ -36,6 +36,7 @@
 - added getBlockData that returns new v2 blockData
 - removed txb.pure(rawValue)
 - Added support for (txb) => input as transaction arguments
+- renamed packageId -> package in Upgrade command
 
 ### exports
 
@@ -59,15 +60,12 @@ Removed `is` and `assert` helpers
 
 - Removed intent enum exports (use bcs instead)
 
-# TODO
-
-- Need to export types for blockData
-- Serialize should be updated to allow exporting v2 state
-- Use valibot parser in TypeTagSerializer
-- Should fromB64, toB64, fromHEX, toHEX still be exported from utils?
-
 # @mysten/bcs
 
 - removed registry
 - default maxSize of writer = Infinity
 - renamed `size` to `initialSize` in writer
+
+# TODO
+
+- Update wallet standard

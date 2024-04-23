@@ -9,9 +9,15 @@ import { is, parse } from 'valibot';
 import type { SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
-import type { CallArg, Transaction } from './blockData/v2.js';
-import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
+import type { CallArg, Transaction } from './blockData/internal.js';
+import {
+	Argument,
+	NormalizedCallArg,
+	ObjectRef,
+	TransactionExpiration,
+} from './blockData/internal.js';
+import { serializeV1TransactionBlockData } from './blockData/v1.js';
+import { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
 import { Inputs } from './Inputs.js';
 import type {
 	BuildTransactionBlockOptions,
@@ -181,7 +187,7 @@ export class TransactionBlock {
 	/** @deprecated Use `getBlockData()` instead. */
 
 	get blockData() {
-		return v1BlockDataFromTransactionBlockState(this.#blockData.snapshot());
+		return serializeV1TransactionBlockData(this.#blockData.snapshot());
 	}
 
 	/** Get a snapshot of the transaction data, in JSON form: */
@@ -353,19 +359,19 @@ export class TransactionBlock {
 	upgrade({
 		modules,
 		dependencies,
-		packageId,
+		package: packageId,
 		ticket,
 	}: {
 		modules: number[][] | string[];
 		dependencies: string[];
-		packageId: string;
+		package: string;
 		ticket: TransactionObjectArgument | string;
 	}) {
 		return this.add(
 			Transactions.Upgrade({
 				modules,
 				dependencies,
-				packageId,
+				package: packageId,
 				ticket: this.object(ticket),
 			}),
 		);
@@ -433,14 +439,21 @@ export class TransactionBlock {
 	 * information is automatically filled in (e.g. by querying for coin objects
 	 * and performing a dry run).
 	 */
-	serialize() {
-		return JSON.stringify(v1BlockDataFromTransactionBlockState(this.#blockData.snapshot()));
+	serialize(format: 'v1' | 'v2' = 'v1') {
+		if (format === 'v1') {
+			return JSON.stringify(serializeV1TransactionBlockData(this.#blockData.snapshot()));
+		}
+
+		return JSON.stringify(
+			parse(SerializedTransactionBlockDataV2, this.#blockData.snapshot()),
+			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+		);
 	}
 
 	async toJSON(options: SerializeTransactionBlockOptions = {}): Promise<string> {
-		await this.#prepareForSerialization(options);
+		await this.prepareForSerialization(options);
 		return JSON.stringify(
-			this.#blockData.snapshot(),
+			parse(SerializedTransactionBlockDataV2, this.#blockData.snapshot()),
 			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
 			2,
 		);
@@ -455,7 +468,7 @@ export class TransactionBlock {
 
 	/** Build the transaction to BCS bytes. */
 	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
-		await this.#prepareForSerialization(options);
+		await this.prepareForSerialization(options);
 		await this.#prepareBuild(options);
 		return this.#blockData.build({
 			onlyTransactionKind: options.onlyTransactionKind,
@@ -521,7 +534,7 @@ export class TransactionBlock {
 		await createNext(0)();
 	}
 
-	async #prepareForSerialization(options: SerializeTransactionBlockOptions) {
+	async prepareForSerialization(options: SerializeTransactionBlockOptions) {
 		const intents = new Set<string>();
 		for (const transaction of this.#blockData.transactions) {
 			if (transaction.Intent && options.supportedIntents) {

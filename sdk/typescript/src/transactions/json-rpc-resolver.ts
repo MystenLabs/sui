@@ -7,8 +7,13 @@ import type { BcsType } from '../bcs/index.js';
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
 import { normalizeSuiAddress, normalizeSuiObjectId, SUI_TYPE_ARG } from '../utils/index.js';
-import type { Argument, CallArg, OpenMoveTypeSignature, Transaction } from './blockData/v2.js';
-import { ObjectRef } from './blockData/v2.js';
+import { ObjectRef } from './blockData/internal.js';
+import type {
+	Argument,
+	CallArg,
+	OpenMoveTypeSignature,
+	Transaction,
+} from './blockData/internal.js';
 import { Inputs } from './Inputs.js';
 import { getPureBcsSchema, isTxContext, normalizedTypeToMoveTypeSignature } from './serializer.js';
 import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
@@ -290,7 +295,7 @@ async function normalizeInputs(
 				});
 				break;
 			case 'TransferObjects':
-				normalizeRawArgument(transaction.TransferObjects.recipient, bcs.Address, blockData);
+				normalizeRawArgument(transaction.TransferObjects.address, bcs.Address, blockData);
 				break;
 		}
 	});

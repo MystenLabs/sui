@@ -182,7 +182,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 									},
 								],
 								// address is also an input
-								recipient: {
+								address: {
 									$kind: 'Input',
 									Input: 3,
 								},

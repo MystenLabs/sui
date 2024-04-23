@@ -5,7 +5,7 @@ import { toB64 } from '@mysten/bcs';
 import type { SerializedBcs } from '@mysten/bcs';
 
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { CallArg, ObjectRef } from './blockData/v2.js';
+import type { CallArg, ObjectRef } from './blockData/internal.js';
 
 function Pure(data: Uint8Array | SerializedBcs<any>): Extract<CallArg, { Pure: unknown }> {
 	return {

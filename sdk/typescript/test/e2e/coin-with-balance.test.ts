@@ -46,7 +46,6 @@ describe('coinWithBalance', () => {
 			},
 			inputs: [
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
@@ -55,7 +54,6 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'Intent',
 					Intent: {
 						data: {
 							balance: '12345',
@@ -66,18 +64,14 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'TransferObjects',
 					TransferObjects: {
 						objects: [
 							{
-								$kind: 'Result',
 								Result: 0,
 							},
 						],
-						recipient: {
-							$kind: 'Input',
+						address: {
 							Input: 0,
-							type: 'pure',
 						},
 					},
 				},
@@ -102,13 +96,11 @@ describe('coinWithBalance', () => {
 			},
 			inputs: [
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
 				},
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(12345).toBytes()),
 					},
@@ -117,34 +109,26 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'SplitCoins',
 					SplitCoins: {
 						coin: {
-							$kind: 'GasCoin',
 							GasCoin: true,
 						},
 						amounts: [
 							{
-								$kind: 'Input',
 								Input: 1,
-								type: 'pure',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'TransferObjects',
 					TransferObjects: {
 						objects: [
 							{
-								$kind: 'NestedResult',
 								NestedResult: [0, 0],
 							},
 						],
-						recipient: {
-							$kind: 'Input',
+						address: {
 							Input: 0,
-							type: 'pure',
 						},
 					},
 				},
@@ -201,7 +185,6 @@ describe('coinWithBalance', () => {
 			},
 			inputs: [
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
@@ -210,7 +193,6 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'Intent',
 					Intent: {
 						data: {
 							balance: '1',
@@ -221,18 +203,14 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'TransferObjects',
 					TransferObjects: {
 						objects: [
 							{
-								$kind: 'Result',
 								Result: 0,
 							},
 						],
-						recipient: {
-							$kind: 'Input',
+						address: {
 							Input: 0,
-							type: 'pure',
 						},
 					},
 				},
@@ -257,27 +235,21 @@ describe('coinWithBalance', () => {
 			},
 			inputs: [
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
 				},
 				{
-					$kind: 'Object',
 					Object: {
-						$kind: 'ImmOrOwnedObject',
 						ImmOrOwnedObject: expect.anything(),
 					},
 				},
 				{
-					$kind: 'Object',
 					Object: {
-						$kind: 'ImmOrOwnedObject',
 						ImmOrOwnedObject: expect.anything(),
 					},
 				},
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(1).toBytes()),
 					},
@@ -286,47 +258,34 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'MergeCoins',
 					MergeCoins: {
 						destination: {
-							$kind: 'Input',
 							Input: 1,
-							type: 'object',
 						},
 						sources: [
 							{
-								$kind: 'Input',
 								Input: 2,
-								type: 'object',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'SplitCoins',
 					SplitCoins: {
 						coin: {
-							$kind: 'Input',
 							Input: 1,
-							type: 'object',
 						},
 						amounts: [
 							{
-								$kind: 'Input',
 								Input: 3,
-								type: 'pure',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'TransferObjects',
 					TransferObjects: {
-						objects: [{ $kind: 'NestedResult', NestedResult: [1, 0] }],
-						recipient: {
-							$kind: 'Input',
+						objects: [{ NestedResult: [1, 0] }],
+						address: {
 							Input: 0,
-							type: 'pure',
 						},
 					},
 				},
@@ -392,7 +351,6 @@ describe('coinWithBalance', () => {
 			},
 			inputs: [
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
@@ -401,7 +359,6 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'Intent',
 					Intent: {
 						data: {
 							balance: '1',
@@ -412,7 +369,6 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'Intent',
 					Intent: {
 						data: {
 							balance: '2',
@@ -423,7 +379,6 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'Intent',
 					Intent: {
 						data: {
 							balance: '3',
@@ -434,7 +389,6 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'Intent',
 					Intent: {
 						data: {
 							balance: '4',
@@ -445,30 +399,23 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					$kind: 'TransferObjects',
 					TransferObjects: {
 						objects: [
 							{
-								$kind: 'Result',
 								Result: 0,
 							},
 							{
-								$kind: 'Result',
 								Result: 1,
 							},
 							{
-								$kind: 'Result',
 								Result: 2,
 							},
 							{
-								$kind: 'Result',
 								Result: 3,
 							},
 						],
-						recipient: {
-							$kind: 'Input',
+						address: {
 							Input: 0,
-							type: 'pure',
 						},
 					},
 				},
@@ -493,45 +440,36 @@ describe('coinWithBalance', () => {
 			},
 			inputs: [
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(fromHEX(receiver.toSuiAddress())),
 					},
 				},
 				{
-					$kind: 'Object',
 					Object: {
-						$kind: 'ImmOrOwnedObject',
 						ImmOrOwnedObject: expect.anything(),
 					},
 				},
 				{
-					$kind: 'Object',
 					Object: {
-						$kind: 'ImmOrOwnedObject',
 						ImmOrOwnedObject: expect.anything(),
 					},
 				},
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(1).toBytes()),
 					},
 				},
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(2).toBytes()),
 					},
 				},
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(3).toBytes()),
 					},
 				},
 				{
-					$kind: 'Pure',
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(4).toBytes()),
 					},
@@ -540,101 +478,75 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					$kind: 'MergeCoins',
 					MergeCoins: {
 						destination: {
-							$kind: 'Input',
 							Input: 1,
-							type: 'object',
 						},
 						sources: [
 							{
-								$kind: 'Input',
 								Input: 2,
-								type: 'object',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'SplitCoins',
 					SplitCoins: {
 						coin: {
-							$kind: 'Input',
 							Input: 1,
-							type: 'object',
 						},
 						amounts: [
 							{
-								$kind: 'Input',
 								Input: 3,
-								type: 'pure',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'SplitCoins',
 					SplitCoins: {
 						coin: {
-							$kind: 'Input',
 							Input: 1,
-							type: 'object',
 						},
 						amounts: [
 							{
-								$kind: 'Input',
 								Input: 4,
-								type: 'pure',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'SplitCoins',
 					SplitCoins: {
 						coin: {
-							$kind: 'GasCoin',
 							GasCoin: true,
 						},
 						amounts: [
 							{
-								$kind: 'Input',
 								Input: 5,
-								type: 'pure',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'SplitCoins',
 					SplitCoins: {
 						coin: {
-							$kind: 'GasCoin',
 							GasCoin: true,
 						},
 						amounts: [
 							{
-								$kind: 'Input',
 								Input: 6,
-								type: 'pure',
 							},
 						],
 					},
 				},
 				{
-					$kind: 'TransferObjects',
 					TransferObjects: {
 						objects: [
-							{ $kind: 'NestedResult', NestedResult: [1, 0] },
-							{ $kind: 'NestedResult', NestedResult: [2, 0] },
-							{ $kind: 'NestedResult', NestedResult: [3, 0] },
-							{ $kind: 'NestedResult', NestedResult: [4, 0] },
+							{ NestedResult: [1, 0] },
+							{ NestedResult: [2, 0] },
+							{ NestedResult: [3, 0] },
+							{ NestedResult: [4, 0] },
 						],
-						recipient: {
-							$kind: 'Input',
+						address: {
 							Input: 0,
-							type: 'pure',
 						},
 					},
 				},

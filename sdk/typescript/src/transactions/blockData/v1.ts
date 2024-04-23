@@ -24,8 +24,8 @@ import {
 
 import { TypeTagSerializer } from '../../bcs/index.js';
 import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/types.js';
-import type { Argument } from './v2.js';
-import { ObjectArg, safeEnum, TransactionBlockState } from './v2.js';
+import { InternalTransactionBlockData, ObjectArg, safeEnum } from './internal.js';
+import type { Argument } from './internal.js';
 
 export const NormalizedCallArg = safeEnum({
 	Object: ObjectArg,
@@ -176,7 +176,7 @@ const TransactionTypes = [
 
 const TransactionType = union([...TransactionTypes]);
 
-export const SerializedTransactionDataBuilderV1 = object({
+export const SerializedTransactionBlockDataV1 = object({
 	version: literal(1),
 	sender: optional(string()),
 	expiration: nullish(TransactionExpiration),
@@ -185,12 +185,12 @@ export const SerializedTransactionDataBuilderV1 = object({
 	transactions: array(TransactionType),
 });
 
-export type SerializedTransactionDataBuilderV1 = Output<typeof SerializedTransactionDataBuilderV1>;
+export type SerializedTransactionBlockDataV1 = Output<typeof SerializedTransactionBlockDataV1>;
 
-export function v1BlockDataFromTransactionBlockState(
-	v2: TransactionBlockState,
-): SerializedTransactionDataBuilderV1 {
-	const inputs: Output<typeof TransactionBlockInput>[] = v2.inputs.map((input, index) => {
+export function serializeV1TransactionBlockData(
+	blockData: InternalTransactionBlockData,
+): SerializedTransactionBlockDataV1 {
+	const inputs: Output<typeof TransactionBlockInput>[] = blockData.inputs.map((input, index) => {
 		if (input.Object) {
 			return {
 				kind: 'Input',
@@ -251,21 +251,21 @@ export function v1BlockDataFromTransactionBlockState(
 
 	return {
 		version: 1,
-		sender: v2.sender ?? undefined,
+		sender: blockData.sender ?? undefined,
 		expiration:
-			v2.expiration?.$kind === 'Epoch'
-				? { Epoch: Number(v2.expiration.Epoch) }
-				: v2.expiration
+			blockData.expiration?.$kind === 'Epoch'
+				? { Epoch: Number(blockData.expiration.Epoch) }
+				: blockData.expiration
 				? { None: true }
 				: null,
 		gasConfig: {
-			owner: v2.gasData.owner ?? undefined,
-			budget: v2.gasData.budget ?? undefined,
-			price: v2.gasData.price ?? undefined,
-			payment: v2.gasData.payment ?? undefined,
+			owner: blockData.gasData.owner ?? undefined,
+			budget: blockData.gasData.budget ?? undefined,
+			price: blockData.gasData.price ?? undefined,
+			payment: blockData.gasData.payment ?? undefined,
 		},
 		inputs,
-		transactions: v2.transactions.map((transaction): Output<typeof TransactionType> => {
+		transactions: blockData.transactions.map((transaction): Output<typeof TransactionType> => {
 			if (transaction.MakeMoveVec) {
 				return {
 					kind: 'MakeMoveVec',
@@ -319,7 +319,7 @@ export function v1BlockDataFromTransactionBlockState(
 					objects: transaction.TransferObjects.objects.map((arg) =>
 						convertTransactionArgument(arg, inputs),
 					),
-					address: convertTransactionArgument(transaction.TransferObjects.recipient, inputs),
+					address: convertTransactionArgument(transaction.TransferObjects.address, inputs),
 				};
 			}
 
@@ -358,10 +358,10 @@ function convertTransactionArgument(
 	throw new Error(`Invalid argument ${Object.keys(arg)}`);
 }
 
-export function transactionBlockStateFromV1BlockData(
-	data: SerializedTransactionDataBuilderV1,
-): TransactionBlockState {
-	return parse(TransactionBlockState, {
+export function transactionBlockDataFromV1(
+	data: SerializedTransactionBlockDataV1,
+): InternalTransactionBlockData {
+	return parse(InternalTransactionBlockData, {
 		version: 2,
 		sender: data.sender ?? null,
 		expiration: data.expiration
@@ -467,7 +467,7 @@ export function transactionBlockStateFromV1BlockData(
 					return {
 						TransferObjects: {
 							objects: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
-							recipient: parseV1TransactionArgument(transaction.address),
+							address: parseV1TransactionArgument(transaction.address),
 						},
 					};
 				}
@@ -485,7 +485,7 @@ export function transactionBlockStateFromV1BlockData(
 
 			throw new Error(`Unknown transaction ${Object.keys(transaction)}`);
 		}),
-	} satisfies Input<typeof TransactionBlockState>);
+	} satisfies Input<typeof InternalTransactionBlockData>);
 }
 
 function parseV1TransactionArgument(

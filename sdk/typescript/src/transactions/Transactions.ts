@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { toB64 } from '@mysten/bcs';
-import { parse } from 'valibot';
 import type { Input } from 'valibot';
+import { parse } from 'valibot';
 
+import type { bcs } from '../bcs/index.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { CallArg, Transaction } from './blockData/v2.js';
-import { Argument } from './blockData/v2.js';
+import { Argument } from './blockData/internal.js';
+import type { CallArg } from './blockData/internal.js';
 import type { TransactionBlock } from './TransactionBlock.js';
 
 export type TransactionArgument = Argument | ((txb: TransactionBlock) => Argument);
-export type { CallArg as TransactionBlockInput };
+export type TransactionBlockInput = CallArg;
 
 // Keep in sync with constants in
 // crates/sui-framework/packages/sui-framework/sources/package.move
@@ -21,8 +22,8 @@ export enum UpgradePolicy {
 	DEP_ONLY = 192,
 }
 
-type TransactionShape<T extends Transaction['$kind']> = { $kind: T } & {
-	[K in T]: Extract<Transaction, { [K in T]: any }>[T];
+type TransactionShape<T extends (typeof bcs.Transaction.$inferType)['$kind']> = { $kind: T } & {
+	[K in T]: Extract<typeof bcs.Transaction.$inferType, { [K in T]: any }>[T];
 };
 
 /**
@@ -67,7 +68,7 @@ export const Transactions = {
 			$kind: 'TransferObjects',
 			TransferObjects: {
 				objects: objects.map((o) => parse(Argument, o)),
-				recipient: parse(Argument, address),
+				address: parse(Argument, address),
 			},
 		};
 	},
@@ -115,12 +116,12 @@ export const Transactions = {
 	Upgrade({
 		modules,
 		dependencies,
-		packageId,
+		package: packageId,
 		ticket,
 	}: {
 		modules: number[][] | string[];
 		dependencies: string[];
-		packageId: string;
+		package: string;
 		ticket: Input<typeof Argument>;
 	}): TransactionShape<'Upgrade'> {
 		return {

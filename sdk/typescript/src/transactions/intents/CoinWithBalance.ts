@@ -4,7 +4,7 @@
 import { bcs } from '@mysten/bcs';
 
 import type { CoinStruct } from '../../client/index.js';
-import type { Argument } from '../blockData/v2.js';
+import type { Argument } from '../blockData/internal.js';
 import { Inputs } from '../Inputs.js';
 import type { BuildTransactionBlockOptions } from '../json-rpc-resolver.js';
 import { getClient } from '../json-rpc-resolver.js';

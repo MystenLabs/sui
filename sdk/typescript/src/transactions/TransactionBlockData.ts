@@ -7,23 +7,24 @@ import { parse } from 'valibot';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { transactionBlockStateFromV1BlockData } from './blockData/v1.js';
-import type { SerializedTransactionDataBuilderV1 } from './blockData/v1.js';
 import type {
 	Argument,
 	CallArg,
 	GasData,
 	Transaction,
 	TransactionExpiration,
-} from './blockData/v2.js';
-import { TransactionBlockState } from './blockData/v2.js';
+} from './blockData/internal.js';
+import { InternalTransactionBlockData } from './blockData/internal.js';
+import { transactionBlockDataFromV1 } from './blockData/v1.js';
+import type { SerializedTransactionBlockDataV1 } from './blockData/v1.js';
+import type { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
 import { hashTypedData } from './hash.js';
 
 function prepareSuiAddress(address: string) {
 	return normalizeSuiAddress(address).replace('0x', '');
 }
 
-export class TransactionBlockDataBuilder implements TransactionBlockState {
+export class TransactionBlockDataBuilder implements InternalTransactionBlockData {
 	static fromKindBytes(bytes: Uint8Array) {
 		const kind = bcs.TransactionKind.parse(bytes);
 
@@ -67,13 +68,15 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 	}
 
 	static restore(
-		data: Input<typeof TransactionBlockState> | Input<typeof SerializedTransactionDataBuilderV1>,
+		data:
+			| Input<typeof SerializedTransactionBlockDataV2>
+			| Input<typeof SerializedTransactionBlockDataV1>,
 	) {
 		if (data.version === 2) {
-			return new TransactionBlockDataBuilder(parse(TransactionBlockState, data));
+			return new TransactionBlockDataBuilder(parse(InternalTransactionBlockData, data));
 		} else {
 			return new TransactionBlockDataBuilder(
-				parse(TransactionBlockState, transactionBlockStateFromV1BlockData(data)),
+				parse(InternalTransactionBlockData, transactionBlockDataFromV1(data)),
 			);
 		}
 	}
@@ -105,7 +108,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 	inputs: CallArg[];
 	transactions: Transaction[];
 
-	constructor(clone?: TransactionBlockState) {
+	constructor(clone?: InternalTransactionBlockData) {
 		this.sender = clone?.sender ?? null;
 		this.expiration = clone?.expiration ?? null;
 		this.inputs = clone?.inputs ?? [];
@@ -208,7 +211,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 					break;
 				case 'TransferObjects':
 					tx.TransferObjects.objects = tx.TransferObjects.objects.map((arg) => fn(arg));
-					tx.TransferObjects.recipient = fn(tx.TransferObjects.recipient);
+					tx.TransferObjects.address = fn(tx.TransferObjects.address);
 					break;
 				case 'SplitCoins':
 					tx.SplitCoins.coin = fn(tx.SplitCoins.coin);
@@ -275,7 +278,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		return TransactionBlockDataBuilder.getDigestFromBytes(bytes);
 	}
 
-	snapshot(): TransactionBlockState {
-		return parse(TransactionBlockState, this);
+	snapshot(): InternalTransactionBlockData {
+		return parse(InternalTransactionBlockData, this);
 	}
 }
