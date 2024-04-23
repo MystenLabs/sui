@@ -25,7 +25,7 @@ use sui_types::{
     transaction::{CertifiedTransaction, Transaction, VerifiedTransaction},
 };
 use sui_types::{
-    effects::{TransactionEffectsAPI},
+    effects::TransactionEffectsAPI,
     messages_checkpoint::{CheckpointRequestV2, CheckpointResponseV2},
 };
 use sui_types::{

@@ -15,8 +15,9 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
@@ -354,6 +355,49 @@ where
         let verified = check_error!(
             self.address,
             self.verify_certificate_response_v2(&digest, response),
+            "Client error in handle_certificate"
+        )?;
+        Ok(verified)
+    }
+
+    fn verify_certificate_response_v3(
+        &self,
+        digest: &TransactionDigest,
+        HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        }: HandleCertificateResponseV3,
+    ) -> SuiResult<HandleCertificateResponseV3> {
+        let effects = self.check_signed_effects_plain(digest, effects, None)?;
+
+        Ok(HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        })
+    }
+
+    /// Execute a certificate.
+    pub async fn handle_certificate_v3(
+        &self,
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        let digest = *request.certificate.digest();
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let response = self
+            .authority_client
+            .handle_certificate_v3(request, client_addr)
+            .await?;
+
+        let verified = check_error!(
+            self.address,
+            self.verify_certificate_response_v3(&digest, response),
             "Client error in handle_certificate"
         )?;
         Ok(verified)
