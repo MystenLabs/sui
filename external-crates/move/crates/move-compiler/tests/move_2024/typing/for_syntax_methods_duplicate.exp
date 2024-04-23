@@ -1,0 +1,33 @@
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/typing/for_syntax_methods_duplicate.move:54:22
+   │
+43 │     public macro fun for_each<$T>($v: vector<$T>, $body: |$T|) {
+   │                      -------- This syntax method was previously defined here.
+   ·
+53 │     #[syntax(for)]
+   │              --- 'for' 'syntax' annotation appears here
+54 │     public macro fun for_each_2<$T>($v: vector<$T>, $body: |$T|) {
+   │                      ^^^^^^^^^^ Redefined 'for' 'syntax' method for 'vector'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/typing/for_syntax_methods_duplicate.move:76:22
+   │
+65 │     public macro fun for_imm<$T>($v: &vector<$T>, $body: |&$T|) {
+   │                      ------- This syntax method was previously defined here.
+   ·
+75 │     #[syntax(for)]
+   │              --- immutable ref 'for' 'syntax' annotation appears here
+76 │     public macro fun for_imm_2<$T>($v: &vector<$T>, $body: |&$T|) {
+   │                      ^^^^^^^^^ Redefined immutable ref 'for' 'syntax' method for 'vector'
+
+error[E02015]: invalid attribute
+   ┌─ tests/move_2024/typing/for_syntax_methods_duplicate.move:98:22
+   │
+87 │     public macro fun for_mut<$T>($v: &mut vector<$T>, $body: |&mut $T|) {
+   │                      ------- This syntax method was previously defined here.
+   ·
+97 │     #[syntax(for)]
+   │              --- mutable ref 'for' 'syntax' annotation appears here
+98 │     public macro fun for_mut_2<$T>($v: &mut vector<$T>, $body: |&mut $T|) {
+   │                      ^^^^^^^^^ Redefined mutable ref 'for' 'syntax' method for 'vector'
+

@@ -1,10 +1,10 @@
 error[E02019]: invalid 'syntax' method type
-   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:29:7
+   ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:29:14
    │
 29 │     #[syntax(for)]
-   │       ^^^^^^^^^^^ Syntax attributes may not appear on macro definitions
+   │              ^^^ Invalid syntax annotation. This syntax method must return a unit type
 30 │     public macro fun for_s(s: &S, i: u64): &u64 {
-   │            ----- This function is a macro
+   │                                            ---- This is not a unit type
 
 error[E02010]: invalid name
    ┌─ tests/move_2024/typing/index_syntax_methods_unsupported.move:30:28

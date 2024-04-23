@@ -1,0 +1,24 @@
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/typing/for_syntax_methods_invalid_type_2.move:42:14
+   │
+42 │     #[syntax(for)]
+   │              ^^^ Invalid syntax annotation. This syntax method must return a unit type
+43 │     public macro fun for_each<$T>($v: vector<$T>, $body: |$T|): u64 {
+   │                                                                 --- This is not a unit type
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/typing/for_syntax_methods_invalid_type_2.move:54:14
+   │
+54 │     #[syntax(for)]
+   │              ^^^ Invalid syntax annotation. This syntax method must return a unit type
+55 │     public macro fun for_imm<$T>($v: &vector<$T>, $body: |&$T|): u64 {
+   │                                                                  --- This is not a unit type
+
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/typing/for_syntax_methods_invalid_type_2.move:66:14
+   │
+66 │     #[syntax(for)]
+   │              ^^^ Invalid syntax annotation. This syntax method must return a unit type
+67 │     public macro fun for_mut<$T>($v: &mut vector<$T>, $body: |&mut $T|): u64 {
+   │                                                                          --- This is not a unit type
+

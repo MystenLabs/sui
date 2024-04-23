@@ -107,7 +107,7 @@ pub(super) fn resolve_syntax_attributes(
             };
             let method_opt: &mut Option<Box<SyntaxMethod>> = method_entry.lookup_kind_entry(&kind);
             if let Some(previous) = method_opt {
-                prev_syntax_defn_error(context, previous, kind, &type_name)
+                prev_syntax_defn_error(context, previous, *function_name, kind, &type_name)
             } else {
                 *method_opt = Some(Box::new(new_syntax_method));
             }
@@ -119,6 +119,7 @@ pub(super) fn resolve_syntax_attributes(
 fn prev_syntax_defn_error(
     context: &mut Context,
     prev: &SyntaxMethod,
+    new_name: FunctionName,
     sp!(sloc, method_kind): SyntaxMethodKind,
     sp!(_, type_name): &TypeName,
 ) {
@@ -133,10 +134,12 @@ fn prev_syntax_defn_error(
         "Redefined {} 'syntax' method for '{}'",
         kind_string, type_name
     );
-    let prev_msg = "This syntax method was previously defined here.";
+    let new_msg = format!("{} 'syntax' annotation appears here", kind_string);
+    let prev_msg = "This syntax method was previously defined here.".to_string();
     context.env.add_diag(diag!(
         Declarations::InvalidAttribute,
-        (sloc, msg),
+        (new_name.0.loc, msg),
+        (sloc, new_msg),
         (prev.loc, prev_msg)
     ));
 }
@@ -460,7 +463,6 @@ fn valid_return_type(
                     Declarations::InvalidSyntaxMethod,
                     (*loc, msg),
                     (ty.loc, tmsg),
-                    (subject_loc, "Mutable subject type defined here")
                 ));
                 false
             }

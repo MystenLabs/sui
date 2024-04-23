@@ -1,0 +1,26 @@
+error[E02019]: invalid 'syntax' method type
+   ┌─ tests/move_2024/typing/for_syntax_methods_nonmacro_invalid.move:42:14
+   │
+42 │     #[syntax(for)]
+   │              ^^^ 'for' syntax attributes may not appear on non-macro definitions
+43 │     public fun for_each<T: drop>(v: vector<T>, body: T) {
+   │                -------- This function is not a macro
+
+warning[W09002]: unused variable
+   ┌─ tests/move_2024/typing/for_syntax_methods_nonmacro_invalid.move:47:17
+   │
+47 │             let next = v.pop_back();
+   │                 ^^^^ Unused local variable 'next'. Consider removing or prefixing with an underscore: '_next'
+   │
+   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+error[E06002]: use of unassigned variable
+   ┌─ tests/move_2024/typing/for_syntax_methods_nonmacro_invalid.move:48:13
+   │
+48 │             body;
+   │             ^^^^
+   │             │
+   │             Invalid usage of previously moved variable 'body'.
+   │             Suggestion: use 'copy body' to avoid the move.
+   │             In a loop, this typically means it was moved in the first iteration, and is not available by the second iteration.
+
