@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use anyhow::{Context, Result};
 use std::process::Command;
 use suioplib::cli::service::init;
@@ -39,7 +42,7 @@ fn test_initialize_service_sui() -> Result<()> {
     // Create a dummy Cargo.toml file at the tempdir/sui level
     let workspace_toml_path = temp_dir.path().join("sui/Cargo.toml");
     std::fs::write(
-        &workspace_toml_path,
+        workspace_toml_path,
         r#"
 [workspace]
 members = []
@@ -61,7 +64,7 @@ members = []
     // created and make sure it got the right contents.
     assert!(svc_dir.join("Cargo.toml").exists());
     // Output Cargo.toml contents
-    let toml_content = std::fs::read_to_string(&svc_dir.join("Cargo.toml"))?;
+    let toml_content = std::fs::read_to_string(svc_dir.join("Cargo.toml"))?;
     // Boilerplate Cargo.toml contents
     let cargo_sui_toml_content =
         std::fs::read_to_string("../mysten-service-boilerplate/Cargo-sui.toml")
