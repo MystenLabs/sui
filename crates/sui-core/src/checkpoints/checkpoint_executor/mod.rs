@@ -70,7 +70,37 @@ type CheckpointExecutionBuffer =
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 2000;
+struct SchedulingTimeoutConfig {
+    timeout: Duration,
+    panic_on_timeout: bool,
+}
+
+fn get_scheduling_timeout() -> &'static SchedulingTimeoutConfig {
+    fn inner() -> SchedulingTimeoutConfig {
+        // get the scheduling timeout from the env var SCHEDULING_EVENT_FUTURE_TIMEOUT_MS
+        // check if the env var PANIC_ON_NEW_CHECKPOINT_TIMEOUT is equal to "true" or "1" and
+        let panic_on_timeout = cfg!(msim)
+            || std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT")
+                .map_or(false, |s| s == "true" || s == "1");
+
+        // if we are panicking on timeout default to a longer timeout than if we are simply logging.
+        let timeout = Duration::from_millis(
+            std::env::var("NEW_CHECKPOINT_TIMEOUT_MS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(if panic_on_timeout { 20000 } else { 2000 }),
+        );
+
+        SchedulingTimeoutConfig {
+            timeout,
+            panic_on_timeout,
+        }
+    }
+
+    static SCHEDULING_TIMEOUT: once_cell::sync::OnceCell<SchedulingTimeoutConfig> =
+        once_cell::sync::OnceCell::new();
+    SCHEDULING_TIMEOUT.get_or_init(inner)
+}
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
@@ -192,7 +222,8 @@ impl CheckpointExecutor {
             .as_ref()
             .map(|c| c.network_total_transactions)
             .unwrap_or(0);
-        let scheduling_timeout = Duration::from_millis(SCHEDULING_EVENT_FUTURE_TIMEOUT_MS);
+        let scheduling_timeout_config = get_scheduling_timeout();
+        let scheduling_timeout = scheduling_timeout_config.timeout;
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
@@ -265,6 +296,9 @@ impl CheckpointExecutor {
                         warn!(
                             "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
                         );
+                        if scheduling_timeout_config.panic_on_timeout {
+                            panic!("No new synced checkpoints received for {scheduling_timeout:?}");
+                        }
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },
                     Ok(Ok(checkpoint)) => {
