@@ -38,7 +38,7 @@ export const Inputs = {
 	}: {
 		objectId: string;
 		mutable: boolean;
-		initialSharedVersion: string;
+		initialSharedVersion: number | string;
 	}): Extract<CallArg, { Object: unknown }> {
 		return {
 			$kind: 'Object',

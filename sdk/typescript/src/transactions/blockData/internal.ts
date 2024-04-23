@@ -312,7 +312,7 @@ export const TransactionExpiration = safeEnum({
 
 export type TransactionExpiration = Output<typeof TransactionExpiration>;
 
-export const InternalTransactionBlockData = object({
+export const TransactionBlockData = object({
 	version: literal(2),
 
 	sender: nullish(SuiAddress),
@@ -321,4 +321,4 @@ export const InternalTransactionBlockData = object({
 	inputs: array(CallArg),
 	transactions: array(Transaction),
 });
-export type InternalTransactionBlockData = Output<typeof InternalTransactionBlockData>;
+export type TransactionBlockData = Output<typeof TransactionBlockData>;

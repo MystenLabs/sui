@@ -3,16 +3,15 @@
 
 import { Text } from '_src/ui/app/shared/text';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import { TypeTagSerializer, type TypeTag } from '@mysten/sui.js/bcs';
 import {
 	type TransactionArgument,
-	type TransactionBlockState,
+	type TransactionBlockData,
 	type Transactions,
 } from '@mysten/sui.js/transactions';
 import { toB64 } from '@mysten/sui.js/utils';
 import { useState } from 'react';
 
-type TransactionType = TransactionBlockState['transactions'][0];
+type TransactionType = TransactionBlockData['transactions'][0];
 type MakeMoveVecTransaction = ReturnType<(typeof Transactions)['MakeMoveVec']>;
 type PublishTransaction = ReturnType<(typeof Transactions)['Publish']>;
 type Argument = Exclude<TransactionArgument, (...args: any) => unknown>;
@@ -26,8 +25,8 @@ function convertCommandArgumentToString(
 		| number[]
 		| Argument
 		| Argument[]
-		| MakeMoveVecTransaction['MakeMoveVec'][0]
-		| PublishTransaction['Publish'][0],
+		| MakeMoveVecTransaction['MakeMoveVec']['type']
+		| PublishTransaction['Publish']['modules'],
 ): string | null {
 	if (!arg) return null;
 
@@ -35,14 +34,6 @@ function convertCommandArgumentToString(
 
 	if (typeof arg === 'object' && 'None' in arg) {
 		return null;
-	}
-
-	if (typeof arg === 'object' && 'Some' in arg) {
-		if (typeof arg.Some === 'object') {
-			// MakeMoveVecTransaction['type'] is TypeTag type
-			return TypeTagSerializer.tagToString(arg.Some as TypeTag);
-		}
-		return arg;
 	}
 
 	if (Array.isArray(arg)) {
@@ -77,58 +68,54 @@ function convertCommandToString(command: TransactionType) {
 			normalizedCommand = {
 				kind: 'MoveCall',
 				...command.MoveCall,
-				typeArguments: command.MoveCall.typeArguments.map((typeArg) =>
-					TypeTagSerializer.tagToString(typeArg),
-				),
+				typeArguments: command.MoveCall.typeArguments,
 			};
 			break;
 		case 'MakeMoveVec':
 			normalizedCommand = {
 				kind: 'MakeMoveVec',
-				type: command.MakeMoveVec[0].Some
-					? TypeTagSerializer.tagToString(command.MakeMoveVec[0].Some)
-					: null,
-				objects: command.MakeMoveVec[1],
+				type: command.MakeMoveVec.type,
+				objects: command.MakeMoveVec.objects,
 			};
 			break;
 		case 'MergeCoins':
 			normalizedCommand = {
 				kind: 'MergeCoins',
-				destination: command.MergeCoins[0],
-				sources: command.MergeCoins[1],
+				destination: command.MergeCoins.destination,
+				sources: command.MergeCoins.sources,
 			};
 			break;
 		case 'TransferObjects':
 			normalizedCommand = {
 				kind: 'TransferObjects',
-				objects: command.TransferObjects[0],
-				address: command.TransferObjects[1],
+				objects: command.TransferObjects.objects,
+				address: command.TransferObjects.address,
 			};
 			break;
 		case 'SplitCoins':
 			normalizedCommand = {
 				kind: 'SplitCoins',
-				coin: command.SplitCoins[0],
-				amounts: command.SplitCoins[1],
+				coin: command.SplitCoins.coin,
+				amounts: command.SplitCoins.amounts,
 			};
 			break;
 		case 'Publish':
 			normalizedCommand = {
 				kind: 'Publish',
-				module: command.Publish[0],
-				dependencies: command.Publish[1],
+				modules: command.Publish.modules,
+				dependencies: command.Publish.dependencies,
 			};
 			break;
 		case 'Upgrade':
 			normalizedCommand = {
 				kind: 'Upgrade',
-				modules: command.Upgrade[0],
-				dependencies: command.Upgrade[1],
-				packageId: command.Upgrade[2],
-				ticket: command.Upgrade[3],
+				modules: command.Upgrade.modules,
+				dependencies: command.Upgrade.dependencies,
+				packageId: command.Upgrade.package,
+				ticket: command.Upgrade.ticket,
 			};
 			break;
-		case 'TransactionIntent': {
+		case 'Intent': {
 			throw new Error('TransactionIntent is not supported');
 		}
 	}

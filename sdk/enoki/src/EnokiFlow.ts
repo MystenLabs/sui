@@ -333,13 +333,6 @@ export class EnokiFlow {
 		const transactionBlockKindBytes = await transactionBlock.build({
 			onlyTransactionKind: true,
 			client,
-			// Theses limits will get verified during the final transaction construction, so we can safely ignore them here:
-			limits: {
-				maxGasObjects: Infinity,
-				maxPureArgumentSize: Infinity,
-				maxTxGas: Infinity,
-				maxTxSizeBytes: Infinity,
-			},
 		});
 
 		return await this.#enokiClient.createSponsoredTransactionBlock({

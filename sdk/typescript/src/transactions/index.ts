@@ -23,7 +23,7 @@ export { type SerializedTransactionBlockDataV2 } from './blockData/v2.js';
 export { type SerializedTransactionBlockDataV1 } from './blockData/v1.js';
 
 export type {
-	InternalTransactionBlockData,
+	TransactionBlockData,
 	Argument,
 	ObjectRef,
 	GasData,

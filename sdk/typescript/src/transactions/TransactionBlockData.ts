@@ -14,7 +14,7 @@ import type {
 	Transaction,
 	TransactionExpiration,
 } from './blockData/internal.js';
-import { InternalTransactionBlockData } from './blockData/internal.js';
+import { TransactionBlockData } from './blockData/internal.js';
 import { transactionBlockDataFromV1 } from './blockData/v1.js';
 import type { SerializedTransactionBlockDataV1 } from './blockData/v1.js';
 import type { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
@@ -24,7 +24,7 @@ function prepareSuiAddress(address: string) {
 	return normalizeSuiAddress(address).replace('0x', '');
 }
 
-export class TransactionBlockDataBuilder implements InternalTransactionBlockData {
+export class TransactionBlockDataBuilder implements TransactionBlockData {
 	static fromKindBytes(bytes: Uint8Array) {
 		const kind = bcs.TransactionKind.parse(bytes);
 
@@ -73,10 +73,10 @@ export class TransactionBlockDataBuilder implements InternalTransactionBlockData
 			| Input<typeof SerializedTransactionBlockDataV1>,
 	) {
 		if (data.version === 2) {
-			return new TransactionBlockDataBuilder(parse(InternalTransactionBlockData, data));
+			return new TransactionBlockDataBuilder(parse(TransactionBlockData, data));
 		} else {
 			return new TransactionBlockDataBuilder(
-				parse(InternalTransactionBlockData, transactionBlockDataFromV1(data)),
+				parse(TransactionBlockData, transactionBlockDataFromV1(data)),
 			);
 		}
 	}
@@ -108,7 +108,7 @@ export class TransactionBlockDataBuilder implements InternalTransactionBlockData
 	inputs: CallArg[];
 	transactions: Transaction[];
 
-	constructor(clone?: InternalTransactionBlockData) {
+	constructor(clone?: TransactionBlockData) {
 		this.sender = clone?.sender ?? null;
 		this.expiration = clone?.expiration ?? null;
 		this.inputs = clone?.inputs ?? [];
@@ -278,7 +278,7 @@ export class TransactionBlockDataBuilder implements InternalTransactionBlockData
 		return TransactionBlockDataBuilder.getDigestFromBytes(bytes);
 	}
 
-	snapshot(): InternalTransactionBlockData {
-		return parse(InternalTransactionBlockData, this);
+	snapshot(): TransactionBlockData {
+		return parse(TransactionBlockData, this);
 	}
 }

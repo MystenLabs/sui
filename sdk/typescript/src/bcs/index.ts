@@ -36,6 +36,8 @@ import {
 } from './bcs.js';
 import { TransactionEffects } from './effects.js';
 
+export type { TypeTag } from './types.js';
+
 export { TypeTagSerializer } from './type-tag-serializer.js';
 export { BcsType, type BcsTypeOptions } from '@mysten/bcs';
 

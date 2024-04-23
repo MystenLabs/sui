@@ -24,7 +24,7 @@ import {
 
 import { TypeTagSerializer } from '../../bcs/index.js';
 import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/types.js';
-import { InternalTransactionBlockData, ObjectArg, safeEnum } from './internal.js';
+import { ObjectArg, safeEnum, TransactionBlockData } from './internal.js';
 import type { Argument } from './internal.js';
 
 export const NormalizedCallArg = safeEnum({
@@ -188,7 +188,7 @@ export const SerializedTransactionBlockDataV1 = object({
 export type SerializedTransactionBlockDataV1 = Output<typeof SerializedTransactionBlockDataV1>;
 
 export function serializeV1TransactionBlockData(
-	blockData: InternalTransactionBlockData,
+	blockData: TransactionBlockData,
 ): SerializedTransactionBlockDataV1 {
 	const inputs: Output<typeof TransactionBlockInput>[] = blockData.inputs.map((input, index) => {
 		if (input.Object) {
@@ -360,8 +360,8 @@ function convertTransactionArgument(
 
 export function transactionBlockDataFromV1(
 	data: SerializedTransactionBlockDataV1,
-): InternalTransactionBlockData {
-	return parse(InternalTransactionBlockData, {
+): TransactionBlockData {
+	return parse(TransactionBlockData, {
 		version: 2,
 		sender: data.sender ?? null,
 		expiration: data.expiration
@@ -485,7 +485,7 @@ export function transactionBlockDataFromV1(
 
 			throw new Error(`Unknown transaction ${Object.keys(transaction)}`);
 		}),
-	} satisfies Input<typeof InternalTransactionBlockData>);
+	} satisfies Input<typeof TransactionBlockData>);
 }
 
 function parseV1TransactionArgument(

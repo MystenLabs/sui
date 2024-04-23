@@ -9,7 +9,7 @@ import {
 	type TransactionInfoResponse,
 } from '_src/shared/qredo-api';
 import { type SuiClient } from '@mysten/sui.js/client';
-import { IntentScope, messageWithIntent } from '@mysten/sui.js/cryptography';
+import { messageWithIntent } from '@mysten/sui.js/cryptography';
 import { toB64 } from '@mysten/sui.js/utils';
 import mitt from 'mitt';
 
@@ -82,7 +82,7 @@ export class QredoSigner extends WalletSigner {
 
 	signMessage: WalletSigner['signMessage'] = async (input, clientIdentifier) => {
 		const signature = await this.signData(
-			messageWithIntent(IntentScope.PersonalMessage, input.message),
+			messageWithIntent('PersonalMessage', input.message),
 			clientIdentifier,
 		);
 		return {
@@ -94,7 +94,7 @@ export class QredoSigner extends WalletSigner {
 	signTransactionBlock: WalletSigner['signTransactionBlock'] = async (input, clientIdentifier) => {
 		const transactionBlockBytes = await this.prepareTransactionBlock(input.transactionBlock);
 		const signature = await this.signData(
-			messageWithIntent(IntentScope.TransactionData, transactionBlockBytes),
+			messageWithIntent('TransactionData', transactionBlockBytes),
 			clientIdentifier,
 		);
 		return {
@@ -108,10 +108,7 @@ export class QredoSigner extends WalletSigner {
 		clientIdentifier,
 	) => {
 		let txInfo = await this.#createQredoTransaction(
-			messageWithIntent(
-				IntentScope.TransactionData,
-				await this.prepareTransactionBlock(transactionBlock),
-			),
+			messageWithIntent('TransactionData', await this.prepareTransactionBlock(transactionBlock)),
 			true,
 			clientIdentifier,
 		);

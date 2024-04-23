@@ -5,7 +5,7 @@ import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
 import { type TransactionBlockInput } from '@mysten/sui.js/transactions';
-import { formatAddress, toB64 } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui.js/utils';
 
 interface InputProps {
 	input: TransactionBlockInput;
@@ -22,7 +22,7 @@ export function Input({ input }: InputProps) {
 		<div className="break-all">
 			<Text variant="pBodySmall" weight="medium" color="steel-dark" mono>
 				{input.Pure ? (
-					`${toB64(new Uint8Array(input.Pure))}`
+					`${input.Pure.bytes}`
 				) : input.Object ? (
 					<ExplorerLink type={ExplorerLinkType.object} objectID={objectId!}>
 						{formatAddress(objectId)}

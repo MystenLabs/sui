@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { PureArg } from '@mysten/sui.js/bcs';
 import { bcs } from '@mysten/sui.js/bcs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import type { CoinStruct, SuiTransaction } from '@mysten/sui.js/client';
@@ -442,7 +441,7 @@ export class ZkSendLink {
 		const receiver =
 			typeof input.value === 'string'
 				? input.value
-				: bcs.Address.parse(new Uint8Array((input.value as PureArg).Pure));
+				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
 		this.assets = getAssetsFromTxnBlock({
 			transactionBlock: txb,
@@ -462,13 +461,6 @@ export class ZkSendLink {
 					await txb.build({
 						onlyTransactionKind: true,
 						client: this.#client,
-						// Theses limits will get verified during the final transaction construction, so we can safely ignore them here:
-						limits: {
-							maxGasObjects: Infinity,
-							maxPureArgumentSize: Infinity,
-							maxTxGas: Infinity,
-							maxTxSizeBytes: Infinity,
-						},
 					}),
 				),
 			}),

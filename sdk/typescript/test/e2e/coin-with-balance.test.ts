@@ -8,6 +8,7 @@ import { bcs } from '../../src/bcs';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { TransactionBlock } from '../../src/transactions';
 import { coinWithBalance } from '../../src/transactions/intents/CoinWithBalance';
+import { normalizeSuiAddress } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('coinWithBalance', () => {
@@ -20,7 +21,7 @@ describe('coinWithBalance', () => {
 		[toolbox, publishToolbox] = await Promise.all([setup(), setup()]);
 		const packagePath = __dirname + '/./data/coin_metadata';
 		({ packageId } = await publishPackage(packagePath, publishToolbox));
-		testType = packageId + '::test::TEST';
+		testType = normalizeSuiAddress(packageId) + '::test::TEST';
 	});
 
 	it('works with sui', async () => {
