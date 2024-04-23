@@ -5,7 +5,9 @@ module 0x42::M {
         if (x < 5 && x > 10) {
             // Logic that can never be reached
         };
-
+        if (x < 5 && 10 < x) {
+            // Logic that can never be reached
+        };
         if (x > 10 && x < 5) {
             // Logic that can never be reached
         };

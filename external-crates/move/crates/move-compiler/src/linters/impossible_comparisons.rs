@@ -78,15 +78,25 @@ fn extract_comparison_details(exp: &T::Exp) -> Option<(Var_, Value_, BinOp_)> {
                     var: sp!(_, var), ..
                 },
                 UnannotatedExp_::Value(sp!(_, value)),
-            )
-            | (
+            ) = (&lhs.exp.value, &rhs.exp.value)
+            {
+                return Some((*var, value.clone(), *op));
+            }
+
+            if let (
                 UnannotatedExp_::Value(sp!(_, value)),
                 UnannotatedExp_::Copy {
                     var: sp!(_, var), ..
                 },
             ) = (&lhs.exp.value, &rhs.exp.value)
             {
-                return Some((*var, value.clone(), *op));
+                match op {
+                    BinOp_::Lt => return Some((*var, value.clone(), BinOp_::Gt)),
+                    BinOp_::Le => return Some((*var, value.clone(), BinOp_::Ge)),
+                    BinOp_::Gt => return Some((*var, value.clone(), BinOp_::Lt)),
+                    BinOp_::Ge => return Some((*var, value.clone(), BinOp_::Le)),
+                    _ => (),
+                }
             }
         }
     }
