@@ -3479,6 +3479,62 @@ impl AuthorityState {
             .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
     }
 
+    pub fn get_transaction_input_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> anyhow::Result<Vec<Object>> {
+        let input_object_keys = effects
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version))
+            .collect::<Vec<_>>();
+
+        let input_objects = self
+            .get_object_store()
+            .multi_get_objects_by_key(&input_object_keys)?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing input object key {:?} from tx {}",
+                        input_object_keys[idx],
+                        effects.transaction_digest()
+                    )
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(input_objects)
+    }
+
+    pub fn get_transaction_output_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> anyhow::Result<Vec<Object>> {
+        let output_object_keys = effects
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+            .collect::<Vec<_>>();
+
+        let output_objects = self
+            .get_object_store()
+            .multi_get_objects_by_key(&output_object_keys)?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing output object key {:?} from tx {}",
+                        output_object_keys[idx],
+                        effects.transaction_digest()
+                    )
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(output_objects)
+    }
+
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
         match &self.indexes {
             Some(i) => Ok(i.clone()),
