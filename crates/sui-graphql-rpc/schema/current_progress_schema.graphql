@@ -3106,7 +3106,7 @@ type SharedInput {
 }
 
 """
-The transaction accpeted a shared object as input, but it's execution was cancelled.
+The transaction accpeted a shared object as input, but its execution was cancelled.
 """
 type SharedObjectCancelled {
 	"""

@@ -22,7 +22,7 @@ pub enum DeferralKey {
 }
 
 impl DeferralKey {
-    fn new_for_randomness(deferred_from_round: Round) -> Self {
+    pub fn new_for_randomness(deferred_from_round: Round) -> Self {
         Self::Randomness {
             deferred_from_round,
         }
@@ -35,7 +35,7 @@ impl DeferralKey {
         }
     }
 
-    fn full_range_for_randomness() -> (Self, Self) {
+    pub fn full_range_for_randomness() -> (Self, Self) {
         (
             Self::Randomness {
                 deferred_from_round: 0,
@@ -47,7 +47,7 @@ impl DeferralKey {
     }
 
     // Returns a range of deferral keys that are deferred up to the given consensus round.
-    fn range_for_up_to_consensus_round(consensus_round: Round) -> (Self, Self) {
+    pub fn range_for_up_to_consensus_round(consensus_round: Round) -> (Self, Self) {
         (
             Self::ConsensusRound {
                 future_round: 0,

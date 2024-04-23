@@ -1455,6 +1455,7 @@ impl AuthorityPerEpochStore {
             cache_reader,
             certificates,
             None,
+            &BTreeMap::new(),
         )
         .await?
         .assigned_versions;

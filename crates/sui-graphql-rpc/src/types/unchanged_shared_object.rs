@@ -40,7 +40,7 @@ pub(crate) struct SharedObjectDelete {
     mutable: bool,
 }
 
-/// The transaction accpeted a shared object as input, but it's execution was cancelled.
+/// The transaction accpeted a shared object as input, but its execution was cancelled.
 #[derive(SimpleObject)]
 pub(crate) struct SharedObjectCancelled {
     /// ID of the shared object.
