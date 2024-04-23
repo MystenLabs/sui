@@ -5,11 +5,11 @@ use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
 use secrecy::ExposeSecret;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use std::env;
 use std::net::SocketAddr;
 use std::path::PathBuf;
-use std::time::Duration;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
@@ -51,6 +51,7 @@ pub async fn start_test_indexer(
         reader_writer_config,
         None,
         Some(data_ingestion_path),
+        CancellationToken::new(),
     )
     .await
 }
@@ -61,6 +62,7 @@ pub async fn start_test_indexer_impl(
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
     data_ingestion_path: Option<PathBuf>,
+    cancel: CancellationToken,
 ) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
@@ -74,30 +76,15 @@ pub async fn start_test_indexer_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    // dynamically set ports instead of all to 9000
-    let base_port = rpc_url
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>()
-        .parse::<u16>()
-        .unwrap();
+    let pool_config = PgConnectionPoolConfig::default();
 
-    // Set connection timeout for tests to 1 second
-    let mut pool_config = PgConnectionPoolConfig::default();
-    pool_config.set_connection_timeout(Duration::from_secs(1));
-
-    // Default writer mode
+    // Default to writer mode
     let mut config = IndexerConfig {
         db_url: Some(db_url.clone().into()),
         rpc_client_url: rpc_url,
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
-        rpc_server_port: base_port + 1,
         remote_store_url: None,
         data_ingestion_path,
         ..Default::default()
@@ -164,6 +151,7 @@ pub async fn start_test_indexer_impl(
                     store_clone,
                     indexer_metrics,
                     snapshot_config,
+                    cancel,
                 )
                 .await
             })
@@ -188,9 +176,7 @@ pub async fn force_delete_database(db_url: String) {
     // This is necessary because you can't drop a database while being connected to it.
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
-    // Set connection timeout for tests to 1 second
-    let mut pool_config = PgConnectionPoolConfig::default();
-    pool_config.set_connection_timeout(Duration::from_secs(1));
+    let pool_config = PgConnectionPoolConfig::default();
 
     let blocking_pool =
         new_pg_connection_pool_with_config(&default_db_url, Some(5), pool_config).unwrap();

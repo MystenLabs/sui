@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use tap::tap::TapFallible;
 use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
 
@@ -27,6 +28,7 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
     mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    cancel: CancellationToken,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -46,6 +48,10 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     let mut batch = vec![];
 
     while let Some(indexed_checkpoint_batch) = stream.next().await {
+        if cancel.is_cancelled() {
+            break;
+        }
+
         let mut latest_fn_cp_res = client.get_latest_checkpoint().await;
         while latest_fn_cp_res.is_err() {
             error!("Failed to get latest checkpoint from the network");

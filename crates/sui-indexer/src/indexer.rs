@@ -6,6 +6,7 @@ use std::env;
 use anyhow::Result;
 use prometheus::Registry;
 use tokio::sync::oneshot;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use mysten_metrics::spawn_monitored_task;
@@ -38,7 +39,14 @@ impl Indexer {
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        Indexer::start_writer_with_config(config, store, metrics, snapshot_config).await
+        Indexer::start_writer_with_config(
+            config,
+            store,
+            metrics,
+            snapshot_config,
+            CancellationToken::new(),
+        )
+        .await
     }
 
     pub async fn start_writer_with_config<S: IndexerStore + Sync + Send + Clone + 'static>(
@@ -46,6 +54,7 @@ impl Indexer {
         store: S,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
+        cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui Indexer Writer (version {:?}) started...",
@@ -78,17 +87,24 @@ impl Indexer {
             store.clone(),
             metrics.clone(),
             snapshot_config,
+            cancel.clone(),
         );
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        #[allow(unused_variables)]
+        let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
+        // Spawn a task that links the cancellation token to the exit sender
+        spawn_monitored_task!(async move {
+            cancel_clone.cancelled().await;
+            let _ = exit_sender.send(());
+        });
+
         let mut executor = IndexerExecutor::new(
             ShimProgressStore(watermark),
             1,
             DataIngestionMetrics::new(&Registry::new()),
         );
-        let worker = new_handlers(store, rest_client, metrics, watermark).await?;
+        let worker = new_handlers(store, rest_client, metrics, watermark, cancel.clone()).await?;
         let worker_pool = WorkerPool::new(worker, "workflow".to_string(), download_queue_size);
         let extra_reader_options = ReaderOptions {
             batch_size: download_queue_size,
