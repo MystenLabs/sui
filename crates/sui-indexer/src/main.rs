@@ -31,7 +31,7 @@ async fn main() -> Result<(), IndexerError> {
     })?;
 
     let db_url = db_url_secret.expose_secret();
-    let blocking_cp = new_pg_connection_pool(&db_url, None).map_err(|e| {
+    let blocking_cp = new_pg_connection_pool(db_url, None).map_err(|e| {
         error!(
             "Failed creating Postgres connection pool with error {:?}",
             e

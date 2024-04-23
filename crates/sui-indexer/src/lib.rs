@@ -91,7 +91,7 @@ impl IndexerConfig {
     pub fn base_connection_url(&self) -> Result<String, anyhow::Error> {
         let url_secret = self.get_db_url()?;
         let url_str = url_secret.expose_secret();
-        let url = Url::parse(&url_str).expect("Failed to parse URL");
+        let url = Url::parse(url_str).expect("Failed to parse URL");
         Ok(format!(
             "{}://{}:{}@{}:{}/",
             url.scheme(),
