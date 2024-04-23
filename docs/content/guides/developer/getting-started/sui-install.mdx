@@ -23,7 +23,7 @@ If you use this method to install Sui, you are all set. The quick install is sui
 
 :::
 
-## Install using Sui binaries {#install-binaries}
+## Download binaries from GitHub {#install-binaries}
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
 
@@ -104,7 +104,7 @@ Running binaries other than `sui` might require installing prerequisites itemize
 
 To confirm that Sui installed correctly, type `sui --version` in your console or terminal and press Enter. The response should provide the Sui version installed. If the console or terminal responds with a command not found error, make sure the full path to your Sui binaries is included in your `PATH` variable.
 
-### Install Sui binaries from source {#install-sui-binaries-from-source}
+## Install from Cargo {#install-sui-binaries-from-source}
 
 Run the following command to install Sui binaries from the `testnet` branch:
 
@@ -122,7 +122,7 @@ rustup update stable
 
 The command installs Sui components in the `~/.cargo/bin` folder.
 
-### Upgrade Sui binaries
+## Upgrade from Cargo
 
 If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch):
 
@@ -130,7 +130,7 @@ If you previously installed the Sui binaries, you can update them to the most re
 cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
 ```
 
-## Install from source
+## Build from source
 
 Follow the instructions in this topic to install the Rust crates (packages) required to interact with Sui networks, including the Sui CLI.
 
