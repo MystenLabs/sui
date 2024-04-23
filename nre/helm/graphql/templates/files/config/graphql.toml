@@ -1,0 +1,13 @@
+[limits]
+max-query-depth = 15
+max-query-nodes = 500
+max-output-nodes = 100000
+max-query-payload-size = 5000
+max-db-query-cost = 20000
+default-page-size = 5
+max-page-size = 10
+request-timeout-ms = 15000
+max-type-argument-depth = 16
+max-type-argument-width = 32
+max-type-nodes = 256
+max-move-value-depth = 128
