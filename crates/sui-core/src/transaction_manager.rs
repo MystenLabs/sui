@@ -54,7 +54,10 @@ pub struct TransactionManager {
     cache_read: Arc<dyn ExecutionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
-    inner: RwLock<Inner>,
+    // inner is a doubly nested lock so that we can enforce that an outer lock (for read) is held
+    // before the inner lock (for read or write) can be acquired. During reconfiguration, we acquire
+    // the outer lock for write, to ensure that no other threads can be running while we reconfigure.
+    inner: RwLock<RwLock<Inner>>,
 }
 
 #[derive(Clone, Debug)]
@@ -343,7 +346,7 @@ impl TransactionManager {
         let transaction_manager = TransactionManager {
             cache_read,
             metrics: metrics.clone(),
-            inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
+            inner: RwLock::new(RwLock::new(Inner::new(epoch_store.epoch(), metrics))),
             tx_ready_certificates,
         };
         transaction_manager.enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store);
@@ -399,6 +402,8 @@ impl TransactionManager {
         )>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        let reconfig_lock = self.inner.read();
+
         // filter out already executed certs
         let certs: Vec<_> = certs
             .into_iter()
@@ -461,7 +466,7 @@ impl TransactionManager {
             .collect();
 
         {
-            let mut inner = self.inner.write();
+            let mut inner = reconfig_lock.write();
             for (key, value) in object_availability.iter_mut() {
                 if let Some(available) = inner.available_objects_cache.is_object_available(key) {
                     *value = Some(available);
@@ -495,7 +500,7 @@ impl TransactionManager {
         // executed.
 
         // Internal lock is held only for updating the internal state.
-        let mut inner = self.inner.write();
+        let mut inner = reconfig_lock.write();
 
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
@@ -649,7 +654,8 @@ impl TransactionManager {
         input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        let mut inner = self.inner.write();
+        let reconfig_lock = self.inner.read();
+        let mut inner = reconfig_lock.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
         self.objects_available_locked(&mut inner, epoch_store, input_keys, true, Instant::now());
         inner.maybe_shrink_capacity();
@@ -704,9 +710,10 @@ impl TransactionManager {
         output_object_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        let reconfig_lock = self.inner.read();
         {
             let commit_time = Instant::now();
-            let mut inner = self.inner.write();
+            let mut inner = reconfig_lock.write();
             let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
 
             if inner.epoch != epoch_store.epoch() {
@@ -751,7 +758,8 @@ impl TransactionManager {
 
     /// Gets the missing input object keys for the given transaction.
     pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         inner
             .pending_certificates
             .get(digest)
@@ -763,7 +771,8 @@ impl TransactionManager {
         &self,
         keys: Vec<ObjectID>,
     ) -> Vec<(ObjectID, usize, Option<Duration>)> {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         keys.into_iter()
             .map(|key| {
                 let default_map = IndexMap::new();
@@ -779,14 +788,16 @@ impl TransactionManager {
 
     // Returns the number of transactions pending or being executed right now.
     pub(crate) fn inflight_queue_len(&self) -> usize {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         inner.pending_certificates.len() + inner.executing_certificates.len()
     }
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
-        let mut inner = self.inner.write();
+        let reconfig_lock = self.inner.write();
+        let mut inner = reconfig_lock.write();
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
@@ -844,7 +855,8 @@ impl TransactionManager {
     // Verify TM has no pending item for tests.
     #[cfg(test)]
     fn check_empty_for_testing(&self) {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         assert!(
             inner.missing_inputs.is_empty(),
             "Missing inputs: {:?}",
