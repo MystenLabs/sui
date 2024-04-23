@@ -48,7 +48,7 @@ impl<T: R2D2Connection> PackageStore for IndexerStorePackageResolver<T> {
             .await
             .map_err(|e| PackageResolverError::Store {
                 store: "PostgresDB",
-                source: Box::new(e),
+                source: Arc::new(e),
             })?;
         Ok(Arc::new(pkg))
     }
@@ -69,7 +69,7 @@ impl<T: R2D2Connection> IndexerStorePackageResolver<T> {
             )));
         };
         let object = bcs::from_bytes::<Object>(&bcs)?;
-        Package::read(&object).map_err(|e| {
+        Package::read_from_object(&object).map_err(|e| {
             IndexerError::PostgresReadError(format!("Failed parsing object to package: {:?}", e))
         })
     }
@@ -113,9 +113,9 @@ impl<T: R2D2Connection> PackageStore for InterimPackageResolver<T> {
         };
         if let Some(obj) = maybe_obj {
             self.metrics.indexing_package_resolver_in_mem_hit.inc();
-            let pkg = Package::read(&obj).map_err(|e| PackageResolverError::Store {
+            let pkg = Package::read_from_object(&obj).map_err(|e| PackageResolverError::Store {
                 store: "InMemoryPackageBuffer",
-                source: Box::new(e),
+                source: Arc::new(e),
             })?;
             Ok(Arc::new(pkg))
         } else {

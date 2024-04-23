@@ -4,6 +4,9 @@
 pub(crate) mod package_resolver;
 pub(crate) mod pg;
 
+use std::sync::Arc;
+
+use async_graphql::dataloader::DataLoader as AGDataLoader;
 use async_trait::async_trait;
 use diesel::{
     query_builder::{BoxedSelectStatement, FromClause, QueryFragment, QueryId},
@@ -20,6 +23,10 @@ pub(crate) type Db = pg::PgExecutor;
 pub(crate) type Conn<'c> = <Db as QueryExecutor>::DbConnection<'c>;
 pub(crate) type DieselConn = <Db as QueryExecutor>::Connection;
 pub(crate) type DieselBackend = <Db as QueryExecutor>::Backend;
+
+/// Helper types for accessing a shared `DataLoader` instance.
+#[derive(Clone)]
+pub(crate) struct DataLoader(pub Arc<AGDataLoader<Db>>);
 
 /// A generic boxed query (compatible with the return type of `into_boxed` on diesel's table DSL).
 ///
@@ -93,5 +100,11 @@ pub(crate) trait DbConnection {
         <Q as LimitDsl>::Output: QueryId + QueryFragment<Self::Backend>,
     {
         self.result(move || query().limit(1i64))
+    }
+}
+
+impl DataLoader {
+    pub(crate) fn new(db: Db) -> Self {
+        Self(Arc::new(AGDataLoader::new(db, tokio::spawn)))
     }
 }

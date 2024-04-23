@@ -57,7 +57,7 @@ impl PackageStore for RemotePackageStore {
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> ResolverResult<Arc<Package>> {
         let object = get_verified_object(&self.config, id.into()).await.unwrap();
-        let package = Package::read(&object).unwrap();
+        let package = Package::read_from_object(&object).unwrap();
         Ok(Arc::new(package))
     }
 }
