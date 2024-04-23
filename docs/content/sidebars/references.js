@@ -69,32 +69,7 @@ const references = [
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
-			{
-				type: 'link',
-				label: 'Dart SDK',
-				href: 'https://github.com/mofalabs/sui',
-			},
-			{
-				type: 'link',
-				label: 'Go SDK',
-				href: 'https://github.com/block-vision/sui-go-sdk',
-			},
-			{
-				type: 'link',
-				label: 'Kotlin SDK',
-				href: 'https://github.com/mcxross/ksui',
-			},
-			{
-				type: 'link',
-				label: 'Python SDK',
-				href: 'https://github.com/FrankC01/pysui',
-			},
 			'references/rust-sdk',
-			{
-				type: 'link',
-				label: 'Swift SDK',
-				href: 'https://github.com/opendive/suikit',
-			},
 			{
 				type: 'link',
 				label: 'TypeScript SDK',
