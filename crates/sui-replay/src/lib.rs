@@ -184,7 +184,6 @@ pub async fn execute_replay_command(
             info!("Executing tx: {}", sandbox_state.transaction_info.tx_digest);
             let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
                 &sandbox_state,
-                None,
                 &sandbox_state.pre_exec_diag,
             )
             .await?;
