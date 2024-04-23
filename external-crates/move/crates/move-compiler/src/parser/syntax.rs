@@ -2010,7 +2010,7 @@ fn parse_for_args(context: &mut Context) -> LambdaBindings {
                     }
                 }
             } else if context.at_stop_set() {
-                    break;
+                break;
             } else {
                 context.advance();
             }
