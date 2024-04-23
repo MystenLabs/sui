@@ -112,7 +112,7 @@ pub(crate) struct CommitInfo {
 }
 
 impl CommitInfo {
-    // Returns an new CommitInfo.
+    // Returns a new CommitInfo.
     pub(crate) fn new(committed_rounds: Vec<Round>, timestamp_ms: BlockTimestampMs) -> Self {
         CommitInfo {
             committed_rounds,

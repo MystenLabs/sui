@@ -48,7 +48,7 @@ pub(crate) fn build_dag(
             .authorities()
             .map(|authority| {
                 let author_idx = authority.0.value() as u32;
-                // Test the case where a block from round R+1 can have small timestamp than a block from round R.
+                // Test the case where a block from round R+1 has smaller timestamp than a block from round R.
                 let ts = round as BlockTimestampMs / 2 * num_authorities as BlockTimestampMs
                     + author_idx as BlockTimestampMs;
                 let block = VerifiedBlock::new_for_test(
