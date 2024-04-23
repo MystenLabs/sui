@@ -85,11 +85,12 @@ pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
+    fn slot(&self) -> Slot;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
     fn commit_votes(&self) -> &[CommitVote];
-    fn slot(&self) -> Slot;
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -102,6 +103,7 @@ pub struct BlockV1 {
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
     commit_votes: Vec<CommitVote>,
+    misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
 impl BlockV1 {
@@ -113,6 +115,7 @@ impl BlockV1 {
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
         commit_votes: Vec<CommitVote>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
     ) -> BlockV1 {
         Self {
             epoch,
@@ -122,6 +125,7 @@ impl BlockV1 {
             ancestors,
             transactions,
             commit_votes,
+            misbehavior_reports,
         }
     }
 
@@ -134,6 +138,7 @@ impl BlockV1 {
             ancestors: vec![],
             transactions: vec![],
             commit_votes: vec![],
+            misbehavior_reports: vec![],
         }
     }
 }
@@ -149,6 +154,10 @@ impl BlockAPI for BlockV1 {
 
     fn author(&self) -> AuthorityIndex {
         self.author
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
     }
 
     fn timestamp_ms(&self) -> BlockTimestampMs {
@@ -167,8 +176,8 @@ impl BlockAPI for BlockV1 {
         &self.commit_votes
     }
 
-    fn slot(&self) -> Slot {
-        Slot::new(self.round, self.author)
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
     }
 }
 
@@ -611,6 +620,19 @@ impl TestBlock {
     pub(crate) fn build(self) -> Block {
         Block::V1(self.block)
     }
+}
+
+/// A block can attach reports of misbehavior by other authorities.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MisbehaviorReport {
+    pub target: AuthorityIndex,
+    pub proof: MisbehaviorProof,
+}
+
+/// Proof of misbehavior are usually signed block(s) from the misbehaving authority.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum MisbehaviorProof {
+    InvalidBlock(BlockRef),
 }
 
 // TODO: add basic verification for BlockRef and BlockDigest.
