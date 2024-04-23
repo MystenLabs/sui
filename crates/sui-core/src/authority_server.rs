@@ -160,6 +160,9 @@ pub struct ValidatorServiceMetrics {
     pub submit_certificate_consensus_latency: MystenHistogram,
     pub handle_certificate_consensus_latency: MystenHistogram,
     pub handle_certificate_non_consensus_latency: MystenHistogram,
+    pub connection_ip_not_found: IntCounter,
+    pub forwarded_header_parse_error: IntCounter,
+    pub forwarded_header_invalid: IntCounter,
 
     num_rejected_tx_in_epoch_boundary: IntCounter,
     num_rejected_cert_in_epoch_boundary: IntCounter,
@@ -234,6 +237,24 @@ impl ValidatorServiceMetrics {
                 "validator_service_num_rejected_cert_during_overload",
                 "Number of rejected transaction certificate due to system overload",
                 &["error_type"],
+                registry,
+            )
+            .unwrap(),
+            connection_ip_not_found: register_int_counter_with_registry!(
+                "validator_service_connection_ip_not_found",
+                "Number of times connection IP was not extractable from request",
+                registry,
+            )
+            .unwrap(),
+            forwarded_header_parse_error: register_int_counter_with_registry!(
+                "validator_service_forwarded_header_parse_error",
+                "Number of times x-forwarded-for header could not be parsed",
+                registry,
+            )
+            .unwrap(),
+            forwarded_header_invalid: register_int_counter_with_registry!(
+                "validator_service_forwarded_header_invalid",
+                "Number of times x-forwarded-for header was invalid",
                 registry,
             )
             .unwrap(),
@@ -690,19 +711,16 @@ macro_rules! handle_with_decoration {
         // throttle a fullnode, or an end user is running a local quorum driver.
         let connection_ip: Option<SocketAddr> = $request.remote_addr();
 
-        // This should never happen except perhaps in simtest or some other non-standard
-        // environment. If we are seeing this, we should investigate
-        // TODO: add metric here
+        // We will hit this case if the IO type used does not
+        // implement Connected or when using a unix domain socket.
+        // TODO: once we have confirmed that no legitimate traffic
+        // is hitting this case, we should reject such requests that
+        // hit this case.
         if connection_ip.is_none() {
             if cfg!(all(test, not(msim))) {
                 panic!("Failed to get remote address from request");
             } else {
-                // We will hit this case if the IO type used does not
-                // implement Connected or when using a unix domain socket.
-                // TODO: once we have confirmed that no legitimate traffic
-                // is hitting this case, we should reject such requests that
-                // hit this case.
-                // TODO(william) add metric here
+                $self.metrics.connection_ip_not_found.inc();
                 error!("Failed to get remote address from request");
             }
         }
@@ -713,22 +731,21 @@ macro_rules! handle_with_decoration {
                     Ok(ip) => match ip.parse() {
                         Ok(ret) => Some(ret),
                         Err(e) => {
-                            // TODO(william) add metric here
+                            $self.metrics.forwarded_header_parse_error.inc();
                             error!("Failed to parse x-forwarded-for header value to SocketAddr: {:?}", e);
-                            return Err(tonic::Status::internal("Failed to parse tonic request metadata"));
+                            None
                         }
                     },
                     Err(e) => {
-                        // TODO(william) add metric here
                         // TODO: once we have confirmed that no legitimate traffic
                         // is hitting this case, we should reject such requests that
                         // hit this case.
+                        $self.metrics.forwarded_header_invalid.inc();
                         error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
-                        return Err(tonic::Status::internal("Invalid tonic request metadata"));
+                        None
                     }
                 }
             } else {
-                // TODO(william) add metric here
                 None
             };
 
