@@ -171,8 +171,12 @@ impl BridgeTestClusterBuilder {
         let mut eth_environment = EthBridgeEnvironment::new(&anvil_url, anvil_port)
             .await
             .unwrap();
-
-        let (eth_signer, eth_pk_hex) = eth_environment.get_signer(TEST_PK).await.unwrap();
+        // Give anvil a bit of time to start
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        let (eth_signer, eth_pk_hex) = eth_environment
+            .get_signer(TEST_PK)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to get eth signer from anvil at {anvil_url}: {e}"));
         let deployed_contracts =
             deploy_sol_contract(&anvil_url, eth_signer, bridge_keys, eth_pk_hex).await;
         info!("Deployed contracts: {:?}", deployed_contracts);
