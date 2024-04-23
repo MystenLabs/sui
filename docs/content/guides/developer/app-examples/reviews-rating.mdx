@@ -32,7 +32,7 @@ Reviewers are consumers of services that use the review system. Reviewers provid
 
 ### Review readers
 
-Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting rewarded. Although it is not implemented as part of this guide, a proportion of the review rewards may be awarded to review readers who has participated in rating reviews by casting their votes.
+Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting up or down votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting rewarded. Although it is not implemented as part of this guide, a proportion of the review rewards may be awarded to review readers who have participated in rating reviews by casting their votes.
 
 ### Moderators
 
@@ -64,7 +64,7 @@ The `dashboard.move` module defines the `Dashboard` struct that is used to group
 
 ```move
 /// Dashboard is a collection of services
-struct Dashboard has key, store {
+public struct Dashboard has key, store {
     id: UID,
     service_type: String
 }
@@ -105,7 +105,7 @@ This module defines the `Review` struct.
 
 ```move
 /// Represents a review of a service
-struct Review has key, store {
+public struct Review has key, store {
     id: UID,
     owner: address,
     service_id: ID,
@@ -122,25 +122,17 @@ struct Review has key, store {
 }
 
 /// Updates the total score of a review
-public fun update_total_score(rev: &mut Review) {
+fun update_total_score(rev: &mut Review) {
     rev.total_score = calculate_total_score(rev);
 }
 
 /// Calculates the total score of a review
 fun calculate_total_score(rev: &Review): u64 {
-    // intrinsic_score = len / 100; max = 150
     let intrinsic_score: u64 = rev.len;
     intrinsic_score = math::min(intrinsic_score, 150);
-
-    // extrinsic_score = # of votes; 1 + (10 * per votes)
     let extrinsic_score: u64 = 10 * rev.votes;
-
     // VM = either 1.0 or 2.0 (if user has proof of experience)
-    let vm: u64 = 1;
-    if (rev.has_poe == true) {
-        vm = 2;
-    };
-
+    let vm: u64 = if (rev.has_poe) { 2 } else { 1 };
     (intrinsic_score + extrinsic_score) * vm
 }
 ```
@@ -158,7 +150,7 @@ This module defines the `Service` struct, which service owners manage.
 const MAX_REVIEWERS_TO_REWARD: u64 = 10;
 
 /// Represents a service
-struct Service has key, store {
+public struct Service has key, store {
     id: UID,
     reward_pool: Balance<SUI>,
     reward: u64,
@@ -177,6 +169,7 @@ The pool of `SUI` tokens that will be distributed to reviewers is stored in `rew
 Since anyone can submit a review for a service, a `Service` should be defined as a shared object.
 All the reviews are stored in `reviews` field, which has [ObjectTable](../../../concepts/sui-move-concepts/collections.mdx#object_table)`<ID, Review>` type.
 Note that `reviews` are stored as children of the shared object, but they are still accessible by their `ID`.
+In other words, one can still go to the explorer and find a review object by its `object_id` but won't be able to use a review as an input to a transaction by its `object_id`.
 :::info
 
 See [Table and Bag](../../../concepts/dynamic-fields/tables-bags.mdx) for more information on the differences between `Table` and `ObjectTable`.
@@ -194,16 +187,16 @@ A vote can be casted on a review by a reader to rate the review as follows:
 ```move
 /// Upvotes a review and reorders top_reviews
 public fun upvote(service: &mut Service, review_id: ID) {
-    let review = object_table::borrow_mut(&mut service.reviews, review_id);
-    review::upvote(review);
-    reorder(service, review_id, review::get_total_score(review));
+    let review = service.reviews.borrow_mut(review_id);
+    review.upvote();
+    service.reorder(review_id, review.get_total_score());
 }
 
 /// Downvotes a review and reorders top_reviews
 public fun downvote(service: &mut Service, review_id: ID) {
-    let review = object_table::borrow_mut(&mut service.reviews, review_id);
-    review::downvote(review);
-    reorder(service, review_id, review::get_total_score(review));
+    let review = service.reviews.borrow_mut(review_id);
+    review.downvote();
+    service.reorder(review_id, review.get_total_score());
 }
 
 /// Reorders top_reviews after a review is updated
@@ -214,13 +207,13 @@ fun reorder(
     review_id: ID,
     total_score: u64
 ) {
-    let (contains, idx) = vector::index_of(&service.top_reviews, &review_id);
+    let (contains, idx) = service.top_reviews.index_of(&review_id);
     if (!contains) {
         update_top_reviews(service, review_id, total_score);
     } else {
-        vector::remove(&mut service.top_reviews, idx);
+        service.top_reviews.remove(idx);
         let idx = find_idx(service, total_score);
-        vector::insert(&mut service.top_reviews, review_id, idx);
+        service.top_reviews.insert(review_id, idx);
     }
 }
 
@@ -232,23 +225,35 @@ fun update_top_reviews(
 ) {
     if (should_update_top_reviews(service, total_score)) {
         let idx = find_idx(service, total_score);
-        vector::insert(&mut service.top_reviews, review_id, idx);
+        service.top_reviews.insert(review_id, idx);
         prune_top_reviews(service);
     };
 }
 
-/// Finds the index of a new review to place within top_reviews
+/// Finds the index of a review in top_reviews
 fun find_idx(service: &Service, total_score: u64): u64 {
-    let idx = 0;
-    let len = vector::length(&service.top_reviews);
-    while (idx < len) {
-        let review_id = *vector::borrow(&service.top_reviews, idx);
-        if (get_total_score(service, review_id) < total_score) {
-            break
+    let len = service.top_reviews.length();
+    let mut i = 0;
+    let mut idx = 0;
+    while (i < len) {
+        idx = len - i - 1;
+        let review_id = service.top_reviews[idx];
+        if (get_total_score(service, review_id) > total_score) {
+            return idx + 1
         };
-        idx = idx + 1;
+        i = i + 1;
     };
     idx
+}
+
+/// Prunes top_reviews if it exceeds MAX_REVIEWERS_TO_REWARD
+fun prune_top_reviews(
+    service: &mut Service
+) {
+    let len = service.top_reviews.length();
+    if (len > MAX_REVIEWERS_TO_REWARD) {
+        service.top_reviews.remove(len - 1);
+    };
 }
 ```
 
@@ -430,7 +435,7 @@ export const useSignAndExecuteTransaction = () => {
     return { handleSignAndExecuteTransaction }
 }
 ```
-The hook logic is straightforward. A `TransactionBlock` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
+A `TransactionBlock` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
 Use the `useWalletKit()` hook from `wallet Kit` to retrieve the Sui client instance configured in `WalletKitProvider`. The `signTransactionBlock()` function is another hook that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeSignedTransactionBlock()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
 
