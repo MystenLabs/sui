@@ -37,6 +37,7 @@ use sui_json_rpc_types::{
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+use sui_sdk::apis::QuorumDriverApi;
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::{SuiClient, SuiClientBuilder};
@@ -56,7 +57,6 @@ use sui_types::bridge::{get_bridge, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, T
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, BridgeSummary, BridgeTrait};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::get_key_pair;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::effects::{TransactionEffects, TransactionEvents};
@@ -127,6 +127,10 @@ impl TestCluster {
 
     pub fn sui_client(&self) -> &SuiClient {
         &self.fullnode_handle.sui_client
+    }
+
+    pub fn quorum_driver_api(&self) -> &QuorumDriverApi {
+        self.sui_client().quorum_driver_api()
     }
 
     pub fn rpc_url(&self) -> &str {
@@ -1093,15 +1097,77 @@ impl TestClusterBuilder {
         }
     }
 
-    pub async fn build_with_bridge(self, deploy_tokens: bool) -> TestCluster {
+    pub async fn build_with_bridge(
+        self,
+        bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
+        deploy_tokens: bool,
+    ) -> TestCluster {
+        let timer = Instant::now();
         let mut test_cluster = self.build().await;
+        info!(
+            "TestCluster build took {:?} secs",
+            timer.elapsed().as_secs()
+        );
         let ref_gas_price = test_cluster.get_reference_gas_price().await;
         let bridge_arg = test_cluster.get_mut_bridge_arg().await.unwrap();
-        let mut bridge_authority_keys = vec![];
+        assert_eq!(
+            bridge_authority_keys.len(),
+            test_cluster.swarm.active_validators().count()
+        );
+
+        let publish_tokens_tasks = if deploy_tokens {
+            let quorum_driver_api = Arc::new(test_cluster.quorum_driver_api().clone());
+            // Register tokens
+            let token_packages_dir = [
+                Path::new("../../bridge/move/tokens/btc"),
+                Path::new("../../bridge/move/tokens/eth"),
+                Path::new("../../bridge/move/tokens/usdc"),
+                Path::new("../../bridge/move/tokens/usdt"),
+            ];
+
+            // publish coin packages
+            let mut publish_tokens_tasks = vec![];
+            let sender = test_cluster.get_address_0();
+            let gases = test_cluster
+                .wallet
+                .get_gas_objects_owned_by_address(sender, None)
+                .await
+                .unwrap();
+            assert!(gases.len() >= token_packages_dir.len());
+            for (token_package_dir, gas) in token_packages_dir.iter().zip(gases) {
+                let tx = test_cluster
+                    .test_transaction_builder_with_gas_object(sender, gas)
+                    .await
+                    .publish(token_package_dir.to_path_buf())
+                    .build();
+                let tx = test_cluster.wallet.sign_transaction(&tx);
+                let api_clone = quorum_driver_api.clone();
+                publish_tokens_tasks.push(tokio::spawn(async move {
+                    api_clone.execute_transaction_block(
+                        tx,
+                        SuiTransactionBlockResponseOptions::new()
+                            .with_effects()
+                            .with_input()
+                            .with_events()
+                            .with_object_changes()
+                            .with_balance_changes(),
+                        Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
+                    ).await
+                }));
+            }
+            Some(publish_tokens_tasks)
+        } else {
+            None
+        };
+
         let mut server_ports = vec![];
         let mut tasks = vec![];
 
-        for node in test_cluster.swarm.active_validators() {
+        for (node, kp) in test_cluster
+            .swarm
+            .active_validators()
+            .zip(bridge_authority_keys.iter())
+        {
             let validator_address = node.config.sui_address();
             // 1, send some gas to validator
             test_cluster
@@ -1116,8 +1182,6 @@ impl TestClusterBuilder {
                 .unwrap();
             let gas = coins.data.first().unwrap();
 
-            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
-            bridge_authority_keys.push(kp.copy());
             let server_port = get_available_port("127.0.0.1");
             let server_url = format!("http://127.0.0.1:{}", server_port);
             server_ports.push(server_port);
@@ -1125,7 +1189,7 @@ impl TestClusterBuilder {
                 validator_address,
                 &gas.object_ref(),
                 bridge_arg,
-                kp,
+                kp.copy(),
                 &server_url,
                 ref_gas_price,
             )
@@ -1162,27 +1226,22 @@ impl TestClusterBuilder {
         }
 
         if deploy_tokens {
-            // Register tokens
-            let token_ids = vec![TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT];
-            let token_packages_dir = [
-                Path::new("../../bridge/move/tokens/btc"),
-                Path::new("../../bridge/move/tokens/eth"),
-                Path::new("../../bridge/move/tokens/usdc"),
-                Path::new("../../bridge/move/tokens/usdt"),
-            ];
-
-            // publish coin packages
-            // let mut published_tokens = vec![];
-            let mut publish_tokens_responses = vec![];
-            for token_package_dir in token_packages_dir {
-                let sender = test_cluster.get_address_0();
-                let tx = test_cluster
-                    .test_transaction_builder_with_sender(sender)
-                    .await
-                    .publish(token_package_dir.to_path_buf())
-                    .build();
-                publish_tokens_responses.push(test_cluster.sign_and_execute_transaction(&tx).await);
+            let timer = Instant::now();
+            let publish_tokens_responses = join_all(publish_tokens_tasks.unwrap())
+                .await
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap()
+                .into_iter()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            for resp in &publish_tokens_responses {
+                assert_eq!(
+                    resp.effects.as_ref().unwrap().status(),
+                    &SuiExecutionStatus::Success
+                );
             }
+            let token_ids = vec![TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT];
             let token_prices = vec![500_000_000u64, 30_000_000u64, 1_000u64, 1_000u64];
 
             let action = publish_coins_return_add_coins_on_sui_action(
@@ -1194,6 +1253,7 @@ impl TestClusterBuilder {
                 0,
             )
             .await;
+            info!("register tokens took {:?} secs", timer.elapsed().as_secs());
             let sig_map = bridge_authority_keys
                 .iter()
                 .map(|key| {
@@ -1236,7 +1296,12 @@ impl TestClusterBuilder {
                 response.effects.unwrap().status(),
                 &SuiExecutionStatus::Success
             );
+            info!("Deploy tokens took {:?} secs", timer.elapsed().as_secs());
         }
+        info!(
+            "TestCluster build_with_bridge took {:?} secs",
+            timer.elapsed().as_secs()
+        );
         test_cluster.bridge_authority_keys = Some(bridge_authority_keys);
         test_cluster.bridge_server_ports = Some(server_ports);
         test_cluster
