@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::Parser;
+use secrecy::ExposeSecret;
 use tracing::{error, info};
 
 use sui_indexer::db::{get_pg_pool_connection, new_pg_connection_pool, reset_database};
@@ -28,13 +29,15 @@ async fn main() -> Result<(), IndexerError> {
     }
     info!("Parsed indexer config: {:#?}", indexer_config);
 
-    let db_url = indexer_config.get_db_url().map_err(|e| {
+    let db_url_secret = indexer_config.get_db_url().map_err(|e| {
         IndexerError::PgPoolConnectionError(format!(
             "Failed parsing database url with error {:?}",
             e
         ))
     })?;
-    let blocking_cp = new_pg_connection_pool(&db_url, None).map_err(|e| {
+
+    let db_url = db_url_secret.expose_secret();
+    let blocking_cp = new_pg_connection_pool(db_url, None).map_err(|e| {
         error!(
             "Failed creating Postgres connection pool with error {:?}",
             e
@@ -96,7 +99,7 @@ async fn main() -> Result<(), IndexerError> {
         let store = PgIndexerStore::new(blocking_cp, indexer_metrics.clone());
         return Indexer::start_writer(&indexer_config, store, indexer_metrics).await;
     } else if indexer_config.rpc_server_worker {
-        return Indexer::start_reader(&indexer_config, &registry, db_url).await;
+        return Indexer::start_reader(&indexer_config, &registry, db_url.to_string()).await;
     }
     Ok(())
 }

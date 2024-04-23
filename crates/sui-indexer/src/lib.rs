@@ -11,6 +11,7 @@ use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuild
 use metrics::IndexerMetrics;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
+use secrecy::{ExposeSecret, Secret};
 use std::path::PathBuf;
 use system_package_task::SystemPackageTask;
 use tokio::runtime::Handle;
@@ -52,11 +53,11 @@ pub mod types;
 )]
 pub struct IndexerConfig {
     #[clap(long)]
-    pub db_url: Option<String>,
+    pub db_url: Option<Secret<String>>,
     #[clap(long)]
     pub db_user_name: Option<String>,
     #[clap(long)]
-    pub db_password: Option<String>,
+    pub db_password: Option<Secret<String>>,
     #[clap(long)]
     pub db_host: Option<String>,
     #[clap(long)]
@@ -88,8 +89,9 @@ pub struct IndexerConfig {
 impl IndexerConfig {
     /// returns connection url without the db name
     pub fn base_connection_url(&self) -> Result<String, anyhow::Error> {
-        let url_str = self.get_db_url()?;
-        let url = Url::parse(&url_str).expect("Failed to parse URL");
+        let url_secret = self.get_db_url()?;
+        let url_str = url_secret.expose_secret();
+        let url = Url::parse(url_str).expect("Failed to parse URL");
         Ok(format!(
             "{}://{}:{}@{}:{}/",
             url.scheme(),
@@ -100,14 +102,14 @@ impl IndexerConfig {
         ))
     }
 
-    pub fn get_db_url(&self) -> Result<String, anyhow::Error> {
+    pub fn get_db_url(&self) -> Result<Secret<String>, anyhow::Error> {
         match (&self.db_url, &self.db_user_name, &self.db_password, &self.db_host, &self.db_port, &self.db_name) {
             (Some(db_url), _, _, _, _, _) => Ok(db_url.clone()),
             (None, Some(db_user_name), Some(db_password), Some(db_host), Some(db_port), Some(db_name)) => {
-                Ok(format!(
+                Ok(secrecy::Secret::new(format!(
                     "postgres://{}:{}@{}:{}/{}",
-                    db_user_name, db_password, db_host, db_port, db_name
-                ))
+                    db_user_name, db_password.expose_secret(), db_host, db_port, db_name
+                )))
             }
             _ => Err(anyhow!("Invalid db connection config, either db_url or (db_user_name, db_password, db_host, db_port, db_name) must be provided")),
         }
@@ -117,7 +119,9 @@ impl IndexerConfig {
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
-            db_url: Some("postgres://postgres:postgres@localhost:5432/sui_indexer".to_string()),
+            db_url: Some(secrecy::Secret::new(
+                "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
+            )),
             db_user_name: None,
             db_password: None,
             db_host: None,

@@ -55,6 +55,7 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
+secrecy = "0.8.0"
 
 [features]
 pg_integration = []
