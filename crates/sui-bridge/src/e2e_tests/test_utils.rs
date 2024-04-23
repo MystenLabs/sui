@@ -172,7 +172,7 @@ impl BridgeTestClusterBuilder {
             .await
             .unwrap();
         // Give anvil a bit of time to start
-        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
         let (eth_signer, eth_pk_hex) = eth_environment
             .get_signer(TEST_PK)
             .await
@@ -691,9 +691,10 @@ pub(crate) async fn start_bridge_cluster(
         std::fs::write(authority_key_path.clone(), base64_encoded).unwrap();
 
         let client_sui_address = SuiAddress::from(kp.public());
+        let sender_address = test_cluster.get_address_0();
         // send some gas to this address
         test_cluster
-            .transfer_sui_must_exceed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {

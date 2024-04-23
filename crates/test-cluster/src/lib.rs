@@ -745,8 +745,13 @@ impl TestCluster {
             .unwrap()
     }
 
-    pub async fn transfer_sui_must_exceed(&self, receiver: SuiAddress, amount: u64) -> ObjectID {
-        let sender = self.get_address_0();
+    pub async fn transfer_sui_must_exceed(
+        &self,
+        sender: SuiAddress,
+        receiver: SuiAddress,
+        amount: u64,
+    ) -> ObjectID {
+        // let sender = self.get_address_0();
         let tx = self
             .test_transaction_builder_with_sender(sender)
             .await
@@ -1162,7 +1167,8 @@ impl TestClusterBuilder {
 
         let mut server_ports = vec![];
         let mut tasks = vec![];
-
+        // use a different sender address than the coin publish to avoid object locks
+        let sender_address = test_cluster.get_address_1();
         for (node, kp) in test_cluster
             .swarm
             .active_validators()
@@ -1171,23 +1177,22 @@ impl TestClusterBuilder {
             let validator_address = node.config.sui_address();
             // 1, send some gas to validator
             test_cluster
-                .transfer_sui_must_exceed(validator_address, 1000000000)
+                .transfer_sui_must_exceed(sender_address, validator_address, 1000000000)
                 .await;
             // 2, create committee registration tx
-            let coins = test_cluster
-                .sui_client()
-                .coin_read_api()
-                .get_coins(validator_address, None, None, None)
+            let gas = test_cluster
+                .wallet
+                .get_one_gas_object_owned_by_address(validator_address)
                 .await
+                .unwrap()
                 .unwrap();
-            let gas = coins.data.first().unwrap();
 
             let server_port = get_available_port("127.0.0.1");
             let server_url = format!("http://127.0.0.1:{}", server_port);
             server_ports.push(server_port);
             let data = build_committee_register_transaction(
                 validator_address,
-                &gas.object_ref(),
+                &gas,
                 bridge_arg,
                 kp.copy(),
                 &server_url,

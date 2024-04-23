@@ -22,7 +22,6 @@ use sui_types::{bridge::BRIDGE_MODULE_NAME, event::EventID, Identifier};
 use tokio::task::JoinHandle;
 use tracing::info;
 
-// pub async fn run_bridge_node(config: BridgeNodeConfig, shutdown_notify: Option<Arc<Notify>>) -> anyhow::Result<()> {
 pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHandle<()>> {
     let (server_config, client_config) = config.validate().await?;
 
@@ -46,7 +45,6 @@ pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHan
             server_config.eth_client,
             server_config.approved_governance_actions,
         ),
-        // shutdown_notify,
     ))
 }
 
@@ -309,7 +307,6 @@ mod tests {
     #[tokio::test]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
-        // let (bridge_test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
         let bridge_test_cluster = setup().await;
         let kp = bridge_test_cluster.bridge_authority_key(0);
 
@@ -317,7 +314,6 @@ mod tests {
         let tmp_dir = tempdir().unwrap().into_path();
         let authority_key_path = "test_starting_bridge_node_bridge_authority_key";
         let server_listen_port = get_available_port("127.0.0.1");
-        // let kp = test_cluster.bridge_authority_keys.as_ref().unwrap()[0].copy();
         let base64_encoded = kp.encode_base64();
         std::fs::write(tmp_dir.join(authority_key_path), base64_encoded).unwrap();
 
@@ -355,7 +351,6 @@ mod tests {
     #[tokio::test]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
-        // let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
         let bridge_test_cluster = setup().await;
         let kp = bridge_test_cluster.bridge_authority_key(0);
 
@@ -369,10 +364,11 @@ mod tests {
         std::fs::write(tmp_dir.join(authority_key_path), base64_encoded).unwrap();
 
         let client_sui_address = SuiAddress::from(kp.public());
+        let sender_address = bridge_test_cluster.sui_user_address();
         // send some gas to this address
         bridge_test_cluster
             .test_cluster
-            .transfer_sui_must_exceed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
@@ -436,11 +432,11 @@ mod tests {
             "test_starting_bridge_node_with_client_and_separate_client_key_bridge_client_key";
         std::fs::write(tmp_dir.join(client_key_path), kp.encode_base64()).unwrap();
         let client_sui_address = SuiAddress::from(&kp.public());
-
+        let sender_address = bridge_test_cluster.sui_user_address();
         // send some gas to this address
         let gas_obj = bridge_test_cluster
             .test_cluster
-            .transfer_sui_must_exceed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
