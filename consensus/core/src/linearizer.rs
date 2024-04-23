@@ -6,7 +6,7 @@ use std::{collections::HashSet, sync::Arc};
 use parking_lot::RwLock;
 
 use crate::{
-    block::{BlockAPI, Round, VerifiedBlock},
+    block::{BlockAPI, BlockTimestampMs, Round, VerifiedBlock},
     commit::{Commit, CommitIndex, CommittedSubDag, TrustedCommit},
     dag_state::DagState,
 };
@@ -29,19 +29,18 @@ impl Linearizer {
         &mut self,
         leader_block: VerifiedBlock,
         last_commit_index: CommitIndex,
+        last_commit_timestamp_ms: BlockTimestampMs,
         last_committed_rounds: Vec<Round>,
     ) -> CommittedSubDag {
         let mut to_commit = Vec::new();
         let mut committed = HashSet::new();
 
-        let dag_state = self.dag_state.read();
-        let timestamp_ms = leader_block
-            .timestamp_ms()
-            .max(dag_state.last_commit_timestamp_ms());
+        let timestamp_ms = leader_block.timestamp_ms().max(last_commit_timestamp_ms);
         let leader_block_ref = leader_block.reference();
         let mut buffer = vec![leader_block];
         assert!(committed.insert(leader_block_ref));
 
+        let dag_state = self.dag_state.read();
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
 
@@ -90,6 +89,7 @@ impl Linearizer {
             let dag_state = self.dag_state.read();
             let last_commit_index = dag_state.last_commit_index();
             let last_commit_digest = dag_state.last_commit_digest();
+            let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
             let mut last_committed_rounds = dag_state.last_committed_rounds();
             drop(dag_state);
 
@@ -97,13 +97,14 @@ impl Linearizer {
             let mut sub_dag = self.collect_sub_dag(
                 leader_block,
                 last_commit_index,
+                last_commit_timestamp_ms,
                 last_committed_rounds.clone(),
             );
 
             // [Optional] sort the sub-dag using a deterministic algorithm.
             sub_dag.sort();
 
-            // Buffer commit in dag state for persistence later.
+            // Summarize CommittedSubDag into Commit.
             let commit = Commit::new(
                 sub_dag.commit_index,
                 last_commit_digest,
@@ -122,7 +123,11 @@ impl Linearizer {
                 .serialize()
                 .unwrap_or_else(|e| panic!("Failed to serialize commit: {}", e));
             let commit = TrustedCommit::new_trusted(commit, serialized);
+
+            // Buffer commit in dag state for persistence later.
+            // This also updates the last commit properties, including rounds and timestamp, in the dag state.
             self.dag_state.write().add_commit(commit.clone());
+
             committed_sub_dags.push(sub_dag);
         }
         // Committed blocks must be persisted to storage before sending them to Sui and executing

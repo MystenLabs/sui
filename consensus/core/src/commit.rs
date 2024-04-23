@@ -38,12 +38,12 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 /// round, at least one voting round, and one decision round.
 pub(crate) type WaveNumber = u32;
 
-/// Versioned representation of a consensus commit.
+/// [`Commit`] summarizes [`CommittedSubDag`] for storage and network communications.
 ///
-/// Commit is used to persist commit metadata for recovery. It is also exchanged over the network.
-/// To balance being functional and succinct, a field must meet these requirements to be added
-/// to the struct:
-/// - helps with recoverying CommittedSubDag locally and for peers catching up.
+/// Validators should be able to reconstruct a sequence of CommittedSubDag from the
+/// corresponding Commit, CommitData and blocks contained in the Commit.
+/// A field must meet these requirements to be added to Commit:
+/// - helps with recovering CommittedSubDag locally and for peers catching up.
 /// - cannot be derived from a sequence of Commits and other persisted values.
 ///
 /// For example, transactions in blocks should not be included in Commit, because they can be
@@ -265,8 +265,12 @@ impl fmt::Debug for CommitRef {
 // Represents a vote on a Commit.
 pub type CommitVote = CommitRef;
 
-/// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
-/// can arbitrarily sort the blocks within each sub-dag (but using a deterministic algorithm).
+/// The output of consensus to execution is an ordered list of [`CommittedSubDag`].
+/// Each CommittedSubDag contains the information needed to execution transactions in
+/// the consensus commit.
+///
+/// The application processing CommittedSubDag can arbitrarily sort the blocks within
+/// each sub-dag (but using a deterministic algorithm).
 #[derive(Clone, PartialEq)]
 pub struct CommittedSubDag {
     /// A reference to the leader of the sub-dag
