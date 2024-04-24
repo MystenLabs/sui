@@ -16,7 +16,7 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, Instant};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::block::{timestamp_utc_ms, BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
@@ -284,7 +284,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 Some(command) = self.commands_receiver.recv() => {
                     match command {
                         Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
-                            assert_ne!(peer_index, self.context.own_index, "We should never attempt to fetch blocks from our own node");
+                            if peer_index == self.context.own_index {
+                                error!("We should never attempt to fetch blocks from our own node");
+                                continue;
+                            }
 
                             // Keep only the max allowed blocks to request. It is ok to reduce here as the scheduler
                             // task will take care syncing whatever is leftover.

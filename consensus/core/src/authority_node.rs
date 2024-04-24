@@ -385,11 +385,11 @@ mod tests {
         }
 
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
-            unimplemented!()
+            Ok(())
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            unimplemented!()
+            Ok(Default::default())
         }
     }
 
