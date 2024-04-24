@@ -229,10 +229,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         build_config,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -260,10 +257,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         module: "test_module".to_string(),
         function: "new_shared".to_string(),
         type_args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
         args: vec![],
     }
@@ -476,10 +470,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     SuiClientCommands::Transfer {
         to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
         object_id: object_to_send,
-        opts: OptsWithGas {
-            gas: Some(object_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
-        },
+        opts: OptsWithGas::for_testing(Some(object_id), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -525,10 +516,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -612,10 +600,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args,
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: None,
     }
     .execute(context)
@@ -652,10 +637,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        opts: OptsWithGas {
-            gas: Some(gas),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        },
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: None,
     }
     .execute(context)
@@ -679,10 +661,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        opts: OptsWithGas {
-            gas: Some(gas),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        },
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: None,
     }
     .execute(context)
@@ -703,10 +682,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        opts: OptsWithGas {
-            gas: Some(gas),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        },
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: Some(1),
     }
     .execute(context)
@@ -728,21 +704,6 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         SuiJsonValue::new(json!(address2))?,
     ];
 
-    SuiClientCommands::Call {
-        package,
-        module: "object_basics".to_string(),
-        function: "transfer".to_string(),
-        type_args: vec![],
-        args: args.to_vec(),
-        opts: OptsWithGas {
-            gas: Some(gas),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        },
-        gas_price: None,
-    }
-    .execute(context)
-    .await?;
-
     // Try a call with customized gas price.
     let args = vec![
         SuiJsonValue::new(json!("123"))?,
@@ -755,10 +716,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args,
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: Some(12345),
     }
     .execute(context)
@@ -810,10 +768,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -883,10 +838,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config: build_config.clone(),
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -956,10 +908,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -994,10 +943,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         module: "sod".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
         args: vec![],
     }
@@ -1017,10 +963,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         module: "sod".to_string(),
         function: "delete".to_string(),
         type_args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
         args: vec![SuiJsonValue::from_str(&shared_id.to_string()).unwrap()],
     }
@@ -1069,10 +1012,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -1107,10 +1047,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
         args: vec![],
     }
@@ -1146,10 +1083,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "receiver".to_string(),
         type_args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
@@ -1201,10 +1135,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -1241,10 +1172,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas_price: None,
         args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1283,10 +1211,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1335,10 +1260,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         build_config,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1373,10 +1295,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         type_args: vec![],
         gas_price: None,
         args: vec![],
-        opts: OptsWithGas {
-            gas: None,
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1829,10 +1748,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
         build_config,
-        opts: OptsWithGas {
-            gas: Some(gas_obj_id),
-            rest: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
-        },
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
     }
@@ -2052,7 +1968,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let obj_id = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
-        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
         to: KeyIdentity::Address(recipient),
         object_id: obj_id,
     }
