@@ -15,7 +15,7 @@ use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::object::Owner;
 use sui_types::transaction::{
-    TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+    TEST_ONLY_GAS_UNIT_FOR_GENERIC, TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
     TEST_ONLY_GAS_UNIT_FOR_PUBLISH, TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
     TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
 };
@@ -3592,18 +3592,16 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_gas_estimation() -> Result<(), anyhow::Error> {
-    let (mut test_cluster, client, rgp, objects, recipients, addresses) =
-        test_cluster_helper().await;
+    let (mut test_cluster, client, rgp, objects, _, addresses) = test_cluster_helper().await;
     let object_id1 = objects[0];
-    let recipient1 = &recipients[0];
     let address2 = addresses[0];
     let context = &mut test_cluster.wallet;
-    let gas_price = context.get_reference_gas_price().await?;
     let amount = 1000;
     let sender = context.active_address().unwrap();
     let tx_builder = client.transaction_builder();
     let tx_kind = tx_builder.transfer_sui_tx_kind(address2, Some(amount));
-    let gas_estimate = estimate_gas_budget(context, sender, tx_kind, gas_price, None, None).await?;
+    let gas_estimate = estimate_gas_budget(context, sender, tx_kind, rgp, None, None).await;
+    assert!(gas_estimate.is_ok());
 
     let transfer_sui_cmd = SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address2),
