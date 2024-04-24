@@ -488,20 +488,8 @@ pub(crate) struct CommitInfo {
     pub(crate) reputation_scores: ReputationScores,
 }
 
-impl CommitInfo {
-    // Returns a new CommitInfo.
-    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
-        CommitInfo {
-            committed_rounds,
-            reputation_scores,
-        }
-    }
-}
-
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
 /// and end (exclusive) commit indices and can be ordered for use as the key of a table.
-/// Note: If used as a key for a table it is useful to ensure the key ranges don't
-/// intersect using the provided helper methods so that ordering becomes clear.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CommitRange(Range<CommitIndex>);
 
@@ -653,5 +641,6 @@ mod tests {
         assert!(range1 < range2);
         assert!(range2 < range3);
         assert!(range3 < range4);
+        assert!(range5 < range4);
     }
 }

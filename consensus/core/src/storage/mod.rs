@@ -11,8 +11,9 @@ use consensus_config::AuthorityIndex;
 
 use crate::{
     block::{BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitIndex, CommitInfo, CommitRange, CommitRef, TrustedCommit},
+    commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
+    CommitIndex,
 };
 
 /// A common interface for consensus storage.
@@ -64,19 +65,19 @@ pub(crate) trait Store: Send + Sync {
 pub(crate) struct WriteBatch {
     pub(crate) blocks: Vec<VerifiedBlock>,
     pub(crate) commits: Vec<TrustedCommit>,
-    pub(crate) last_commit_info: Option<(CommitRef, CommitInfo)>,
+    pub(crate) commit_info: Vec<(CommitRef, CommitInfo)>,
 }
 
 impl WriteBatch {
     pub(crate) fn new(
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
-        last_commit_info: Option<(CommitRef, CommitInfo)>,
+        commit_info: Vec<(CommitRef, CommitInfo)>,
     ) -> Self {
         WriteBatch {
             blocks,
             commits,
-            last_commit_info,
+            commit_info,
         }
     }
 
@@ -91,6 +92,12 @@ impl WriteBatch {
     #[cfg(test)]
     pub(crate) fn commits(mut self, commits: Vec<TrustedCommit>) -> Self {
         self.commits = commits;
+        self
+    }
+
+    #[cfg(test)]
+    pub(crate) fn commit_info(mut self, commit_info: Vec<(CommitRef, CommitInfo)>) -> Self {
+        self.commit_info = commit_info;
         self
     }
 }
