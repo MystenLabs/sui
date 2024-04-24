@@ -4,7 +4,7 @@
 #[cfg(msim)]
 mod test {
     use rand::{distributions::uniform::SampleRange, thread_rng, Rng};
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashSet;
     use std::path::PathBuf;
     use std::str::FromStr;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -148,11 +148,11 @@ mod test {
     fn handle_failpoint(
         dead_validator: Arc<Mutex<Option<DeadValidator>>>,
         keep_alive_nodes: HashSet<sui_simulator::task::NodeId>,
-        grace_period_nodes: Arc<Mutex<HashMap<sui_simulator::task::NodeId, Instant>>>,
+        grace_period: Arc<Mutex<Option<Instant>>>,
         probability: f64,
     ) {
         let mut dead_validator = dead_validator.lock().unwrap();
-        let mut grace_period_nodes = grace_period_nodes.lock().unwrap();
+        let mut grace_period = grace_period.lock().unwrap();
         let cur_node = sui_simulator::current_simnode_id();
 
         if keep_alive_nodes.contains(&cur_node) {
@@ -169,22 +169,25 @@ mod test {
         // otherwise, possibly fail the current node
         let mut rng = thread_rng();
         if rng.gen_range(0.0..1.0) < probability {
-            if grace_period_nodes
-                .get(&cur_node)
-                .map_or(false, |t| *t > Instant::now())
-            {
-                trace!(?cur_node, "node is still in grace period, not failing");
+            // clear grace period if expired
+            if let Some(t) = *grace_period {
+                if t < Instant::now() {
+                    *grace_period = None;
+                }
+            }
+
+            // check if any node is in grace period
+            if grace_period.is_some() {
+                trace!(?cur_node, "grace period in effect, not failing node");
                 return;
-            } else {
-                grace_period_nodes.remove(&cur_node);
             }
 
             let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
             let dead_until = Instant::now() + restart_after;
 
             // Prevent the same node from being restarted again rapidly.
-            let alive_until = dead_until + Duration::from_millis(rng.gen_range(0..30000));
-            grace_period_nodes.insert(cur_node, alive_until);
+            let alive_until = dead_until + Duration::from_millis(rng.gen_range(5000..30000));
+            *grace_period = Some(alive_until);
 
             error!(?cur_node, ?dead_until, ?alive_until, "killing node");
 
@@ -195,7 +198,7 @@ mod test {
 
             // must manually release lock before calling kill_current_node, which panics
             // and would poison the lock.
-            drop(grace_period_nodes);
+            drop(grace_period);
             drop(dead_validator);
 
             sui_simulator::task::kill_current_node(Some(restart_after));
@@ -253,13 +256,12 @@ mod test {
         let test_cluster = build_test_cluster(4, 1000).await;
 
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
-        let grace_period_nodes: Arc<Mutex<HashMap<sui_simulator::task::NodeId, Instant>>> =
-            Default::default();
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
-        let grace_period_nodes_clone = grace_period_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
                 "batch-write-before",
@@ -275,7 +277,7 @@ mod test {
                 handle_failpoint(
                     dead_validator.clone(),
                     keep_alive_nodes_clone.clone(),
-                    grace_period_nodes_clone.clone(),
+                    grace_period_clone.clone(),
                     0.02,
                 );
             },
@@ -283,16 +285,16 @@ mod test {
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
-        let grace_period_nodes_clone = grace_period_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_point_async("crash", move || {
             let dead_validator = dead_validator.clone();
             let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
-            let grace_period_nodes_clone = grace_period_nodes_clone.clone();
+            let grace_period_clone = grace_period_clone.clone();
             async move {
                 handle_failpoint(
                     dead_validator.clone(),
                     keep_alive_nodes_clone.clone(),
-                    grace_period_nodes_clone.clone(),
+                    grace_period_clone.clone(),
                     0.01,
                 );
             }
@@ -301,7 +303,7 @@ mod test {
         // Narwhal & Consensus 2.0 fail points.
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
-        let grace_period_nodes_clone = grace_period_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
                 "narwhal-rpc-response",
@@ -315,7 +317,7 @@ mod test {
                 handle_failpoint(
                     dead_validator.clone(),
                     keep_alive_nodes_clone.clone(),
-                    grace_period_nodes_clone.clone(),
+                    grace_period_clone.clone(),
                     0.001,
                 );
             },
@@ -349,13 +351,12 @@ mod test {
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
-        let grace_period_nodes: Arc<Mutex<HashMap<sui_simulator::task::NodeId, Instant>>> =
-            Default::default();
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
         register_fail_points(&["before-open-new-epoch-store"], move || {
             handle_failpoint(
                 dead_validator.clone(),
                 keep_alive_nodes.clone(),
-                grace_period_nodes.clone(),
+                grace_period.clone(),
                 1.0,
             );
         });
