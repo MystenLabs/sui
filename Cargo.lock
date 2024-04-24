@@ -2622,6 +2622,7 @@ dependencies = [
  "rstest",
  "serde",
  "shared-crypto",
+ "sui-macros",
  "sui-protocol-config",
  "tap",
  "telemetry-subscribers",

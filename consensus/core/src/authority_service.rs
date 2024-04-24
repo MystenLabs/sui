@@ -8,6 +8,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
+use sui_macros::{fail_point, fail_point_async};
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
@@ -71,6 +72,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         serialized_block: Bytes,
     ) -> ConsensusResult<()> {
+        fail_point_async!("consensus-rpc-response");
+
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // TODO: dedup block verifications, here and with fetched blocks.
@@ -221,6 +224,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         last_received: Round,
     ) -> ConsensusResult<BlockStream> {
+        fail_point_async!("consensus-rpc-response");
+
         let dag_state = self.dag_state.read();
         // Find recent own blocks that have not been received by the peer.
         // If last_received is a valid and more blocks have been proposed since then, this call is
@@ -233,6 +238,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
         let broadcasted_blocks =
             BroadcastedBlockStream::new(peer, self.rx_block_broadcaster.resubscribe());
+
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         Ok(Box::pin(missed_blocks.chain(
             broadcasted_blocks.map(|block| block.serialized().clone()),
@@ -245,6 +251,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
+        fail_point_async!("consensus-rpc-response");
+
         const MAX_ADDITIONAL_BLOCKS: usize = 10;
         if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
@@ -309,6 +317,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         start: CommitIndex,
         end: CommitIndex,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        fail_point_async!("consensus-rpc-response");
+
         // Compute an exclusive end index and bound the maximum number of commits scanned.
         let exclusive_end =
             (end + 1).min(start + self.context.parameters.commit_sync_batch_size as CommitIndex);
@@ -376,6 +386,9 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
         let maybe_item = loop {
             let (result, rx) = ready!(self.inner.poll(cx));
             self.inner.set(make_recv_future(rx));
+
+            fail_point!("consensus-rpc-response");
+
             match result {
                 Ok(item) => break Some(item),
                 Err(broadcast::error::RecvError::Closed) => {

@@ -116,8 +116,9 @@ impl CommitObserver {
         for commit in unsent_commits {
             // Commit index must be continuous.
             assert_eq!(commit.index(), last_sent_commit_index + 1);
-            let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
-            self.sender.send(committed_subdag).unwrap_or_else(|e| {
+            let committed_sub_dag = load_committed_subdag_from_store(self.store.as_ref(), commit);
+
+            self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
                 panic!(
                     "Failed to send commit during recovery, probably due to shutdown: {:?}",
                     e

@@ -264,7 +264,7 @@ mod test {
             }
         });
 
-        // Narwhal fail points.
+        // Narwhal & Consensus 2.0 fail points.
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
         register_fail_points(
@@ -272,6 +272,9 @@ mod test {
                 "narwhal-rpc-response",
                 "narwhal-store-before-write",
                 "narwhal-store-after-write",
+                "consensus-store-before-write",
+                "consensus-store-after-write",
+                "consensus-after-propose",
             ],
             move || {
                 handle_failpoint(
@@ -282,6 +285,22 @@ mod test {
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+
+        let dead_validator = dead_validator_orig.clone();
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        register_fail_point_async("consensus-rpc-response", move || {
+            let dead_validator = dead_validator.clone();
+            let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
+            async move {
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    0.001,
+                );
+            }
+        });
+        register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+
         register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
