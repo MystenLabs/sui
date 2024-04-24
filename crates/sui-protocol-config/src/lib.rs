@@ -408,6 +408,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "ConsensusChoice::is_narwhal")]
     consensus_choice: ConsensusChoice,
 
+    // Consensus network to use.
+    #[serde(skip_serializing_if = "ConsensusNetwork::is_anemo")]
+    consensus_network: ConsensusNetwork,
+
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     zklogin_max_epoch_upper_bound_delta: Option<u64>,
@@ -463,6 +467,20 @@ pub enum ConsensusChoice {
 impl ConsensusChoice {
     pub fn is_narwhal(&self) -> bool {
         matches!(self, ConsensusChoice::Narwhal)
+    }
+}
+
+// Configuration options for consensus network.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+pub enum ConsensusNetwork {
+    #[default]
+    Anemo,
+    Tonic,
+}
+
+impl ConsensusNetwork {
+    pub fn is_anemo(&self) -> bool {
+        matches!(self, ConsensusNetwork::Anemo)
     }
 }
 
@@ -1251,6 +1269,10 @@ impl ProtocolConfig {
 
     pub fn consensus_choice(&self) -> ConsensusChoice {
         self.feature_flags.consensus_choice
+    }
+
+    pub fn consensus_network(&self) -> ConsensusNetwork {
+        self.feature_flags.consensus_network
     }
 }
 
@@ -2242,6 +2264,10 @@ impl ProtocolConfig {
 
     pub fn set_consensus_choice(&mut self, val: ConsensusChoice) {
         self.feature_flags.consensus_choice = val;
+    }
+
+    pub fn set_consensus_network(&mut self, val: ConsensusNetwork) {
+        self.feature_flags.consensus_network = val;
     }
 
     pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {
