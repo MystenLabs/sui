@@ -5,5 +5,4 @@ module 0x42::M {
     const MIN_U64: u64 = 10;
     const Maxcount: u64 = 500; // Should not trigger a warning
     const MinValue: u64 = 1; // Should not trigger a warning
-  
 }

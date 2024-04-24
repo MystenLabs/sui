@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! `ConstantNamingVisitor` enforces a naming convention for constants in Move programs,
-//! requiring them to follow an ALL_CAPS_SNAKE_CASE format. This lint checks each constant's name
+//! requiring them to follow an ALL_CAPS_SNAKE_CASE or PascalCase format. This lint checks each constant's name
 //! within a module against this convention.
 use crate::{
     diag,
@@ -84,7 +84,7 @@ fn is_valid_name(name: &str) -> bool {
 
     let mut all_uppers = true;
     let mut has_underscore = false;
-    while let Some(char) = chars.next() {
+    for char in chars {
         if char.is_lowercase() {
             all_uppers = false;
         } else if char == '_' {
