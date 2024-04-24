@@ -15,7 +15,7 @@ use parking_lot::RwLock;
 use super::{CommitInfo, Store, WriteBatch};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRef, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -74,12 +74,13 @@ impl Store for MemStore {
                     .commits
                     .insert((commit.index(), commit.digest()), commit);
             }
-            let commit_info = CommitInfo {
-                last_committed_rounds: write_batch.last_committed_rounds,
-            };
-            inner
-                .commit_info
-                .insert((last_commit.index(), last_commit.digest()), commit_info);
+            // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
+            if let Some(last_commit_info) = write_batch.last_commit_info {
+                inner.commit_info.insert(
+                    (last_commit.index(), last_commit.digest()),
+                    last_commit_info,
+                );
+            }
         }
         Ok(())
     }
@@ -204,8 +205,11 @@ impl Store for MemStore {
         Ok(votes)
     }
 
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
         let inner = self.inner.read();
-        Ok(inner.commit_info.last_key_value().map(|(_k, v)| v.clone()))
+        Ok(inner
+            .commit_info
+            .last_key_value()
+            .map(|(k, v)| (CommitRef::new(k.0, k.1), v.clone())))
     }
 }

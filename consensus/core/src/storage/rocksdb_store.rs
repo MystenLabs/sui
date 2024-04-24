@@ -19,7 +19,7 @@ use typed_store::{
 
 use super::{CommitInfo, Store, WriteBatch};
 use crate::block::Slot;
-use crate::commit::{CommitAPI as _, CommitDigest, TrustedCommit};
+use crate::commit::{CommitAPI as _, CommitDigest, CommitRef, TrustedCommit};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
     commit::CommitIndex,
@@ -32,12 +32,12 @@ pub(crate) struct RocksDBStore {
     blocks: DBMap<(Round, AuthorityIndex, BlockDigest), Bytes>,
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
-    /// Maps commit index to content.
+    /// Maps commit index to Commit.
     commits: DBMap<(CommitIndex, CommitDigest), Bytes>,
     /// Collects votes on commits.
     /// TODO: batch multiple votes into a single row.
     commit_votes: DBMap<(CommitIndex, CommitDigest, BlockRef), ()>,
-    /// Stores the latest values of a few properties.
+    /// Stores info related to Commit that helps recovery.
     commit_info: DBMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
@@ -135,15 +135,18 @@ impl Store for RocksDBStore {
                     )
                     .map_err(ConsensusError::RocksDBFailure)?;
             }
-            let commit_info = CommitInfo {
-                last_committed_rounds: write_batch.last_committed_rounds,
-            };
-            batch
-                .insert_batch(
-                    &self.commit_info,
-                    [((last_commit.index(), last_commit.digest()), commit_info)],
-                )
-                .map_err(ConsensusError::RocksDBFailure)?;
+            // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
+            if let Some(last_commit_info) = write_batch.last_commit_info {
+                batch
+                    .insert_batch(
+                        &self.commit_info,
+                        [(
+                            (last_commit.index(), last_commit.digest()),
+                            last_commit_info,
+                        )],
+                    )
+                    .map_err(ConsensusError::RocksDBFailure)?;
+            }
         }
         batch.write()?;
         Ok(())
@@ -292,11 +295,11 @@ impl Store for RocksDBStore {
         Ok(votes)
     }
 
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
         let Some(result) = self.commit_info.safe_iter().skip_to_last().next() else {
             return Ok(None);
         };
-        let (_, commit_info) = result.map_err(ConsensusError::RocksDBFailure)?;
-        Ok(Some(commit_info))
+        let (key, commit_info) = result.map_err(ConsensusError::RocksDBFailure)?;
+        Ok(Some((CommitRef::new(key.0, key.1), commit_info)))
     }
 }
