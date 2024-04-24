@@ -4423,7 +4423,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-vdf"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=d7a33a9f79271bfc19fc4c8816ea5467e4205e17#d7a33a9f79271bfc19fc4c8816ea5467e4205e17"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
 dependencies = [
  "fastcrypto",
  "num-bigint 0.4.4",

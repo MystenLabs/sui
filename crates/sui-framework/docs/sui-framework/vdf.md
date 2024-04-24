@@ -47,7 +47,7 @@ The largest allowed byte length of the input to the VDF.
 Hash an arbitrary binary <code>message</code> to a class group element to be used as input for <code>vdf_verify</code>.
 
 The <code>discriminant</code> defines what class group to use and should be the same as used in <code>vdf_verify</code>. The
-<code>discriminant</code> should be encoded as a big-endian encoding of the negation of the negative discriminant.
+<code>discriminant</code> should be encoded as a big-endian encoding of the absolute value of the negative discriminant.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_hash_to_input">hash_to_input</a>(discriminant: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, message: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
@@ -97,7 +97,7 @@ The <code>discriminant</code> defines what class group to use and should be the 
 ## Function `vdf_verify`
 
 Verify the output and proof of a VDF with the given number of iterations. The <code>input</code>, <code>output</code> and <code>proof</code>
-are all class group elements represented by triples <code>(a,b,c)</code> such that <code>b^2 + 4ac = discriminant</code>. They should
+are all class group elements represented by triples <code>(a,b,c)</code> such that <code>b^2 - 4ac = discriminant</code>. They should
 be encoded in the following format:
 
 <code>a_len</code> (2 bytes, big endian) | <code>a</code> as unsigned big endian bytes | <code>b_len</code> (2 bytes, big endian) | <code>b</code> as signed
@@ -106,7 +106,7 @@ big endian bytes
 Note that <code>c</code> is omitted because it may be computed from <code>a</code> and <code>b</code> and <code>discriminant</code>.
 
 The <code>discriminant</code> defines what class group to use and should be the same as used in <code>hash_to_input</code>. The
-<code>discriminant</code> should be encoded as a big-endian encoding of the negation of the negative discriminant.
+<code>discriminant</code> should be encoded as a big-endian encoding of the absolute value of the negative discriminant.
 
 This uses Wesolowski's VDF construction over imaginary class groups as described in Wesolowski (2020),
 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in
