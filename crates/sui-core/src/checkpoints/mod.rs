@@ -793,9 +793,9 @@ impl CheckpointStore {
             let txns: Vec<_> = txns
                 .into_iter()
                 .map(|tx| tx.unwrap())
-                // end of epoch transaction can only be executed by CheckpointExecutor
-                .filter(|tx| !tx.data().transaction_data().is_end_of_epoch_tx())
                 .zip(fx_digests.into_iter())
+                // end of epoch transaction can only be executed by CheckpointExecutor
+                .filter(|(tx, _)| !tx.data().transaction_data().is_end_of_epoch_tx())
                 .map(|(tx, fx)| {
                     (
                         VerifiedExecutableTransaction::new_from_checkpoint(
@@ -807,6 +807,8 @@ impl CheckpointStore {
                     )
                 })
                 .collect();
+
+            let tx_digests: Vec<_> = txns.iter().map(|(tx, _)| *tx.digest()).collect();
 
             info!(
                 ?seq,
