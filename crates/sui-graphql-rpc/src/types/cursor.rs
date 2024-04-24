@@ -159,7 +159,7 @@ impl<C> Page<C> {
         Ok(page)
     }
 
-    /// A page that just limits the the number of results, without applying any other bounds.
+    /// A page that just limits the number of results, without applying any other bounds.
     pub(crate) fn bounded(limit: u64) -> Self {
         Page {
             after: None,

@@ -1247,7 +1247,7 @@ pub enum Bytecode {
     /// ```..., integer_value -> ..., u128_value```
     CastU128,
     /// Push a `Constant` onto the stack. The value is loaded and deserialized (according to its
-    /// type) from the the `ConstantPool` via `ConstantPoolIndex`
+    /// type) from the `ConstantPool` via `ConstantPoolIndex`
     ///
     /// Stack transition:
     ///
