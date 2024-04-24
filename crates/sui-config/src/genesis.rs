@@ -647,6 +647,7 @@ impl TokenDistributionScheduleBuilder {
     }
 
     pub fn add_allocation(&mut self, allocation: TokenAllocation) {
+        println!("Total allocation: {}, token allocation: {}", self.pool, allocation.amount_mist);
         self.pool = self.pool.checked_sub(allocation.amount_mist).unwrap();
         self.allocations.push(allocation);
     }
