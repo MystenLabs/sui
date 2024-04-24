@@ -100,6 +100,8 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV2 {
     }
 
     fn leader_scoring_round_range(&self, min_round: u32, max_round: u32) -> Range<u32> {
+        // To be able to calculate scores using certified votes we require +1 round
+        // for the votes on the leader and +1 round for the certificates of those votes.
         assert!(min_round < max_round - 1);
         min_round..max_round.saturating_sub(1)
     }
@@ -178,6 +180,8 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV1 {
     }
 
     fn leader_scoring_round_range(&self, min_round: u32, max_round: u32) -> Range<u32> {
+        // To be able to calculate scores using certified votes we require +1 round
+        // for the votes on the leader and +1 round for the certificates of those votes.
         assert!(min_round < max_round - 1);
         min_round..max_round.saturating_sub(1)
     }
@@ -230,6 +234,8 @@ impl ScoringStrategy for VoteScoringStrategy {
     }
 
     fn leader_scoring_round_range(&self, min_round: u32, max_round: u32) -> Range<u32> {
+        // To be able to calculate scores using votes we require +1 round
+        // for the votes on the leader.
         assert!(min_round < max_round);
         min_round..max_round
     }
@@ -285,6 +291,8 @@ impl ScoringStrategy for CertificateScoringStrategy {
     }
 
     fn leader_scoring_round_range(&self, min_round: u32, max_round: u32) -> Range<u32> {
+        // To be able to calculate scores using certificates we require +1 round
+        // for the votes on the leader and +1 round for the certificates of those votes.
         assert!(min_round < max_round - 1);
         min_round..max_round.saturating_sub(1)
     }
