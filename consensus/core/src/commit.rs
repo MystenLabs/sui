@@ -294,6 +294,10 @@ pub struct CommittedSubDag {
     /// First commit after genesis has a index of 1, then every next commit has a
     /// index incremented by 1.
     pub commit_index: CommitIndex,
+    /// Optional scores that are provided as part of the consensus output to Sui
+    /// then can then be used by Sui for future submission to consensus.
+    // TODO: change to option and only submit new scores to Sui
+    pub reputation_scores: Vec<(AuthorityIndex, u64)>,
 }
 
 impl CommittedSubDag {
@@ -309,7 +313,12 @@ impl CommittedSubDag {
             blocks,
             timestamp_ms,
             commit_index,
+            reputation_scores: vec![],
         }
+    }
+
+    pub fn update_scores(&mut self, scores: Vec<(AuthorityIndex, u64)>) {
+        self.reputation_scores = scores;
     }
 
     /// Sort the blocks of the sub-dag by round number then authority index. Any
@@ -486,6 +495,16 @@ impl Display for LeaderStatus {
 pub(crate) struct CommitInfo {
     pub(crate) committed_rounds: Vec<Round>,
     pub(crate) reputation_scores: ReputationScores,
+}
+
+impl CommitInfo {
+    // Returns a new CommitInfo.
+    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
+        CommitInfo {
+            committed_rounds,
+            reputation_scores,
+        }
+    }
 }
 
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)

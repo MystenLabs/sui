@@ -127,6 +127,7 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 //             Enable transactions to be signed with zkLogin inside multisig signature.
 //             Add native bridge.
 //             Enable native bridge in devnet
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -426,6 +427,10 @@ struct FeatureFlags {
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     zklogin_max_epoch_upper_bound_delta: Option<u64>,
+
+    // Controls leader scoring & schedule change in Mysticeti consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_leader_scoring_and_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1303,6 +1308,10 @@ impl ProtocolConfig {
     pub fn consensus_network(&self) -> ConsensusNetwork {
         self.feature_flags.consensus_network
     }
+
+    pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
+        self.feature_flags.mysticeti_leader_scoring_and_schedule
+    }
 }
 
 #[cfg(not(msim))]
@@ -2161,15 +2170,20 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
-                    // Enable random beacon on testnet.
+
                     if chain != Chain::Mainnet {
+                        // Enable random beacon on testnet.
                         cfg.feature_flags.random_beacon = true;
                         cfg.random_beacon_reduction_lower_bound = Some(1600);
                         cfg.random_beacon_dkg_timeout_round = Some(3000);
                         cfg.random_beacon_min_round_interval_ms = Some(150);
+
+                        // Enable leader scoring & schedule change on testnet for mysticeti.
+                        cfg.feature_flags.mysticeti_leader_scoring_and_schedule = true;
                     }
                     cfg.min_move_binary_format_version = Some(6);
                     cfg.feature_flags.accept_zklogin_in_multisig = true;
+
                     // Also bumps framework snapshot to fix binop issue.
 
                     // enable bridge in devnet
@@ -2340,6 +2354,10 @@ impl ProtocolConfig {
     }
     pub fn set_disable_bridge_for_testing(&mut self) {
         self.feature_flags.bridge = false
+    }
+
+    pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
+        self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
 }
 

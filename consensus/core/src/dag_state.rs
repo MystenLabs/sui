@@ -121,7 +121,12 @@ impl DagState {
                         .flat_map(|commit| {
                             let committed_subdag =
                                 load_committed_subdag_from_store(store.as_ref(), commit.clone());
-                            unscored_committed_subdags.push(committed_subdag.clone());
+                            if context
+                                .protocol_config
+                                .mysticeti_leader_scoring_and_schedule()
+                            {
+                                unscored_committed_subdags.push(committed_subdag.clone());
+                            }
                             committed_subdag.blocks
                         })
                         .collect::<Vec<_>>();
@@ -691,7 +696,23 @@ impl DagState {
         // Flush buffered data to storage.
         let blocks = std::mem::take(&mut self.blocks_to_write);
         let commits = std::mem::take(&mut self.commits_to_write);
-        let commit_info_to_write = std::mem::take(&mut self.commit_info_to_write);
+        let commit_info_to_write = if self
+            .context
+            .protocol_config
+            .mysticeti_leader_scoring_and_schedule()
+        {
+            std::mem::take(&mut self.commit_info_to_write)
+        } else if commits.is_empty() {
+            vec![]
+        } else {
+            let last_commit_ref = commits.last().as_ref().unwrap().reference();
+            let commit_info = CommitInfo::new(
+                self.last_committed_rounds.clone(),
+                ReputationScores::default(),
+            );
+            vec![(last_commit_ref, commit_info)]
+        };
+
         if blocks.is_empty() && commits.is_empty() {
             return;
         }
@@ -827,10 +848,10 @@ mod test {
     use parking_lot::RwLock;
 
     use super::*;
-    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
+        test_dag_builder::DagBuilder,
     };
 
     #[tokio::test]

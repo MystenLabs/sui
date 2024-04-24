@@ -509,9 +509,9 @@ impl MysticetiConsensusHandler {
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<consensus_core::CommittedSubDag>,
     ) -> Self {
         let handle = spawn_monitored_task!(async move {
-            while let Some(committed_subdag) = receiver.recv().await {
+            while let Some(consensus_output) = receiver.recv().await {
                 consensus_handler
-                    .handle_consensus_output_internal(committed_subdag)
+                    .handle_consensus_output_internal(consensus_output)
                     .await;
             }
         });

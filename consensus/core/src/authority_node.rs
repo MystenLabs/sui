@@ -20,7 +20,7 @@ use crate::{
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
-    leader_schedule::LeaderSchedule,
+    leader_schedule::{LeaderSchedule, LeaderSwapTable},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
     network::{
@@ -201,17 +201,28 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
+        let leader_schedule = if context
+            .protocol_config
+            .mysticeti_leader_scoring_and_schedule()
+        {
+            Arc::new(LeaderSchedule::from_store(
+                context.clone(),
+                dag_state.clone(),
+            ))
+        } else {
+            Arc::new(LeaderSchedule::new(
+                context.clone(),
+                LeaderSwapTable::default(),
+            ))
+        };
+
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
-
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
 
         let core = Core::new(
             context.clone(),
@@ -629,6 +640,7 @@ mod tests {
                         );
                     }
                 }
+                assert_eq!(committed_subdag.reputation_scores, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }
