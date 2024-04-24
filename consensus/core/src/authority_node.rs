@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Instant};
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tracing::info;
 
 use crate::{
@@ -42,16 +42,9 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
-// Type of network used by the authority node.
-#[derive(Clone, Copy)]
-pub enum NetworkType {
-    Anemo,
-    Tonic,
-}
-
 impl ConsensusAuthority {
     pub async fn start(
-        network_type: NetworkType,
+        network_type: ConsensusNetwork,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -63,7 +56,7 @@ impl ConsensusAuthority {
         registry: Registry,
     ) -> Self {
         match network_type {
-            NetworkType::Anemo => {
+            ConsensusNetwork::Anemo => {
                 let authority = AuthorityNode::start(
                     own_index,
                     committee,
@@ -78,7 +71,7 @@ impl ConsensusAuthority {
                 .await;
                 Self::WithAnemo(authority)
             }
-            NetworkType::Tonic => {
+            ConsensusNetwork::Tonic => {
                 let authority = AuthorityNode::start(
                     own_index,
                     committee,
@@ -392,11 +385,11 @@ mod tests {
         }
 
         async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
-            unimplemented!()
+            Ok(())
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            unimplemented!()
+            Ok(Default::default())
         }
     }
 
@@ -449,7 +442,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_authority_start_and_stop(
-        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
@@ -548,7 +541,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_authority_committee(
-        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
