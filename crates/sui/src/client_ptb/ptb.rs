@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::SuiClientCommandResult,
+    client_commands::{estimate_gas_budget, execute_dry_run, SuiClientCommandResult},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
@@ -31,7 +31,8 @@ use sui_types::{
     gas::GasCostSummary,
     quorum_driver_types::ExecuteTransactionRequestType,
     transaction::{
-        ProgrammableTransaction, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+        ProgrammableTransaction, SenderSignedData, Transaction, TransactionData,
+        TransactionDataAPI, TransactionKind,
     },
 };
 
@@ -138,17 +139,6 @@ impl PTB {
             anyhow::bail!("No active address, cannot execute PTB");
         };
 
-        // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = program_metadata.gas_object_id {
-            context.get_object_ref(gas.value).await?
-        } else {
-            context
-                .gas_for_owner_budget(sender, program_metadata.gas_budget.value, BTreeSet::new())
-                .await?
-                .1
-                .object_ref()
-        };
-
         // get the gas price
         let gas_price = context
             .get_client()
@@ -157,25 +147,48 @@ impl PTB {
             .get_reference_gas_price()
             .await?;
 
-        // create the transaction data that will be sent to the network
-        let tx_data = TransactionData::new_programmable(
-            sender,
-            vec![coins],
-            ptb,
-            program_metadata.gas_budget.value,
-            gas_price,
-        );
+        // build the tx kind
+        let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: ptb.inputs,
+            commands: ptb.commands,
+        });
+
+        // estimate the gas budget if none is provided, otherwise use the provided one
+        let gas_budget = match program_metadata.gas_budget {
+            Some(gas_budget) => gas_budget.value,
+            None => {
+                estimate_gas_budget(context, sender, tx_kind.clone(), gas_price, None, None).await?
+            }
+        };
+
+        // find the gas coins if we have no gas coin given
+        let coins = if let Some(gas) = program_metadata.gas_object_id {
+            context.get_object_ref(gas.value).await?
+        } else {
+            context
+                .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
+                .await?
+                .1
+                .object_ref()
+        };
 
         if program_metadata.dry_run_set {
-            let response = context
-                .get_client()
-                .await?
-                .read_api()
-                .dry_run_transaction_block(tx_data)
-                .await?;
-            println!("{}", SuiClientCommandResult::DryRun(response));
+            let response = execute_dry_run(
+                context,
+                sender,
+                tx_kind,
+                Some(gas_budget),
+                gas_price,
+                Some(vec![coins.0]),
+                None,
+            )
+            .await?;
+            println!("{}", response);
             return Ok(());
         }
+
+        // create the transaction data that will be sent to the network
+        let tx_data = TransactionData::new(tx_kind.clone(), sender, coins, gas_budget, gas_price);
 
         if program_metadata.serialize_unsigned_set {
             serialize_or_execute!(tx_data, true, false, context, PTB).print(true);

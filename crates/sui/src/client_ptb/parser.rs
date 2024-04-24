@@ -193,14 +193,6 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 .push(err!(sp, "Trailing {tok} found after the last command",));
         }
 
-        let Some(gas_budget) = self.state.gas_budget else {
-            self.state.errors.push(err!(
-                sp => help: { "Use --gas-budget <u64> to set a gas budget" },
-                "Gas budget not set."
-            ));
-            return Err(self.state.errors);
-        };
-
         if self.state.errors.is_empty() {
             Ok((
                 A::Program {
@@ -215,7 +207,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     gas_object_id: self.state.gas_object_id,
                     json_set: self.state.json_set,
                     dry_run_set: self.state.dry_run_set,
-                    gas_budget,
+                    gas_budget: self.state.gas_budget,
                 },
             ))
         } else {

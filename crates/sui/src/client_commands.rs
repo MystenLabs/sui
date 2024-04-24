@@ -3149,7 +3149,7 @@ fn format_balance(
 }
 
 /// Helper function to reduce code duplication for executing dry run
-async fn execute_dry_run(
+pub async fn execute_dry_run(
     context: &mut WalletContext,
     signer: SuiAddress,
     kind: TransactionKind,
