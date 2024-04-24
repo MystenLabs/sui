@@ -610,6 +610,7 @@ pub enum SuiClientCommands {
     },
 }
 
+/// Global options for most transaction execution related commands
 #[derive(Args, Debug)]
 pub struct Opts {
     /// Gas budget for this transaction (in MIST)
@@ -631,6 +632,7 @@ pub struct Opts {
     pub serialize_signed_transaction: bool,
 }
 
+/// Global options with gas
 #[derive(Args, Debug)]
 pub struct OptsWithGas {
     /// ID of the gas object for gas payment.
@@ -677,12 +679,7 @@ impl OptsWithGas {
     pub fn for_testing_dry_run(gas: Option<ObjectID>, gas_budget: u64) -> Self {
         Self {
             gas,
-            rest: Opts {
-                gas_budget,
-                dry_run: true,
-                serialize_unsigned_transaction: false,
-                serialize_signed_transaction: false,
-            },
+            rest: Opts::for_testing_dry_run(gas_budget),
         }
     }
 }
