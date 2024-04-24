@@ -207,7 +207,13 @@ async fn main() -> Result<()> {
 
 ## Filtering event queries
 
-To filter the events returned from your queries, use the following data structures. Currently, you cannot combine filters.
+To filter the events returned from your queries, use the following data structures.
+
+:::caution
+
+This set of filters only applies to **Event querying APIs**. It differs from the filters offered for the subscriptions API (see following section), and in particular it **does not** support combinations, like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, or `"Not": _`. 
+
+:::
 
 | Query         | Description                                              | JSON-RPC Parameter Example                                                                          |
 | ------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -224,7 +230,14 @@ To filter the events returned from your queries, use the following data structur
 
 ## Filtering events for subscription
 
-To create a subscription, you can set a filter to return only the set of events you're interested in listening for. Unlike filtering event queries, you are able to combine subscription filters.
+To create a subscription, you can set a filter to return only the set of events you're interested in listening for. 
+
+:::caution
+
+This set of filters only applies to **Event subscription APIs**. It differs from the filters offered for the query API (see previous section), and in particular it **does** support combinations, like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, or `"Not": _`. 
+
+:::
+
 
 | Filter            | Description                                           | JSON-RPC Parameter Example                                                                 |
 | ----------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------ |
