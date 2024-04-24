@@ -114,6 +114,8 @@ pub struct PolicyConfig {
     pub error_policy_type: PolicyType,
     #[serde(default = "default_channel_capacity")]
     pub channel_capacity: usize,
+    #[serde(default = "default_dry_run")]
+    pub dry_run: bool,
 }
 
 impl Default for PolicyConfig {
@@ -124,6 +126,7 @@ impl Default for PolicyConfig {
             spam_policy_type: PolicyType::NoOp,
             error_policy_type: PolicyType::NoOp,
             channel_capacity: 100,
+            dry_run: default_dry_run(),
         }
     }
 }
@@ -133,4 +136,8 @@ pub fn default_connection_blocklist_ttl_sec() -> u64 {
 }
 pub fn default_channel_capacity() -> usize {
     100
+}
+
+pub fn default_dry_run() -> bool {
+    true
 }

@@ -41,6 +41,7 @@ pub struct TrafficController {
     tally_channel: mpsc::Sender<TrafficTally>,
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
+    dry_run_mode: bool,
 }
 
 impl Debug for TrafficController {
@@ -87,6 +88,7 @@ impl TrafficController {
                 proxy_ips: Arc::new(DashMap::new()),
             },
             metrics: metrics.clone(),
+            dry_run_mode: policy_config.dry_run,
         };
         let blocklists = ret.blocklists.clone();
         spawn_monitored_task!(run_tally_loop(
@@ -147,6 +149,10 @@ impl TrafficController {
         );
         let (conn_check, proxy_check) = futures::future::join(connection_check, proxy_check).await;
         conn_check && proxy_check
+    }
+
+    pub fn dry_run_mode(&self) -> bool {
+        self.dry_run_mode
     }
 
     async fn check_and_clear_blocklist(
