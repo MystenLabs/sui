@@ -78,6 +78,24 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 			address: parsedSignature.zkLogin!.address,
 			bytes: toB64(message),
 			signature: parsedSignature.serializedSignature,
+			intent_scope: 'PERSONAL_MESSAGE',
+			client: this.#client,
+		});
+	}
+
+	/**
+	 * Verifies that the signature is valid for for the provided TransactionBlock
+	 */
+	verifyTransactionBlock(
+		transactionBlock: Uint8Array,
+		signature: Uint8Array | SerializedSignature,
+	): Promise<boolean> {
+		const parsedSignature = parseSerializedZkLoginSignature(signature);
+		return graphqlVerifyZkLoginSignature({
+			address: parsedSignature.zkLogin!.address,
+			bytes: toB64(transactionBlock),
+			signature: parsedSignature.serializedSignature,
+			intent_scope: 'TRANSACTION_DATA',
 			client: this.#client,
 		});
 	}
@@ -122,6 +140,7 @@ async function graphqlVerifyZkLoginSignature({
 	address,
 	bytes,
 	signature,
+	intent_scope,
 	client = new SuiGraphQLClient({
 		url: 'https://sui-mainnet.mystenlabs.com/graphql',
 	}),
@@ -129,6 +148,7 @@ async function graphqlVerifyZkLoginSignature({
 	address: string;
 	bytes: string;
 	signature: string;
+	intent_scope: string;
 	client?: SuiGraphQLClient;
 }) {
 	const resp = await client.query({
@@ -136,12 +156,10 @@ async function graphqlVerifyZkLoginSignature({
 		variables: {
 			bytes,
 			signature,
-			intent_scope: 'PERSONAL_MESSAGE',
+			intent_scope: intent_scope,
 			author: address,
 		},
 	});
-	console.log('scce', resp.data?.verifyZkloginSignature.success);
-
 	console.log('resp', resp.data?.verifyZkloginSignature.errors);
 	return (
 		resp.data?.verifyZkloginSignature.success === true &&
