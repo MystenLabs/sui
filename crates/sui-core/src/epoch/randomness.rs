@@ -12,6 +12,7 @@ use fastcrypto_tbls::{dkg, nodes};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use narwhal_types::Round;
+use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
@@ -77,6 +78,7 @@ pub struct RandomnessManager {
 
     // State for randomness generation.
     next_randomness_round: RandomnessRound,
+    highest_completed_round: Arc<Mutex<RandomnessRound>>,
 }
 
 impl RandomnessManager {
@@ -190,6 +192,11 @@ impl RandomnessManager {
         );
 
         // Load existing data from store.
+        let highest_completed_round = tables
+            .randomness_highest_completed_round
+            .get(&SINGLETON_KEY)
+            .expect("typed_store should not fail")
+            .unwrap_or(RandomnessRound(0));
         let mut rm = RandomnessManager {
             epoch_store: epoch_store_weak,
             epoch: committee.epoch(),
@@ -204,6 +211,7 @@ impl RandomnessManager {
             confirmations: BTreeMap::new(),
             dkg_output: OnceCell::new(),
             next_randomness_round: RandomnessRound(0),
+            highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
         };
         let dkg_output = tables
             .dkg_output
@@ -226,6 +234,7 @@ impl RandomnessManager {
                 rm.authority_info.clone(),
                 dkg_output,
                 rm.party.t(),
+                Some(highest_completed_round),
             );
         } else {
             info!(
@@ -447,6 +456,7 @@ impl RandomnessManager {
                         self.authority_info.clone(),
                         output.clone(),
                         self.party.t(),
+                        None,
                     );
                     batch.insert_batch(
                         &epoch_store.tables()?.dkg_output,
@@ -593,6 +603,7 @@ impl RandomnessManager {
             epoch_store: self.epoch_store.clone(),
             epoch: self.epoch,
             network_handle: self.network_handle.clone(),
+            highest_completed_round: self.highest_completed_round.clone(),
         }
     }
 
@@ -648,6 +659,7 @@ pub struct RandomnessReporter {
     epoch_store: Weak<AuthorityPerEpochStore>,
     epoch: EpochId,
     network_handle: randomness::Handle,
+    highest_completed_round: Arc<Mutex<RandomnessRound>>,
 }
 
 impl RandomnessReporter {
@@ -663,6 +675,14 @@ impl RandomnessReporter {
             .tables()?
             .randomness_rounds_pending
             .remove(&round)?;
+        let mut highest_completed_round = self.highest_completed_round.lock();
+        if round > *highest_completed_round {
+            *highest_completed_round = round;
+            epoch_store
+                .tables()?
+                .randomness_highest_completed_round
+                .insert(&SINGLETON_KEY, &highest_completed_round)?;
+        }
         self.network_handle
             .complete_round(epoch_store.committee().epoch(), round);
         Ok(())

@@ -489,6 +489,8 @@ pub struct AuthorityEpochTables {
     pub(crate) randomness_rounds_pending: DBMap<RandomnessRound, ()>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
+    /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
+    pub(crate) randomness_highest_completed_round: DBMap<u64, RandomnessRound>,
 }
 
 // TODO: move deferral related data structures to authority_per_epoch_store_util.rs

@@ -133,6 +133,7 @@ impl UnstartedRandomness {
                 received_partial_sigs: BTreeMap::new(),
                 completed_sigs: BTreeSet::new(),
                 completed_rounds: BTreeSet::new(),
+                recovered_last_completed_round: None,
             },
             handle,
         )
