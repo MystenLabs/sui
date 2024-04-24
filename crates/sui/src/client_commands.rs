@@ -618,7 +618,7 @@ pub enum SuiClientCommands {
 #[derive(Args, Debug)]
 pub struct Opts {
     /// An optional gas budget for this transaction (in MIST). If gas budget is not provided, the
-    /// tool will perform a dry run first to get the gas estimate, and then execute the
+    /// tool will first perform a dry run to estimate the gas cost, and then it will execute the
     /// transaction. Please note that this incurs a small cost in performance due to the additional
     /// dry run call.
     #[arg(long)]

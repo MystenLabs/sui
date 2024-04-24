@@ -342,7 +342,10 @@ pub fn ptb_description() -> clap::Command {
         ))
         .arg(arg!(
             --"gas-budget" <MIST>
-            "The gas budget for the transaction, in MIST."
+            "An optional gas budget for this PTB (in MIST). If gas budget is not provided, the \
+            tool will first perform a dry run to estimate the gas cost, and then it will execute \
+            the transaction. Please note that this incurs a small cost in performance due to the \
+            additional dry run call."
         ))
         .arg(arg!(
             --"make-move-vec" <MAKE_MOVE_VEC>
