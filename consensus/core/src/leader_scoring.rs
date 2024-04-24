@@ -3,7 +3,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fmt::Debug,
     ops::Bound::{Excluded, Included},
     sync::Arc,
@@ -186,6 +186,12 @@ impl ReputationScores {
     }
 }
 
+/// UnscoredSubdag represents a collection of subdags across multiple commits.
+/// These subdags are considered unscored for the purposes of leader schedule
+/// change. On a leader schedule change, reputation scores will be calculated
+/// based on the dags collected in this struct. Similar graph traversal methods
+/// that are provided in DagState are also added here to help calculate the
+/// scores.
 pub(crate) struct UnscoredSubdag {
     pub context: Arc<Context>,
     pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
@@ -213,7 +219,9 @@ impl UnscoredSubdag {
             .keys()
             .map(|block_ref| block_ref.round)
             .filter(|round| *round != 0)
-            .collect::<Vec<_>>()
+            .collect::<HashSet<Round>>()
+            .into_iter()
+            .collect::<Vec<Round>>()
     }
 
     pub(crate) fn find_supported_block(
