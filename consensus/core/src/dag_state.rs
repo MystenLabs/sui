@@ -511,6 +511,10 @@ impl DagState {
                 return;
             }
             assert_eq!(commit.index(), last_commit.index() + 1);
+
+            if commit.timestamp_ms() < last_commit.timestamp_ms() {
+                panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
+            }
         } else {
             assert_eq!(commit.index(), 1);
         }
