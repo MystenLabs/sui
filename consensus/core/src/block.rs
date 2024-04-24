@@ -5,8 +5,7 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     ops::Deref,
-    sync::{Arc, OnceLock},
-    time::{Instant, SystemTime},
+    sync::Arc,
 };
 
 use bytes::Bytes;
@@ -30,25 +29,6 @@ pub(crate) const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
-
-// Returns the current time expressed as UNIX timestamp in milliseconds.
-// Calculated with Rust Instant to ensure monotonicity.
-pub(crate) fn timestamp_utc_ms() -> BlockTimestampMs {
-    static UNIX_EPOCH: OnceLock<Instant> = OnceLock::new();
-    let unix_epoch_instant = UNIX_EPOCH.get_or_init(|| {
-        let now = Instant::now();
-        let duration_since_unix_epoch =
-            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-                Ok(d) => d,
-                Err(e) => panic!("SystemTime before UNIX EPOCH! {e}"),
-            };
-        now.checked_sub(duration_since_unix_epoch).unwrap()
-    });
-    Instant::now()
-        .checked_duration_since(*unix_epoch_instant)
-        .unwrap()
-        .as_millis() as BlockTimestampMs
-}
 
 /// Sui transaction in serialised bytes
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]

@@ -16,8 +16,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     block::{
-        timestamp_utc_ms, Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock,
-        Slot, VerifiedBlock, GENESIS_ROUND,
+        Block, BlockAPI, BlockRef, BlockTimestampMs, BlockV1, Round, SignedBlock, Slot,
+        VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
     commit_observer::CommitObserver,
@@ -152,13 +152,13 @@ impl Core {
         let max_ancestor_timestamp = ancestor_blocks
             .iter()
             .fold(0, |ts, b| ts.max(b.timestamp_ms()));
-        let wait_ms = max_ancestor_timestamp.saturating_sub(timestamp_utc_ms());
+        let wait_ms = max_ancestor_timestamp.saturating_sub(self.context.clock.timestamp_utc_ms());
         if wait_ms > 0 {
             warn!(
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
             );
-            std::thread::sleep(Duration::from_millis(wait_ms as u64));
+            std::thread::sleep(Duration::from_millis(wait_ms));
         }
         // Recover the last available quorum to correctly advance the threshold clock.
         let last_quorum = self.dag_state.read().last_quorum();
@@ -303,7 +303,10 @@ impl Core {
                 return None;
             }
             if Duration::from_millis(
-                timestamp_utc_ms().saturating_sub(self.last_proposed_timestamp_ms()),
+                self.context
+                    .clock
+                    .timestamp_utc_ms()
+                    .saturating_sub(self.last_proposed_timestamp_ms()),
             ) < self.context.parameters.min_round_delay
             {
                 return None;
@@ -348,7 +351,7 @@ impl Core {
 
         // Ensure ancestor timestamps are not more advanced than the current time.
         // Also catch the issue if system's clock go backwards.
-        let now = timestamp_utc_ms();
+        let now = self.context.clock.timestamp_utc_ms();
         ancestors.iter().for_each(|block| {
             assert!(
                 block.timestamp_ms() <= now,

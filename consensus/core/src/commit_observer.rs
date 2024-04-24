@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI, VerifiedBlock},
+    block::{BlockAPI, VerifiedBlock},
     commit::{load_committed_subdag_from_store, CommitAPI, CommitIndex, CommittedSubDag},
     context::Context,
     dag_state::DagState,
@@ -130,7 +130,7 @@ impl CommitObserver {
     }
 
     fn report_metrics(&self, committed: &[CommittedSubDag]) {
-        let utc_now = timestamp_utc_ms();
+        let utc_now = self.context.clock.timestamp_utc_ms();
         let mut total = 0;
         for block in committed.iter().flat_map(|dag| &dag.blocks) {
             let latency_ms = utc_now

@@ -14,7 +14,7 @@ use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    block::{BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, TrustedCommit},
     commit_syncer::CommitVoteMonitor,
@@ -108,7 +108,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
         // Reject block with timestamp too far in the future.
-        let now = timestamp_utc_ms();
+        let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =
             Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
         if forward_time_drift > self.context.parameters.max_forward_time_drift {

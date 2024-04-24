@@ -45,7 +45,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         Commit, CommitAPI as _, CommitDigest, CommitRef, TrustedCommit, GENESIS_COMMIT_INDEX,
@@ -454,7 +454,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
 
         // 8. Make sure fetched block timestamps are lower than current time.
         for block in &fetched_blocks {
-            let now_ms = timestamp_utc_ms();
+            let now_ms = inner.context.clock.timestamp_utc_ms();
             let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
             if forward_drift == 0 {
                 continue;

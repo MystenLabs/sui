@@ -9,6 +9,7 @@ use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tracing::info;
 
+use crate::context::Clock;
 use crate::{
     authority_service::AuthorityService,
     block_manager::BlockManager,
@@ -158,6 +159,7 @@ where
             parameters,
             protocol_config,
             initialise_metrics(registry),
+            Arc::new(Clock::new()),
         ));
         let start_time = Instant::now();
 
@@ -347,7 +349,7 @@ mod tests {
     use super::*;
     use crate::{
         authority_node::AuthorityService,
-        block::{timestamp_utc_ms, BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -511,7 +513,7 @@ mod tests {
         ));
 
         // Test delaying blocks with time drift.
-        let now = timestamp_utc_ms();
+        let now = context.clock.timestamp_utc_ms();
         let max_drift = context.parameters.max_forward_time_drift;
         let input_block = VerifiedBlock::new_for_test(
             TestBlock::new(9, 0)

@@ -18,7 +18,7 @@ use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, Instant};
 use tracing::{debug, error, info, warn};
 
-use crate::block::{timestamp_utc_ms, BlockRef, SignedBlock, VerifiedBlock};
+use crate::block::{BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::core_thread::CoreThreadDispatcher;
@@ -553,7 +553,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
             // Dropping is ok because the block will be refetched.
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
-            let now = timestamp_utc_ms();
+            let now = context.clock.timestamp_utc_ms();
             if now < verified_block.timestamp_ms() {
                 warn!(
                     "Fetched block {} timestamp {} is in the future (now={}). Ignoring.",
