@@ -89,21 +89,6 @@ impl CommitObserver {
     }
 
     fn recover_and_send_commits(&mut self, last_processed_commit_index: CommitIndex) {
-        // TODO: remove this check, to allow consensus to regenerate commits?
-        let last_commit = self
-            .store
-            .read_last_commit()
-            .expect("Reading the last commit should not fail");
-
-        if let Some(last_commit) = last_commit {
-            let last_commit_index = last_commit.index();
-
-            assert!(last_commit_index >= last_processed_commit_index);
-            if last_commit_index == last_processed_commit_index {
-                return;
-            }
-        };
-
         // We should not send the last processed commit again, so last_processed_commit_index+1
         let unsent_commits = self
             .store
@@ -115,16 +100,17 @@ impl CommitObserver {
         let mut last_sent_commit_index = last_processed_commit_index;
         for commit in unsent_commits {
             // Commit index must be continuous.
-            assert_eq!(commit.index(), last_sent_commit_index + 1);
-            let committed_sub_dag = load_committed_subdag_from_store(self.store.as_ref(), commit);
+            if commit.index() != last_sent_commit_index + 1 {
+                return;
+            }
 
+            let committed_sub_dag = load_committed_subdag_from_store(self.store.as_ref(), commit);
             self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
                 panic!(
                     "Failed to send commit during recovery, probably due to shutdown: {:?}",
                     e
                 )
             });
-
             last_sent_commit_index += 1;
         }
     }
