@@ -502,6 +502,7 @@ pub enum MatchPattern_ {
         Option<Vec<Type>>,
         Fields<MatchPattern>,
     ),
+    Constant(ModuleIdent, ConstantName),
     Binder(Mutability, Var, /* unused binding */ bool),
     Literal(Value),
     Wildcard,
@@ -1940,6 +1941,9 @@ impl AstDebug for MatchPattern_ {
                     pat.ast_debug(w);
                 });
                 w.write("} ");
+            }
+            Constant(mident, const_) => {
+                w.write(format!("const#{}::{}", mident, const_));
             }
             Binder(mut_, name, unused_binding) => {
                 mut_.ast_debug(w);

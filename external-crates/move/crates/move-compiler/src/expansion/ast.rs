@@ -464,7 +464,7 @@ pub enum MatchPattern_ {
         Fields<MatchPattern>,
         Option<Loc>,
     ),
-    HeadConstructor(ModuleAccess, Option<Vec<Type>>),
+    ModuleAccessName(ModuleAccess, Option<Vec<Type>>),
     Binder(Mutability, Var),
     Literal(Value),
     ErrorPat,
@@ -1805,7 +1805,7 @@ impl AstDebug for MatchPattern_ {
                 }
                 w.write("} ");
             }
-            HeadConstructor(name, tys_opt) => {
+            ModuleAccessName(name, tys_opt) => {
                 name.ast_debug(w);
                 if let Some(ss) = tys_opt {
                     w.write("<");

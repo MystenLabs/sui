@@ -2171,6 +2171,15 @@ fn match_pattern_(
         };
     }
 
+    macro_rules! maybe_add_drop {
+        ($ty:expr, $msg:expr) => {
+            // If the thing we are matching isn't a ref, a wildcard (or lit/const) drops it.
+            if mut_ref.is_none() && wildcard_needs_drop {
+                context.add_ability_constraint(loc, Some($msg), $ty.clone(), Ability_::Drop);
+            }
+        };
+    }
+
     match pat_ {
         P::Variant(m, enum_, variant, tys_opt, fields) => {
             let (bt, targs) = core::make_enum_type(context, loc, &m, &enum_, tys_opt);
@@ -2255,7 +2264,31 @@ fn match_pattern_(
             };
             T::pat(bt, sp(loc, pat_))
         }
-
+        P::Constant(m, const_) => {
+            let ty = core::make_constant_type(context, loc, &m, &const_);
+            context
+                .used_module_members
+                .entry(m.value)
+                .or_default()
+                .insert(const_.value());
+            context.add_ability_constraint(
+                loc,
+                Some(format!(
+                    "Invalid 'copy' of value with the '{}' ability. \
+                    Literal patterns copy their values for equality checking",
+                    Ability_::Copy
+                )),
+                ty.clone(),
+                Ability_::Copy,
+            );
+            let msg = format!(
+                "Cannot match constants against values without the '{}' ability. \
+                              Constant patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
+            T::pat(rtype!(ty), sp(loc, TP::Constant(m, const_)))
+        }
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Wildcard))
@@ -2272,30 +2305,29 @@ fn match_pattern_(
             context.add_ability_constraint(
                 loc,
                 Some(format!(
-                    "Cannot ignore values without the '{}' ability. \
+                    "Invalid 'copy' of value with the '{}' ability. \
                     Literal patterns copy their values for equality checking",
                     Ability_::Copy
                 )),
                 ty.clone(),
                 Ability_::Copy,
             );
+            let msg = format!(
+                "Cannot match literals against values without the '{}' ability. \
+                              Literal patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
             T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
-            if mut_ref.is_none() && wildcard_needs_drop {
-                // If the thing we are matching isn't a ref, a wildcard drops it.
-                context.add_ability_constraint(
-                    loc,
-                    Some(format!(
-                        "Cannot ignore values without the '{}' ability. \
-                        '_' patterns discard their values",
-                        Ability_::Drop
-                    )),
-                    ty.clone(),
-                    Ability_::Drop,
-                );
-            }
+            let msg = format!(
+                "Cannot ignore values without the '{}' ability. \
+                              '_' patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
             T::pat(rtype!(ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
@@ -2434,6 +2466,7 @@ fn match_pattern_has_rhs_binders(
             match_pattern_has_rhs_binders(lhs, rhs_binders)
                 || match_pattern_has_rhs_binders(rhs, rhs_binders)
         }
+        N::MatchPattern_::Constant(_, _) => false,
         N::MatchPattern_::Literal(_) => false,
         N::MatchPattern_::Wildcard => false,
         N::MatchPattern_::ErrorPat => false,
