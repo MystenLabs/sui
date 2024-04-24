@@ -3,12 +3,15 @@
 
 use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
 
-use consensus_config::ProtocolKeyPair;
+use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_macros::fail_point;
-use tokio::sync::{broadcast, watch};
+use tokio::{
+    sync::{broadcast, watch},
+    time::Instant,
+};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -290,10 +293,13 @@ impl Core {
             return None;
         }
 
+        // There must be a quorum of blocks from the previous round.
+        let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
+
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
         if !force {
-            if !self.last_quorum_leaders_exist() {
+            if !self.leaders_exist(quorum_round) {
                 return None;
             }
             if Duration::from_millis(
@@ -303,6 +309,28 @@ impl Core {
                 return None;
             }
         }
+
+        let leader_authority = &self
+            .context
+            .committee
+            .authority(self.first_leader(quorum_round))
+            .hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposal_leader_wait_ms
+            .with_label_values(&[leader_authority])
+            .inc_by(
+                Instant::now()
+                    .saturating_duration_since(self.threshold_clock.get_quorum_ts())
+                    .as_millis() as u64,
+            );
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposal_leader_wait_count
+            .with_label_values(&[leader_authority])
+            .inc();
 
         // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
         // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
@@ -491,14 +519,12 @@ impl Core {
         ancestors
     }
 
-    /// Checks whether all the leaders of the previous quorum exist.
+    /// Checks whether all the leaders of the round exist.
     /// TODO: we can leverage some additional signal here in order to more cleverly manipulate later the leader timeout
     /// Ex if we already have one leader - the first in order - we might don't want to wait as much.
-    fn last_quorum_leaders_exist(&self) -> bool {
-        let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
-
+    fn leaders_exist(&self, round: Round) -> bool {
         let dag_state = self.dag_state.read();
-        for leader in self.leaders(quorum_round) {
+        for leader in self.leaders(round) {
             // Search for all the leaders. If at least one is not found, then return false.
             // A linear search should be fine here as the set of elements is not expected to be small enough and more sophisticated
             // data structures might not give us much here.
@@ -517,6 +543,11 @@ impl Core {
             .into_iter()
             .map(|authority_index| Slot::new(round, authority_index))
             .collect()
+    }
+
+    /// Returns the 1st leader of the round.
+    fn first_leader(&self, round: Round) -> AuthorityIndex {
+        self.leaders(round).first().unwrap().authority
     }
 
     fn last_proposed_timestamp_ms(&self) -> BlockTimestampMs {
