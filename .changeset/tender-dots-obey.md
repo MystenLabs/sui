@@ -2,4 +2,4 @@
 '@mysten/zklogin': minor
 ---
 
-add support for verify zklogin personal msg
+add support for verify zklogin signature in sdk
