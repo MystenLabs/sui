@@ -179,14 +179,14 @@ mod test {
                 grace_period_nodes.remove(&cur_node);
             }
 
-            error!("Matched probability threshold for failpoint. Failing...");
-
             let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
             let dead_until = Instant::now() + restart_after;
 
             // Prevent the same node from being restarted again rapidly.
             let alive_until = dead_until + Duration::from_millis(rng.gen_range(0..30000));
             grace_period_nodes.insert(cur_node, alive_until);
+
+            error!(?cur_node, ?dead_until, ?alive_until, "killing node");
 
             *dead_validator = Some(DeadValidator {
                 node_id: cur_node,
