@@ -18,7 +18,7 @@ use sui_types::authenticator_state::{ActiveJwk, AuthenticatorStateInner};
 use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::{DynamicFieldType, Field};
 use sui_types::signature::GenericSignature;
-use sui_types::signature::{AuthenticatorTrait, VerifyParams};
+use sui_types::signature::VerifyParams;
 use sui_types::transaction::TransactionData;
 use sui_types::{TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS};
 use tracing::warn;
@@ -129,12 +129,8 @@ pub(crate) async fn verify_zklogin_signature(
             if tx_sender != author.into() {
                 return Err(Error::Client("Tx sender mismatch author".to_string()));
             }
-            match zklogin_sig.verify_authenticator(
-                &intent_msg,
-                tx_sender,
-                Some(curr_epoch),
-                &verify_params,
-            ) {
+            let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+            match sig.verify_authenticator(&intent_msg, tx_sender, curr_epoch, &verify_params) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],
@@ -156,12 +152,8 @@ pub(crate) async fn verify_zklogin_signature(
                 data,
             );
 
-            match zklogin_sig.verify_authenticator(
-                &intent_msg,
-                author.into(),
-                Some(curr_epoch),
-                &verify_params,
-            ) {
+            let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+            match sig.verify_authenticator(&intent_msg, author.into(), curr_epoch, &verify_params) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],

@@ -43,7 +43,7 @@ use sui_types::crypto::{DefaultHash, PublicKey};
 use sui_types::error::SuiResult;
 use sui_types::multisig::{MultiSig, MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
-use sui_types::signature::{AuthenticatorTrait, GenericSignature, VerifyParams};
+use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::transaction::{TransactionData, TransactionDataAPI};
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
 use sui_types::zk_login_util::get_zklogin_inputs;
@@ -80,6 +80,8 @@ pub enum KeyToolCommand {
         tx_bytes: String,
         #[clap(long)]
         sig: Option<GenericSignature>,
+        #[clap(long, default_value = "0")]
+        cur_epoch: u64,
     },
     /// Given a Base64 encoded MultiSig signature, decode its components.
     /// If tx_bytes is passed in, verify the multisig.
@@ -88,6 +90,8 @@ pub enum KeyToolCommand {
         multisig: MultiSig,
         #[clap(long)]
         tx_bytes: Option<String>,
+        #[clap(long, default_value = "0")]
+        cur_epoch: u64,
     },
     /// Generate a new keypair with key scheme flag {ed25519 | secp256k1 | secp256r1}
     /// with optional derivation path, default to m/44'/784'/0'/0'/0' for ed25519 or
@@ -265,7 +269,7 @@ pub enum KeyToolCommand {
         intent_scope: u8,
         /// The current epoch for the network to verify the signature's max_epoch against.
         #[clap(long)]
-        curr_epoch: Option<EpochId>,
+        cur_epoch: Option<EpochId>,
         /// The network to verify the signature for, determines ZkLoginEnv.
         #[clap(long, default_value = "devnet")]
         network: String,
@@ -477,7 +481,11 @@ impl KeyToolCommand {
                 CommandOutput::Convert(result)
             }
 
-            KeyToolCommand::DecodeMultiSig { multisig, tx_bytes } => {
+            KeyToolCommand::DecodeMultiSig {
+                multisig,
+                tx_bytes,
+                cur_epoch,
+            } => {
                 let pks = multisig.get_pk().pubkeys();
                 let sigs = multisig.get_sigs();
                 let bitmap = multisig.get_indices()?;
@@ -521,7 +529,7 @@ impl KeyToolCommand {
                     let res = s.verify_authenticator(
                         &IntentMessage::new(Intent::sui_transaction(), tx_data),
                         address,
-                        None,
+                        cur_epoch,
                         &VerifyParams::default(),
                     );
                     output.transaction_result = format!("{:?}", res);
@@ -530,7 +538,11 @@ impl KeyToolCommand {
                 CommandOutput::DecodeMultiSig(output)
             }
 
-            KeyToolCommand::DecodeOrVerifyTx { tx_bytes, sig } => {
+            KeyToolCommand::DecodeOrVerifyTx {
+                tx_bytes,
+                sig,
+                cur_epoch,
+            } => {
                 let tx_bytes = Base64::decode(&tx_bytes)
                     .map_err(|e| anyhow!("Invalid base64 key: {:?}", e))?;
                 let tx_data: TransactionData = bcs::from_bytes(&tx_bytes)?;
@@ -543,7 +555,7 @@ impl KeyToolCommand {
                         let res = s.verify_authenticator(
                             &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
                             tx_data.sender(),
-                            None,
+                            cur_epoch,
                             &VerifyParams::default(),
                         );
                         CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {
@@ -1052,14 +1064,14 @@ impl KeyToolCommand {
                 sig,
                 bytes,
                 intent_scope,
-                curr_epoch,
+                cur_epoch,
                 network,
             } => {
                 match GenericSignature::from_bytes(
                     &Base64::decode(&sig).map_err(|e| anyhow!("Invalid base64 sig: {:?}", e))?,
                 )? {
                     GenericSignature::ZkLoginAuthenticator(zk) => {
-                        if bytes.is_none() || curr_epoch.is_none() {
+                        if bytes.is_none() || cur_epoch.is_none() {
                             return Ok(CommandOutput::ZkLoginSigVerify(ZkLoginSigVerifyResponse {
                                 data: None,
                                 parsed: Some(serde_json::to_string(&zk)?),
@@ -1090,10 +1102,11 @@ impl KeyToolCommand {
                                         .map_err(|e| anyhow!("Invalid base64 tx data: {:?}", e))?,
                                 )?;
 
-                                let res = zk.verify_authenticator(
+                                let sig = GenericSignature::ZkLoginAuthenticator(zk.clone());
+                                let res = sig.verify_authenticator(
                                     &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
                                     tx_data.execution_parts().1,
-                                    Some(curr_epoch.unwrap()),
+                                    cur_epoch.unwrap(),
                                     &verify_params,
                                 );
                                 (serde_json::to_string(&tx_data)?, res)
@@ -1105,10 +1118,11 @@ impl KeyToolCommand {
                                     })?,
                                 )?;
 
-                                let res = zk.verify_authenticator(
+                                let sig = GenericSignature::ZkLoginAuthenticator(zk.clone());
+                                let res = sig.verify_authenticator(
                                     &IntentMessage::new(Intent::personal_message(), data.clone()),
                                     (&zk).try_into()?,
-                                    Some(curr_epoch.unwrap()),
+                                    cur_epoch.unwrap(),
                                     &verify_params,
                                 );
                                 (serde_json::to_string(&data)?, res)

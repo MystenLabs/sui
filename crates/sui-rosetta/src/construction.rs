@@ -18,6 +18,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
+use sui_types::signature_verification::verify_sender_signed_data_message_signatures;
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
@@ -111,7 +112,14 @@ pub async fn combine(
             &[&*flag, &*sig_bytes, &*pub_key].concat(),
         )?],
     );
-    signed_tx.verify_signature(&VerifyParams::default())?;
+    // TODO: this will likely fail with zklogin authenticator, since we do not know the current epoch.
+    // As long as coinbase doesn't need to use zklogin for custodial wallets this is okay.
+    let place_holder_epoch = 0;
+    verify_sender_signed_data_message_signatures(
+        &signed_tx,
+        place_holder_epoch,
+        &VerifyParams::default(),
+    )?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 
     Ok(ConstructionCombineResponse {
