@@ -61,6 +61,11 @@ module sui_system::sui_system {
         version: u64,
     }
 
+    public struct NativeStakedSui has key {
+        id: UID,
+        staked_sui: StakedSui,
+    }
+
     const ENotSystemAddress: u64 = 0;
     const EWrongInnerVersion: u64 = 1;
 
@@ -241,6 +246,31 @@ module sui_system::sui_system {
         self.request_add_stake(stake, validator_address, ctx)
     }
 
+    /// Add native stake to a validator's staking pool.
+    public entry fun request_add_native_stake(
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let native_staked_sui = request_add_native_stake_non_entry(wrapper, stake, validator_address, ctx);
+        transfer::transfer(native_staked_sui, ctx.sender());
+    }
+
+    /// The non-entry version of `request_add_native_stake`, which returns the native staked SUI instead of transferring it to the sender.
+    public fun request_add_native_stake_non_entry(
+        wrapper: &mut SuiSystemState,
+        stake: Coin<SUI>,
+        validator_address: address,
+        ctx: &mut TxContext,
+    ): NativeStakedSui {
+        let staked_sui = request_add_stake_non_entry(wrapper, stake, validator_address, ctx);
+        NativeStakedSui {
+            id: object::new(ctx),
+            staked_sui,
+        }
+    }
+
     /// Add stake to a validator's staking pool using multiple coins.
     public entry fun request_add_stake_mul_coin(
         wrapper: &mut SuiSystemState,
@@ -270,6 +300,28 @@ module sui_system::sui_system {
         staked_sui: StakedSui,
         ctx: &mut TxContext,
     ) : Balance<SUI> {
+        let self = load_system_state_mut(wrapper);
+        self.request_withdraw_stake(staked_sui, ctx)
+    }
+
+    /// Withdraw native stake from a validator's staking pool.
+    public entry fun request_withdraw_native_stake(
+        wrapper: &mut SuiSystemState,
+        native_staked_sui: NativeStakedSui,
+        ctx: &mut TxContext,
+    ) {
+        let withdrawn_stake = request_withdraw_native_stake_non_entry(wrapper, native_staked_sui, ctx);
+        transfer::public_transfer(withdrawn_stake.into_coin(ctx), ctx.sender());
+    }
+
+    /// Non-entry version of `request_withdraw_native_stake` that returns the withdrawn SUI instead of transferring it to the sender.
+    public fun request_withdraw_native_stake_non_entry(
+        wrapper: &mut SuiSystemState,
+        native_staked_sui: NativeStakedSui,
+        ctx: &mut TxContext,
+    ) : Balance<SUI> {
+        let NativeStakedSui { id, staked_sui } = native_staked_sui;
+        object::delete(id);
         let self = load_system_state_mut(wrapper);
         self.request_withdraw_stake(staked_sui, ctx)
     }
