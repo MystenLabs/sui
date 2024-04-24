@@ -108,6 +108,7 @@ impl Linearizer {
             let commit = Commit::new(
                 sub_dag.commit_index,
                 last_commit_digest,
+                sub_dag.timestamp_ms,
                 sub_dag.leader,
                 sub_dag
                     .blocks
@@ -125,7 +126,7 @@ impl Linearizer {
             let commit = TrustedCommit::new_trusted(commit, serialized);
 
             // Buffer commit in dag state for persistence later.
-            // This also updates the last commit properties, including rounds and timestamp, in the dag state.
+            // This also updates the last committed rounds.
             self.dag_state.write().add_commit(commit.clone());
 
             committed_sub_dags.push(sub_dag);
@@ -259,6 +260,7 @@ mod tests {
         let first_commit_data = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
+            0,
             first_leader.reference(),
             blocks.clone(),
         );
@@ -310,6 +312,7 @@ mod tests {
         let expected_second_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
+            0,
             second_leader.reference(),
             blocks.clone(),
         );

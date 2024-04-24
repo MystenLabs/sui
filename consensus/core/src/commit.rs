@@ -18,7 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
-    storage::{CommitInfo, Store},
+    storage::Store,
 };
 
 /// Index of a commit among all consensus commits.
@@ -41,9 +41,9 @@ pub(crate) type WaveNumber = u32;
 /// [`Commit`] summarizes [`CommittedSubDag`] for storage and network communications.
 ///
 /// Validators should be able to reconstruct a sequence of CommittedSubDag from the
-/// corresponding Commit, CommitData and blocks contained in the Commit.
+/// corresponding Commit and blocks referenced in the Commit.
 /// A field must meet these requirements to be added to Commit:
-/// - helps with recovering CommittedSubDag locally and for peers catching up.
+/// - helps with recovery locally and for peers catching up.
 /// - cannot be derived from a sequence of Commits and other persisted values.
 ///
 /// For example, transactions in blocks should not be included in Commit, because they can be
@@ -61,12 +61,14 @@ impl Commit {
     pub(crate) fn new(
         index: CommitIndex,
         previous_digest: CommitDigest,
+        timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
         Commit::V1(CommitV1 {
             index,
             previous_digest,
+            timestamp_ms,
             leader,
             blocks,
         })
@@ -84,6 +86,7 @@ pub(crate) trait CommitAPI {
     fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
     fn previous_digest(&self) -> CommitDigest;
+    fn timestamp_ms(&self) -> BlockTimestampMs;
     fn leader(&self) -> BlockRef;
     fn blocks(&self) -> &[BlockRef];
 }
@@ -98,6 +101,8 @@ pub(crate) struct CommitV1 {
     /// Digest of the previous commit.
     /// Set to CommitDigest::MIN for the first commit after genesis.
     previous_digest: CommitDigest,
+    /// Timestamp of the commit, max of the timestamp of the leader block and previous Commit timestamp.
+    timestamp_ms: BlockTimestampMs,
     /// A reference to the commit leader.
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
@@ -115,6 +120,10 @@ impl CommitAPI for CommitV1 {
 
     fn previous_digest(&self) -> CommitDigest {
         self.previous_digest
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
     }
 
     fn leader(&self) -> BlockRef {
@@ -154,10 +163,11 @@ impl TrustedCommit {
     pub(crate) fn new_for_test(
         index: CommitIndex,
         previous_digest: CommitDigest,
+        timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
-        let commit = Commit::new(index, previous_digest, leader, blocks);
+        let commit = Commit::new(index, previous_digest, timestamp_ms, leader, blocks);
         let serialized = commit.serialize().unwrap();
         Self::new_trusted(commit, serialized)
     }
@@ -343,7 +353,6 @@ impl fmt::Debug for CommittedSubDag {
 pub fn load_committed_subdag_from_store(
     store: &dyn Store,
     commit: TrustedCommit,
-    commit_info: CommitInfo,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
     let commit_blocks = store
@@ -366,7 +375,7 @@ pub fn load_committed_subdag_from_store(
     CommittedSubDag::new(
         leader_block_ref,
         blocks,
-        commit_info.timestamp_ms,
+        commit.timestamp_ms(),
         commit.index(),
     )
 }
@@ -585,14 +594,11 @@ mod tests {
         let commit = TrustedCommit::new_for_test(
             commit_index,
             CommitDigest::MIN,
+            leader_block.timestamp_ms(),
             leader_ref,
             blocks.clone(),
         );
-        let commit_info = CommitInfo {
-            committed_rounds: vec![0; num_authorities as usize],
-            timestamp_ms: leader_block.timestamp_ms(),
-        };
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit, commit_info);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(

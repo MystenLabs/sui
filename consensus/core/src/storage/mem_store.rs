@@ -205,19 +205,6 @@ impl Store for MemStore {
         Ok(votes)
     }
 
-    fn read_commit_info(&self, commit_index: CommitIndex) -> ConsensusResult<Option<CommitInfo>> {
-        let inner = self.inner.read();
-        let info = inner
-            .commit_info
-            .range((
-                Included((commit_index, CommitDigest::MIN)),
-                Included((commit_index, CommitDigest::MAX)),
-            ))
-            .map(|(_, info)| info.clone())
-            .next();
-        Ok(info)
-    }
-
     fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
         let inner = self.inner.read();
         Ok(inner

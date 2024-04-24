@@ -116,13 +116,7 @@ impl CommitObserver {
         for commit in unsent_commits {
             // Commit index must be continuous.
             assert_eq!(commit.index(), last_sent_commit_index + 1);
-            let commit_info = self
-                .store
-                .read_commit_info(commit.index())
-                .unwrap()
-                .unwrap();
-            let committed_subdag =
-                load_committed_subdag_from_store(self.store.as_ref(), commit, commit_info);
+            let committed_subdag = load_committed_subdag_from_store(self.store.as_ref(), commit);
             self.sender.send(committed_subdag).unwrap_or_else(|e| {
                 panic!(
                     "Failed to send commit during recovery, probably due to shutdown: {:?}",
@@ -230,10 +224,14 @@ mod tests {
         for (idx, subdag) in commits.iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
-            assert!(leaders[idx].timestamp_ms() <= subdag.timestamp_ms);
-            if idx > 0 {
-                assert!(commits[idx - 1].timestamp_ms <= subdag.timestamp_ms);
-            }
+            let expected_ts = if idx == 0 {
+                leaders[idx].timestamp_ms()
+            } else {
+                leaders[idx]
+                    .timestamp_ms()
+                    .max(commits[idx - 1].timestamp_ms)
+            };
+            assert_eq!(expected_ts, subdag.timestamp_ms);
             if idx == 0 {
                 // First subdag includes the leader block plus all ancestor blocks
                 // of the leader minus the genesis round blocks

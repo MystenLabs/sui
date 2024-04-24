@@ -37,7 +37,7 @@ pub(crate) struct RocksDBStore {
     /// Collects votes on commits.
     /// TODO: batch multiple votes into a single row.
     commit_votes: DBMap<(CommitIndex, CommitDigest, BlockRef), ()>,
-    /// Stores info related to Commit that helps recovering CommittedSubDag.
+    /// Stores info related to Commit that helps recovery.
     commit_info: DBMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
@@ -293,20 +293,6 @@ impl Store for RocksDBStore {
             votes.push(block_ref);
         }
         Ok(votes)
-    }
-
-    fn read_commit_info(&self, commit_index: CommitIndex) -> ConsensusResult<Option<CommitInfo>> {
-        let Some(info) = self
-            .commit_info
-            .safe_range_iter((
-                Included((commit_index, CommitDigest::MIN)),
-                Included((commit_index, CommitDigest::MAX)),
-            ))
-            .next()
-        else {
-            return Ok(None);
-        };
-        Ok(Some(info?.1))
     }
 
     fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
