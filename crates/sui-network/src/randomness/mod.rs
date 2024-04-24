@@ -74,6 +74,7 @@ impl Handle {
         authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
         dkg_output: dkg::Output<bls12381::G2Element, bls12381::G2Element>,
         aggregation_threshold: u16,
+        recovered_last_completed_round: Option<RandomnessRound>, // set to None if not starting up mid-epoch
     ) {
         self.sender
             .try_send(RandomnessMessage::UpdateEpoch(
@@ -81,6 +82,7 @@ impl Handle {
                 authority_info,
                 dkg_output,
                 aggregation_threshold,
+                recovered_last_completed_round,
             ))
             .expect("RandomnessEventLoop mailbox should not overflow or be closed")
     }
@@ -124,7 +126,8 @@ enum RandomnessMessage {
         EpochId,
         HashMap<AuthorityName, (PeerId, PartyId)>,
         dkg::Output<bls12381::G2Element, bls12381::G2Element>,
-        u16, // aggregation_threshold
+        u16,                     // aggregation_threshold
+        Option<RandomnessRound>, // recovered_last_completed_round
     ),
     SendPartialSignatures(EpochId, RandomnessRound),
     CompleteRound(EpochId, RandomnessRound),
@@ -152,6 +155,7 @@ struct RandomnessEventLoop {
         BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
     completed_sigs: BTreeSet<(EpochId, RandomnessRound)>,
     completed_rounds: BTreeSet<(EpochId, RandomnessRound)>,
+    recovered_last_completed_round: Option<RandomnessRound>, // reported by RandomnessManager on crash recovery
 }
 
 impl RandomnessEventLoop {
@@ -182,10 +186,15 @@ impl RandomnessEventLoop {
                 authority_info,
                 dkg_output,
                 aggregation_threshold,
+                recovered_last_completed_round,
             ) => {
-                if let Err(e) =
-                    self.update_epoch(epoch, authority_info, dkg_output, aggregation_threshold)
-                {
+                if let Err(e) = self.update_epoch(
+                    epoch,
+                    authority_info,
+                    dkg_output,
+                    aggregation_threshold,
+                    recovered_last_completed_round,
+                ) {
                     error!("BUG: failed to update epoch in RandomnessEventLoop: {e:?}");
                 }
             }
@@ -206,6 +215,7 @@ impl RandomnessEventLoop {
         authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
         dkg_output: dkg::Output<bls12381::G2Element, bls12381::G2Element>,
         aggregation_threshold: u16,
+        recovered_last_completed_round: Option<RandomnessRound>,
     ) -> Result<()> {
         assert!(self.dkg_output.is_none() || new_epoch > self.epoch);
 
@@ -232,6 +242,7 @@ impl RandomnessEventLoop {
         self.authority_info = Arc::new(authority_info);
         self.dkg_output = Some(dkg_output);
         self.aggregation_threshold = aggregation_threshold;
+        self.recovered_last_completed_round = recovered_last_completed_round;
         for (_, task) in std::mem::take(&mut self.send_tasks) {
             task.abort();
         }
@@ -368,8 +379,17 @@ impl RandomnessEventLoop {
             Some((last_completed_epoch, last_completed_round)) => {
                 (*last_completed_epoch, *last_completed_round)
             }
-            // If we just changed epochs and haven't completed any sigs yet, this will be used.
-            None => (self.epoch, RandomnessRound(0)),
+            // If we just changed epochs and haven't completed any sigs yet, or if we
+            // restarted mid-epoch, this will be used.
+            None => (
+                self.epoch,
+                // We don't store completed sigs durably outside of checkpoints, so after a
+                // restart we use the last completed round instead. This is okay because
+                // incomplete rounds with previously-completed sigs will be re-opened
+                // by the RandomnessManager on restart, and we'll simply repeat the process.
+                self.recovered_last_completed_round
+                    .unwrap_or(RandomnessRound(0)),
+            ),
         };
         if epoch == last_completed_epoch
             && round.0
