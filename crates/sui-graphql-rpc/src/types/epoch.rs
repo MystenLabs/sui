@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
-use crate::data::{Db, DbConnection, QueryExecutor};
+use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::server::watermark_task::Watermark;
 
@@ -17,7 +17,7 @@ use super::system_state_summary::SystemStateSummary;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
-use async_graphql::dataloader::{DataLoader, Loader};
+use async_graphql::dataloader::Loader;
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
@@ -274,7 +274,7 @@ impl Epoch {
         checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         if let Some(epoch_id) = filter {
-            let dl: &DataLoader<Db> = ctx.data_unchecked();
+            let DataLoader(dl) = ctx.data_unchecked();
             dl.load_one(EpochKey {
                 epoch_id,
                 checkpoint_viewed_at,

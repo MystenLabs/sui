@@ -32,7 +32,7 @@ impl From<Error> for PackageResolverError {
         match source {
             Error::TypedStore(store_error) => Self::Store {
                 store: STORE,
-                source: Box::new(store_error),
+                source: Arc::new(store_error),
             },
         }
     }
@@ -114,7 +114,7 @@ impl LocalDBPackageStore {
 impl PackageStore for LocalDBPackageStore {
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         let object = self.get(id).await?;
-        Ok(Arc::new(Package::read(&object)?))
+        Ok(Arc::new(Package::read_from_object(&object)?))
     }
 }
 
