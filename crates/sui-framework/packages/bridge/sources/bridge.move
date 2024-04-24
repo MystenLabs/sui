@@ -20,7 +20,6 @@ module bridge::bridge {
         UpdateBridgeLimit, AddTokenOnSui
     };
     use bridge::message_types;
-    use bridge::result::{Self, Result};
     use bridge::treasury::{Self, BridgeTreasury};
 
     const MESSAGE_VERSION: u8 = 1;
@@ -92,7 +91,6 @@ module bridge::bridge {
     const ETokenAlreadyClaimed: u64 = 15;
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
-    const ETransferLimitExceed: u64 = 18;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -305,23 +303,21 @@ module bridge::bridge {
         bridge_seq_num: u64,
         ctx: &mut TxContext,
     ): Coin<T> {
-        let (result, owner) = claim_token_internal<T>(
+        let (maybe_token, owner) = claim_token_internal<T>(
             clock,
             bridge,
             source_chain,
             bridge_seq_num,
             ctx,
         );
-        if (result.is_err()){
-            abort result.unwrap_err()
-        };
         // Only token owner can claim the token
         assert!(ctx.sender() == owner, EUnauthorisedClaim);
-        result.unwrap()
+        assert!(maybe_token.is_some(), ETokenAlreadyClaimed);
+        maybe_token.destroy_some()
     }
 
     // This function can be called by anyone to claim and transfer the token to the recipient
-    // If the token has already been claimed or transfer limit reached, it will return instead of aborting.
+    // If the token has already been claimed, it will return instead of aborting.
     public fun claim_and_transfer_token<T>(
         bridge: &mut Bridge,
         clock: &Clock,
@@ -329,27 +325,15 @@ module bridge::bridge {
         bridge_seq_num: u64,
         ctx: &mut TxContext,
     ) {
-        let (result, owner) = claim_token_internal<T>(clock, bridge, source_chain, bridge_seq_num, ctx);
-        if (result.is_err()) {
-            let err = result.unwrap_err();
-            let key = message::create_key(
-                source_chain,
-                message_types::token(),
-                bridge_seq_num
-            );
-            if (err == ETokenAlreadyClaimed){
-                emit(TokenTransferAlreadyClaimed { message_key: key });
-            } else if (err == ETransferLimitExceed){
-                emit(TokenTransferLimitExceed { message_key: key });
-            } else {
-                abort err
-            };
-            return
-        };
-        transfer::public_transfer(
-            result.unwrap(),
+        let (token, owner) = claim_token_internal<T>(clock, bridge, source_chain, bridge_seq_num, ctx);
+        if (token.is_some()) {
+            transfer::public_transfer(
+                token.destroy_some(),
             owner
-        )
+            )
+        }else{
+            token.destroy_none();
+        };
     }
 
     fun load_inner_mut(bridge: &mut Bridge): &mut BridgeInner {
@@ -382,7 +366,7 @@ module bridge::bridge {
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext,
-    ): (Result<Coin<T>,u64>, address) {
+    ): (Option<Coin<T>>, address) {
         let inner = load_inner_mut(bridge);
         assert!(!inner.paused, EBridgeUnavailable);
 
@@ -406,7 +390,8 @@ module bridge::bridge {
 
         // If already claimed, exit early
         if (record.claimed) {
-            return (result::err(ETokenAlreadyClaimed), owner)
+            emit(TokenTransferAlreadyClaimed { message_key: key });
+            return (option::none(), owner)
         };
 
         let target_chain = token_payload.token_target_chain();
@@ -435,7 +420,8 @@ module bridge::bridge {
                     amount,
                 )
         ) {
-            return (result::err(ETransferLimitExceed), owner)
+            emit(TokenTransferLimitExceed { message_key: key });
+            return (option::none(), owner)
         };
 
         // claim from treasury
@@ -444,7 +430,8 @@ module bridge::bridge {
         // Record changes
         record.claimed = true;
         emit(TokenTransferClaimed { message_key: key });
-        (result::ok(token), owner)
+
+        (option::some(token), owner)
     }
 
     public fun execute_system_message(
