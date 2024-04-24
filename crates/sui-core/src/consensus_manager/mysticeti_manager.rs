@@ -5,7 +5,7 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, NetworkType, Round};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
@@ -78,18 +78,15 @@ impl MysticetiManager {
         store_path
     }
 
-    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> NetworkType {
+    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> ConsensusNetwork {
         if let Ok(type_str) = std::env::var("CONSENSUS_NETWORK") {
             match type_str.to_lowercase().as_str() {
-                "anemo" => return NetworkType::Anemo,
-                "tonic" => return NetworkType::Tonic,
+                "anemo" => return ConsensusNetwork::Anemo,
+                "tonic" => return ConsensusNetwork::Tonic,
                 _ => {}
             }
         }
-        match epoch_store.protocol_config().consensus_network() {
-            ConsensusNetwork::Anemo => NetworkType::Anemo,
-            ConsensusNetwork::Tonic => NetworkType::Tonic,
-        }
+        epoch_store.protocol_config().consensus_network()
     }
 }
 
