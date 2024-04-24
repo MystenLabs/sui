@@ -209,7 +209,7 @@ async fn main() -> Result<()> {
 
 To filter the events returned from your queries, use the following data structures.
 
-:::caution
+:::info
 
 This set of filters applies only to event querying APIs. It differs from the filters offered for the subscriptions API (see following section). In particular, it does not support combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
 
@@ -232,7 +232,7 @@ This set of filters applies only to event querying APIs. It differs from the fil
 
 To create a subscription, you can set a filter to return only the set of events you're interested in listening for. 
 
-:::caution
+:::info
 
 This set of filters applies only to event subscription APIs. It differs from the filters offered for the query API (see previous section). In particular, it supports combinations like `"All": [...]`, `"Any": [...]`, `"And": [_, _]`, `"Or": [_, _]`, and `"Not": _`. 
 
