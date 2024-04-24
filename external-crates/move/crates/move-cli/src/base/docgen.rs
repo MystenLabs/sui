@@ -58,68 +58,69 @@ pub struct Docgen {
 impl Docgen {
     /// Calling the Docgen
     pub fn execute(self, path: Option<PathBuf>, config: BuildConfig) -> anyhow::Result<()> {
-        let model = config.move_model_for_package(
-            &reroot_path(path).unwrap(),
-            ModelConfig {
-                all_files_as_targets: false,
-                target_filter: None,
-            },
-        )?;
+        // let model = config.move_model_for_package(
+        //     &reroot_path(path).unwrap(),
+        //     ModelConfig {
+        //         all_files_as_targets: false,
+        //         target_filter: None,
+        //     },
+        // )?;
 
-        let mut options = DocgenOptions::default();
+        // let mut options = DocgenOptions::default();
 
-        if !self.template.is_empty() {
-            options.root_doc_templates = self.template;
-        }
-        if self.section_level_start.is_some() {
-            options.section_level_start = self.section_level_start.unwrap();
-        }
-        if self.exclude_private_fun {
-            options.include_private_fun = false;
-        }
-        if self.exclude_specs {
-            options.include_specs = false;
-        }
-        if self.independent_specs {
-            options.specs_inlined = false;
-        }
-        if self.exclude_impl {
-            options.include_impl = false;
-        }
-        if self.toc_depth.is_some() {
-            options.toc_depth = self.toc_depth.unwrap();
-        }
-        if self.no_collapsed_sections {
-            options.collapsed_sections = false;
-        }
-        if self.output_directory.is_some() {
-            options.output_directory = self.output_directory.unwrap();
-        }
-        if self.references_file.is_some() {
-            options.references_file = self.references_file;
-        }
-        if self.compile_relative_to_output_dir {
-            options.compile_relative_to_output_dir = true;
-        }
+        // if !self.template.is_empty() {
+        //     options.root_doc_templates = self.template;
+        // }
+        // if self.section_level_start.is_some() {
+        //     options.section_level_start = self.section_level_start.unwrap();
+        // }
+        // if self.exclude_private_fun {
+        //     options.include_private_fun = false;
+        // }
+        // if self.exclude_specs {
+        //     options.include_specs = false;
+        // }
+        // if self.independent_specs {
+        //     options.specs_inlined = false;
+        // }
+        // if self.exclude_impl {
+        //     options.include_impl = false;
+        // }
+        // if self.toc_depth.is_some() {
+        //     options.toc_depth = self.toc_depth.unwrap();
+        // }
+        // if self.no_collapsed_sections {
+        //     options.collapsed_sections = false;
+        // }
+        // if self.output_directory.is_some() {
+        //     options.output_directory = self.output_directory.unwrap();
+        // }
+        // if self.references_file.is_some() {
+        //     options.references_file = self.references_file;
+        // }
+        // if self.compile_relative_to_output_dir {
+        //     options.compile_relative_to_output_dir = true;
+        // }
 
-        // We are using the full namespace, since we already use `Docgen` here.
-        // Docgen is the most suitable name for both: this Docgen subcommand,
-        // and the actual move_docgen::Docgen.
-        let generator = move_docgen::Docgen::new(&model, &options);
+        // // We are using the full namespace, since we already use `Docgen` here.
+        // // Docgen is the most suitable name for both: this Docgen subcommand,
+        // // and the actual move_docgen::Docgen.
+        // let generator = move_docgen::Docgen::new(&model, &options);
 
-        for (file, content) in generator.gen() {
-            let path = PathBuf::from(&file);
-            fs::create_dir_all(path.parent().unwrap())?;
-            fs::write(path.as_path(), content)?;
-            println!("Generated {:?}", path);
-        }
+        // for (file, content) in generator.gen() {
+        //     let path = PathBuf::from(&file);
+        //     fs::create_dir_all(path.parent().unwrap())?;
+        //     fs::write(path.as_path(), content)?;
+        //     println!("Generated {:?}", path);
+        // }
 
-        anyhow::ensure!(
-            !model.has_errors(),
-            "Errors encountered while generating documentation!"
-        );
+        // anyhow::ensure!(
+        //     !model.has_errors(),
+        //     "Errors encountered while generating documentation!"
+        // );
 
-        println!("\nDocumentation generation successful!");
-        Ok(())
+        // println!("\nDocumentation generation successful!");
+        // Ok(())
+        todo!("use package system")
     }
 }

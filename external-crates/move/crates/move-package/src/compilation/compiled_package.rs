@@ -30,13 +30,13 @@ use move_compiler::{
     editions::Flavor,
     linters,
     shared::{
-        program_info::TypingProgramInfo, NamedAddressMap, NumericalAddress, PackageConfig,
-        PackagePaths,
+        program_info::{self, TypingProgramInfo},
+        NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths, SaveTypingInfo,
     },
     sui_mode, Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
-use move_model_2::model::*;
+use move_model_2::source_model;
 use move_symbol_pool::Symbol;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -540,15 +540,17 @@ impl CompiledPackage {
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+        mut compiler_driver: impl FnMut(
+            Compiler,
+        )
+            -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
-        let saved_program_info: Rc<RefCell<Arc<TypingProgramInfo>>> =
-            Rc::new(RefCell::new(Option::none()));
+        let program_info_hook = SaveTypingInfo::new();
         let BuildResult {
             root_package_name,
-            sources_package_paths,
+            sources_package_paths: _,
             immediate_dependencies,
-            deps_package_paths,
+            deps_package_paths: _,
             result,
         } = Self::build_for_driver(
             w,
@@ -557,15 +559,15 @@ impl CompiledPackage {
             transitive_dependencies,
             resolution_graph,
             |compiler| {
-                let compiler = compiler.add_program_info_save(saved_program_info.clone());
+                let compiler = compiler.add_save_hook(&program_info_hook);
                 compiler_driver(compiler)
             },
         )?;
-        let program_info = saved_program_info.borrow().take().unwrap();
-        let (file_map, program_info, all_compiled_units) = result;
+        let program_info = program_info_hook.into_inner();
+        let (file_map, all_compiled_units) = result;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
-        for annot_unit in all_compiled_units {
+        for annot_unit in all_compiled_units.clone() {
             let source_path = PathBuf::from(file_map[&annot_unit.loc().file_hash()].0.as_str());
             let package_name = annot_unit.named_module.package_name.unwrap();
             let unit = CompiledUnitWithSource {
@@ -581,7 +583,13 @@ impl CompiledPackage {
 
         let mut compiled_docs = None;
         if resolution_graph.build_options.generate_docs {
-            let model = Model::new(file_map, program_info, all_compiled_units)?;
+            let root_named_address_map = resolved_package.resolved_table.clone();
+            let model = source_model::Model::new(
+                file_map,
+                root_named_address_map,
+                program_info,
+                all_compiled_units,
+            )?;
 
             if resolution_graph.build_options.generate_docs {
                 compiled_docs = Some(Self::build_docs(
@@ -715,7 +723,7 @@ impl CompiledPackage {
 
     fn build_docs(
         package_name: PackageName,
-        model: &Model,
+        model: &source_model::Model,
         package_root: &Path,
         deps: &[PackageName],
         install_dir: &Option<PathBuf>,

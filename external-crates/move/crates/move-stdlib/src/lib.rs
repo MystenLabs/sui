@@ -82,25 +82,26 @@ pub fn build_doc(
     with_diagram: bool,
     named_addresses: BTreeMap<String, NumericalAddress>,
 ) {
-    let options = move_prover::cli::Options {
-        move_sources: sources.to_vec(),
-        move_deps: dep_paths,
-        move_named_address_values: move_prover::cli::named_addresses_for_options(&named_addresses),
-        verbosity_level: LevelFilter::Warn,
-        run_docgen: true,
-        docgen: move_docgen::DocgenOptions {
-            root_doc_templates: templates,
-            references_file,
-            doc_path: vec![doc_path.to_string()],
-            output_directory: output_path.to_string(),
-            include_dep_diagrams: with_diagram,
-            include_call_diagrams: with_diagram,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    options.setup_logging_for_test();
-    move_prover::run_move_prover_errors_to_stderr(options).unwrap();
+    // let options = move_prover::cli::Options {
+    //     move_sources: sources.to_vec(),
+    //     move_deps: dep_paths,
+    //     move_named_address_values: move_prover::cli::named_addresses_for_options(&named_addresses),
+    //     verbosity_level: LevelFilter::Warn,
+    //     run_docgen: true,
+    //     docgen: move_docgen::DocgenOptions {
+    //         root_doc_templates: templates,
+    //         references_file,
+    //         doc_path: vec![doc_path.to_string()],
+    //         output_directory: output_path.to_string(),
+    //         include_dep_diagrams: with_diagram,
+    //         include_call_diagrams: with_diagram,
+    //         ..Default::default()
+    //     },
+    //     ..Default::default()
+    // };
+    // options.setup_logging_for_test();
+    // move_prover::run_move_prover_errors_to_stderr(options).unwrap();
+    todo!("use the package system")
 }
 
 pub fn build_stdlib_doc(output_path: &str) {
@@ -133,29 +134,4 @@ pub fn build_nursery_doc(output_path: &str) {
         false,
         move_stdlib_named_addresses(),
     )
-}
-
-pub fn build_error_code_map(output_path: &str) {
-    let options = move_prover::cli::Options {
-        move_sources: crate::move_stdlib_files(),
-        move_deps: vec![],
-        verbosity_level: LevelFilter::Warn,
-        run_errmapgen: true,
-        move_named_address_values: move_prover::cli::named_addresses_for_options(
-            &move_stdlib_named_addresses(),
-        ),
-        errmapgen: move_errmapgen::ErrmapOptions {
-            output_file: output_path.to_string(),
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    options.setup_logging_for_test();
-    move_prover::run_move_prover_errors_to_stderr(options).unwrap();
-}
-
-const ERROR_DESCRIPTIONS: &[u8] = include_bytes!("../error_description.errmap");
-
-pub fn error_descriptions() -> &'static [u8] {
-    ERROR_DESCRIPTIONS
 }

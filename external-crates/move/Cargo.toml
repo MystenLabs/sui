@@ -151,7 +151,6 @@ move-core-types = { path = "crates/move-core-types" }
 move-coverage = { path = "crates/move-coverage" }
 move-disassembler = { path = "crates/move-disassembler" }
 move-docgen = { path = "crates/move-docgen" }
-move-errmapgen = { path = "crates/move-errmapgen" }
 move-ir-compiler = { path = "crates/move-ir-compiler" }
 move-ir-to-bytecode = { path = "crates/move-ir-to-bytecode" }
 move-ir-to-bytecode-syntax = { path = "crates/move-ir-to-bytecode-syntax" }
@@ -160,7 +159,6 @@ move-model = { path = "crates/move-model" }
 move-model-2 = { path = "crates/move-model-2" }
 move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
-move-prover = { path = "crates/move-prover" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
 move-read-write-set-types = { path = "crates/move-read-write-set-types" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }

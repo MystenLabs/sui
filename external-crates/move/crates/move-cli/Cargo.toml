@@ -40,9 +40,7 @@ move-vm-test-utils.workspace = true
 move-read-write-set-types.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
-move-prover.workspace = true
 move-unit-test.workspace = true
-move-errmapgen.workspace = true
 move-bytecode-viewer.workspace = true
 move-model-2.workspace = true
 

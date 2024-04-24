@@ -26,7 +26,6 @@ serde.workspace = true
 once_cell.workspace = true
 
 [dev-dependencies]
-move-prover.workspace = true
 datatest-stable.workspace = true
 tempfile.workspace = true
 move-prover-test-utils.workspace = true

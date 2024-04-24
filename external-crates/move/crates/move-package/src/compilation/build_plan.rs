@@ -18,7 +18,7 @@ use move_compiler::{
         report_diagnostics_to_buffer_with_env_color, report_warnings, FilesSourceText, Migration,
     },
     editions::Edition,
-    shared::{program_info::TypingProgramInfo, PackagePaths},
+    shared::PackagePaths,
     Compiler,
 };
 use move_symbol_pool::Symbol;
@@ -26,7 +26,6 @@ use std::{
     collections::BTreeSet,
     io::Write,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 use toml_edit::{value, Document};
 use vfs::VfsPath;

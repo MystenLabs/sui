@@ -29,7 +29,6 @@ use move_symbol_pool::Symbol;
 use once_cell::sync::OnceCell;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
-    borrow::BorrowMut,
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
     fmt,

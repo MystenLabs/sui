@@ -922,23 +922,23 @@ impl PassResult {
     pub fn save(&self, compilation_env: &mut CompilationEnv) {
         match self {
             PassResult::Parser(prog) => {
-                compilation_env.save_parser_ast(&prog);
+                compilation_env.save_parser_ast(prog);
             }
             PassResult::Expansion(prog) => {
-                compilation_env.save_expansion_ast(&prog);
+                compilation_env.save_expansion_ast(prog);
             }
             PassResult::Naming(prog) => {
-                compilation_env.save_naming_ast(&prog);
+                compilation_env.save_naming_ast(prog);
             }
             PassResult::Typing(prog) => {
-                compilation_env.save_typing_ast(&prog);
+                compilation_env.save_typing_ast(prog);
                 compilation_env.save_typing_info(&prog.info);
             }
             PassResult::HLIR(prog) => {
-                compilation_env.save_hlir_ast(&prog);
+                compilation_env.save_hlir_ast(prog);
             }
             PassResult::CFGIR(prog) => {
-                compilation_env.save_cfgir_ast(&prog);
+                compilation_env.save_cfgir_ast(prog);
             }
             PassResult::Compilation(_, _) => (),
         }

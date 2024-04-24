@@ -31,11 +31,12 @@ use move_symbol_pool::Symbol;
 
 pub struct Model {
     files: MappedFiles,
+    root_named_address_map: BTreeMap<Symbol, AccountAddress>,
     info: Arc<TypingProgramInfo>,
     // keeping separate in anticipation of compiled model
-    compiled_units: BTreeMap<ModuleId, AnnotatedCompiledUnit>,
+    compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
     // TODO package
-    modules: BTreeMap<AccountAddress, BTreeMap<Symbol, ModuleData>>,
+    packages: BTreeMap<AccountAddress, PackageData>,
     //     compiled_units: BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
     //     module_deps: BTreeMap<ModuleId, BTreeMap<ModuleId, /* is immediate */ bool>>,
     //     // reverse mapping of module_deps
@@ -53,9 +54,17 @@ pub type ModuleId = (AccountAddress, Symbol);
 pub type QualifiedMemberId = (ModuleId, Symbol);
 
 #[derive(Clone, Copy)]
+pub struct Package<'a> {
+    addr: AccountAddress,
+    // TODO name. We likely want the package name from the root package's named address map
+    model: &'a Model,
+    data: &'a PackageData,
+}
+
+#[derive(Clone, Copy)]
 pub struct Module<'a> {
     id: ModuleId,
-    env: &'a Model,
+    package: Package<'a>,
     data: &'a ModuleData,
 }
 
@@ -108,6 +117,7 @@ pub struct Constant<'a> {
 impl Model {
     pub fn new(
         files: FilesSourceText,
+        root_named_address_map: BTreeMap<Symbol, AccountAddress>,
         info: Arc<TypingProgramInfo>,
         compiled_units_vec: Vec<AnnotatedCompiledUnit>,
     ) -> anyhow::Result<Self> {
@@ -115,11 +125,10 @@ impl Model {
         for unit in compiled_units_vec {
             let package_name = unit.package_name();
             let loc = *unit.loc();
-            let id = (
-                unit.named_module.address.into_inner(),
-                unit.named_module.name,
-            );
-            if let Some(prev) = compiled_units.insert(id, unit) {
+            let addr = unit.named_module.address.into_inner();
+            let name = unit.named_module.name;
+            let package = compiled_units.entry(addr).or_insert_with(BTreeMap::new);
+            if let Some(prev) = package.insert(name, unit) {
                 anyhow::bail!(
                     "Duplicate module {}::{}. \n\
                     One in package {} in file {}. \n\
@@ -139,42 +148,71 @@ impl Model {
                 );
             }
         }
-        let modules = info
+        let root_named_address_reverse_map = root_named_address_map
+            .iter()
+            .map(|(n, a)| (*a, *n))
+            .collect::<BTreeMap<_, _>>();
+        let ident_map = info
             .modules
             .key_cloned_iter()
-            .map(|(ident, info)| {
-                let id = ident.module_id();
-                let unit = compiled_units.get(&id).unwrap();
-                let data = ModuleData::new(id, ident, info, unit);
-                (id, data)
+            .map(|(ident, _)| (ident.module_id(), ident))
+            .collect::<BTreeMap<_, _>>();
+        let packages = compiled_units
+            .iter()
+            .map(|(addr, units)| {
+                let name = root_named_address_reverse_map.get(addr).copied();
+                let data = PackageData::new(name, *addr, &ident_map, &info, units);
+                (*addr, data)
             })
             .collect();
         let mut model = Self {
             files: MappedFiles::new(files),
+            root_named_address_map,
             info,
             compiled_units,
-            modules,
+            packages,
         };
         model.compute_dependencies();
         model.compute_function_dependencies();
         Ok(model)
     }
 
-    pub fn maybe_module(&self, module: impl TModuleId) -> Option<Module<'_>> {
-        let id = module.module_id();
-        let data = self.modules.get(&id)?;
-        Some(Module {
-            id,
-            env: self,
+    pub fn maybe_package(&self, addr: &AccountAddress) -> Option<Package<'_>> {
+        let data = self.packages.get(addr)?;
+        Some(Package {
+            addr: *addr,
+            model: self,
             data,
         })
+    }
+    pub fn package(&self, addr: &AccountAddress) -> Package<'_> {
+        self.maybe_package(addr).unwrap()
+    }
+
+    /// The name of the package corresponds to the name for the address in the root package's
+    /// named address map. This is not the name of the package in the Move.toml file.
+    pub fn package_by_name(&self, name: &Symbol) -> Option<Package<'_>> {
+        let addr = self.root_named_address_map.get(name)?;
+        self.maybe_package(addr)
+    }
+
+    pub fn maybe_module(&self, module: impl TModuleId) -> Option<Module<'_>> {
+        let (addr, name) = module.module_id();
+        let package = self.maybe_package(&addr)?;
+        package.maybe_module(name)
     }
     pub fn module(&self, module: impl TModuleId) -> Module<'_> {
         self.maybe_module(module).unwrap()
     }
 
+    pub fn packages(&self) -> impl Iterator<Item = Package<'_>> {
+        self.packages.keys().map(|a| self.package(a))
+    }
+
     pub fn modules(&self) -> impl Iterator<Item = Module<'_>> {
-        self.modules.keys().map(|id| self.module(id))
+        self.packages
+            .iter()
+            .flat_map(move |(a, p)| p.modules.keys().map(move |m| self.module((a, m))))
     }
 
     pub fn files(&self) -> &MappedFiles {
@@ -182,9 +220,46 @@ impl Model {
     }
 }
 
+impl<'a> Package<'a> {
+    pub fn address(&self) -> AccountAddress {
+        self.addr
+    }
+
+    /// The name of the package corresponds to the name for the address in the root package's
+    /// named address map. This is not the name of the package in the Move.toml file.
+    pub fn name(&self) -> Option<Symbol> {
+        self.data.name
+    }
+
+    pub fn model(&self) -> &'a Model {
+        self.model
+    }
+
+    pub fn maybe_module(&self, name: impl Into<Symbol>) -> Option<Module<'a>> {
+        let name = name.into();
+        let data = self.data.modules.get(&name)?;
+        Some(Module {
+            id: (self.addr, name),
+            package: *self,
+            data,
+        })
+    }
+    pub fn module(&self, name: impl Into<Symbol>) -> Module<'a> {
+        self.maybe_module(name).unwrap()
+    }
+
+    pub fn modules(&self) -> impl Iterator<Item = Module<'a>> + '_ {
+        self.data.modules.keys().map(move |name| self.module(*name))
+    }
+}
+
 impl<'a> Module<'a> {
     pub fn model(&self) -> &'a Model {
-        self.env
+        self.package.model()
+    }
+
+    pub fn package(&self) -> Package<'a> {
+        self.package
     }
 
     pub fn maybe_struct(&self, name: impl Into<Symbol>) -> Option<Struct<'a>> {
@@ -272,11 +347,11 @@ impl<'a> Module<'a> {
     }
 
     pub fn info(&self) -> &'a ModuleInfo {
-        self.env.info.modules.get(self.ident()).unwrap()
+        self.model().info.modules.get(self.ident()).unwrap()
     }
 
     pub fn compiled(&self) -> &'a AnnotatedCompiledUnit {
-        &self.env.compiled_units[&self.id]
+        &self.model().compiled_units[&self.id.0][&self.id.1]
     }
 
     pub fn ident(&self) -> &'a E::ModuleIdent {
@@ -288,7 +363,7 @@ impl<'a> Module<'a> {
     }
 
     pub fn source_path(&self) -> Symbol {
-        self.env
+        self.model()
             .files
             .name(&self.info().defined_loc.file_hash())
             .unwrap()
@@ -313,7 +388,11 @@ impl<'a> Struct<'a> {
     }
 
     pub fn model(&self) -> &'a Model {
-        self.module.env
+        self.module.model()
+    }
+
+    pub fn package(&self) -> Package<'a> {
+        self.module.package()
     }
 
     pub fn module(&self) -> Module<'a> {
@@ -358,8 +437,12 @@ impl<'a> Enum<'a> {
         self.name
     }
 
+    pub fn package(&self) -> Package<'a> {
+        self.module.package()
+    }
+
     pub fn model(&self) -> &'a Model {
-        self.module.env
+        self.module.model()
     }
 
     pub fn module(&self) -> Module<'a> {
@@ -384,8 +467,12 @@ impl<'a> Function<'a> {
         self.name
     }
 
+    pub fn package(&self) -> Package<'a> {
+        self.module.package()
+    }
+
     pub fn model(&self) -> &'a Model {
-        self.module.env
+        self.module.model()
     }
 
     pub fn module(&self) -> Module<'a> {
@@ -452,8 +539,12 @@ impl<'a> Constant<'a> {
         self.name
     }
 
+    pub fn package(&self) -> Package<'a> {
+        self.module.package()
+    }
+
     pub fn model(&self) -> &'a Model {
-        self.module.env
+        self.module.model()
     }
 
     pub fn module(&self) -> Module<'a> {
@@ -590,6 +681,12 @@ impl<T: TModuleId> TModuleId for Spanned<T> {
 // Internals
 //**************************************************************************************************
 
+struct PackageData {
+    // Based on the root packages named address map
+    name: Option<Symbol>,
+    modules: BTreeMap<Symbol, ModuleData>,
+}
+
 struct ModuleData {
     ident: E::ModuleIdent,
     structs: BTreeMap<Symbol, StructData>,
@@ -625,7 +722,7 @@ struct ConstantData {
 impl Model {
     fn compute_dependencies(&mut self) {
         fn visit(
-            compiled_units: &BTreeMap<ModuleId, AnnotatedCompiledUnit>,
+            compiled_units: &BTreeMap<AccountAddress, BTreeMap<Symbol, AnnotatedCompiledUnit>>,
             acc: &mut BTreeMap<ModuleId, BTreeMap<ModuleId, bool>>,
             id: ModuleId,
             unit: &AnnotatedCompiledUnit,
@@ -642,7 +739,7 @@ impl Model {
                 .map(|id| (*id.address(), Symbol::from(id.name().as_str())))
                 .collect::<Vec<_>>();
             for immediate_dep in &immediate_deps {
-                let unit = compiled_units.get(immediate_dep).unwrap();
+                let unit = &compiled_units[&immediate_dep.0][&immediate_dep.1];
                 visit(compiled_units, acc, *immediate_dep, unit);
             }
             let mut deps = BTreeMap::new();
@@ -658,8 +755,11 @@ impl Model {
         }
 
         let mut module_deps = BTreeMap::new();
-        for (id, unit) in &self.compiled_units {
-            visit(&self.compiled_units, &mut module_deps, *id, unit);
+        for (a, units) in &self.compiled_units {
+            for (m, unit) in units {
+                let id = (*a, *m);
+                visit(&self.compiled_units, &mut module_deps, id, unit);
+            }
         }
         let mut module_used_by = module_deps
             .keys()
@@ -673,47 +773,52 @@ impl Model {
                 *is_immediate = *is_immediate || immediate;
             }
         }
-        for (id, data) in &mut self.modules {
-            data.deps = module_deps.remove(id).unwrap();
-            data.used_by = module_used_by.remove(id).unwrap();
+        for (a, package) in &mut self.packages {
+            for (m, data) in &mut package.modules {
+                let id = (*a, *m);
+                data.deps = module_deps.remove(&id).unwrap();
+                data.used_by = module_used_by.remove(&id).unwrap();
+            }
         }
     }
 
     fn compute_function_dependencies(&mut self) {
-        let mut function_immediate_deps: BTreeMap<_, BTreeSet<_>> = self
+        let mut function_immediate_deps: BTreeMap<_, BTreeSet<_>> = BTreeMap::new();
+        let units = self
             .compiled_units
             .iter()
-            .flat_map(|(id, unit)| {
-                let module = &unit.named_module.module;
-                module.function_defs().iter().map(move |fdef| {
-                    let fhandle = module.function_handle_at(fdef.function);
-                    let fname = module.identifier_at(fhandle.name);
-                    let qualified_id = (*id, Symbol::from(fname.as_str()));
-                    let callees = fdef
-                        .code
-                        .as_ref()
-                        .iter()
-                        .flat_map(|c| c.code.iter())
-                        .filter_map(|instr| match instr {
-                            file_format::Bytecode::Call(i) => Some(*i),
-                            file_format::Bytecode::CallGeneric(i) => {
-                                Some(module.function_instantiation_at(*i).handle)
-                            }
-                            _ => None,
-                        })
-                        .map(|i| {
-                            let callee_handle = module.function_handle_at(i);
-                            let callee_module = module
-                                .module_id_for_handle(module.module_handle_at(callee_handle.module))
-                                .module_id();
-                            let callee_name = module.identifier_at(fhandle.name);
-                            (callee_module, Symbol::from(callee_name.as_str()))
-                        })
-                        .collect();
-                    (qualified_id, callees)
-                })
-            })
-            .collect();
+            .flat_map(|(a, units)| units.iter().map(|(m, u)| ((*a, *m), u)));
+        for (id, unit) in units {
+            let module = &unit.named_module.module;
+            for fdef in module.function_defs() {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                let qualified_id = (id, Symbol::from(fname.as_str()));
+                let callees = fdef
+                    .code
+                    .as_ref()
+                    .iter()
+                    .flat_map(|c| c.code.iter())
+                    .filter_map(|instr| match instr {
+                        file_format::Bytecode::Call(i) => Some(*i),
+                        file_format::Bytecode::CallGeneric(i) => {
+                            Some(module.function_instantiation_at(*i).handle)
+                        }
+                        _ => None,
+                    })
+                    .map(|i| {
+                        let callee_handle = module.function_handle_at(i);
+                        let callee_module = module
+                            .module_id_for_handle(module.module_handle_at(callee_handle.module))
+                            .module_id();
+                        let callee_name = module.identifier_at(fhandle.name);
+                        (callee_module, Symbol::from(callee_name.as_str()))
+                    })
+                    .collect();
+                function_immediate_deps.insert(qualified_id, callees);
+            }
+        }
+
         // ensure the map is populated for all functions
         let mut function_called_by = function_immediate_deps
             .keys()
@@ -724,13 +829,38 @@ impl Model {
                 function_called_by.get_mut(callee).unwrap().insert(*caller);
             }
         }
-        for (id, data) in &mut self.modules {
-            for (fname, fdata) in &mut data.functions {
-                let qualified_id = (*id, *fname);
-                fdata.calls = function_immediate_deps.remove(&qualified_id).unwrap();
-                fdata.called_by = function_called_by.remove(&qualified_id).unwrap();
+        for (a, package) in &mut self.packages {
+            for (m, data) in &mut package.modules {
+                let id = (*a, *m);
+                for (fname, fdata) in &mut data.functions {
+                    let qualified_id = (id, *fname);
+                    fdata.calls = function_immediate_deps.remove(&qualified_id).unwrap();
+                    fdata.called_by = function_called_by.remove(&qualified_id).unwrap();
+                }
             }
         }
+    }
+}
+
+impl PackageData {
+    fn new(
+        name: Option<Symbol>,
+        addr: AccountAddress,
+        ident_map: &BTreeMap<ModuleId, E::ModuleIdent>,
+        info: &TypingProgramInfo,
+        units: &BTreeMap<Symbol, AnnotatedCompiledUnit>,
+    ) -> Self {
+        let modules = units
+            .iter()
+            .map(|(name, unit)| {
+                let id = (addr, *name);
+                let ident = ident_map.get(&id).unwrap();
+                let info = info.module(ident);
+                let data = ModuleData::new(id, *ident, info, unit);
+                (*name, data)
+            })
+            .collect();
+        Self { name, modules }
     }
 }
 

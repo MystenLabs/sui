@@ -6726,11 +6726,9 @@ dependencies = [
  "move-coverage",
  "move-disassembler",
  "move-docgen",
- "move-errmapgen",
  "move-ir-types",
  "move-model-2",
  "move-package",
- "move-prover",
  "move-read-write-set-types",
  "move-stdlib",
  "move-stdlib-natives",
@@ -6876,17 +6874,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-errmapgen"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "move-command-line-common",
- "move-core-types",
- "move-model",
- "serde",
-]
-
-[[package]]
 name = "move-ir-compiler"
 version = "0.1.0"
 dependencies = [
@@ -7002,7 +6989,6 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-docgen",
- "move-model",
  "move-model-2",
  "move-symbol-pool",
  "named-lock",
@@ -7028,27 +7014,6 @@ dependencies = [
  "enum-compat-util",
  "quote 1.0.35",
  "syn 2.0.48",
-]
-
-[[package]]
-name = "move-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "codespan-reporting",
- "itertools 0.10.5",
- "log",
- "move-command-line-common",
- "move-compiler",
- "move-docgen",
- "move-errmapgen",
- "move-model",
- "move-stackless-bytecode",
- "once_cell",
- "serde",
- "simplelog",
- "toml 0.5.10",
 ]
 
 [[package]]
@@ -7109,8 +7074,6 @@ dependencies = [
  "move-command-line-common",
  "move-core-types",
  "move-docgen",
- "move-errmapgen",
- "move-prover",
  "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-types",
@@ -11360,17 +11323,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "simplelog"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bc0ffd69814a9b251d43afcabf96dad1b29f5028378056257be9e3fecc9f720"
-dependencies = [
- "chrono",
- "log",
- "termcolor",
-]
-
-[[package]]
 name = "simulacrum"
 version = "0.1.0"
 dependencies = [
@@ -13065,7 +13017,6 @@ dependencies = [
  "move-disassembler",
  "move-ir-types",
  "move-package",
- "move-prover",
  "move-unit-test",
  "move-vm-runtime",
  "mysten-metrics",
