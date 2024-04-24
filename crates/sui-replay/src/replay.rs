@@ -83,9 +83,11 @@ impl ExecutionSandboxState {
     pub fn check_effects(&self) -> Result<(), ReplayEngineError> {
         if self.transaction_info.effects != self.local_exec_effects {
             error!("Replay tool forked {}", self.transaction_info.tx_digest);
+            let diff = self.diff_effects();
+            println!("{}", diff);
             return Err(ReplayEngineError::EffectsForked {
                 digest: self.transaction_info.tx_digest,
-                diff: format!("\n{}", self.diff_effects()),
+                diff: format!("\n{}", diff),
                 on_chain: Box::new(self.transaction_info.effects.clone()),
                 local: Box::new(self.local_exec_effects.clone()),
             });
@@ -102,7 +104,6 @@ impl ExecutionSandboxState {
         let mut res = vec![];
 
         let diff = TextDiff::from_lines(&on_chain_str, &local_chain_str);
-        println!("On-chain vs local diff");
         for change in diff.iter_all_changes() {
             let sign = match change.tag() {
                 ChangeTag::Delete => "---",
@@ -735,6 +736,7 @@ impl LocalExec {
         };
 
         let all_required_objects = self.storage.all_objects();
+
         let effects =
             SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
