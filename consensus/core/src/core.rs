@@ -3,12 +3,15 @@
 
 use std::{collections::BTreeSet, iter, sync::Arc, time::Duration, vec};
 
-use consensus_config::ProtocolKeyPair;
+use consensus_config::{AuthorityIndex, ProtocolKeyPair};
 use itertools::Itertools as _;
 use mysten_metrics::monitored_scope;
 use parking_lot::RwLock;
 use sui_macros::fail_point;
-use tokio::sync::{broadcast, watch};
+use tokio::{
+    sync::{broadcast, watch},
+    time::Instant,
+};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -304,6 +307,28 @@ impl Core {
             }
         }
 
+        let leader_authority = &self
+            .context
+            .committee
+            .authority(self.first_round_leader(clock_round))
+            .hostname;
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposal_leader_wait_ms
+            .with_label_values(&[leader_authority])
+            .inc_by(
+                Instant::now()
+                    .saturating_duration_since(self.threshold_clock.get_quorum_ts())
+                    .as_millis() as u64,
+            );
+        self.context
+            .metrics
+            .node_metrics
+            .block_proposal_leader_wait_count
+            .with_label_values(&[leader_authority])
+            .inc();
+
         // TODO: produce the block for the clock_round. As the threshold clock can advance many rounds at once (ex
         // because we synchronized a bulk of blocks) we can decide here whether we want to produce blocks per round
         // or just the latest one. From earlier experiments I saw only benefit on proposing for the penultimate round
@@ -517,6 +542,11 @@ impl Core {
             .into_iter()
             .map(|authority_index| Slot::new(round, authority_index))
             .collect()
+    }
+
+    /// Returns the 1st leader of the round.
+    fn first_round_leader(&self, round: Round) -> AuthorityIndex {
+        self.leaders(round).first().unwrap().authority
     }
 
     fn last_proposed_timestamp_ms(&self) -> BlockTimestampMs {

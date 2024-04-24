@@ -83,6 +83,8 @@ pub(crate) struct NodeMetrics {
     pub proposed_blocks: IntCounterVec,
     pub block_size: Histogram,
     pub block_ancestors: Histogram,
+    pub block_proposal_leader_wait_ms: IntCounterVec,
+    pub block_proposal_leader_wait_count: IntCounterVec,
     pub block_timestamp_drift_wait_ms: IntCounterVec,
     pub blocks_per_commit_count: Histogram,
     pub broadcaster_rtt_estimate_ms: IntGaugeVec,
@@ -156,6 +158,18 @@ impl NodeMetrics {
                 "block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
+            block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
+                "block_proposal_leader_wait_ms",
+                "Total time in ms spent waiting for a leader when proposing blocks.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_proposal_leader_wait_count: register_int_counter_vec_with_registry!(
+                "block_proposal_leader_wait_count",
+                "Total times waiting for a leader when proposing blocks.",
+                &["authority"],
                 registry,
             ).unwrap(),
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
