@@ -696,16 +696,15 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
     }
 }
 
-// Assumes `flatten_or` has already been performed.
-//
 // A BRIEF OVERVIEW OF CONSTANT MATCH HANDLING
+//
 // To handle constants, we need to do two things: first, we need to replace all of the constants in
 // the patterns with _something_, and then we need to push the constant checks into guards in the
 // right-hand side. We take advantage of existing assumptions for match compilation to accomplish
 // this, allowing us to reuse the existing match compilation machinery:
 //
 // 1. We traverse the pattern mutably, replacing all constants with new, fresh variables.
-// 2. We generate a second 'guard' variable that acts as the "guard variable map" entry for that
+// 2. We generate a new 'guard' variable that acts as the "guard variable map" entry for that
 //    binder, indicating that this guard variable should be bound during match decision tree
 //    compilation for guard checking. This guard variable, as all, is typed as an immutable
 //    reference of the value in question.
@@ -713,13 +712,13 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
 //
 // Finally, we hand back:
 //
-// 1. a guard binder map that maps the new pattern variable to their new guard versions;
-// 2. and a new guard expression made up of the new guards plus the old guard (if any).
+// 1. a new guard expression made up of the new guards plus the old guard (if any), in that order;
+// 2. and a guard binder map that maps the new pattern variable to their new guard versions.
 //
 // As an example:
 //
 //  match (Option::Some(5)) {
-//    Option::Some(CONST) => rhs0,
+//    Option::Some(y @ CONST) if (y#guard == 0) => rhs0,
 //    Option::Some(x) if (x#guard == 1) => rhs1,
 //    _ => rhs2
 //  }
@@ -727,7 +726,7 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
 // will be translated as:
 //
 //  match (Option::Some(5)) {
-//    Option::Some(_match_var) if (match_var#guard == &CONST) => rhs0,
+//    Option::Some(y @ _match_var) if (_match_var#guard == &CONST && y#guard == 0) => rhs0,
 //    Option::Some(x) if (x#guard == 1) => rhs1,
 //    _ => rhs2
 //  }
@@ -735,6 +734,8 @@ fn flatten_or(pat: MatchPattern) -> Vec<MatchPattern> {
 // At this point, match compilation can proceed normally.
 //
 // NB: Since `_match_var` is not in the `rhs_binders` list, it will be erased in the final arm.
+
+/// Assumes `flatten_or` has already been performed.
 fn const_pats_to_guards(
     context: &mut Context,
     pat: &mut MatchPattern,
