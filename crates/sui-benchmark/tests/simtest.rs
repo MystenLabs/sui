@@ -253,7 +253,11 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+
+        let test_cluster = init_test_cluster_builder(4, 1000)
+            .with_num_unpruned_validators(4)
+            .build()
+            .await;
 
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
