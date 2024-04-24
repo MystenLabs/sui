@@ -70,13 +70,29 @@ type CheckpointExecutionBuffer =
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-struct SchedulingTimeoutConfig {
-    timeout: Duration,
-    panic_on_timeout: bool,
+#[derive(Debug, Clone, Copy)]
+pub struct CheckpointTimeoutConfig {
+    pub timeout: Duration,
+    pub panic_on_timeout: bool,
 }
 
-fn get_scheduling_timeout() -> &'static SchedulingTimeoutConfig {
-    fn inner() -> SchedulingTimeoutConfig {
+// We use a thread local so that the config can be overridden on a per-test basis. This means
+// that get_scheduling_timeout() can be called multiple times in a multithreaded context, but
+// the function is still very cheap to call so this is okay.
+thread_local! {
+    static SCHEDULING_TIMEOUT: once_cell::sync::OnceCell<CheckpointTimeoutConfig> =
+        once_cell::sync::OnceCell::new();
+}
+
+#[cfg(msim)]
+pub fn init_checkpoint_timeout_config(config: CheckpointTimeoutConfig) {
+    SCHEDULING_TIMEOUT.with(|s| {
+        s.set(config).expect("SchedulingTimeoutConfig already set");
+    });
+}
+
+fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
+    fn inner() -> CheckpointTimeoutConfig {
         // get the scheduling timeout from the env var SCHEDULING_EVENT_FUTURE_TIMEOUT_MS
         // check if the env var PANIC_ON_NEW_CHECKPOINT_TIMEOUT is equal to "true" or "1" and
         let panic_on_timeout = cfg!(msim)
@@ -91,15 +107,13 @@ fn get_scheduling_timeout() -> &'static SchedulingTimeoutConfig {
                 .unwrap_or(if panic_on_timeout { 20000 } else { 2000 }),
         );
 
-        SchedulingTimeoutConfig {
+        CheckpointTimeoutConfig {
             timeout,
             panic_on_timeout,
         }
     }
 
-    static SCHEDULING_TIMEOUT: once_cell::sync::OnceCell<SchedulingTimeoutConfig> =
-        once_cell::sync::OnceCell::new();
-    SCHEDULING_TIMEOUT.get_or_init(inner)
+    SCHEDULING_TIMEOUT.with(|s| *s.get_or_init(inner))
 }
 
 #[derive(PartialEq, Eq, Debug)]
