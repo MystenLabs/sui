@@ -10,7 +10,7 @@ use move_core_types::parser::parse_struct_tag;
 use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
 use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
