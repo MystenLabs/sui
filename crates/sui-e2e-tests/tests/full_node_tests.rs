@@ -584,12 +584,11 @@ async fn do_test_full_node_sync_flood() {
                         amounts: Some(vec![1]),
                         count: None,
                         coin_id: object_to_split.0,
-                        gas: Some(gas_object_id),
-                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
-                            * context.get_reference_gas_price().await.unwrap(),
-                        dry_run: false,
-                        serialize_unsigned_transaction: false,
-                        serialize_signed_transaction: false,
+                        opts: OptsWithGas::for_testing(
+                            Some(gas_object_id),
+                            TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                                * context.get_reference_gas_price().await.unwrap(),
+                        ),
                     }
                     .execute(context)
                     .await
