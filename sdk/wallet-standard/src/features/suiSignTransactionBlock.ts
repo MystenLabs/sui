@@ -4,10 +4,14 @@
 import type { TransactionBlock } from '@mysten/sui/transactions';
 import type { IdentifierString, WalletAccount } from '@wallet-standard/core';
 
+import type { SignedTransactionBlock } from './suiSignTransactionBlockV2.js';
+
 /** The latest API version of the signTransactionBlock API. */
 export type SuiSignTransactionBlockVersion = '1.0.0';
 
 /**
+ * @deprecated Use `sui:signTransactionBlock:v2` instead.
+ *
  * A Wallet Standard feature for signing a transaction, and returning the
  * serialized transaction and transaction signature.
  */
@@ -16,10 +20,12 @@ export type SuiSignTransactionBlockFeature = {
 	'sui:signTransactionBlock': {
 		/** Version of the feature API. */
 		version: SuiSignTransactionBlockVersion;
+		/** @deprecated Use `sui:signTransactionBlock:v2` instead. */
 		signTransactionBlock: SuiSignTransactionBlockMethod;
 	};
 };
 
+/** @deprecated Use `sui:signTransactionBlock:v2` instead. */
 export type SuiSignTransactionBlockMethod = (
 	input: SuiSignTransactionBlockInput,
 ) => Promise<SuiSignTransactionBlockOutput>;
@@ -33,8 +39,3 @@ export interface SuiSignTransactionBlockInput {
 
 /** Output of signing transactions. */
 export interface SuiSignTransactionBlockOutput extends SignedTransactionBlock {}
-
-export interface SignedTransactionBlock {
-	transactionBlockBytes: string;
-	signature: string;
-}

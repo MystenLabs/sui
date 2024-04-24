@@ -3,15 +3,17 @@
 
 import type { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { toB64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
 	StandardEventsFeature,
 	StandardEventsOnMethod,
 	SuiFeatures,
-	SuiSignAndExecuteTransactionBlockMethod,
+	SuiSignAndExecuteTransactionBlockV2Method,
 	SuiSignPersonalMessageMethod,
-	SuiSignTransactionBlockMethod,
+	SuiSignTransactionBlockV2Method,
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, ReadonlyWalletAccount, SUI_CHAINS } from '@mysten/wallet-standard';
@@ -92,12 +94,12 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 					version: '1.0.0',
 					signPersonalMessage: this.#signPersonalMessage,
 				},
-				'sui:signTransactionBlock': {
-					version: '1.0.0',
+				'sui:signTransactionBlock:v2': {
+					version: '2.0.0',
 					signTransactionBlock: this.#signTransactionBlock,
 				},
-				'sui:signAndExecuteTransactionBlock': {
-					version: '1.0.0',
+				'sui:signAndExecuteTransactionBlock:v2': {
+					version: '2.0.0',
 					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
 				},
 			};
@@ -116,8 +118,10 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			return { bytes, signature };
 		};
 
-		#signTransactionBlock: SuiSignTransactionBlockMethod = async (transactionInput) => {
-			const { bytes, signature } = await transactionInput.transactionBlock.sign({
+		#signTransactionBlock: SuiSignTransactionBlockV2Method = async (transactionInput) => {
+			const { bytes, signature } = await TransactionBlock.from(
+				transactionInput.transactionBlock,
+			).sign({
 				client: suiClient,
 				signer: keypair,
 			});
@@ -128,15 +132,33 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			};
 		};
 
-		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (
+		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockV2Method = async (
 			transactionInput,
 		) => {
-			return await suiClient.signAndExecuteTransactionBlock({
+			const { rawEffects, balanceChanges } = await suiClient.signAndExecuteTransactionBlock({
 				signer: keypair,
-				transactionBlock: transactionInput.transactionBlock,
-				options: transactionInput.options,
-				requestType: transactionInput.requestType,
+				transactionBlock: TransactionBlock.from(transactionInput.transactionBlock),
+				options: {
+					showRawEffects: true,
+					showBalanceChanges: true,
+				},
 			});
+
+			return {
+				effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
+				balanceChanges:
+					balanceChanges?.map(({ coinType, amount, owner }) => {
+						const address =
+							(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
+							(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
+
+						return {
+							coinType,
+							amount,
+							address,
+						};
+					}) ?? null,
+			};
 		};
 	}
 

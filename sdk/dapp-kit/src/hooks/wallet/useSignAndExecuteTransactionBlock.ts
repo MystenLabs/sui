@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/sui.js/utils';
 import type {
-	SuiSignAndExecuteTransactionBlockInput,
-	SuiSignAndExecuteTransactionBlockOutput,
+	SuiSignAndExecuteTransactionBlockV2Input,
+	SuiSignAndExecuteTransactionBlockV2Output,
 } from '@mysten/wallet-standard';
 import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
@@ -20,11 +21,11 @@ import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
 type UseSignAndExecuteTransactionBlockArgs = PartialBy<
-	SuiSignAndExecuteTransactionBlockInput,
+	SuiSignAndExecuteTransactionBlockV2Input,
 	'account' | 'chain'
 >;
 
-type UseSignAndExecuteTransactionBlockResult = SuiSignAndExecuteTransactionBlockOutput;
+type UseSignAndExecuteTransactionBlockResult = SuiSignAndExecuteTransactionBlockV2Output;
 
 type UseSignAndExecuteTransactionBlockError =
 	| WalletFeatureNotSupportedError
@@ -49,7 +50,7 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
  */
 export function useSignAndExecuteTransactionBlock({
 	mutationKey,
-	executeFromWallet,
+	executeFromWallet = true,
 	...mutationOptions
 }: UseSignAndExecuteTransactionBlockMutationOptions = {}): UseMutationResult<
 	UseSignAndExecuteTransactionBlockResult,
@@ -62,7 +63,7 @@ export function useSignAndExecuteTransactionBlock({
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signAndExecuteTransactionBlock(mutationKey),
-		mutationFn: async ({ requestType, options, ...signTransactionBlockArgs }) => {
+		mutationFn: async ({ ...signTransactionBlockArgs }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
@@ -75,7 +76,7 @@ export function useSignAndExecuteTransactionBlock({
 			}
 
 			if (executeFromWallet) {
-				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock'];
+				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
 				if (!walletFeature) {
 					throw new WalletFeatureNotSupportedError(
 						"This wallet doesn't support the `signAndExecuteTransactionBlock` feature.",
@@ -86,12 +87,10 @@ export function useSignAndExecuteTransactionBlock({
 					...signTransactionBlockArgs,
 					account: signerAccount,
 					chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
-					requestType,
-					options,
 				});
 			}
 
-			const walletFeature = currentWallet.features['sui:signTransactionBlock'];
+			const walletFeature = currentWallet.features['sui:signTransactionBlock:v2'];
 			if (!walletFeature) {
 				throw new WalletFeatureNotSupportedError(
 					"This wallet doesn't support the `signTransactionBlock` feature.",
@@ -104,12 +103,30 @@ export function useSignAndExecuteTransactionBlock({
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
 
-			return client.executeTransactionBlock({
+			const { rawEffects, balanceChanges } = await client.executeTransactionBlock({
 				transactionBlock: transactionBlockBytes,
 				signature,
-				requestType,
-				options,
+				options: {
+					showRawEffects: true,
+					showBalanceChanges: true,
+				},
 			});
+
+			return {
+				effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
+				balanceChanges:
+					balanceChanges?.map(({ coinType, amount, owner }) => {
+						const address =
+							(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
+							(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
+
+						return {
+							coinType,
+							amount,
+							address,
+						};
+					}) ?? null,
+			};
 		},
 		...mutationOptions,
 	});
