@@ -133,6 +133,10 @@ macro_rules! serialize_or_execute {
     }};
 }
 
+/// Only to be used within CLI
+pub const MAX_GAS_BUDGET: u64 = 50_000_000_000;
+pub const GAS_SAFE_OVERHEAD: u64 = 1000;
+
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
 pub enum SuiClientCommands {
@@ -613,9 +617,12 @@ pub enum SuiClientCommands {
 /// Global options for most transaction execution related commands
 #[derive(Args, Debug)]
 pub struct Opts {
-    /// Gas budget for this transaction (in MIST)
+    /// An optional gas budget for this transaction (in MIST). If gas budget is not provided, the
+    /// tool will perform a dry run first to get the gas estimate, and then execute the
+    /// transaction. Please note that this incurs a small cost in performance due to the additional
+    /// dry run call.
     #[arg(long)]
-    pub gas_budget: u64,
+    pub gas_budget: Option<u64>,
     /// Perform a dry run of the transaction, without executing it.
     #[arg(long)]
     pub dry_run: bool,
@@ -647,7 +654,7 @@ impl Opts {
     /// Uses the passed gas_budget for the gas budget variable and sets all other flags to false.
     pub fn for_testing(gas_budget: u64) -> Self {
         Self {
-            gas_budget,
+            gas_budget: Some(gas_budget),
             dry_run: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -657,7 +664,7 @@ impl Opts {
     /// and sets all other flags to false.
     pub fn for_testing_dry_run(gas_budget: u64) -> Self {
         Self {
-            gas_budget,
+            gas_budget: Some(gas_budget),
             dry_run: true,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -934,11 +941,27 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            sender,
+                            tx_kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
+
                 let data = client
                     .transaction_builder()
                     .tx_data(
                         sender,
-                        tx_kind,
+                        tx_kind.clone(),
                         gas_budget,
                         gas_price,
                         gas.into_iter().collect(),
@@ -1039,6 +1062,21 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            sender,
+                            tx_kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
 
                 let data = client
                     .transaction_builder()
@@ -1265,6 +1303,20 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            signer,
+                            tx_kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -1320,6 +1372,20 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            from,
+                            tx_kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -1371,6 +1437,20 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            from,
+                            tx_kind.clone(),
+                            gas_price,
+                            Some(vec![object_id]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -1455,6 +1535,20 @@ impl SuiClientCommands {
                     .await;
                 }
 
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            from,
+                            kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -1529,6 +1623,20 @@ impl SuiClientCommands {
                     .await;
                 }
 
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            signer,
+                            kind.clone(),
+                            gas_price,
+                            Some(input_coins.clone()),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -1582,6 +1690,20 @@ impl SuiClientCommands {
                     .await;
                 }
 
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            signer,
+                            tx_kind.clone(),
+                            gas_price,
+                            Some(input_coins.clone()),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(signer, tx_kind, gas_budget, gas_price, input_coins, None)
@@ -1734,6 +1856,21 @@ impl SuiClientCommands {
                     .await;
                 }
 
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            signer,
+                            tx_kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
+
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -1787,6 +1924,21 @@ impl SuiClientCommands {
                     )
                     .await;
                 }
+
+                let gas_budget = match gas_budget {
+                    Some(gas_budget) => gas_budget,
+                    None => {
+                        estimate_gas_budget(
+                            context,
+                            signer,
+                            tx_kind.clone(),
+                            gas_price,
+                            gas.map(|x| vec![x]),
+                            None,
+                        )
+                        .await?
+                    }
+                };
                 let data = client
                     .transaction_builder()
                     .tx_data(
@@ -3001,11 +3153,15 @@ async fn execute_dry_run(
     context: &mut WalletContext,
     signer: SuiAddress,
     kind: TransactionKind,
-    gas_budget: u64,
+    gas_budget: Option<u64>,
     gas_price: u64,
     gas_payment: Option<Vec<ObjectID>>,
     sponsor: Option<SuiAddress>,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
+    let gas_budget = match gas_budget {
+        Some(gas_budget) => gas_budget,
+        None => max_gas_budget(context).await?,
+    };
     let dry_run_tx_data = context
         .get_client()
         .await?
@@ -3020,4 +3176,44 @@ async fn execute_dry_run(
         .await
         .map_err(|e| anyhow!("Dry run failed: {e}"))?;
     Ok(SuiClientCommandResult::DryRun(response))
+}
+
+/// Call a dry run with the transaction data to get the estimated gas budget.
+/// The final gas budget is the dry run gas budget + 10% margin.
+pub async fn estimate_gas_budget(
+    context: &mut WalletContext,
+    signer: SuiAddress,
+    kind: TransactionKind,
+    gas_price: u64,
+    gas_payment: Option<Vec<ObjectID>>,
+    sponsor: Option<SuiAddress>,
+) -> Result<u64, anyhow::Error> {
+    let client = context.get_client().await?;
+    let dry_run =
+        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
+    if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
+        let buffer = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
+        let gas_with_buffer = (dry_run.effects.gas_cost_summary().computation_cost + buffer) as i64;
+        let net_gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage();
+        let gas_estimate = std::cmp::max(gas_with_buffer, net_gas_usage);
+        Ok(gas_estimate.try_into()?)
+    } else {
+        bail!("Dry run failed, could not automatically determine the gas budget. Please use the --gas-budget flag to provide a gas budget.")
+    }
+}
+
+/// Tries to get the maximum gas budget that is set in the protocol, and if not,
+/// it returns the max gas budget defined in a constant in this module {MAX_GAS_BUDGET}.
+pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::Error> {
+    let cfg = context
+        .get_client()
+        .await?
+        .read_api()
+        .get_protocol_config(None)
+        .await?;
+    Ok(match cfg.attributes.get("max_tx_gas") {
+        // TODO should we fail instead, if the protocol config does not have the max-budget, and ask the user to provide with a budget?
+        Some(Some(sui_json_rpc_types::SuiProtocolConfigValue::U64(y))) => *y,
+        _ => MAX_GAS_BUDGET,
+    })
 }
