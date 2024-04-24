@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cfgir::ast as G,
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
@@ -14,14 +15,18 @@ use crate::{
         FeatureGate, Flavor,
     },
     expansion::ast as E,
+    hlir::ast as H,
     naming::ast as N,
+    parser::ast as P,
     sui_mode,
+    typing::ast as T,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
 use clap::*;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use once_cell::sync::OnceCell;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     cell::RefCell,
@@ -236,6 +241,7 @@ pub struct CompilationEnv {
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
     mapped_files: MappedFiles,
+    save_hooks: Vec<SaveHook>,
 }
 
 macro_rules! known_code_filter {
@@ -256,6 +262,7 @@ impl CompilationEnv {
     pub fn new(
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
+        save_hooks: Vec<SaveHook>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
@@ -352,6 +359,7 @@ impl CompilationEnv {
             known_filter_names,
             prim_definers: BTreeMap::new(),
             mapped_files: MappedFiles::empty(),
+            save_hooks,
         }
     }
 
@@ -592,6 +600,62 @@ impl CompilationEnv {
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
     }
+
+    pub fn save_parser_ast(&self, ast: &P::Program) {
+        for hook in &self.save_hooks {
+            if let SaveHook::Parser(h) = hook {
+                h.set(ast)
+            }
+        }
+    }
+
+    pub fn save_expansion_ast(&self, ast: &E::Program) {
+        for hook in &self.save_hooks {
+            if let SaveHook::Expansion(h) = hook {
+                h.set(ast)
+            }
+        }
+    }
+
+    pub fn save_naming_ast(&self, ast: &N::Program) {
+        for hook in &self.save_hooks {
+            if let SaveHook::Naming(h) = hook {
+                h.set(ast)
+            }
+        }
+    }
+
+    pub fn save_typing_ast(&self, ast: &T::Program) {
+        for hook in &self.save_hooks {
+            if let SaveHook::Typing(h) = hook {
+                h.set(ast)
+            }
+        }
+    }
+
+    pub fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
+        for hook in &self.save_hooks {
+            if let SaveHook::TypingInfo(h) = hook {
+                h.set(info)
+            }
+        }
+    }
+
+    pub fn save_hlir_ast(&self, ast: &H::Program) {
+        for hook in &self.save_hooks {
+            if let SaveHook::HLIR(h) = hook {
+                h.set(ast)
+            }
+        }
+    }
+
+    pub fn save_cfgir_ast(&self, ast: &G::Program) {
+        for hook in &self.save_hooks {
+            if let SaveHook::CFGIR(h) = hook {
+                h.set(ast)
+            }
+        }
+    }
 }
 
 pub fn format_allow_attr(attr_name: FilterPrefix, filter: FilterName) -> String {
@@ -805,6 +869,181 @@ impl Visitors {
             }
         }
         vs
+    }
+}
+
+//**************************************************************************************************
+// Save Hooks
+//**************************************************************************************************
+
+pub enum SaveHook {
+    Parser(SaveParser),
+    Expansion(SaveExpansion),
+    Naming(SaveNaming),
+    Typing(SaveTyping),
+    TypingInfo(SaveTypingInfo),
+    HLIR(SaveHLIR),
+    CFGIR(SaveCFGIR),
+}
+
+#[derive(Clone)]
+pub struct SaveParser(Rc<OnceCell<P::Program>>);
+
+#[derive(Clone)]
+pub struct SaveExpansion(Rc<OnceCell<E::Program>>);
+
+#[derive(Clone)]
+pub struct SaveNaming(Rc<OnceCell<N::Program>>);
+
+#[derive(Clone)]
+pub struct SaveTyping(Rc<OnceCell<T::Program>>);
+
+#[derive(Clone)]
+pub struct SaveTypingInfo(Rc<OnceCell<Arc<program_info::TypingProgramInfo>>>);
+
+#[derive(Clone)]
+pub struct SaveHLIR(Rc<OnceCell<H::Program>>);
+
+#[derive(Clone)]
+pub struct SaveCFGIR(Rc<OnceCell<G::Program>>);
+
+impl SaveParser {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &crate::parser::ast::Program) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> crate::parser::ast::Program {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveParser> for SaveHook {
+    fn from(s: SaveParser) -> Self {
+        SaveHook::Parser(s)
+    }
+}
+
+impl SaveExpansion {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &crate::expansion::ast::Program) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> crate::expansion::ast::Program {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveExpansion> for SaveHook {
+    fn from(s: SaveExpansion) -> Self {
+        SaveHook::Expansion(s)
+    }
+}
+
+impl SaveNaming {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &crate::naming::ast::Program) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> crate::naming::ast::Program {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveNaming> for SaveHook {
+    fn from(s: SaveNaming) -> Self {
+        SaveHook::Naming(s)
+    }
+}
+
+impl SaveTyping {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &crate::typing::ast::Program) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> crate::typing::ast::Program {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveTyping> for SaveHook {
+    fn from(s: SaveTyping) -> Self {
+        SaveHook::Typing(s)
+    }
+}
+
+impl SaveTypingInfo {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &Arc<program_info::TypingProgramInfo>) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> Arc<program_info::TypingProgramInfo> {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveTypingInfo> for SaveHook {
+    fn from(s: SaveTypingInfo) -> Self {
+        SaveHook::TypingInfo(s)
+    }
+}
+
+impl SaveHLIR {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &crate::hlir::ast::Program) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> crate::hlir::ast::Program {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveHLIR> for SaveHook {
+    fn from(s: SaveHLIR) -> Self {
+        SaveHook::HLIR(s)
+    }
+}
+
+impl SaveCFGIR {
+    pub fn new() -> Self {
+        Self(Rc::new(OnceCell::new()))
+    }
+
+    pub(crate) fn set(&self, p: &crate::cfgir::ast::Program) {
+        self.0.set(p.clone()).unwrap()
+    }
+
+    pub fn into_inner(self) -> crate::cfgir::ast::Program {
+        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    }
+}
+
+impl From<SaveCFGIR> for SaveHook {
+    fn from(s: SaveCFGIR) -> Self {
+        SaveHook::CFGIR(s)
     }
 }
 
