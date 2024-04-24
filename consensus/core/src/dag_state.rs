@@ -150,17 +150,6 @@ impl DagState {
                 block, block.timestamp_ms(), now,
             );
         }
-
-        // TODO: Move this check to core
-        // Ensure we don't write multiple blocks per slot for our own index
-        if block_ref.author == self.context.own_index {
-            let existing_blocks = self.get_uncommitted_blocks_at_slot(block_ref.into());
-            assert!(
-                existing_blocks.is_empty(),
-                "Block Rejected! Attempted to add block {block:#?} to own slot where \
-                block(s) {existing_blocks:#?} already exists."
-            );
-        }
         self.update_block_metadata(&block);
         self.blocks_to_write.push(block);
         self.context.metrics.node_metrics.accepted_blocks.inc();
