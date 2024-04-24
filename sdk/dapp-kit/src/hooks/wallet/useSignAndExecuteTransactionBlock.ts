@@ -60,7 +60,7 @@ export function useSignAndExecuteTransactionBlock({
 	UseSignAndExecuteTransactionBlockError,
 	UseSignAndExecuteTransactionBlockArgs
 > {
-	const { currentWallet } = useCurrentWallet();
+	const { currentWallet, supportedIntents } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
 	const client = useSuiClient();
 
@@ -89,7 +89,7 @@ export function useSignAndExecuteTransactionBlock({
 				return walletFeature.signAndExecuteTransactionBlock({
 					...signTransactionBlockArgs,
 					transactionBlock: await transactionBlock.toJSON({
-						supportedIntents: [],
+						supportedIntents,
 						client,
 					}),
 					account: signerAccount,
@@ -107,7 +107,7 @@ export function useSignAndExecuteTransactionBlock({
 			const { signature, transactionBlockBytes } = await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
 				transactionBlock: await transactionBlock.toJSON({
-					supportedIntents: [],
+					supportedIntents,
 					client,
 				}),
 				account: signerAccount,

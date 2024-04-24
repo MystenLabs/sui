@@ -22,6 +22,10 @@ declare module '@wallet-standard/core' {
 		 */
 		readonly id?: string;
 	}
+
+	export interface StandardConnectOutput {
+		supportedIntents?: string[];
+	}
 }
 
 export type { Wallet } from '@wallet-standard/core';
