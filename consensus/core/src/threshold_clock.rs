@@ -82,8 +82,8 @@ mod tests {
     use crate::block::BlockDigest;
     use consensus_config::AuthorityIndex;
 
-    #[test]
-    fn test_threshold_clock_add_block() {
+    #[tokio::test]
+    async fn test_threshold_clock_add_block() {
         let context = Arc::new(Context::new_for_test(4).0);
         let mut aggregator = ThresholdClock::new(0, context);
 
@@ -137,8 +137,8 @@ mod tests {
         assert_eq!(aggregator.get_round(), 5);
     }
 
-    #[test]
-    fn test_threshold_clock_add_blocks() {
+    #[tokio::test]
+    async fn test_threshold_clock_add_blocks() {
         let context = Arc::new(Context::new_for_test(4).0);
         let mut aggregator = ThresholdClock::new(0, context);
 

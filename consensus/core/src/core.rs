@@ -293,10 +293,13 @@ impl Core {
             return None;
         }
 
+        // There must be a quorum of blocks from the previous round.
+        let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
+
         // Create a new block either because we want to "forcefully" propose a block due to a leader timeout,
         // or because we are actually ready to produce the block (leader exists and min delay has passed).
         if !force {
-            if !self.last_quorum_leaders_exist() {
+            if !self.leaders_exist(quorum_round) {
                 return None;
             }
             if Duration::from_millis(
@@ -310,7 +313,7 @@ impl Core {
         let leader_authority = &self
             .context
             .committee
-            .authority(self.first_round_leader(clock_round))
+            .authority(self.first_leader(quorum_round))
             .hostname;
         self.context
             .metrics
@@ -516,14 +519,12 @@ impl Core {
         ancestors
     }
 
-    /// Checks whether all the leaders of the previous quorum exist.
+    /// Checks whether all the leaders of the round exist.
     /// TODO: we can leverage some additional signal here in order to more cleverly manipulate later the leader timeout
     /// Ex if we already have one leader - the first in order - we might don't want to wait as much.
-    fn last_quorum_leaders_exist(&self) -> bool {
-        let quorum_round = self.threshold_clock.get_round().saturating_sub(1);
-
+    fn leaders_exist(&self, round: Round) -> bool {
         let dag_state = self.dag_state.read();
-        for leader in self.leaders(quorum_round) {
+        for leader in self.leaders(round) {
             // Search for all the leaders. If at least one is not found, then return false.
             // A linear search should be fine here as the set of elements is not expected to be small enough and more sophisticated
             // data structures might not give us much here.
@@ -545,7 +546,7 @@ impl Core {
     }
 
     /// Returns the 1st leader of the round.
-    fn first_round_leader(&self, round: Round) -> AuthorityIndex {
+    fn first_leader(&self, round: Round) -> AuthorityIndex {
         self.leaders(round).first().unwrap().authority
     }
 
