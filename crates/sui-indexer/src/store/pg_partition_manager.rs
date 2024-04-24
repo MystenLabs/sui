@@ -15,7 +15,8 @@ use crate::models::epoch::StoredEpochInfo;
 use crate::store::diesel_macro::*;
 use downcast::Any;
 
-const GET_PARTITION_SQL: &str = r"
+const GET_PARTITION_SQL: &str = if cfg!(feature = "postgres-feature") {
+    r"
 SELECT parent.relname                                            AS table_name,
        MIN(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS first_partition,
        MAX(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS last_partition
@@ -26,7 +27,19 @@ FROM pg_inherits
          JOIN pg_namespace nmsp_child ON nmsp_child.oid = child.relnamespace
 WHERE parent.relkind = 'p'
 GROUP BY table_name;
-";
+"
+} else if cfg!(feature = "mysql-feature") && cfg!(not(feature = "postgres-feature")) {
+    r"
+    SELECT TABLE_NAME AS table_name,
+       MAX(CAST(SUBSTRING(PARTITION_NAME, -1) AS UNSIGNED)) AS last_partition
+FROM information_schema.PARTITIONS
+WHERE TABLE_SCHEMA = DATABASE()
+AND PARTITION_NAME IS NOT NULL
+GROUP BY table_name;
+    "
+} else {
+    ""
+};
 
 pub struct PgPartitionManager<T: R2D2Connection + 'static> {
     cp: ConnectionPool<T>,

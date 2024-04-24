@@ -12,7 +12,6 @@ use async_trait::async_trait;
 use core::result::Result::Ok;
 use diesel::dsl::max;
 use diesel::r2d2::R2D2Connection;
-use diesel::upsert::excluded;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
@@ -44,11 +43,17 @@ use crate::schema::{
     tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
-use crate::{read_only_blocking, transactional_blocking_with_retry};
+use crate::{
+    insert_or_ignore_into, on_conflict_do_update, read_only_blocking,
+    transactional_blocking_with_retry,
+};
 
 use super::pg_partition_manager::{EpochPartitionData, PgPartitionManager};
 use super::IndexerStore;
 use super::ObjectChangeToCommit;
+
+#[cfg(feature = "postgres-feature")]
+use diesel::upsert::excluded;
 
 #[macro_export]
 macro_rules! chunk {
@@ -204,18 +209,22 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                diesel::insert_into(display::table)
-                    .values(display_updates.values().collect::<Vec<_>>())
-                    .on_conflict(display::object_type)
-                    .do_update()
-                    .set((
+                on_conflict_do_update!(
+                    display::table,
+                    display_updates.values().collect::<Vec<_>>(),
+                    display::object_type,
+                    (
                         display::id.eq(excluded(display::id)),
                         display::version.eq(excluded(display::version)),
                         display::bcs.eq(excluded(display::bcs)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed to write display updates to PostgresDB")?;
+                    ),
+                    |excluded: &StoredDisplay| (
+                        display::id.eq(excluded.id.clone()),
+                        display::version.eq(excluded.version),
+                        display::bcs.eq(excluded.bcs.clone()),
+                    ),
+                    conn
+                );
                 Ok::<(), IndexerError>(())
             },
             PG_DB_COMMIT_SLEEP_DURATION
@@ -236,11 +245,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
-                diesel::insert_into(objects::table)
-                    .values(mutated_object_mutation_chunk.clone())
-                    .on_conflict(objects::object_id)
-                    .do_update()
-                    .set((
+                on_conflict_do_update!(
+                    objects::table,
+                    mutated_object_mutation_chunk.clone(),
+                    objects::object_id,
+                    (
                         objects::object_id.eq(excluded(objects::object_id)),
                         objects::object_version.eq(excluded(objects::object_version)),
                         objects::object_digest.eq(excluded(objects::object_digest)),
@@ -256,10 +265,25 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         objects::df_name.eq(excluded(objects::df_name)),
                         objects::df_object_type.eq(excluded(objects::df_object_type)),
                         objects::df_object_id.eq(excluded(objects::df_object_id)),
-                    ))
-                    .execute(conn)
-                    .map_err(IndexerError::from)
-                    .context("Failed to write object mutation to PostgresDB")?;
+                    ),
+                    |excluded: StoredObject| (
+                        objects::object_id.eq(excluded.object_id.clone()),
+                        objects::object_version.eq(excluded.object_version),
+                        objects::object_digest.eq(excluded.object_digest.clone()),
+                        objects::checkpoint_sequence_number.eq(excluded.checkpoint_sequence_number),
+                        objects::owner_type.eq(excluded.owner_type),
+                        objects::owner_id.eq(excluded.owner_id.clone()),
+                        objects::object_type.eq(excluded.object_type.clone()),
+                        objects::serialized_object.eq(excluded.serialized_object.clone()),
+                        objects::coin_type.eq(excluded.coin_type.clone()),
+                        objects::coin_balance.eq(excluded.coin_balance),
+                        objects::df_kind.eq(excluded.df_kind),
+                        objects::df_name.eq(excluded.df_name.clone()),
+                        objects::df_object_type.eq(excluded.df_object_type.clone()),
+                        objects::df_object_id.eq(excluded.df_object_id.clone()),
+                    ),
+                    conn
+                );
                 Ok::<(), IndexerError>(())
             },
             PG_DB_COMMIT_SLEEP_DURATION
@@ -338,11 +362,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 for objects_snapshot_chunk in
                     objects_snapshot.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    diesel::insert_into(objects_snapshot::table)
-                        .values(objects_snapshot_chunk)
-                        .on_conflict(objects_snapshot::object_id)
-                        .do_update()
-                        .set((
+                    on_conflict_do_update!(
+                        objects_snapshot::table,
+                        objects_snapshot_chunk,
+                        objects_snapshot::object_id,
+                        (
                             objects_snapshot::object_version
                                 .eq(excluded(objects_snapshot::object_version)),
                             objects_snapshot::object_status
@@ -366,10 +390,26 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                                 .eq(excluded(objects_snapshot::df_object_type)),
                             objects_snapshot::df_object_id
                                 .eq(excluded(objects_snapshot::df_object_id)),
-                        ))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write object mutations to objects_snapshot in DB.")?;
+                        ),
+                        |excluded: StoredObjectSnapshot| (
+                            objects_snapshot::object_version.eq(excluded.object_version),
+                            objects_snapshot::object_status.eq(excluded.object_status),
+                            objects_snapshot::object_digest.eq(excluded.object_digest),
+                            objects_snapshot::checkpoint_sequence_number
+                                .eq(excluded.checkpoint_sequence_number),
+                            objects_snapshot::owner_type.eq(excluded.owner_type),
+                            objects_snapshot::owner_id.eq(excluded.owner_id),
+                            objects_snapshot::object_type.eq(excluded.object_type),
+                            objects_snapshot::serialized_object.eq(excluded.serialized_object),
+                            objects_snapshot::coin_type.eq(excluded.coin_type),
+                            objects_snapshot::coin_balance.eq(excluded.coin_balance),
+                            objects_snapshot::df_kind.eq(excluded.df_kind),
+                            objects_snapshot::df_name.eq(excluded.df_name),
+                            objects_snapshot::df_object_type.eq(excluded.df_object_type),
+                            objects_snapshot::df_object_id.eq(excluded.df_object_id),
+                        ),
+                        conn
+                    );
                 }
                 Ok::<(), IndexerError>(())
             },
@@ -415,23 +455,17 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 for mutated_object_change_chunk in
                     mutated_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    diesel::insert_into(objects_history::table)
-                        .values(mutated_object_change_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write object mutations to objects_history in DB.")?;
+                    insert_or_ignore_into!(
+                        objects_history::table,
+                        mutated_object_change_chunk,
+                        conn
+                    );
                 }
 
                 for deleted_objects_chunk in
                     deleted_object_ids.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    diesel::insert_into(objects_history::table)
-                        .values(deleted_objects_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write object deletions to objects_history in DB.")?;
+                    insert_or_ignore_into!(objects_history::table, deleted_objects_chunk, conn);
                 }
 
                 Ok::<(), IndexerError>(())
@@ -486,12 +520,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 for stored_checkpoint_chunk in
                     stored_checkpoints.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
                 {
-                    diesel::insert_into(checkpoints::table)
-                        .values(stored_checkpoint_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write checkpoints to PostgresDB")?;
+                    insert_or_ignore_into!(checkpoints::table, stored_checkpoint_chunk, conn);
                     let time_now_ms = chrono::Utc::now().timestamp_millis();
                     for stored_checkpoint in stored_checkpoint_chunk {
                         self.metrics
@@ -538,12 +567,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             &self.blocking_cp,
             |conn| {
                 for transaction_chunk in transactions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(transactions::table)
-                        .values(transaction_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write transactions to PostgresDB")?;
+                    insert_or_ignore_into!(transactions::table, transaction_chunk, conn);
                 }
                 Ok::<(), IndexerError>(())
             },
@@ -577,12 +601,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             &self.blocking_cp,
             |conn| {
                 for event_chunk in events.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(events::table)
-                        .values(event_chunk)
-                        .on_conflict_do_nothing()
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write events to PostgresDB")?;
+                    insert_or_ignore_into!(events::table, event_chunk, conn);
                 }
                 Ok::<(), IndexerError>(())
             },
@@ -613,17 +632,20 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             &self.blocking_cp,
             |conn| {
                 for packages_chunk in packages.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                    diesel::insert_into(packages::table)
-                        .values(packages_chunk)
-                        // System packages such as 0x2/0x9 will have their package_id
-                        // unchanged during upgrades. In this case, we override the modules
-                        // TODO: race condition is possible here. Figure out how to avoid/detect
-                        .on_conflict(packages::package_id)
-                        .do_update()
-                        .set(packages::move_package.eq(excluded(packages::move_package)))
-                        .execute(conn)
-                        .map_err(IndexerError::from)
-                        .context("Failed to write packages to PostgresDB")?;
+                    on_conflict_do_update!(
+                        packages::table,
+                        packages_chunk,
+                        packages::package_id,
+                        (
+                            packages::package_id.eq(excluded(packages::package_id)),
+                            packages::move_package.eq(excluded(packages::move_package)),
+                        ),
+                        |excluded: StoredPackage| (
+                            packages::package_id.eq(excluded.package_id.clone()),
+                            packages::move_package.eq(excluded.move_package),
+                        ),
+                        conn
+                    );
                 }
                 Ok::<(), IndexerError>(())
             },
@@ -689,20 +711,10 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in senders.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_senders::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_senders to PostgresDB")?;
+                        insert_or_ignore_into!(tx_senders::table, chunk, conn);
                     }
                     for chunk in recipients.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_recipients::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_recipients to PostgresDB")?;
+                        insert_or_ignore_into!(tx_recipients::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -732,12 +744,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in input_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_input_objects::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_input_objects chunk to PostgresDB")?;
+                        insert_or_ignore_into!(tx_input_objects::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -762,12 +769,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in changed_objects.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_changed_objects::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_changed_objects chunk to PostgresDB")?;
+                        insert_or_ignore_into!(tx_changed_objects::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -791,12 +793,7 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 &this.blocking_cp,
                 |conn| {
                     for chunk in calls.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
-                        diesel::insert_into(tx_calls::table)
-                            .values(chunk)
-                            .on_conflict_do_nothing()
-                            .execute(conn)
-                            .map_err(IndexerError::from)
-                            .context("Failed to write tx_calls chunk to PostgresDB")?;
+                        insert_or_ignore_into!(tx_calls::table, chunk, conn);
                     }
                     Ok::<(), IndexerError>(())
                 },
@@ -871,11 +868,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     let last_epoch_id = last_epoch.epoch;
                     let last_epoch = StoredEpochInfo::from_epoch_end_info(last_epoch);
                     info!(last_epoch_id, "Persisting epoch end data: {:?}", last_epoch);
-                    diesel::insert_into(epochs::table)
-                        .values(last_epoch)
-                        .on_conflict(epochs::epoch)
-                        .do_update()
-                        .set((
+                    on_conflict_do_update!(
+                        epochs::table,
+                        vec![last_epoch],
+                        epochs::epoch,
+                        (
                             // Note: Exclude epoch beginning info except system_state below.
                             // This is to ensure that epoch beginning info columns are not overridden with default values,
                             // because these columns are default values in `last_epoch`.
@@ -895,16 +892,32 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                             epochs::leftover_storage_fund_inflow
                                 .eq(excluded(epochs::leftover_storage_fund_inflow)),
                             epochs::epoch_commitments.eq(excluded(epochs::epoch_commitments)),
-                        ))
-                        .execute(conn)?;
+                        ),
+                        |excluded: StoredEpochInfo| (
+                            epochs::system_state.eq(excluded.system_state.clone()),
+                            epochs::epoch_total_transactions.eq(excluded.epoch_total_transactions),
+                            epochs::last_checkpoint_id.eq(excluded.last_checkpoint_id),
+                            epochs::epoch_end_timestamp.eq(excluded.epoch_end_timestamp),
+                            epochs::storage_fund_reinvestment
+                                .eq(excluded.storage_fund_reinvestment),
+                            epochs::storage_charge.eq(excluded.storage_charge),
+                            epochs::storage_rebate.eq(excluded.storage_rebate),
+                            epochs::stake_subsidy_amount.eq(excluded.stake_subsidy_amount),
+                            epochs::total_gas_fees.eq(excluded.total_gas_fees),
+                            epochs::total_stake_rewards_distributed
+                                .eq(excluded.total_stake_rewards_distributed),
+                            epochs::leftover_storage_fund_inflow
+                                .eq(excluded.leftover_storage_fund_inflow),
+                            epochs::epoch_commitments.eq(excluded.epoch_commitments)
+                        ),
+                        conn
+                    );
                 }
+
                 let epoch_id = epoch.new_epoch.epoch;
                 info!(epoch_id, "Persisting epoch beginning info");
                 let new_epoch = StoredEpochInfo::from_epoch_beginning_info(&epoch.new_epoch);
-                diesel::insert_into(epochs::table)
-                    .values(new_epoch)
-                    .on_conflict_do_nothing()
-                    .execute(conn)?;
+                insert_or_ignore_into!(epochs::table, new_epoch, conn);
                 Ok::<(), IndexerError>(())
             },
             PG_DB_COMMIT_SLEEP_DURATION

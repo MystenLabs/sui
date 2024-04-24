@@ -17,7 +17,7 @@ pub struct TxSequenceNumber {
 
 #[derive(QueryableByName)]
 pub struct TxDigest {
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
 }
 

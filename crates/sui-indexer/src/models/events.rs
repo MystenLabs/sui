@@ -29,16 +29,22 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub event_sequence_number: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
 
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub checkpoint_sequence_number: i64,
 
+    #[cfg(feature = "postgres-feature")]
     #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
     pub senders: Vec<Option<Vec<u8>>>,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[cfg(feature = "mysql-feature")]
+    #[cfg(not(feature = "postgres-feature"))]
+    #[diesel(sql_type = diesel::sql_types::Json)]
+    pub senders: serde_json::Value,
+
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub package: Vec<u8>,
 
     #[diesel(sql_type = diesel::sql_types::Text)]
@@ -59,9 +65,16 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub timestamp_ms: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub bcs: Vec<u8>,
 }
+
+#[cfg(feature = "postgres-feature")]
+pub type SendersType = Vec<Option<Vec<u8>>>;
+
+#[cfg(feature = "postgres-feature")]
+#[cfg(not(feature = "postgres-feature"))]
+pub type SendersType = serde_json::Value;
 
 impl From<IndexedEvent> for StoredEvent {
     fn from(event: IndexedEvent) -> Self {
@@ -70,11 +83,15 @@ impl From<IndexedEvent> for StoredEvent {
             event_sequence_number: event.event_sequence_number as i64,
             transaction_digest: event.transaction_digest.into_inner().to_vec(),
             checkpoint_sequence_number: event.checkpoint_sequence_number as i64,
+            #[cfg(feature = "postgres-feature")]
             senders: event
                 .senders
                 .into_iter()
                 .map(|sender| Some(sender.to_vec()))
                 .collect(),
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            senders: serde_json::to_value(event.senders).unwrap(),
             package: event.package.to_vec(),
             module: event.module.clone(),
             event_type: event.event_type.clone(),
@@ -99,13 +116,37 @@ impl StoredEvent {
             ))
         })?;
         // Note: SuiEvent only has one sender today, so we always use the first one.
-        let sender = self.senders.first().ok_or_else(|| {
-            IndexerError::PersistentStorageDataCorruptionError(
-                "Event senders should contain at least one address".to_string(),
-            )
-        })?;
+        let sender = {
+            #[cfg(feature = "postgres-feature")]
+            {
+                self.senders.first().ok_or_else(|| {
+                    IndexerError::PersistentStorageDataCorruptionError(
+                        "Event senders should contain at least one address".to_string(),
+                    )
+                })?
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                self.senders
+                    .as_array()
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(
+                            "Failed to parse event senders as array".to_string(),
+                        )
+                    })?
+                    .first()
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(
+                            "Event senders should contain at least one address".to_string(),
+                        )
+                    })?
+                    .as_str()
+                    .map(|s| s.as_bytes().to_vec())
+            }
+        };
         let sender = match sender {
-            Some(s) => SuiAddress::from_bytes(s).map_err(|_e| {
+            Some(ref s) => SuiAddress::from_bytes(s).map_err(|_e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to parse event sender address: {:?}",
                     sender
