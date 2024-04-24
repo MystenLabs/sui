@@ -21,7 +21,7 @@ use sui_types::transaction::{
 };
 use tokio::time::sleep;
 
-use sui::client_commands::SwitchResponse;
+use sui::client_commands::{Opts, OptsWithGas, SwitchResponse};
 use sui::{
     client_commands::{SuiClientCommandResult, SuiClientCommands},
     sui_commands::SuiCommand,
@@ -227,13 +227,9 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config,
-        gas: Some(gas_obj_id),
-        dry_run: false,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -261,13 +257,9 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
         module: "test_module".to_string(),
         function: "new_shared".to_string(),
         type_args: vec![],
-        dry_run: false,
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -478,11 +470,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     SuiClientCommands::Transfer {
         to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
         object_id: object_to_send,
-        gas: Some(object_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(object_id), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -528,13 +516,9 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_PUBLISH * rgp,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -616,12 +600,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args,
-        gas: None,
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: None,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -657,12 +637,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: None,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -685,12 +661,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: None,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -710,12 +682,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: Some(1),
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -742,12 +710,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "transfer".to_string(),
         type_args: vec![],
         args: args.to_vec(),
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS,
         gas_price: None,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
     }
     .execute(context)
     .await?;
@@ -764,12 +728,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         function: "create".to_string(),
         type_args: vec![],
         args,
-        gas: None,
-        gas_budget: TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
         gas_price: Some(12345),
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -820,13 +780,9 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -894,13 +850,9 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config: build_config.clone(),
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -968,13 +920,9 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1007,13 +955,9 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         module: "sod".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
-        dry_run: false,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1031,13 +975,9 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
         module: "sod".to_string(),
         function: "delete".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
-        dry_run: false,
         args: vec![SuiJsonValue::from_str(&shared_id.to_string()).unwrap()],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1084,13 +1024,9 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1123,13 +1059,9 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
-        dry_run: false,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1163,16 +1095,12 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "receiver".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         gas_price: None,
-        dry_run: false,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1219,13 +1147,9 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1258,13 +1182,9 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         gas_price: None,
-        dry_run: false,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1298,16 +1218,12 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "invalid_call_immut_ref".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         gas_price: None,
-        dry_run: false,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1354,13 +1270,9 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1393,13 +1305,9 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "start".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         gas_price: None,
-        dry_run: false,
         args: vec![],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1433,16 +1341,12 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
         module: "tto".to_string(),
         function: "invalid_call_mut_ref".to_string(),
         type_args: vec![],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         gas_price: None,
-        dry_run: false,
         args: vec![
             SuiJsonValue::from_str(&parent.object_id.to_string()).unwrap(),
             SuiJsonValue::from_str(&child.object_id.to_string()).unwrap(),
         ],
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -1491,13 +1395,9 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     let resp = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1564,13 +1464,9 @@ async fn test_package_publish_command_with_unpublished_dependency_fails(
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -1611,13 +1507,9 @@ async fn test_package_publish_command_non_zero_unpublished_dep_fails() -> Result
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -1667,13 +1559,9 @@ async fn test_package_publish_command_failure_invalid() -> Result<(), anyhow::Er
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -1710,13 +1598,9 @@ async fn test_package_publish_nonexistent_dependency() -> Result<(), anyhow::Err
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -1754,13 +1638,9 @@ async fn test_package_publish_test_flag() -> Result<(), anyhow::Error> {
     let result = SuiClientCommands::Publish {
         package_path,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await;
@@ -1810,13 +1690,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1884,13 +1760,9 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -1953,13 +1825,9 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config: build_config_publish.clone(),
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2034,13 +1902,9 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
         build_config: build_config_upgrade.clone(),
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2116,13 +1980,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let obj_id = object_refs.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
-        gas: Some(gas_obj_id),
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
         to: KeyIdentity::Address(recipient),
         object_id: obj_id,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2226,13 +2086,9 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let obj_id = object_refs.data.get(1).unwrap().object().unwrap().object_id;
 
     let resp = SuiClientCommands::Transfer {
-        gas: None,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
         to: KeyIdentity::Address(recipient),
         object_id: obj_id,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2544,11 +2400,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::MergeCoin {
         primary_coin,
         coin_to_merge,
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC),
     }
     .execute(context)
     .await?;
@@ -2601,11 +2453,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::MergeCoin {
         primary_coin,
         coin_to_merge,
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_GENERIC),
     }
     .execute(context)
     .await?;
@@ -2665,14 +2513,10 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Test with gas specified
     let resp = SuiClientCommands::SplitCoin {
-        gas: Some(gas),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN),
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2735,14 +2579,10 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Test split coin into equal parts
     let resp = SuiClientCommands::SplitCoin {
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN),
         coin_id: coin,
         amounts: None,
         count: Some(3),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2807,14 +2647,10 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN,
-        dry_run: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN),
         coin_id: coin,
         amounts: Some(vec![1000, 10]),
         count: None,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
     }
     .execute(context)
     .await?;
@@ -2920,11 +2756,13 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
         amount: Some(1),
-        serialize_unsigned_transaction: true,
-        serialize_signed_transaction: false,
+        opts: Opts {
+            gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+            dry_run: false,
+            serialize_unsigned_transaction: true,
+            serialize_signed_transaction: false,
+        },
     }
     .execute(context)
     .await?;
@@ -2932,11 +2770,13 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(address1),
         sui_coin_object_id: coin,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
         amount: Some(1),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: true,
+        opts: Opts {
+            gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+            dry_run: false,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: true,
+        },
     }
     .execute(context)
     .await?;
@@ -2945,11 +2785,13 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     SuiClientCommands::TransferSui {
         to: KeyIdentity::Alias(alias1),
         sui_coin_object_id: coin,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
         amount: Some(1),
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: true,
+        opts: Opts {
+            gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+            dry_run: false,
+            serialize_unsigned_transaction: false,
+            serialize_signed_transaction: true,
+        },
     }
     .execute(context)
     .await?;
@@ -3249,11 +3091,10 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     let transfer_dry_run = SuiClientCommands::Transfer {
         to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
         object_id: object_to_send,
-        gas: Some(object_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: true,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing_dry_run(
+            Some(object_id),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        ),
     }
     .execute(context)
     .await?;
@@ -3264,11 +3105,8 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     let transfer_sui_dry_run = SuiClientCommands::TransferSui {
         to: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
         sui_coin_object_id: object_to_send,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: true,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
         amount: Some(1),
+        opts: Opts::for_testing_dry_run(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3280,11 +3118,7 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
         input_coins: vec![object_id],
         recipients: vec![KeyIdentity::Address(SuiAddress::random_for_testing_only())],
         amounts: vec![1],
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: true,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing_dry_run(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3302,11 +3136,10 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
         input_coins: vec![object_id],
         recipients: vec![KeyIdentity::Address(SuiAddress::random_for_testing_only())],
         amounts: vec![1],
-        gas: Some(gas_coin_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: true,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing_dry_run(
+            Some(gas_coin_id),
+            rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
+        ),
     }
     .execute(context)
     .await?;
@@ -3318,10 +3151,7 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
         input_coins: vec![object_id],
         recipients: vec![KeyIdentity::Address(SuiAddress::random_for_testing_only())],
         amounts: vec![1],
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: true,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: Opts::for_testing_dry_run(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3332,10 +3162,7 @@ async fn test_dry_run() -> Result<(), anyhow::Error> {
     let pay_all_sui_dry_run = SuiClientCommands::PayAllSui {
         input_coins: vec![object_id],
         recipient: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: true,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: Opts::for_testing_dry_run(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3406,12 +3233,8 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     let pay = SuiClientCommands::Pay {
         input_coins: vec![object_id1, object_id2],
         recipients: vec![recipient1.clone(), recipient2.clone()],
-        gas: Some(object_id1),
         amounts: vec![5000, 10000],
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(object_id1), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await;
@@ -3424,12 +3247,8 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     let pay = SuiClientCommands::Pay {
         input_coins: vec![object_id1, object_id2],
         recipients: vec![recipient1.clone(), recipient2.clone()],
-        gas: None, // will select the first available gas coin
         amounts: amounts.into(),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3510,10 +3329,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
         input_coins: vec![object_id1, object_id2],
         recipients: vec![recipient1.clone(), recipient2.clone()],
         amounts: amounts.into(),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3590,10 +3406,7 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
     let pay_all_sui = SuiClientCommands::PayAllSui {
         input_coins: vec![object_id1, object_id2],
         recipient: recipient1.clone(),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3638,11 +3451,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     let transfer = SuiClientCommands::Transfer {
         to: KeyIdentity::Address(address2),
         object_id: object_id1,
-        gas: Some(object_id1),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(object_id1), rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await;
@@ -3653,11 +3462,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     let transfer = SuiClientCommands::Transfer {
         to: recipient1.clone(),
         object_id: object_id1,
-        gas: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(None, rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3705,10 +3510,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
         to: KeyIdentity::Address(address2),
         sui_coin_object_id: object_id1,
         amount: Some(amount),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
@@ -3749,10 +3551,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
         to: recipient1.clone(),
         sui_coin_object_id: object_id1,
         amount: None,
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
-        dry_run: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: Opts::for_testing(rgp * TEST_ONLY_GAS_UNIT_FOR_TRANSFER),
     }
     .execute(context)
     .await?;
