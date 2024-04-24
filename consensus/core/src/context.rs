@@ -4,6 +4,7 @@
 use std::sync::Arc;
 use std::time::{Instant, SystemTime};
 
+use crate::block::BlockTimestampMs;
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 #[cfg(test)]
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};

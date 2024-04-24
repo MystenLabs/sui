@@ -9,6 +9,7 @@ use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tracing::info;
 
+use crate::context::Clock;
 use crate::{
     authority_service::AuthorityService,
     block_manager::BlockManager,
