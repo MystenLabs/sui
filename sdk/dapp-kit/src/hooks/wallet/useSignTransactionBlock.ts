@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { TransactionBlock } from '@mysten/sui.js/transactions';
 import type {
 	SuiSignTransactionBlockV2Input,
 	SuiSignTransactionBlockV2Output,
@@ -15,10 +16,16 @@ import {
 } from '../..//errors/walletErrors.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import type { PartialBy } from '../../types/utilityTypes.js';
+import { useSuiClient } from '../useSuiClient.js';
 import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
-type UseSignTransactionBlockArgs = PartialBy<SuiSignTransactionBlockV2Input, 'account' | 'chain'>;
+type UseSignTransactionBlockArgs = PartialBy<
+	Omit<SuiSignTransactionBlockV2Input, 'transactionBlock'>,
+	'account' | 'chain'
+> & {
+	transactionBlock: TransactionBlock;
+};
 
 type UseSignTransactionBlockResult = SuiSignTransactionBlockV2Output;
 
@@ -51,10 +58,11 @@ export function useSignTransactionBlock({
 > {
 	const { currentWallet } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
+	const client = useSuiClient();
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signTransactionBlock(mutationKey),
-		mutationFn: async (signTransactionBlockArgs) => {
+		mutationFn: async ({ transactionBlock, ...signTransactionBlockArgs }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
@@ -75,6 +83,10 @@ export function useSignTransactionBlock({
 
 			return await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
+				transactionBlock: await transactionBlock.toJSON({
+					supportedIntents: [],
+					client,
+				}),
 				account: signerAccount,
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
