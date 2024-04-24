@@ -749,6 +749,7 @@ impl SuiClientCommands {
                     path,
                     terminate_early,
                     num_tasks: 16,
+                    persist_path: None,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
