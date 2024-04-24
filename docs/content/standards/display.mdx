@@ -100,7 +100,7 @@ module examples::my_hero {
         let publisher = package::claim(otw, ctx);
 
         // Get a new `Display` object for the `Hero` type.
-        let display = display::new_with_fields<Hero>(
+        let mut display = display::new_with_fields<Hero>(
             &publisher, keys, values, ctx
         );
 

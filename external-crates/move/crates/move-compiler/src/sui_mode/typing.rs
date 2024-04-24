@@ -403,10 +403,12 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         if !is_otw {
             let msg = format!(
                 "Invalid parameter '{}' of type {}. \
-                Expected a one-time witness type, '{}::{otw_name}",
+                Expected a one-time witness type, {}::{otw_name}, \
+                like this: ({}: {otw_name}, ...other parameters)",
                 first_var.value.name,
                 error_format(first_ty, &Subst::empty()),
                 context.current_module(),
+                first_var.value.name,
             );
             let mut diag = diag!(
                 INIT_FUN_DIAG,
