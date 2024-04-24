@@ -704,6 +704,18 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
         SuiJsonValue::new(json!(address2))?,
     ];
 
+    SuiClientCommands::Call {
+        package,
+        module: "object_basics".to_string(),
+        function: "transfer".to_string(),
+        type_args: vec![],
+        args: args.to_vec(),
+        gas_price: None,
+        opts: OptsWithGas::for_testing(Some(gas), rgp * TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS),
+    }
+    .execute(context)
+    .await?;
+
     // Try a call with customized gas price.
     let args = vec![
         SuiJsonValue::new(json!("123"))?,
