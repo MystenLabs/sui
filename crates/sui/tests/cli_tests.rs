@@ -3619,9 +3619,17 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     .unwrap();
     if let SuiClientCommandResult::TransferSui(response) = transfer_sui_cmd {
         assert!(response.status_ok().unwrap());
-        let gas_used = response.effects.unwrap().gas_object().object_id();
+        let gas_used = response.effects.as_ref().unwrap().gas_object().object_id();
         assert_eq!(gas_used, object_id1);
-        assert!(response.effects.unwrap().gas_cost_summary().gas_used() <= gas_estimate.unwrap());
+        assert!(
+            response
+                .effects
+                .as_ref()
+                .unwrap()
+                .gas_cost_summary()
+                .gas_used()
+                <= gas_estimate.unwrap()
+        );
     } else {
         panic!("TransferSui test failed");
     }
