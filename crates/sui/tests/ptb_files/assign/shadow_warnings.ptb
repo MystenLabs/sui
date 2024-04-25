@@ -3,5 +3,4 @@
 --assign b 4
 --assign a a
 --assign a 4
---gas-budget 1
 --warn-shadows

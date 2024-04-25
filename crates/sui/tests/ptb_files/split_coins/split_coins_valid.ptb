@@ -9,4 +9,3 @@
 --move-call sui::coin::destroy_zero<sui::sui::SUI> zcoins.1
 # Can merge the split coins back
 --merge-coins gas [coins.1, coins.2, coins.3]
---gas-budget 10000000

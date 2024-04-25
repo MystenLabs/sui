@@ -12,8 +12,6 @@ expression: "results.join(\"\\n\")"
 │ assign           │ result          │
 │ transfer-objects │ [result.0] @0x6 │
 ├──────────────────┼─────────────────┤
-│ gas-budget       │ 100000          │
-╰──────────────────┴─────────────────╯
  === BUILT PTB === 
 Input 0: SharedObject(mutable: true)
 Input 1: Pure([232, 3, 0, 0, 0, 0, 0, 0])

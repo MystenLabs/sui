@@ -17,8 +17,6 @@ expression: "results.join(\"\\n\")"
 │ move-call   │ sui::coin::destroy_zero<sui::sui::SUI> zcoins.1 │
 │ merge-coins │ gas [coins.1, coins.2, coins.3]                 │
 ├─────────────┼─────────────────────────────────────────────────┤
-│ gas-budget  │ 10000000                                        │
-╰─────────────┴─────────────────────────────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0])
 Input 1: Pure([1, 0, 0, 0, 0, 0, 0, 0])

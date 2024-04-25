@@ -12,8 +12,6 @@ expression: "results.join(\"\\n\")"
 │ assign        │ a                        │
 │ make-move-vec │ <vector<address>> [a, a] │
 ├───────────────┼──────────────────────────┤
-│ gas-budget    │ 1000000000               │
-╰───────────────┴──────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 Command 0: MakeMoveVec(Someaddress,[Input(0)])

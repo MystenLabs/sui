@@ -1,3 +1,2 @@
---gas-budget 1000 
 # Invalid module access
 --move-call invalid_access

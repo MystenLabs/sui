@@ -6,4 +6,3 @@
 --assign "c1" coins.1
 --merge-coins gas [c0, c1]
 
---gas-budget 10000000

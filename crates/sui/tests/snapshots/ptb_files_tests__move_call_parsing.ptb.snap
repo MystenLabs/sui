@@ -4,9 +4,8 @@ expression: "results.join(\"\\n\")"
 ---
  === ERRORS AFTER PARSING INPUT COMMANDS === 
   × Error when processing PTB
-   ╭─[2:27]
- 1 │ --gas-budget 1000
- 2 │ --move-call invalid_access 
+   ╭────
+ 1 │ --move-call invalid_access 
    ·                           ▲
    ·                           ╰── Expected '::' but found end of input
    ╰────

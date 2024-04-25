@@ -3,5 +3,3 @@
 # Make sure that the second usage of 's' here binds to/uses the same input as the move call above
 --make-move-vec <address> [s]
 
---gas-budget 100000
-
