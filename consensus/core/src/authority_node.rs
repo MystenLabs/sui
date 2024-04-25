@@ -9,7 +9,6 @@ use prometheus::Registry;
 use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tracing::info;
 
-use crate::context::Clock;
 use crate::{
     authority_service::AuthorityService,
     block_manager::BlockManager,
@@ -17,7 +16,7 @@ use crate::{
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitVoteMonitor},
-    context::Context,
+    context::{Clock, Context},
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
