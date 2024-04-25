@@ -37,7 +37,7 @@ public entry fun create_game(x_address: address, o_address: address, ctx: &mut T
     // TODO: Validate sender address, only GameAdmin can create games.
 
     let id = object::new(ctx);
-    let game_id = object::uid_to_inner(&id);
+    let game_id = id.to_inner();
     let gameboard = vector[
         vector[option::none(), option::none(), option::none()],
         vector[option::none(), option::none(), option::none()],
@@ -249,7 +249,7 @@ The `create_game` function is fairly similar to one in the previous two versions
 /// x_addr and o_addr should be the two addresses part-taking in the multisig.
 public fun create_game(x_addr: address, o_addr: address, ctx: &mut TxContext) {
     let id = object::new(ctx);
-    let game_id = object::uid_to_inner(&id);
+    let game_id = id.to_inner();
 
     let tic_tac_toe = TicTacToe {
         id,
@@ -293,7 +293,7 @@ public fun send_mark_to_game(mark: Mark, row: u8, col: u8) {
 /// This is called by the multisig account to execute the last move by the player who used
 /// `send_mark_to_game`.
 public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
-    assert!(mark.game_id == object::uid_to_inner(&game.id), EMarkIsFromDifferentGame);
+    assert!(mark.game_id == game.id.to_inner(), EMarkIsFromDifferentGame);
 
     let addr = get_cur_turn_address(game);
     // Note here we empty the option
@@ -330,7 +330,7 @@ public fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
                 winner,
                 loser,
                 played_as,
-                game_id: object::uid_to_inner(&game.id)
+                game_id: game.id.to_inner()
             },
             winner
         );
