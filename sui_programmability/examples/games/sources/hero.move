@@ -119,7 +119,7 @@ module games::hero {
 
     /// Create a new game. Separated to bypass public entry vs init requirements.
     fun create(ctx: &mut TxContext) {
-        let sender = tx_context::sender(ctx);
+        let sender = ctx.sender();
         let id = object::new(ctx);
         let game_id = object::uid_to_inner(&id);
 
@@ -167,12 +167,12 @@ module games::hero {
         // hero gains experience proportional to the boar, sword grows in
         // strength by one (if hero is using a sword)
         hero.experience = hero.experience + hp;
-        if (option::is_some(&hero.sword)) {
-            level_up_sword(option::borrow_mut(&mut hero.sword), 1)
+        if (hero.sword.is_some()) {
+            level_up_sword(hero.sword.borrow_mut(), 1)
         };
         // let the world know about the hero's triumph by emitting an event!
         event::emit(BoarSlainEvent {
-            slayer_address: tx_context::sender(ctx),
+            slayer_address: ctx.sender(),
             hero: object::uid_to_inner(&hero.id),
             boar: object::uid_to_inner(&boar_id),
             game_id: id(game)
@@ -187,8 +187,8 @@ module games::hero {
             return 0
         };
 
-        let sword_strength = if (option::is_some(&hero.sword)) {
-            sword_strength(option::borrow(&hero.sword))
+        let sword_strength = if (hero.sword.is_some()) {
+            sword_strength(hero.sword.borrow())
         } else {
             // hero can fight without a sword, but will not be very strong
             0
@@ -221,14 +221,14 @@ module games::hero {
     /// Add `new_sword` to the hero's inventory and return the old sword
     /// (if any)
     public fun equip_sword(hero: &mut Hero, new_sword: Sword): Option<Sword> {
-        option::swap_or_fill(&mut hero.sword, new_sword)
+        hero.sword.swap_or_fill(new_sword)
     }
 
     /// Disarm the hero by returning their sword.
     /// Aborts if the hero does not have a sword.
     public fun remove_sword(hero: &mut Hero): Sword {
-        assert!(option::is_some(&hero.sword), ENO_SWORD);
-        option::extract(&mut hero.sword)
+        assert!(hero.sword.is_some(), ENO_SWORD);
+        hero.sword.extract()
     }
 
     // --- Object creation ---
@@ -241,7 +241,7 @@ module games::hero {
         payment: Coin<SUI>,
         ctx: &mut TxContext
     ): Sword {
-        let value = coin::value(&payment);
+        let value = payment.value();
         // ensure the user pays enough for the sword
         assert!(value >= MIN_SWORD_COST, EINSUFFICIENT_FUNDS);
         // pay the admin for this sword
@@ -263,7 +263,7 @@ module games::hero {
     ) {
         let sword = create_sword(game, payment, ctx);
         let hero = create_hero(game, sword, ctx);
-        transfer::public_transfer(hero, tx_context::sender(ctx))
+        transfer::public_transfer(hero, ctx.sender())
     }
 
     /// Anyone can create a hero if they have a sword. All heroes start with the
@@ -335,7 +335,7 @@ module games::hero {
     public fun delete_hero_for_testing(hero: Hero) {
         let Hero { id, hp: _, experience: _, sword, game_id: _ } = hero;
         object::delete(id);
-        let sword = option::destroy_some(sword);
+        let sword = sword.destroy_some();
         let Sword { id, magic: _, strength: _, game_id: _ } = sword;
         object::delete(id)
     }
@@ -356,40 +356,40 @@ module games::hero {
         let mut scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
         // Run the module initializers
-        test_scenario::next_tx(scenario, admin);
+        scenario.next_tx(admin);
         {
-            init(test_scenario::ctx(scenario));
+            init(scenario.ctx());
         };
         // Player purchases a hero with the coins
-        test_scenario::next_tx(scenario, player);
+        scenario.next_tx(player);
         {
-            let game = test_scenario::take_immutable<GameInfo>(scenario);
+            let game = scenario.take_immutable<GameInfo>();
             let game_ref = &game;
-            let coin = coin::mint_for_testing(500, test_scenario::ctx(scenario));
-            acquire_hero(game_ref, coin, test_scenario::ctx(scenario));
+            let coin = coin::mint_for_testing(500, scenario.ctx());
+            acquire_hero(game_ref, coin, scenario.ctx());
             test_scenario::return_immutable(game);
         };
         // Admin sends a boar to the Player
-        test_scenario::next_tx(scenario, admin);
+        scenario.next_tx(admin);
         {
-            let game = test_scenario::take_immutable<GameInfo>(scenario);
+            let game = scenario.take_immutable<GameInfo>();
             let game_ref = &game;
-            let mut admin_cap = test_scenario::take_from_sender<GameAdmin>(scenario);
-            send_boar(game_ref, &mut admin_cap, 10, 10, player, test_scenario::ctx(scenario));
-            test_scenario::return_to_sender(scenario, admin_cap);
+            let mut admin_cap = scenario.take_from_sender<GameAdmin>();
+            send_boar(game_ref, &mut admin_cap, 10, 10, player, scenario.ctx());
+            scenario.return_to_sender(admin_cap);
             test_scenario::return_immutable(game);
         };
         // Player slays the boar!
-        test_scenario::next_tx(scenario, player);
+        scenario/next_tx(player);
         {
-            let game = test_scenario::take_immutable<GameInfo>(scenario);
+            let game = scenario.take_immutable<GameInfo>();
             let game_ref = &game;
-            let mut hero = test_scenario::take_from_sender<Hero>(scenario);
-            let boar = test_scenario::take_from_sender<Boar>(scenario);
-            slay(game_ref, &mut hero, boar, test_scenario::ctx(scenario));
-            test_scenario::return_to_sender(scenario, hero);
+            let mut hero = scenario.take_from_sender<Hero>();
+            let boar = scenario.take_from_sender<Boar>();
+            slay(game_ref, &mut hero, boar, scenario.ctx());
+            scenario.return_to_sender(hero);
             test_scenario::return_immutable(game);
         };
-        test_scenario::end(scenario_val);
+        scenario_val.end();
     }
 }

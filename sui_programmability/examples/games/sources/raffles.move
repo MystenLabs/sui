@@ -60,18 +60,18 @@ module games::raffle_with_tickets {
     /// functions are allowed, the calling function might abort the transaction depending on the winner.)
     /// Gas based attacks are not possible since the gas cost of this function is independent of the winner.
     entry fun determine_winner(game: &mut Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
-        assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
-        assert!(option::is_none(&game.winner), EGameAlreadyCompleted);
+        assert!(game.end_time <= clock.timestamp_ms(), EGameInProgress);
+        assert!(game.winner.is_none(), EGameAlreadyCompleted);
         assert!(game.participants > 0, ENoParticipants);
         let mut generator = new_generator(r, ctx);
-        let winner = random::generate_u32_in_range(&mut generator, 1, game.participants);
+        let winner = generator.generate_u32_in_range(1, game.participants);
         game.winner = option::some(winner);
     }
 
     /// Anyone can play and receive a ticket.
     public fun buy_ticket(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext): Ticket {
-        assert!(game.end_time > clock::timestamp_ms(clock), EGameAlreadyCompleted);
-        assert!(coin::value(&coin) == game.cost_in_sui, EInvalidAmount);
+        assert!(game.end_time > clock.timestamp_ms(), EGameAlreadyCompleted);
+        assert!(coin.value() == game.cost_in_sui, EInvalidAmount);
 
         game.participants = game.participants + 1;
         coin::put(&mut game.balance, coin);
@@ -86,7 +86,7 @@ module games::raffle_with_tickets {
     /// The winner can take the prize.
     public fun redeem(ticket: Ticket, game: Game, ctx: &mut TxContext): Coin<SUI> {
         assert!(object::id(&game) == ticket.game_id, EGameMismatch);
-        assert!(option::contains(&game.winner, &ticket.participant_index), ENotWinner);
+        assert!(game.winner.contains(&ticket.participant_index), ENotWinner);
         destroy_ticket(ticket);
 
         let Game { id, cost_in_sui: _, participants: _, end_time: _, winner: _, balance } = game;

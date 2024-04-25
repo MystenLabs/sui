@@ -123,7 +123,7 @@ module games::drand_based_lottery {
     /// The winner can redeem its ticket.
     public entry fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
         assert!(object::id(game) == ticket.game_id, EInvalidTicket);
-        assert!(option::contains(&game.winner, &ticket.participant_index), EInvalidTicket);
+        assert!(game.winner.contains(&ticket.participant_index), EInvalidTicket);
 
         let winner = GameWinner {
             id: object::new(ctx),
