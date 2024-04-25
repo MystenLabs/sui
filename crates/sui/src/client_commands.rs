@@ -134,7 +134,6 @@ macro_rules! serialize_or_execute {
 }
 
 /// Only to be used within CLI
-pub const MAX_GAS_BUDGET: u64 = 50_000_000_000;
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
 #[derive(Parser)]
