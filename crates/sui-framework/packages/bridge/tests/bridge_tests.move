@@ -2,19 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::bridge_tests {
+module bridge::bridge_tests {
     use bridge::bridge::{
         assert_not_paused, assert_paused, create_bridge_for_testing, execute_system_message,
-        get_token_transfer_action_status, inner_limiter, inner_paused, 
-        inner_treasury, inner_token_transfer_records, new_bridge_record_for_testing, 
+        get_token_transfer_action_status, inner_limiter, inner_paused,
+        inner_treasury, inner_token_transfer_records, new_bridge_record_for_testing,
         new_for_testing, send_token, test_execute_emergency_op, test_init_bridge_committee,
-        test_get_current_seq_num_and_increment, test_execute_update_asset_price, 
+        test_get_current_seq_num_and_increment, test_execute_update_asset_price,
         test_execute_update_bridge_limit, test_get_token_transfer_action_signatures,
         test_load_inner_mut, transfer_status_approved, transfer_status_claimed,
-        transfer_status_not_found, transfer_status_pending, 
+        transfer_status_not_found, transfer_status_pending,
         Bridge,
     };
-    use bridge::chain_ids; 
+    use bridge::chain_ids;
     use bridge::message::{Self, create_blocklist_message};
     use bridge::message_types;
     use bridge::treasury::{BTC, ETH};
@@ -43,18 +43,18 @@ module sui::bridge_tests {
     #[test_only]
     const VALIDATOR2_PUBKEY: vector<u8> = b"033e99a541db69bd32040dfe5037fbf5210dafa8151a71e21c5204b05d95ce0a62";
 
-    // common error start code for unexpected errors in tests (assertions). 
+    // common error start code for unexpected errors in tests (assertions).
     // If more than one assert in a test needs to use an unexpected error code,
     // use this as the starting error and add 1 to subsequent errors
-    const UNEXPECTED_ERROR: u64 = 10293847; 
+    const UNEXPECTED_ERROR: u64 = 10293847;
     // use on tests that fail to save cleanup
-    const TEST_DONE: u64 = 74839201; 
+    const TEST_DONE: u64 = 74839201;
 
     //
     // Utility functions
     //
 
-    // Info to set up a validator 
+    // Info to set up a validator
     public struct ValidatorInfo has copy, drop {
         validator: address,
         stake_amount: u64,
@@ -62,7 +62,7 @@ module sui::bridge_tests {
 
     // Add a validator to the chain
     fun setup_validators(
-        scenario: &mut Scenario, 
+        scenario: &mut Scenario,
         validators_info: vector<ValidatorInfo>,
         sender: address,
     ) {
@@ -382,19 +382,19 @@ module sui::bridge_tests {
         );
         // other message type nonce does not change
         assert!(
-            !inner.sequence_nums().contains(&message_types::token()), 
+            !inner.sequence_nums().contains(&message_types::token()),
             UNEXPECTED_ERROR + 3,
         );
         assert!(
-            !inner.sequence_nums().contains(&message_types::emergency_op()), 
+            !inner.sequence_nums().contains(&message_types::emergency_op()),
             UNEXPECTED_ERROR + 4,
         );
         assert!(
-            !inner.sequence_nums().contains(&message_types::update_bridge_limit()), 
+            !inner.sequence_nums().contains(&message_types::update_bridge_limit()),
             UNEXPECTED_ERROR + 5,
         );
         assert!(
-            !inner.sequence_nums().contains(&message_types::update_asset_price()), 
+            !inner.sequence_nums().contains(&message_types::update_asset_price()),
             UNEXPECTED_ERROR + 6,
         );
         assert!(
@@ -436,10 +436,10 @@ module sui::bridge_tests {
         assert!(
             inner.inner_limiter().get_route_limit(
                 &chain_ids::get_route(
-                    chain_ids::eth_mainnet(), 
+                    chain_ids::eth_mainnet(),
                     chain_ids::sui_mainnet(),
                 ),
-            ) != 1, 
+            ) != 1,
             UNEXPECTED_ERROR,
         );
         // now shrink to 1 for SUI mainnet -> ETH mainnet
@@ -456,20 +456,20 @@ module sui::bridge_tests {
         assert!(
             inner.inner_limiter().get_route_limit(
                 &chain_ids::get_route(
-                    chain_ids::eth_mainnet(), 
+                    chain_ids::eth_mainnet(),
                     chain_ids::sui_mainnet()
                 ),
-            ) == 1, 
+            ) == 1,
             UNEXPECTED_ERROR + 1,
         );
         // other routes are not impacted
         assert!(
             inner.inner_limiter().get_route_limit(
                 &chain_ids::get_route(
-                    chain_ids::eth_sepolia(), 
+                    chain_ids::eth_sepolia(),
                     chain_ids::sui_testnet(),
                 ),
-            ) != 1, 
+            ) != 1,
             UNEXPECTED_ERROR + 2,
         );
 
@@ -512,7 +512,7 @@ module sui::bridge_tests {
 
         // Assert the starting limit is a different value
         assert!(
-            inner.inner_treasury().notional_value<BTC>() != 1_001_000_000, 
+            inner.inner_treasury().notional_value<BTC>() != 1_001_000_000,
             UNEXPECTED_ERROR,
         );
         // now change it to 100_001_000
@@ -532,7 +532,7 @@ module sui::bridge_tests {
         );
         // other assets are not impacted
         assert!(
-            inner.inner_treasury().notional_value<ETH>() != 1_001_000_000, 
+            inner.inner_treasury().notional_value<ETH>() != 1_001_000_000,
             UNEXPECTED_ERROR + 2,
         );
 
@@ -628,7 +628,7 @@ module sui::bridge_tests {
 
         let key = message.key();
         bridge.test_load_inner_mut().inner_token_transfer_records().push_back(
-            key, 
+            key,
             new_bridge_record_for_testing(message, option::none(), false),
         );
         assert!(
@@ -638,7 +638,7 @@ module sui::bridge_tests {
         );
         assert!(
             bridge.test_get_token_transfer_action_signatures(chain_id, 10) == option::none(),
-            UNEXPECTED_ERROR + 1,  
+            UNEXPECTED_ERROR + 1,
         );
 
         // Test when ready for claim
@@ -653,7 +653,7 @@ module sui::bridge_tests {
         );
         let key = message.key();
         bridge.test_load_inner_mut().inner_token_transfer_records().push_back(
-            key, 
+            key,
             new_bridge_record_for_testing(message, option::some(vector[]), false),
         );
         assert!(
@@ -679,7 +679,7 @@ module sui::bridge_tests {
         );
         let key = message.key();
         bridge.test_load_inner_mut().inner_token_transfer_records().push_back(
-            key, 
+            key,
             new_bridge_record_for_testing(message, option::some(vector[b"1234"]), true),
         );
         assert!(
@@ -688,7 +688,7 @@ module sui::bridge_tests {
             UNEXPECTED_ERROR + 3,
         );
         assert!(
-            bridge.test_get_token_transfer_action_signatures(chain_id, 12) 
+            bridge.test_get_token_transfer_action_signatures(chain_id, 12)
                 == option::some(vector[b"1234"]),
             UNEXPECTED_ERROR + 4,
         );
