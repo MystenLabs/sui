@@ -491,13 +491,16 @@ pub struct AuthorityEpochTables {
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
     /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
     pub(crate) randomness_highest_completed_round: DBMap<u64, RandomnessRound>,
+    /// Holds the timestamp of the most recently generated round of randomness.
+    pub(crate) randomness_last_round_timestamp: DBMap<u64, TimestampMs>,
 }
 
 // TODO: move deferral related data structures to authority_per_epoch_store_util.rs
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum DeferralKey {
-    // For transactions deferred until randomness DKG has completed.
-    RandomnessDkg {
+    // For transactions deferred until new randomness is available (whether delayd due to
+    // DKG, or skipped commits).
+    Randomness {
         deferred_from_round: Round,
     },
     // ConsensusRound deferral key requires both the round to which the tx should be deferred (so that
@@ -511,7 +514,7 @@ pub enum DeferralKey {
 
 impl DeferralKey {
     fn new_for_randomness(deferred_from_round: Round) -> Self {
-        Self::RandomnessDkg {
+        Self::Randomness {
             deferred_from_round,
         }
     }
@@ -525,10 +528,10 @@ impl DeferralKey {
 
     fn full_range_for_randomness() -> (Self, Self) {
         (
-            Self::RandomnessDkg {
+            Self::Randomness {
                 deferred_from_round: 0,
             },
-            Self::RandomnessDkg {
+            Self::Randomness {
                 deferred_from_round: u64::MAX,
             },
         )
@@ -579,7 +582,7 @@ async fn test_deferral_key_sort_order() {
     let mut previous_future_round = 0;
     for (key, _) in db.deferred_certs.unbounded_iter() {
         match key {
-            DeferralKey::RandomnessDkg { .. } => (),
+            DeferralKey::Randomness { .. } => (),
             DeferralKey::ConsensusRound { future_round, .. } => {
                 assert!(previous_future_round <= future_round);
                 previous_future_round = future_round;
@@ -637,7 +640,7 @@ async fn test_fetching_deferred_txs() {
     {
         let (key, _) = result.unwrap();
         match key {
-            DeferralKey::RandomnessDkg { .. } => {
+            DeferralKey::Randomness { .. } => {
                 panic!("Should not receive randomness deferral txn.")
             }
             DeferralKey::ConsensusRound { future_round, .. } => {
@@ -1622,6 +1625,30 @@ impl AuthorityPerEpochStore {
         self.load_deferred_transactions(batch, min, max)
     }
 
+    fn load_and_process_deferred_transactions_for_randomness(
+        &self,
+        batch: &mut DBBatch,
+        previously_deferred_tx_digests: &mut HashMap<TransactionDigest, DeferralKey>,
+        sequenced_randomness_transactions: &mut Vec<VerifiedSequencedConsensusTransaction>,
+    ) -> SuiResult {
+        let deferred_randomness_txs = self.load_deferred_transactions_for_randomness(batch)?;
+        previously_deferred_tx_digests.extend(deferred_randomness_txs.iter().flat_map(
+            |(deferral_key, txs)| {
+                txs.iter().map(|tx| match tx.0.transaction.key() {
+                    SequencedConsensusTransactionKey::External(
+                        ConsensusTransactionKey::Certificate(digest),
+                    ) => (digest, *deferral_key),
+                    _ => {
+                        panic!("deferred randomness transaction was not a user certificate: {tx:?}")
+                    }
+                })
+            },
+        ));
+        sequenced_randomness_transactions
+            .extend(deferred_randomness_txs.into_iter().flat_map(|(_, txs)| txs));
+        Ok(())
+    }
+
     fn load_deferred_transactions_for_up_to_consensus_round(
         &self,
         batch: &mut DBBatch,
@@ -1692,12 +1719,18 @@ impl AuthorityPerEpochStore {
         &self,
         cert: &VerifiedExecutableTransaction,
         commit_round: Round,
-        dkg_closed: bool,
+        dkg_failed: bool,
+        generating_randomness: bool,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         shared_object_congestion_tracker: &SharedObjectCongestionTracker,
     ) -> Option<(DeferralKey, DeferralReason)> {
-        // Defer transaction if it uses randomness but DKG has not yet closed.
-        if !dkg_closed && self.randomness_state_enabled() && cert.is_randomness_reader() {
+        // Defer transaction if it uses randomness but we aren't generating any this round.
+        // Don't defer if DKG has permanently failed; in that case we need to ignore.
+        if !dkg_failed
+            && !generating_randomness
+            && self.randomness_state_enabled()
+            && cert.is_randomness_reader()
+        {
             return Some((
                 DeferralKey::new_for_randomness(commit_round),
                 DeferralReason::RandomnessNotReady,
@@ -2538,29 +2571,51 @@ impl AuthorityPerEpochStore {
             Some(rm) => Some(rm.lock().await),
             None => None,
         };
-        let dkg_closed = self.randomness_state_enabled()
+        let dkg_failed = self.randomness_state_enabled()
             && randomness_manager
                 .as_ref()
                 .expect("randomness manager should exist if randomness is enabled")
-                .is_dkg_closed();
-        if dkg_closed {
-            let deferred_randomness_txs =
-                self.load_deferred_transactions_for_randomness(&mut batch)?;
-            previously_deferred_tx_digests.extend(deferred_randomness_txs.iter().flat_map(
-                |(deferral_key, txs)| {
-                    txs.iter().map(|tx| match tx.0.transaction.key() {
-                        SequencedConsensusTransactionKey::External(
-                            ConsensusTransactionKey::Certificate(digest),
-                        ) => (digest, *deferral_key),
-                        _ => panic!(
-                            "deferred randomness transaction was not a user certificate: {tx:?}"
-                        ),
-                    })
-                },
-            ));
-            sequenced_randomness_transactions
-                .extend(deferred_randomness_txs.into_iter().flat_map(|(_, txs)| txs));
+                .is_dkg_failed();
+        if dkg_failed {
+            self.load_and_process_deferred_transactions_for_randomness(
+                &mut batch,
+                &mut previously_deferred_tx_digests,
+                &mut sequenced_randomness_transactions,
+            )?;
         }
+
+        // Generate randomness for this commit if:
+        // 1. randomness is enabled
+        // 2. DKG is completed successfully
+        // 3. we are still accepting certs
+        let randomness_round = if !dkg_failed
+            && self.randomness_state_enabled()
+            && randomness_manager
+                .as_ref()
+                .expect("randomness manager should exist if randomness is enabled")
+                .is_dkg_successful()
+            // It is ok to just release lock here as functions called by this one are the
+            // only place that transition into RejectAllCerts state, and this function
+            // itself is always executed from consensus task.
+            && self
+                .get_reconfig_state_read_lock_guard()
+                .should_accept_tx()
+        {
+            randomness_manager
+                .as_mut()
+                .expect("randomness manager should exist if randomness is enabled")
+                .reserve_next_randomness(commit_timestamp, &mut batch)?
+        } else {
+            None
+        };
+        if randomness_round.is_some() {
+            self.load_and_process_deferred_transactions_for_randomness(
+                &mut batch,
+                &mut previously_deferred_tx_digests,
+                &mut sequenced_randomness_transactions,
+            )?;
+        }
+
         sequenced_randomness_transactions.extend(current_commit_sequenced_randomness_transactions);
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
@@ -2603,30 +2658,7 @@ impl AuthorityPerEpochStore {
             .chain(sequenced_randomness_transactions)
             .collect();
 
-        // Generate randomness for this commit if:
-        // 1. randomness is enabled
-        // 2. DKG is completed successfully
-        // 3. we are still accepting certs
-        let generate_randomness = dkg_closed
-            && randomness_manager
-                .as_ref()
-                .expect("randomness manager should exist if randomness is enabled")
-                .is_dkg_successful()
-            // It is ok to just release lock here as functions called by this one are the
-            // only place that transition into RejectAllCerts state, and this function
-            // itself is always executed from consensus task.
-            && self
-                .get_reconfig_state_read_lock_guard()
-                .should_accept_tx();
-
-        let (
-            transactions_to_schedule,
-            notifications,
-            deferred_tx_roots,
-            lock,
-            randomness_round,
-            final_round,
-        ) = self
+        let (transactions_to_schedule, notifications, deferred_tx_roots, lock, final_round) = self
             .process_consensus_transactions(
                 &mut batch,
                 &consensus_transactions,
@@ -2636,8 +2668,8 @@ impl AuthorityPerEpochStore {
                 commit_round,
                 previously_deferred_tx_digests,
                 randomness_manager.as_deref_mut(),
-                dkg_closed,
-                generate_randomness,
+                dkg_failed,
+                randomness_round,
                 authority_metrics,
             )
             .await?;
@@ -2693,6 +2725,9 @@ impl AuthorityPerEpochStore {
                     details: PendingCheckpointInfo {
                         timestamp_ms: commit_timestamp,
                         last_of_epoch: final_round,
+                        // Note if randomness is not generated for this commit, we will skip the
+                        // checkpoint with the associated height. Therefore checkpoint heights may
+                        // not be contiguous.
                         checkpoint_height: checkpoint_height + 1,
                     },
                 });
@@ -2841,28 +2876,19 @@ impl AuthorityPerEpochStore {
         commit_round: Round,
         previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
-        dkg_closed: bool,
-        generate_randomness: bool,
+        dkg_failed: bool,
+        randomness_round: Option<RandomnessRound>,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<(
         Vec<VerifiedExecutableTransaction>,    // transactions to schedule
         Vec<SequencedConsensusTransactionKey>, // keys to notify as complete
         Vec<TransactionKey>,                   // roots of any deferred transactions
         Option<RwLockWriteGuard<ReconfigState>>,
-        Option<RandomnessRound>, // round number for generated randomness
-        bool,                    // true if final round
+        bool, // true if final round
     )> {
-        let randomness_round = if generate_randomness {
-            assert!(dkg_closed);
-            Some(
-                randomness_manager
-                    .as_mut()
-                    .expect("randomness manager should exist if randomness is enabled")
-                    .reserve_next_randomness(batch)?,
-            )
-        } else {
-            None
-        };
+        if randomness_round.is_some() {
+            assert!(!dkg_failed); // invariant check
+        }
 
         let mut verified_certificates = Vec::with_capacity(transactions.len());
         let mut notifications = Vec::with_capacity(transactions.len());
@@ -2898,8 +2924,8 @@ impl AuthorityPerEpochStore {
                     commit_round,
                     &previously_deferred_tx_digests,
                     randomness_manager.as_deref_mut(),
-                    dkg_closed,
-                    generate_randomness,
+                    dkg_failed,
+                    randomness_round.is_some(),
                     execution_cost,
                 )
                 .await?
@@ -2976,7 +3002,6 @@ impl AuthorityPerEpochStore {
             notifications,
             deferred_tx_roots,
             lock,
-            randomness_round,
             final_round,
         ))
     }
@@ -3090,7 +3115,7 @@ impl AuthorityPerEpochStore {
         commit_round: Round,
         previously_deferred_tx_digests: &HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
-        dkg_closed: bool,
+        dkg_failed: bool,
         generating_randomness: bool,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
     ) -> SuiResult<ConsensusCertificateResult> {
@@ -3150,7 +3175,8 @@ impl AuthorityPerEpochStore {
                 let deferral_info = self.should_defer(
                     &certificate,
                     commit_round,
-                    dkg_closed,
+                    dkg_failed,
+                    generating_randomness,
                     previously_deferred_tx_digests,
                     shared_object_congestion_tracker,
                 );
@@ -3163,12 +3189,11 @@ impl AuthorityPerEpochStore {
                     return Ok(ConsensusCertificateResult::Deferred(deferral_key));
                 }
 
-                if dkg_closed
-                    && !generating_randomness
+                if dkg_failed
                     && self.randomness_state_enabled()
                     && certificate.is_randomness_reader()
                 {
-                    // TODO: Fail these immediately instead of waiting until end of epoch.
+                    // TODO: Cancel these immediately instead of waiting until end of epoch.
                     debug!(
                         "Ignoring randomness-using certificate for transaction {:?} because DKG failed",
                         certificate.digest(),

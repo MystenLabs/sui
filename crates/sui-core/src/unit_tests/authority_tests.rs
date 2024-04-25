@@ -5813,7 +5813,7 @@ async fn test_per_object_congestion_control() {
             assert_eq!(future_round, commit_round + 1);
             assert_eq!(deferred_from_round, commit_round);
         }
-        DeferralKey::RandomnessDkg {
+        DeferralKey::Randomness {
             deferred_from_round,
         } => {
             panic!(
@@ -5873,7 +5873,7 @@ async fn test_per_object_congestion_control() {
             assert_eq!(future_round, commit_round + 2);
             assert_eq!(deferred_from_round, commit_round);
         }
-        DeferralKey::RandomnessDkg {
+        DeferralKey::Randomness {
             deferred_from_round,
         } => {
             panic!(
