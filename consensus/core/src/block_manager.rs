@@ -372,7 +372,7 @@ mod tests {
 
     use crate::test_dag_builder::DagBuilder;
     use crate::{
-        block::{genesis_blocks, BlockAPI, BlockRef, Round, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
         block_manager::BlockManager,
         block_verifier::{BlockVerifier, NoopBlockVerifier},
         context::Context,
@@ -460,45 +460,6 @@ mod tests {
             assert_eq!(missing, block_ancestors);
         }
     }
-
-    #[test]
-    fn accept_blocks_with_complete_causal_history() {
-        // GIVEN
-        let (context, _key_pairs) = Context::new_for_test(4);
-        let context = Arc::new(context);
-        let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
-
-        let mut block_manager =
-            BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
-
-        // create a DAG of 2 rounds
-        let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=2).build();
-
-        let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
-
-        // WHEN
-        let (accepted_blocks, missing) = block_manager.try_accept_blocks(all_blocks.clone());
-
-        // THEN
-        assert!(accepted_blocks.len() == 8);
-        assert_eq!(
-            accepted_blocks,
-            all_blocks
-                .iter()
-                .filter(|block| block.round() > 0)
-                .cloned()
-                .collect::<Vec<VerifiedBlock>>()
-        );
-        assert!(missing.is_empty());
-        assert!(block_manager.is_empty());
-
-        // WHEN trying to accept same blocks again, then none will be returned as those have been already accepted
-        let (accepted_blocks, _) = block_manager.try_accept_blocks(all_blocks);
-        assert!(accepted_blocks.is_empty());
-    }
-
 
     #[test]
     fn accept_blocks_with_complete_causal_history() {
