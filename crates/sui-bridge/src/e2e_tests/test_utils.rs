@@ -4,15 +4,18 @@
 use crate::abi::EthBridgeCommittee;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::events::*;
 use crate::server::APPLICATION_JSON;
 use crate::types::{AddTokensOnSuiAction, BridgeAction};
 use crate::utils::get_eth_signer_client;
 use crate::utils::EthSigner;
 use ethers::types::Address as EthAddress;
+use move_core_types::language_storage::StructTag;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fs::File;
 use std::fs::{self, DirBuilder};
 use std::io::{Read, Write};
@@ -20,7 +23,11 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
+use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
+use sui_json_rpc_types::TransactionFilter;
 use sui_sdk::wallet_context::WalletContext;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::bridge::{
@@ -28,6 +35,7 @@ use sui_types::bridge::{
 };
 use sui_types::committee::TOTAL_VOTING_POWER;
 use sui_types::crypto::get_key_pair;
+use sui_types::digests::TransactionDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
@@ -77,6 +85,7 @@ pub struct BridgeTestCluster {
     eth_environment: EthBridgeEnvironment,
     bridge_node_handles: Option<Vec<JoinHandle<()>>>,
     approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
+    bridge_tx_cursor: Option<TransactionDigest>,
 }
 
 pub struct BridgeTestClusterBuilder {
@@ -119,6 +128,7 @@ impl BridgeTestClusterBuilder {
     }
 
     pub async fn build(self) -> BridgeTestCluster {
+        init_all_struct_tags();
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
         for _ in 0..=3 {
@@ -149,6 +159,7 @@ impl BridgeTestClusterBuilder {
             eth_environment,
             bridge_node_handles,
             approved_governance_actions_for_next_start: self.approved_governance_actions,
+            bridge_tx_cursor: None,
         }
     }
 
@@ -285,6 +296,79 @@ impl BridgeTestCluster {
             )
             .await,
         );
+    }
+
+    /// Returns new bridge transaction. It advanaces the stored tx digest cursor.
+    /// When `assert_success` is true, it asserts all transactions are successful.
+    pub async fn new_bridge_transactions(
+        &mut self,
+        assert_success: bool,
+    ) -> Vec<SuiTransactionBlockResponse> {
+        let resps = self
+            .sui_client()
+            .read_api()
+            .query_transaction_blocks(
+                SuiTransactionBlockResponseQuery {
+                    filter: Some(TransactionFilter::InputObject(BRIDGE_PACKAGE_ID)),
+                    options: Some(SuiTransactionBlockResponseOptions::full_content()),
+                },
+                self.bridge_tx_cursor,
+                None,
+                false,
+            )
+            .await
+            .unwrap();
+        self.bridge_tx_cursor = resps.next_cursor;
+
+        for tx in &resps.data {
+            if assert_success {
+                assert!(tx.status_ok().unwrap());
+            }
+            let events = &tx.events.as_ref().unwrap().data;
+            if events
+                .iter()
+                .any(|e| &e.type_ == TokenTransferApproved.get().unwrap())
+            {
+                assert!(events
+                    .iter()
+                    .any(|e| &e.type_ == TokenTransferClaimed.get().unwrap()
+                        || &e.type_ == TokenTransferApproved.get().unwrap()));
+            } else if events
+                .iter()
+                .any(|e| &e.type_ == TokenTransferAlreadyClaimed.get().unwrap())
+            {
+                assert!(events
+                    .iter()
+                    .all(|e| &e.type_ == TokenTransferAlreadyClaimed.get().unwrap()
+                        || &e.type_ == TokenTransferAlreadyApproved.get().unwrap()));
+            }
+            // TODO: check for other events e.g. TokenRegistrationEvent, NewTokenEvent etc
+        }
+        resps.data
+    }
+
+    /// Returns events that are emitted in new bridge transaction and match `event_types`.
+    /// It advanaces the stored tx digest cursor.
+    /// See `new_bridge_transactions` for `assert_success`.
+    pub async fn new_bridge_events(
+        &mut self,
+        event_types: HashSet<StructTag>,
+        assert_success: bool,
+    ) -> Vec<SuiEvent> {
+        let txes = self.new_bridge_transactions(assert_success).await;
+        let events = txes
+            .iter()
+            .flat_map(|tx| {
+                tx.events
+                    .as_ref()
+                    .unwrap()
+                    .data
+                    .iter()
+                    .filter(|e| event_types.contains(&e.type_))
+                    .cloned()
+            })
+            .collect();
+        events
     }
 }
 

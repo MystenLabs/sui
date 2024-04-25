@@ -305,15 +305,18 @@ pub async fn bridge_token(
     let signed_tn = context.sign_transaction(&tx);
     let resp = context.execute_transaction_must_succeed(signed_tn).await;
     let events = resp.events.unwrap();
-    let mut bridge_events = events
+    let bridge_events = events
         .data
         .iter()
         .filter_map(|event| SuiBridgeEvent::try_from_sui_event(event).unwrap())
         .collect::<Vec<_>>();
-    assert_eq!(bridge_events.len(), 1);
-    match bridge_events.remove(0) {
-        SuiBridgeEvent::SuiToEthTokenBridgeV1(event) => event,
-    }
+    bridge_events
+        .iter()
+        .find_map(|e| match e {
+            SuiBridgeEvent::SuiToEthTokenBridgeV1(event) => Some(event.clone()),
+            _ => None,
+        })
+        .unwrap()
 }
 
 /// Returns a VerifiedCertifiedBridgeAction with signatures from the given
