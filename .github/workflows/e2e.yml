@@ -10,6 +10,7 @@ jobs:
       isWallet: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-wallet')) }}
       isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui')) }}
       isGraphQlTransport: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/graphql-transport')) }}
+      isClientGenTests: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'client-gen-tests')) }}
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
@@ -24,7 +25,7 @@ jobs:
   localnet:
     name: Localnet
     needs: diff
-    if: needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isClientGenTests
     runs-on: ubuntu-ghcloud
     services:
       postgres:
@@ -67,7 +68,7 @@ jobs:
           echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=warn RUST_BACKTRACE=1 $(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
 
       - name: Run client-gen tests
-        if: ${{ needs.diff.outputs.isGraphQlTransport == 'true' || needs.diff.outputs.isRust == 'true'}}
+        if: ${{ needs.diff.outputs.isClientGenTests == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter client-gen-tests test:e2e'
 
       - name: Run TS SDK e2e tests
