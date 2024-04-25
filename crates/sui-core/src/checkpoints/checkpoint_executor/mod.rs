@@ -93,8 +93,6 @@ pub fn init_checkpoint_timeout_config(config: CheckpointTimeoutConfig) {
 
 fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
     fn inner() -> CheckpointTimeoutConfig {
-        // get the scheduling timeout from the env var SCHEDULING_EVENT_FUTURE_TIMEOUT_MS
-        // check if the env var PANIC_ON_NEW_CHECKPOINT_TIMEOUT is equal to "true" or "1" and
         let panic_on_timeout = cfg!(msim)
             || std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT")
                 .map_or(false, |s| s == "true" || s == "1");

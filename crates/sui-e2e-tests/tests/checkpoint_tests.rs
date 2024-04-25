@@ -46,6 +46,8 @@ async fn basic_checkpoints_integration_test() {
 async fn checkpoint_split_brain_test() {
     #[cfg(msim)]
     {
+        // this test intentionally halts the network by causing a fork, so we cannot panic on
+        // loss of liveness
         use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
         init_checkpoint_timeout_config(CheckpointTimeoutConfig {
             timeout: Duration::from_secs(2),
