@@ -155,19 +155,23 @@ const addCodeInject = function (source) {
                 if (modMatch) {
                   const abridged = injectFileContent.substring(modMatch.index);
                   const lines = abridged.split("\n");
-                  var open = 0;
-                  var close = 0;
+                  var open = [];
+                  var close = [];
                   let modLines = [];
                   for (let line of lines) {
                     modLines.push(line);
-                    open += line.match(/{/g) || [];
-                    close += line.match(/}/g) || [];
-                    if (open !== 0 && close === open) {
+                    open = [...open, ...(line.match(/{/g) || [])];
+                    close = [...close, ...(line.match(/}/g) || [])];
+                    console.log(`Open: ${open}\nClose: ${close}`);
+                    if (open.length !== 0 && close.length === open.length) {
+                      console.log("BOOBAH");
+                      console.log(modLines.join("/n"));
+                      process.abort();
                       break;
                     }
                   }
-                  console.log(modLines.join("\n"));
-                  process.abort();
+                  //console.log(modLines.join("\n"));
+                  //process.abort();
                 }
               } else {
                 const regexStr = `\\/\\/\\s?docs::${marker.trim()}\\b([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${marker.trim()}\\b`;
