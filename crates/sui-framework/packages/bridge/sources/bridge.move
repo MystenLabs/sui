@@ -327,11 +327,8 @@ module bridge::bridge {
     ) {
         let (token, owner) = claim_token_internal<T>(clock, bridge, source_chain, bridge_seq_num, ctx);
         if (token.is_some()) {
-            transfer::public_transfer(
-                token.destroy_some(),
-            owner
-            )
-        }else{
+            transfer::public_transfer(token.destroy_some(), owner)
+        } else {
             token.destroy_none();
         };
     }
