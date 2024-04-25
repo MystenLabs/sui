@@ -22,13 +22,17 @@ use std::process::Command;
 use std::str::FromStr;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::bridge::{
     BridgeChainId, BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME,
 };
 use sui_types::committee::TOTAL_VOTING_POWER;
+use sui_types::crypto::get_key_pair;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
+use tokio::join;
+use tokio::task::JoinHandle;
 
 use tracing::error;
 use tracing::info;
@@ -65,6 +69,224 @@ const USDC_NAME: &str = "USDC";
 const USDT_NAME: &str = "USDT";
 
 pub const TEST_PK: &str = "0x4bbbf85ce3377467afe5d46f804f221813b2bb87f24d81f60f1fcdbf7cbf4356";
+
+/// A helper struct that holds TestCluster and other Bridge related
+/// structs that are needed for testing.
+pub struct BridgeTestCluster {
+    pub test_cluster: TestCluster,
+    eth_environment: EthBridgeEnvironment,
+    bridge_node_handles: Option<Vec<JoinHandle<()>>>,
+    approved_governance_actions_for_next_start: Option<Vec<Vec<BridgeAction>>>,
+}
+
+pub struct BridgeTestClusterBuilder {
+    with_eth_env: bool,
+    with_bridge_cluster: bool,
+    approved_governance_actions: Option<Vec<Vec<BridgeAction>>>,
+}
+
+impl Default for BridgeTestClusterBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BridgeTestClusterBuilder {
+    pub fn new() -> Self {
+        BridgeTestClusterBuilder {
+            with_eth_env: false,
+            with_bridge_cluster: false,
+            approved_governance_actions: None,
+        }
+    }
+
+    pub fn with_eth_env(mut self, with_eth_env: bool) -> Self {
+        self.with_eth_env = with_eth_env;
+        self
+    }
+
+    pub fn with_bridge_cluster(mut self, with_bridge_cluster: bool) -> Self {
+        self.with_bridge_cluster = with_bridge_cluster;
+        self
+    }
+
+    pub fn with_approved_governance_actions(
+        mut self,
+        approved_governance_actions: Vec<Vec<BridgeAction>>,
+    ) -> Self {
+        self.approved_governance_actions = Some(approved_governance_actions);
+        self
+    }
+
+    pub async fn build(self) -> BridgeTestCluster {
+        let mut bridge_keys = vec![];
+        let mut bridge_keys_copy = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp.copy());
+            bridge_keys_copy.push(kp);
+        }
+        let start_cluster_task = tokio::task::spawn(Self::start_test_cluster(bridge_keys));
+        let start_eth_env_task = tokio::task::spawn(Self::start_eth_env(bridge_keys_copy));
+        let (start_cluster_res, start_eth_env_res) = join!(start_cluster_task, start_eth_env_task);
+        let test_cluster = start_cluster_res.unwrap();
+        let eth_environment = start_eth_env_res.unwrap();
+
+        let mut bridge_node_handles = None;
+        if self.with_bridge_cluster {
+            let approved_governace_actions = self
+                .approved_governance_actions
+                .clone()
+                .unwrap_or(vec![vec![], vec![], vec![], vec![]]);
+            bridge_node_handles = Some(
+                start_bridge_cluster(&test_cluster, &eth_environment, approved_governace_actions)
+                    .await,
+            );
+        }
+
+        BridgeTestCluster {
+            test_cluster,
+            eth_environment,
+            bridge_node_handles,
+            approved_governance_actions_for_next_start: self.approved_governance_actions,
+        }
+    }
+
+    async fn start_test_cluster(bridge_keys: Vec<BridgeAuthorityKeyPair>) -> TestCluster {
+        let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
+            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
+            .build_with_bridge(bridge_keys, true)
+            .await;
+        info!("Test cluster built");
+        test_cluster
+            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
+            .await;
+        info!("Bridge committee is finalized");
+        test_cluster
+    }
+
+    async fn start_eth_env(bridge_keys: Vec<BridgeAuthorityKeyPair>) -> EthBridgeEnvironment {
+        let anvil_port = get_available_port("127.0.0.1");
+        let anvil_url = format!("http://127.0.0.1:{anvil_port}");
+        let mut eth_environment = EthBridgeEnvironment::new(&anvil_url, anvil_port)
+            .await
+            .unwrap();
+        // Give anvil a bit of time to start
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        let (eth_signer, eth_pk_hex) = eth_environment
+            .get_signer(TEST_PK)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to get eth signer from anvil at {anvil_url}: {e}"));
+        let deployed_contracts =
+            deploy_sol_contract(&anvil_url, eth_signer, bridge_keys, eth_pk_hex).await;
+        info!("Deployed contracts: {:?}", deployed_contracts);
+        eth_environment.contracts = Some(deployed_contracts);
+        eth_environment
+    }
+}
+
+impl BridgeTestCluster {
+    pub async fn get_eth_signer_and_private_key(&self) -> anyhow::Result<(EthSigner, String)> {
+        self.eth_environment.get_signer(TEST_PK).await
+    }
+
+    pub async fn get_eth_signer_and_address(&self) -> anyhow::Result<(EthSigner, EthAddress)> {
+        let (eth_signer, _) = self.get_eth_signer_and_private_key().await?;
+        let eth_address = eth_signer.address();
+        Ok((eth_signer, eth_address))
+    }
+
+    pub async fn sui_bridge_client(&self) -> anyhow::Result<SuiBridgeClient> {
+        SuiBridgeClient::new(&self.test_cluster.fullnode_handle.rpc_url).await
+    }
+
+    pub fn sui_client(&self) -> SuiClient {
+        self.test_cluster.fullnode_handle.sui_client.clone()
+    }
+
+    pub fn sui_user_address(&self) -> SuiAddress {
+        self.test_cluster.get_address_0()
+    }
+
+    pub fn contracts(&self) -> &DeployedSolContracts {
+        self.eth_environment.contracts()
+    }
+
+    pub fn sui_bridge_address(&self) -> String {
+        self.eth_environment.contracts().sui_bridge_addrress_hex()
+    }
+
+    pub fn wallet_mut(&mut self) -> &mut WalletContext {
+        self.test_cluster.wallet_mut()
+    }
+
+    pub fn wallet(&mut self) -> &WalletContext {
+        &self.test_cluster.wallet
+    }
+
+    pub fn bridge_authority_key(&self, index: usize) -> BridgeAuthorityKeyPair {
+        self.test_cluster.bridge_authority_keys.as_ref().unwrap()[index].copy()
+    }
+
+    pub fn sui_rpc_url(&self) -> String {
+        self.test_cluster.fullnode_handle.rpc_url.clone()
+    }
+
+    pub fn eth_rpc_url(&self) -> String {
+        self.eth_environment.rpc_url.clone()
+    }
+
+    pub async fn get_mut_bridge_arg(&self) -> Option<ObjectArg> {
+        self.test_cluster.get_mut_bridge_arg().await
+    }
+
+    pub async fn test_transaction_builder_with_sender(
+        &self,
+        sender: SuiAddress,
+    ) -> TestTransactionBuilder {
+        self.test_cluster
+            .test_transaction_builder_with_sender(sender)
+            .await
+    }
+
+    pub async fn wait_for_bridge_cluster_to_be_up(&self, timeout_sec: u64) {
+        self.test_cluster
+            .wait_for_bridge_cluster_to_be_up(timeout_sec)
+            .await;
+    }
+
+    pub async fn sign_and_execute_transaction(
+        &self,
+        tx_data: &TransactionData,
+    ) -> SuiTransactionBlockResponse {
+        self.test_cluster
+            .sign_and_execute_transaction(tx_data)
+            .await
+    }
+
+    pub fn set_approved_governance_actions_for_next_start(
+        &mut self,
+        approved_governance_actions: Vec<Vec<BridgeAction>>,
+    ) {
+        self.approved_governance_actions_for_next_start = Some(approved_governance_actions);
+    }
+
+    pub async fn start_bridge_cluster(&mut self) {
+        assert!(self.bridge_node_handles.is_none());
+        let approved_governace_actions = self
+            .approved_governance_actions_for_next_start
+            .clone()
+            .unwrap_or(vec![vec![], vec![], vec![], vec![]]);
+        self.bridge_node_handles = Some(
+            start_bridge_cluster(
+                &self.test_cluster,
+                &self.eth_environment,
+                approved_governace_actions,
+            )
+            .await,
+        );
+    }
+}
 
 pub async fn publish_coins_return_add_coins_on_sui_action(
     wallet_context: &mut WalletContext,
@@ -218,79 +440,12 @@ struct SolDeployConfig {
     token_prices: Vec<u64>,
 }
 
-pub(crate) async fn initialize_bridge_environment(
-    should_start_bridge_cluster: bool,
-) -> (TestCluster, EthBridgeEnvironment) {
-    let anvil_port = get_available_port("127.0.0.1");
-    let anvil_url = format!("http://127.0.0.1:{anvil_port}");
-    let mut eth_environment = EthBridgeEnvironment::new(&anvil_url, anvil_port)
-        .await
-        .unwrap();
-
-    // Deploy solidity contracts in a separate task
-    let anvil_url_clone = anvil_url.clone();
-    let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
-
-    let mut server_ports = vec![];
-    for _ in 0..3 {
-        server_ports.push(get_available_port("127.0.0.1"));
-    }
-
-    let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .build_with_bridge(true)
-        .await;
-    info!("Test cluster built");
-    test_cluster
-        .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
-        .await;
-    info!("Bridge committee is finalized");
-    // TODO: do not block on `build_with_bridge`, return with bridge keys immediately
-    // to parallize the setup.
-    let bridge_authority_keys = test_cluster
-        .bridge_authority_keys
-        .as_ref()
-        .unwrap()
-        .iter()
-        .map(|k| k.copy())
-        .collect::<Vec<_>>();
-
-    let (eth_signer, eth_pk_hex) = eth_environment.get_signer(TEST_PK).await.unwrap();
-    tokio::task::spawn(async move {
-        deploy_sol_contract(
-            &anvil_url_clone,
-            eth_signer,
-            bridge_authority_keys,
-            tx_ack,
-            eth_pk_hex,
-        )
-        .await
-    });
-    let deployed_contracts = rx_ack.await.unwrap();
-    info!("Deployed contracts: {:?}", deployed_contracts);
-    eth_environment.contracts = Some(deployed_contracts);
-
-    // if start bridge cluster is enabled, start the bridge cluster
-    if should_start_bridge_cluster {
-        start_bridge_cluster(
-            &test_cluster,
-            &eth_environment,
-            vec![vec![], vec![], vec![], vec![]],
-        )
-        .await;
-        info!("Started bridge cluster");
-    }
-
-    (test_cluster, eth_environment)
-}
-
 pub(crate) async fn deploy_sol_contract(
     anvil_url: &str,
     eth_signer: EthSigner,
     bridge_authority_keys: Vec<BridgeAuthorityKeyPair>,
-    tx: tokio::sync::oneshot::Sender<DeployedSolContracts>,
     eth_private_key_hex: String,
-) {
+) -> DeployedSolContracts {
     let sol_path = format!("{}/../../bridge/evm", env!("CARGO_MANIFEST_DIR"));
 
     // Write the deploy config to a temp file then provide it to the forge late
@@ -445,7 +600,7 @@ pub(crate) async fn deploy_sol_contract(
         );
         assert!(!eth_bridge_committee.blocklist(eth_address).await.unwrap());
     }
-    tx.send(contracts).unwrap();
+    contracts
 }
 
 #[derive(Debug)]
@@ -498,8 +653,7 @@ pub(crate) async fn start_bridge_cluster(
     test_cluster: &TestCluster,
     eth_environment: &EthBridgeEnvironment,
     approved_governance_actions: Vec<Vec<BridgeAction>>,
-) {
-    // TODO: move this to TestCluster
+) -> Vec<JoinHandle<()>> {
     let bridge_authority_keys = test_cluster
         .bridge_authority_keys
         .as_ref()
@@ -520,6 +674,7 @@ pub(crate) async fn start_bridge_cluster(
         .unwrap()
         .sui_bridge_addrress_hex();
 
+    let mut handles = vec![];
     for (i, ((kp, server_listen_port), approved_governance_actions)) in bridge_authority_keys
         .iter()
         .zip(bridge_server_ports.iter())
@@ -536,9 +691,10 @@ pub(crate) async fn start_bridge_cluster(
         std::fs::write(authority_key_path.clone(), base64_encoded).unwrap();
 
         let client_sui_address = SuiAddress::from(kp.public());
+        let sender_address = test_cluster.get_address_0();
         // send some gas to this address
         test_cluster
-            .transfer_sui_must_exceed(client_sui_address, 1000000000)
+            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
@@ -565,11 +721,9 @@ pub(crate) async fn start_bridge_cluster(
         };
         // Spawn bridge node in memory
         let config_clone = config.clone();
-        tokio::spawn(async move {
-            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-            run_bridge_node(config_clone).await.unwrap();
-        });
+        handles.push(run_bridge_node(config_clone).await.unwrap());
     }
+    handles
 }
 
 pub(crate) async fn get_signatures(

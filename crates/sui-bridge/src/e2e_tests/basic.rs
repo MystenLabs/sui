@@ -3,10 +3,8 @@
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::e2e_tests::test_utils::{get_signatures, initialize_bridge_environment, TEST_PK};
-use crate::e2e_tests::test_utils::{
-    publish_coins_return_add_coins_on_sui_action, start_bridge_cluster,
-};
+use crate::e2e_tests::test_utils::publish_coins_return_add_coins_on_sui_action;
+use crate::e2e_tests::test_utils::{get_signatures, BridgeTestClusterBuilder};
 use crate::events::SuiBridgeEvent;
 use crate::sui_client::SuiBridgeClient;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
@@ -40,27 +38,27 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     let eth_chain_id = BridgeChainId::EthCustom as u8;
     let sui_chain_id = BridgeChainId::SuiCustom as u8;
 
-    let (mut test_cluster, eth_environment) = initialize_bridge_environment(true).await;
+    let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
+        .with_eth_env(true)
+        .with_bridge_cluster(true)
+        .build()
+        .await;
 
-    let (eth_signer, _) = eth_environment.get_signer(TEST_PK).await.unwrap();
-
-    let eth_address = eth_signer.address();
-
-    let sui_client = test_cluster.fullnode_handle.sui_client.clone();
-
-    let sui_bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
+    let (eth_signer, eth_address) = bridge_test_cluster
+        .get_eth_signer_and_address()
         .await
         .unwrap();
 
-    let sui_address = test_cluster.get_address_0();
+    let sui_client = bridge_test_cluster.sui_client();
+    let sui_bridge_client = bridge_test_cluster.sui_bridge_client().await.unwrap();
+    let sui_address = bridge_test_cluster.sui_user_address();
     let amount = 42;
-    // ETH coin has 8 decimals on Sui
     let sui_amount = amount * 100_000_000;
 
     initiate_bridge_eth_to_sui(
         &sui_bridge_client,
         &eth_signer,
-        eth_environment.contracts().sui_bridge,
+        bridge_test_cluster.contracts().sui_bridge,
         sui_address,
         eth_address,
         eth_chain_id,
@@ -98,7 +96,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         &sui_bridge_client,
         &sui_client,
         sui_address,
-        test_cluster.wallet_mut(),
+        bridge_test_cluster.wallet_mut(),
         eth_chain_id,
         sui_chain_id,
         eth_address_1,
@@ -122,7 +120,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     .await;
 
     let eth_sui_bridge = EthSuiBridge::new(
-        eth_environment.contracts().sui_bridge,
+        bridge_test_cluster.contracts().sui_bridge,
         eth_signer.clone().into(),
     );
     let tx = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
@@ -138,24 +136,27 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
 #[tokio::test]
 async fn test_add_new_coins_on_sui() {
     telemetry_subscribers::init_for_testing();
+    let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
+        .with_eth_env(true)
+        .with_bridge_cluster(false)
+        .build()
+        .await;
 
-    let (mut test_cluster, eth_environment) = initialize_bridge_environment(false).await;
-
-    let bridge_arg = test_cluster.get_mut_bridge_arg().await.unwrap();
+    let bridge_arg = bridge_test_cluster.get_mut_bridge_arg().await.unwrap();
 
     // Register tokens
     let token_id = 42;
     let token_price = 10000;
-    let sender = test_cluster.get_address_0();
-    let tx = test_cluster
+    let sender = bridge_test_cluster.sui_user_address();
+    let tx = bridge_test_cluster
         .test_transaction_builder_with_sender(sender)
         .await
         .publish(Path::new("../../bridge/move/tokens/mock/ka").into())
         .build();
-    let publish_token_response = test_cluster.sign_and_execute_transaction(&tx).await;
+    let publish_token_response = bridge_test_cluster.sign_and_execute_transaction(&tx).await;
     info!("Published new token");
     let action = publish_coins_return_add_coins_on_sui_action(
-        test_cluster.wallet_mut(),
+        bridge_test_cluster.wallet_mut(),
         bridge_arg,
         vec![publish_token_response],
         vec![token_id],
@@ -164,28 +165,22 @@ async fn test_add_new_coins_on_sui() {
     )
     .await;
 
-    // TODO: do not block on `build_with_bridge`, return with bridge keys immediately
-    // to paralyze the setup.
-    let sui_bridge_client = SuiBridgeClient::new(&test_cluster.fullnode_handle.rpc_url)
-        .await
-        .unwrap();
+    let sui_bridge_client = bridge_test_cluster.sui_bridge_client().await.unwrap();
 
     info!("Starting bridge cluster");
 
-    start_bridge_cluster(
-        &test_cluster,
-        &eth_environment,
-        vec![
-            vec![action.clone()],
-            vec![action.clone()],
-            vec![action.clone()],
-            vec![],
-        ],
-    )
-    .await;
-
-    test_cluster.wait_for_bridge_cluster_to_be_up(10).await;
+    bridge_test_cluster.set_approved_governance_actions_for_next_start(vec![
+        vec![action.clone()],
+        vec![action.clone()],
+        vec![action.clone()],
+        vec![],
+    ]);
+    bridge_test_cluster.start_bridge_cluster().await;
+    bridge_test_cluster
+        .wait_for_bridge_cluster_to_be_up(10)
+        .await;
     info!("Bridge cluster is up");
+
     let bridge_committee = Arc::new(
         sui_bridge_client
             .get_bridge_committee()
@@ -201,8 +196,8 @@ async fn test_add_new_coins_on_sui() {
 
     let tx = build_add_tokens_on_sui_transaction(
         sender,
-        &test_cluster
-            .wallet
+        &bridge_test_cluster
+            .wallet()
             .get_one_gas_object_owned_by_address(sender)
             .await
             .unwrap()
@@ -212,7 +207,7 @@ async fn test_add_new_coins_on_sui() {
     )
     .unwrap();
 
-    let response = test_cluster.sign_and_execute_transaction(&tx).await;
+    let response = bridge_test_cluster.sign_and_execute_transaction(&tx).await;
     assert_eq!(
         response.effects.unwrap().status(),
         &SuiExecutionStatus::Success

@@ -1,11 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use sui_bridge::crypto::BridgeAuthorityKeyPair;
 use sui_bridge::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use sui_json_rpc_api::BridgeReadApiClient;
 use sui_macros::sim_test;
 use sui_types::bridge::get_bridge;
 use sui_types::bridge::BridgeTrait;
+use sui_types::crypto::get_key_pair;
 use sui_types::SUI_BRIDGE_OBJECT_ID;
 use test_cluster::TestClusterBuilder;
 
@@ -53,9 +55,14 @@ async fn test_create_bridge_state_object() {
 #[tokio::test]
 async fn test_committee_registration() {
     telemetry_subscribers::init_for_testing();
+    let mut bridge_keys = vec![];
+    for _ in 0..=3 {
+        let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+        bridge_keys.push(kp);
+    }
     let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-        .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-        .build_with_bridge(false)
+        .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+        .build_with_bridge(bridge_keys, false)
         .await;
 
     let bridge = get_bridge(
