@@ -8,6 +8,14 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::{fmt::Debug, path::PathBuf};
 
+// These values set to loosely attempt to limit
+// memory usage for a single sketch to ~20MB
+// For reference, see
+// https://github.com/jedisct1/rust-count-min-sketch/blob/master/src/lib.rs
+pub const DEFAULT_SKETCH_CAPACITY: usize = 50_000;
+pub const DEFAULT_SKETCH_PROBABILITY: f64 = 0.999;
+pub const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
+
 const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
 #[derive(Clone, Debug)]
@@ -77,6 +85,61 @@ fn default_drain_timeout() -> u64 {
     TRAFFIC_SINK_TIMEOUT_SEC
 }
 
+#[serde_as]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct FreqThresholdConfig {
+    #[serde(default = "default_threshold")]
+    pub threshold: u64,
+    #[serde(default = "default_window_size_secs")]
+    pub window_size_secs: u64,
+    #[serde(default = "default_update_interval_secs")]
+    pub update_interval_secs: u64,
+    #[serde(default = "default_sketch_capacity")]
+    pub sketch_capacity: usize,
+    #[serde(default = "default_sketch_probability")]
+    pub sketch_probability: f64,
+    #[serde(default = "default_sketch_tolerance")]
+    pub sketch_tolerance: f64,
+}
+
+impl Default for FreqThresholdConfig {
+    fn default() -> Self {
+        Self {
+            threshold: default_threshold(),
+            window_size_secs: default_window_size_secs(),
+            update_interval_secs: default_update_interval_secs(),
+            sketch_capacity: default_sketch_capacity(),
+            sketch_probability: default_sketch_probability(),
+            sketch_tolerance: default_sketch_tolerance(),
+        }
+    }
+}
+
+fn default_threshold() -> u64 {
+    10
+}
+
+fn default_window_size_secs() -> u64 {
+    30
+}
+
+fn default_update_interval_secs() -> u64 {
+    5
+}
+
+fn default_sketch_capacity() -> usize {
+    DEFAULT_SKETCH_CAPACITY
+}
+
+fn default_sketch_probability() -> f64 {
+    DEFAULT_SKETCH_PROBABILITY
+}
+
+fn default_sketch_tolerance() -> f64 {
+    DEFAULT_SKETCH_TOLERANCE
+}
+
 // Serializable representation of policy types, used in config
 // in order to easily change in tests or to killswitch
 #[derive(Clone, Serialize, Deserialize, Debug, Default)]
@@ -84,6 +147,11 @@ pub enum PolicyType {
     /// Does nothing
     #[default]
     NoOp,
+
+    /// Blocks connection_ip after reaching a tally frequency (tallies per second)
+    /// of `threshold`, as calculated over an average window of `window_size_secs`
+    /// with granularity of `update_interval_secs`
+    FreqThreshold(FreqThresholdConfig),
 
     /* Below this point are test policies, and thus should not be used in production */
     ///
