@@ -74,7 +74,7 @@ module games::tic_tac_toe {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = object::new(ctx);
-        let game_id = object::uid_to_inner(&id);
+        let game_id = id.to_inner();
         let gameboard = vector[
             vector[option::none(), option::none(), option::none()],
             vector[option::none(), option::none(), option::none()],

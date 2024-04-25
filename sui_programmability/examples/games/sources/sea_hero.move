@@ -74,7 +74,7 @@ module games::sea_hero {
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
-            hero.hero_strength() >= reward.value(),
+            hero.strength() >= reward.value(),
             EHERO_NOT_STRONG_ENOUGH
         );
 

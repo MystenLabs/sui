@@ -19,12 +19,11 @@ module games::drand_based_scratch_card_tests {
         let user1 = @0x0;
         let user2 = @0x1;
 
-        let mut scenario_val = test_scenario::begin(user1);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(user1);
 
         // Create the game and get back the output objects.
-        mint(user1, 10, scenario);
-        let coin1 = test_scenario::take_from_sender<Coin<SUI>>(scenario);
+        mint(user1, 10, &mut scenario);
+        let coin1 = scenario.take_from_sender<Coin<SUI>>();
         drand_based_scratch_card::create(coin1, 10, 10, scenario.ctx());
         scenario.next_tx(user1);
         let game = scenario.take_immutable<drand_based_scratch_card::Game>();
@@ -37,7 +36,7 @@ module games::drand_based_scratch_card_tests {
         loop {
             // User2 buys a ticket.
             scenario.next_tx(user2);
-            mint(user2, 1, scenario);
+            mint(user2, 1, &mut scenario);
             let coin2 = scenario.take_from_sender<Coin<SUI>>();
             drand_based_scratch_card::buy_ticket(coin2, &game, scenario.ctx());
             scenario.next_tx(user1);
@@ -74,23 +73,22 @@ module games::drand_based_scratch_card_tests {
 
         test_scenario::return_shared(reward_val);
         test_scenario::return_immutable(game);
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
     fun test_play_drand_scratch_card_without_winner() {
         let user1 = @0x0;
 
-        let mut scenario_val = test_scenario::begin(user1);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(user1);
 
         // Create the game and get back the output objects.
-        mint(user1, 10, scenario);
+        mint(user1, 10, &mut scenario);
         let coin1 = scenario.take_from_sender<Coin<SUI>>();
         drand_based_scratch_card::create(coin1, 10, 10, scenario.ctx());
         scenario.next_tx(user1);
         let game = scenario.take_immutable<drand_based_scratch_card::Game>();
-        let mut reward_val = scenario.take_shared<drand_based_scratch_card::Reward>();
+        let mut reward = scenario.take_shared<drand_based_scratch_card::Reward>();
 
         // More 4 epochs forward.
         scenario.next_epoch(user1);
@@ -99,15 +97,14 @@ module games::drand_based_scratch_card_tests {
         scenario.next_epoch(user1);
 
         // Take back the reward.
-        let reward = &mut reward_val;
         reward.redeem(&game, scenario.ctx());
         scenario.next_tx(user1);
         let coin1 = scenario.take_from_sender<Coin<SUI>>();
         assert!(coin1.value() == 10, 1);
         scenario.return_to_sender(coin1);
 
-        test_scenario::return_shared(reward_val);
+        test_scenario::return_shared(reward);
         test_scenario::return_immutable(game);
-        scenario_val.end();
+        scenario.end();
     }
 }

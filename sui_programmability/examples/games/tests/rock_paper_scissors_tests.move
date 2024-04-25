@@ -14,8 +14,7 @@ module games::rock_paper_scissors_tests {
         let mr_lizard = @0xA55555;
         let mr_spock = @0x590C;
 
-        let mut scenario_val = test_scenario::begin(the_main_guy);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(the_main_guy);
 
         // Let the game begin!
         game::new_game(mr_spock, mr_lizard, scenario.ctx());
@@ -99,7 +98,7 @@ module games::rock_paper_scissors_tests {
         let prize = scenario.take_from_sender<ThePrize>();
         // Don't forget to give it back!
         scenario.return_to_sender(prize);
-        scenario_val.end();
+        scenario.end();
     }
 
     // Copy of the hashing function from the main module.

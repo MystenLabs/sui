@@ -19,7 +19,7 @@ module games::tic_tac_toe_tests {
         let mut scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
         // Admin creates a game
-        tic_tac_toe::create_game(copy player_x, copy player_o, scenario.ctx());
+        tic_tac_toe::create_game(player_x, player_o, scenario.ctx());
         // Player1 places an X in (1, 1).
         place_mark(1, 1, admin, player_x, scenario);
         /*
@@ -96,7 +96,7 @@ module games::tic_tac_toe_tests {
         let mut scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
 
-        tic_tac_toe::create_game(copy player_x, copy player_o, scenario.ctx());
+        tic_tac_toe::create_game(player_x, player_o, scenario.ctx());
         // Player1 places an X in (0, 1).
         let mut status = place_mark(0, 1, admin, player_x, scenario);
         assert!(status == IN_PROGRESS, 1);

@@ -42,8 +42,7 @@ module games::drand_based_lottery_tests {
         let user3 = @0x2;
         let user4 = @0x3;
 
-        let mut scenario_val = test_scenario::begin(user1);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(user1);
 
         drand_based_lottery::create(10, scenario.ctx());
         scenario.next_tx(user1);
@@ -94,6 +93,6 @@ module games::drand_based_lottery_tests {
         test_scenario::return_to_address(user2, ticket);
 
         test_scenario::return_shared(game_val);
-        scenario_val.end();
+        scenario.end();
     }
 }

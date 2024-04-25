@@ -121,7 +121,7 @@ module games::hero {
     fun create(ctx: &mut TxContext) {
         let sender = ctx.sender();
         let id = object::new(ctx);
-        let game_id = object::uid_to_inner(&id);
+        let game_id = id.to_inner();
 
         transfer::freeze_object(GameInfo {
             id,
@@ -146,8 +146,8 @@ module games::hero {
     public entry fun slay(
         game: &GameInfo, hero: &mut Hero, boar: Boar, ctx: &TxContext
     ) {
-        check_id(game, hero.game_id);
-        check_id(game, boar.game_id);
+        game.check_id(hero.game_id);
+        game.check_id(boar.game_id);
         let Boar { id: boar_id, strength: boar_strength, hp, game_id: _ } = boar;
         let hero_strength = hero_strength(hero);
         let mut boar_hp = hp;
@@ -168,17 +168,19 @@ module games::hero {
         // strength by one (if hero is using a sword)
         hero.experience = hero.experience + hp;
         if (hero.sword.is_some()) {
-            level_up_sword(hero.sword.borrow_mut(), 1)
+            hero.sword.borrow_mut().level_up(1)
         };
         // let the world know about the hero's triumph by emitting an event!
         event::emit(BoarSlainEvent {
             slayer_address: ctx.sender(),
-            hero: object::uid_to_inner(&hero.id),
-            boar: object::uid_to_inner(&boar_id),
+            hero: hero.id.to_inner(),
+            boar: boar_id.to_inner(),
             game_id: id(game)
         });
         object::delete(boar_id);
     }
+
+    public use fun hero_strength as Hero.strength;
 
     /// Strength of the hero when attacking
     public fun hero_strength(hero: &Hero): u64 {
@@ -188,7 +190,7 @@ module games::hero {
         };
 
         let sword_strength = if (hero.sword.is_some()) {
-            sword_strength(hero.sword.borrow())
+            hero.sword.borrow().strength()
         } else {
             // hero can fight without a sword, but will not be very strong
             0
@@ -197,9 +199,13 @@ module games::hero {
         (hero.experience * hero.hp) + sword_strength
     }
 
+    public use fun level_up_sword as Sword.level_up;
+
     fun level_up_sword(sword: &mut Sword, amount: u64) {
         sword.strength = sword.strength + amount
     }
+
+    public use fun sword_strength as Sword.strength;
 
     /// Strength of a sword when attacking
     public fun sword_strength(sword: &Sword): u64 {
@@ -261,8 +267,8 @@ module games::hero {
     public entry fun acquire_hero(
         game: &GameInfo, payment: Coin<SUI>, ctx: &mut TxContext
     ) {
-        let sword = create_sword(game, payment, ctx);
-        let hero = create_hero(game, sword, ctx);
+        let sword = game.create_sword(payment, ctx);
+        let hero = game.create_hero(sword, ctx);
         transfer::public_transfer(hero, ctx.sender())
     }
 
@@ -271,7 +277,7 @@ module games::hero {
     public fun create_hero(
         game: &GameInfo, sword: Sword, ctx: &mut TxContext
     ): Hero {
-        check_id(game, sword.game_id);
+        game.check_id(sword.game_id);
         Hero {
             id: object::new(ctx),
             hp: 100,
@@ -289,7 +295,7 @@ module games::hero {
         admin: &mut GameAdmin,
         ctx: &mut TxContext
     ) {
-        check_id(game, admin.game_id);
+        game.check_id(admin.game_id);
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
         transfer::public_transfer(
@@ -307,7 +313,7 @@ module games::hero {
         player: address,
         ctx: &mut TxContext
     ) {
-        check_id(game, admin.game_id);
+        game.check_id(admin.game_id);
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
         transfer::transfer(
@@ -319,7 +325,7 @@ module games::hero {
     // --- Game integrity / Links checks ---
 
     public fun check_id(game_info: &GameInfo, id: ID) {
-        assert!(id(game_info) == id, 403); // TODO: error code
+        assert!(game_info.id() == id, 403); // TODO: error code
     }
 
     public fun id(game_info: &GameInfo): ID {
@@ -328,7 +334,7 @@ module games::hero {
 
     // --- Testing functions ---
     public fun assert_hero_strength(hero: &Hero, strength: u64) {
-        assert!(hero_strength(hero) == strength, ASSERT_ERR);
+        assert!(hero.strength() == strength, ASSERT_ERR);
     }
 
     #[test_only]

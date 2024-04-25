@@ -63,7 +63,7 @@ module games::raffle_with_tickets {
         assert!(game.end_time <= clock.timestamp_ms(), EGameInProgress);
         assert!(game.winner.is_none(), EGameAlreadyCompleted);
         assert!(game.participants > 0, ENoParticipants);
-        let mut generator = new_generator(r, ctx);
+        let mut generator = r.new_generator(ctx);
         let winner = generator.generate_u32_in_range(1, game.participants);
         game.winner = option::some(winner);
     }
@@ -176,7 +176,7 @@ module games::small_raffle {
         assert!(game.end_time <= clock.timestamp_ms(), EGameInProgress);
         let Game { id, cost_in_sui: _, participants, end_time: _, balance, mut participants_table } = game;
         if (participants > 0) {
-            let mut generator = new_generator(r, ctx);
+            let mut generator = r.new_generator(ctx);
             let winner = generator.generate_u32_in_range(1, participants);
             let winner_address = participants_table[winner];
             let reward = coin::from_balance(balance, ctx);
