@@ -48,7 +48,8 @@ use crate::{
     block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
-        Commit, CommitAPI as _, CommitDigest, CommitRef, TrustedCommit, GENESIS_COMMIT_INDEX,
+        Commit, CommitAPI as _, CommitDigest, CommitRange, CommitRef, TrustedCommit,
+        GENESIS_COMMIT_INDEX,
     },
     context::Context,
     core_thread::CoreThreadDispatcher,
@@ -108,8 +109,8 @@ impl<C: NetworkClient> CommitSyncer<C> {
         interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
         // Inflight requests to fetch commits from different authorities.
         let mut inflight_fetches = JoinSet::new();
-        // Additional ranges (inclusive start and end) of commits to fetch.
-        let mut pending_fetches = BTreeSet::<(CommitIndex, CommitIndex)>::new();
+        // Additional CommitRange(inclusive_start..end) of commits to fetch.
+        let mut pending_fetches = BTreeSet::<CommitRange>::new();
         // Fetched commits and blocks by commit indices.
         let mut fetched_blocks = BTreeMap::<(CommitIndex, CommitIndex), Vec<VerifiedBlock>>::new();
         // Highest end index among inflight and pending fetches.
@@ -150,7 +151,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         if range_end > quorum_commit_index {
                             break 'pending;
                         }
-                        pending_fetches.insert((range_start, range_end));
+                        pending_fetches.insert(CommitRange::new(range_start..range_end));
                         // quorum_commit_index should be non-decreasing, so highest_scheduled_index should not
                         // decrease either.
                         highest_scheduled_index = Some(range_end);
@@ -177,7 +178,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     let (commit_start, commit_end) = (commits.first().unwrap().index(), commits.last().unwrap().index());
                     // Allow returning partial results, and try fetching the rest separately.
                     if commit_end < target_end {
-                        pending_fetches.insert((commit_end + 1, target_end));
+                        pending_fetches.insert(CommitRange::new(commit_end + 1..target_end));
                     }
                     // Make sure synced_commit_index is up to date.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());
@@ -256,14 +257,13 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 if inflight_fetches.len() >= target_parallel_fetches {
                     break;
                 }
-                let Some((start, end)) = pending_fetches.pop_first() else {
+                let Some(commit_range) = pending_fetches.pop_first() else {
                     break;
                 };
                 inflight_fetches.spawn(Self::fetch_loop(
                     inner.clone(),
                     fetch_state.clone(),
-                    start,
-                    end,
+                    commit_range,
                 ));
             }
 
@@ -286,8 +286,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     async fn fetch_loop(
         inner: Arc<Inner<C>>,
         fetch_state: Arc<Mutex<FetchState>>,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
     ) -> (CommitIndex, Vec<TrustedCommit>, Vec<VerifiedBlock>) {
         let _timer = inner
             .context
@@ -297,13 +296,18 @@ impl<C: NetworkClient> CommitSyncer<C> {
             .start_timer();
         info!(
             "Starting to fetch commits from {} to {} (inclusive) ...",
-            start, end
+            commit_range.start(),
+            commit_range.end()
         );
         loop {
-            match Self::fetch_once(inner.clone(), fetch_state.clone(), start, end).await {
+            match Self::fetch_once(inner.clone(), fetch_state.clone(), commit_range.clone()).await {
                 Ok((commits, blocks)) => {
-                    info!("Finished fetching commits from {} to {}", start, end);
-                    return (end, commits, blocks);
+                    info!(
+                        "Finished fetching commits from {} to {}",
+                        commit_range.start(),
+                        commit_range.end()
+                    );
+                    return (commit_range.end(), commits, blocks);
                 }
                 Err(e) => {
                     warn!("Failed to fetch: {}", e);
@@ -318,8 +322,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
     async fn fetch_once(
         inner: Arc<Inner<C>>,
         fetch_state: Arc<Mutex<FetchState>>,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
         const FETCH_COMMITS_TIMEOUT: Duration = Duration::from_secs(10);
         const FETCH_BLOCKS_TIMEOUT: Duration = Duration::from_secs(60);
@@ -347,10 +350,14 @@ impl<C: NetworkClient> CommitSyncer<C> {
             sleep(available_time - now).await;
         }
 
-        // 2. Fetch commits in the range [start, end] from the selected authority.
+        // 2. Fetch commits in the CommitRange from the selected authority.
         let (serialized_commits, serialized_blocks) = match inner
             .network_client
-            .fetch_commits(target_authority, start, end, FETCH_COMMITS_TIMEOUT)
+            .fetch_commits(
+                target_authority,
+                commit_range.clone(),
+                FETCH_COMMITS_TIMEOUT,
+            )
             .await
         {
             Ok(result) => {
@@ -378,8 +385,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
         // as well.
         let commits = inner.verify_commits(
             target_authority,
-            start,
-            end,
+            commit_range,
             serialized_commits,
             serialized_blocks,
         )?;
@@ -549,8 +555,7 @@ impl<C: NetworkClient> Inner<C> {
     fn verify_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         serialized_commits: Vec<Bytes>,
         serialized_blocks: Vec<Bytes>,
     ) -> ConsensusResult<Vec<TrustedCommit>> {
@@ -562,10 +567,10 @@ impl<C: NetworkClient> Inner<C> {
             let digest = TrustedCommit::compute_digest(serialized);
             if commits.is_empty() {
                 // start is inclusive, so first commit must be at the start index.
-                if commit.index() != start {
+                if commit.index() != commit_range.start() {
                     return Err(ConsensusError::UnexpectedStartCommit {
                         peer,
-                        start,
+                        start: commit_range.start(),
                         commit: Box::new(commit),
                     });
                 }
@@ -584,7 +589,7 @@ impl<C: NetworkClient> Inner<C> {
                 }
             }
             // Do not process more commits past the end index.
-            if commit.index() > end {
+            if commit.index() > commit_range.end() {
                 break;
             }
             commits.push((digest, commit));

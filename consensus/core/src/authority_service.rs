@@ -16,7 +16,7 @@ use tracing::{debug, info, warn};
 use crate::{
     block::{BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
-    commit::{CommitAPI as _, TrustedCommit},
+    commit::{CommitAPI as _, CommitRange, TrustedCommit},
     commit_syncer::CommitVoteMonitor,
     context::Context,
     core_thread::CoreThreadDispatcher,
@@ -314,15 +314,17 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
     async fn handle_fetch_commits(
         &self,
         _peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
         fail_point_async!("consensus-rpc-response");
 
         // Compute an exclusive end index and bound the maximum number of commits scanned.
-        let exclusive_end =
-            (end + 1).min(start + self.context.parameters.commit_sync_batch_size as CommitIndex);
-        let mut commits = self.store.scan_commits((start..exclusive_end).into())?;
+        let exclusive_end = (commit_range.end() + 1).min(
+            commit_range.start() + self.context.parameters.commit_sync_batch_size as CommitIndex,
+        );
+        let mut commits = self
+            .store
+            .scan_commits(CommitRange::new(commit_range.start()..exclusive_end))?;
         let mut certifier_block_refs = vec![];
         'commit: while let Some(c) = commits.last() {
             let index = c.index();

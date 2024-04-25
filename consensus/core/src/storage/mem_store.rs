@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque, VecDeque},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     ops::Bound::{Excluded, Included, Unbounded},
 };
 

@@ -208,11 +208,6 @@ where
             store.clone(),
         );
 
-        let leader_schedule = Arc::new(LeaderSchedule::new(
-            context.clone(),
-            LeaderSwapTable::default(),
-        ));
-
         let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
             dag_state.clone(),
@@ -357,6 +352,7 @@ mod tests {
         authority_node::AuthorityService,
         block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
+        commit::CommitRange,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
         error::ConsensusResult,
@@ -439,8 +435,7 @@ mod tests {
         async fn fetch_commits(
             &self,
             _peer: AuthorityIndex,
-            _start: Round,
-            _end: Round,
+            _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")

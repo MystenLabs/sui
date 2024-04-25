@@ -784,6 +784,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 mod tests {
     use crate::block::{BlockDigest, BlockRef, Round, TestBlock, VerifiedBlock};
     use crate::block_verifier::NoopBlockVerifier;
+    use crate::commit::CommitRange;
     use crate::context::Context;
     use crate::core_thread::{CoreError, CoreThreadDispatcher};
     use crate::dag_state::DagState;
@@ -920,8 +921,7 @@ mod tests {
         async fn fetch_commits(
             &self,
             _peer: AuthorityIndex,
-            _start: Round,
-            _end: Round,
+            _commit_range: CommitRange,
             _timeout: Duration,
         ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
