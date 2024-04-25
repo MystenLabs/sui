@@ -100,6 +100,11 @@ macro_rules! debug_print_internal {
         crate::shared::string_utils::debug_print_format!($val $(; $fmt)*);
         }
     };
+    ((msg $val:expr)) => {
+        {
+            println!("{}", $val);
+        }
+    };
     ((opt $name:expr => $val:expr $(; $fmt:ident)?)) => {
         {
         print!("{}: ", $name);
