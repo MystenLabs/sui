@@ -199,7 +199,7 @@ module games::hero {
         (hero.experience * hero.hp) + sword_strength
     }
 
-    public use fun level_up_sword as Sword.level_up;
+    use fun level_up_sword as Sword.level_up;
 
     fun level_up_sword(sword: &mut Sword, amount: u64) {
         sword.strength = sword.strength + amount
