@@ -1212,6 +1212,15 @@ do not have this capability:
 
 
 
+<a name="0xdee9_clob_v2_QUANTITY_MIN_TICK"></a>
+
+
+
+<pre><code><b>const</b> <a href="clob_v2.md#0xdee9_clob_v2_QUANTITY_MIN_TICK">QUANTITY_MIN_TICK</a>: u64 = 1000;
+</code></pre>
+
+
+
 <a name="0xdee9_clob_v2_REFERENCE_MAKER_REBATE_RATE"></a>
 
 
@@ -2169,8 +2178,8 @@ so with this function.
                         filled_quote_quantity_without_commission,
                         maker_order.price
                     );
-                    <b>let</b> filled_base_lot = filled_base_quantity / pool.lot_size;
-                    filled_base_quantity = filled_base_lot * pool.lot_size;
+                    <b>let</b> filled_base_lot = filled_base_quantity / <a href="clob_v2.md#0xdee9_clob_v2_QUANTITY_MIN_TICK">QUANTITY_MIN_TICK</a>;
+                    filled_base_quantity = filled_base_lot * <a href="clob_v2.md#0xdee9_clob_v2_QUANTITY_MIN_TICK">QUANTITY_MIN_TICK</a>;
                     // filled_quote_quantity_without_commission = 0 is permitted here since filled_base_quantity could be 0
                     filled_quote_quantity_without_commission = clob_math::unsafe_mul(
                         filled_base_quantity,
@@ -2793,7 +2802,7 @@ Place a market order to the order book.
     // We start <b>with</b> the bid PriceLevel <b>with</b> the highest price by calling max_leaf on the bids Critbit Tree.
     // The inner <b>loop</b> for iterating over the open orders in ascending orders of order id is the same <b>as</b> above.
     // Then iterate over the price levels in descending order until the market order is completely filled.
-    <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
+    <b>assert</b>!(quantity &gt;= pool.lot_size && quantity % <a href="clob_v2.md#0xdee9_clob_v2_QUANTITY_MIN_TICK">QUANTITY_MIN_TICK</a> == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(quantity != 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>let</b> metadata;
     <b>if</b> (is_bid) {
@@ -3084,7 +3093,7 @@ So please check that boolean value first before using the order id.
     <b>assert</b>!(quantity &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(price &gt; 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>);
     <b>assert</b>!(price % pool.tick_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidPrice">EInvalidPrice</a>);
-    <b>assert</b>!(quantity % pool.lot_size == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
+    <b>assert</b>!(quantity &gt;= pool.lot_size && quantity % <a href="clob_v2.md#0xdee9_clob_v2_QUANTITY_MIN_TICK">QUANTITY_MIN_TICK</a> == 0, <a href="clob_v2.md#0xdee9_clob_v2_EInvalidQuantity">EInvalidQuantity</a>);
     <b>assert</b>!(expire_timestamp &gt; <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>), <a href="clob_v2.md#0xdee9_clob_v2_EInvalidExpireTimestamp">EInvalidExpireTimestamp</a>);
     <b>let</b> owner = account_owner(account_cap);
     <b>let</b> original_quantity = quantity;
