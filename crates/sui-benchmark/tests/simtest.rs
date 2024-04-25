@@ -330,13 +330,16 @@ mod test {
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_point_async("consensus-rpc-response", move || {
             let dead_validator = dead_validator.clone();
             let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
+            let grace_period_clone = grace_period_clone.clone();
             async move {
                 handle_failpoint(
                     dead_validator.clone(),
                     keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
                     0.001,
                 );
             }
