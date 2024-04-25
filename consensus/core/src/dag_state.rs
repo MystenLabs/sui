@@ -77,7 +77,7 @@ pub(crate) struct DagState {
     // Buffer the reputation scores & last_committed_rounds to be flushed with the
     // next dag state flush. This is okay because we can recover reputation scores
     // & last_committed_rounds from the commits as needed.
-    commit_info_to_write: Vec<(CommitRange, CommitInfo)>,
+    commit_info_to_write: Vec<((CommitIndex, CommitDigest), CommitInfo)>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -117,7 +117,7 @@ impl DagState {
                     let commit_range =
                         CommitRange::new((commit_ref.index + 1)..last_commit.index() + 1);
                     let committed_blocks = store
-                        .scan_commits(commit_range)
+                        .scan_commits(((commit_index + 1)..last_commit.index() + 1).into())
                         .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
                         .iter()
                         .flat_map(|commit| {
@@ -605,16 +605,20 @@ impl DagState {
         self.commits_to_write.push(commit);
     }
 
-    pub(crate) fn add_commit_info(
-        &mut self,
-        commit_range: CommitRange,
-        reputation_scores: Vec<u64>,
-    ) {
+    pub(crate) fn add_commit_info(&mut self, reputation_scores: ReputationScores) {
+        // We empty the unscored committed subdags to calculate reputation scores.
+        assert!(self.unscored_committed_subdags.is_empty());
+
         let commit_info = CommitInfo {
             reputation_scores,
             last_committed_rounds: self.last_committed_rounds.clone(),
         };
-        self.commit_info_to_write.push((commit_range, commit_info));
+        let last_commit = self
+            .last_commit
+            .as_ref()
+            .expect("Last commit should already be set.");
+        self.commit_info_to_write
+            .push(((last_commit.index(), last_commit.digest()), commit_info));
     }
 
     pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitVote> {
@@ -761,13 +765,13 @@ impl DagState {
         panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
     }
 
-    pub(crate) fn last_reputation_scores_from_store(&self) -> Option<(CommitRange, Vec<u64>)> {
+    pub(crate) fn last_reputation_scores_from_store(&self) -> Option<ReputationScores> {
         let commit_info = self
             .store
             .read_last_commit_info()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-        if let Some((commit_range, commit_info)) = commit_info {
-            Some((commit_range, commit_info.reputation_scores))
+        if let Some(((_, _), commit_info)) = commit_info {
+            Some(commit_info.reputation_scores)
         } else {
             None
         }
@@ -809,6 +813,11 @@ impl DagState {
     /// round <= the evict round have been cleaned up.
     fn eviction_round(commit_round: Round, cached_rounds: Round) -> Round {
         commit_round.saturating_sub(cached_rounds)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_last_commit(&mut self, commit: TrustedCommit) {
+        self.last_commit = Some(commit);
     }
 }
 

@@ -324,7 +324,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
         let mut commits = self
             .store
-            .scan_commits(CommitRange::new(commit_range.start()..exclusive_end))?;
+            .scan_commits((commit_range.start()..exclusive_end).into())?;
         let mut certifier_block_refs = vec![];
         'commit: while let Some(c) = commits.last() {
             let index = c.index();

@@ -143,14 +143,6 @@ pub enum ConsensusError {
         received: BlockRef,
     },
 
-    #[error(
-        "Storage failure: Overlapping commit range, existing range {existing:?} & inserting range {inserting:?}"
-    )]
-    OverlappingCommitRange {
-        existing: CommitRange,
-        inserting: CommitRange,
-    },
-
     #[error("RocksDB failure: {0}")]
     RocksDBFailure(#[from] TypedStoreError),
 

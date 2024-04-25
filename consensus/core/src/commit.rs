@@ -653,5 +653,6 @@ mod tests {
         assert!(range1 < range2);
         assert!(range2 < range3);
         assert!(range3 < range4);
+        assert!(range5 < range4);
     }
 }

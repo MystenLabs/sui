@@ -369,7 +369,7 @@ mod tests {
     #[test]
     fn test_reputation_scores_authorities_by_score_desc() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let scores = ReputationScores::new(CommitRange::new(1..300), vec![4, 1, 1, 3]);
+        let scores = ReputationScores::new((1..300).into(), vec![4, 1, 1, 3]);
         let authorities = scores.authorities_by_score_desc(context);
         assert_eq!(
             authorities,
@@ -385,7 +385,7 @@ mod tests {
     #[test]
     fn test_reputation_scores_update_metrics() {
         let context = Arc::new(Context::new_for_test(4).0);
-        let scores = ReputationScores::new(CommitRange::new(1..300), vec![1, 2, 4, 3]);
+        let scores = ReputationScores::new((1..300).into(), vec![1, 2, 4, 3]);
         scores.update_metrics(context.clone());
         let metrics = context.metrics.node_metrics.reputation_scores.clone();
         assert_eq!(
@@ -498,7 +498,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..2));
+        assert_eq!(scores.commit_range, (1..2).into());
     }
 
     #[test]
@@ -651,6 +651,6 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..2));
+        assert_eq!(scores.commit_range, (1..2).into());
     }
 }

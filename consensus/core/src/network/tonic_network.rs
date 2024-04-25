@@ -453,7 +453,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
             .service
-            .handle_fetch_commits(peer_index, CommitRange::new(request.start..request.end))
+            .handle_fetch_commits(peer_index, (request.start..request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         let commits = commits
