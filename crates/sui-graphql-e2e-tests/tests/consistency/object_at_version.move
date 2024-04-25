@@ -219,6 +219,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+# Querying objects by version doesn't require it to be in the snapshot table.
 {
   object_within_available_range: object(
     address: "@{obj_2_0}"

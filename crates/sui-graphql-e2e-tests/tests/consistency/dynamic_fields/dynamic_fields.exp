@@ -819,7 +819,24 @@ Checkpoint created: 7
 task 33 'run-graphql'. lines 445-495:
 Response: {
   "data": {
-    "parent_version_4_outside_consistent_range": null,
+    "parent_version_4_outside_consistent_range": {
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IPzS8naECYD4KyjqOrwvPZSgKp0kO3zeSAqOIyZX0G0bBwAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "pAEAAAAAAAA=",
+                "type": {
+                  "repr": "u64"
+                }
+              },
+              "value": null
+            }
+          }
+        ]
+      }
+    },
     "parent_version_4_paginated_outside_consistent_range": null,
     "parent_version_6_no_df_1_2_3": {
       "dynamicFields": {
@@ -886,13 +903,33 @@ Response: {
         "edges": []
       }
     }
-  }
+  },
+  "errors": [
+    {
+      "message": "Requested data is outside the available range",
+      "locations": [
+        {
+          "line": 34,
+          "column": 5
+        }
+      ],
+      "path": [
+        "parent_version_4_paginated_outside_consistent_range",
+        "dynamicFields"
+      ],
+      "extensions": {
+        "code": "BAD_USER_INPUT"
+      }
+    }
+  ]
 }
 
 task 34 'run-graphql'. lines 497-528:
 Response: {
   "data": {
-    "parent_version_4": null,
+    "parent_version_4": {
+      "dfAtParentVersion4_outside_range": null
+    },
     "parent_version_6": {
       "dfAtParentVersion6": null
     }

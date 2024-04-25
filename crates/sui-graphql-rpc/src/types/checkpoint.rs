@@ -35,8 +35,8 @@ pub(crate) struct CheckpointId {
     pub sequence_number: Option<u64>,
 }
 
-/// DataLoader key for fetching a `Checkpoint` by its sequence number, optionally constrained by a
-/// consistency cursor.
+/// DataLoader key for fetching a `Checkpoint` by its sequence number, constrained by a consistency
+/// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct SeqNumKey {
     pub sequence_number: u64,
@@ -46,8 +46,7 @@ struct SeqNumKey {
     pub checkpoint_viewed_at: u64,
 }
 
-/// DataLoader key for fetching a `Checkpoint` by its digest, optionally constrained by a
-/// consistency cursor.
+/// DataLoader key for fetching a `Checkpoint` by its digest, constrained by a consistency cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct DigestKey {
     pub digest: Digest,

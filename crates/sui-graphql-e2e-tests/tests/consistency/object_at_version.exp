@@ -177,7 +177,7 @@ Objects snapshot updated to [0 to 5)
 task 18 'create-checkpoint'. lines 219-219:
 Checkpoint created: 6
 
-task 19 'run-graphql'. lines 221-259:
+task 19 'run-graphql'. lines 221-260:
 Response: {
   "data": {
     "object_within_available_range": {
@@ -192,7 +192,22 @@ Response: {
         }
       }
     },
-    "object_outside_available_range": null,
-    "object_not_in_snapshot": null
+    "object_outside_available_range": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 5,
+      "asMoveObject": null
+    },
+    "object_not_in_snapshot": {
+      "status": "INDEXED",
+      "version": 3,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0x7a166d93d67f2815b463e90d909798a5c572b3e15cdbd6dc8fc10f9fc88618f9",
+            "value": "0"
+          }
+        }
+      }
+    }
   }
 }

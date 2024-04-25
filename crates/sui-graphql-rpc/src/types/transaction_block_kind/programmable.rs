@@ -283,7 +283,7 @@ impl MoveCallTransaction {
     /// The function being called, resolved.
     async fn function(&self, ctx: &Context<'_>) -> Result<Option<MoveFunction>> {
         MoveFunction::query(
-            ctx.data_unchecked(),
+            ctx,
             self.native.package.into(),
             self.native.module.as_str(),
             self.native.function.as_str(),

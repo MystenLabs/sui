@@ -10,7 +10,7 @@ use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, Dynami
 
 use super::available_range::AvailableRange;
 use super::cursor::{Page, Target};
-use super::object::{self, deserialize_move_struct, Object, ObjectKind, ObjectLookupKey};
+use super::object::{self, deserialize_move_struct, Object, ObjectKind, ObjectLookup};
 use super::type_filter::ExactTypeFilter;
 use super::{
     base64::Base64, move_object::MoveObject, move_value::MoveValue, sui_address::SuiAddress,
@@ -105,12 +105,12 @@ impl DynamicField {
             // object. Thus, we use the version of the field object to bound the value object at the
             // correct version.
             let obj = MoveObject::query(
-                ctx.data_unchecked(),
+                ctx,
                 self.df_object_id,
-                ObjectLookupKey::LatestAtParentVersion {
-                    version: self.super_.super_.version_impl(),
-                    checkpoint_viewed_at: self.super_.super_.checkpoint_viewed_at,
-                },
+                Object::under_parent(
+                    self.super_.super_.version_impl(),
+                    self.super_.super_.checkpoint_viewed_at,
+                ),
             )
             .await
             .extend()?;
@@ -152,7 +152,7 @@ impl DynamicField {
     /// before the provided version. If `parent_version` is not provided, the latest version of the
     /// field is returned as bounded by the `checkpoint_viewed_at` parameter.
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         parent: SuiAddress,
         parent_version: Option<u64>,
         name: DynamicFieldName,
@@ -169,16 +169,15 @@ impl DynamicField {
         let field_id = derive_dynamic_field_id(parent, &type_, &name.bcs.0)
             .map_err(|e| Error::Internal(format!("Failed to derive dynamic field id: {e}")))?;
 
-        use ObjectLookupKey as K;
-        let key = match parent_version {
-            None => K::LatestAt(checkpoint_viewed_at),
-            Some(version) => K::LatestAtParentVersion {
-                version,
+        let super_ = MoveObject::query(
+            ctx,
+            SuiAddress::from(field_id),
+            ObjectLookup::LatestAt {
+                parent_version,
                 checkpoint_viewed_at,
             },
-        };
-
-        let super_ = MoveObject::query(db, SuiAddress::from(field_id), key).await?;
+        )
+        .await?;
 
         super_.map(Self::try_from).transpose()
     }

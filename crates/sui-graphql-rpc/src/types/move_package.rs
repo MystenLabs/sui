@@ -9,7 +9,7 @@ use super::cursor::{JsonCursor, Page};
 use super::move_module::MoveModule;
 use super::move_object::MoveObject;
 use super::object::{
-    self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus,
+    self, Object, ObjectFilter, ObjectImpl, ObjectLookup, ObjectOwner, ObjectStatus,
 };
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
@@ -18,7 +18,6 @@ use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use crate::consistency::ConsistentNamedCursor;
-use crate::data::Db;
 use crate::error::Error;
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
@@ -413,11 +412,11 @@ impl MovePackage {
     }
 
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         address: SuiAddress,
-        key: ObjectLookupKey,
+        key: ObjectLookup,
     ) -> Result<Option<Self>, Error> {
-        let Some(object) = Object::query(db, address, key).await? else {
+        let Some(object) = Object::query(ctx, address, key).await? else {
             return Ok(None);
         };
 

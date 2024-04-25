@@ -8,7 +8,7 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
-use super::object::ObjectLookupKey;
+use super::object::Object;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -96,9 +96,9 @@ impl Validator {
     /// can then update the reference gas price and tallying rule on behalf of the validator.
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             self.operation_cap_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -108,9 +108,9 @@ impl Validator {
     /// and to compound staking rewards.
     async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             self.staking_pool_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -120,9 +120,9 @@ impl Validator {
     /// the amount of SUI tokens that each past SUI staker can withdraw in the future.
     async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             self.exchange_rates_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()

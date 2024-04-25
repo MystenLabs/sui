@@ -15,7 +15,7 @@ use super::{
     dynamic_field::{DynamicField, DynamicFieldName},
     move_object::{MoveObject, MoveObjectImpl},
     move_value::MoveValue,
-    object::{self, Object, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus},
+    object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectStatus},
     owner::OwnerImpl,
     stake::StakedSui,
     string_input::impl_string_input,
@@ -411,9 +411,9 @@ impl NameService {
         let reverse_record_id = config.reverse_record_field_id(address.as_slice());
 
         let Some(object) = MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             reverse_record_id.into(),
-            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+            Object::latest_at(checkpoint_viewed_at),
         )
         .await?
         else {
