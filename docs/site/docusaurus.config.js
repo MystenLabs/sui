@@ -49,15 +49,12 @@ const config = {
   },
   plugins: [
     // ....
-    [path.resolve(__dirname, "src/plugins/inject-code"), {}],
     [
       "@graphql-markdown/docusaurus",
       {
-        schema: path.resolve(
-          __dirname,
+        schema:
           "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
-        ),
-        rootPath: path.resolve(__dirname, "../content"), // docs will be generated under rootPath/baseURL
+        rootPath: "../content", // docs will be generated under rootPath/baseURL
         baseURL: "references/sui-api/sui-graphql/reference",
         loaders: {
           GraphQLFileLoader: "@graphql-tools/graphql-file-loader",
@@ -67,7 +64,7 @@ const config = {
     [
       "docusaurus-plugin-includes",
       {
-        postBuildDeletedFolders: [path.resolve(__dirname, "../snippets")],
+        postBuildDeletedFolders: ["../snippets"],
       },
     ],
     async function myPlugin(context, options) {
@@ -90,9 +87,9 @@ const config = {
       /** @type {import('@docusaurus/preset-classic').Options} */
       ({
         docs: {
-          path: path.resolve(__dirname, "../content"),
+          path: "../content",
           routeBasePath: "/",
-          sidebarPath: require.resolve(path.resolve(__dirname, "sidebars.js")),
+          sidebarPath: require.resolve("./sidebars.js"),
           // the double docs below is a fix for having the path set to ../content
           editUrl: "https://github.com/MystenLabs/sui/tree/main/docs/docs",
           /*disableVersioning: true,
@@ -118,8 +115,8 @@ const config = {
         },
         theme: {
           customCss: [
-            require.resolve(path.resolve(__dirname, "src/css/fonts.css")),
-            require.resolve(path.resolve(__dirname, "src/css/custom.css")),
+            require.resolve("./src/css/fonts.css"),
+            require.resolve("./src/css/custom.css"),
           ],
         },
       }),
