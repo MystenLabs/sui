@@ -67,10 +67,6 @@ jobs:
           echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
           echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=warn RUST_BACKTRACE=1 $(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
 
-      - name: Run client-gen tests
-        if: ${{ needs.diff.outputs.isClientGenTests == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm --filter client-gen-tests test:e2e
-
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui test:e2e'
@@ -96,6 +92,10 @@ jobs:
           name: playwright-report-wallet
           path: apps/wallet/playwright-report/
           retention-days: 30
+
+      - name: Run client-gen tests
+        if: ${{ needs.diff.outputs.isClientGenTests == 'true' || needs.diff.outputs.isRust == 'true'}}
+        run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter client-gen-tests test:e2e'
 
   # Run e2e test against localnet built on the devnet branch for backward compatibility check
   local_devnet_branch:
