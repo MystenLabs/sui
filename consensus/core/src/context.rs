@@ -2,16 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
-use std::time::{Instant, SystemTime};
+use std::time::SystemTime;
 
-use crate::block::BlockTimestampMs;
 use consensus_config::{AuthorityIndex, Committee, Parameters};
 #[cfg(test)]
 use consensus_config::{NetworkKeyPair, ProtocolKeyPair};
 use sui_protocol_config::ProtocolConfig;
 #[cfg(test)]
 use tempfile::TempDir;
+use tokio::time::Instant;
 
+use crate::block::BlockTimestampMs;
 #[cfg(test)]
 use crate::metrics::test_metrics;
 use crate::metrics::Metrics;
