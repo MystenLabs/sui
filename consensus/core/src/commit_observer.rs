@@ -179,8 +179,8 @@ mod tests {
         test_dag::{build_dag, get_all_uncommitted_leader_blocks},
     };
 
-    #[test]
-    fn test_handle_commit() {
+    #[tokio::test]
+    async fn test_handle_commit() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);
@@ -278,8 +278,8 @@ mod tests {
         assert!(blocks_existence.iter().all(|exists| *exists));
     }
 
-    #[test]
-    fn test_recover_and_send_commits() {
+    #[tokio::test]
+    async fn test_recover_and_send_commits() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);
@@ -415,8 +415,8 @@ mod tests {
         verify_channel_empty(&mut receiver);
     }
 
-    #[test]
-    fn test_send_no_missing_commits() {
+    #[tokio::test]
+    async fn test_send_no_missing_commits() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);

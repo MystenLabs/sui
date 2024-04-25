@@ -380,8 +380,8 @@ mod tests {
         storage::mem_store::MemStore,
     };
 
-    #[test]
-    fn suspend_blocks_with_missing_ancestors() {
+    #[tokio::test]
+    async fn suspend_blocks_with_missing_ancestors() {
         // GIVEN
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -425,8 +425,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn try_accept_block_returns_missing_blocks() {
+    #[tokio::test]
+    async fn try_accept_block_returns_missing_blocks() {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -456,8 +456,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn accept_blocks_with_complete_causal_history() {
+    #[tokio::test]
+    async fn accept_blocks_with_complete_causal_history() {
         // GIVEN
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -491,8 +491,8 @@ mod tests {
         assert!(accepted_blocks.is_empty());
     }
 
-    #[test]
-    fn accept_blocks_unsuspend_children_blocks() {
+    #[tokio::test]
+    async fn accept_blocks_unsuspend_children_blocks() {
         // GIVEN
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -584,8 +584,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn reject_blocks_failing_verifications() {
+    #[tokio::test]
+    async fn reject_blocks_failing_verifications() {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 
