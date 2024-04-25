@@ -565,7 +565,7 @@ impl SuiClientInner for SuiSdkClient {
     ) -> Result<SuiTransactionBlockResponse, BridgeError> {
         match self.quorum_driver_api().execute_transaction_block(
             tx,
-            SuiTransactionBlockResponseOptions::new().with_effects(),
+            SuiTransactionBlockResponseOptions::new().with_effects().with_events(),
             Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForEffectsCert),
         ).await {
             Ok(response) => Ok(response),

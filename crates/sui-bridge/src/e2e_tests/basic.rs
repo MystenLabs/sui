@@ -5,7 +5,9 @@ use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use crate::e2e_tests::test_utils::publish_coins_return_add_coins_on_sui_action;
 use crate::e2e_tests::test_utils::{get_signatures, BridgeTestClusterBuilder};
-use crate::events::SuiBridgeEvent;
+use crate::events::{
+    SuiBridgeEvent, SuiToEthTokenBridgeV1, TokenTransferApproved, TokenTransferClaimed,
+};
 use crate::sui_client::SuiBridgeClient;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
@@ -14,7 +16,7 @@ use eth_sui_bridge::EthSuiBridgeEvents;
 use ethers::prelude::*;
 use ethers::types::Address as EthAddress;
 use move_core_types::ident_str;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use std::path::Path;
 
@@ -69,7 +71,17 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         0,
     )
     .await;
-    info!("Deposited Eth to Sol contract");
+    let events = bridge_test_cluster
+        .new_bridge_events(
+            HashSet::from_iter([
+                TokenTransferApproved.get().unwrap().clone(),
+                TokenTransferClaimed.get().unwrap().clone(),
+            ]),
+            true,
+        )
+        .await;
+    // There are exactly 1 approved and 1 claimed event
+    assert_eq!(events.len(), 2);
 
     let eth_coin = sui_client
         .coin_read_api()
@@ -107,7 +119,18 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         &sui_token_type_tags,
     )
     .await;
-    info!("Deposited Eth to move package");
+    let events = bridge_test_cluster
+        .new_bridge_events(
+            HashSet::from_iter([
+                SuiToEthTokenBridgeV1.get().unwrap().clone(),
+                TokenTransferApproved.get().unwrap().clone(),
+                TokenTransferClaimed.get().unwrap().clone(),
+            ]),
+            true,
+        )
+        .await;
+    // There are exactly 1 deposit and 1 approved event
+    assert_eq!(events.len(), 2);
     let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
 
     let signatures = get_signatures(
@@ -340,6 +363,7 @@ async fn initiate_bridge_eth_to_sui(
     assert_eq!(eth_bridge_event.sui_adjusted_amount, sui_amount);
     assert_eq!(eth_bridge_event.sender_address, eth_address);
     assert_eq!(eth_bridge_event.recipient_address, sui_address.to_vec());
+    info!("Deposited Eth to Sol contract");
 
     wait_for_transfer_action_status(
         sui_bridge_client,
@@ -391,7 +415,7 @@ async fn initiate_bridge_sui_to_eth(
             }
         })
         .unwrap();
-
+    info!("Deposited Eth to move package");
     assert_eq!(bridge_event.sui_bridge_event.nonce, nonce);
     assert_eq!(
         bridge_event.sui_bridge_event.sui_chain_id as u8,
