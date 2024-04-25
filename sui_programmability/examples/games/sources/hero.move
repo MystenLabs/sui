@@ -349,6 +349,7 @@ module games::hero {
     #[test]
     fun slay_boar_test() {
         use sui::test_scenario;
+        use sui::coin;
 
         let admin = @0xAD014;
         let player = @0x0;
