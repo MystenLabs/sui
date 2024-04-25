@@ -336,6 +336,10 @@ pub fn ptb_description() -> clap::Command {
         )
         .value_names(["NAME", "VALUE"]))
         .arg(arg!(
+            --"dry-run"
+            "Perform a dry run of the PTB instead of executing it."
+        ))
+        .arg(arg!(
             --"gas-coin" <ID> ...
             "The object ID of the gas coin to use. If not specified, it will try to use the first \
             gas coin that it finds that has at least the requested gas-budget balance."
