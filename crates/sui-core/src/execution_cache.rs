@@ -28,7 +28,7 @@ use sui_types::storage::{
     ObjectStore, PackageObject, ParentSync,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::transaction::VerifiedTransaction;
+use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber},
     object::Owner,
@@ -36,7 +36,8 @@ use sui_types::{
 };
 use tracing::instrument;
 
-pub(crate) mod cached_version_map;
+pub(crate) mod cache_types;
+mod object_locks;
 pub mod passthrough_cache;
 pub mod writeback_cache;
 
@@ -63,14 +64,29 @@ impl ExecutionCacheMetrics {
 pub type ExecutionCache = PassthroughCache;
 
 pub trait ExecutionCacheCommit: Send + Sync {
-    /// Durably commit the transaction outputs of the given transaction to the database.
+    /// Durably commit the outputs of the given transactions to the database.
     /// Will be called by CheckpointExecutor to ensure that transaction outputs are
     /// written durably before marking a checkpoint as finalized.
-    fn commit_transaction_outputs(
-        &self,
+    fn commit_transaction_outputs<'a>(
+        &'a self,
         epoch: EpochId,
-        digest: &TransactionDigest,
-    ) -> BoxFuture<'_, SuiResult>;
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult>;
+
+    /// Durably commit transactions (but not their outputs) to the database.
+    /// Called before writing a locally built checkpoint to the CheckpointStore, so that
+    /// the inputs of the checkpoint cannot be lost.
+    /// These transactions are guaranteed to be final unless this validator
+    /// forks (i.e. constructs a checkpoint which will never be certified). In this case
+    /// some non-final transactions could be left in the database.
+    ///
+    /// This is an intermediate solution until we delay commits to the epoch db. After
+    /// we have done that, crash recovery will be done by re-processing consensus commits
+    /// and pending_consensus_transactions, and this method can be removed.
+    fn persist_transactions<'a>(
+        &'a self,
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult>;
 }
 
 pub trait ExecutionCacheRead: Send + Sync {
@@ -132,11 +148,11 @@ pub trait ExecutionCacheRead: Send + Sync {
         for (object_opt, object_ref) in objects.into_iter().zip(object_refs) {
             match object_opt {
                 None => {
-                    let lock = self._get_latest_lock_for_object_id(object_ref.0)?;
-                    let error = if lock.1 >= object_ref.1 {
+                    let live_objref = self._get_live_objref(object_ref.0)?;
+                    let error = if live_objref.1 >= object_ref.1 {
                         UserInputError::ObjectVersionUnavailableForConsumption {
                             provided_obj_ref: *object_ref,
-                            current_version: lock.1,
+                            current_version: live_objref.1,
                         }
                     } else {
                         UserInputError::ObjectNotFound {
@@ -188,7 +204,7 @@ pub trait ExecutionCacheRead: Send + Sync {
                 // be false, but since this is a receiving object we should mark it as available if
                 // we can determine that an object with a version greater than or equal to the
                 // specified version exists or was deleted. We will then let mark it as available
-                // to let the the transaction through so it can fail at execution.
+                // to let the transaction through so it can fail at execution.
                 let is_available = self
                     .get_object(&input_key.id())?
                     .map(|obj| obj.version() >= input_key.version().unwrap())
@@ -246,12 +262,14 @@ pub trait ExecutionCacheRead: Send + Sync {
         version: SequenceNumber,
     ) -> SuiResult<Option<Object>>;
 
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_id: EpochId) -> SuiLockResult;
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult;
 
     // This method is considered "private" - only used by multi_get_objects_with_more_accurate_error_return
-    fn _get_latest_lock_for_object_id(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef>;
 
-    fn check_owned_object_locks_exist(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
+    // Check that the given set of objects are live at the given version. This is used as a
+    // safety check before execution, and could potentially be deleted or changed to a debug_assert
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
     fn multi_get_transaction_blocks(
         &self,
@@ -495,9 +513,9 @@ pub trait ExecutionCacheWrite: Send + Sync {
     /// Attempt to acquire object locks for all of the owned input locks.
     fn acquire_transaction_locks<'a>(
         &'a self,
-        epoch_id: EpochId,
+        epoch_store: &'a AuthorityPerEpochStore,
         owned_input_objects: &'a [ObjectRef],
-        tx_digest: TransactionDigest,
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult>;
 }
 

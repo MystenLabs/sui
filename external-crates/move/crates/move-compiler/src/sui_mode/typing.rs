@@ -8,11 +8,11 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, FunctionName, Mutability, StructName},
+    parser::ast::{Ability_, DatatypeName, FunctionName},
     shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::*,
     typing::{
@@ -50,7 +50,7 @@ pub struct Context<'a> {
     sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
     otw_name: Option<Symbol>,
-    one_time_witness: Option<Result<StructName, ()>>,
+    one_time_witness: Option<Result<DatatypeName, ()>>,
     in_test: bool,
 }
 
@@ -122,7 +122,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.set_module(ident);
         self.in_test = mdef.attributes.is_test_or_test_only();
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
-            let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
+            let valid_fields = if let N::StructFields::Defined(_, fields) = &sdef.fields {
                 invalid_otw_field_loc(fields).is_none()
             } else {
                 true
@@ -140,6 +140,10 @@ impl<'a> TypingVisitorContext for Context<'a> {
 
         for (name, sdef) in mdef.structs.key_cloned_iter() {
             struct_def(self, name, sdef)
+        }
+
+        for (name, edef) in mdef.enums.key_cloned_iter() {
+            enum_def(self, name, edef)
         }
 
         // do not skip module
@@ -169,7 +173,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
 // Structs
 //**************************************************************************************************
 
-fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
+fn struct_def(context: &mut Context, name: DatatypeName, sdef: &N::StructDefinition) {
     let N::StructDefinition {
         warning_filter: _,
         index: _,
@@ -183,7 +187,7 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
         return;
     };
 
-    let StructFields::Defined(fields) = fields else {
+    let StructFields::Defined(_, fields) = fields else {
         return;
     };
     let invalid_first_field = if fields.is_empty() {
@@ -219,7 +223,7 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
     }
 }
 
-fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Diagnostic {
+fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: DatatypeName) -> Diagnostic {
     const KEY_MSG: &str = "The 'key' ability is used to declare objects in Sui";
 
     let msg = format!(
@@ -236,11 +240,33 @@ fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Dia
 }
 
 //**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+fn enum_def(context: &mut Context, name: DatatypeName, edef: &N::EnumDefinition) {
+    let N::EnumDefinition {
+        warning_filter: _,
+        index: _,
+        attributes: _,
+        abilities,
+        type_parameters: _,
+        variants: _,
+    } = edef;
+    if let Some(key_loc) = abilities.ability_loc_(Ability_::Key) {
+        let msg = format!("Invalid object '{name}'");
+        let key_msg = format!("Enums cannot have the '{}' ability.", Ability_::Key);
+        let diag = diag!(OBJECT_DECL_DIAG, (name.loc(), msg), (key_loc, key_msg));
+        context.env.add_diag(diag);
+    };
+}
+
+//**************************************************************************************************
 // Functions
 //**********************************************************************************************
 
 fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
+        compiled_visibility: _,
         visibility,
         signature,
         body,
@@ -423,7 +449,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
 // when trying to write an 'init' function.
 fn check_otw_type(
     context: &mut Context,
-    name: StructName,
+    name: DatatypeName,
     sdef: &N::StructDefinition,
     usage_loc: Option<Loc>,
 ) {
@@ -450,7 +476,7 @@ fn check_otw_type(
         valid = false;
     }
 
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         let invalid_otw_opt = invalid_otw_field_loc(fields);
         if let Some(invalid_otw_opt) = invalid_otw_opt {
             let msg_base = format!(
@@ -625,6 +651,8 @@ fn entry_param_ty(
     param_ty: &Type,
 ) {
     let is_mut_clock = is_mut_clock(param_ty);
+    let is_mut_random = is_mut_random(param_ty);
+
     // TODO better error message for cases such as `MyObject<InnerTypeWithoutStore>`
     // which should give a contextual error about `MyObject` having `key`, but the instantiation
     // `MyObject<InnerTypeWithoutStore>` not having `key` due to `InnerTypeWithoutStore` not having
@@ -632,7 +660,7 @@ fn entry_param_ty(
     let is_valid = is_entry_primitive_ty(param_ty)
         || is_entry_object_ty(param_ty)
         || is_entry_receiving_ty(param_ty);
-    if is_mut_clock || !is_valid {
+    if is_mut_clock || is_mut_random || !is_valid {
         let pmsg = format!(
             "Invalid 'entry' parameter type for parameter '{}'",
             param.value.name
@@ -643,6 +671,13 @@ fn entry_param_ty(
                 a = SUI_ADDR_NAME,
                 m = CLOCK_MODULE_NAME,
                 n = CLOCK_TYPE_NAME,
+            )
+        } else if is_mut_random {
+            format!(
+                "{a}::{m}::{n} must be passed by immutable reference, e.g. '&{a}::{m}::{n}'",
+                a = SUI_ADDR_NAME,
+                m = RANDOMNESS_MODULE_NAME,
+                n = RANDOMNESS_STATE_TYPE_NAME,
             )
         } else {
             "'entry' parameters must be primitives (by-value), vectors of primitives, objects \
@@ -664,6 +699,24 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         Type_::Ref(/* mut */ false, _) => false,
         Type_::Ref(/* mut */ true, t) => is_mut_clock(t),
         Type_::Apply(_, sp!(_, n_), _) => n_.is(SUI_ADDR_NAME, CLOCK_MODULE_NAME, CLOCK_TYPE_NAME),
+        Type_::Unit
+        | Type_::Param(_)
+        | Type_::Var(_)
+        | Type_::Anything
+        | Type_::UnresolvedError
+        | Type_::Fun(_, _) => false,
+    }
+}
+
+fn is_mut_random(param_ty: &Type) -> bool {
+    match &param_ty.value {
+        Type_::Ref(/* mut */ false, _) => false,
+        Type_::Ref(/* mut */ true, t) => is_mut_random(t),
+        Type_::Apply(_, sp!(_, n_), _) => n_.is(
+            SUI_ADDR_NAME,
+            RANDOMNESS_MODULE_NAME,
+            RANDOMNESS_STATE_TYPE_NAME,
+        ),
         Type_::Unit
         | Type_::Param(_)
         | Type_::Var(_)

@@ -68,7 +68,7 @@ pub fn on_text_document_sync_notification(
         };
         if first_access {
             // create all directories on first access, otherwise file creation will fail
-            let _ = vfs_path.parent().create_dir();
+            let _ = vfs_path.parent().create_dir_all();
         }
         let Some(vfs_file) = vfs_path.create_file().ok() else {
             eprintln!("Could not create file at {:?}", vfs_path);

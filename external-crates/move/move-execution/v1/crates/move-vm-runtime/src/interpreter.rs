@@ -137,15 +137,10 @@ impl Interpreter {
                     function.clone(),
                     &ty_args,
                 )
-                .map_err(|e| match function.module_id() {
-                    Some(id) => e
-                        .at_code_offset(function.index(), 0)
-                        .finish(Location::Module(id.clone())),
-                    None => PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(
-                            "Unexpected native function not located in a module".to_owned(),
-                        )
-                        .finish(Location::Undefined),
+                .map_err(|e| {
+                    let id = function.module_id();
+                    e.at_code_offset(function.index(), 0)
+                        .finish(Location::Module(id.clone()))
                 })?;
 
             profile_close_frame!(gas_meter, function.pretty_string());
@@ -226,13 +221,7 @@ impl Interpreter {
                     profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
-                    let module_id = func
-                        .module_id()
-                        .ok_or_else(|| {
-                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                                .with_message("Failed to get native function module id".to_string())
-                        })
-                        .map_err(|e| set_err_info!(current_frame, e))?;
+                    let module_id = func.module_id();
                     gas_meter
                         .charge_call(
                             module_id,
@@ -259,7 +248,7 @@ impl Interpreter {
                         let err = set_err_info!(frame, err);
                         self.maybe_core_dump(err, &frame)
                     })?;
-                    // Note: the caller will find the the callee's return values at the top of the shared operand stack
+                    // Note: the caller will find the callee's return values at the top of the shared operand stack
                     current_frame = frame;
                 }
                 ExitCode::CallGeneric(idx) => {
@@ -273,13 +262,7 @@ impl Interpreter {
                     profile_open_frame!(gas_meter, func_name.clone());
 
                     // Charge gas
-                    let module_id = func
-                        .module_id()
-                        .ok_or_else(|| {
-                            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                                .with_message("Failed to get native function module id".to_string())
-                        })
-                        .map_err(|e| set_err_info!(current_frame, e))?;
+                    let module_id = func.module_id();
                     gas_meter
                         .charge_call_generic(
                             module_id,
@@ -367,23 +350,15 @@ impl Interpreter {
     ) -> VMResult<()> {
         // Note: refactor if native functions push a frame on the stack
         self.call_native_impl(resolver, gas_meter, extensions, function.clone(), ty_args)
-            .map_err(|e| match function.module_id() {
-                Some(id) => {
-                    let e = if resolver.loader().vm_config().error_execution_state {
-                        e.with_exec_state(self.get_internal_state())
-                    } else {
-                        e
-                    };
-                    e.at_code_offset(function.index(), 0)
-                        .finish(Location::Module(id.clone()))
-                }
-                None => {
-                    let err = PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                        .with_message(
-                            "Unexpected native function not located in a module".to_owned(),
-                        );
-                    self.set_location(err)
-                }
+            .map_err(|e| {
+                let id = function.module_id();
+                let e = if resolver.loader().vm_config().error_execution_state {
+                    e.with_exec_state(self.get_internal_state())
+                } else {
+                    e
+                };
+                e.at_code_offset(function.index(), 0)
+                    .finish(Location::Module(id.clone()))
             })
     }
 
@@ -547,9 +522,8 @@ impl Interpreter {
         let func = &frame.function;
 
         debug_write!(buf, "    [{}] ", idx)?;
-        if let Some(module) = func.module_id() {
-            debug_write!(buf, "{}::{}::", module.address(), module.name(),)?;
-        }
+        let module = func.module_id();
+        debug_write!(buf, "{}::{}::", module.address(), module.name(),)?;
         debug_write!(buf, "{}", func.name())?;
         let ty_args = frame.ty_args();
         let mut ty_tags = vec![];
@@ -692,12 +666,12 @@ impl Interpreter {
             .iter()
             .rev()
             .take(count)
-            .filter_map(|frame| {
-                Some((
-                    frame.function.module_id()?.clone(),
+            .map(|frame| {
+                (
+                    frame.function.module_id().clone(),
                     frame.function.index(),
                     frame.pc,
-                ))
+                )
             })
             .collect();
         ExecutionState::new(stack_trace)
@@ -902,11 +876,11 @@ impl Frame {
             }
             Bytecode::LdU128(int_const) => {
                 gas_meter.charge_simple_instr(S::LdU128)?;
-                interpreter.operand_stack.push(Value::u128(*int_const))?;
+                interpreter.operand_stack.push(Value::u128(**int_const))?;
             }
             Bytecode::LdU256(int_const) => {
                 gas_meter.charge_simple_instr(S::LdU256)?;
-                interpreter.operand_stack.push(Value::u256(*int_const))?;
+                interpreter.operand_stack.push(Value::u256(**int_const))?;
             }
             Bytecode::LdConst(idx) => {
                 let constant = resolver.constant_at(*idx);
@@ -1379,10 +1353,7 @@ impl Frame {
     }
 
     fn location(&self) -> Location {
-        match self.function.module_id() {
-            None => Location::Script,
-            Some(id) => Location::Module(id.clone()),
-        }
+        Location::Module(self.function.module_id().clone())
     }
 
     fn check_depth_of_type(resolver: &Resolver, ty: &Type) -> PartialVMResult<u64> {
@@ -1440,7 +1411,8 @@ impl Frame {
                     .ok_or_else(|| { PartialVMError::new(StatusCode::VM_MAX_VALUE_DEPTH_REACHED) })?
                     .solve(&[])?)
             }
-            Type::StructInstantiation(si, ty_args) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (si, ty_args) = &**struct_inst;
                 // Calculate depth of all type arguments, and make sure they themselves are not too deep.
                 let ty_arg_depths = ty_args
                     .iter()

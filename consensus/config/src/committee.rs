@@ -9,7 +9,7 @@ use std::{
 use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
 
-use crate::{NetworkPublicKey, ProtocolPublicKey};
+use crate::{AuthorityPublicKey, NetworkPublicKey, ProtocolPublicKey};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -43,6 +43,7 @@ impl Committee {
             "Too many authorities ({})!",
             authorities.len()
         );
+
         let total_stake = authorities.iter().map(|a| a.stake).sum();
         assert_ne!(total_stake, 0, "Total stake cannot be zero!");
         let quorum_threshold = 2 * total_stake / 3 + 1;
@@ -136,10 +137,12 @@ pub struct Authority {
     pub address: Multiaddr,
     /// The authority's hostname, for metrics and logging.
     pub hostname: String,
-    /// The authority's ed25519 publicKey for signing network messages and blocks.
-    pub network_key: NetworkPublicKey,
-    /// The authority's bls public key for random beacon.
+    /// The authority's public key as Sui identity.
+    pub authority_key: AuthorityPublicKey,
+    /// The authority's public key for verifying blocks.
     pub protocol_key: ProtocolPublicKey,
+    /// The authority's public key for TLS and as network identity.
+    pub network_key: NetworkPublicKey,
 }
 
 /// Each authority is uniquely identified by its AuthorityIndex in the Committee.
@@ -154,8 +157,12 @@ pub struct Authority {
 pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
-    // Minimum committee size is 4, so 0 index is always valid.
-    pub const ZERO: AuthorityIndex = AuthorityIndex(0);
+    // Minimum committee size is 1, so 0 index is always valid.
+    pub const ZERO: Self = Self(0);
+
+    // Only for scanning rows in the database. Invalid elsewhere.
+    pub const MIN: Self = Self::ZERO;
+    pub const MAX: Self = Self(u32::MAX);
 
     pub fn value(&self) -> usize {
         self.0 as usize
@@ -210,7 +217,8 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{local_committee_and_keys, Stake};
+    use super::*;
+    use crate::local_committee_and_keys;
 
     #[test]
     fn committee_basic() {

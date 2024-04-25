@@ -17,14 +17,12 @@
 /// assert!(&table1 != &table2, 0);
 /// ```
 module sui::table {
-    use sui::object::{Self, UID};
     use sui::dynamic_field as field;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty table
     const ETableNotEmpty: u64 = 0;
 
-    struct Table<phantom K: copy + drop + store, phantom V: store> has key, store {
+    public struct Table<phantom K: copy + drop + store, phantom V: store> has key, store {
         /// the ID of this table
         id: UID,
         /// the number of key-value pairs in the table
@@ -47,6 +45,7 @@ module sui::table {
         table.size = table.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutable borrows the value associated with the key in the table `table: &Table<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -54,6 +53,7 @@ module sui::table {
         field::borrow(&table.id, k)
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the table `table: &mut Table<K, V>`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the table does not have an entry with
     /// that key `k: K`.
@@ -90,13 +90,13 @@ module sui::table {
     public fun destroy_empty<K: copy + drop + store, V: store>(table: Table<K, V>) {
         let Table { id, size } = table;
         assert!(size == 0, ETableNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 
     /// Drop a possibly non-empty table.
     /// Usable only if the value type `V` has the `drop` ability
     public fun drop<K: copy + drop + store, V: drop + store>(table: Table<K, V>) {
         let Table { id, size: _ } = table;
-        object::delete(id)
+        id.delete()
     }
 }

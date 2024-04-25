@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module deepbook::order_query {
-    use std::option;
-    use std::option::{Option, some, none};
-    use std::vector;
+    use std::option::{some, none};
     use deepbook::critbit::CritbitTree;
     use sui::linked_table;
     use deepbook::critbit;
@@ -13,7 +11,7 @@ module deepbook::order_query {
 
     const PAGE_LIMIT: u64 = 100;
 
-    struct OrderPage has drop {
+    public struct OrderPage has drop {
         orders: vector<Order>,
         // false if this is the last page
         has_next_page: bool,
@@ -42,7 +40,7 @@ module deepbook::order_query {
         ascending: bool,
     ): OrderPage {
         let bids = clob_v2::bids(pool);
-        let orders = iter_ticks_internal(
+        let mut orders = iter_ticks_internal(
             bids,
             start_tick_level,
             start_order_id,
@@ -81,7 +79,7 @@ module deepbook::order_query {
         ascending: bool,
     ): OrderPage {
         let asks = clob_v2::asks(pool);
-        let orders = iter_ticks_internal(
+        let mut orders = iter_ticks_internal(
             asks,
             start_tick_level,
             start_order_id,
@@ -109,7 +107,7 @@ module deepbook::order_query {
         // tick level to start from
         start_tick_level: Option<u64>,
         // order id within that tick level to start from
-        start_order_id: Option<u64>,
+        mut start_order_id: Option<u64>,
         // if provided, do not include orders with an expire timestamp less than the provided value (expired order),
         // value is in microseconds
         min_expire_timestamp: Option<u64>,
@@ -119,7 +117,7 @@ module deepbook::order_query {
         // if true, the orders are returned in ascending tick level.
         ascending: bool,
     ): vector<Order> {
-        let tick_level_key = if (option::is_some(&start_tick_level)) {
+        let mut tick_level_key = if (option::is_some(&start_tick_level)) {
             option::destroy_some(start_tick_level)
         } else {
             let (key, _) = if (ascending) {
@@ -130,13 +128,13 @@ module deepbook::order_query {
             key
         };
 
-        let orders = vector[];
+        let mut orders = vector[];
 
         while (tick_level_key != 0 && vector::length(&orders) < PAGE_LIMIT + 1) {
             let tick_level = critbit::borrow_leaf_by_key(ticks, tick_level_key);
             let open_orders = clob_v2::open_orders(tick_level);
 
-            let next_order_key = if (option::is_some(&start_order_id)) {
+            let mut next_order_key = if (option::is_some(&start_order_id)) {
                 let key = option::destroy_some(start_order_id);
                 if (!linked_table::contains(open_orders, key)) {
                     let (next_leaf, _) = if (ascending) {

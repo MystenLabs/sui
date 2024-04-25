@@ -6,9 +6,9 @@ module utils::immutable_external_resource_tests {
     use utils::immutable_external_resource;
     use sui::url;
     use std::ascii::Self;
-    use sui::digest;
+    use std::hash::sha3_256;
 
-    const EHashLengthMisMatch: u64 = 0;
+    const EHashStringMisMatch: u64 = 0;
     const EUrlStringMisMatch: u64 = 1;
 
     #[test]
@@ -19,16 +19,16 @@ module utils::immutable_external_resource_tests {
         let hash = x"1234567890123456789012345678901234567890abcdefabcdefabcdefabcdef";
 
         let url = url::new_unsafe(url_str);
-        let digest = digest::sha3_256_digest_from_bytes(hash);
-        let resource = immutable_external_resource::new(url, digest);
+        let digest = sha3_256(hash);
+        let mut resource = immutable_external_resource::new(url, digest);
 
-        assert!(immutable_external_resource::url(&resource) == url, 0);
-        assert!(immutable_external_resource::digest(&resource) == digest, 0);
+        assert!(immutable_external_resource::url(&resource) == url, EUrlStringMisMatch);
+        assert!(immutable_external_resource::digest(&resource) == digest, EHashStringMisMatch);
 
         let new_url_str = ascii::string(x"37414243454647");
         let new_url = url::new_unsafe(new_url_str);
 
         immutable_external_resource::update(&mut resource, new_url);
-        assert!(immutable_external_resource::url(&resource) == new_url, 0);
+        assert!(immutable_external_resource::url(&resource) == new_url, EUrlStringMisMatch);
     }
 }

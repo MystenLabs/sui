@@ -77,9 +77,9 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Expected '[' but found end of input",
+            message: "Expected '[' but found identifier 'a'",
             span: Span {
-                start: 20,
+                start: 19,
                 end: 20,
             },
             help: None,
@@ -99,10 +99,10 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected '['",
+            message: "Unexpected end of input",
             span: Span {
-                start: 19,
-                end: 20,
+                start: 22,
+                end: 22,
             },
             help: Some(
                 "Expected an argument here",
@@ -123,10 +123,32 @@ expression: parsed
     ],
     [
         PTBError {
-            message: "Unexpected end of input",
+            message: "Expected '[' but found end of input",
             span: Span {
                 start: 18,
                 end: 18,
+            },
+            help: None,
+            severity: Error,
+        },
+        PTBError {
+            message: "Gas budget not set.",
+            span: Span {
+                start: 18,
+                end: 18,
+            },
+            help: Some(
+                "Use --gas-budget <u64> to set a gas budget",
+            ),
+            severity: Error,
+        },
+    ],
+    [
+        PTBError {
+            message: "Unexpected '['",
+            span: Span {
+                start: 23,
+                end: 24,
             },
             help: Some(
                 "Expected an argument here",
@@ -136,8 +158,8 @@ expression: parsed
         PTBError {
             message: "Gas budget not set.",
             span: Span {
-                start: 18,
-                end: 18,
+                start: 26,
+                end: 26,
             },
             help: Some(
                 "Use --gas-budget <u64> to set a gas budget",

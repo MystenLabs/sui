@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::{collections::HashSet, sync::Arc};
 
 use move_binary_format::CompiledModule;
-use move_vm_config::verifier::VerifierConfig;
+use move_vm_config::verifier::{MeterConfig, VerifierConfig};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress, TxContext},
@@ -22,11 +22,9 @@ use sui_types::{
     type_resolver::LayoutResolver,
 };
 
-use move_bytecode_verifier_v1::meter::Scope;
+use move_bytecode_verifier_meter::Meter;
 use move_vm_runtime_v1::move_vm::MoveVM;
-use sui_adapter_v1::adapter::{
-    default_verifier_config, new_move_vm, run_metered_move_bytecode_verifier,
-};
+use sui_adapter_v1::adapter::{new_move_vm, run_metered_move_bytecode_verifier};
 use sui_adapter_v1::execution_engine::{
     execute_genesis_state_update, execute_transaction_to_effects,
 };
@@ -37,14 +35,12 @@ use sui_verifier_v1::meter::SuiVerifierMeter;
 
 use crate::executor;
 use crate::verifier;
-use crate::verifier::{VerifierMeteredValues, VerifierOverrides};
 
 pub(crate) struct Executor(Arc<MoveVM>);
 
 pub(crate) struct Verifier<'m> {
     config: VerifierConfig,
     metrics: &'m Arc<BytecodeVerifierMetrics>,
-    meter: SuiVerifierMeter,
 }
 
 impl Executor {
@@ -62,18 +58,8 @@ impl Executor {
 }
 
 impl<'m> Verifier<'m> {
-    pub(crate) fn new(
-        protocol_config: &ProtocolConfig,
-        is_metered: bool,
-        metrics: &'m Arc<BytecodeVerifierMetrics>,
-    ) -> Self {
-        let config = default_verifier_config(protocol_config, is_metered);
-        let meter = SuiVerifierMeter::new(&config);
-        Verifier {
-            config,
-            metrics,
-            meter,
-        }
+    pub(crate) fn new(config: VerifierConfig, metrics: &'m Arc<BytecodeVerifierMetrics>) -> Self {
+        Verifier { config, metrics }
     }
 }
 
@@ -205,33 +191,16 @@ impl executor::Executor for Executor {
 }
 
 impl<'m> verifier::Verifier for Verifier<'m> {
+    fn meter(&self, config: MeterConfig) -> Box<dyn Meter> {
+        Box::new(SuiVerifierMeter::new(config))
+    }
+
     fn meter_compiled_modules(
         &mut self,
         _protocol_config: &ProtocolConfig,
         modules: &[CompiledModule],
+        meter: &mut dyn Meter,
     ) -> SuiResult<()> {
-        run_metered_move_bytecode_verifier(modules, &self.config, &mut self.meter, self.metrics)
-    }
-
-    fn meter_compiled_modules_with_overrides(
-        &mut self,
-        modules: &[CompiledModule],
-        _protocol_config: &ProtocolConfig,
-        config_overrides: &VerifierOverrides,
-    ) -> SuiResult<VerifierMeteredValues> {
-        let mut config = self.config.clone();
-        let max_per_fun_meter_current = config.max_per_fun_meter_units;
-        let max_per_mod_meter_current = config.max_per_mod_meter_units;
-        config.max_per_fun_meter_units = config_overrides.max_per_fun_meter_units;
-        config.max_per_mod_meter_units = config_overrides.max_per_mod_meter_units;
-        run_metered_move_bytecode_verifier(modules, &config, &mut self.meter, self.metrics)?;
-        let fun_meter_units_result = self.meter.get_usage(Scope::Function);
-        let mod_meter_units_result = self.meter.get_usage(Scope::Function);
-        Ok(VerifierMeteredValues::new(
-            max_per_fun_meter_current,
-            max_per_mod_meter_current,
-            fun_meter_units_result,
-            mod_meter_units_result,
-        ))
+        run_metered_move_bytecode_verifier(modules, &self.config, meter, self.metrics)
     }
 }

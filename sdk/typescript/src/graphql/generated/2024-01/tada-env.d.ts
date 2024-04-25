@@ -9718,6 +9718,63 @@ export type introspection = {
                 }
               }
             ]
+          },
+          {
+            "name": "verifyZkloginSignature",
+            "type": {
+              "kind": "NON_NULL",
+              "ofType": {
+                "kind": "OBJECT",
+                "name": "ZkLoginVerifyResult",
+                "ofType": null
+              }
+            },
+            "args": [
+              {
+                "name": "bytes",
+                "type": {
+                  "kind": "NON_NULL",
+                  "ofType": {
+                    "kind": "SCALAR",
+                    "name": "Base64",
+                    "ofType": null
+                  }
+                }
+              },
+              {
+                "name": "signature",
+                "type": {
+                  "kind": "NON_NULL",
+                  "ofType": {
+                    "kind": "SCALAR",
+                    "name": "Base64",
+                    "ofType": null
+                  }
+                }
+              },
+              {
+                "name": "intentScope",
+                "type": {
+                  "kind": "NON_NULL",
+                  "ofType": {
+                    "kind": "ENUM",
+                    "name": "ZkLoginIntentScope",
+                    "ofType": null
+                  }
+                }
+              },
+              {
+                "name": "author",
+                "type": {
+                  "kind": "NON_NULL",
+                  "ofType": {
+                    "kind": "SCALAR",
+                    "name": "SuiAddress",
+                    "ofType": null
+                  }
+                }
+              }
+            ]
           }
         ],
         "interfaces": []
@@ -13439,6 +13496,55 @@ export type introspection = {
                 }
               }
             ]
+          }
+        ],
+        "interfaces": []
+      },
+      {
+        "kind": "ENUM",
+        "name": "ZkLoginIntentScope",
+        "enumValues": [
+          {
+            "name": "TRANSACTION_DATA"
+          },
+          {
+            "name": "PERSONAL_MESSAGE"
+          }
+        ]
+      },
+      {
+        "kind": "OBJECT",
+        "name": "ZkLoginVerifyResult",
+        "fields": [
+          {
+            "name": "success",
+            "type": {
+              "kind": "NON_NULL",
+              "ofType": {
+                "kind": "SCALAR",
+                "name": "Boolean",
+                "ofType": null
+              }
+            },
+            "args": []
+          },
+          {
+            "name": "errors",
+            "type": {
+              "kind": "NON_NULL",
+              "ofType": {
+                "kind": "LIST",
+                "ofType": {
+                  "kind": "NON_NULL",
+                  "ofType": {
+                    "kind": "SCALAR",
+                    "name": "String",
+                    "ofType": null
+                  }
+                }
+              }
+            },
+            "args": []
           }
         ],
         "interfaces": []

@@ -14,13 +14,12 @@ use super::object::{
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
-use super::suins_registration::SuinsRegistration;
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use crate::consistency::ConsistentNamedCursor;
 use crate::data::Db;
 use crate::error::Error;
-use crate::types::checkpoint::Checkpoint;
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use sui_package_resolver::{error::Error as PackageCacheError, Package as ParsedMovePackage};
@@ -164,8 +163,14 @@ impl MovePackage {
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl::from(&self.super_).default_suins_name(ctx).await
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
+        OwnerImpl::from(&self.super_)
+            .default_suins_name(ctx, format)
+            .await
     }
 
     /// The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
@@ -383,15 +388,7 @@ impl MovePackage {
 
 impl MovePackage {
     fn parsed_package(&self) -> Result<ParsedMovePackage, Error> {
-        // TODO: Leverage the package cache (attempt to read from it, and if that doesn't succeed,
-        // write back the parsed Package to the cache as well.)
-        let Some(native) = self.super_.native_impl() else {
-            return Err(Error::Internal(
-                "No native representation of package to parse.".to_string(),
-            ));
-        };
-
-        ParsedMovePackage::read(native)
+        ParsedMovePackage::read_from_package(&self.native)
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
@@ -424,21 +421,16 @@ impl MovePackage {
             return Ok(None);
         };
 
-        let checkpoint_viewed_at = match object.checkpoint_viewed_at {
-            Some(value) => Ok(value),
-            None => Checkpoint::query_latest_checkpoint_sequence_number(db).await,
-        }?;
-
-        Ok(Some(
-            MovePackage::try_from(&object, checkpoint_viewed_at)
-                .map_err(|_| Error::Internal(format!("{address} is not a package")))?,
-        ))
+        Ok(Some(MovePackage::try_from(&object).map_err(|_| {
+            Error::Internal(format!("{address} is not a package"))
+        })?))
     }
+}
 
-    pub(crate) fn try_from(
-        object: &Object,
-        checkpoint_viewed_at: u64,
-    ) -> Result<Self, MovePackageDowncastError> {
+impl TryFrom<&Object> for MovePackage {
+    type Error = MovePackageDowncastError;
+
+    fn try_from(object: &Object) -> Result<Self, MovePackageDowncastError> {
         let Some(native) = object.native_impl() else {
             return Err(MovePackageDowncastError);
         };
@@ -447,7 +439,7 @@ impl MovePackage {
             Ok(Self {
                 super_: object.clone(),
                 native: move_package.clone(),
-                checkpoint_viewed_at,
+                checkpoint_viewed_at: object.checkpoint_viewed_at,
             })
         } else {
             Err(MovePackageDowncastError)

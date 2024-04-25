@@ -1,13 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish --sender A
 module Test::boars {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{TxContext, sender};
-    use sui::transfer;
     use sui::package;
     use sui::url::{Self, Url};
     use sui::display;
@@ -46,8 +43,8 @@ module Test::boars {
         let pub = package::claim(otw, ctx);
         let display = display::new<Boar>(&pub, ctx);
 
-        transfer::public_transfer(display, sender(ctx));
-        transfer::public_transfer(pub, sender(ctx));
+        transfer::public_transfer(display, ctx.sender());
+        transfer::public_transfer(pub, ctx.sender());
     }
 
 
@@ -125,10 +122,10 @@ module Test::boars {
             full_url: url::new_unsafe_from_bytes(b"https://get-a-boar.fullurl.com/"),
             nums: 420,
             bools: true,
-            buyer: sender(ctx),
+            buyer: ctx.sender(),
             vec: vector[1, 2, 3],
         };
-        transfer::transfer(boar, sender(ctx))
+        transfer::transfer(boar, ctx.sender())
     }
 }
 

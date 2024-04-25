@@ -19,7 +19,6 @@ use crossbeam_channel::{bounded, unbounded, Receiver, Sender};
 use getrandom::getrandom;
 use module_generation::generate_module;
 use move_binary_format::{
-    access::ModuleAccess,
     errors::VMError,
     file_format::{
         AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken, StructHandleIndex,
@@ -54,6 +53,7 @@ fn run_verifier(module: CompiledModule) -> Result<CompiledModule, String> {
 static STORAGE_WITH_MOVE_STDLIB: Lazy<InMemoryStorage> = Lazy::new(|| {
     let mut storage = InMemoryStorage::new();
     let (_, compiled_units) = Compiler::from_files(
+        None,
         move_stdlib::move_stdlib_files(),
         vec![],
         move_stdlib::move_stdlib_named_addresses(),
@@ -98,7 +98,7 @@ fn run_vm(module: CompiledModule) -> Result<(), VMError> {
             | SignatureToken::U128
             | SignatureToken::Signer
             | SignatureToken::Struct(_)
-            | SignatureToken::StructInstantiation(_, _)
+            | SignatureToken::StructInstantiation(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
             | SignatureToken::TypeParameter(_)
@@ -132,9 +132,9 @@ fn execute_function_in_module(
         module.identifier_at(entry_name_idx)
     };
     {
-        let vm = MoveVM::new(move_stdlib::natives::all_natives(
+        let vm = MoveVM::new(move_stdlib_natives::all_natives(
             AccountAddress::from_hex_literal("0x1").unwrap(),
-            move_stdlib::natives::GasParameters::zeros(),
+            move_stdlib_natives::GasParameters::zeros(),
         ))
         .unwrap();
 
@@ -397,10 +397,13 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
         Signer => Signer,
         Vector(ty) => Vector(Box::new(substitute(ty, tys))),
         Struct(idx) => Struct(*idx),
-        StructInstantiation(idx, type_params) => StructInstantiation(
-            *idx,
-            type_params.iter().map(|ty| substitute(ty, tys)).collect(),
-        ),
+        StructInstantiation(struct_inst) => {
+            let (idx, type_params) = &**struct_inst;
+            StructInstantiation(Box::new((
+                *idx,
+                type_params.iter().map(|ty| substitute(ty, tys)).collect(),
+            )))
+        }
         Reference(ty) => Reference(Box::new(substitute(ty, tys))),
         MutableReference(ty) => MutableReference(Box::new(substitute(ty, tys))),
         TypeParameter(idx) => {
@@ -413,7 +416,7 @@ pub(crate) fn substitute(token: &SignatureToken, tys: &[SignatureToken]) -> Sign
 }
 
 pub fn abilities(
-    module: &impl ModuleAccess,
+    module: &CompiledModule,
     ty: &SignatureToken,
     constraints: &[AbilitySet],
 ) -> AbilitySet {
@@ -435,7 +438,8 @@ pub fn abilities(
             let sh = module.struct_handle_at(*idx);
             sh.abilities
         }
-        StructInstantiation(idx, type_args) => {
+        StructInstantiation(struct_inst) => {
+            let (idx, type_args) = &**struct_inst;
             let sh = module.struct_handle_at(*idx);
             let declared_abilities = sh.abilities;
             let declared_phantom_parameters =
@@ -457,12 +461,20 @@ pub(crate) fn get_struct_handle_from_reference(
     reference_signature: &SignatureToken,
 ) -> Option<StructHandleIndex> {
     match reference_signature {
-        SignatureToken::Reference(signature) => match **signature {
-            SignatureToken::StructInstantiation(idx, _) | SignatureToken::Struct(idx) => Some(idx),
+        SignatureToken::Reference(signature) => match &**signature {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (idx, _) = &**struct_inst;
+                Some(*idx)
+            }
+            SignatureToken::Struct(idx) => Some(*idx),
             _ => None,
         },
-        SignatureToken::MutableReference(signature) => match **signature {
-            SignatureToken::StructInstantiation(idx, _) | SignatureToken::Struct(idx) => Some(idx),
+        SignatureToken::MutableReference(signature) => match &**signature {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (idx, _) = &**struct_inst;
+                Some(*idx)
+            }
+            SignatureToken::Struct(idx) => Some(*idx),
             _ => None,
         },
         _ => None,
@@ -476,7 +488,10 @@ pub(crate) fn get_type_actuals_from_reference(
 
     match token {
         Reference(box_) | MutableReference(box_) => match &**box_ {
-            StructInstantiation(_, tys) => Some(tys.clone()),
+            StructInstantiation(struct_inst) => {
+                let (_, tys) = &**struct_inst;
+                Some(tys.clone())
+            }
             Struct(_) => Some(vec![]),
             _ => None,
         },
@@ -488,7 +503,7 @@ pub(crate) fn get_type_actuals_from_reference(
         | Signer
         | Vector(_)
         | Struct(_)
-        | StructInstantiation(_, _)
+        | StructInstantiation(_)
         | TypeParameter(_)
         | U16
         | U32

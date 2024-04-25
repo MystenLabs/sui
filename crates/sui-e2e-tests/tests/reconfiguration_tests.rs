@@ -6,9 +6,10 @@ use rand::rngs::OsRng;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_arg, sim_test};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
@@ -153,7 +154,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let cert = net
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), None)
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -179,7 +180,10 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client.handle_certificate_v2(cert.clone()).await.unwrap();
+    client
+        .handle_certificate_v2(cert.clone(), None)
+        .await
+        .unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {
@@ -300,6 +304,75 @@ async fn do_test_passive_reconfig() {
                 .unwrap();
             assert_eq!(commitments.len(), 1);
         });
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[sim_test]
+async fn test_expired_locks() {
+    do_test_lock_table_upgrade().await
+}
+
+#[sim_test]
+async fn test_expired_locks_with_lock_table_upgrade() {
+    register_fail_point_arg("initial_epoch_flags", || {
+        Some(vec![
+            EpochFlag::InMemoryCheckpointRoots,
+            EpochFlag::PerEpochFinalizedTransactions,
+        ])
+    });
+    do_test_lock_table_upgrade().await
+}
+
+async fn do_test_lock_table_upgrade() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10000)
+        .build()
+        .await;
+
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    let accounts_and_objs = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_objs[0].0;
+    let receiver = accounts_and_objs[1].0;
+    let gas_object = accounts_and_objs[0].1[0];
+
+    let transfer_sui = |amount| {
+        test_cluster.wallet.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui(Some(amount), receiver)
+                .build(),
+        )
+    };
+
+    let t1 = transfer_sui(1);
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap();
+
+    // attempt to equivocate
+    let t2 = transfer_sui(2);
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap_err();
+
+    test_cluster.wait_for_epoch_all_nodes(1).await;
+
+    // old locks can be overridden in new epoch
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap();
+
+    // attempt to equivocate
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap_err();
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -424,7 +497,7 @@ async fn test_validator_resign_effects() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let effects1 = net
-        .process_transaction(tx)
+        .process_transaction(tx, None)
         .await
         .unwrap()
         .into_effects_for_testing();

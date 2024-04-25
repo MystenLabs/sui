@@ -15,6 +15,7 @@ use sui_types::base_types::{EpochId, ObjectID};
 use sui_types::digests::{CheckpointContentsDigest, TransactionDigest};
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_checkpoint::{CheckpointDigest, CheckpointSequenceNumber};
+use sui_types::storage::ObjectStore;
 use typed_store::rocks::MetricConf;
 pub mod db_dump;
 mod index_search;
@@ -32,6 +33,7 @@ pub enum DbToolCommand {
     PrintLastConsensusIndex,
     PrintConsensusCommit(PrintConsensusCommitOptions),
     PrintTransaction(PrintTransactionOptions),
+    PrintObject(PrintObjectOptions),
     PrintCheckpoint(PrintCheckpointOptions),
     PrintCheckpointContent(PrintCheckpointContentOptions),
     ResetDB,
@@ -100,6 +102,15 @@ pub struct PrintConsensusCommitOptions {
 pub struct PrintTransactionOptions {
     #[arg(long, help = "The transaction digest to print")]
     digest: TransactionDigest,
+}
+
+#[derive(Parser)]
+#[command(rename_all = "kebab-case")]
+pub struct PrintObjectOptions {
+    #[arg(long, help = "The object id to print")]
+    id: ObjectID,
+    #[arg(long, help = "The object version to print")]
+    version: Option<u64>,
 }
 
 #[derive(Parser)]
@@ -188,6 +199,7 @@ pub async fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> an
         DbToolCommand::PrintLastConsensusIndex => print_last_consensus_index(&db_path),
         DbToolCommand::PrintConsensusCommit(d) => print_consensus_commit(&db_path, d),
         DbToolCommand::PrintTransaction(d) => print_transaction(&db_path, d),
+        DbToolCommand::PrintObject(o) => print_object(&db_path, o),
         DbToolCommand::PrintCheckpoint(d) => print_checkpoint(&db_path, d),
         DbToolCommand::PrintCheckpointContent(d) => print_checkpoint_content(&db_path, d),
         DbToolCommand::ResetDB => reset_db_to_genesis(&db_path),
@@ -281,6 +293,24 @@ pub fn print_transaction(path: &Path, opt: PrintTransactionOptions) -> anyhow::R
             effects.dependencies(),
         );
     };
+    Ok(())
+}
+
+pub fn print_object(path: &Path, opt: PrintObjectOptions) -> anyhow::Result<()> {
+    let perpetual_db = AuthorityPerpetualTables::open(&path.join("store"), None);
+
+    let obj = if let Some(version) = opt.version {
+        perpetual_db.get_object_by_key(&opt.id, version.into())?
+    } else {
+        perpetual_db.get_object(&opt.id)?
+    };
+
+    if let Some(obj) = obj {
+        println!("Object {:?}:\n{:#?}", opt.id, obj);
+    } else {
+        println!("Object {:?} not found", opt.id);
+    }
+
     Ok(())
 }
 

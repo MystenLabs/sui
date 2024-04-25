@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui.js/client';
+import type { PaginationArguments, SuiClient } from '@mysten/sui.js/client';
 
 import {
 	FLOOR_PRICE_RULE_ADDRESS,
@@ -54,13 +54,21 @@ export class KioskClient {
 	/**
 	 * Get an addresses's owned kiosks.
 	 * @param address The address for which we want to retrieve the kiosks.
+	 * @param pagination Optional pagination arguments.
 	 * @returns An Object containing all the `kioskOwnerCap` objects as well as the kioskIds.
 	 */
-	async getOwnedKiosks({ address }: { address: string }): Promise<OwnedKiosks> {
+	async getOwnedKiosks({
+		address,
+		pagination,
+	}: {
+		address: string;
+		pagination?: PaginationArguments<string>;
+	}): Promise<OwnedKiosks> {
 		const personalPackageId =
 			this.packageIds?.personalKioskRulePackageId || PERSONAL_KIOSK_RULE_ADDRESS[this.network];
 
 		return getOwnedKiosks(this.client, address, {
+			pagination,
 			personalKioskType: personalPackageId
 				? `${personalPackageId}::personal_kiosk::PersonalKioskCap`
 				: '',

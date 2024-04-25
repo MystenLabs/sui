@@ -11,12 +11,8 @@ use crate::{
     },
 };
 use itertools::Itertools;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        Bytecode as MoveBytecode, CodeOffset, CompiledModule, FieldHandleIndex, SignatureIndex,
-    },
-    views::{FunctionHandleView, ViewInternals},
+use move_binary_format::file_format::{
+    Bytecode as MoveBytecode, CodeOffset, CompiledModule, FieldHandleIndex, SignatureIndex,
 };
 use move_core_types::{
     language_storage::{self, CORE_CODE_ADDRESS},
@@ -382,8 +378,11 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types.push(Type::Primitive(PrimitiveType::U256));
-                self.code
-                    .push(Bytecode::Load(attr_id, temp_index, Constant::from(number)));
+                self.code.push(Bytecode::Load(
+                    attr_id,
+                    temp_index,
+                    Constant::from(&**number),
+                ));
                 self.temp_count += 1;
             }
 
@@ -391,8 +390,11 @@ impl<'a> StacklessBytecodeGenerator<'a> {
                 let temp_index = self.temp_count;
                 self.temp_stack.push(temp_index);
                 self.local_types.push(Type::Primitive(PrimitiveType::U128));
-                self.code
-                    .push(Bytecode::Load(attr_id, temp_index, Constant::U128(*number)));
+                self.code.push(Bytecode::Load(
+                    attr_id,
+                    temp_index,
+                    Constant::U128(**number),
+                ));
                 self.temp_count += 1;
             }
 
@@ -549,20 +551,21 @@ impl<'a> StacklessBytecodeGenerator<'a> {
 
             MoveBytecode::Call(idx) => {
                 let function_handle = self.module.function_handle_at(*idx);
-                let function_handle_view = FunctionHandleView::new(self.module, function_handle);
+                let parameters = self.module.signature_at(function_handle.parameters);
+                let return_ = self.module.signature_at(function_handle.return_);
 
                 let mut arg_temp_indices = vec![];
                 let mut return_temp_indices = vec![];
-                for _ in function_handle_view.arg_tokens() {
+                for _ in &parameters.0 {
                     let arg_temp_index = self.temp_stack.pop().unwrap();
                     arg_temp_indices.push(arg_temp_index);
                 }
-                for return_type_view in function_handle_view.return_tokens() {
+                for return_signature_token in &return_.0 {
                     let return_temp_index = self.temp_count;
                     let return_type = self
                         .func_env
                         .module_env
-                        .globalize_signature(return_type_view.as_inner());
+                        .globalize_signature(return_signature_token);
                     return_temp_indices.push(return_temp_index);
                     self.temp_stack.push(return_temp_index);
                     self.local_types.push(return_type);
@@ -585,21 +588,22 @@ impl<'a> StacklessBytecodeGenerator<'a> {
 
                 let type_sigs = self.get_type_params(func_instantiation.type_parameters);
                 let function_handle = self.module.function_handle_at(func_instantiation.handle);
-                let function_handle_view = FunctionHandleView::new(self.module, function_handle);
+                let parameters = self.module.signature_at(function_handle.parameters);
+                let return_ = self.module.signature_at(function_handle.return_);
 
                 let mut arg_temp_indices = vec![];
                 let mut return_temp_indices = vec![];
-                for _ in function_handle_view.arg_tokens() {
+                for _ in &parameters.0 {
                     let arg_temp_index = self.temp_stack.pop().unwrap();
                     arg_temp_indices.push(arg_temp_index);
                 }
-                for return_type_view in function_handle_view.return_tokens() {
+                for return_signature_token in &return_.0 {
                     let return_temp_index = self.temp_count;
                     // instantiate type parameters
                     let return_type = self
                         .func_env
                         .module_env
-                        .globalize_signature(return_type_view.as_inner())
+                        .globalize_signature(return_signature_token)
                         .instantiate(&type_sigs);
                     return_temp_indices.push(return_temp_index);
                     self.temp_stack.push(return_temp_index);

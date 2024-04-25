@@ -3,9 +3,6 @@ title: Install Sui
 description: Install the Sui framework and required prerequisites on your system, including the Sui command line interface to interact with the Sui network.
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 The quickest way to install Sui is using the binaries delivered with every release. If you require more control over the install process, you can install from source. To take advantage of containerization, you can utilize the Docker images in the `docker` folder of the sui repository.
 
 ## Supported operating systems {#supported-operating-systems}
@@ -16,17 +13,40 @@ Sui supports the following operating systems:
 - macOS - macOS Monterey
 - Microsoft Windows - Windows 10 and 11
 
-## Install using Homebrew {#install-homebrew}
+## Quick install using Homebrew or Chocolatey {#install-homebrew}
 
-If you use [Homebrew](https://brew.sh/), you can install Sui with the following command:
+{@include: ../../../snippets/quick-install.mdx}
 
-```bash
-brew install sui
-```
+:::info
 
-## Install from binaries {#install-binaries}
+If you use this method to install Sui, you are all set. The quick install is suitable for most use cases. The remaining installation methods are for those wanting more control over the installation process.
+
+:::
+
+## Download binaries from GitHub {#install-binaries}
 
 Each Sui release provides a set of binaries for several operating systems. You can download these binaries from GitHub and use them to install Sui.
+
+<Tabs groupId="operating-systems">
+
+<TabItem value="linux" label="Linux">
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
+
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system for demonstration purposes. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the expanded folder. You should have the following extracted files:
+
+    {@include: ../../../snippets/binaries-file-list.mdx}
+
+1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
+1. Start a new terminal session or type `source ~/.bashrc` to load the new `PATH` value.
+
+</TabItem>
+
+<TabItem value="mac" label="macOS">
 
 1. Go to https://github.com/MystenLabs/sui.
 1. In the right pane, find the **Releases** section.
@@ -34,36 +54,95 @@ Each Sui release provides a set of binaries for several operating systems. You c
     ![Sui releases in GitHub](./images/releases.png)
 1. Click the release tagged **Latest** to open the release's page.
 1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
-1. Double-click the downloaded file. If the file doesn't automatically expand, manually unzip the file.
-1. Open the expanded folder and double-click the appropriate binary to install, beginning with sui-`<OS>`-`<ARCHITECTURE>`:
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the user root of your system. Replace references to this location in subsequent steps if you choose a different directory.
+1. Navigate to the expanded folder. You should have the following extracted files: 
+    
+    {@include: ../../../snippets/binaries-file-list.mdx}
 
-    - sui-faucet-`<OS>`-`<ARCHITECTURE>`: Local faucet to mint coins on local network.
-    - sui-indexer-`<OS>`-`<ARCHITECTURE>`: An indexer for a local Sui network.
-    - sui-`<OS>`-`<ARCHITECTURE>`: Main Sui binary.
-    - sui-node-`<OS>`-`<ARCHITECTURE>`: Run a local node.
-    - sui-test-validator-`<OS>`-`<ARCHITECTURE>`: Run test validators on a local network for development.
-    - sui-tool-`<OS>`-`<ARCHITECTURE>`: Provides utilities for Sui.
+1. Add the folder containing the extracted files to your `PATH` variable. To do so, you can update your `~/.zshrc` or `~/.bashrc` to include the location of the Sui binaries. If using the suggested location, you type `export PATH=$PATH:~/sui` and press Enter.
+1. Start a new terminal session or type `source ~/.zshrc` (or `.bashrc`) to load the new `PATH` value.
+1. If running the binaries for the first time, you might receive an error from MacOS that prevents the binaries from running. If you receive this error, close the dialog and type `xattr -d com.apple.quarantine ~/sui/*` in your terminal and press Enter (be sure to adjust the path if different). 
 
-    The Sui binary takes several minutes to download and install files, so make sure you allocate enough time for it to complete. Actual time to complete depends on your network connection and computer specifications.
+</TabItem>
 
+<TabItem value="win" label="Windows">
 
-### Confirm the installation {#confirm-the-installation}
+1. Go to https://github.com/MystenLabs/sui.
+1. In the right pane, find the **Releases** section.
 
-To confirm that Sui installed correctly, type `sui` and press Enter. You should see a message about the Sui version installed and help for using Sui commands.
+    ![Sui releases in GitHub](./images/releases.png)
+1. Click the release tagged **Latest** to open the release's page.
+1. In the **Assets** section of the release, select the .tgz compressed file that corresponds to your operating system.
+1. Extract all files from the .tgz file into the preferred location on your system. These instructions assume you extract the files into a `sui` folder at the root of your C drive. Replace references to this location in subsequent steps if you choose a different directory.
 
-## Install from source
+    :::info 
+
+    Windows does not natively support .tgz files, but you can use a free compressed file app like [7Zip](https://7-zip.org/) to extract.
+
+    :::
+
+1. Navigate to the expanded folder. You should have the following extracted files:
+
+    {@include: ../../../snippets/binaries-file-list.mdx}
+
+1. Add the folder containing the extracted files to your `PATH` variable. There are several ways to get to the setting depending on your version of Windows. One way that works on all versions of Windows is to type `sysdm.cpl` in a console to open the System Properties window. Under the **Advanced** tab, click the **Environment Variables...** button.
+1. In the Environment Variables window, select the `Path` variable and click the **Edit...** button. 
+1. In the Edit environment variable window, click **New** and add the path to your expanded folder. Using the example path, this would be `C:\sui`.
+1. Click **OK**.
+
+</TabItem>
+
+</Tabs>
+
+:::info 
+
+Running binaries other than `sui` might require installing prerequisites itemized in the following section. 
+
+:::
+
+#### Confirm the installation {#confirm-the-installation}
+
+To confirm that Sui installed correctly, type `sui --version` in your console or terminal and press Enter. The response should provide the Sui version installed. If the console or terminal responds with a command not found error, make sure the full path to your Sui binaries is included in your `PATH` variable.
+
+## Install from Cargo {#install-sui-binaries-from-source}
+
+Run the following command to install Sui binaries from the `testnet` branch:
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+```
+
+The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
+
+To update to the latest stable version of Rust:
+
+```shell
+rustup update stable
+```
+
+The command installs Sui components in the `~/.cargo/bin` folder.
+
+## Upgrade from Cargo
+
+If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them (changing `testnet` to the desired branch):
+
+```shell
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
+```
+
+## Build from source
 
 Follow the instructions in this topic to install the Rust crates (packages) required to interact with Sui networks, including the Sui CLI.
 
 To install Sui from source, you first need to install its [prerequisites](#prerequisites) for your operating system. After installing the supporting technologies, you can install [Sui binaries from source](#install-sui-binaries-from-source).
 
-You can also download the [source code](./sui-environment) to have local access to files.
+You can also download the [source code](/references/contribute/sui-environment.mdx) to have local access to files.
 
-## Prerequisites {#prerequisites}
+#### Prerequisites {#prerequisites}
 
 Your system needs the following prerequisites available to successfully install Sui.
 
-### Rust and Cargo {#rust-and-cargo}
+#### Rust and Cargo {#rust-and-cargo}
 
 Sui requires Rust and Cargo (Rust's package manager) on all supported operating systems. The suggested method to install Rust is with `rustup` using cURL.
 
@@ -86,7 +165,7 @@ Use the following command to update Rust with `rustup`:
 ```bash
 rustup update stable
 ```
-### Additional prerequisites by operating system
+#### Additional prerequisites by operating system
 
 Select the appropriate tab to view the requirements for your system.
 
@@ -119,12 +198,10 @@ sudo apt-get update
 ```
 
 #### All Linux prerequisites
-
+ 
 Reference the relevant sections that follow to install each prerequisite individually, or run the following to install them all at once:
 
-```bash
-sudo apt-get install curl git-all cmake gcc libssl-dev pkg-config libclang-dev libpq-dev build-essential
-```
+{@include: ../../../snippets/linux-deps.mdx}
 
 #### cURL {#curl}
 
@@ -245,9 +322,7 @@ If you used the commands in the [Install using Homebrew](#install-homebrew) sect
 
 With Homebrew installed, you can install individual prerequisites from the following sections or install them all at once with this command:
 
-```bash
-brew install curl cmake libpq git
-```
+{@include: ../../../snippets/macos-deps.mdx}
 
 
 #### cURL {#curl-1}
@@ -327,31 +402,9 @@ Sui requires the following additional tools on computers running Windows.
 
 </Tabs>
 
-## Install Sui binaries from source {#install-sui-binaries-from-source}
+## Using Sui from command line
 
-Run the following command to install Sui binaries from the `testnet` branch:
-
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
-```
-
-The install process can take a while to complete. You can monitor installation progress in the terminal. If you encounter an error, make sure to install the latest version of all prerequisites and then try the command again.
-
-To update to the latest stable version of Rust:
-
-```shell
-rustup update stable
-```
-
-The command installs Sui components in the `~/.cargo/bin` folder.
-
-## Upgrade Sui binaries
-
-If you previously installed the Sui binaries, you can update them to the most recent release with the same command you used to install them:
-
-```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch testnet sui
-```
+With Sui installed, you can interact with Sui networks using the Sui CLI. For more details, see the [Sui CLI](/references/cli.mdx) reference.
 
 ## Next steps {#next-steps}
 

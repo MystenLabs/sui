@@ -82,7 +82,7 @@ module a::invalid5 {
 }
 
 module a::invalid6 {
-    use std::vector;
+
 
     public struct S<T> has drop { t: vector<T> }
 
@@ -139,5 +139,3 @@ module a::invalid9 {
     public fun borrow_mut<T>(s: &mut S<T>, i: &u64, j: &T): &mut T { abort 0 }
 
 }
-
-

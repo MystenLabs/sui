@@ -5,8 +5,8 @@ use std::{
     fmt,
     hash::{Hash, Hasher},
     ops::Deref,
-    sync::Arc,
-    time::SystemTime,
+    sync::{Arc, OnceLock},
+    time::{Instant, SystemTime},
 };
 
 use bytes::Bytes;
@@ -15,32 +15,39 @@ use consensus_config::{
     ProtocolPublicKey, DIGEST_LENGTH,
 };
 use enum_dispatch::enum_dispatch;
-use fastcrypto::traits::{Signer, ToFromBytes};
-use fastcrypto::{
-    hash::{Digest, HashFunction},
-    traits::VerifyingKey as _,
-};
+use fastcrypto::hash::{Digest, HashFunction};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
-use crate::context::Context;
-use crate::error::ConsensusResult;
-use crate::{ensure, error::ConsensusError};
-
-const GENESIS_ROUND: Round = 0;
+use crate::{
+    commit::CommitVote, context::Context, ensure, error::ConsensusError, error::ConsensusResult,
+};
 
 /// Round number of a block.
 pub type Round = u32;
+
+pub(crate) const GENESIS_ROUND: Round = 0;
 
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
 
 // Returns the current time expressed as UNIX timestamp in milliseconds.
-pub fn timestamp_utc_ms() -> BlockTimestampMs {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_millis() as BlockTimestampMs,
-        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-    }
+// Calculated with Rust Instant to ensure monotonicity.
+pub(crate) fn timestamp_utc_ms() -> BlockTimestampMs {
+    static UNIX_EPOCH: OnceLock<Instant> = OnceLock::new();
+    let unix_epoch_instant = UNIX_EPOCH.get_or_init(|| {
+        let now = Instant::now();
+        let duration_since_unix_epoch =
+            match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
+                Ok(d) => d,
+                Err(e) => panic!("SystemTime before UNIX EPOCH! {e}"),
+            };
+        now.checked_sub(duration_since_unix_epoch).unwrap()
+    });
+    Instant::now()
+        .checked_duration_since(*unix_epoch_instant)
+        .unwrap()
+        .as_millis() as BlockTimestampMs
 }
 
 /// Sui transaction in serialised bytes
@@ -49,7 +56,6 @@ pub struct Transaction {
     data: Bytes,
 }
 
-#[allow(dead_code)]
 impl Transaction {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data: data.into() }
@@ -74,44 +80,17 @@ pub enum Block {
     V1(BlockV1),
 }
 
-impl Block {
-    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, all_genesis_blocks).
-    /// The blocks are returned in authority index order.
-    pub(crate) fn genesis(context: Arc<Context>) -> (VerifiedBlock, Vec<VerifiedBlock>) {
-        let blocks = context
-            .committee
-            .authorities()
-            .map(|(authority_index, _)| {
-                let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis(
-                    authority_index,
-                    context.committee.epoch(),
-                )));
-                let serialized = signed_block
-                    .serialize()
-                    .expect("Genesis block serialization failed.");
-                // Unnecessary to verify genesis blocks.
-                VerifiedBlock::new_verified(signed_block, serialized)
-            })
-            .collect::<Vec<VerifiedBlock>>();
-        (
-            blocks
-                .iter()
-                .find(|b| b.author() == context.own_index)
-                .cloned()
-                .expect("We should have found our own genesis block"),
-            blocks,
-        )
-    }
-}
-
 #[enum_dispatch]
 pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
+    fn slot(&self) -> Slot;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
+    fn commit_votes(&self) -> &[CommitVote];
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -123,10 +102,11 @@ pub struct BlockV1 {
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
+    commit_votes: Vec<CommitVote>,
+    misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
 impl BlockV1 {
-    #[allow(dead_code)]
     pub(crate) fn new(
         epoch: Epoch,
         round: Round,
@@ -134,37 +114,50 @@ impl BlockV1 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
+        commit_votes: Vec<CommitVote>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
     ) -> BlockV1 {
         Self {
+            epoch,
             round,
             author,
             timestamp_ms,
             ancestors,
             transactions,
-            epoch,
+            commit_votes,
+            misbehavior_reports,
         }
     }
 
-    /// Generate the block that is meant to be used for genesis
-    pub(crate) fn genesis(author: AuthorityIndex, epoch: Epoch) -> BlockV1 {
+    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
         Self {
+            epoch,
             round: GENESIS_ROUND,
             author,
             timestamp_ms: 0,
             ancestors: vec![],
             transactions: vec![],
-            epoch,
+            commit_votes: vec![],
+            misbehavior_reports: vec![],
         }
     }
 }
 
 impl BlockAPI for BlockV1 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
     fn round(&self) -> Round {
         self.round
     }
 
     fn author(&self) -> AuthorityIndex {
         self.author
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
     }
 
     fn timestamp_ms(&self) -> BlockTimestampMs {
@@ -179,8 +172,12 @@ impl BlockAPI for BlockV1 {
         &self.transactions
     }
 
-    fn epoch(&self) -> Epoch {
-        self.epoch
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
+    }
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
     }
 }
 
@@ -193,8 +190,19 @@ pub struct BlockRef {
     pub digest: BlockDigest,
 }
 
-#[allow(unused)]
 impl BlockRef {
+    pub const MIN: Self = Self {
+        round: 0,
+        author: AuthorityIndex::MIN,
+        digest: BlockDigest::MIN,
+    };
+
+    pub const MAX: Self = Self {
+        round: u32::MAX,
+        author: AuthorityIndex::MAX,
+        digest: BlockDigest::MAX,
+    };
+
     pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
         Self {
             round,
@@ -207,13 +215,13 @@ impl BlockRef {
 // TODO: re-evaluate formats for production debugging.
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{})", self.round, self.author, self.digest)
     }
 }
 
 impl fmt::Debug for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({:?})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{:?})", self.round, self.author, self.digest)
     }
 }
 
@@ -280,7 +288,7 @@ impl AsRef<[u8]> for BlockDigest {
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
-pub(crate) struct Slot {
+pub struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,
 }
@@ -322,7 +330,6 @@ impl fmt::Debug for Slot {
 ///
 /// Note: `BlockDigest` is computed over this struct, so any added field (without `#[serde(skip)]`)
 /// will affect the values of `BlockDigest` and `BlockRef`.
-#[allow(unused)]
 #[derive(Deserialize, Serialize)]
 pub(crate) struct SignedBlock {
     inner: Block,
@@ -342,7 +349,7 @@ impl SignedBlock {
         let signature = compute_block_signature(&block, protocol_keypair)?;
         Ok(Self {
             inner: block,
-            signature: signature.as_bytes().to_vec().into(),
+            signature: Bytes::copy_from_slice(signature.to_bytes()),
         })
     }
 
@@ -435,7 +442,7 @@ impl Deref for SignedBlock {
 }
 
 /// VerifiedBlock allows full access to its content.
-/// It should be relatively cheap to copy.
+/// Note: clone() is relatively cheap with most underlying data refcounted.
 #[derive(Clone)]
 pub struct VerifiedBlock {
     block: Arc<SignedBlock>,
@@ -493,7 +500,7 @@ impl VerifiedBlock {
     }
 
     /// Computes digest from the serialized block with signature.
-    fn compute_digest(serialized: &[u8]) -> BlockDigest {
+    pub(crate) fn compute_digest(serialized: &[u8]) -> BlockDigest {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(serialized);
         BlockDigest(hasher.finalize().into())
@@ -526,13 +533,34 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({}ms;{:?};{};v)",
+            "{:?}({}ms;{:?};{}t;{}c)",
             self.reference(),
             self.timestamp_ms(),
             self.ancestors(),
-            self.transactions().len()
+            self.transactions().len(),
+            self.commit_votes().len(),
         )
     }
+}
+
+/// Generates the genesis blocks for the current Committee.
+/// The blocks are returned in authority index order.
+pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
+    context
+        .committee
+        .authorities()
+        .map(|(authority_index, _)| {
+            let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis_block(
+                context.committee.epoch(),
+                authority_index,
+            )));
+            let serialized = signed_block
+                .serialize()
+                .expect("Genesis block serialization failed.");
+            // Unnecessary to verify genesis blocks.
+            VerifiedBlock::new_verified(signed_block, serialized)
+        })
+        .collect::<Vec<VerifiedBlock>>()
 }
 
 /// Creates fake blocks for testing.
@@ -542,7 +570,6 @@ pub(crate) struct TestBlock {
     block: BlockV1,
 }
 
-#[allow(unused)]
 #[cfg(test)]
 impl TestBlock {
     pub(crate) fn new(round: Round, author: u32) -> Self {
@@ -553,6 +580,11 @@ impl TestBlock {
                 ..Default::default()
             },
         }
+    }
+
+    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+        self.block.epoch = epoch;
+        self
     }
 
     pub(crate) fn set_round(mut self, round: Round) -> Self {
@@ -580,14 +612,27 @@ impl TestBlock {
         self
     }
 
-    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
-        self.block.epoch = epoch;
+    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+        self.block.commit_votes = commit_votes;
         self
     }
 
     pub(crate) fn build(self) -> Block {
         Block::V1(self.block)
     }
+}
+
+/// A block can attach reports of misbehavior by other authorities.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MisbehaviorReport {
+    pub target: AuthorityIndex,
+    pub proof: MisbehaviorProof,
+}
+
+/// Proof of misbehavior are usually signed block(s) from the misbehaving authority.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum MisbehaviorProof {
+    InvalidBlock(BlockRef),
 }
 
 // TODO: add basic verification for BlockRef and BlockDigest.
@@ -599,9 +644,11 @@ mod tests {
 
     use fastcrypto::error::FastCryptoError;
 
-    use crate::block::{SignedBlock, TestBlock};
-    use crate::context::Context;
-    use crate::error::ConsensusError;
+    use crate::{
+        block::{SignedBlock, TestBlock},
+        context::Context,
+        error::ConsensusError,
+    };
 
     #[test]
     fn test_sign_and_verify() {

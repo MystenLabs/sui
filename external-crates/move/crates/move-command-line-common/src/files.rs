@@ -121,6 +121,21 @@ pub fn find_move_filenames(
     }
 }
 
+/// Similar to find_filenames but it will keep any file explicitly passed in `paths`
+pub fn find_filenames_and_keep_specified<Predicate: FnMut(&Path) -> bool>(
+    paths: &[impl AsRef<Path>],
+    is_file_desired: Predicate,
+) -> anyhow::Result<Vec<String>> {
+    let (file_paths, other_paths): (Vec<&Path>, Vec<&Path>) =
+        paths.iter().map(|p| p.as_ref()).partition(|s| s.is_file());
+    let mut files = file_paths
+        .into_iter()
+        .map(path_to_string)
+        .collect::<anyhow::Result<Vec<String>>>()?;
+    files.extend(find_filenames(&other_paths, is_file_desired)?);
+    Ok(files)
+}
+
 pub fn path_to_string(path: &Path) -> anyhow::Result<String> {
     match path.to_str() {
         Some(p) => Ok(p.to_string()),

@@ -37,19 +37,13 @@ use num::BigUint;
 
 pub use move_binary_format::file_format::{AbilitySet, Visibility as FunctionVisibility};
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
         AddressIdentifierIndex, Bytecode, Constant as VMConstant, ConstantPoolIndex,
-        FunctionDefinitionIndex, FunctionHandleIndex, FunctionInstantiation, SignatureIndex,
-        SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
-        Visibility,
+        FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex, FunctionInstantiation,
+        SignatureIndex, SignatureToken, StructDefinitionIndex, StructFieldInformation,
+        StructHandleIndex, Visibility,
     },
     normalized::{FunctionRef, Type as MType},
-    views::{
-        FieldDefinitionView, FunctionDefinitionView, FunctionHandleView, SignatureTokenView,
-        StructDefinitionView, StructHandleView,
-    },
     CompiledModule,
 };
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
@@ -718,12 +712,9 @@ impl GlobalEnv {
     /// TODO: move-compiler should use FileId as well so we don't need this here. There is already
     /// a todo in their code to remove the current use of `&'static str` for file names in Loc.
     pub fn to_loc(&self, loc: &MoveIrLoc) -> Loc {
-        let file_id = self.get_file_id(loc.file_hash()).unwrap_or_else(|| {
-            panic!(
-                "Unable to find source file '{}' in the environment",
-                loc.file_hash()
-            )
-        });
+        let Some(file_id) = self.get_file_id(loc.file_hash()) else {
+            return self.unknown_loc();
+        };
         Loc {
             file_id,
             span: Span::new(loc.start(), loc.end()),
@@ -1675,14 +1666,16 @@ impl<'env> ModuleEnv<'env> {
     /// Gets FunctionEnv for a function used in this module, via the FunctionHandleIndex. The
     /// returned function might be from this or another module.
     pub fn get_used_function(&self, idx: FunctionHandleIndex) -> FunctionEnv<'_> {
-        let view =
-            FunctionHandleView::new(&self.data.module, self.data.module.function_handle_at(idx));
-        let module_name = self.env.to_module_name(&view.module_id());
+        let module = &self.data.module;
+        let fhandle = module.function_handle_at(idx);
+        let fname = module.identifier_at(fhandle.name).as_str();
+        let declaring_module_handle = module.module_handle_at(fhandle.module);
+        let declaring_module = module.module_id_for_handle(declaring_module_handle);
         let module_env = self
             .env
-            .find_module(&module_name)
+            .find_module(&self.env.to_module_name(&declaring_module))
             .expect("unexpected reference to module not found in global env");
-        module_env.into_function(FunId::new(self.env.symbol_pool.make(view.name().as_str())))
+        module_env.into_function(FunId::new(self.env.symbol_pool.make(fname)))
     }
 
     /// Gets the function id from a definition index.
@@ -1875,30 +1868,33 @@ impl<'env> ModuleEnv<'env> {
             SignatureToken::TypeParameter(index) => Type::TypeParameter(*index),
             SignatureToken::Vector(bt) => Type::Vector(Box::new(self.globalize_signature(bt))),
             SignatureToken::Struct(handle_idx) => {
-                let struct_view = StructHandleView::new(
-                    &self.data.module,
-                    self.data.module.struct_handle_at(*handle_idx),
-                );
+                let module = &self.data.module;
+                let shandle = module.struct_handle_at(*handle_idx);
+                let sname = module.identifier_at(shandle.name).as_str();
+                let declaring_module_handle = module.module_handle_at(shandle.module);
+                let declaring_module = module.module_id_for_handle(declaring_module_handle);
                 let declaring_module_env = self
                     .env
-                    .find_module(&self.env.to_module_name(&struct_view.module_id()))
+                    .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
                 let struct_env = declaring_module_env
-                    .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
+                    .find_struct(self.env.symbol_pool.make(sname))
                     .expect("undefined struct");
                 Type::Struct(declaring_module_env.data.id, struct_env.get_id(), vec![])
             }
-            SignatureToken::StructInstantiation(handle_idx, args) => {
-                let struct_view = StructHandleView::new(
-                    &self.data.module,
-                    self.data.module.struct_handle_at(*handle_idx),
-                );
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (handle_idx, args) = &**struct_inst;
+                let module = &self.data.module;
+                let shandle = module.struct_handle_at(*handle_idx);
+                let sname = module.identifier_at(shandle.name).as_str();
+                let declaring_module_handle = module.module_handle_at(shandle.module);
+                let declaring_module = module.module_id_for_handle(declaring_module_handle);
                 let declaring_module_env = self
                     .env
-                    .find_module(&self.env.to_module_name(&struct_view.module_id()))
+                    .find_module(&self.env.to_module_name(&declaring_module))
                     .expect("undefined module");
                 let struct_env = declaring_module_env
-                    .find_struct(self.env.symbol_pool.make(struct_view.name().as_str()))
+                    .find_struct(self.env.symbol_pool.make(sname))
                     .expect("undefined struct");
                 Type::Struct(
                     declaring_module_env.data.id,
@@ -1952,10 +1948,7 @@ impl<'env> ModuleEnv<'env> {
     /// Disassemble the module bytecode
     pub fn disassemble(&self) -> String {
         let disas = Disassembler::new(
-            SourceMapping::new(
-                self.data.source_map.clone(),
-                BinaryIndexedView::Module(self.get_verified_module()),
-            ),
+            SourceMapping::new(self.data.source_map.clone(), self.get_verified_module()),
             DisassemblerOptions {
                 only_externally_visible: false,
                 print_code: true,
@@ -2210,11 +2203,11 @@ impl<'env> StructEnv<'env> {
         let pool = &self.module_env.env.symbol_pool;
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let view = StructDefinitionView::new(
-                    &self.module_env.data.module,
-                    self.module_env.data.module.struct_def_at(*def_idx),
-                );
-                view.type_parameters()
+                let module = &self.module_env.data.module;
+                let sdef = module.struct_def_at(*def_idx);
+                let shandle = module.struct_handle_at(sdef.struct_handle);
+                shandle
+                    .type_parameters
                     .iter()
                     .enumerate()
                     .map(|(i, k)| {
@@ -2232,11 +2225,11 @@ impl<'env> StructEnv<'env> {
     pub fn get_named_type_parameters(&self) -> Vec<TypeParameter> {
         match &self.data.info {
             StructInfo::Declared { def_idx, .. } => {
-                let view = StructDefinitionView::new(
-                    &self.module_env.data.module,
-                    self.module_env.data.module.struct_def_at(*def_idx),
-                );
-                view.type_parameters()
+                let module = &self.module_env.data.module;
+                let sdef = module.struct_def_at(*def_idx);
+                let shandle = module.struct_handle_at(sdef.struct_handle);
+                shandle
+                    .type_parameters
                     .iter()
                     .enumerate()
                     .map(|(i, k)| {
@@ -2310,11 +2303,8 @@ impl<'env> FieldEnv<'env> {
         let m = &self.struct_env.module_env.data.module;
         let def = m.struct_def_at(*def_idx);
         let offset = self.data.offset;
-        Some(
-            FieldDefinitionView::new(m, def.field(offset).expect("Bad field offset"))
-                .name()
-                .to_owned(),
-        )
+        let field = def.field(offset).expect("Bad field offset");
+        Some(m.identifier_at(field.name).to_owned())
     }
 
     /// Get documentation associated with this field.
@@ -2584,9 +2574,7 @@ impl<'env> FunctionEnv<'env> {
             .data
             .module
             .function_def_at(self.get_def_idx());
-        let function_definition_view =
-            FunctionDefinitionView::new(&self.module_env.data.module, function_definition);
-        match function_definition_view.code() {
+        match &function_definition.code {
             Some(code) => &code.code,
             None => &[],
         }
@@ -2594,8 +2582,7 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns true if this function is native.
     pub fn is_native(&self) -> bool {
-        let view = self.definition_view();
-        view.is_native()
+        self.definition().is_native()
     }
 
     /// Returns true if this is the well-known native or intrinsic function of the given name.
@@ -2612,12 +2599,12 @@ impl<'env> FunctionEnv<'env> {
 
     /// Return the visibility of this function
     pub fn visibility(&self) -> FunctionVisibility {
-        self.definition_view().visibility()
+        self.definition().visibility
     }
 
     /// Return true if the function is an entry fucntion
     pub fn is_entry(&self) -> bool {
-        self.definition_view().is_entry()
+        self.definition().is_entry
     }
 
     /// Return the visibility string for this function. Useful for formatted printing.
@@ -2632,8 +2619,8 @@ impl<'env> FunctionEnv<'env> {
     /// Return whether this function is exposed outside of the module.
     pub fn is_exposed(&self) -> bool {
         self.module_env.is_script_module()
-            || self.definition_view().is_entry()
-            || match self.definition_view().visibility() {
+            || self.definition().is_entry
+            || match self.definition().visibility {
                 Visibility::Public | Visibility::Friend => true,
                 Visibility::Private => false,
             }
@@ -2642,8 +2629,8 @@ impl<'env> FunctionEnv<'env> {
     /// Return whether this function is exposed outside of the module.
     pub fn has_unknown_callers(&self) -> bool {
         self.module_env.is_script_module()
-            || self.definition_view().is_entry()
-            || match self.definition_view().visibility() {
+            || self.definition().is_entry
+            || match self.definition().visibility {
                 Visibility::Public => true,
                 Visibility::Private | Visibility::Friend => false,
             }
@@ -2652,12 +2639,12 @@ impl<'env> FunctionEnv<'env> {
     /// Returns true if the function is a script function
     pub fn is_script(&self) -> bool {
         // The main function of a scipt is a script function
-        self.module_env.is_script_module() || self.definition_view().is_entry()
+        self.module_env.is_script_module() || self.definition().is_entry
     }
 
     /// Return true if this function is a friend function
     pub fn is_friend(&self) -> bool {
-        self.definition_view().visibility() == Visibility::Friend
+        self.definition().visibility == Visibility::Friend
     }
 
     /// Returns true if this function mutates any references (i.e. has &mut parameters).
@@ -2671,8 +2658,14 @@ impl<'env> FunctionEnv<'env> {
     pub fn get_type_parameters(&self) -> Vec<TypeParameter> {
         // TODO: currently the translation scheme isn't working with using real type
         //   parameter names, so use indices instead.
-        let view = self.definition_view();
-        view.type_parameters()
+        let fdef = self.definition();
+        let fhandle = self
+            .module_env
+            .data
+            .module
+            .function_handle_at(fdef.function);
+        fhandle
+            .type_parameters
             .iter()
             .enumerate()
             .map(|(i, k)| {
@@ -2686,8 +2679,14 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the type parameters with the real names.
     pub fn get_named_type_parameters(&self) -> Vec<TypeParameter> {
-        let view = self.definition_view();
-        view.type_parameters()
+        let fdef = self.definition();
+        let fhandle = self
+            .module_env
+            .data
+            .module
+            .function_handle_at(fdef.function);
+        fhandle
+            .type_parameters
             .iter()
             .enumerate()
             .map(|(i, k)| {
@@ -2709,14 +2708,21 @@ impl<'env> FunctionEnv<'env> {
     }
 
     pub fn get_parameter_count(&self) -> usize {
-        let view = self.definition_view();
-        view.arg_tokens().count()
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module.signature_at(fhandle.parameters).0.len()
     }
 
     /// Return the number of type parameters for self
     pub fn get_type_parameter_count(&self) -> usize {
-        let view = self.definition_view();
-        view.type_parameters().len()
+        let fdef = self.definition();
+        let fhandle = self
+            .module_env
+            .data
+            .module
+            .function_handle_at(fdef.function);
+        fhandle.type_parameters.len()
     }
 
     /// Return `true` if idx is a formal parameter index
@@ -2733,21 +2739,27 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the parameter types associated with this function
     pub fn get_parameter_types(&self) -> Vec<Type> {
-        let view = self.definition_view();
-        view.arg_tokens()
-            .map(|tv: SignatureTokenView<CompiledModule>| {
-                self.module_env.globalize_signature(tv.signature_token())
-            })
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module
+            .signature_at(fhandle.parameters)
+            .0
+            .iter()
+            .map(|tv: &SignatureToken| self.module_env.globalize_signature(tv))
             .collect()
     }
 
     /// Returns the regular parameters associated with this function.
     pub fn get_parameters(&self) -> Vec<Parameter> {
-        let view = self.definition_view();
-        view.arg_tokens()
-            .map(|tv: SignatureTokenView<CompiledModule>| {
-                self.module_env.globalize_signature(tv.signature_token())
-            })
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module
+            .signature_at(fhandle.parameters)
+            .0
+            .iter()
+            .map(|tv: &SignatureToken| self.module_env.globalize_signature(tv))
             .zip(self.data.arg_names.iter())
             .map(|(s, i)| Parameter(*i, s))
             .collect_vec()
@@ -2755,11 +2767,14 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns return types of this function.
     pub fn get_return_types(&self) -> Vec<Type> {
-        let view = self.definition_view();
-        view.return_tokens()
-            .map(|tv: SignatureTokenView<CompiledModule>| {
-                self.module_env.globalize_signature(tv.signature_token())
-            })
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module
+            .signature_at(fhandle.return_)
+            .0
+            .iter()
+            .map(|tv: &SignatureToken| self.module_env.globalize_signature(tv))
             .collect_vec()
     }
 
@@ -2770,8 +2785,10 @@ impl<'env> FunctionEnv<'env> {
 
     /// Returns the number of return values of this function.
     pub fn get_return_count(&self) -> usize {
-        let view = self.definition_view();
-        view.return_count()
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        module.signature_at(fhandle.return_).0.len()
     }
 
     /// Get the name to be used for a local. If the local is an argument, use that for naming,
@@ -2815,29 +2832,31 @@ impl<'env> FunctionEnv<'env> {
     /// by the user and also have a user assigned name which can be discovered via `get_local_name`.
     /// Note we may have more anonymous locals generated e.g by the 'stackless' transformation.
     pub fn get_local_count(&self) -> usize {
-        let view = self.definition_view();
-        match view.locals_signature() {
-            Some(locals_view) => locals_view.len(),
-            None => view.parameters().len(),
-        }
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let num_params = self.get_parameter_count();
+        let num_locals = fdef
+            .code
+            .as_ref()
+            .map(|code| module.signature_at(code.locals).0.len())
+            .unwrap_or(0);
+        num_params + num_locals
     }
 
     /// Gets the type of the local at index. This must use an index in the range as determined by
     /// `get_local_count`.
     pub fn get_local_type(&self, idx: usize) -> Type {
-        let view = self.definition_view();
-        let parameters = view.parameters();
-
-        if idx < parameters.len() {
-            self.module_env.globalize_signature(&parameters.0[idx])
+        let fdef = self.definition();
+        let module = &self.module_env.data.module;
+        let fhandle = module.function_handle_at(fdef.function);
+        let parameters = &module.signature_at(fhandle.parameters).0;
+        let st = if idx < parameters.len() {
+            &parameters[idx]
         } else {
-            self.module_env.globalize_signature(
-                view.locals_signature()
-                    .unwrap()
-                    .token_at(idx as u8)
-                    .signature_token(),
-            )
-        }
+            let locals = &module.signature_at(fdef.code.as_ref().unwrap().locals).0;
+            &locals[idx - parameters.len()]
+        };
+        self.module_env.globalize_signature(st)
     }
 
     /// Returns the acquired global resource types.
@@ -2961,14 +2980,11 @@ impl<'env> FunctionEnv<'env> {
         }
     }
 
-    fn definition_view(&'env self) -> FunctionDefinitionView<'env, CompiledModule> {
-        FunctionDefinitionView::new(
-            &self.module_env.data.module,
-            self.module_env
-                .data
-                .module
-                .function_def_at(self.data.def_idx),
-        )
+    fn definition(&'env self) -> &'env FunctionDefinition {
+        self.module_env
+            .data
+            .module
+            .function_def_at(self.data.def_idx)
     }
 
     /// Produce a TypeDisplayContext to print types within the scope of this env

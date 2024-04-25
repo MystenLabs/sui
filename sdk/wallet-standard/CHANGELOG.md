@@ -1,5 +1,30 @@
 # @mysten/wallet-standard
 
+## 0.11.2
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+
+## 0.11.1
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+
+## 0.11.0
+
+### Minor Changes
+
+- 437f0ca2ef: Add isSuiChain utility which is useful for type-safe dApp interfaces in wallets
+
+### Patch Changes
+
+- Updated dependencies [0cafa94027]
+  - @mysten/sui.js@0.51.0
+
 ## 0.10.3
 
 ### Patch Changes

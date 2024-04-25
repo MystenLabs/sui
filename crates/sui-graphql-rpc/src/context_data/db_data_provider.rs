@@ -6,8 +6,9 @@ use crate::{
     error::Error,
     types::{address::Address, sui_address::SuiAddress, validator::Validator},
 };
+use diesel::PgConnection;
 use std::{collections::BTreeMap, time::Duration};
-use sui_indexer::db::PgConnectionPoolConfig;
+use sui_indexer::db::ConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
@@ -19,16 +20,16 @@ use sui_types::{
 };
 
 pub(crate) struct PgManager {
-    pub inner: IndexerReader,
+    pub inner: IndexerReader<PgConnection>,
 }
 
 impl PgManager {
-    pub(crate) fn new(inner: IndexerReader) -> Self {
+    pub(crate) fn new(inner: IndexerReader<PgConnection>) -> Self {
         Self { inner }
     }
 
     /// Create a new underlying reader, which is used by this type as well as other data providers.
-    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader, Error> {
+    pub(crate) fn reader(db_url: impl Into<String>) -> Result<IndexerReader<PgConnection>, Error> {
         Self::reader_with_config(
             db_url,
             DEFAULT_SERVER_DB_POOL_SIZE,
@@ -40,11 +41,11 @@ impl PgManager {
         db_url: impl Into<String>,
         pool_size: u32,
         timeout_ms: u64,
-    ) -> Result<IndexerReader, Error> {
-        let mut config = PgConnectionPoolConfig::default();
+    ) -> Result<IndexerReader<PgConnection>, Error> {
+        let mut config = ConnectionPoolConfig::default();
         config.set_pool_size(pool_size);
         config.set_statement_timeout(Duration::from_millis(timeout_ms));
-        IndexerReader::new_with_config(db_url, config)
+        IndexerReader::<PgConnection>::new_with_config(db_url, config)
             .map_err(|e| Error::Internal(format!("Failed to create reader: {e}")))
     }
 }
@@ -62,14 +63,6 @@ impl PgManager {
             .get_validator_apy(address)
             .await
             .map_err(|e| Error::Internal(format!("{e}")))
-    }
-
-    pub(crate) async fn available_range(&self) -> Result<(u64, u64), Error> {
-        Ok(self
-            .inner
-            .spawn_blocking(|this| this.get_consistent_read_range())
-            .await
-            .map(|(start, end)| (start as u64, end as u64))?)
     }
 
     /// If no epoch was requested or if the epoch requested is in progress,
@@ -154,7 +147,7 @@ pub(crate) fn convert_to_validators(
                     .cloned()
                     .map(|a| Address {
                         address: SuiAddress::from(a),
-                        checkpoint_viewed_at: Some(checkpoint_viewed_at),
+                        checkpoint_viewed_at,
                     })
                     .collect()
             });

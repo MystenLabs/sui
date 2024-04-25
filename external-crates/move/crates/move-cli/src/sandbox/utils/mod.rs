@@ -6,7 +6,6 @@ use crate::sandbox::utils::on_disk_state_view::OnDiskStateView;
 use anyhow::{bail, Result};
 
 use move_binary_format::{
-    access::ModuleAccess,
     compatibility::Compatibility,
     errors::{Location, VMError},
     file_format::{AbilitySet, CompiledModule, FunctionDefinitionIndex, SignatureToken},
@@ -30,6 +29,7 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs,
     path::Path,
+    sync::Arc,
 };
 
 pub mod on_disk_state_view;
@@ -144,7 +144,7 @@ pub(crate) fn explain_publish_error(
         file_hash,
         (
             FileName::from(unit.source_path.to_string_lossy()),
-            file_contents,
+            Arc::from(file_contents),
         ),
     );
 
@@ -342,7 +342,6 @@ pub(crate) fn explain_execution_error(
                         state.resolve_function(id, function.0)?.unwrap()
                     )
                 }
-                Location::Script => "script".to_owned(),
                 Location::Undefined => "UNDEFINED".to_owned(),
             };
             println!(

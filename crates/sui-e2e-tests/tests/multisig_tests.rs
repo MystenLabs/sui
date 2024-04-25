@@ -3,10 +3,12 @@
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use shared_crypto::intent::{Intent, IntentMessage};
-use std::time::Duration;
+use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
+use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{
@@ -22,6 +24,7 @@ use sui_types::{
     zk_login_authenticator::ZkLoginAuthenticator,
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
+
 async fn do_upgraded_multisig_test() -> SuiResult {
     let test_cluster = TestClusterBuilder::new().build().await;
     let tx = make_upgraded_multisig_tx();
@@ -33,15 +36,13 @@ async fn do_upgraded_multisig_test() -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx)
+        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
         .await
         .map(|_| ())
 }
 
 #[sim_test]
 async fn test_upgraded_multisig_feature_deny() {
-    use sui_protocol_config::ProtocolConfig;
-
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_upgraded_multisig_for_testing(false);
         config
@@ -54,8 +55,6 @@ async fn test_upgraded_multisig_feature_deny() {
 
 #[sim_test]
 async fn test_upgraded_multisig_feature_allow() {
-    use sui_protocol_config::ProtocolConfig;
-
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_upgraded_multisig_for_testing(true);
         config
@@ -175,8 +174,14 @@ async fn test_multisig_e2e() {
 
 #[sim_test]
 async fn test_multisig_with_zklogin_scenerios() {
-    let test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
-    test_cluster.wait_for_authenticator_state_update().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(15000)
+        .with_default_jwks()
+        .build()
+        .await;
+
+    test_cluster.wait_for_epoch(Some(1)).await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &test_cluster.wallet;
 
@@ -252,7 +257,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let wrong_eph_sig = Signature::new_secure(&wrong_intent_msg, eph_kp);
     let wrong_zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         wrong_eph_sig,
     ));
     let multisig = GenericSignature::MultiSig(
@@ -273,7 +278,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let eph_sig = Signature::new_secure(&intent_msg, eph_kp_1);
     let zklogin_sig_mismatch = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         eph_sig,
     ));
     let multisig = GenericSignature::MultiSig(
@@ -289,7 +294,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     // 6. a multisig with an inconsistent max_epoch with zk proof itself fails to execute.
     let eph_sig = Signature::new_secure(&intent_msg, eph_kp);
     let zklogin_sig_wrong_zklogin_inputs = GenericSignature::ZkLoginAuthenticator(
-        ZkLoginAuthenticator::new(zklogin_inputs.clone(), 11, eph_sig), // max_epoch set to 9 instead of 10
+        ZkLoginAuthenticator::new(zklogin_inputs.clone(), 1, eph_sig), // max_epoch set to 1 instead of 2
     );
     let multisig = GenericSignature::MultiSig(
         MultiSig::combine(vec![zklogin_sig_wrong_zklogin_inputs], multisig_pk.clone()).unwrap(),
@@ -319,7 +324,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -340,6 +345,11 @@ async fn test_multisig_with_zklogin_scenerios() {
         0b1000,
         multisig_pk.clone(),
     ));
+    let sender = SuiAddress::try_from(&multisig).unwrap();
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+
     let tx_7 = Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]);
     let res = context.execute_transaction_may_fail(tx_7).await;
     assert!(res
@@ -400,7 +410,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -420,7 +430,7 @@ async fn test_multisig_with_zklogin_scenerios() {
     let sig: GenericSignature = Signature::new_secure(&intent_msg, &keys[0]).into();
     let sig_1: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
@@ -635,30 +645,73 @@ async fn test_multisig_with_zklogin_scenerios() {
 
 #[sim_test]
 async fn test_expired_epoch_zklogin_in_multisig() {
-    // 17. expired zklogin sig fails to execute. wait till epoch 11, the zklogin input committed to max_epoch 10 fails to execute.
     let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(15000)
         .with_default_jwks()
-        .with_epoch_duration_ms(1000)
         .build()
         .await;
-    test_cluster.wait_for_authenticator_state_update().await;
-    test_cluster
-        .wait_for_epoch_with_timeout(Some(11), Duration::from_secs(300))
-        .await;
-    let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    test_cluster.wait_for_epoch(Some(3)).await;
+    // construct tx with max_epoch set to 2.
+    let (tx, legacy_tx) = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+
+    // latest multisig fails for expired epoch.
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
         .unwrap_err()
         .to_string()
-        .contains("ZKLogin expired at epoch 10"));
+        .contains("ZKLogin expired at epoch 2"));
+
+    // legacy multisig also faiils for expired epoch.
+    let res = test_cluster
+        .wallet
+        .execute_transaction_may_fail(legacy_tx)
+        .await;
+    assert!(res.is_err());
+}
+
+#[sim_test]
+async fn test_max_epoch_too_large_fail_zklogin_in_multisig() {
+    use sui_protocol_config::ProtocolConfig;
+    let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+        config.set_zklogin_max_epoch_upper_bound_delta(Some(1));
+        config
+    });
+
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(15000)
+        .with_default_jwks()
+        .build()
+        .await;
+    test_cluster.wait_for_authenticator_state_update().await;
+    // both tx with max_epoch set to 2.
+    let (tx, legacy_tx) = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+
+    // max epoch at 2 is larger than current epoch (0) + upper bound (1), tx fails.
+    let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
+    assert!(res
+        .unwrap_err()
+        .to_string()
+        .contains("ZKLogin max epoch too large"));
+
+    // legacy tx fails for the same reason
+    let res = test_cluster
+        .wallet
+        .execute_transaction_may_fail(legacy_tx)
+        .await;
+    assert!(res.is_err());
 }
 
 #[sim_test]
 async fn test_random_zklogin_in_multisig() {
     let test_vectors =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..11];
-    let test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(15000)
+        .with_default_jwks()
+        .build()
+        .await;
     test_cluster.wait_for_authenticator_state_update().await;
+
     let rgp = test_cluster.get_reference_gas_price().await;
     let context = &test_cluster.wallet;
 
@@ -678,7 +731,7 @@ async fn test_random_zklogin_in_multisig() {
         let eph_sig = Signature::new_secure(&intent_msg, kp);
         let zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
             inputs.clone(),
-            10,
+            2,
             eph_sig,
         ));
         zklogin_sigs.push(zklogin_sig);
@@ -737,24 +790,36 @@ async fn test_multisig_legacy_works() {
 
 #[sim_test]
 async fn test_zklogin_inside_multisig_feature_deny() {
-    use sui_protocol_config::ProtocolConfig;
-
     // if feature disabled, fails to execute.
     let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_accept_zklogin_in_multisig_for_testing(false);
         config
     });
-    let test_cluster = TestClusterBuilder::new().with_default_jwks().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        .with_default_jwks()
+        .with_epoch_duration_ms(15000)
+        .build()
+        .await;
     test_cluster.wait_for_authenticator_state_update().await;
-    let tx = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    let (tx, legacy_tx) = construct_simple_zklogin_multisig_tx(&test_cluster).await;
+    // feature flag disabled fails latest multisig tx.
     let res = test_cluster.wallet.execute_transaction_may_fail(tx).await;
     assert!(res
         .unwrap_err()
         .to_string()
         .contains("zkLogin sig not supported inside multisig"));
+
+    // legacy multisig fails for the same reason.
+    let res = test_cluster
+        .wallet
+        .execute_transaction_may_fail(legacy_tx)
+        .await;
+    assert!(res.is_err());
 }
 
-async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Transaction {
+async fn construct_simple_zklogin_multisig_tx(
+    test_cluster: &TestCluster,
+) -> (Transaction, Transaction) {
     // construct a multisig address with 1 zklogin pk with threshold = 1.
     let (eph_kp, _eph_pk, zklogin_inputs) =
         &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
@@ -763,6 +828,8 @@ async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Tra
             .unwrap(),
     );
     let multisig_pk = MultiSigPublicKey::insecure_new(vec![(zklogin_pk.clone(), 1)], 1);
+    let multisig_pk_legacy =
+        MultiSigPublicKeyLegacy::new(vec![zklogin_pk.clone()], vec![1], 1).unwrap();
     let rgp = test_cluster.get_reference_gas_price().await;
 
     let multisig_addr = SuiAddress::from(&multisig_pk);
@@ -775,11 +842,18 @@ async fn construct_simple_zklogin_multisig_tx(test_cluster: &TestCluster) -> Tra
     let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
     let sig_4: GenericSignature = ZkLoginAuthenticator::new(
         zklogin_inputs.clone(),
-        10,
+        2,
         Signature::new_secure(&intent_msg, eph_kp),
     )
     .into();
-    let multisig =
-        GenericSignature::MultiSig(MultiSig::combine(vec![sig_4], multisig_pk.clone()).unwrap());
-    Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig])
+    let multisig = GenericSignature::MultiSig(
+        MultiSig::combine(vec![sig_4.clone()], multisig_pk.clone()).unwrap(),
+    );
+    let multisig_legacy = GenericSignature::MultiSigLegacy(
+        MultiSigLegacy::combine(vec![sig_4.clone()], multisig_pk_legacy.clone()).unwrap(),
+    );
+    (
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]),
+        Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig_legacy]),
+    )
 }

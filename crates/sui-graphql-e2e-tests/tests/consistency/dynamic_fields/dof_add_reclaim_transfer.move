@@ -14,14 +14,11 @@
 // 3              | 3             | added child to parent
 // 4              | 4             | reclaimed child from parent
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
     use sui::dynamic_object_field as ofield;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
 
     public struct Parent has key, store {
         id: UID,

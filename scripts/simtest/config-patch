@@ -1,28 +1,22 @@
 diff --git a/.cargo/config b/.cargo/config
-index 7369a2afce..5254870044 100644
+index ec2c459490..55985cbe9f 100644
 --- a/.cargo/config
 +++ b/.cargo/config
-@@ -20,11 +20,11 @@ move-clippy = [
-     "-Aclippy::upper_case_acronyms",
-     "-Aclippy::type_complexity",
-     # Remove after https://github.com/rust-lang/rust-clippy/pull/11792 is released.
-     "-Aclippy::map_identity",
-     "-Aclippy::new_without_default",
-     "-Aclippy::box_default",
-     "-Aclippy::manual_slice_size_calculation",
+@@ -25,4 +25,4 @@ move-clippy = [
  ]
- 
+
  [build]
 -rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]
 +rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes", "--cfg", "msim"]
 diff --git a/Cargo.toml b/Cargo.toml
-index 3b1ca4591c..e4ff4d61d2 100644
+index c0829bc1b6..4007f97d66 100644
 --- a/Cargo.toml
 +++ b/Cargo.toml
-@@ -668,2 +668,6 @@ semver = "1.0.16"
+@@ -682,3 +682,7 @@ field_names = "0.2.0"
+ semver = "1.0.16"
  spinners = "4.1.0"
  include_dir = "0.7.3"
 +
 +[patch.crates-io]
-+tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8" }
-+futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8" }
++tokio = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89" }
++futures-timer = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89" }

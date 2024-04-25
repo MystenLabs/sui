@@ -7,8 +7,6 @@
 
 //# publish
 module test::m1 {
-    use std::option::{Self, Option};
-
     public entry fun option_prim<T: copy + drop>(opt: Option<T>) {
         if (option::is_some(&opt)) {
             option::destroy_some(opt);

@@ -159,6 +159,16 @@ impl<C> Page<C> {
         Ok(page)
     }
 
+    /// A page that just limits the number of results, without applying any other bounds.
+    pub(crate) fn bounded(limit: u64) -> Self {
+        Page {
+            after: None,
+            before: None,
+            limit,
+            end: End::Front,
+        }
+    }
+
     pub(crate) fn after(&self) -> Option<&C> {
         self.after.as_ref()
     }

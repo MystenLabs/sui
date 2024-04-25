@@ -91,6 +91,8 @@ static_symbols!(
     "%macro",
     "lint",
     "migration",
+    "beta",
+    "development",
 );
 
 /// The global, unique cache of strings.

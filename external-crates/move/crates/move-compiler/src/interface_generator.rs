@@ -4,13 +4,10 @@
 
 use crate::shared::{NumberFormat, NumericalAddress};
 use anyhow::{anyhow, Result};
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        Ability, AbilitySet, CompiledModule, FunctionDefinition, ModuleHandle, SignatureToken,
-        StructDefinition, StructFieldInformation, StructHandleIndex, StructTypeParameter,
-        TypeParameterIndex, Visibility,
-    },
+use move_binary_format::file_format::{
+    Ability, AbilitySet, CompiledModule, FunctionDefinition, ModuleHandle, SignatureToken,
+    StructDefinition, StructFieldInformation, StructHandleIndex, StructTypeParameter,
+    TypeParameterIndex, Visibility,
 };
 use move_core_types::language_storage::ModuleId;
 use std::collections::BTreeMap;
@@ -359,7 +356,8 @@ fn write_signature_token(ctx: &mut Context, t: &SignatureToken) -> String {
         SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => format!("vector<{}>", write_signature_token(ctx, inner)),
         SignatureToken::Struct(idx) => write_struct_handle_type(ctx, *idx),
-        SignatureToken::StructInstantiation(idx, types) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, types) = &**struct_inst;
             let n = write_struct_handle_type(ctx, *idx);
             let tys = types
                 .iter()

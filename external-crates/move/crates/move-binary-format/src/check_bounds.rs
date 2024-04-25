@@ -3,15 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    binary_views::BinaryIndexedView,
     errors::{
         bounds_error, offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
         PartialVMError, PartialVMResult,
     },
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, CompiledScript, Constant,
-        FieldHandle, FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandle, FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
+        AbilitySet, Bytecode, CodeOffset, CodeUnit, CompiledModule, Constant, FieldHandle,
+        FieldInstantiation, FunctionDefinition, FunctionDefinitionIndex, FunctionHandle,
+        FunctionInstantiation, LocalIndex, ModuleHandle, Signature, SignatureToken,
         StructDefInstantiation, StructDefinition, StructFieldInformation, StructHandle, TableIndex,
     },
     internals::ModuleIndex,
@@ -22,54 +21,19 @@ use move_core_types::vm_status::StatusCode;
 enum BoundsCheckingContext {
     Module,
     ModuleFunction(FunctionDefinitionIndex),
-    Script,
 }
 pub struct BoundsChecker<'a> {
-    view: BinaryIndexedView<'a>,
+    module: &'a CompiledModule,
     context: BoundsCheckingContext,
 }
 
 impl<'a> BoundsChecker<'a> {
-    pub fn verify_script(script: &'a CompiledScript) -> PartialVMResult<()> {
-        let mut bounds_check = Self {
-            view: BinaryIndexedView::Script(script),
-            context: BoundsCheckingContext::Script,
-        };
-        bounds_check.verify_impl()?;
-
-        let type_param_count = script.type_parameters.len();
-
-        check_bounds_impl(bounds_check.view.signatures(), script.parameters)?;
-        if let Some(sig) = bounds_check
-            .view
-            .signatures()
-            .get(script.parameters.into_index())
-        {
-            for ty in &sig.0 {
-                bounds_check.check_type_parameter(ty, type_param_count)?
-            }
-        }
-
-        // The bounds checker has already checked each function definition's code, but a
-        // script's code exists outside of any function definition. It gets checked here.
-        bounds_check.check_code(
-            &script.code,
-            &script.type_parameters,
-            bounds_check
-                .view
-                .signatures()
-                .get(script.parameters.into_index())
-                .unwrap(),
-            CompiledScript::MAIN_INDEX.into_index(),
-        )
-    }
-
     pub fn verify_module(module: &'a CompiledModule) -> PartialVMResult<()> {
         let mut bounds_check = Self {
-            view: BinaryIndexedView::Module(module),
+            module,
             context: BoundsCheckingContext::Module,
         };
-        if bounds_check.view.module_handles().is_empty() {
+        if bounds_check.module.module_handles().is_empty() {
             let status =
                 verification_error(StatusCode::NO_MODULE_HANDLES, IndexKind::ModuleHandle, 0);
             return Err(status);
@@ -94,118 +58,112 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_signatures(&self) -> PartialVMResult<()> {
-        for signature in self.view.signatures() {
+        for signature in self.module.signatures() {
             self.check_signature(signature)?
         }
         Ok(())
     }
 
     fn check_constants(&self) -> PartialVMResult<()> {
-        for constant in self.view.constant_pool() {
+        for constant in self.module.constant_pool() {
             self.check_constant(constant)?
         }
         Ok(())
     }
 
     fn check_module_handles(&self) -> PartialVMResult<()> {
-        for script_handle in self.view.module_handles() {
+        for script_handle in self.module.module_handles() {
             self.check_module_handle(script_handle)?
         }
         Ok(())
     }
 
     fn check_struct_handles(&self) -> PartialVMResult<()> {
-        for struct_handle in self.view.struct_handles() {
+        for struct_handle in self.module.struct_handles() {
             self.check_struct_handle(struct_handle)?
         }
         Ok(())
     }
 
     fn check_function_handles(&self) -> PartialVMResult<()> {
-        for function_handle in self.view.function_handles() {
+        for function_handle in self.module.function_handles() {
             self.check_function_handle(function_handle)?
         }
         Ok(())
     }
 
     fn check_field_handles(&self) -> PartialVMResult<()> {
-        for field_handle in self.view.field_handles().into_iter().flatten() {
+        for field_handle in self.module.field_handles() {
             self.check_field_handle(field_handle)?
         }
         Ok(())
     }
 
     fn check_friend_decls(&self) -> PartialVMResult<()> {
-        for friend_decl in self.view.friend_decls().into_iter().flatten() {
+        for friend_decl in self.module.friend_decls() {
             self.check_module_handle(friend_decl)?
         }
         Ok(())
     }
 
     fn check_struct_instantiations(&self) -> PartialVMResult<()> {
-        for struct_instantiation in self.view.struct_instantiations().into_iter().flatten() {
+        for struct_instantiation in self.module.struct_instantiations() {
             self.check_struct_instantiation(struct_instantiation)?
         }
         Ok(())
     }
 
     fn check_function_instantiations(&self) -> PartialVMResult<()> {
-        for function_instantiation in self.view.function_instantiations() {
+        for function_instantiation in self.module.function_instantiations() {
             self.check_function_instantiation(function_instantiation)?
         }
         Ok(())
     }
 
     fn check_field_instantiations(&self) -> PartialVMResult<()> {
-        for field_instantiation in self.view.field_instantiations().into_iter().flatten() {
+        for field_instantiation in self.module.field_instantiations() {
             self.check_field_instantiation(field_instantiation)?
         }
         Ok(())
     }
 
     fn check_struct_defs(&self) -> PartialVMResult<()> {
-        for struct_def in self.view.struct_defs().into_iter().flatten() {
+        for struct_def in self.module.struct_defs() {
             self.check_struct_def(struct_def)?
         }
         Ok(())
     }
 
     fn check_function_defs(&mut self) -> PartialVMResult<()> {
-        let view = self.view;
-        for (function_def_idx, function_def) in
-            view.function_defs().into_iter().flatten().enumerate()
-        {
+        for (function_def_idx, function_def) in self.module.function_defs().iter().enumerate() {
             self.check_function_def(function_def_idx, function_def)?
         }
         Ok(())
     }
 
     fn check_module_handle(&self, module_handle: &ModuleHandle) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.address_identifiers(), module_handle.address)?;
-        check_bounds_impl(self.view.identifiers(), module_handle.name)
+        check_bounds_impl(self.module.address_identifiers(), module_handle.address)?;
+        check_bounds_impl(self.module.identifiers(), module_handle.name)
     }
 
     fn check_self_module_handle(&self) -> PartialVMResult<()> {
-        match self.view.self_handle_idx() {
-            Some(idx) => check_bounds_impl(self.view.module_handles(), idx),
-            None => Ok(()),
-        }
+        check_bounds_impl(self.module.module_handles(), self.module.self_handle_idx())
     }
 
     fn check_struct_handle(&self, struct_handle: &StructHandle) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.module_handles(), struct_handle.module)?;
-        check_bounds_impl(self.view.identifiers(), struct_handle.name)
+        check_bounds_impl(self.module.module_handles(), struct_handle.module)?;
+        check_bounds_impl(self.module.identifiers(), struct_handle.name)
     }
 
     fn check_function_handle(&self, function_handle: &FunctionHandle) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.module_handles(), function_handle.module)?;
-        check_bounds_impl(self.view.identifiers(), function_handle.name)?;
-        check_bounds_impl(self.view.signatures(), function_handle.parameters)?;
-        check_bounds_impl(self.view.signatures(), function_handle.return_)?;
+        check_bounds_impl(self.module.module_handles(), function_handle.module)?;
+        check_bounds_impl(self.module.identifiers(), function_handle.name)?;
+        check_bounds_impl(self.module.signatures(), function_handle.parameters)?;
+        check_bounds_impl(self.module.signatures(), function_handle.return_)?;
         // function signature type paramters must be in bounds to the function type parameters
         let type_param_count = function_handle.type_parameters.len();
         if let Some(sig) = self
-            .view
+            .module
             .signatures()
             .get(function_handle.parameters.into_index())
         {
@@ -214,7 +172,7 @@ impl<'a> BoundsChecker<'a> {
             }
         }
         if let Some(sig) = self
-            .view
+            .module
             .signatures()
             .get(function_handle.return_.into_index())
         {
@@ -226,12 +184,12 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_field_handle(&self, field_handle: &FieldHandle) -> PartialVMResult<()> {
-        check_bounds_impl_opt(&self.view.struct_defs(), field_handle.owner)?;
+        check_bounds_impl(self.module.struct_defs(), field_handle.owner)?;
         // field offset must be in bounds, struct def just checked above must exist
         if let Some(struct_def) = &self
-            .view
+            .module
             .struct_defs()
-            .and_then(|d| d.get(field_handle.owner.into_index()))
+            .get(field_handle.owner.into_index())
         {
             let fields_count = match &struct_def.field_information {
                 StructFieldInformation::Native => 0,
@@ -253,17 +211,23 @@ impl<'a> BoundsChecker<'a> {
         &self,
         struct_instantiation: &StructDefInstantiation,
     ) -> PartialVMResult<()> {
-        check_bounds_impl_opt(&self.view.struct_defs(), struct_instantiation.def)?;
-        check_bounds_impl(self.view.signatures(), struct_instantiation.type_parameters)
+        check_bounds_impl(self.module.struct_defs(), struct_instantiation.def)?;
+        check_bounds_impl(
+            self.module.signatures(),
+            struct_instantiation.type_parameters,
+        )
     }
 
     fn check_function_instantiation(
         &self,
         function_instantiation: &FunctionInstantiation,
     ) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.function_handles(), function_instantiation.handle)?;
         check_bounds_impl(
-            self.view.signatures(),
+            self.module.function_handles(),
+            function_instantiation.handle,
+        )?;
+        check_bounds_impl(
+            self.module.signatures(),
             function_instantiation.type_parameters,
         )
     }
@@ -272,8 +236,11 @@ impl<'a> BoundsChecker<'a> {
         &self,
         field_instantiation: &FieldInstantiation,
     ) -> PartialVMResult<()> {
-        check_bounds_impl_opt(&self.view.field_handles(), field_instantiation.handle)?;
-        check_bounds_impl(self.view.signatures(), field_instantiation.type_parameters)
+        check_bounds_impl(self.module.field_handles(), field_instantiation.handle)?;
+        check_bounds_impl(
+            self.module.signatures(),
+            field_instantiation.type_parameters,
+        )
     }
 
     fn check_signature(&self, signature: &Signature) -> PartialVMResult<()> {
@@ -288,17 +255,17 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_struct_def(&self, struct_def: &StructDefinition) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.struct_handles(), struct_def.struct_handle)?;
+        check_bounds_impl(self.module.struct_handles(), struct_def.struct_handle)?;
         // check signature (type) and type parameter for the field type
         if let StructFieldInformation::Declared(fields) = &struct_def.field_information {
             let type_param_count = self
-                .view
+                .module
                 .struct_handles()
                 .get(struct_def.struct_handle.into_index())
                 .map_or(0, |sh| sh.type_parameters.len());
             // field signatures are inlined
             for field in fields {
-                check_bounds_impl(self.view.identifiers(), field.name)?;
+                check_bounds_impl(self.module.identifiers(), field.name)?;
                 self.check_type(&field.signature.0)?;
                 self.check_type_parameter(&field.signature.0, type_param_count)?;
             }
@@ -314,9 +281,9 @@ impl<'a> BoundsChecker<'a> {
         self.context = BoundsCheckingContext::ModuleFunction(FunctionDefinitionIndex(
             function_def_idx as TableIndex,
         ));
-        check_bounds_impl(self.view.function_handles(), function_def.function)?;
+        check_bounds_impl(self.module.function_handles(), function_def.function)?;
         for ty in &function_def.acquires_global_resources {
-            check_bounds_impl_opt(&self.view.struct_defs(), *ty)?;
+            check_bounds_impl(self.module.struct_defs(), *ty)?;
         }
 
         let code_unit = match &function_def.code {
@@ -324,22 +291,22 @@ impl<'a> BoundsChecker<'a> {
             None => return Ok(()),
         };
 
-        if function_def.function.into_index() >= self.view.function_handles().len() {
+        if function_def.function.into_index() >= self.module.function_handles().len() {
             return Err(verification_error(
                 StatusCode::INDEX_OUT_OF_BOUNDS,
                 IndexKind::FunctionDefinition,
                 function_def_idx as TableIndex,
             ));
         }
-        let function_handle = &self.view.function_handles()[function_def.function.into_index()];
-        if function_handle.parameters.into_index() >= self.view.signatures().len() {
+        let function_handle = &self.module.function_handles()[function_def.function.into_index()];
+        if function_handle.parameters.into_index() >= self.module.signatures().len() {
             return Err(verification_error(
                 StatusCode::INDEX_OUT_OF_BOUNDS,
                 IndexKind::FunctionDefinition,
                 function_def_idx as TableIndex,
             ));
         }
-        let parameters = &self.view.signatures()[function_handle.parameters.into_index()];
+        let parameters = &self.module.signatures()[function_handle.parameters.into_index()];
 
         self.check_code(
             code_unit,
@@ -356,7 +323,7 @@ impl<'a> BoundsChecker<'a> {
         parameters: &Signature,
         index: usize,
     ) -> PartialVMResult<()> {
-        check_bounds_impl(self.view.signatures(), code_unit.locals)?;
+        check_bounds_impl(self.module.signatures(), code_unit.locals)?;
 
         let locals = self.get_locals(code_unit)?;
         // Use saturating add for stability
@@ -383,29 +350,27 @@ impl<'a> BoundsChecker<'a> {
 
             match bytecode {
                 LdConst(idx) => self.check_code_unit_bounds_impl(
-                    self.view.constant_pool(),
+                    self.module.constant_pool(),
                     *idx,
                     bytecode_offset,
                 )?,
-                MutBorrowField(idx) | ImmBorrowField(idx) => self.check_code_unit_bounds_impl_opt(
-                    &self.view.field_handles(),
+                MutBorrowField(idx) | ImmBorrowField(idx) => self.check_code_unit_bounds_impl(
+                    self.module.field_handles(),
                     *idx,
                     bytecode_offset,
                 )?,
                 MutBorrowFieldGeneric(idx) | ImmBorrowFieldGeneric(idx) => {
-                    self.check_code_unit_bounds_impl_opt(
-                        &self.view.field_instantiations(),
+                    self.check_code_unit_bounds_impl(
+                        self.module.field_instantiations(),
                         *idx,
                         bytecode_offset,
                     )?;
                     // check type parameters in borrow are bound to the function type parameters
-                    if let Some(field_inst) = self
-                        .view
-                        .field_instantiations()
-                        .and_then(|f| f.get(idx.into_index()))
+                    if let Some(field_inst) =
+                        self.module.field_instantiations().get(idx.into_index())
                     {
                         if let Some(sig) = self
-                            .view
+                            .module
                             .signatures()
                             .get(field_inst.type_parameters.into_index())
                         {
@@ -416,22 +381,22 @@ impl<'a> BoundsChecker<'a> {
                     }
                 }
                 Call(idx) => self.check_code_unit_bounds_impl(
-                    self.view.function_handles(),
+                    self.module.function_handles(),
                     *idx,
                     bytecode_offset,
                 )?,
                 CallGeneric(idx) => {
                     self.check_code_unit_bounds_impl(
-                        self.view.function_instantiations(),
+                        self.module.function_instantiations(),
                         *idx,
                         bytecode_offset,
                     )?;
                     // check type parameters in call are bound to the function type parameters
                     if let Some(func_inst) =
-                        self.view.function_instantiations().get(idx.into_index())
+                        self.module.function_instantiations().get(idx.into_index())
                     {
                         if let Some(sig) = self
-                            .view
+                            .module
                             .signatures()
                             .get(func_inst.type_parameters.into_index())
                         {
@@ -447,8 +412,8 @@ impl<'a> BoundsChecker<'a> {
                 | ImmBorrowGlobalDeprecated(idx)
                 | MutBorrowGlobalDeprecated(idx)
                 | MoveFromDeprecated(idx)
-                | MoveToDeprecated(idx) => self.check_code_unit_bounds_impl_opt(
-                    &self.view.struct_defs(),
+                | MoveToDeprecated(idx) => self.check_code_unit_bounds_impl(
+                    self.module.struct_defs(),
                     *idx,
                     bytecode_offset,
                 )?,
@@ -459,19 +424,17 @@ impl<'a> BoundsChecker<'a> {
                 | MutBorrowGlobalGenericDeprecated(idx)
                 | MoveFromGenericDeprecated(idx)
                 | MoveToGenericDeprecated(idx) => {
-                    self.check_code_unit_bounds_impl_opt(
-                        &self.view.struct_instantiations(),
+                    self.check_code_unit_bounds_impl(
+                        self.module.struct_instantiations(),
                         *idx,
                         bytecode_offset,
                     )?;
                     // check type parameters in type operations are bound to the function type parameters
-                    if let Some(struct_inst) = self
-                        .view
-                        .struct_instantiations()
-                        .and_then(|s| s.get(idx.into_index()))
+                    if let Some(struct_inst) =
+                        self.module.struct_instantiations().get(idx.into_index())
                     {
                         if let Some(sig) = self
-                            .view
+                            .module
                             .signatures()
                             .get(struct_inst.type_parameters.into_index())
                         {
@@ -519,11 +482,11 @@ impl<'a> BoundsChecker<'a> {
                 | VecUnpack(idx, _)
                 | VecSwap(idx) => {
                     self.check_code_unit_bounds_impl(
-                        self.view.signatures(),
+                        self.module.signatures(),
                         *idx,
                         bytecode_offset,
                     )?;
-                    if let Some(sig) = self.view.signatures().get(idx.into_index()) {
+                    if let Some(sig) = self.module.signatures().get(idx.into_index()) {
                         for ty in &sig.0 {
                             self.check_type_parameter(ty, type_param_count)?;
                         }
@@ -550,8 +513,8 @@ impl<'a> BoundsChecker<'a> {
                 Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | TypeParameter(_)
                 | Reference(_) | MutableReference(_) | Vector(_) => (),
                 Struct(idx) => {
-                    check_bounds_impl(self.view.struct_handles(), *idx)?;
-                    if let Some(sh) = self.view.struct_handles().get(idx.into_index()) {
+                    check_bounds_impl(self.module.struct_handles(), *idx)?;
+                    if let Some(sh) = self.module.struct_handles().get(idx.into_index()) {
                         if !sh.type_parameters.is_empty() {
                             return Err(PartialVMError::new(
                                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -563,9 +526,10 @@ impl<'a> BoundsChecker<'a> {
                         }
                     }
                 }
-                StructInstantiation(idx, type_params) => {
-                    check_bounds_impl(self.view.struct_handles(), *idx)?;
-                    if let Some(sh) = self.view.struct_handles().get(idx.into_index()) {
+                StructInstantiation(struct_inst) => {
+                    let (idx, type_params) = &**struct_inst;
+                    check_bounds_impl(self.module.struct_handles(), *idx)?;
+                    if let Some(sh) = self.module.struct_handles().get(idx.into_index()) {
                         if sh.type_parameters.len() != type_params.len() {
                             return Err(PartialVMError::new(
                                 StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -616,24 +580,10 @@ impl<'a> BoundsChecker<'a> {
                 | Reference(_)
                 | MutableReference(_)
                 | Vector(_)
-                | StructInstantiation(_, _) => (),
+                | StructInstantiation(_) => (),
             }
         }
         Ok(())
-    }
-
-    fn check_code_unit_bounds_impl_opt<T, I>(
-        &self,
-        pool: &Option<&[T]>,
-        idx: I,
-        bytecode_offset: usize,
-    ) -> PartialVMResult<()>
-    where
-        I: ModuleIndex,
-    {
-        pool.map_or(Ok(()), |p| {
-            self.check_code_unit_bounds_impl(p, idx, bytecode_offset)
-        })
     }
 
     fn check_code_unit_bounds_impl<T, I>(
@@ -661,13 +611,13 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn get_locals(&self, code_unit: &CodeUnit) -> PartialVMResult<&[SignatureToken]> {
-        match self.view.signatures().get(code_unit.locals.into_index()) {
+        match self.module.signatures().get(code_unit.locals.into_index()) {
             Some(signature) => Ok(&signature.0),
             None => Err(bounds_error(
                 StatusCode::INDEX_OUT_OF_BOUNDS,
                 IndexKind::Signature,
                 code_unit.locals.into_index() as u16,
-                self.view.signatures().len(),
+                self.module.signatures().len(),
             )),
         }
     }
@@ -695,21 +645,8 @@ impl<'a> BoundsChecker<'a> {
                     cur_bytecode_offset,
                 )
             }
-            BoundsCheckingContext::Script => {
-                let msg = format!(
-        "Index {} out of bounds for {} at bytecode offset {} in script while indexing {}",
-        target_offset, target_pool_len, cur_bytecode_offset, kind);
-                PartialVMError::new(status).with_message(msg)
-            }
         }
     }
-}
-
-fn check_bounds_impl_opt<T, I>(pool: &Option<&[T]>, idx: I) -> PartialVMResult<()>
-where
-    I: ModuleIndex,
-{
-    pool.map_or(Ok(()), |p| check_bounds_impl(p, idx))
 }
 
 fn check_bounds_impl<T, I>(pool: &[T], idx: I) -> PartialVMResult<()>

@@ -8,7 +8,7 @@
 // 2     | 2
 // An additional checkpoint is created at the end.
 
-//# init --addresses Test=0x0 --accounts A B --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A B --simulator
 
 //# create-checkpoint
 

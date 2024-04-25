@@ -1,6 +1,10 @@
 [package]
 name = "package_upgrade_base"
 version = "0.0.1"
+edition = "2024.beta"
 
 [addresses]
 base_addr =  "_"
+
+[dev-addresses]
+base_addr =  "0x0"

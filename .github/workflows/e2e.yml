@@ -8,12 +8,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       isWallet: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-wallet')) }}
-      isExplorer: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-explorer')) }}
       isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) }}
       isGraphQlTransport: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/graphql-transport')) }}
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Detect Changes (turbo)
         uses: './.github/actions/turbo-diffs'
         id: turbo
@@ -25,7 +24,7 @@ jobs:
   localnet:
     name: Localnet
     needs: diff
-    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isWallet == 'true' || needs.diff.outputs.isRust == 'true'
     runs-on: ubuntu-ghcloud
     services:
       postgres:
@@ -43,7 +42,7 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       # Disabled for now as it makes test runs take longer
       # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
@@ -58,7 +57,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Install Playwright Browsers
-        run: pnpm --filter sui-explorer playwright install --with-deps chromium
+        run: pnpm --filter sui-wallet playwright install --with-deps chromium
 
       - name: Set env
         run: |
@@ -72,17 +71,6 @@ jobs:
       - name: Run RPC/GrpahQL comaptability e2e tests
         if: ${{ needs.diff.outputs.isGraphQlTransport == 'true' || needs.diff.outputs.isRust == 'true'}}
         run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/graphql-transport test:e2e'
-
-      - name: Build explorer
-        if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm turbo --filter=sui-explorer build
-
-      - uses: actions/upload-artifact@v3
-        if: always()
-        with:
-          name: playwright-report-explorer
-          path: apps/explorer/playwright-report/
-          retention-days: 30
 
       - name: Run Local net
         run: cargo run --bin sui-test-validator -- --epoch-duration-ms 10000 &
@@ -107,7 +95,7 @@ jobs:
     name: Local Network Built on devnet branch
     needs: diff
     # TODO: add wallet e2e to the `if` condition when available
-    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'
+    if: needs.diff.outputs.isTypescriptSDK == 'true'
     runs-on: ubuntu-ghcloud
     services:
       postgres:
@@ -125,7 +113,7 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Run E2E Test Runner with devnet branch
         uses: './.github/actions/ts-e2e'
         with:
@@ -136,7 +124,7 @@ jobs:
     name: Local Network Built on testnet branch
     needs: diff
     # TODO: add wallet e2e to the `if` condition when available
-    if: needs.diff.outputs.isExplorer == 'true' || needs.diff.outputs.isTypescriptSDK == 'true'
+    if: needs.diff.outputs.isTypescriptSDK == 'true'
     runs-on: ubuntu-ghcloud
     services:
       postgres:
@@ -154,7 +142,7 @@ jobs:
         ports:
           - 5432:5432
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Run E2E Test Runner with testnet branch
         uses: './.github/actions/ts-e2e'
         with:

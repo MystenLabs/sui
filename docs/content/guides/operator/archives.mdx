@@ -3,9 +3,6 @@ title: Sui Archives
 description: The archive is a historical record of all transactions on Sui. Enable archiving on your Full nodes as a best practice.
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 A Sui archive is a history of all transaction data on Sui, trailing behind the latest checkpoint by 10 minutes. As a Sui node operator, you can write this history to an object store like S3, GCS, or similar for safe keeping. Saving this archive data is considered a best practice because Sui prunes transactions on Full nodes to remove historical transactions and their effects. Peer nodes, for example, might not catch up with all transactions and effects through synchronization if they lag behind the current epoch by more than the latest few epochs. Instead of relying on synchronization, peer nodes can fallback to downloading this information from an archive.
 
 Sui Archival nodes (Full nodes that write to an archive) don't store historical state on local storage and don't help query historical data. They serve the purpose of enabling peer nodes to catch up to the latest checkpoint and are useful for auditing and verifying the complete history of all transactions on the network.
@@ -90,3 +87,24 @@ state-archive-read-config:
 
 </TabItem>
 </Tabs>
+
+
+Even though these buckets are publicly readable, you need to make sure to properly grant the correct policies to read them via AWS, for example:
+```
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetObject",
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::mysten-mainnet-archives/*",
+                "arn:aws:s3:::mysten-mainnet-archives"
+            ]
+        }
+    ]
+}
+```

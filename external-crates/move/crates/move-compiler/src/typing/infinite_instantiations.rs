@@ -12,6 +12,7 @@ use crate::{
     typing::ast as T,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use petgraph::{
     algo::{astar as petgraph_astar, tarjan_scc as petgraph_scc},
@@ -217,6 +218,7 @@ fn sequence_item(context: &mut Context, item: &T::SequenceItem) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, e: &T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {
@@ -229,6 +231,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
         | E::Continue(_)
+        | E::ErrorConstant(_)
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => {
@@ -240,6 +243,21 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, eb);
             exp(context, et);
             exp(context, ef);
+        }
+        E::Match(esubject, arms) => {
+            exp(context, esubject);
+            for sp!(_, arm) in &arms.value {
+                if let Some(guard) = arm.guard.as_ref() {
+                    exp(context, guard)
+                }
+                exp(context, &arm.rhs);
+            }
+        }
+        E::VariantMatch(subject, _, arms) => {
+            exp(context, subject);
+            for (_, rhs) in arms {
+                exp(context, rhs);
+            }
         }
         E::While(_, eb, eloop) => {
             exp(context, eb);
@@ -258,7 +276,8 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Dereference(er)
         | E::UnaryExp(_, er)
         | E::Borrow(_, er, _)
-        | E::TempBorrow(_, er) => exp(context, er),
+        | E::TempBorrow(_, er)
+        | E::InvalidAccess(er) => exp(context, er),
         E::Mutate(el, er) | E::BinopExp(el, _, _, er) => {
             exp(context, el);
             exp(context, er)
@@ -269,6 +288,12 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 exp(context, fe)
             }
         }
+        E::PackVariant(_, _, _, _, fields) => {
+            for (_, _, (_, (_, fe))) in fields.iter() {
+                exp(context, fe)
+            }
+        }
+
         E::ExpList(el) => exp_list(context, el),
 
         E::Cast(e, _) | E::Annotate(e, _) => exp(context, e),

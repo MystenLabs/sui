@@ -6,11 +6,11 @@ module move_test_code::tto {
     use sui::tx_context::{Self, TxContext};
     use sui::transfer::{Self, Receiving};
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 

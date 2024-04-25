@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_cli::base::test::UnitTestResult;
+use move_package::LintFlag;
 use move_unit_test::UnitTestingConfig;
 use std::{fs, io, path::PathBuf};
 use sui_move::unit_test::run_move_unit_tests;
@@ -92,7 +93,7 @@ fn check_package_builds(path: PathBuf) {
     config.print_diags_to_stderr = true;
     config.config.warnings_are_errors = true;
     config.config.silence_warnings = false;
-    config.config.no_lint = false;
+    config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
     config
         .build(path.clone())
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
@@ -107,7 +108,7 @@ fn check_move_unit_tests(path: PathBuf) {
     config.print_diags_to_stderr = true;
     config.config.warnings_are_errors = true;
     config.config.silence_warnings = false;
-    config.config.no_lint = false;
+    config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
     let move_config = config.config.clone();
     let mut testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
     testing_config.filter = std::env::var(FILTER_ENV).ok().map(|s| s.to_string());

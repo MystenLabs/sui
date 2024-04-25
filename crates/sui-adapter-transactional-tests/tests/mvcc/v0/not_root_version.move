@@ -8,8 +8,6 @@
 //# publish
 
 module test::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
     use sui::dynamic_field as field;
 
     public struct A has key, store {

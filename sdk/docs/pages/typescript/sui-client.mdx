@@ -36,7 +36,8 @@ during development. In a production application, however, you should use the
 
 For local development, you can run `cargo run --bin sui-test-validator` to spin up a local network
 with a local validator, a Full node, and a faucet server. Refer to
-[the Local Network guide](https://docs.sui.io/build/sui-local-network) for more information.
+[the Local Network guide](https://docs.sui.io/guides/developer/getting-started/local-network) for
+more information.
 
 ## Manually calling unsupported RPC methods
 
@@ -54,7 +55,7 @@ const committeeInfo = await client.call('suix_getCommitteeInfo', []);
 ```
 
 For a full list of available RPC methods, see the
-[RPC documentation](https://docs.sui.io/sui-jsonrpc).
+[RPC documentation](https://docs.sui.io/references/sui-api).
 
 ## Subscribing to events with SuiClient
 

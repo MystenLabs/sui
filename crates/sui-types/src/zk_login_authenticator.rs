@@ -19,7 +19,6 @@ use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
 
-//#[cfg(any(test, feature = "test-utils"))]
 #[cfg(test)]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
 mod zk_login_authenticator_test;
@@ -89,19 +88,41 @@ impl Hash for ZkLoginAuthenticator {
 }
 
 impl AuthenticatorTrait for ZkLoginAuthenticator {
-    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult {
-        // Verify the max epoch in aux inputs is <= the current epoch of authority.
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> SuiResult {
+        // the checks here ensure that `current_epoch + max_epoch_upper_bound_delta >= self.max_epoch >= current_epoch`.
+        // 1. if the config for upper bound is set, ensure that the max epoch in signature is not larger than epoch + upper_bound.
+        if let Some(delta) = max_epoch_upper_bound_delta {
+            let max_epoch_upper_bound = epoch + delta;
+            if self.get_max_epoch() > max_epoch_upper_bound {
+                return Err(SuiError::InvalidSignature {
+                    error: format!(
+                        "ZKLogin max epoch too large {}, current epoch {}, max accepted: {}",
+                        self.get_max_epoch(),
+                        epoch,
+                        max_epoch_upper_bound
+                    ),
+                });
+            }
+        }
+        // 2. ensure that max epoch in signature is greater than the current epoch.
         if epoch > self.get_max_epoch() {
             return Err(SuiError::InvalidSignature {
-                error: format!("ZKLogin expired at epoch {}", self.get_max_epoch()),
+                error: format!(
+                    "ZKLogin expired at epoch {}, current epoch {}",
+                    self.get_max_epoch(),
+                    epoch
+                ),
             });
         }
         Ok(())
     }
 
-    /// This verifies the addresss derivation and ephemeral signature.
-    /// It does not verify the zkLogin inputs (that includes the expensive zk proof verify).
-    fn verify_uncached_checks<T>(
+    /// Verify an intent message of a transaction with an zk login authenticator.
+    fn verify_claims<T>(
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
@@ -137,21 +158,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
-        self.user_signature
-            .verify_secure(intent_msg, author, SignatureScheme::ZkLoginAuthenticator)
-    }
-
-    /// Verify an intent message of a transaction with an zk login authenticator.
-    fn verify_claims<T>(
-        &self,
-        intent_msg: &IntentMessage<T>,
-        author: SuiAddress,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
-        self.verify_uncached_checks(intent_msg, author, aux_verify_data)?;
+        self.user_signature.verify_secure(
+            intent_msg,
+            author,
+            SignatureScheme::ZkLoginAuthenticator,
+        )?;
 
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
@@ -195,5 +206,129 @@ impl AsRef<[u8]> for ZkLoginAuthenticator {
                 Ok(bytes)
             })
             .expect("OnceCell invariant violated")
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AddressSeed([u8; 32]);
+
+impl AddressSeed {
+    pub fn unpadded(&self) -> &[u8] {
+        let mut buf = self.0.as_slice();
+
+        while !buf.is_empty() && buf[0] == 0 {
+            buf = &buf[1..];
+        }
+
+        // If the value is '0' then just return a slice of length 1 of the final byte
+        if buf.is_empty() {
+            &self.0[31..]
+        } else {
+            buf
+        }
+    }
+
+    pub fn padded(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for AddressSeed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let big_int = num_bigint::BigUint::from_bytes_be(&self.0);
+        let radix10 = big_int.to_str_radix(10);
+        f.write_str(&radix10)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum AddressSeedParseError {
+    #[error("unable to parse radix10 encoded value `{0}`")]
+    Parse(#[from] num_bigint::ParseBigIntError),
+    #[error("larger than 32 bytes")]
+    TooBig,
+}
+
+impl std::str::FromStr for AddressSeed {
+    type Err = AddressSeedParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let big_int = <num_bigint::BigUint as num_traits::Num>::from_str_radix(s, 10)?;
+        let be_bytes = big_int.to_bytes_be();
+        let len = be_bytes.len();
+        let mut buf = [0; 32];
+
+        if len > 32 {
+            return Err(AddressSeedParseError::TooBig);
+        }
+
+        buf[32 - len..].copy_from_slice(&be_bytes);
+        Ok(Self(buf))
+    }
+}
+
+// AddressSeed's serialized format is as a radix10 encoded string
+impl Serialize for AddressSeed {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for AddressSeed {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = std::borrow::Cow::<'de, str>::deserialize(deserializer)?;
+        std::str::FromStr::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::str::FromStr;
+
+    use super::AddressSeed;
+    use num_bigint::BigUint;
+    use proptest::prelude::*;
+
+    #[test]
+    fn unpadded_slice() {
+        let seed = AddressSeed([0; 32]);
+        let zero: [u8; 1] = [0];
+        assert_eq!(seed.unpadded(), zero.as_slice());
+
+        let mut seed = AddressSeed([1; 32]);
+        seed.0[0] = 0;
+        assert_eq!(seed.unpadded(), [1; 31].as_slice());
+    }
+
+    proptest! {
+        #[test]
+        fn dont_crash_on_large_inputs(
+            bytes in proptest::collection::vec(any::<u8>(), 33..1024)
+        ) {
+            let big_int = BigUint::from_bytes_be(&bytes);
+            let radix10 = big_int.to_str_radix(10);
+
+            // doesn't crash
+            let _ = AddressSeed::from_str(&radix10);
+        }
+
+        #[test]
+        fn valid_address_seeds(
+            bytes in proptest::collection::vec(any::<u8>(), 1..=32)
+        ) {
+            let big_int = BigUint::from_bytes_be(&bytes);
+            let radix10 = big_int.to_str_radix(10);
+
+            let seed = AddressSeed::from_str(&radix10).unwrap();
+            assert_eq!(radix10, seed.to_string());
+            // Ensure unpadded doesn't crash
+            seed.unpadded();
+        }
     }
 }

@@ -3,11 +3,13 @@
 
 use crate::chain_from_chain_id;
 use crate::{
-    config::ReplayableNetworkConfigSet,
     data_fetcher::{
         extract_epoch_and_version, DataFetcher, Fetchers, NodeStateDumpFetcher, RemoteFetcher,
     },
-    displays::Pretty,
+    displays::{
+        transaction_displays::{transform_command_results_to_annotated, FullPTB},
+        Pretty,
+    },
     types::*,
 };
 use futures::executor::block_on;
@@ -60,9 +62,8 @@ use sui_types::{
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{
-        CertifiedTransaction, CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
-        ObjectReadResultKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
-        TransactionKind, VerifiedCertificate, VerifiedTransaction,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        SenderSignedData, Transaction, TransactionDataAPI, TransactionKind, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
 };
@@ -74,7 +75,7 @@ use tracing::{error, info, trace, warn};
 pub struct ExecutionSandboxState {
     /// Information describing the transaction
     pub transaction_info: OnChainTransactionInfo,
-    /// All the obejcts that are required for the execution of the transaction
+    /// All the objects that are required for the execution of the transaction
     pub required_objects: Vec<Object>,
     /// Temporary store from executing this locally in `execute_transaction_to_effects`
     #[serde(skip)]
@@ -141,6 +142,7 @@ pub struct ProtocolVersionSummary {
     pub epoch_change_tx: TransactionDigest,
 }
 
+#[derive(Clone)]
 pub struct Storage {
     /// These are objects at the frontier of the execution's view
     /// They might not be the latest object currently but they are the latest objects
@@ -211,6 +213,7 @@ impl Storage {
     }
 }
 
+#[derive(Clone)]
 pub struct LocalExec {
     pub client: Option<SuiClient>,
     // For a given protocol version, what TX created it, and what is the valid range of epochs
@@ -316,8 +319,7 @@ impl LocalExec {
     }
 
     pub async fn replay_with_network_config(
-        rpc_url: Option<String>,
-        path: Option<String>,
+        rpc_url: String,
         tx_digest: TransactionDigest,
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
         use_authority: bool,
@@ -325,79 +327,20 @@ impl LocalExec {
         protocol_version: Option<i64>,
         enable_profiler: Option<PathBuf>,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        async fn inner_exec(
-            rpc_url: String,
-            tx_digest: TransactionDigest,
-            expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-            use_authority: bool,
-            executor_version: Option<i64>,
-            protocol_version: Option<i64>,
-            enable_profiler: Option<PathBuf>,
-        ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-            LocalExec::new_from_fn_url(&rpc_url)
-                .await?
-                .init_for_execution()
-                .await?
-                .execute_transaction(
-                    &tx_digest,
-                    expensive_safety_check_config,
-                    use_authority,
-                    executor_version,
-                    protocol_version,
-                    enable_profiler,
-                )
-                .await
-        }
-
-        if let Some(url) = rpc_url.clone() {
-            info!("Using RPC URL: {}", url);
-            return match inner_exec(
-                url,
-                tx_digest,
-                expensive_safety_check_config.clone(),
+        info!("Using RPC URL: {}", rpc_url);
+        LocalExec::new_from_fn_url(&rpc_url)
+            .await?
+            .init_for_execution()
+            .await?
+            .execute_transaction(
+                &tx_digest,
+                expensive_safety_check_config,
                 use_authority,
                 executor_version,
                 protocol_version,
                 enable_profiler,
             )
             .await
-            {
-                Ok(exec_state) => Ok(exec_state),
-                Err(e) => Err(ReplayEngineError::SuiRpcError {
-                    err: format!(
-                        "Failed to execute transaction with provided RPC URL: Error {}",
-                        e
-                    ),
-                }),
-            };
-        }
-
-        let cfg = ReplayableNetworkConfigSet::load_config(path)?;
-        for cfg in &cfg.base_network_configs {
-            info!(
-                "Attempting to replay with network rpc: {}",
-                cfg.public_full_node.clone()
-            );
-            match inner_exec(
-                cfg.public_full_node.clone(),
-                tx_digest,
-                expensive_safety_check_config.clone(),
-                use_authority,
-                executor_version,
-                protocol_version,
-                enable_profiler.clone(),
-            )
-            .await
-            {
-                Ok(exec_state) => return Ok(exec_state),
-                Err(e) => {
-                    warn!("Failed to execute transaction with network config: {}. Attempting next network config...", e);
-                    continue;
-                }
-            };
-        }
-        error!("No more configs to attempt. Try specifying Full Node RPC URL directly or provide a config file with a valid URL");
-        Err(ReplayEngineError::UnableToExecuteWithNetworkConfigs { cfgs: cfg })
     }
 
     /// This captures the state of the network at a given point in time and populates
@@ -724,10 +667,6 @@ impl LocalExec {
             &input_objects.filter_shared_objects().len(),
             &tx_info.shared_object_refs.len()
         );
-        assert_eq!(
-            input_objects.transaction_dependencies(),
-            tx_info.dependencies.clone().into_iter().collect(),
-        );
         // At this point we have all the objects needed for replay
 
         // This assumes we already initialized the protocol version table `protocol_version_epoch_table`
@@ -761,12 +700,12 @@ impl LocalExec {
             executor.execute_transaction_to_effects(
                 &self,
                 protocol_config,
-                metrics,
+                metrics.clone(),
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
                 epoch_start_timestamp,
-                CheckedInputObjects::new_for_replay(input_objects),
+                CheckedInputObjects::new_for_replay(input_objects.clone()),
                 tx_info.gas.clone(),
                 gas_status,
                 transaction_kind.clone(),
@@ -779,8 +718,30 @@ impl LocalExec {
 
         trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
 
-        if let ProgrammableTransaction(pt) = transaction_kind {
-            trace!(target: "replay_ptb_info", "{}", Pretty(&pt));
+        let skip_checks = true;
+        if let ProgrammableTransaction(ref pt) = transaction_kind {
+            trace!(target: "replay_ptb_info", "{}",
+                Pretty(
+                    &FullPTB {
+                        ptb: pt.clone(),
+                        results: transform_command_results_to_annotated(
+                            &executor,
+                            &self.clone(),
+                            executor.dev_inspect_transaction(&self, protocol_config,
+                            metrics,
+                            expensive_checks,
+                            &certificate_deny_set,
+                           &tx_info.executed_epoch,
+                            epoch_start_timestamp,
+                            CheckedInputObjects::new_for_replay(input_objects),
+                            tx_info.gas.clone(),
+                            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)?,
+                            transaction_kind.clone(),
+                            tx_info.sender,
+                            *tx_digest,
+                            skip_checks
+                            ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),)?
+            }))
         };
 
         let all_required_objects = self.storage.all_objects();
@@ -826,19 +787,11 @@ impl LocalExec {
 
     /// Executes a transaction with the state specified in `pre_run_sandbox`
     /// This is useful for executing a transaction with a specific state
-    /// However if the state in invalid, the behavior is undefined. Use wisely
-    /// If no transaction is provided, the transaction in the sandbox state is used
-    /// Currently if the transaction is provided, the signing will fail, so this feature is TBD
+    /// However if the state in invalid, the behavior is undefined.
     pub async fn certificate_execute_with_sandbox_state(
         pre_run_sandbox: &ExecutionSandboxState,
-        override_transaction_data: Option<TransactionData>,
         pre_exec_diag: &DiagInfo,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        assert!(
-            override_transaction_data.is_none(),
-            "Custom transaction data is not supported yet"
-        );
-
         // These cannot be changed and are inherited from the sandbox state
         let executed_epoch = pre_run_sandbox.transaction_info.executed_epoch;
         let reference_gas_price = pre_run_sandbox.transaction_info.reference_gas_price;
@@ -858,20 +811,6 @@ impl LocalExec {
                 .intent,
             Intent::sui_transaction()
         );
-        let transaction_signatures = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .tx_signatures()
-            .to_vec();
-
-        // This must be provided
-        let transaction_data = override_transaction_data.unwrap_or(
-            pre_run_sandbox
-                .transaction_info
-                .sender_signed_data
-                .transaction_data()
-                .clone(),
-        );
 
         // Begin state prep
         let (authority_state, epoch_store) = prep_network(
@@ -883,31 +822,11 @@ impl LocalExec {
         )
         .await;
 
-        let sender_signed_tx =
-            Transaction::from_generic_sig_data(transaction_data, transaction_signatures);
-        let sender_signed_tx = VerifiedTransaction::new_unchecked(
-            VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
-        );
-
-        let response = authority_state
-            .handle_transaction(&epoch_store, sender_signed_tx.clone())
-            .await?;
-
-        let auth_vote = response.status.into_signed_for_testing();
-
-        let mut committee = authority_state.clone_committee_for_testing();
-        committee.epoch = executed_epoch;
-        let certificate = CertifiedTransaction::new(
-            sender_signed_tx.clone().into_message(),
-            vec![auth_vote.clone()],
-            &committee,
-        )
-        .unwrap();
-
-        certificate.verify_committee_sigs_only(&committee).unwrap();
-
-        let certificate = &VerifiedExecutableTransaction::new_from_certificate(
-            VerifiedCertificate::new_unchecked(certificate.clone()),
+        let certificate = VerifiedExecutableTransaction::new_from_quorum_execution(
+            VerifiedTransaction::new_unchecked(Transaction::new(
+                pre_run_sandbox.transaction_info.sender_signed_data.clone(),
+            )),
+            executed_epoch,
         );
 
         let new_tx_digest = certificate.digest();
@@ -930,7 +849,7 @@ impl LocalExec {
         }
 
         let res = authority_state
-            .try_execute_immediately(certificate, None, &epoch_store)
+            .try_execute_immediately(&certificate, None, &epoch_store)
             .await
             .map_err(ReplayEngineError::from)?;
 
@@ -962,7 +881,7 @@ impl LocalExec {
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
-        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, None, &self.diag).await
+        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, &self.diag).await
     }
 
     /// Must be called after `init_for_execution`
@@ -1101,7 +1020,7 @@ impl LocalExec {
                 .node_state_dump
                 .relevant_system_packages
                 .iter()
-                .map(|w| w.compute_object_reference())
+                .map(|w| (w.id, w.version, w.digest))
                 .map(|q| (q.0, q.1))
                 .collect()),
         }
@@ -2102,6 +2021,7 @@ async fn prep_network(
         protocol_config.version.as_u64(),
     )
     .await;
+    *authority_state.execution_lock_for_reconfiguration().await = executed_epoch;
 
     (authority_state, epoch_store)
 }
@@ -2148,6 +2068,7 @@ async fn create_epoch_store(
         sys_state,
         CheckpointDigest::random(),
         &authority_state.get_object_store(),
+        None,
     )
     .unwrap();
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --simulator
+//# init --protocol-version 39 --simulator
 
 //# create-checkpoint
 

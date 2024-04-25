@@ -9,9 +9,9 @@ use move_core_types::{
     language_storage::{StructTag, TypeTag},
 };
 use serde::{Deserialize, Serialize};
-use sui_package_resolver::Resolver;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 
-use crate::context_data::package_cache::PackageCache;
+use crate::data::package_resolver::PackageResolver;
 use crate::{error::Error, types::json::Json, types::move_type::unexpected_signer_error};
 
 use super::{base64::Base64, big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
@@ -82,7 +82,7 @@ pub(crate) struct MoveField {
 impl MoveValue {
     /// Structured contents of a Move value.
     async fn data(&self, ctx: &Context<'_>) -> Result<MoveData> {
-        let resolver: &Resolver<PackageCache> = ctx
+        let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
@@ -105,8 +105,8 @@ impl MoveValue {
     /// This form is offered as a less verbose convenience in cases where the layout of the type is
     /// known by the client.
     async fn json(&self, ctx: &Context<'_>) -> Result<Json> {
-        let resolver = ctx
-            .data::<Resolver<PackageCache>>()
+        let resolver: &PackageResolver = ctx
+            .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
 
@@ -123,9 +123,8 @@ impl MoveValue {
     }
 
     fn value_impl(&self, layout: A::MoveTypeLayout) -> Result<A::MoveValue, Error> {
-        // TODO: If this becomes a performance bottleneck, it can be made more efficient by not
-        // deserializing via `value::MoveValue` (but this is significantly more code).
-        bcs::from_bytes_seed(&layout, &self.bcs.0[..]).map_err(|_| {
+        // TODO (annotated-visitor): deserializing directly using a custom visitor.
+        BoundedVisitor::deserialize_value(&self.bcs.0[..], &layout).map_err(|_| {
             let type_tag: TypeTag = (&layout).into();
             Error::Internal(format!(
                 "Failed to deserialize Move value for type: {}",

@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use consensus_config::{AuthorityIndex, Committee, Stake};
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::marker::PhantomData;
+
+use consensus_config::{AuthorityIndex, Committee, Stake};
 
 pub(crate) trait CommitteeThreshold {
     fn is_threshold(committee: &Committee, amount: Stake) -> bool;
@@ -25,15 +26,11 @@ impl CommitteeThreshold for ValidityThreshold {
     }
 }
 
-#[allow(unused)]
-
 pub(crate) struct StakeAggregator<T> {
-    votes: HashSet<AuthorityIndex>,
+    votes: BTreeSet<AuthorityIndex>,
     stake: Stake,
     _phantom: PhantomData<T>,
 }
-
-#[allow(unused)]
 
 impl<T: CommitteeThreshold> StakeAggregator<T> {
     pub(crate) fn new() -> Self {
@@ -51,6 +48,14 @@ impl<T: CommitteeThreshold> StakeAggregator<T> {
         if self.votes.insert(vote) {
             self.stake += committee.stake(vote);
         }
+        T::is_threshold(committee, self.stake)
+    }
+
+    pub(crate) fn stake(&self) -> Stake {
+        self.stake
+    }
+
+    pub(crate) fn reached_threshold(&self, committee: &Committee) -> bool {
         T::is_threshold(committee, self.stake)
     }
 

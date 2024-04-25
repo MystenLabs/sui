@@ -4,16 +4,19 @@
 use crate::{
     diag,
     diagnostics::Diagnostic,
-    expansion::ast::ModuleIdent,
-    naming::ast::{self as N, BlockLabel, Color, TParamID, Type, Type_, UseFuns, Var, Var_},
+    expansion::ast::{ModuleIdent, Mutability},
+    naming::ast::{
+        self as N, BlockLabel, Color, MatchArm_, TParamID, Type, Type_, UseFuns, Var, Var_,
+    },
     parser::ast::FunctionName,
-    shared::program_info::FunctionInfo,
+    shared::{program_info::FunctionInfo, unique_map::UniqueMap},
     typing::{
         ast as T,
         core::{self, TParamSubst},
     },
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 type LambdaMap = BTreeMap<Var_, (N::Lambda, Vec<Type>, Type)>;
@@ -186,7 +189,7 @@ fn recolor_macro(
 ) -> Result<
     (
         Vec<TParamID>,
-        Vec<(Option<Loc>, Var, N::Type)>,
+        Vec<(Mutability, Var, N::Type)>,
         N::Block,
         BlockLabel,
         Color,
@@ -272,8 +275,10 @@ fn bind_lambda(
 use recolor_struct::*;
 
 mod recolor_struct {
-    use crate::naming::ast::{self as N, BlockLabel, Color, Var};
-    use move_ir_types::location::Loc;
+    use crate::{
+        expansion::ast::Mutability,
+        naming::ast::{self as N, BlockLabel, Color, Var},
+    };
     use std::collections::{BTreeMap, BTreeSet};
     // handles all of the recoloring of variables, labels, and use funs.
     // The mask of known vars and labels is here to handle the case where a variable was captured
@@ -299,7 +304,7 @@ mod recolor_struct {
             }
         }
 
-        pub fn add_params(&mut self, params: &[(Option<Loc>, Var, N::Type)]) {
+        pub fn add_params(&mut self, params: &[(Mutability, Var, N::Type)]) {
             for (_, v, _) in params {
                 self.vars.insert(*v);
             }
@@ -323,6 +328,10 @@ mod recolor_struct {
                     }
                 }
             }
+        }
+
+        pub fn add_var(&mut self, var: &Var) {
+            self.vars.insert(*var);
         }
 
         pub fn add_block_label(&mut self, label: BlockLabel) {
@@ -423,6 +432,7 @@ fn recolor_use_funs_(ctx: &mut Recolor, use_fun_color: &mut Color) {
     }
 }
 
+#[growing_stack]
 fn recolor_seq(ctx: &mut Recolor, (use_funs, seq): &mut N::Sequence) {
     recolor_use_funs(ctx, use_funs);
     for sp!(_, item_) in seq {
@@ -459,9 +469,10 @@ fn recolor_lvalue(ctx: &mut Recolor, sp!(_, lvalue_): &mut N::LValue) {
     }
 }
 
+#[growing_stack]
 fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
     match e_ {
-        N::Exp_::Value(_) | N::Exp_::Constant(_, _) => (),
+        N::Exp_::Value(_) | N::Exp_::Constant(_, _) | N::Exp_::ErrorConstant => (),
         N::Exp_::Give(_usage, label, e) => {
             recolor_block_label(ctx, label);
             recolor_exp(ctx, e)
@@ -495,6 +506,44 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_exp(ctx, et);
             recolor_exp(ctx, ef);
         }
+        N::Exp_::Match(subject, arms) => {
+            recolor_exp(ctx, subject);
+            for arm in &mut arms.value {
+                let MatchArm_ {
+                    pattern,
+                    binders,
+                    guard,
+                    guard_binders,
+                    rhs_binders,
+                    rhs,
+                } = &mut arm.value;
+                for (_, var) in binders.iter_mut() {
+                    ctx.add_var(var);
+                    recolor_var(ctx, var);
+                }
+                let mut old_guard_binders = std::mem::take(guard_binders)
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                for (pv, gv) in old_guard_binders.iter_mut() {
+                    ctx.add_var(gv);
+                    recolor_var(ctx, pv);
+                    recolor_var(ctx, gv);
+                }
+                let _ = std::mem::replace(
+                    guard_binders,
+                    UniqueMap::maybe_from_iter(old_guard_binders.into_iter()).unwrap(),
+                );
+                let mut recolored_rhs_binders =
+                    std::mem::take(rhs_binders).into_iter().collect::<Vec<_>>();
+                for var in recolored_rhs_binders.iter_mut() {
+                    recolor_var(ctx, var);
+                }
+                let _ = std::mem::replace(rhs_binders, recolored_rhs_binders.into_iter().collect());
+                recolor_pat(ctx, pattern);
+                let _ = guard.as_mut().map(|guard| recolor_exp(ctx, guard));
+                recolor_exp(ctx, rhs);
+            }
+        }
         N::Exp_::Loop(name, e) => {
             ctx.add_block_label(*name);
             recolor_block_label(ctx, name);
@@ -526,6 +575,11 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
             recolor_exp(ctx, er)
         }
         N::Exp_::Pack(_, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                recolor_exp(ctx, e)
+            }
+        }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
             for (_, _, (_, e)) in fields {
                 recolor_exp(ctx, e)
             }
@@ -576,7 +630,9 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => recolor_exp(ctx, e),
-        N::ExpDotted_::Dot(ed, _) => recolor_exp_dotted(ctx, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+            recolor_exp_dotted(ctx, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             recolor_exp_dotted(ctx, ed);
             for e in es {
@@ -586,6 +642,31 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     }
 }
 
+fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
+    use N::MatchPattern_ as MP;
+    match p_ {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Variant(_, _, _, _, fields) => {
+            for (_, _, (_, p)) in fields {
+                recolor_pat(ctx, p)
+            }
+        }
+        MP::Struct(_, _, _, fields) => {
+            for (_, _, (_, p)) in fields {
+                recolor_pat(ctx, p)
+            }
+        }
+        MP::Binder(_mut, var, _) => recolor_var(ctx, var),
+        MP::Or(lhs, rhs) => {
+            recolor_pat(ctx, lhs);
+            recolor_pat(ctx, rhs);
+        }
+        MP::At(var, _unused_var, inner) => {
+            recolor_var(ctx, var);
+            recolor_pat(ctx, inner);
+        }
+    }
+}
 //**************************************************************************************************
 // subst args
 //**************************************************************************************************
@@ -633,6 +714,7 @@ fn block(context: &mut Context, b: &mut N::Block) {
     seq(context, &mut b.seq)
 }
 
+#[growing_stack]
 fn seq(context: &mut Context, (_use_funs, seq): &mut N::Sequence) {
     for sp!(_, item_) in seq {
         match item_ {
@@ -677,12 +759,14 @@ fn lvalue(context: &mut Context, sp!(_, lv_): &mut N::LValue) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Give(_, _, e)
         | N::Exp_::Return(e)
@@ -703,6 +787,60 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
+        N::Exp_::Match(subject, arms) => {
+            macro_rules! take_and_mut_replace {
+                ($target:ident, $local:ident, $block:block) => {
+                    let mut $local = std::mem::take($target);
+                    $block;
+                    let _ = std::mem::replace($target, $local);
+                };
+            }
+            exp(context, subject);
+            for arm in &mut arms.value {
+                let MatchArm_ {
+                    pattern,
+                    binders,
+                    guard,
+                    guard_binders,
+                    rhs_binders,
+                    rhs,
+                } = &mut arm.value;
+                take_and_mut_replace!(binders, valid_binders, {
+                    valid_binders.retain(|(_, sp!(_, var_))| {
+                        if context.all_params.contains_key(var_) {
+                            assert!(
+                                context.core.env.has_errors(),
+                                "ICE cannot use macro parameter in pattern"
+                            );
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                    let valid_binders_set = valid_binders
+                        .iter()
+                        .map(|(_, var)| *var)
+                        .collect::<BTreeSet<_>>();
+                    take_and_mut_replace!(guard_binders, cur_guard_binders, {
+                        cur_guard_binders = cur_guard_binders.filter_map(|k, v| {
+                            if valid_binders_set.contains(&k) {
+                                Some(v)
+                            } else {
+                                None
+                            }
+                        });
+                    });
+                    take_and_mut_replace!(rhs_binders, valid_rhs_binders, {
+                        valid_rhs_binders.retain(|v| valid_binders_set.contains(v));
+                    });
+                });
+                pat(context, pattern);
+                if let Some(guard) = guard.as_mut() {
+                    exp(context, guard)
+                }
+                exp(context, rhs);
+            }
+        }
         N::Exp_::While(_name, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
@@ -721,6 +859,14 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
             exp(context, er)
         }
         N::Exp_::Pack(_, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
+        N::Exp_::PackVariant(_, _, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
@@ -950,7 +1096,7 @@ fn builtin_function(context: &mut Context, sp!(_, bf_): &mut N::BuiltinFunction)
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => exp_dotted(context, ed),
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
@@ -963,5 +1109,50 @@ fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
 fn exps(context: &mut Context, es: &mut [N::Exp]) {
     for e in es {
         exp(context, e)
+    }
+}
+
+fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
+    use N::MatchPattern_ as MP;
+    match p_ {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Variant(_, _, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, p)) in fields {
+                pat(context, p)
+            }
+        }
+        MP::Struct(_, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, p)) in fields {
+                pat(context, p)
+            }
+        }
+        MP::Binder(_mut, var, _) => {
+            if context.all_params.contains_key(&var.value) {
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE cannot use macro parameter in pattern"
+                );
+                *p_ = MP::ErrorPat;
+            }
+        }
+        MP::Or(lhs, rhs) => {
+            pat(context, lhs);
+            pat(context, rhs);
+        }
+        MP::At(var, _unused_var, inner) => {
+            if context.all_params.contains_key(&var.value) {
+                assert!(
+                    context.core.env.has_errors(),
+                    "ICE cannot use macro parameter in pattern"
+                );
+            }
+            pat(context, inner);
+        }
     }
 }

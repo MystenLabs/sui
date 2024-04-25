@@ -5,70 +5,14 @@
 mod sim_only_tests {
     use std::path::PathBuf;
     use std::time::Duration;
-    use sui_core::authority::authority_store_tables::LiveObject;
-    use sui_core::state_accumulator::AccumulatorStore;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::sim_test;
     use sui_node::SuiNode;
-    use sui_protocol_config::{ProtocolConfig, ProtocolVersion, SupportedProtocolVersions};
     use sui_test_transaction_builder::publish_package;
     use sui_types::messages_checkpoint::CheckpointSequenceNumber;
     use sui_types::{base_types::ObjectID, digests::TransactionDigest};
     use test_cluster::{TestCluster, TestClusterBuilder};
     use tokio::time::timeout;
-
-    /// This test checks that after we enable simplified_unwrap_then_delete, we no longer depend
-    /// on wrapped tombstones when generating effects and using effects.
-    #[sim_test]
-    async fn test_no_more_dependency_on_wrapped_tombstone() {
-        let mut _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_simplified_unwrap_then_delete(false);
-            config
-        });
-
-        let test_cluster = TestClusterBuilder::new()
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-                ProtocolVersion::MAX.as_u64(),
-                ProtocolVersion::MAX_ALLOWED.as_u64(),
-            ))
-            .build()
-            .await;
-
-        let (package_id, object_id) = publish_package_and_create_parent_object(&test_cluster).await;
-
-        let child_id = create_owned_child(&test_cluster, package_id).await;
-        wrap_child(&test_cluster, package_id, object_id, child_id).await;
-        assert_eq!(count_fullnode_wrapped_tombstones(&test_cluster), 1);
-
-        // At this point, we should have a wrapped tombstone in the db of every node.
-
-        drop(_guard);
-        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
-            config.set_simplified_unwrap_then_delete(true);
-            config
-        });
-        // At this epoch change, we should be re-accumulating without wrapped tombstone and now
-        // flips the feature flag simplified_unwrap_then_delete to true.
-        test_cluster.trigger_reconfiguration().await;
-
-        // Remove the wrapped tombstone on some nodes but not all.
-        for (idx, validator) in test_cluster.swarm.validator_nodes().enumerate() {
-            validator.get_node_handle().unwrap().with(|node| {
-                let db = node.state().database_for_testing().clone();
-                assert_eq!(count_wrapped_tombstone(&node), 1);
-                if idx % 2 == 0 {
-                    db.remove_all_versions_of_object(child_id);
-                    assert_eq!(count_wrapped_tombstone(&node), 0);
-                }
-            })
-        }
-
-        let effects = unwrap_and_delete_child(&test_cluster, package_id, object_id).await;
-        assert_eq!(effects.modified_at_versions().len(), 2);
-        assert_eq!(effects.unwrapped_then_deleted().len(), 1);
-
-        test_cluster.trigger_reconfiguration().await;
-    }
 
     // Tests that object pruning can prune objects correctly.
     // Specifically, we first wrap a child object into a root object (tests wrap tombstone),
@@ -89,7 +33,7 @@ mod sim_only_tests {
 
         fullnode
             .with_async(|node| async {
-                // Wait until the wraping transaction is included in checkpoint.
+                // Wait until the wrapping transaction is included in checkpoint.
                 let checkpoint = timeout(
                     Duration::from_secs(60),
                     wait_until_txn_in_checkpoint(node, &wrap_child_txn_digest),
@@ -303,21 +247,6 @@ mod sim_only_tests {
             .unwrap();
         assert_eq!(effects.deleted().len(), 1);
         effects
-    }
-
-    fn count_fullnode_wrapped_tombstones(test_cluster: &TestCluster) -> usize {
-        test_cluster
-            .fullnode_handle
-            .sui_node
-            .with(|node| count_wrapped_tombstone(node))
-    }
-
-    fn count_wrapped_tombstone(node: &SuiNode) -> usize {
-        let store = node.state().get_execution_cache();
-        store
-            .iter_live_object_set(true)
-            .filter(|o| matches!(o, LiveObject::Wrapped(_)))
-            .count()
     }
 
     async fn wait_until_txn_in_checkpoint(

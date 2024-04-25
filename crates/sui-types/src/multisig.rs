@@ -76,23 +76,16 @@ impl Hash for MultiSig {
 }
 
 impl AuthenticatorTrait for MultiSig {
-    fn verify_user_authenticator_epoch(&self, epoch_id: EpochId) -> Result<(), SuiError> {
-        // If there is any zkLogin signatures, filter and check epoch for each.
-        self.get_zklogin_sigs()?
-            .iter()
-            .try_for_each(|s| s.verify_user_authenticator_epoch(epoch_id))
-    }
-
-    fn verify_uncached_checks<T>(
+    fn verify_user_authenticator_epoch(
         &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _verify_params: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        Ok(())
+        epoch_id: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> Result<(), SuiError> {
+        // If there is any zkLogin signatures, filter and check epoch for each.
+        // TODO: call this on all sigs to avoid future lapses
+        self.get_zklogin_sigs()?.iter().try_for_each(|s| {
+            s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
+        })
     }
 
     fn verify_claims<T>(

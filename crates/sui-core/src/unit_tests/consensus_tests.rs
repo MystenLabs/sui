@@ -103,6 +103,8 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
 
 #[tokio::test]
 async fn submit_transaction_to_consensus_adapter() {
+    telemetry_subscribers::init_for_testing();
+
     // Initialize an authority with a (owned) gas object and a shared object; then
     // make a test certificate.
     let mut objects = test_gas_objects();
@@ -128,7 +130,7 @@ async fn submit_transaction_to_consensus_adapter() {
                     vec![SequencedConsensusTransaction::new_test(transaction.clone())],
                     &Arc::new(CheckpointServiceNoop {}),
                     self.0.get_cache_reader().as_ref(),
-                    &self.0.metrics.skipped_consensus_txns,
+                    &self.0.metrics,
                 )
                 .await?;
             Ok(())

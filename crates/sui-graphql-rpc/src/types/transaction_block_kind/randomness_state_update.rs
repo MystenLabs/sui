@@ -17,18 +17,14 @@ pub(crate) struct RandomnessStateUpdateTransaction {
 impl RandomnessStateUpdateTransaction {
     /// Epoch of the randomness state update transaction.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(
-            ctx.data_unchecked(),
-            Some(self.native.epoch),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx, Some(self.native.epoch), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// Randomness round of the update.
     async fn randomness_round(&self) -> u64 {
-        self.native.randomness_round
+        self.native.randomness_round.0
     }
 
     /// Updated random bytes, encoded as Base64.

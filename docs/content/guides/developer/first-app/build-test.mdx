@@ -8,13 +8,13 @@ If you followed [Write a Move Package](./write-package.mdx), you have a basic mo
 
 Make sure your terminal or console is in the directory that contains your package (`my_first_package` if you're following along). Use the following command to build your package:
 
-```bash
-sui move build
+```shell
+$ sui move build
 ```
 
 A successful build returns a response similar to the following:
 
-```bash
+```shell
 UPDATING GIT DEPENDENCY https://github.com/MystenLabs/sui.git
 INCLUDING DEPENDENCY Sui
 INCLUDING DEPENDENCY MoveStdlib
@@ -27,17 +27,17 @@ Now that you have designed your asset and its accessor functions, it's time to t
 
 ## Testing a package {#testing-a-package}
 
-Sui includes support for the Move testing framework that enables you to write unit tests that analyze Move code much like test frameworks for other languages (for example, the built-in Rust testing framework or the JUnit framework for Java).
+Sui includes support for the Move testing framework. Using the framework, you can write unit tests that analyze Move code much like test frameworks for other languages, such as the built-in Rust testing framework or the JUnit framework for Java.
 
 An individual Move unit test is encapsulated in a public function that has no parameters, no return values, and has the `#[test]` annotation. The testing framework executes such functions when you call the `sui move test` command from the package root (`my_move_package` directory as per the current running example):
 
-```bash
-sui move test
+```shell
+$ sui move test
 ```
 
 If you execute this command for the package created in [Write a Package](./write-package.mdx), you see the following output. Unsurprisingly, the test result has an `OK` status because there are no tests written yet to fail.
 
-```bash
+```shell
 BUILDING Sui
 BUILDING MoveStdlib
 BUILDING my_first_package
@@ -48,22 +48,21 @@ Test result: OK. Total tests: 0; passed: 0; failed: 0
 To actually test your code, you need to add test functions. Start with adding a basic test function to the `my_module.move` file, inside the module definition:
 
 ```move
-    #[test]
-    public fun test_sword_create() {
+#[test]
+fun test_sword_create() {
+    // Create a dummy TxContext for testing
+    let mut ctx = tx_context::dummy();
 
-        // Create a dummy TxContext for testing
-        let ctx = tx_context::dummy();
+    // Create a sword
+    let sword = Sword {
+        id: object::new(&mut ctx),
+        magic: 42,
+        strength: 7,
+    };
 
-        // Create a sword
-        let sword = Sword {
-            id: object::new(&mut ctx),
-            magic: 42,
-            strength: 7,
-        };
-
-        // Check if accessor functions return correct values
-        assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
-    }
+    // Check if accessor functions return correct values
+    assert!(sword.magic() == 42 && sword.strength() == 7, 1);
+}
 ```
 
 As the code shows, the unit test function (`test_sword_create()`) creates a dummy instance of the `TxContext` struct and assigns it to `ctx`. The function then creates a sword object using `ctx` to create a unique identifier and assigns `42` to the `magic` parameter and `7` to `strength`. Finally, the test calls the `magic` and `strength` accessor functions to verify that they return correct values.
@@ -72,29 +71,29 @@ The function passes the dummy context, `ctx`, to the `object::new` function as a
 
 Now that you have a test function, run the test command again:
 
-```bash
-sui move test
+```shell
+$ sui move test
 ```
 
 After running the `test` command, however, you get a compilation error instead of a test result:
 
-```bash
+```shell
 error[E06001]: unused value without 'drop'
-   ┌─ ./sources/my_module.move:60:65
+   ┌─ ./sources/my_module.move:59:65
    │
- 4 │       struct Sword has key, store {
-   │              ----- To satisfy the constraint, the 'drop' ability would need to be added here
+ 9 │       public struct Sword has key, store {
+   │                     ----- To satisfy the constraint, the 'drop' ability would need to be added here
    ·
-27 │           let sword = Sword {
+52 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             id: object::new(&mut ctx),
-29 │ │             magic: 42,
-30 │ │             strength: 7,
-31 │ │         };
-   │ ╰─────────' The type 'MyFirstPackage::my_module::Sword' does not have the ability 'drop'
+53 │ │             id: object::new(&mut ctx),
+54 │ │             magic: 42,
+55 │ │             strength: 7,
+56 │ │         };
+   │ ╰─────────' The type 'my_first_package::my_module::Sword' does not have the ability 'drop'
    · │
-34 │           assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
+59 │           assert!(sword.magic() == 42 && sword.strength() == 7, 1);
    │                                                                   ^ Invalid return
 ```
 
@@ -104,23 +103,17 @@ The `Sword` struct represents a game asset that digitally mimics a real-world it
 
 One of the solutions (as suggested in the error message), is to add the `drop` ability to the definition of the `Sword` struct, which would allow instances of this struct to disappear (be dropped). The ability to drop a valuable asset is not a desirable asset property in this case, so another solution is needed. Another way to solve this problem is to transfer ownership of the `sword`.
 
-To get the test to work, add the following line to the beginning of the testing function to import the Transfer module:
-
-```move
-use sui::transfer;
-```
-
-With the Transfer module imported, add the following lines to the end of the test function (after the `!assert` call) to transfer ownership of the `sword` to a freshly created dummy address:
+To get the test to work, we will need to use the `transfer` module, which is imported by default. Add the following lines to the end of the test function (after the `assert!` call) to transfer ownership of the `sword` to a freshly created dummy address:
 
 ```move
 // Create a dummy address and transfer the sword
 let dummy_address = @0xCAFE;
-transfer::transfer(sword, dummy_address);
+transfer::public_transfer(sword, dummy_address);
 ```
 
 Run the test command again. Now the output shows a single successful test has run:
 
-```
+```shell
 BUILDING MoveStdlib
 BUILDING Sui
 BUILDING my_first_package
@@ -137,100 +130,88 @@ Use a filter string to run only a matching subset of the unit tests. With a filt
 
 Example:
 
-```bash
-sui move test sword
+```shell
+$ sui move test sword
 ```
 
 The previous command runs all tests whose name contains `sword`.
 
 You can discover more testing options through:
-```bash
-sui move test -h
+
+```shell
+$ sui move test -h
 ```
 
 ## Sui-specific testing
 
-The previous testing example is largely pure Move and isn't specific to Sui beyond using some Sui packages, such as `sui::tx_context` and `sui::transfer`. While this style of testing is already useful for writing Move code for Sui, you might also want to test additional Sui-specific features. In particular, a Move call in Sui is encapsulated in a Sui transaction, and you might want to test interactions between different transactions within a single test (for example, one transaction creating an object and the other one transferring it).
+The previous testing example uses Move but isn't specific to Sui beyond using some Sui packages, such as `sui::tx_context` and `sui::transfer`. While this style of testing is already useful for writing Move code for Sui, you might also want to test additional Sui-specific features. In particular, a Move call in Sui is encapsulated in a Sui transaction, and you might want to test interactions between different transactions within a single test (for example, one transaction creating an object and the other one transferring it).
+
 Sui-specific testing is supported through the `test_scenario` module that provides Sui-related testing functionality otherwise unavailable in pure Move and its testing framework.
 
 The `test_scenario` module provides a scenario that emulates a series of Sui transactions, each with a potentially different user executing them. A test using this module typically starts the first transaction using the `test_scenario::begin` function. This function takes an address of the user executing the transaction as its argument and returns an instance of the `Scenario` struct representing a scenario.
 
 An instance of the `Scenario` struct contains a per-address object pool emulating Sui object storage, with helper functions provided to manipulate objects in the pool. After the first transaction finishes, subsequent test transactions start with the `test_scenario::next_tx` function. This function takes an instance of the `Scenario` struct representing the current scenario and an address of a user as arguments.
-Update your `my_module.move` file to include entry functions callable from Sui that implement `sword` creation and transfer. With these in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put these functions after the accessors (Part 5 in comments).
+
+Update your `my_module.move` file to include a function callable from Sui that implements `sword` creation. With this in place, you can then add a multi-transaction test that uses the `test_scenario` module to test these new capabilities. Put this functions after the accessors (Part 5 in comments).
 
 ```move
-    public fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
-        use sui::transfer;
-
-        // create a sword
-        let sword = Sword {
-            id: object::new(ctx),
-            magic: magic,
-            strength: strength,
-        };
-        // transfer the sword
-        transfer::transfer(sword, recipient);
+public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
+    // Create a sword
+    Sword {
+        id: object::new(ctx),
+        magic: magic,
+        strength: strength,
     }
-
-    public fun sword_transfer(sword: Sword, recipient: address, _ctx: &mut TxContext) {
-        use sui::transfer;
-        // transfer the sword
-        transfer::transfer(sword, recipient);
-    }
+}
 ```
 
-The code of the new functions uses struct creation and Sui-internal modules (`TxContext` and `Transfer`) in a way similar to what you have seen in the previous sections. The important part is for the entry functions to have correct signatures.
+The code of the new functions uses struct creation and Sui-internal modules (`tx_context`) in a way similar to what you have seen in the previous sections. The important part is for the function to have correct signatures.
 
-With the new entry functions included, add another test function to make sure they behave as expected.
+With the new function included, add another test function to make sure it behaves as expected.
 
 ```move
-    #[test]
-    fun test_sword_transactions() {
-        use sui::test_scenario;
+#[test]
+fun test_sword_transactions() {
+    use sui::test_scenario;
 
-        // create test addresses representing users
-        let admin = @0xBABE;
-        let initial_owner = @0xCAFE;
-        let final_owner = @0xFACE;
+    // Create test addresses representing users
+    let initial_owner = @0xCAFE;
+    let final_owner = @0xFACE;
 
-        // first transaction to emulate module initialization
-        let scenario_val = test_scenario::begin(admin);
-        let scenario = &mut scenario_val;
-        {
-            init(test_scenario::ctx(scenario));
-        };
-        // second transaction executed by admin to create the sword
-        test_scenario::next_tx(scenario, admin);
-        {
-            // create the sword and transfer it to the initial owner
-            sword_create(42, 7, initial_owner, test_scenario::ctx(scenario));
-        };
-        // third transaction executed by the initial sword owner
-        test_scenario::next_tx(scenario, initial_owner);
-        {
-            // extract the sword owned by the initial owner
-            let sword = test_scenario::take_from_sender<Sword>(scenario);
-            // transfer the sword to the final owner
-            sword_transfer(sword, final_owner, test_scenario::ctx(scenario))
-        };
-        // fourth transaction executed by the final sword owner
-        test_scenario::next_tx(scenario, final_owner);
-        {
-            // extract the sword owned by the final owner
-            let sword = test_scenario::take_from_sender<Sword>(scenario);
-            // verify that the sword has expected properties
-            assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
-            // return the sword to the object pool (it cannot be simply "dropped")
-            test_scenario::return_to_sender(scenario, sword)
-        };
-        test_scenario::end(scenario_val);
-    }
+    // First transaction executed by initial owner to create the sword
+    let mut scenario = test_scenario::begin(initial_owner);
+    {
+        // Create the sword and transfer it to the initial owner
+        let sword = sword_create(42, 7, scenario.ctx());
+        transfer::public_transfer(sword, initial_owner);
+    };
+
+    // Second transaction executed by the initial sword owner
+    scenario.next_tx(initial_owner);
+    {
+        // Extract the sword owned by the initial owner
+        let sword = scenario.take_from_sender<Sword>();
+        // Transfer the sword to the final owner
+        transfer::public_transfer(sword, final_owner);
+    };
+
+    // Third transaction executed by the final sword owner
+    scenario.next_tx(final_owner);
+    {
+        // Extract the sword owned by the final owner
+        let sword = scenario.take_from_sender<Sword>();
+        // Verify that the sword has expected properties
+        assert!(sword.magic() == 42 && sword.strength() == 7, 1);
+        // Return the sword to the object pool (it cannot be simply "dropped")
+        scenario.return_to_sender(sword)
+    };
+    scenario.end();
+}
 ```
 
-There are some details of the new testing function to pay attention to. The first thing the code does is create some addresses that represent users participating in the testing scenario. The assumption is that there is one game administrator user and two regular users representing players. The test then creates a scenario by starting the first transaction on behalf of the administrator address.
-The administrator executes the second transaction. The transaction creates a `sword` where the `initial_owner` is the receiver.
+There are some details of the new testing function to pay attention to. The first thing the code does is create some addresses that represent users participating in the testing scenario. The test then creates a scenario by starting the first transaction on behalf of the initial sword owner.
 
-The initial owner then executes the third transaction (passed as an argument to the `test_scenario::next_tx` function), who then transfers the `sword` they now own to the final owner. In pure Move there is no notion of Sui storage; consequently, there is no easy way for the emulated Sui transaction to retrieve it from storage. This is where the `test_scenario` module helps - its `take_from_sender` function allows an address-owned object of a given type (`Sword`) executing the current transaction to be available for Move code manipulation. For now, assume that there is only one such object. In this case, the test transfers the object it retrieves from storage to another address.
+The initial owner then executes the second transaction (passed as an argument to the `test_scenario::next_tx` function), who then transfers the `sword` they now own to the final owner. In pure Move there is no notion of Sui storage; consequently, there is no easy way for the emulated Sui transaction to retrieve it from storage. This is where the `test_scenario` module helps - its `take_from_sender` function allows an address-owned object of a given type (`Sword`) executing the current transaction to be available for Move code manipulation. For now, assume that there is only one such object. In this case, the test transfers the object it retrieves from storage to another address.
 
 :::tip
 
@@ -238,13 +219,13 @@ Transaction effects, such as object creation and transfer become visible only af
 
 :::
 
-The final owner executes the fourth and final transaction that retrieves the `sword` object from storage and checks if it has the expected properties. Remember, as described in [Testing a package](#testing-a-package), in the pure Move testing scenario, after an object is available in Move code (after creation or retrieval from emulated storage), it cannot simply disappear.
+The final owner executes the third and final transaction that retrieves the `sword` object from storage and checks if it has the expected properties. Remember, as described in [Testing a package](#testing-a-package), in the pure Move testing scenario, after an object is available in Move code (after creation or retrieval from emulated storage), it cannot simply disappear.
 
-In the pure Move testing function, the function transfers the `sword` object to the fake address to handle the disappearing problem. The `test_scenario` package provides a more elegant solution, however, which is closer to what happens when Move code actually executes in the context of Sui - the package simply returns the `sword` to the object pool using the `test_scenario::return_to_sender` function.
+In the pure Move testing function, the function transfers the `sword` object to the fake address to handle the disappearing problem. The `test_scenario` package provides a more elegant solution, however, which is closer to what happens when Move code actually executes in the context of Sui - the package simply returns the `sword` to the object pool using the `test_scenario::return_to_sender` function. For scenarios where returning to the sender is not desirable or if you would like to simply destroy the object, the `test_utils` module also provides the generic `destroy<T>` function, that can be used on any type `T` regardless of its ability. It is advisable to check out other useful functions in the [`test_scenario`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_scenario.move) and [`test_utils`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/packages/sui-framework/sources/test/test_utils.move) modules as well.
 
 Run the test command again to see two successful tests for our module:
 
-```bash
+```shell
 BUILDING Sui
 BUILDING MoveStdlib
 BUILDING my_first_package
@@ -254,4 +235,106 @@ Running Move unit tests
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 ```
 
-Now that you have built a tested package, the next topic walks you through publishing your package to a Sui network.
+### Module initializers
+
+Each module in a package can include a special initializer function that runs at publication time. The goal of an initializer function is to pre-initialize module-specific data (for example, to create singleton objects). The initializer function must have the following properties for it to execute at publication:
+
+- Function name must be `init`
+- The parameter list must end with either a `&mut TxContext` or a `&TxContext` type
+- No return values
+- Private visibility
+- Optionally, the parameter list starts by accepting the module's [one-time witness by value](../../../concepts/sui-move-concepts/one-time-witness.mdx)
+
+For example, the following `init` functions are all valid:
+
+- `fun init(ctx: &TxContext)`
+- `fun init(ctx: &mut TxContext)`
+- `fun init(otw: EXAMPLE, ctx: &TxContext)`
+- `fun init(otw: EXAMPLE, ctx: &mut TxContext)`
+
+While the `sui move` command does not support publishing explicitly, you can still test module initializers using the testing framework by dedicating the first transaction to executing the initializer function.
+
+The `init` function for the module in the running example creates a `Forge` object.
+
+```move
+/// Module initializer to be executed when this module is published
+fun init(ctx: &mut TxContext) {
+    let admin = Forge {
+        id: object::new(ctx),
+        swords_created: 0,
+    };
+
+    // Transfer the forge object to the module/package publisher
+    transfer::transfer(admin, ctx.sender());
+}
+```
+
+The tests you have so far call the `init` function, but the initializer function itself isn't tested to ensure it properly creates a `Forge` object. To test this functionality, add a `new_sword` function to take the forge as a parameter and to update the number of created swords at the end of the function. If this were an actual module, you'd replace the `sword_create` function with `new_sword`. To keep the existing tests from failing, however, we will keep both functions.
+
+```move
+/// Constructor for creating swords
+public fun new_sword(
+    forge: &mut Forge,
+    magic: u64,
+    strength: u64,
+    ctx: &mut TxContext,
+): Sword {
+    forge.swords_created = forge.swords_created + 1;
+    Sword {
+        id: object::new(ctx),
+        magic: magic,
+        strength: strength,
+    }
+}
+```
+
+Now, create a function to test the module initialization:
+
+```move
+#[test]
+fun test_module_init() {
+    use sui::test_scenario;
+
+    // Create test addresses representing users
+    let admin = @0xAD;
+    let initial_owner = @0xCAFE;
+
+    // First transaction to emulate module initialization
+    let mut scenario = test_scenario::begin(admin);
+    {
+        init(scenario.ctx());
+    };
+
+    // Second transaction to check if the forge has been created
+    // and has initial value of zero swords created
+    scenario.next_tx(admin);
+    {
+        // Extract the Forge object
+        let forge = scenario.take_from_sender<Forge>();
+        // Verify number of created swords
+        assert!(forge.swords_created() == 0, 1);
+        // Return the Forge object to the object pool
+        scenario.return_to_sender(forge);
+    };
+
+    // Third transaction executed by admin to create the sword
+    scenario.next_tx(admin);
+    {
+        let mut forge = scenario.take_from_sender<Forge>();
+        // Create the sword and transfer it to the initial owner
+        let sword = forge.new_sword(42, 7, scenario.ctx());
+        transfer::public_transfer(sword, initial_owner);
+        scenario.return_to_sender(forge);
+    };
+    scenario.end();
+}
+```
+
+As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `Forge` object has been created and properly initialized. Finally, the admin uses the `Forge` to create a sword and transfer it to the initial owner.
+
+You can refer to the source code for the package (with all the tests and functions properly adjusted) in the [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move) module in the `sui/examples` directory.
+
+## Related links
+
+- [Publish a Package](./publish.mdx): Continue the example by publishing your package to the Sui network.
+- [Package Upgrades](../../../concepts/sui-move-concepts/packages.mdx): Upgrading packages published on the Sui network.

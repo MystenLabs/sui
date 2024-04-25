@@ -7,15 +7,12 @@
 // chkpt3: add df4, 5, 6 parent @ version 5, child @ version 4
 // chkpt4: remove df1, df2, df3 parent @ version 6, child @ version 4
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish
 module Test::M1 {
     use sui::dynamic_object_field as ofield;
     use sui::dynamic_field as field;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
     use std::string::{String, utf8};
 
     public struct Parent has key, store {

@@ -4,7 +4,6 @@
 use std::collections::HashMap;
 
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         Bytecode, CodeUnit, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
         IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken, StructDefinition,
@@ -138,7 +137,7 @@ pub fn in_module(
     // 2 (c). Update ordering for module handles.
     apply_permutation(&mut module.module_handles, modules);
 
-    // 3 (a). Choose ordering for struct handles.
+    // 3 (a). Choose ordering for datatype handles.
     let struct_defs = struct_definition_order(&module.struct_defs);
     let structs = permutation(&module.struct_handles, |ix, handle| {
         if handle.module == module.self_handle_idx() {
@@ -273,7 +272,8 @@ fn remap_signature_token(token: &mut SignatureToken, structs: &[TableIndex]) {
 
         T::Struct(handle) => remap!(StructHandleIndex, *handle, structs),
 
-        T::StructInstantiation(handle, tokens) => {
+        T::StructInstantiation(struct_inst) => {
+            let (handle, tokens) = Box::as_mut(struct_inst);
             remap!(StructHandleIndex, *handle, structs);
             for token in tokens {
                 remap_signature_token(token, structs)

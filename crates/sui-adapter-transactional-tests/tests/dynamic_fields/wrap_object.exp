@@ -3,57 +3,87 @@ processed 12 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-41:
+task 1 'publish'. lines 8-39:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7478400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 43-43:
+task 2 'run'. lines 41-41:
 created: object(2,0), object(2,1), object(2,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 45-45:
+task 3 'view-object'. lines 43-43:
 Owner: Object ID: ( fake(2,2) )
 Version: 2
-Contents: a::m::Obj {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,1)}}}
+Contents: a::m::Obj {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,1),
+        },
+    },
+}
 
-task 4 'run'. lines 47-47:
+task 4 'run'. lines 45-45:
 created: object(4,0)
 mutated: object(0,0), object(2,0)
 deleted: object(2,2)
 wrapped: object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 4157200,  storage_rebate: 5831100, non_refundable_storage_fee: 58900
 
-task 5 'run'. lines 50-50:
+task 5 'run'. lines 48-48:
 created: object(5,0), object(5,1), object(5,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'view-object'. lines 52-52:
+task 6 'view-object'. lines 50-50:
 Owner: Object ID: ( fake(5,1) )
 Version: 4
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(5,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(5,0)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(5,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(5,0),
+    },
+}
 
-task 7 'run'. lines 54-54:
+task 7 'run'. lines 52-52:
 mutated: object(0,0), object(5,1)
 deleted: object(5,0), object(5,2)
 gas summary: computation_cost: 1000000, storage_cost: 2211600,  storage_rebate: 5831100, non_refundable_storage_fee: 58900
 
-task 8 'run'. lines 57-57:
+task 8 'run'. lines 55-55:
 created: object(8,0), object(8,1), object(8,2)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5890000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9 'view-object'. lines 59-59:
+task 9 'view-object'. lines 57-57:
 Owner: Object ID: ( fake(8,0) )
 Version: 6
-Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {id: sui::object::UID {id: sui::object::ID {bytes: fake(8,2)}}, name: sui::dynamic_object_field::Wrapper<u64> {name: 0u64}, value: sui::object::ID {bytes: fake(8,1)}}
+Contents: sui::dynamic_field::Field<sui::dynamic_object_field::Wrapper<u64>, sui::object::ID> {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(8,2),
+        },
+    },
+    name: sui::dynamic_object_field::Wrapper<u64> {
+        name: 0u64,
+    },
+    value: sui::object::ID {
+        bytes: fake(8,1),
+    },
+}
 
-task 10 'run'. lines 61-61:
+task 10 'run'. lines 59-59:
 mutated: object(0,0), object(8,0), object(8,1)
 deleted: object(8,2)
 gas summary: computation_cost: 1000000, storage_cost: 3435200,  storage_rebate: 5831100, non_refundable_storage_fee: 58900
 
-task 11 'view-object'. lines 63-63:
+task 11 'view-object'. lines 61-61:
 No object at id 8,2

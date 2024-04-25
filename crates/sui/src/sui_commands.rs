@@ -273,7 +273,7 @@ impl SuiCommand {
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
-                let context = WalletContext::new(&config, None, None).await?;
+                let context = WalletContext::new(&config, None, None)?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client {
@@ -284,7 +284,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None).await?;
+                let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -303,7 +303,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None).await?;
+                let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -587,12 +587,12 @@ async fn prompt_if_no_config(
                         String::new()
                     } else {
                         print!(
-                            "Sui Full node server URL (Defaults to Sui Devnet if not specified) : "
+                            "Sui Full node server URL (Defaults to Sui Testnet if not specified) : "
                         );
                         read_line()?
                     };
                     Some(if url.trim().is_empty() {
-                        SuiEnv::devnet()
+                        SuiEnv::testnet()
                     } else {
                         print!("Environment alias for [{url}] : ");
                         let alias = read_line()?;

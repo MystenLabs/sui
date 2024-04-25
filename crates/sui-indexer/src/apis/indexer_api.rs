@@ -1,13 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::indexer_reader::IndexerReader;
-use crate::IndexerError;
 use async_trait::async_trait;
+use diesel::r2d2::R2D2Connection;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionEmptyError;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee::{RpcModule, SubscriptionSink};
+use tap::TapFallible;
+
 use sui_json_rpc::name_service::{Domain, NameRecord, NameServiceConfig};
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_api::{cap_page_limit, IndexerApiServer};
@@ -25,13 +26,16 @@ use sui_types::event::EventID;
 use sui_types::object::ObjectRead;
 use sui_types::TypeTag;
 
-pub(crate) struct IndexerApi {
-    inner: IndexerReader,
+use crate::indexer_reader::IndexerReader;
+use crate::IndexerError;
+
+pub(crate) struct IndexerApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
     name_service_config: NameServiceConfig,
 }
 
-impl IndexerApi {
-    pub fn new(inner: IndexerReader) -> Self {
+impl<T: R2D2Connection + 'static> IndexerApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
         Self {
             inner,
             // TODO allow configuring for other networks
@@ -52,15 +56,24 @@ impl IndexerApi {
             .inner
             .get_owned_objects_in_blocking_task(address, filter, cursor, limit + 1)
             .await?;
-        let mut objects = self
-            .inner
-            .spawn_blocking(move |this| {
-                objects
-                    .into_iter()
-                    .map(|object| object.try_into_object_read(&this))
-                    .collect::<Result<Vec<_>, _>>()
-            })
-            .await?;
+
+        let mut object_futures = vec![];
+        for object in objects {
+            object_futures.push(tokio::task::spawn(
+                object.try_into_object_read(self.inner.package_resolver()),
+            ));
+        }
+        let mut objects = futures::future::join_all(object_futures)
+            .await
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|e| {
+                tracing::error!("Error joining object read futures.");
+                jsonrpsee::core::Error::Custom(format!("Error joining object read futures. {}", e))
+            })?
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()
+            .tap_err(|e| tracing::error!("Error converting object to object read: {}", e))?;
         let has_next_page = objects.len() > limit;
         objects.truncate(limit);
 
@@ -121,7 +134,7 @@ impl IndexerApi {
 }
 
 #[async_trait]
-impl IndexerApiServer for IndexerApi {
+impl<T: R2D2Connection + 'static> IndexerApiServer for IndexerApi<T> {
     async fn get_owned_objects(
         &self,
         address: SuiAddress,
@@ -228,11 +241,7 @@ impl IndexerApiServer for IndexerApi {
         parent_object_id: ObjectID,
         name: DynamicFieldName,
     ) -> RpcResult<SuiObjectResponse> {
-        let name_bcs_value = self
-            .inner
-            .bcs_name_from_dynamic_field_name_in_blocking_task(&name)
-            .await?;
-
+        let name_bcs_value = self.inner.bcs_name_from_dynamic_field_name(&name).await?;
         // Try as Dynamic Field
         let id = sui_types::dynamic_field::derive_dynamic_field_id(
             parent_object_id,
@@ -354,7 +363,7 @@ impl IndexerApiServer for IndexerApi {
     }
 }
 
-impl SuiRpcModule for IndexerApi {
+impl<T: R2D2Connection> SuiRpcModule for IndexerApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

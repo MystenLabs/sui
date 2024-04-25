@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
@@ -109,8 +107,6 @@ fn verify_init_not_called(
 
 /// Checks if this module has a conformant `init`
 fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
-    let view = &BinaryIndexedView::Module(module);
-
     if fdef.visibility != Visibility::Private {
         return Err(format!(
             "{}. '{}' function must be private",
@@ -136,7 +132,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         ));
     }
 
-    if !view.signature_at(fhandle.return_).is_empty() {
+    if !module.signature_at(fhandle.return_).is_empty() {
         return Err(format!(
             "{}, '{}' function cannot have return values",
             module.self_id(),
@@ -144,7 +140,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         ));
     }
 
-    let parameters = &view.signature_at(fhandle.parameters).0;
+    let parameters = &module.signature_at(fhandle.parameters).0;
     if parameters.is_empty() || parameters.len() > 2 {
         return Err(format!(
             "Expected at least one and at most two parameters for {}::{}",
@@ -157,7 +153,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     // then the first parameter must be of a one-time witness type and must be passed by value. This
     // is checked by the verifier for pass one-time witness value (one_time_witness_verifier) -
     // please see the description of this pass for additional details.
-    if TxContext::kind(view, &parameters[parameters.len() - 1]) != TxContextKind::None {
+    if TxContext::kind(module, &parameters[parameters.len() - 1]) != TxContextKind::None {
         Ok(())
     } else {
         Err(format!(
@@ -168,17 +164,16 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
             SUI_FRAMEWORK_ADDRESS,
             TX_CONTEXT_MODULE_NAME,
             TX_CONTEXT_STRUCT_NAME,
-            format_signature_token(view, &parameters[0]),
+            format_signature_token(module, &parameters[0]),
         ))
     }
 }
 
 fn verify_entry_function_impl(
-    module: &CompiledModule,
+    view: &CompiledModule,
     func_def: &FunctionDefinition,
     verifier_config: &VerifierConfig,
 ) -> Result<(), String> {
-    let view = &BinaryIndexedView::Module(module);
     let handle = view.function_handle_at(func_def.function);
     let params = view.signature_at(handle.parameters);
 
@@ -200,7 +195,7 @@ fn verify_entry_function_impl(
 }
 
 fn verify_return_type(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_parameters: &[AbilitySet],
     return_ty: &SignatureToken,
 ) -> Result<(), String> {
@@ -225,7 +220,7 @@ fn verify_return_type(
 }
 
 fn verify_param_type(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
     verifier_config: &VerifierConfig,

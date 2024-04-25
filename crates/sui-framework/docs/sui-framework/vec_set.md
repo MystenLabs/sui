@@ -1,7 +1,6 @@
-
-<a name="0x2_vec_set"></a>
-
-# Module `0x2::vec_set`
+---
+title: Module `0x2::vec_set`
+---
 
 
 
@@ -20,8 +19,8 @@
 -  [Function `get_idx`](#0x2_vec_set_get_idx)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/option.md#0x1_option">0x1::option</a>;
-<b>use</b> <a href="dependencies/move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
+<b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 </code></pre>
 
 
@@ -37,7 +36,7 @@ of programming against a set API. Sets that need sorted iteration rather
 than insertion order iteration should be handwritten.
 
 
-<pre><code><b>struct</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K: <b>copy</b>, drop&gt; <b>has</b> <b>copy</b>, drop, store
+<pre><code><b>struct</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K: <b>copy</b>, drop&gt; <b>has</b> <b>copy</b>, drop, store
 </code></pre>
 
 
@@ -48,7 +47,7 @@ than insertion order iteration should be handwritten.
 
 <dl>
 <dt>
-<code>contents: <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;</code>
+<code>contents: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;</code>
 </dt>
 <dd>
 
@@ -68,7 +67,7 @@ than insertion order iteration should be handwritten.
 This key already exists in the map
 
 
-<pre><code><b>const</b> <a href="vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>: u64 = 0;
 </code></pre>
 
 
@@ -78,7 +77,7 @@ This key already exists in the map
 This key does not exist in the map
 
 
-<pre><code><b>const</b> <a href="vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
+<pre><code><b>const</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>: u64 = 1;
 </code></pre>
 
 
@@ -87,10 +86,10 @@ This key does not exist in the map
 
 ## Function `empty`
 
-Create an empty <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>
+Create an empty <code><a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b>, drop&gt;(): <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b>, drop&gt;(): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
 </code></pre>
 
 
@@ -99,8 +98,8 @@ Create an empty <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b> + drop&gt;(): <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
-    <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="dependencies/move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>() }
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">empty</a>&lt;K: <b>copy</b> + drop&gt;(): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
+    <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[] }
 }
 </code></pre>
 
@@ -112,10 +111,10 @@ Create an empty <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code>
 
 ## Function `singleton`
 
-Create a singleton <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> that only contains one element.
+Create a singleton <code><a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> that only contains one element.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b>, drop&gt;(key: K): <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b>, drop&gt;(key: K): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
 </code></pre>
 
 
@@ -124,8 +123,8 @@ Create a singleton <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></cod
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b> + drop&gt;(key: K): <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
-    <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="dependencies/move-stdlib/vector.md#0x1_vector_singleton">vector::singleton</a>(key) }
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_singleton">singleton</a>&lt;K: <b>copy</b> + drop&gt;(key: K): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
+    <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[key] }
 }
 </code></pre>
 
@@ -141,7 +140,7 @@ Insert a <code>key</code> into self.
 Aborts if <code>key</code> is already present in <code>self</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_insert">insert</a>&lt;K: <b>copy</b>, drop&gt;(self: &<b>mut</b> <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: K)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_insert">insert</a>&lt;K: <b>copy</b>, drop&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: K)
 </code></pre>
 
 
@@ -150,9 +149,9 @@ Aborts if <code>key</code> is already present in <code>self</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_insert">insert</a>&lt;K: <b>copy</b> + drop&gt;(self: &<b>mut</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: K) {
-    <b>assert</b>!(!<a href="vec_set.md#0x2_vec_set_contains">contains</a>(self, &key), <a href="vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>);
-    <a href="dependencies/move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> self.contents, key)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_insert">insert</a>&lt;K: <b>copy</b> + drop&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: K) {
+    <b>assert</b>!(!self.<a href="../sui-framework/vec_set.md#0x2_vec_set_contains">contains</a>(&key), <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyAlreadyExists">EKeyAlreadyExists</a>);
+    self.contents.push_back(key)
 }
 </code></pre>
 
@@ -167,7 +166,7 @@ Aborts if <code>key</code> is already present in <code>self</code>.
 Remove the entry <code>key</code> from self. Aborts if <code>key</code> is not present in <code>self</code>.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_remove">remove</a>&lt;K: <b>copy</b>, drop&gt;(self: &<b>mut</b> <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_remove">remove</a>&lt;K: <b>copy</b>, drop&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K)
 </code></pre>
 
 
@@ -176,9 +175,9 @@ Remove the entry <code>key</code> from self. Aborts if <code>key</code> is not p
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_remove">remove</a>&lt;K: <b>copy</b> + drop&gt;(self: &<b>mut</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K) {
-    <b>let</b> idx = <a href="vec_set.md#0x2_vec_set_get_idx">get_idx</a>(self, key);
-    <a href="dependencies/move-stdlib/vector.md#0x1_vector_remove">vector::remove</a>(&<b>mut</b> self.contents, idx);
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_remove">remove</a>&lt;K: <b>copy</b> + drop&gt;(self: &<b>mut</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K) {
+    <b>let</b> idx = <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>(self, key);
+    self.contents.<a href="../sui-framework/vec_set.md#0x2_vec_set_remove">remove</a>(idx);
 }
 </code></pre>
 
@@ -193,7 +192,7 @@ Remove the entry <code>key</code> from self. Aborts if <code>key</code> is not p
 Return true if <code>self</code> contains an entry for <code>key</code>, false otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_contains">contains</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_contains">contains</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): bool
 </code></pre>
 
 
@@ -202,8 +201,8 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_contains">contains</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): bool {
-    <a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&<a href="vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>(self, key))
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_contains">contains</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): bool {
+    <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>(self, key).is_some()
 }
 </code></pre>
 
@@ -218,7 +217,7 @@ Return true if <code>self</code> contains an entry for <code>key</code>, false o
 Return the number of entries in <code>self</code>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): u64
 </code></pre>
 
 
@@ -227,8 +226,8 @@ Return the number of entries in <code>self</code>
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): u64 {
-    <a href="dependencies/move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&self.contents)
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): u64 {
+    self.contents.length()
 }
 </code></pre>
 
@@ -243,7 +242,7 @@ Return the number of entries in <code>self</code>
 Return true if <code>self</code> has 0 elements, false otherwise
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): bool
 </code></pre>
 
 
@@ -252,8 +251,8 @@ Return true if <code>self</code> has 0 elements, false otherwise
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): bool {
-    <a href="vec_set.md#0x2_vec_set_size">size</a>(self) == 0
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_is_empty">is_empty</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): bool {
+    <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>(self) == 0
 }
 </code></pre>
 
@@ -269,7 +268,7 @@ Unpack <code>self</code> into vectors of keys.
 The output keys are stored in insertion order, *not* sorted.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b>, drop&gt;(self: <a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b>, drop&gt;(self: <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
 </code></pre>
 
 
@@ -278,8 +277,8 @@ The output keys are stored in insertion order, *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b> + drop&gt;(self: <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): <a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt; {
-    <b>let</b> <a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents } = self;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b> + drop&gt;(self: <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt; {
+    <b>let</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents } = self;
     contents
 }
 </code></pre>
@@ -292,12 +291,12 @@ The output keys are stored in insertion order, *not* sorted.
 
 ## Function `keys`
 
-Borrow the <code>contents</code> of the <code><a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> to access content by index
+Borrow the <code>contents</code> of the <code><a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> to access content by index
 without unpacking. The contents are stored in insertion order,
 *not* sorted.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;
 </code></pre>
 
 
@@ -306,7 +305,7 @@ without unpacking. The contents are stored in insertion order,
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_keys">keys</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt; {
     &self.contents
 }
 </code></pre>
@@ -323,7 +322,7 @@ Find the index of <code>key</code> in <code>self</code>. Return <code>None</code
 Note that keys are stored in insertion order, *not* sorted.
 
 
-<pre><code><b>fun</b> <a href="vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="dependencies/move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;u64&gt;
 </code></pre>
 
 
@@ -332,16 +331,16 @@ Note that keys are stored in insertion order, *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): Option&lt;u64&gt; {
-    <b>let</b> i = 0;
-    <b>let</b> n = <a href="vec_set.md#0x2_vec_set_size">size</a>(self);
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): Option&lt;u64&gt; {
+    <b>let</b> <b>mut</b> i = 0;
+    <b>let</b> n = <a href="../sui-framework/vec_set.md#0x2_vec_set_size">size</a>(self);
     <b>while</b> (i &lt; n) {
-        <b>if</b> (<a href="dependencies/move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&self.contents, i) == key) {
-            <b>return</b> <a href="dependencies/move-stdlib/option.md#0x1_option_some">option::some</a>(i)
+        <b>if</b> (&self.contents[i] == key) {
+            <b>return</b> <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(i)
         };
         i = i + 1;
     };
-    <a href="dependencies/move-stdlib/option.md#0x1_option_none">option::none</a>()
+    <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
 }
 </code></pre>
 
@@ -357,7 +356,7 @@ Find the index of <code>key</code> in <code>self</code>. Aborts if <code>key</co
 Note that map entries are stored in insertion order, *not* sorted.
 
 
-<pre><code><b>fun</b> <a href="vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): u64
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b>, drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;, key: &K): u64
 </code></pre>
 
 
@@ -366,10 +365,10 @@ Note that map entries are stored in insertion order, *not* sorted.
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): u64 {
-    <b>let</b> idx_opt = <a href="vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>(self, key);
-    <b>assert</b>!(<a href="dependencies/move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&idx_opt), <a href="vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>);
-    <a href="dependencies/move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(idx_opt)
+<pre><code><b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx">get_idx</a>&lt;K: <b>copy</b> + drop&gt;(self: &<a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;, key: &K): u64 {
+    <b>let</b> idx_opt = <a href="../sui-framework/vec_set.md#0x2_vec_set_get_idx_opt">get_idx_opt</a>(self, key);
+    <b>assert</b>!(idx_opt.is_some(), <a href="../sui-framework/vec_set.md#0x2_vec_set_EKeyDoesNotExist">EKeyDoesNotExist</a>);
+    idx_opt.destroy_some()
 }
 </code></pre>
 

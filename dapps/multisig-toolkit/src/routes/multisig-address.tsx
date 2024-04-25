@@ -5,6 +5,7 @@ import { PublicKey } from '@mysten/sui.js/cryptography';
 import { MultiSigPublicKey, publicKeyFromSuiBytes } from '@mysten/sui.js/multisig';
 import { useState } from 'react';
 import { FieldValues, useFieldArray, useForm } from 'react-hook-form';
+import { toast } from 'react-hot-toast';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -19,7 +20,7 @@ export default function MultiSigAddressGenerator() {
 	const [msAddress, setMSAddress] = useState('');
 	const { register, control, handleSubmit } = useForm({
 		defaultValues: {
-			pubKeys: [{ pubKey: 'Sui Pubkey', weight: '' }],
+			pubKeys: [{ pubKey: '', weight: '' }],
 			threshold: 1,
 		},
 	});
@@ -30,17 +31,21 @@ export default function MultiSigAddressGenerator() {
 
 	// Perform generation of multisig address
 	const onSubmit = (data: FieldValues) => {
-		let pks: { publicKey: PublicKey; weight: number }[] = [];
-		data.pubKeys.forEach((item: any) => {
-			const pk = publicKeyFromSuiBytes(item.pubKey);
-			pks.push({ publicKey: pk, weight: item.weight });
-		});
-		const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
-			threshold: data.threshold,
-			publicKeys: pks,
-		});
-		const multisigSuiAddress = multiSigPublicKey.toSuiAddress();
-		setMSAddress(multisigSuiAddress);
+		try {
+			const pks: { publicKey: PublicKey; weight: number }[] = [];
+			data.pubKeys.forEach((item: any) => {
+				const pk = publicKeyFromSuiBytes(item.pubKey);
+				pks.push({ publicKey: pk, weight: item.weight });
+			});
+			const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
+				threshold: data.threshold,
+				publicKeys: pks,
+			});
+			const multisigSuiAddress = multiSigPublicKey.toSuiAddress();
+			setMSAddress(multisigSuiAddress);
+		} catch (e: any) {
+			toast.error(e?.message || 'Error generating MultiSig Address');
+		}
 	};
 
 	// if you want to control your fields with watch
@@ -58,7 +63,7 @@ export default function MultiSigAddressGenerator() {
 
 			<form className="flex flex-col gap-4" onSubmit={handleSubmit(onSubmit)}>
 				<p>The following demo allow you to create Sui MultiSig addresses.</p>
-				<code>
+				<code className="overflow-x-auto">
 					Sui Pubkeys for playing with
 					<p>ABr818VXt+6PLPRoA7QnsHBfRpKJdWZPjt7ppiTl6Fkq</p>
 					<p>ANRdB4M6Hj73R+gRM4N6zUPNidLuatB9uccOzHBc/0bP</p>
@@ -66,35 +71,29 @@ export default function MultiSigAddressGenerator() {
 				<ul className="grid w-full gap-1.5">
 					{fields.map((item, index) => {
 						return (
-							<li key={item.id}>
+							<li key={item.id} className="grid grid-cols-3 gap-3">
 								<input
 									className="min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 									{...register(`pubKeys.${index}.pubKey`, { required: true })}
+									placeholder="Sui Public Key"
 								/>
 
 								<input
 									className="min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 									type="number"
 									{...register(`pubKeys.${index}.weight`, { required: true })}
+									placeholder="Weight"
 								/>
 
-								{/* <Controller
-									render={({ field }) => (
-										<input
-											className="min-h-[80px] rounded-md border border-input bg-transparent px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-											{...field}
-										/>
-									)}
-									name={`pubKeys.${index}.weight`}
-									control={control}
-								/> */}
-								<Button
-									className="min-h-[80px] rounded-md border border-input px-3 py-2 text-sm padding-2"
-									type="button"
-									onClick={() => remove(index)}
-								>
-									Delete
-								</Button>
+								<div>
+									<Button
+										className="min-h-[80px] rounded-md border border-input px-3 py-2 text-sm padding-2"
+										type="button"
+										onClick={() => remove(index)}
+									>
+										Delete
+									</Button>
+								</div>
 							</li>
 						);
 					})}
@@ -103,14 +102,14 @@ export default function MultiSigAddressGenerator() {
 					<Button
 						type="button"
 						onClick={() => {
-							append({ pubKey: 'Sui Pubkey', weight: '' });
+							append({ pubKey: '', weight: '' });
 						}}
 					>
 						New PubKey
 					</Button>
 				</section>
 				<section>
-					<label className="form-label min-h-[80px] rounded-md border text-sm px-3 py-2 ring-offset-background">
+					<label className="form-label min-h-[80px] rounded-md text-sm px-3 py-2 ring-offset-background">
 						MultiSig Threshold Value:
 					</label>
 					<input
@@ -127,7 +126,7 @@ export default function MultiSigAddressGenerator() {
 					className="form-control"
 				/> */}
 
-				<Button type="submit">Submit</Button>
+				<Button type="submit">Create MultiSig Address</Button>
 			</form>
 			{msAddress && (
 				<Card key={msAddress}>

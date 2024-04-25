@@ -7,11 +7,13 @@ use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::{
-    block::{Block, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
+    block::{genesis_blocks, BlockRef, BlockTimestampMs, Round, Slot, TestBlock, VerifiedBlock},
     context::Context,
     dag_state::DagState,
     leader_schedule::LeaderSchedule,
 };
+
+// todo: remove this once tests have been refactored to use DagBuilder/DagParser
 
 /// Build a fully interconnected dag up to the specified round. This function
 /// starts building the dag from the specified [`start`] parameter or from
@@ -32,12 +34,13 @@ pub(crate) fn build_dag(
             );
             start
         }
-        None => {
-            let (_my_genesis_block, genesis) = Block::genesis(context.clone());
-            genesis.iter().map(|x| x.reference()).collect::<Vec<_>>()
-        }
+        None => genesis_blocks(context.clone())
+            .iter()
+            .map(|x| x.reference())
+            .collect::<Vec<_>>(),
     };
 
+    let num_authorities = context.committee.size();
     let starting_round = ancestors.first().unwrap().round + 1;
     for round in starting_round..=stop {
         let (references, blocks): (Vec<_>, Vec<_>) = context
@@ -45,10 +48,12 @@ pub(crate) fn build_dag(
             .authorities()
             .map(|authority| {
                 let author_idx = authority.0.value() as u32;
-                let base_ts = round as BlockTimestampMs * 1000;
+                // Test the case where a block from round R+1 has smaller timestamp than a block from round R.
+                let ts = round as BlockTimestampMs / 2 * num_authorities as BlockTimestampMs
+                    + author_idx as BlockTimestampMs;
                 let block = VerifiedBlock::new_for_test(
                     TestBlock::new(round, author_idx)
-                        .set_timestamp_ms(base_ts + (author_idx + round) as u64)
+                        .set_timestamp_ms(ts)
                         .set_ancestors(ancestors.clone())
                         .build(),
                 );
@@ -85,8 +90,11 @@ pub(crate) fn build_dag_layer(
     references
 }
 
-// TODO: confirm pipelined & multi-leader cases work properly
-pub(crate) fn get_all_leader_blocks(
+// Leader blocks start from round 1 as we do not consider any blocks from genesis
+// round as a leader block.
+// TODO: confirm pipelined & multi-leader cases work properly and interaction with
+// DagState flush
+pub(crate) fn get_all_uncommitted_leader_blocks(
     dag_state: Arc<RwLock<DagState>>,
     leader_schedule: LeaderSchedule,
     num_rounds: u32,

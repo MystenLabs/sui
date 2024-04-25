@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::progress_store::ExecutorProgress;
-use crate::reader::ENV_VAR_LOCAL_READ_TIMEOUT_MS;
-use crate::Worker;
 use crate::{DataIngestionMetrics, FileProgressStore, IndexerExecutor, WorkerPool};
+use crate::{ReaderOptions, Worker};
 use anyhow::Result;
 use async_trait::async_trait;
 use prometheus::Registry;
@@ -39,27 +38,29 @@ async fn run(
     path: Option<PathBuf>,
     duration: Option<Duration>,
 ) -> Result<ExecutorProgress> {
-    std::env::set_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS, "10");
+    let options = ReaderOptions {
+        tick_interal_ms: 10,
+        batch_size: 1,
+        ..Default::default()
+    };
     let (sender, recv) = oneshot::channel();
-    let result = match duration {
+    match duration {
         None => {
             indexer
-                .run(path.unwrap_or_else(temp_dir), None, vec![], 1, recv)
+                .run(path.unwrap_or_else(temp_dir), None, vec![], options, recv)
                 .await
         }
         Some(duration) => {
             let handle = tokio::task::spawn(async move {
                 indexer
-                    .run(path.unwrap_or_else(temp_dir), None, vec![], 1, recv)
+                    .run(path.unwrap_or_else(temp_dir), None, vec![], options, recv)
                     .await
             });
             tokio::time::sleep(duration).await;
             drop(sender);
             handle.await?
         }
-    };
-    std::env::remove_var(ENV_VAR_LOCAL_READ_TIMEOUT_MS);
-    result
+    }
 }
 
 struct ExecutorBundle {

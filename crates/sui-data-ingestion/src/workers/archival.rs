@@ -7,7 +7,7 @@ use byteorder::BigEndian;
 use byteorder::ByteOrder;
 use bytes::Bytes;
 use object_store::path::Path;
-use object_store::{parse_url_opts, ObjectStore};
+use object_store::ObjectStore;
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::ops::Range;
@@ -16,14 +16,13 @@ use sui_archival::{
     create_file_metadata_from_bytes, finalize_manifest, read_manifest_from_bytes, FileType,
     Manifest, CHECKPOINT_FILE_MAGIC, SUMMARY_FILE_MAGIC,
 };
-use sui_data_ingestion_core::{Worker, MAX_CHECKPOINTS_IN_PROGRESS};
+use sui_data_ingestion_core::{create_remote_store_client, Worker, MAX_CHECKPOINTS_IN_PROGRESS};
 use sui_storage::blob::{Blob, BlobEncoding};
 use sui_storage::{compress, FileCompression, StorageFormat};
 use sui_types::base_types::{EpochId, ExecutionData};
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::messages_checkpoint::{CheckpointSequenceNumber, FullCheckpointContents};
 use tokio::sync::Mutex;
-use url::Url;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ArchivalConfig {
@@ -51,12 +50,8 @@ pub struct ArchivalWorker {
 
 impl ArchivalWorker {
     pub async fn new(config: ArchivalConfig) -> Result<Self> {
-        let remote_store = parse_url_opts(
-            &Url::parse(&config.remote_url).expect("failed to parse remote store url"),
-            config.remote_store_options,
-        )
-        .expect("failed to parse remote store config")
-        .0;
+        let remote_store =
+            create_remote_store_client(config.remote_url, config.remote_store_options, 10)?;
         let manifest = Self::read_manifest(&remote_store).await?;
         let state = AccumulatedState {
             epoch: manifest.epoch_num(),
@@ -154,6 +149,10 @@ impl Worker for ArchivalWorker {
             return Ok(());
         }
         let epoch = checkpoint.checkpoint_summary.epoch;
+        if state.buffer.is_empty() {
+            assert!(epoch == state.epoch || epoch == state.epoch + 1);
+            state.epoch = epoch;
+        }
         let full_checkpoint_contents = FullCheckpointContents::from_contents_and_execution_data(
             checkpoint.checkpoint_contents,
             checkpoint

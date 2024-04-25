@@ -6,6 +6,7 @@ exclude = [
   "external-crates/move/crates/bytecode-interpreter-testsuite",
   "external-crates/move/crates/bytecode-verifier-libfuzzer",
   "external-crates/move/crates/bytecode-verifier-tests",
+  "external-crates/move/crates/bytecode-verifier-prop-tests",
   "external-crates/move/crates/bytecode-verifier-transactional-tests",
   "external-crates/move/crates/enum-compat-util",
   "external-crates/move/crates/invalid-mutations",
@@ -18,6 +19,7 @@ exclude = [
   "external-crates/move/crates/move-bytecode-source-map",
   "external-crates/move/crates/move-bytecode-utils",
   "external-crates/move/crates/move-bytecode-verifier",
+  "external-crates/move/crates/move-bytecode-verifier-meter",
   "external-crates/move/crates/move-bytecode-viewer",
   "external-crates/move/crates/move-cli",
   "external-crates/move/crates/move-command-line-common",
@@ -43,6 +45,7 @@ exclude = [
   "external-crates/move/crates/move-stackless-bytecode",
   "external-crates/move/crates/move-stackless-bytecode-interpreter",
   "external-crates/move/crates/move-stdlib",
+  "external-crates/move/crates/move-stdlib-natives",
   "external-crates/move/crates/move-symbol-pool",
   "external-crates/move/crates/move-transactional-test-runner",
   "external-crates/move/crates/move-unit-test",
@@ -55,13 +58,16 @@ exclude = [
   "external-crates/move/crates/move-vm-types",
   "external-crates/move/crates/serializer-tests",
   "external-crates/move/crates/test-generation",
-  "external-crates/move/move-execution/v0/move-bytecode-verifier",
-  "external-crates/move/move-execution/v0/move-stdlib",
-  "external-crates/move/move-execution/v0/move-vm/runtime",
+  "external-crates/move/move-execution/v0/crates/move-bytecode-verifier",
+  "external-crates/move/move-execution/v0/crates/move-stdlib-natives",
+  "external-crates/move/move-execution/v0/crates/move-vm-runtime",
   "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
-  "external-crates/move/move-execution/v1/crates/move-stdlib",
+  "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
   "external-crates/move/move-execution/v1/crates/move-vm-runtime",
-  "sdk/move-binary-format-wasm",
+  "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
+  "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
+  "external-crates/move/move-execution/v2/crates/move-vm-runtime",
+  "sdk/move-bytecode-template",
 ]
 
 members = [
@@ -73,7 +79,6 @@ members = [
   "crates/mysten-metrics",
   "crates/mysten-network",
   "crates/mysten-service",
-  "crates/mysten-service-boilerplate",
   "crates/mysten-util-mem",
   "crates/mysten-util-mem-derive",
   "crates/prometheus-closure-metric",
@@ -123,6 +128,7 @@ members = [
   "crates/sui-open-rpc",
   "crates/sui-open-rpc-macros",
   "crates/sui-oracle",
+  "crates/sui-package-management",
   "crates/sui-package-resolver",
   "crates/sui-proc-macros",
   "crates/sui-protocol-config",
@@ -133,6 +139,7 @@ members = [
   "crates/sui-rosetta",
   "crates/sui-rpc-loadgen",
   "crates/sui-sdk",
+  "crates/sui-security-watchdog",
   "crates/sui-simulator",
   "crates/sui-single-node-benchmark",
   "crates/sui-snapshot",
@@ -183,11 +190,14 @@ members = [
   "sui-execution/v1/sui-adapter",
   "sui-execution/v1/sui-move-natives",
   "sui-execution/v1/sui-verifier",
+  "sui-execution/v2/sui-adapter",
+  "sui-execution/v2/sui-move-natives",
+  "sui-execution/v2/sui-verifier",
 ]
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.20.0"
+version = "1.24.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -300,14 +310,12 @@ derive_builder = "0.12.0"
 derive_more = "0.99.17"
 diesel = { version = "2.1.0", features = [
   "chrono",
-  "postgres",
   "r2d2",
   "serde_json",
   "64-column-tables",
   "i-implement-a-third-party-backend-and-opt-into-breaking-changes",
-  "postgres_backend",
 ] }
-diesel-derive-enum = { version = "2.0.1", features = ["postgres"] }
+diesel-derive-enum = { version = "2.0.1" }
 diesel_migrations = { version = "2.0.0" }
 dirs = "4.0.0"
 duration-str = "0.5.0"
@@ -335,7 +343,7 @@ http = "0.2.8"
 http-body = "0.4.5"
 humantime = "2.1.0"
 hyper = "0.14.20"
-hyper-rustls = { version = "0.24", features = ["rustls-native-certs", "http2"] }
+hyper-rustls = { version = "0.24", features = ["webpki-roots", "http2"] }
 im = "15"
 impl-trait-for-tuples = "0.2.0"
 indexmap = { version = "2.1.0", features = ["serde"] }
@@ -358,13 +366,16 @@ leb128 = "0.2.5"
 lru = "0.10"
 markdown-gen = "1.2.1"
 match_opt = "0.1.2"
-miette = {version = "7", features = ["fancy"] }
+miette = { version = "7", features = ["fancy"] }
 mime = "0.3"
 mockall = "0.11.4"
-moka = { version = "0.12", default-features = false, features = ["sync", "atomic64"] }
+moka = { version = "0.12", default-features = false, features = [
+  "sync",
+  "atomic64",
+] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "4d9040e5c6bb264bfe14900d09a5da4000154da8", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -391,8 +402,8 @@ prometheus-http-query = { version = "0.6.6", default_features = false, features 
 prometheus-parse = { git = "https://github.com/asonnino/prometheus-parser.git", rev = "75334db" }
 proptest = "1.1.0"
 proptest-derive = "0.3.0"
-prost = "0.12.1"
-prost-build = "0.12.1"
+prost = "0.12.3"
+prost-build = "0.12.3"
 protobuf = { version = "2.28", features = ["with-bytes"] }
 protobuf-src = "1.1.0"
 quinn-proto = "^0.10.5"
@@ -425,7 +436,7 @@ rusoto_kms = { version = "0.48.0", default_features = false, features = [
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
-rustls = { version = "0.21.6", features = ["dangerous_configuration"] }
+rustls = { version = "0.21.11", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
@@ -448,7 +459,7 @@ serde_yaml = "0.8.26"
 shell-words = "1.1.0"
 shellexpand = "3.1.0"
 signature = "1.6.0"
-similar = "2.2.0"
+similar = "2.4.0"
 slip10_ed25519 = "0.1.3"
 smallvec = "1.10.0"
 snap = "1.1.0"
@@ -473,9 +484,9 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.10", features = ["transport", "tls"] }
-tonic-build = { version = "0.10", features = ["prost", "transport"] }
-tonic-health = "0.10"
+tonic = { version = "0.11", features = ["transport", "tls"] }
+tonic-build = { version = "0.11", features = ["prost", "transport"] }
+tonic-health = "0.11"
 tower = { version = "0.4.12", features = [
   "full",
   "util",
@@ -526,6 +537,7 @@ shlex = "1.3.0"
 move-binary-format = { path = "external-crates/move/crates/move-binary-format" }
 move-bytecode-utils = { path = "external-crates/move/crates/move-bytecode-utils" }
 move-bytecode-source-map = { path = "external-crates/move/crates/move-bytecode-source-map" }
+move-bytecode-verifier-meter = { path = "external-crates/move/crates/move-bytecode-verifier-meter" }
 move-cli = { path = "external-crates/move/crates/move-cli" }
 move-compiler = { path = "external-crates/move/crates/move-compiler" }
 move-core-types = { path = "external-crates/move/crates/move-core-types" }
@@ -546,9 +558,9 @@ move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-b
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ea66012b860d9dd152abb7f2156275698ee91126", package = "fastcrypto-zkp" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
@@ -562,7 +574,6 @@ mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
 mysten-service = { path = "crates/mysten-service" }
-mysten-service-boilerplate = { path = "crates/mysten-service-boilerplate" }
 mysten-util-mem = { path = "crates/mysten-util-mem" }
 mysten-util-mem-derive = { path = "crates/mysten-util-mem-derive" }
 prometheus-closure-metric = { path = "crates/prometheus-closure-metric" }
@@ -606,6 +617,7 @@ sui-network = { path = "crates/sui-network" }
 sui-node = { path = "crates/sui-node" }
 sui-open-rpc = { path = "crates/sui-open-rpc" }
 sui-open-rpc-macros = { path = "crates/sui-open-rpc-macros" }
+sui-package-management = { path = "crates/sui-package-management" }
 sui-package-resolver = { path = "crates/sui-package-resolver" }
 sui-proc-macros = { path = "crates/sui-proc-macros" }
 sui-protocol-config = { path = "crates/sui-protocol-config" }
