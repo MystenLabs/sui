@@ -3,6 +3,7 @@
 
 module deepbook::clob_v2 {
     use std::type_name::{Self, TypeName};
+    use std::debug;
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
@@ -58,6 +59,8 @@ module deepbook::clob_v2 {
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
+    // The minimum increments after reaching lot size is 1000, which is 0.000001 SUI.
+    const QUANTITY_MIN_TICK: u64 = 1000;
     #[test_only]
     const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
     const REFERENCE_TAKER_FEE_RATE: u64 = 2_500_000;
@@ -774,8 +777,8 @@ module deepbook::clob_v2 {
                             filled_quote_quantity_without_commission,
                             maker_order.price
                         );
-                        let filled_base_lot = filled_base_quantity / pool.lot_size;
-                        filled_base_quantity = filled_base_lot * pool.lot_size;
+                        let filled_base_lot = filled_base_quantity / QUANTITY_MIN_TICK;
+                        filled_base_quantity = filled_base_lot * QUANTITY_MIN_TICK;
                         // filled_quote_quantity_without_commission = 0 is permitted here since filled_base_quantity could be 0
                         filled_quote_quantity_without_commission = clob_math::unsafe_mul(
                             filled_base_quantity,
@@ -1298,7 +1301,7 @@ module deepbook::clob_v2 {
         // We start with the bid PriceLevel with the highest price by calling max_leaf on the bids Critbit Tree.
         // The inner loop for iterating over the open orders in ascending orders of order id is the same as above.
         // Then iterate over the price levels in descending order until the market order is completely filled.
-        assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
+        assert!(quantity >= pool.lot_size && quantity % QUANTITY_MIN_TICK == 0, EInvalidQuantity);
         assert!(quantity != 0, EInvalidQuantity);
         let metadata;
         if (is_bid) {
@@ -1509,7 +1512,7 @@ module deepbook::clob_v2 {
         assert!(quantity > 0, EInvalidQuantity);
         assert!(price > 0, EInvalidPrice);
         assert!(price % pool.tick_size == 0, EInvalidPrice);
-        assert!(quantity % pool.lot_size == 0, EInvalidQuantity);
+        assert!(quantity >= pool.lot_size && quantity % QUANTITY_MIN_TICK == 0, EInvalidQuantity);
         assert!(expire_timestamp > clock::timestamp_ms(clock), EInvalidExpireTimestamp);
         let owner = account_owner(account_cap);
         let original_quantity = quantity;
@@ -2355,6 +2358,8 @@ module deepbook::clob_v2 {
         order_left: &Order,
         order_right: &Order,
     ): bool {
+        // debug::print(order_left);
+        // debug::print(order_right);
         return (order_left.order_id == order_right.order_id) &&
             (order_left.price == order_right.price) &&
             (order_left.quantity == order_right.quantity) &&
@@ -3143,6 +3148,111 @@ module deepbook::clob_v2 {
             test_scenario::return_shared(clock);
             test_scenario::return_to_address<AccountCap>(bob, account_cap);
         };
+        test_scenario::end(test);
+    }
+
+    #[test]
+    fun test_swap_exact_base_for_quote_min_tick() {
+        let owner: address = @0xAAAA;
+        let alice: address = @0xBBBB;
+        let bob: address = @0xCCCC;
+        let mut test = test_scenario::begin(owner);
+        test_scenario::next_tx(&mut test, owner);
+        {
+            setup_test(0, 0, &mut test, owner);
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            mint_account_cap_transfer(
+                alice,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, bob);
+        {
+            mint_account_cap_transfer(
+                bob,
+                test_scenario::ctx(&mut test)
+            );
+        };
+        test_scenario::next_tx(&mut test, alice);
+        {
+            let mut pool = test_scenario::take_shared<Pool<SUI, USD>>(&test);
+            let clock = test_scenario::take_shared<Clock>(&test);
+            let account_cap = test_scenario::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = account_owner(&account_cap);
+            // deposit 2000 lots of SUI and 2000 lots of USD
+            custodian::deposit(
+                &mut pool.base_custodian,
+                mint_for_testing<SUI>(2000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::deposit(
+                &mut pool.quote_custodian,
+                mint_for_testing<USD>(2000 * 100000000, test_scenario::ctx(&mut test)),
+                account_cap_user
+            );
+            custodian::assert_user_balance<SUI>(
+                &pool.base_custodian,
+                account_cap_user,
+                2000 * 100000000,
+                0 * 100000000
+            );
+            custodian::assert_user_balance<USD>(
+                &pool.quote_custodian,
+                account_cap_user,
+                2000 * 100000000,
+                0 * 100000000
+            );
+            // place 200 lots of 0.1 USD at $5
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                CLIENT_ID_ALICE,
+                5 * FLOAT_SCALING,
+                200 * 100000000,
+                PREVENT_SELF_MATCHING_DEFAULT,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+
+            // place 200 lots of 0.1 SUI at $6
+            place_limit_order<SUI, USD>(
+                &mut pool,
+                CLIENT_ID_ALICE,
+                6 * FLOAT_SCALING,
+                200 * 100000000,
+                PREVENT_SELF_MATCHING_DEFAULT,
+                false,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                test_scenario::ctx(&mut test)
+            );
+            // 200 of SUI was locked
+            custodian::assert_user_balance<SUI>(
+                &pool.base_custodian,
+                account_cap_user,
+                1800 * 100000000,
+                200 * 100000000
+            );
+            // 1000 of USD was locked
+            custodian::assert_user_balance<USD>(
+                &pool.quote_custodian,
+                account_cap_user,
+                1000 * 100000000,
+                1000 * 100000000
+            );
+            
+            test_scenario::return_shared(pool);
+            test_scenario::return_shared(clock);
+            test_scenario::return_to_address<AccountCap>(alice, account_cap);
+        };
+
         test_scenario::end(test);
     }
 
