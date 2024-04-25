@@ -1,0 +1,8 @@
+[config]
+rpc = "https://fullnode.testnet.sui.io:443"
+
+[packages]
+AMM = { local = "../move/amm" }
+Examples = { local = "../move/examples" }
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+
