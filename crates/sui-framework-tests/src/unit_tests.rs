@@ -39,6 +39,15 @@ fn run_deepbook_tests() {
         buf
     });
 }
+#[test]
+#[cfg_attr(msim, ignore)]
+fn run_bridge_tests() {
+    check_move_unit_tests({
+        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        buf.extend(["..", "sui-framework", "packages", "bridge"]);
+        buf
+    });
+}
 
 #[test]
 #[cfg_attr(msim, ignore)]
