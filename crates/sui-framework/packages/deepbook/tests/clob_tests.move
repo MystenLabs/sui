@@ -65,6 +65,9 @@ module deepbook::clob_test {
     #[test] fun test_inject_and_match_taker_bid_with_quote_quantity_partial_lot(
     ) { let _ = test_inject_and_match_taker_bid_with_quote_quantity_partial_lot_(scenario()); }
 
+    #[test] fun test_swap_exact_base_for_quote_min_tick(
+    ) { let _ = test_swap_exact_base_for_quote_min_tick_(scenario()); }
+
     #[test] fun test_inject_and_match_taker_bid() { let _ = test_inject_and_match_taker_bid_(scenario()); }
 
     #[test] fun test_inject_and_match_taker_bid_with_skip_self_matching() { let _ = test_inject_and_match_taker_bid_with_skipping_self_matching_(scenario()); }
@@ -3090,6 +3093,94 @@ module deepbook::clob_test {
                 clob::test_construct_order(0, CLIENT_ID_ALICE, 1 * FLOAT_SCALING, 100000, 100000, true, account_cap_user_alice)
             );
             assert!(open_orders == open_orders_cmp, 0);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap_alice);
+        };
+        end(test)
+    }
+
+    fun test_swap_exact_base_for_quote_min_tick_(mut test: Scenario): TransactionEffects {
+        let (alice, bob) = people();
+        let owner = @0xF;
+        let lot_size = 100000000; // 0.1 SUI
+        // setup pool and custodian
+        next_tx(&mut test, owner);
+        {
+            clob::setup_test_with_tick_lot(0, 0, 1 * FLOAT_SCALING, lot_size, &mut test, owner);
+        };
+        next_tx(&mut test, alice);
+        {
+            mint_account_cap_transfer(alice, test::ctx(&mut test));
+        };
+        next_tx(&mut test, bob);
+        {
+            mint_account_cap_transfer(bob, test::ctx(&mut test));
+        };
+        next_tx(&mut test, alice);
+        {
+            // assuming 9 decimal points, alice gets 5 SUI and 5 USDC
+            // alice places a limit buy of 2 lots of SUI (0.2 SUI) at $4, costing her 0.8 USDC
+            // alice places a limit sell of 2 lots of SUI (0.2 SUI) at $5, costing her 0.2 SUI
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user = account_owner(&account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
+            let alice_deposit_WSUI: u64 = 50 * lot_size;
+            let alice_deposit_USDC: u64 = 50 * lot_size;
+            custodian::test_increase_user_available_balance<SUI>(base_custodian, account_cap_user, alice_deposit_WSUI);
+            custodian::test_increase_user_available_balance<USD>(quote_custodian, account_cap_user, alice_deposit_USDC);
+            clob::test_inject_limit_order(&mut pool, CLIENT_ID_ALICE, 4 * FLOAT_SCALING, 2 * lot_size, 2 * lot_size, true,
+                CANCEL_OLDEST, &account_cap, ctx(&mut test));
+            clob::test_inject_limit_order(&mut pool, CLIENT_ID_ALICE, 5 * FLOAT_SCALING, 2 * lot_size, 2 * lot_size, false,
+                CANCEL_OLDEST, &account_cap, ctx(&mut test));
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        next_tx(&mut test, bob);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap_alice = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user_alice = account_owner(&account_cap_alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+
+            // alice has 4.2 USDC available and 0.8 USDC locked
+            custodian::assert_user_balance<USD>(quote_custodian, account_cap_user_alice, 4_200_000_000, 800_000_000);
+            // alice has 4.8 SUI available and 0.2 SUI locked
+            custodian::assert_user_balance<SUI>(base_custodian, account_cap_user_alice, 4_800_000_000, 200_000_000);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(alice, account_cap_alice);
+        };
+        next_tx(&mut test, bob);
+        {
+            // bob pays 0.5001 USDC to buy as much SUI from the market as possible. He is matched against alice's $5 limit order.
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, bob);
+            let (base_quantity_filled, quote_quantity_filled) = clob::test_match_bid_with_quote_quantity(
+                &mut pool,
+                &account_cap,
+                CLIENT_ID_BOB,
+                500_100_000,
+                MAX_PRICE,
+                0,
+            );
+            // bob's 0.5 USDC fills 1 lot of SUI at $5. the remaining 0.0001 USDC fills 0.0002 lots of SUI at $5.
+            assert!(base_quantity_filled == 1 * lot_size + (lot_size / 10000 * 2), 0);
+            // all of bob's quote asset was filled.
+            assert!(quote_quantity_filled == 500_100_000, 0);
+            test::return_shared(pool);
+            test::return_to_address<AccountCap>(bob, account_cap);
+        };
+        next_tx(&mut test, bob);
+        {
+            let pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap_alice = test::take_from_address<AccountCap>(&test, alice);
+            let account_cap_user_alice = account_owner(&account_cap_alice);
+            let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
+
+            // alice received bob's 0.5001 USDC, increasing the available balance to 4.7001 USDC
+            custodian::assert_user_balance<USD>(quote_custodian, account_cap_user_alice, 4_700_100_000, 800_000_000);
+            // alice's locked SUI was reduced by 1.0002 lots or 0.10002 SUI
+            custodian::assert_user_balance<SUI>(base_custodian, account_cap_user_alice, 4_800_000_000, 99_980_000);
             test::return_shared(pool);
             test::return_to_address<AccountCap>(alice, account_cap_alice);
         };

@@ -5,7 +5,6 @@ module deepbook::custodian_v2 {
     use sui::balance::{Self, Balance, split};
     use sui::coin::{Self, Coin};
     use sui::table::{Self, Table};
-    use std::debug;
 
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     #[test_only]
@@ -215,9 +214,6 @@ module deepbook::custodian_v2 {
         locked_balance: u64,
     ) {
         let user_balance = borrow_account_balance<T>(custodian, owner);
-        debug::print(&balance::value(&user_balance.available_balance));
-        debug::print(&balance::value(&user_balance.locked_balance));
-        debug::print(&b"_");
         assert!(balance::value(&user_balance.available_balance) == available_balance, ENull);
         assert!(balance::value(&user_balance.locked_balance) == locked_balance, ENull)
     }
