@@ -19,5 +19,8 @@
 		"@mysten/bcs": "workspace:*",
 		"@mysten/sui.js": "workspace:*",
 		"commander": "^11.0.0"
+	},
+	"devDependencies": {
+		"vitest": "^0.33.0"
 	}
 }
