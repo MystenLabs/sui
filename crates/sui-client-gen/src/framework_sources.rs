@@ -154,6 +154,8 @@ export function pure(txb: TransactionBlock, arg: PureArg, type: string) {
   function getBcsForType(type: string): BcsType<any> {
     const { typeName, typeArgs } = parseTypeName(type)
     switch (typeName) {
+      case 'bool':
+        return bcs.Bool
       case 'u8':
         return bcs.U8
       case 'u16':
@@ -228,27 +230,29 @@ export function pure(txb: TransactionBlock, arg: PureArg, type: string) {
 }
 
 export function option(txb: TransactionBlock, type: string, arg: GenericArg | null) {
-  if (arg === null) {
-    return pure(txb, arg, `0x1::option::Option<${type}>`)
+  if (isTransactionArgument(arg)) {
+    return arg
   }
 
   if (typeArgIsPure(type)) {
     return pure(txb, arg as PureArg | TransactionArgument, `0x1::option::Option<${type}>`)
-  } else if (isTransactionArgument(arg)) {
-    return arg
-  } else {
-    if (arg === null) {
-      return pure(txb, arg, `vector<${type}>`)
-    }
+  }
 
-    // wrap it with some
-    const val = generic(txb, type, arg)
+  if (arg === null) {
     return txb.moveCall({
-      target: `0x1::option::some`,
+      target: `0x1::option::none`,
       typeArguments: [type],
-      arguments: [val],
+      arguments: [],
     })
   }
+
+  // wrap it with some
+  const val = generic(txb, type, arg)
+  return txb.moveCall({
+    target: `0x1::option::some`,
+    typeArguments: [type],
+    arguments: [val],
+  })
 }
 
 export function generic(txb: TransactionBlock, type: string, arg: GenericArg) {

@@ -1,0 +1,10 @@
+[package]
+name = "AMM"
+version = "0.1.0"
+published-at = "0xf917eb03d02b9221b10276064b2c10296276cb43feb24aac35113a272dd691c7"
+
+[dependencies]
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+amm = "0xf917eb03d02b9221b10276064b2c10296276cb43feb24aac35113a272dd691c7"
