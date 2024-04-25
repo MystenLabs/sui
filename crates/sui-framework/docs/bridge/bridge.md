@@ -14,6 +14,7 @@ title: Module `0xb::bridge`
 -  [Struct `TokenTransferClaimed`](#0xb_bridge_TokenTransferClaimed)
 -  [Struct `TokenTransferAlreadyApproved`](#0xb_bridge_TokenTransferAlreadyApproved)
 -  [Struct `TokenTransferAlreadyClaimed`](#0xb_bridge_TokenTransferAlreadyClaimed)
+-  [Struct `TokenTransferLimitExceed`](#0xb_bridge_TokenTransferLimitExceed)
 -  [Constants](#@Constants_0)
 -  [Function `create`](#0xb_bridge_create)
 -  [Function `init_bridge_committee`](#0xb_bridge_init_bridge_committee)
@@ -392,6 +393,33 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>struct</b> <a href="bridge.md#0xb_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> <b>has</b> <b>copy</b>, drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>message_key: <a href="message.md#0xb_message_BridgeMessageKey">message::BridgeMessageKey</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0xb_bridge_TokenTransferLimitExceed"></a>
+
+## Struct `TokenTransferLimitExceed`
+
+
+
+<pre><code><b>struct</b> <a href="bridge.md#0xb_bridge_TokenTransferLimitExceed">TokenTransferLimitExceed</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -989,22 +1017,11 @@ title: Module `0xb::bridge`
     ctx: &<b>mut</b> TxContext,
 ) {
     <b>let</b> (token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="../sui-framework/clock.md#0x2_clock">clock</a>, <a href="bridge.md#0xb_bridge">bridge</a>, source_chain, bridge_seq_num, ctx);
-    <b>if</b> (token.is_none()) {
+    <b>if</b> (token.is_some()) {
+        <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(token.destroy_some(), owner)
+    } <b>else</b> {
         token.destroy_none();
-        <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(
-            source_chain,
-            <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
-            bridge_seq_num
-        );
-
-        emit(<a href="bridge.md#0xb_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> { message_key: key });
-        <b>return</b>
     };
-
-    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(
-        token.destroy_some(),
-        owner
-    )
 }
 </code></pre>
 
@@ -1118,6 +1135,7 @@ title: Module `0xb::bridge`
 
     // If already claimed, exit early
     <b>if</b> (record.claimed) {
+        emit(<a href="bridge.md#0xb_bridge_TokenTransferAlreadyClaimed">TokenTransferAlreadyClaimed</a> { message_key: key });
         <b>return</b> (<a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
     };
 
@@ -1130,8 +1148,6 @@ title: Module `0xb::bridge`
     // TODO: add unit tests
     // `get_route` <b>abort</b> <b>if</b> route is invalid
     <b>let</b> route = <a href="chain_ids.md#0xb_chain_ids_get_route">chain_ids::get_route</a>(source_chain, target_chain);
-    // get owner <b>address</b>
-    <b>let</b> owner = address::from_bytes(token_payload.token_target_address());
     // check token type
     <b>assert</b>!(
         <a href="treasury.md#0xb_treasury_token_id">treasury::token_id</a>&lt;T&gt;(&inner.<a href="treasury.md#0xb_treasury">treasury</a>) == token_payload.token_type(),
@@ -1149,6 +1165,7 @@ title: Module `0xb::bridge`
                 amount,
             )
     ) {
+        emit(<a href="bridge.md#0xb_bridge_TokenTransferLimitExceed">TokenTransferLimitExceed</a> { message_key: key });
         <b>return</b> (<a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(), owner)
     };
 
