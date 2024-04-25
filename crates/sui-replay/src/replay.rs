@@ -49,7 +49,7 @@ use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber, VersionNumber},
     committee::EpochId,
     digests::{ChainIdentifier, CheckpointDigest, ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError, SuiResult},
@@ -641,23 +641,27 @@ impl LocalExec {
         expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
         let tx_digest = &tx_info.tx_digest;
-        // A lot of the logic here isnt designed for genesis
-        if *tx_digest == TransactionDigest::genesis_marker() || tx_info.sender == SuiAddress::ZERO {
-            // Genesis.
+        // TODO: Support system transactions.
+        if tx_info.sender_signed_data.transaction_data().is_system_tx() {
             warn!(
-                "Genesis/system TX replay not supported: {}, skipping transaction",
+                "System TX replay not supported: {}, skipping transaction",
                 tx_digest
             );
-            // Return the same data from onchain since we dont want to fail nor do we want to recompute
-            // Assume genesis transactions are always successful
-            let effects = tx_info.effects.clone();
-            return Ok(ExecutionSandboxState {
-                transaction_info: tx_info.clone(),
-                required_objects: vec![],
-                local_exec_temporary_store: None,
-                local_exec_effects: effects,
-                local_exec_status: Some(Ok(())),
-                pre_exec_diag: self.diag.clone(),
+            return Err(ReplayEngineError::TransactionNotSupported {
+                digest: *tx_digest,
+                reason: "System transaction".to_string(),
+            });
+        }
+        // Before protocol version 16, the generation of effects depends on the wrapped tombstones.
+        // It is not possible to retrieve such data for replay.
+        if tx_info.protocol_version.as_u64() < 16 {
+            warn!(
+                "Protocol version ({:?}) too old: {}, skipping transaction",
+                tx_info.protocol_version, tx_digest
+            );
+            return Err(ReplayEngineError::TransactionNotSupported {
+                digest: *tx_digest,
+                reason: "Protocol version too old".to_string(),
             });
         }
         // Initialize the state necessary for execution
@@ -675,11 +679,6 @@ impl LocalExec {
 
         let metrics = self.metrics.clone();
 
-        // Extract the epoch start timestamp
-        let (epoch_start_timestamp, rgp) = self
-            .get_epoch_start_timestamp_and_rgp(tx_info.executed_epoch)
-            .await?;
-
         let ov = self.executor_version;
 
         // We could probably cache the executor per protocol config
@@ -694,9 +693,12 @@ impl LocalExec {
         let expensive_checks = true;
         let transaction_kind = override_transaction_kind.unwrap_or(tx_info.kind.clone());
         let certificate_deny_set = HashSet::new();
-        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) =
-            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)
-        {
+        let (inner_store, gas_status, effects, result) = if let Ok(gas_status) = SuiGasStatus::new(
+            tx_info.gas_budget,
+            tx_info.gas_price,
+            tx_info.reference_gas_price,
+            protocol_config,
+        ) {
             executor.execute_transaction_to_effects(
                 &self,
                 protocol_config,
@@ -704,7 +706,7 @@ impl LocalExec {
                 expensive_checks,
                 &certificate_deny_set,
                 &tx_info.executed_epoch,
-                epoch_start_timestamp,
+                tx_info.epoch_start_timestamp,
                 CheckedInputObjects::new_for_replay(input_objects.clone()),
                 tx_info.gas.clone(),
                 gas_status,
@@ -720,28 +722,40 @@ impl LocalExec {
 
         let skip_checks = true;
         if let ProgrammableTransaction(ref pt) = transaction_kind {
-            trace!(target: "replay_ptb_info", "{}",
-                Pretty(
-                    &FullPTB {
-                        ptb: pt.clone(),
-                        results: transform_command_results_to_annotated(
-                            &executor,
-                            &self.clone(),
-                            executor.dev_inspect_transaction(&self, protocol_config,
+            let full_ptb = FullPTB {
+                ptb: pt.clone(),
+                results: transform_command_results_to_annotated(
+                    &executor,
+                    &self.clone(),
+                    executor
+                        .dev_inspect_transaction(
+                            &self,
+                            protocol_config,
                             metrics,
                             expensive_checks,
                             &certificate_deny_set,
-                           &tx_info.executed_epoch,
-                            epoch_start_timestamp,
+                            &tx_info.executed_epoch,
+                            tx_info.epoch_start_timestamp,
                             CheckedInputObjects::new_for_replay(input_objects),
                             tx_info.gas.clone(),
-                            SuiGasStatus::new(tx_info.gas_budget, tx_info.gas_price, rgp, protocol_config)?,
+                            SuiGasStatus::new(
+                                tx_info.gas_budget,
+                                tx_info.gas_price,
+                                tx_info.reference_gas_price,
+                                protocol_config,
+                            )?,
                             transaction_kind.clone(),
                             tx_info.sender,
                             *tx_digest,
-                            skip_checks
-                            ).3.unwrap_or_else(|e| panic!("Error executing this transaction in dev-inspect mode, {e}")),)?
-            }))
+                            skip_checks,
+                        )
+                        .3
+                        .unwrap_or_else(|e| {
+                            panic!("Error executing this transaction in dev-inspect mode, {e}")
+                        }),
+                )?,
+            };
+            trace!(target: "replay_ptb_info", "{}", Pretty(&full_ptb))
         };
 
         let all_required_objects = self.storage.all_objects();
@@ -1329,9 +1343,13 @@ impl LocalExec {
     pub async fn get_epoch_start_timestamp_and_rgp(
         &self,
         epoch_id: u64,
+        tx_digest: &TransactionDigest,
     ) -> Result<(u64, u64), ReplayEngineError> {
         if epoch_id == 0 {
-            return Err(ReplayEngineError::EpochNotSupported { epoch: epoch_id });
+            return Err(ReplayEngineError::TransactionNotSupported {
+                digest: *tx_digest,
+                reason: "Transactions from epoch 0 not supported".to_string(),
+            });
         }
         self.fetcher
             .get_epoch_start_timestamp_and_rgp(epoch_id)
@@ -1387,8 +1405,9 @@ impl LocalExec {
         let chain = chain_from_chain_id(self.fetcher.get_chain_id().await?.as_str());
 
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) =
-            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
+        let (epoch_start_timestamp, reference_gas_price) = self
+            .get_epoch_start_timestamp_and_rgp(epoch_id, tx_digest)
+            .await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
@@ -1465,8 +1484,9 @@ impl LocalExec {
         let protocol_config =
             ProtocolConfig::get_for_version(dp.node_state_dump.protocol_version.into(), chain);
         // Extract the epoch start timestamp
-        let (epoch_start_timestamp, reference_gas_price) =
-            self.get_epoch_start_timestamp_and_rgp(epoch_id).await?;
+        let (epoch_start_timestamp, reference_gas_price) = self
+            .get_epoch_start_timestamp_and_rgp(epoch_id, tx_digest)
+            .await?;
 
         Ok(OnChainTransactionInfo {
             kind: tx_kind_orig.clone(),
