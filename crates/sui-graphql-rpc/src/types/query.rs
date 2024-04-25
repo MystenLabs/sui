@@ -327,6 +327,29 @@ impl Query {
         .extend()
     }
 
+    /// The transaction blocks that exist in the network.
+    async fn transaction_blocks_calls(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<transaction_block::Cursor>,
+        last: Option<u64>,
+        before: Option<transaction_block::Cursor>,
+        filter: Option<TransactionBlockFilter>,
+    ) -> Result<Connection<String, TransactionBlock>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        TransactionBlock::paginate_calls(
+            ctx.data_unchecked(),
+            page,
+            filter.unwrap_or_default(),
+            checkpoint
+        )
+        .await
+        .extend()
+    }
+
     /// The events that exist in the network.
     async fn events(
         &self,

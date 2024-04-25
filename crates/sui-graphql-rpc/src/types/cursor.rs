@@ -321,6 +321,43 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         ))
     }
 
+    pub(crate) fn paginate_query_simple<T, Q, ST, GB>(
+        &self,
+        conn: &mut Conn<'_>,
+        checkpoint_viewed_at: u64,
+        query: Q,
+    ) -> QueryResult<(bool, bool, impl Iterator<Item = T>)>
+    where
+        Q: Fn() -> Query<ST, T::Source, GB>,
+        Query<ST, T::Source, GB>: LoadQuery<'static, DieselConn, T>,
+        Query<ST, T::Source, GB>: QueryFragment<DieselBackend>,
+        <T as Paginated<C>>::Source: Send + 'static,
+        <<T as Paginated<C>>::Source as QuerySource>::FromClause: Send + 'static,
+        Q: Send + 'static,
+        T: Send + Paginated<C> + 'static,
+        ST: Send + 'static,
+        GB: Send + 'static,
+    {
+        let query = move || query();
+
+        let results: Vec<T> = if self.limit() == 0 {
+            // Avoid the database roundtrip in the degenerate case.
+            vec![]
+        } else {
+            let mut results = conn.results(query)?;
+            if !self.is_from_front() {
+                results.reverse();
+            }
+            results
+        };
+
+        Ok(self.paginate_results(
+            results.first().map(|f| f.cursor(checkpoint_viewed_at)),
+            results.last().map(|l| l.cursor(checkpoint_viewed_at)),
+            results,
+        ))
+    }
+
     /// This function is similar to `paginate_query`, but is specifically designed for handling
     /// `RawQuery`. Treat the cursors of this page as upper- and lowerbound filters for a database
     /// `query`. Returns two booleans indicating whether there is a previous or next page in the
@@ -382,17 +419,20 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // cursors, so the bounds must have been invalid, no matter which end the page was
                 // drawn from.
                 (_, None, _, _, _) | (_, _, None, _, _) => {
+                    println!("a");
                     return (false, false, vec![].into_iter());
                 }
 
                 // Page drawn from the front, and the cursor for the first element does not match
                 // `after`. This implies the bound was invalid, so we return an empty result.
                 (Some(a), Some(f), _, _, End::Front) if f != *a => {
+                    println!("b");
                     return (false, false, vec![].into_iter());
                 }
 
                 // Similar to above case, but for back of results.
                 (_, _, Some(l), Some(b), End::Back) if l != *b => {
+                    println!("c");
                     return (false, false, vec![].into_iter());
                 }
 
@@ -400,6 +440,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // supplied on the end the page is being drawn from, it was found in the results
                 // (implying a page follows in that direction).
                 (after, _, Some(l), before, End::Front) => {
+                    println!("d");
                     let has_previous_page = after.is_some();
                     let prefix = has_previous_page as usize;
 
@@ -415,6 +456,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
 
                 // Symmetric to the previous case, but drawing from the back.
                 (after, Some(f), _, before, End::Back) => {
+                    println!("e");
                     let has_next_page = before.is_some();
                     let suffix = has_next_page as usize;
 
@@ -430,15 +472,18 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         // previous or next page, because there will be no start or end cursor for this page to
         // anchor on.
         if results.len() == prefix + suffix {
+            println!("f");
             return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
         let mut results = results.into_iter();
         if prefix > 0 {
+            println!("g");
             results.nth(prefix - 1);
         }
         if suffix > 0 {
+            println!("h");
             results.nth_back(suffix - 1);
         }
 

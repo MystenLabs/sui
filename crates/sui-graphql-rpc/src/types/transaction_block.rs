@@ -6,13 +6,22 @@ use async_graphql::{
     connection::{Connection, CursorType, Edge},
     *,
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{
+    alias,
+    dsl::{max, min},
+    expression::{is_aggregate::No, ValidGrouping},
+    query_builder::QueryFragment,
+    sql_types::{Binary, SmallInt},
+    AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods,
+    NullableExpressionMethods, OptionalExtension, QueryDsl, QuerySource,
+};
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
     models::transactions::StoredTransaction,
     schema::{
-        transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+        transactions, tx_addresses, tx_calls, tx_calls_cp, tx_changed_objects,
+        tx_changed_objects_cp, tx_input_objects, tx_recipients, tx_senders,
     },
 };
 use sui_types::{
@@ -28,7 +37,7 @@ use sui_types::{
 
 use crate::{
     consistency::Checkpointed,
-    data::{self, Db, DbConnection, QueryExecutor},
+    data::{self, Db, DbConnection, DieselBackend, Query as GenericQuery, QueryExecutor},
     error::Error,
     server::watermark_task::Watermark,
     types::intersect,
@@ -425,6 +434,121 @@ impl TransactionBlock {
 
         Ok(conn)
     }
+
+    pub(crate) async fn paginate_calls(
+        db: &Db,
+        page: Page<Cursor>,
+        filter: TransactionBlockFilter,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Connection<String, TransactionBlock>, Error> {
+        use transactions as tx;
+        use tx_calls_cp::dsl as tx_calls;
+
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+
+        let response = db
+            .execute(move |conn| {
+                let page_clone = page.clone();
+
+                let result = page_clone.paginate_query_simple::<StoredTransaction, _, _, _>(
+                    conn,
+                    checkpoint_viewed_at,
+                    move || {
+                        let mut query = tx::dsl::transactions.into_boxed();
+                        if let Some(f) = &filter.function {
+                            let mut sub_query = tx_calls::tx_calls_cp
+                                .select(tx_calls::tx_sequence_number)
+                                .into_boxed();
+
+                            sub_query =
+                                filter.apply_addr_rel(sub_query, tx_calls::address, tx_calls::rel);
+                            sub_query = f.apply(
+                                sub_query,
+                                tx_calls::package,
+                                tx_calls::module,
+                                tx_calls::func,
+                            );
+
+                            sub_query = crate::apply_filters_and_pagination!(
+                                sub_query,
+                                tx_calls::tx_sequence_number,
+                                &filter,
+                                &page,
+                                checkpoint_viewed_at
+                            );
+                            query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                        } else if let Some(o) = &filter.changed_object {
+                            let mut sub_query = tx_changed_objects_cp::dsl::tx_changed_objects_cp
+                                .select(tx_changed_objects_cp::tx_sequence_number)
+                                .filter(tx_changed_objects_cp::object_id.eq(o.into_vec()))
+                                .into_boxed();
+                            sub_query = filter.apply_addr_rel(
+                                sub_query,
+                                tx_changed_objects_cp::address,
+                                tx_changed_objects_cp::rel,
+                            );
+                            sub_query = crate::apply_filters_and_pagination!(
+                                sub_query,
+                                tx_changed_objects_cp::tx_sequence_number,
+                                &filter,
+                                &page,
+                                checkpoint_viewed_at
+                            );
+                            query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                        } else if filter.sign_address.is_some() || filter.recv_address.is_some() {
+                            let mut sub_query = tx_addresses::dsl::tx_addresses
+                                .select(tx_addresses::dsl::tx_sequence_number)
+                                .into_boxed();
+                            sub_query = filter.apply_addr_rel(
+                                sub_query,
+                                tx_addresses::address,
+                                tx_addresses::rel,
+                            );
+                            sub_query = crate::apply_filters_and_pagination!(
+                                sub_query,
+                                tx_addresses::tx_sequence_number,
+                                &filter,
+                                &page,
+                                checkpoint_viewed_at
+                            );
+                            query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                        }
+
+                        if page.is_from_front() {
+                            query.order(tx::dsl::tx_sequence_number.asc())
+                        } else {
+                            query.order(tx::dsl::tx_sequence_number.desc())
+                        }
+                    },
+                )?;
+
+                Ok::<_, diesel::result::Error>((result, checkpoint_viewed_at))
+            })
+            .await?;
+
+        let ((prev, next, results), checkpoint_viewed_at) = response;
+
+        let mut conn = Connection::new(prev, next);
+
+        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
+        // current available range. This sets a consistent upper bound for the nested queries.
+        for stored in results {
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            println!(
+                "cp, tx: {}, {}",
+                stored.checkpoint_sequence_number, stored.tx_sequence_number
+            );
+            let inner = TransactionBlockInner::try_from(stored)?;
+            let transaction = TransactionBlock {
+                inner,
+                checkpoint_viewed_at,
+            };
+            conn.edges.push(Edge::new(cursor, transaction));
+        }
+
+        Ok(conn)
+    }
 }
 
 impl TransactionBlockFilter {
@@ -458,6 +582,37 @@ impl TransactionBlockFilter {
                 Some(a.intersection(&b).cloned().collect())
             })?,
         })
+    }
+
+    pub(crate) fn apply_addr_rel<A, R, QS, ST, GB>(
+        &self,
+        mut query: GenericQuery<ST, QS, GB>,
+        address: A,
+        rel: R,
+    ) -> GenericQuery<ST, QS, GB>
+    where
+        GenericQuery<ST, QS, GB>: QueryDsl,
+        A: ExpressionMethods + Expression<SqlType = Binary> + QueryFragment<DieselBackend>,
+        R: ExpressionMethods + Expression<SqlType = SmallInt> + QueryFragment<DieselBackend>,
+        A: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
+        R: AppearsOnTable<QS> + ValidGrouping<(), IsAggregate = No>,
+        A: Send + 'static,
+        R: Send + Copy + 'static,
+        QS: QuerySource,
+    {
+        if let Some(a) = &self.sign_address {
+            query = query
+                .filter(rel.eq(0).or(rel.eq(2)))
+                .filter(rel.ne(1))
+                .filter(address.eq(a.into_vec()));
+        } else if let Some(a) = &self.recv_address {
+            query = query
+                .filter(rel.eq(1).or(rel.eq(2)))
+                .filter(rel.ne(0))
+                .filter(address.eq(a.into_vec()));
+        }
+
+        query
     }
 }
 
@@ -553,4 +708,69 @@ impl TryFrom<TransactionBlockEffects> for TransactionBlock {
             checkpoint_viewed_at,
         })
     }
+}
+
+#[macro_export]
+macro_rules! apply_filters_and_pagination {
+    ($sub_query:expr, $tx_seq_num_col:expr, $filter:expr, $page:expr, $checkpoint_viewed_at:expr) => {{
+        use diesel::dsl::{max, min};
+        use diesel::prelude::*;
+
+        let mut sub_query = $sub_query;
+
+        // When given a checkpoint condition, convert it into tx_sequence_number
+        // bound using `transactions` table
+        if let Some(c) = &$filter.after_checkpoint {
+            let min_tx = tx::dsl::transactions
+                .select(min(tx::dsl::tx_sequence_number))
+                .filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64))
+                .single_value();
+            sub_query = sub_query.filter($tx_seq_num_col.nullable().ge(min_tx));
+        }
+        if let Some(c) = &$filter.at_checkpoint {
+            let min_tx = tx::dsl::transactions
+                .select(min(tx::dsl::tx_sequence_number))
+                .filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64))
+                .single_value();
+            let max_tx = tx::dsl::transactions
+                .select(max(tx::dsl::tx_sequence_number))
+                .filter(tx::dsl::checkpoint_sequence_number.eq(*c as i64))
+                .single_value();
+            sub_query = sub_query.filter($tx_seq_num_col.nullable().between(min_tx, max_tx));
+        }
+        if let Some(b) = &$filter.before_checkpoint {
+            let max_tx = tx::dsl::transactions
+                .select(max(tx::dsl::tx_sequence_number))
+                .filter(tx::dsl::checkpoint_sequence_number.eq(*b as i64))
+                .single_value();
+            sub_query = sub_query.filter($tx_seq_num_col.nullable().le(max_tx));
+        }
+
+        // apply checkpoint bound
+        let checkpoint_bound = tx::dsl::transactions
+            .select(max(tx::dsl::tx_sequence_number))
+            .filter(tx::dsl::checkpoint_sequence_number.eq($checkpoint_viewed_at as i64))
+            .single_value();
+        sub_query = sub_query.filter($tx_seq_num_col.nullable().le(checkpoint_bound));
+
+        // handle pagination, order, limit
+        // We only need to condition on `tx_sequence_number` from the cursor
+        if let Some(after) = $page.after() {
+            sub_query = sub_query.filter($tx_seq_num_col.ge(after.tx_sequence_number as i64));
+        }
+        if let Some(before) = $page.before() {
+            sub_query = sub_query.filter($tx_seq_num_col.le(before.tx_sequence_number as i64));
+        }
+
+        // Load extra rows to detect the existence of pages on either side.
+        sub_query = sub_query.limit($page.limit() as i64 + 2);
+
+        if $page.is_from_front() {
+            sub_query = sub_query.order($tx_seq_num_col.asc());
+        } else {
+            sub_query = sub_query.order($tx_seq_num_col.desc());
+        }
+
+        sub_query
+    }};
 }

@@ -280,6 +280,26 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    tx_addresses (address, rel, tx_sequence_number, checkpoint_sequence_number) {
+        address -> Bytea,
+        rel -> Int2,
+        rel_bitmask -> Int2,
+        tx_sequence_number -> Int8,
+        checkpoint_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    tx_digests (tx_digest) {
+        tx_digest -> Bytea,
+        tx_sequence_number -> Int8,
+        checkpoint_sequence_number -> Int8,
+        address -> Bytea,
+        rel -> Int2,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     checkpoints,
     display,
@@ -299,4 +319,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     tx_input_objects,
     tx_recipients,
     tx_senders,
+    tx_addresses,
+    tx_calls_cp,
+    tx_digests,
+    tx_changed_objects_cp
 );
