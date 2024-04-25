@@ -9,5 +9,8 @@ module 0x42::M {
     const HttpTimeout: u64 = 30000; 
     const JSON_Max_Size: u64 = 1048576;
     const VALUE_MAX: u64 = 200;
+
+    // Should not trigger a warning
+    #[allow(lint(constant_naming))]
     const numItems: u64 = 30;   
 }
