@@ -582,6 +582,10 @@ importers:
       commander:
         specifier: ^11.0.0
         version: 11.0.0
+    devDependencies:
+      vitest:
+        specifier: ^0.33.0
+        version: 0.33.0(jsdom@23.0.0)
 
   dapps/kiosk:
     dependencies:
@@ -1480,6 +1484,8 @@ importers:
         specifier: ^1.6.0
         version: 1.6.0(@types/node@20.4.2)(happy-dom@14.11.0)(jsdom@23.0.0)(sass@1.63.6)(terser@5.19.1)
 
+  sdk/move-binary-format-wasm/pkg: {}
+
   sdk/move-bytecode-template:
     devDependencies:
       '@mysten/bcs':
@@ -1497,8 +1503,6 @@ importers:
       wasm-pack:
         specifier: ^0.12.1
         version: 0.12.1
-
-  sdk/move-bytecode-template/pkg: {}
 
   sdk/suins-toolkit:
     dependencies:

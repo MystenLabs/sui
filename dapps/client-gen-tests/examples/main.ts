@@ -76,7 +76,7 @@ async function fetchPoolCreationEvents() {
 			MoveEventType: PoolCreationEvent.$typeName,
 		},
 	});
-	res.data.map((e) => {
+	res.data.forEach((e) => {
 		console.log(PoolCreationEvent.fromBcs(fromB64(e.bcs!)));
 	});
 }

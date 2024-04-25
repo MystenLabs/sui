@@ -22,4 +22,5 @@ generated/
 playwright-report/
 storybook-static/
 CHANGELOG.md
+move/*/build
 
