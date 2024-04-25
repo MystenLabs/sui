@@ -8,14 +8,15 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::{fmt::Debug, path::PathBuf};
 
-const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 // These values set to loosely attempt to limit
 // memory usage for a single sketch to ~20MB
 // For reference, see
 // https://github.com/jedisct1/rust-count-min-sketch/blob/master/src/lib.rs
-const DEFAULT_SKETCH_CAPACITY: usize = 100_000;
-const DEFAULT_SKETCH_PROBABILITY: f64 = 0.999;
-const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
+pub const DEFAULT_SKETCH_CAPACITY: usize = 50_000;
+pub const DEFAULT_SKETCH_PROBABILITY: f64 = 0.999;
+pub const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
+
+const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
 #[derive(Clone, Debug)]
 pub enum ServiceResponse {

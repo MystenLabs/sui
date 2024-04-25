@@ -9,8 +9,10 @@ use mysten_metrics::spawn_monitored_task;
 use parking_lot::RwLock;
 use std::collections::VecDeque;
 use std::fmt::Debug;
+use std::time::Duration;
 use std::time::{Instant, SystemTime};
 use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, ServiceResponse};
+use tracing::info;
 
 pub struct TrafficSketch {
     /// Circular buffer Count Min Sketches representing a sliding window
@@ -23,34 +25,54 @@ pub struct TrafficSketch {
     /// potentially lower the memory consumption by using CountMinSketch16, which
     /// will reliably support up to ~65,000 unique IP addresses in the window.
     sketches: VecDeque<CountMinSketch32<IpAddr>>,
-    window_size_secs: u64,
-    update_interval_secs: u64,
+    window_size: Duration,
+    update_interval: Duration,
     last_reset_time: Instant,
     current_sketch_index: usize,
 }
 
 impl TrafficSketch {
     pub fn new(
-        window_size_secs: u64,
-        update_interval_secs: u64,
+        window_size: Duration,
+        update_interval: Duration,
         sketch_capacity: usize,
         sketch_probability: f64,
         sketch_tolerance: f64,
     ) -> Self {
-        let num_sketches = window_size_secs / update_interval_secs;
+        // intentionally round down via integer division. We can't have a partial sketch
+        let num_sketches = window_size.as_secs() / update_interval.as_secs();
+        let new_window_size = Duration::from_secs(num_sketches * update_interval.as_secs());
+        if new_window_size != window_size {
+            info!(
+                "Rounding traffic sketch window size down to {} seconds to make it an integer multiple of update interval {} seconds.",
+                new_window_size.as_secs(),
+                update_interval.as_secs(),
+            );
+        }
+        let window_size = new_window_size;
+
         assert!(
-            window_size_secs < 600,
-            "window_size_secs too large. Max 600 seconds"
+            window_size < Duration::from_secs(600),
+            "window_size too large. Max 600 seconds"
         );
         assert!(
-            update_interval_secs < window_size_secs,
+            update_interval < window_size,
             "Update interval may not be larger than window size"
         );
         assert!(
-            update_interval_secs >= 1,
+            update_interval >= Duration::from_secs(1),
             "Update interval too short, must be at least 1 second"
         );
         assert!(num_sketches <= 10, "Given parameters require too many sketches to be stored. Reduce window size or increase update interval.");
+        let mem_estimate = (num_sketches as usize)
+            * CountMinSketch32::<IpAddr>::estimate_memory(
+                sketch_capacity,
+                sketch_probability,
+                sketch_tolerance,
+            )
+            .expect("Failed to estimate memory for CountMinSketch32");
+        assert!(mem_estimate < 128_000_000, "Memory estimate for traffic sketch exceeds 128MB. Reduce window size or increase update interval.");
+
         let mut sketches = VecDeque::with_capacity(num_sketches as usize);
         for _ in 0..num_sketches {
             sketches.push_back(
@@ -64,28 +86,28 @@ impl TrafficSketch {
         }
         Self {
             sketches,
-            window_size_secs,
-            update_interval_secs,
+            window_size,
+            update_interval,
             last_reset_time: Instant::now(),
             current_sketch_index: 0,
         }
     }
 
-    fn increment_count(&mut self, ip: IpAddr) {
+    pub fn increment_count(&mut self, ip: IpAddr) {
         // reset all expired intervals
         let current_time = Instant::now();
-        let mut elapsed = current_time.duration_since(self.last_reset_time).as_secs();
-        while elapsed >= self.update_interval_secs {
+        let mut elapsed = current_time.duration_since(self.last_reset_time);
+        while elapsed >= self.update_interval {
             self.rotate_window();
-            elapsed -= self.update_interval_secs;
+            elapsed -= self.update_interval;
         }
         // Increment in the current active sketch
         self.sketches[self.current_sketch_index].increment(&ip);
     }
 
-    fn get_request_rate(&self, ip: &IpAddr) -> f64 {
+    pub fn get_request_rate(&self, ip: &IpAddr) -> f64 {
         let count: u32 = self.sketches.iter().map(|sketch| sketch.estimate(ip)).sum();
-        count as f64 / self.window_size_secs as f64
+        count as f64 / self.window_size.as_secs() as f64
     }
 
     fn rotate_window(&mut self) {
@@ -196,8 +218,8 @@ impl FreqThresholdPolicy {
         }: FreqThresholdConfig,
     ) -> Self {
         let sketch = TrafficSketch::new(
-            window_size_secs,
-            update_interval_secs,
+            Duration::from_secs(window_size_secs),
+            Duration::from_secs(update_interval_secs),
             sketch_capacity,
             sketch_probability,
             sketch_tolerance,
@@ -349,8 +371,12 @@ impl TestPanicOnInvocationPolicy {
 mod tests {
     use super::*;
     use std::net::{IpAddr, Ipv4Addr};
+    use sui_macros::sim_test;
+    use sui_types::traffic_control::{
+        DEFAULT_SKETCH_CAPACITY, DEFAULT_SKETCH_PROBABILITY, DEFAULT_SKETCH_TOLERANCE,
+    };
 
-    #[tokio::test]
+    #[sim_test]
     async fn test_freq_threshold_policy() {
         // Create freq policy that will block on average frequency 2 requests per second
         // as observed over a 5 second window
@@ -393,7 +419,7 @@ mod tests {
         assert_eq!(response.block_proxy_ip, None);
         assert_eq!(response.block_connection_ip, bob.connection_ip);
 
-        // 2 more tallies, so far we are above 2 talles
+        // 2 more tallies, so far we are above 2 tallies
         // per second, but over the average window of 5 seconds
         // we are still below the threshold. Should not block
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -407,7 +433,7 @@ mod tests {
         let _ = policy.handle_tally(bob.clone());
         let response = policy.handle_tally(bob.clone());
         assert_eq!(response.block_proxy_ip, None);
-        assert_eq!(response.block_connection_ip, None);
+        assert_eq!(response.block_connection_ip, bob.connection_ip);
 
         // close to threshold for alice, but still below
         tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
@@ -422,5 +448,25 @@ mod tests {
         let response = policy.handle_tally(alice.clone());
         assert_eq!(response.block_connection_ip, alice.connection_ip);
         assert_eq!(response.block_proxy_ip, None);
+    }
+
+    #[sim_test]
+    async fn test_traffic_sketch_mem_estimate() {
+        // Test for getting a rough estimate of memory usage for the traffic sketch
+        // given certain parameters. Parameters below are the default.
+        // With default parameters, memory estimate is 113 MB.
+        let window_size = Duration::from_secs(30);
+        let update_interval = Duration::from_secs(5);
+        let mem_estimate = CountMinSketch32::<IpAddr>::estimate_memory(
+            DEFAULT_SKETCH_CAPACITY,
+            DEFAULT_SKETCH_PROBABILITY,
+            DEFAULT_SKETCH_TOLERANCE,
+        )
+        .unwrap()
+            * (window_size.as_secs() / update_interval.as_secs()) as usize;
+        assert!(
+            mem_estimate < 128_000_000,
+            "Memory estimate {mem_estimate} for traffic sketch exceeds 128MB."
+        );
     }
 }
