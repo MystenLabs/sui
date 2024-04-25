@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::inconsistent_digit_grouping)]
-
 use crate::{
     crypto::BridgeAuthorityPublicKeyBytes,
     error::BridgeError,
@@ -54,11 +53,15 @@ pub const ADD_TOKENS_ON_SUI_PATH: &str =
 pub const ADD_TOKENS_ON_EVM_PATH: &str =
     "/sign/add_tokens_on_evm/:chain_id/:nonce/:native/:token_ids/:token_addresses/:token_sui_decimals/:token_prices";
 
-pub async fn run_server(socket_address: &SocketAddr, handler: BridgeRequestHandler) {
-    axum::Server::bind(socket_address)
-        .serve(make_router(Arc::new(handler)).into_make_service())
-        .await
-        .unwrap();
+pub fn run_server(
+    socket_address: &SocketAddr,
+    handler: BridgeRequestHandler,
+) -> tokio::task::JoinHandle<()> {
+    let service = axum::Server::bind(socket_address)
+        .serve(make_router(Arc::new(handler)).into_make_service());
+    tokio::spawn(async move {
+        service.await.unwrap();
+    })
 }
 
 pub(crate) fn make_router(
