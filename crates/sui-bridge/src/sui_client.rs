@@ -604,6 +604,7 @@ impl SuiClientInner for SuiSdkClient {
 
 #[cfg(test)]
 mod tests {
+    use crate::crypto::BridgeAuthorityKeyPair;
     use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
     use crate::{
         events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
@@ -753,9 +754,14 @@ mod tests {
     #[tokio::test]
     async fn test_get_action_onchain_status_for_sui_to_eth_transfer() {
         telemetry_subscribers::init_for_testing();
+        let mut bridge_keys = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp);
+        }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(true)
+            .build_with_bridge(bridge_keys, true)
             .await;
 
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)

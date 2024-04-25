@@ -584,6 +584,7 @@ pub fn build_committee_register_transaction(
 
 #[cfg(test)]
 mod tests {
+    use crate::crypto::BridgeAuthorityKeyPair;
     use crate::sui_client::SuiClient;
     use crate::types::BridgeAction;
     use crate::types::EmergencyAction;
@@ -600,15 +601,21 @@ mod tests {
     use ethers::types::Address as EthAddress;
     use std::collections::HashMap;
     use sui_types::bridge::{BridgeChainId, TOKEN_ID_BTC, TOKEN_ID_USDC};
+    use sui_types::crypto::get_key_pair;
     use sui_types::crypto::ToFromBytes;
     use test_cluster::TestClusterBuilder;
 
     #[tokio::test]
     async fn test_build_sui_transaction_for_token_transfer() {
         telemetry_subscribers::init_for_testing();
+        let mut bridge_keys = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp);
+        }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-            .build_with_bridge(true)
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .build_with_bridge(bridge_keys, true)
             .await;
 
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
@@ -677,9 +684,14 @@ mod tests {
     #[tokio::test]
     async fn test_build_sui_transaction_for_emergency_op() {
         telemetry_subscribers::init_for_testing();
+        let mut bridge_keys = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp);
+        }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(true)
+            .build_with_bridge(bridge_keys, true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -741,9 +753,14 @@ mod tests {
     #[tokio::test]
     async fn test_build_sui_transaction_for_committee_blocklist() {
         telemetry_subscribers::init_for_testing();
+        let mut bridge_keys = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp);
+        }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(true)
+            .build_with_bridge(bridge_keys, true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -824,9 +841,14 @@ mod tests {
     #[tokio::test]
     async fn test_build_sui_transaction_for_limit_update() {
         telemetry_subscribers::init_for_testing();
+        let mut bridge_keys = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp);
+        }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
             .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
-            .build_with_bridge(true)
+            .build_with_bridge(bridge_keys, true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await
@@ -888,9 +910,14 @@ mod tests {
     #[tokio::test]
     async fn test_build_sui_transaction_for_price_update() {
         telemetry_subscribers::init_for_testing();
+        let mut bridge_keys = vec![];
+        for _ in 0..=3 {
+            let (_, kp): (_, BridgeAuthorityKeyPair) = get_key_pair();
+            bridge_keys.push(kp);
+        }
         let mut test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-            .build_with_bridge(true)
+            .with_protocol_version((BRIDGE_ENABLE_PROTOCOL_VERSION).into())
+            .build_with_bridge(bridge_keys, true)
             .await;
         let sui_client = SuiClient::new(&test_cluster.fullnode_handle.rpc_url)
             .await

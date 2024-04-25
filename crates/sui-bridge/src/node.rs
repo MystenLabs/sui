@@ -22,7 +22,7 @@ use sui_types::{bridge::BRIDGE_MODULE_NAME, event::EventID, Identifier};
 use tokio::task::JoinHandle;
 use tracing::info;
 
-pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<()> {
+pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHandle<()>> {
     let (server_config, client_config) = config.validate().await?;
 
     // Start Client
@@ -37,7 +37,7 @@ pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<()> {
         IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)),
         server_config.server_listen_port,
     );
-    run_server(
+    Ok(run_server(
         &socket_address,
         BridgeRequestHandler::new(
             server_config.key,
@@ -45,10 +45,7 @@ pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<()> {
             server_config.eth_client,
             server_config.approved_governance_actions,
         ),
-    )
-    .await;
-
-    Ok(())
+    ))
 }
 
 // TODO: is there a way to clean up the overrides after it's stored in DB?
@@ -178,16 +175,14 @@ fn get_eth_contracts_to_watch(
 #[cfg(test)]
 mod tests {
     use ethers::types::Address as EthAddress;
-    use std::process::Child;
 
     use super::*;
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
-    use crate::e2e_tests::test_utils::deploy_sol_contract;
-    use crate::e2e_tests::test_utils::get_eth_signer_client_e2e_test_only;
     use crate::e2e_tests::test_utils::wait_for_server_to_be_up;
-    use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
+    use crate::e2e_tests::test_utils::BridgeTestCluster;
+    use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;
@@ -199,7 +194,6 @@ mod tests {
     use sui_types::digests::TransactionDigest;
     use sui_types::event::EventID;
     use tempfile::tempdir;
-    use test_cluster::TestClusterBuilder;
 
     #[tokio::test]
     async fn test_get_eth_contracts_to_watch() {
@@ -313,13 +307,13 @@ mod tests {
     #[tokio::test]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
+        let bridge_test_cluster = setup().await;
+        let kp = bridge_test_cluster.bridge_authority_key(0);
 
         // prepare node config (server only)
         let tmp_dir = tempdir().unwrap().into_path();
         let authority_key_path = "test_starting_bridge_node_bridge_authority_key";
         let server_listen_port = get_available_port("127.0.0.1");
-        let kp = test_cluster.bridge_authority_keys.as_ref().unwrap()[0].copy();
         let base64_encoded = kp.encode_base64();
         std::fs::write(tmp_dir.join(authority_key_path), base64_encoded).unwrap();
 
@@ -328,15 +322,15 @@ mod tests {
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
-                sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
+                sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
                 bridge_client_key_path_base64_sui_key: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
             eth: EthConfig {
-                eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
-                eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
+                eth_rpc_url: bridge_test_cluster.eth_rpc_url(),
+                eth_bridge_proxy_address: bridge_test_cluster.sui_bridge_address(),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
                 eth_contracts_start_block_fallback: None,
                 eth_contracts_start_block_override: None,
@@ -346,21 +340,19 @@ mod tests {
             db_path: None,
         };
         // Spawn bridge node in memory
-        tokio::spawn(async move {
-            run_bridge_node(config).await.unwrap();
-        });
+        let _handle = run_bridge_node(config).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
         let res = wait_for_server_to_be_up(server_url, 5).await;
-        child.kill().unwrap();
         res.unwrap();
     }
 
     #[tokio::test]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
+        let bridge_test_cluster = setup().await;
+        let kp = bridge_test_cluster.bridge_authority_key(0);
 
         // prepare node config (server + client)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -368,14 +360,15 @@ mod tests {
         let authority_key_path = "test_starting_bridge_node_with_client_bridge_authority_key";
         let server_listen_port = get_available_port("127.0.0.1");
 
-        let kp = test_cluster.bridge_authority_keys.as_ref().unwrap()[0].copy();
         let base64_encoded = kp.encode_base64();
         std::fs::write(tmp_dir.join(authority_key_path), base64_encoded).unwrap();
 
         let client_sui_address = SuiAddress::from(kp.public());
+        let sender_address = bridge_test_cluster.sui_user_address();
         // send some gas to this address
-        test_cluster
-            .transfer_sui_must_exceed(client_sui_address, 1000000000)
+        bridge_test_cluster
+            .test_cluster
+            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
@@ -383,7 +376,7 @@ mod tests {
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
-                sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
+                sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
                 bridge_client_key_path_base64_sui_key: None,
                 bridge_client_gas_object: None,
@@ -393,8 +386,8 @@ mod tests {
                 }),
             },
             eth: EthConfig {
-                eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
-                eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
+                eth_rpc_url: bridge_test_cluster.eth_rpc_url(),
+                eth_bridge_proxy_address: bridge_test_cluster.sui_bridge_address(),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
                 eth_contracts_start_block_fallback: Some(0),
                 eth_contracts_start_block_override: None,
@@ -404,24 +397,21 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let config_clone = config.clone();
-        tokio::spawn(async move {
-            run_bridge_node(config_clone).await.unwrap();
-        });
+        let _handle = run_bridge_node(config).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
         // client components are spawned earlier than server, so as long as the server is up,
         // we know the client components are already running.
         let res = wait_for_server_to_be_up(server_url, 5).await;
-        child.kill().unwrap();
         res.unwrap();
     }
 
     #[tokio::test]
     async fn test_starting_bridge_node_with_client_and_separate_client_key() {
         telemetry_subscribers::init_for_testing();
-        let (test_cluster, anvil_port, mut child, bridge_contract_address) = setup().await;
+        let bridge_test_cluster = setup().await;
+        let kp = bridge_test_cluster.bridge_authority_key(0);
 
         // prepare node config (server + client)
         let tmp_dir = tempdir().unwrap().into_path();
@@ -432,7 +422,6 @@ mod tests {
         let server_listen_port = get_available_port("127.0.0.1");
 
         // prepare bridge authority key
-        let kp = test_cluster.bridge_authority_keys.as_ref().unwrap()[0].copy();
         let base64_encoded = kp.encode_base64();
         std::fs::write(tmp_dir.join(authority_key_path), base64_encoded).unwrap();
 
@@ -443,10 +432,11 @@ mod tests {
             "test_starting_bridge_node_with_client_and_separate_client_key_bridge_client_key";
         std::fs::write(tmp_dir.join(client_key_path), kp.encode_base64()).unwrap();
         let client_sui_address = SuiAddress::from(&kp.public());
-
+        let sender_address = bridge_test_cluster.sui_user_address();
         // send some gas to this address
-        let gas_obj = test_cluster
-            .transfer_sui_must_exceed(client_sui_address, 1000000000)
+        let gas_obj = bridge_test_cluster
+            .test_cluster
+            .transfer_sui_must_exceed(sender_address, client_sui_address, 1000000000)
             .await;
 
         let config = BridgeNodeConfig {
@@ -454,7 +444,7 @@ mod tests {
             metrics_port: get_available_port("127.0.0.1"),
             bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
-                sui_rpc_url: test_cluster.fullnode_handle.rpc_url,
+                sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
                 bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
                 bridge_client_gas_object: Some(gas_obj),
@@ -464,8 +454,8 @@ mod tests {
                 }),
             },
             eth: EthConfig {
-                eth_rpc_url: format!("http://127.0.0.1:{}", anvil_port),
-                eth_bridge_proxy_address: format!("{:#x}", bridge_contract_address),
+                eth_rpc_url: bridge_test_cluster.eth_rpc_url(),
+                eth_bridge_proxy_address: bridge_test_cluster.sui_bridge_address(),
                 eth_bridge_chain_id: BridgeChainId::EthCustom as u8,
                 eth_contracts_start_block_fallback: Some(0),
                 eth_contracts_start_block_override: Some(0),
@@ -475,66 +465,21 @@ mod tests {
             db_path: Some(db_path),
         };
         // Spawn bridge node in memory
-        let config_clone = config.clone();
-        tokio::spawn(async move {
-            run_bridge_node(config_clone).await.unwrap();
-        });
+        let _handle = run_bridge_node(config).await.unwrap();
 
         let server_url = format!("http://127.0.0.1:{}", server_listen_port);
         // Now we expect to see the server to be up and running.
         // client components are spawned earlier than server, so as long as the server is up,
         // we know the client components are already running.
         let res = wait_for_server_to_be_up(server_url, 5).await;
-        child.kill().unwrap();
         res.unwrap();
     }
 
-    async fn setup() -> (test_cluster::TestCluster, u16, Child, EthAddress) {
-        // Start eth node with anvil
-        let anvil_port = get_available_port("127.0.0.1");
-        let eth_node_process = std::process::Command::new("anvil")
-            .arg("--port")
-            .arg(anvil_port.to_string())
-            .spawn()
-            .expect("Failed to start anvil");
-
-        let test_cluster: test_cluster::TestCluster = TestClusterBuilder::new()
-            .with_protocol_version(BRIDGE_ENABLE_PROTOCOL_VERSION.into())
-            .build_with_bridge(true)
-            .await;
-
-        test_cluster
-            .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
-            .await;
-
-        let (tx_ack, rx_ack) = tokio::sync::oneshot::channel();
-        let bridge_authority_keys = test_cluster
-            .bridge_authority_keys
-            .as_ref()
-            .unwrap()
-            .iter()
-            .map(|k| k.copy())
-            .collect::<Vec<_>>();
-        let anvil_url = format!("http://127.0.0.1:{}", anvil_port);
-        let (eth_signer_0, eth_private_key_hex_0) = get_eth_signer_client_e2e_test_only(&anvil_url)
+    async fn setup() -> BridgeTestCluster {
+        BridgeTestClusterBuilder::new()
+            .with_eth_env(true)
+            .with_bridge_cluster(false)
+            .build()
             .await
-            .unwrap();
-        tokio::task::spawn(async move {
-            deploy_sol_contract(
-                &anvil_url,
-                eth_signer_0,
-                bridge_authority_keys,
-                tx_ack,
-                eth_private_key_hex_0,
-            )
-            .await
-        });
-        let address = rx_ack.await.unwrap();
-        (
-            test_cluster,
-            anvil_port,
-            eth_node_process,
-            address.sui_bridge,
-        )
     }
 }
