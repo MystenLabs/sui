@@ -56,13 +56,13 @@ Next, add some more code to this module:
     /// Configuration and Treasury object, managed by the house.
     public struct HouseData has key {
         id: UID,
-        balance: Balance<SUI>, // House's balance which also contains the acrued winnings of the house.
+        balance: Balance<SUI>,
         house: address,
-        public_key: vector<u8>, // Public key used to verify the beacon produced by the back-end.
+        public_key: vector<u8>,
         max_stake: u64,
         min_stake: u64,
-        fees: Balance<SUI>, // The acrued fees from games played.
-        base_fee_in_bp: u16 // The default fee in basis points. 1 basis point = 0.01%.
+        fees: Balance<SUI>,
+        base_fee_in_bp: u16 
     }
 
     /// A one-time use capability to initialize the house data; created and sent
