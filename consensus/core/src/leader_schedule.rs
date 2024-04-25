@@ -49,7 +49,7 @@ impl LeaderSchedule {
     }
 
     #[cfg(test)]
-    pub(crate)(crate) fn with_num_commits_per_schedule(mut self, num_commits_per_schedule: u64) -> Self {
+    pub(crate) fn with_num_commits_per_schedule(mut self, num_commits_per_schedule: u64) -> Self {
         self.num_commits_per_schedule = num_commits_per_schedule;
         self
     }

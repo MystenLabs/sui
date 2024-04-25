@@ -39,9 +39,10 @@ use super::{
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
+    commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
-    CommitIndex, Round,
+    Round,
 };
 
 /// Implements Anemo RPC client for Consensus.
@@ -191,12 +192,11 @@ impl NetworkClient for AnemoClient {
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         let mut client = self.get_client(peer, timeout).await?;
-        let request = FetchCommitsRequest { start, end };
+        let request = FetchCommitsRequest { commit_range };
         let response = client
             .fetch_commits(anemo::Request::new(request).with_timeout(timeout))
             .await
@@ -320,7 +320,7 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
         let request = request.into_body();
         let (commits, certifier_blocks) = self
             .service
-            .handle_fetch_commits(*index, request.start, request.end)
+            .handle_fetch_commits(*index, request.commit_range)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -596,8 +596,7 @@ pub(crate) struct FetchBlocksResponse {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct FetchCommitsRequest {
-    start: CommitIndex,
-    end: CommitIndex,
+    commit_range: CommitRange,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
