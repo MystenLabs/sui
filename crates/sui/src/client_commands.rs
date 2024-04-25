@@ -3178,8 +3178,16 @@ pub async fn execute_dry_run(
     Ok(SuiClientCommandResult::DryRun(response))
 }
 
-/// Call a dry run with the transaction data to get the estimated gas budget.
-/// The final gas budget is the dry run gas budget + 10% margin.
+/// Call a dry run with the transaction data to estimate the gas budget.
+/// The estimated gas budget is computed as following:
+/// * the maximum between A and B, where:
+/// A = computation cost + GAS_SAFE_OVERHEAD * reference gas price
+/// B = computation cost + storage cost - storage rebate + GAS_SAFE_OVERHEAD * reference gas price
+/// overhead
+///
+/// This gas estimate is computed exactly as in the TypeScript SDK. Check the
+/// function `prepare` in the TransactionBlock.ts file and look for safeOverhead variable
+/// https://github.com/MystenLabs/sui/blob/main/sdk/typescript/src/transactions/TransactionBlock.ts
 pub async fn estimate_gas_budget(
     context: &mut WalletContext,
     signer: SuiAddress,
@@ -3192,18 +3200,24 @@ pub async fn estimate_gas_budget(
     let dry_run =
         execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
     if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
-        let buffer = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
-        let gas_with_buffer = (dry_run.effects.gas_cost_summary().computation_cost + buffer) as i64;
-        let net_gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage();
-        let gas_estimate = std::cmp::max(gas_with_buffer, net_gas_usage);
-        Ok(gas_estimate.try_into()?)
+        let safe_overhead = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
+        let computation_cost_with_overhead =
+            (dry_run.effects.gas_cost_summary().computation_cost + safe_overhead) as i64;
+        let gas_budget = dry_run.effects.gas_cost_summary().net_gas_usage() + safe_overhead as i64;
+        let gas_estimate = std::cmp::max(computation_cost_with_overhead, gas_budget);
+        let gas_estimate: u64 = gas_estimate.try_into().map_err(|e| {
+            anyhow!(
+                "Could not convert gas estimate to u64: {e}.\n Please use the --gas-budget flag to\
+                provide a gas budget."
+            )
+        })?;
+        Ok(gas_estimate)
     } else {
         bail!("Dry run failed, could not automatically determine the gas budget. Please use the --gas-budget flag to provide a gas budget.")
     }
 }
 
-/// Tries to get the maximum gas budget that is set in the protocol, and if not,
-/// it returns the max gas budget defined in a constant in this module {MAX_GAS_BUDGET}.
+/// Queries the protocol config for the maximum gas allowed in a transaction.
 pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::Error> {
     let cfg = context
         .get_client()
@@ -3212,8 +3226,10 @@ pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::
         .get_protocol_config(None)
         .await?;
     Ok(match cfg.attributes.get("max_tx_gas") {
-        // TODO should we fail instead, if the protocol config does not have the max-budget, and ask the user to provide with a budget?
         Some(Some(sui_json_rpc_types::SuiProtocolConfigValue::U64(y))) => *y,
-        _ => MAX_GAS_BUDGET,
+        _ => bail!(
+            "Could not automatically find the maximum gas allowed in a transaction from the \
+            protocol config. Please provide a gas budget with the --gas-budget flag."
+        ),
     })
 }
