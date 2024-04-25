@@ -3621,6 +3621,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
         assert!(response.status_ok().unwrap());
         let gas_used = response.effects.unwrap().gas_object().object_id();
         assert_eq!(gas_used, object_id1);
+        assert!(response.effects.unwrap().gas_cost_summary().gas_used() <= gas_estimate.unwrap());
     } else {
         panic!("TransferSui test failed");
     }
