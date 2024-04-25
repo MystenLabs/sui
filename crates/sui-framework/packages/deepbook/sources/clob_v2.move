@@ -58,7 +58,7 @@ module deepbook::clob_v2 {
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
-    // The minimum increments after reaching lot size is 1000, which is 0.000001 SUI.
+    // Quantity must be >= lot_size and a multiple of QUANTITY_MIN_TICK. This is the trade granularity.
     const QUANTITY_MIN_TICK: u64 = 1000;
     #[test_only]
     const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
