@@ -11,9 +11,9 @@
 
 module games::raffle_with_tickets {
     use sui::balance::{Self, Balance};
-    use sui::clock::{Self, Clock};
+    use sui::clock::Clock;
     use sui::coin::{Self, Coin};
-    use sui::random::{Self, Random, new_generator};
+    use sui::random::{Random, new_generator};
     use sui::sui::SUI;
 
     /// Error codes
@@ -91,7 +91,7 @@ module games::raffle_with_tickets {
 
         let Game { id, cost_in_sui: _, participants: _, end_time: _, winner: _, balance } = game;
         object::delete(id);
-        let reward = coin::from_balance(balance, ctx);
+        let reward = balance.into_coin(ctx);
         reward
     }
 
@@ -122,16 +122,16 @@ module games::raffle_with_tickets {
 
     #[test_only]
     public fun get_balance(game: &Game): u64 {
-        balance::value(&game.balance)
+        game.balance.value()
     }
 }
 
 
 module games::small_raffle {
     use sui::balance::{Self, Balance};
-    use sui::clock::{Self, Clock};
+    use sui::clock::Clock;
     use sui::coin::{Self, Coin};
-    use sui::random::{Self, Random, new_generator};
+    use sui::random::{Random, new_generator};
     use sui::sui::SUI;
     use sui::table::{Self, Table};
     use sui::tx_context::sender;
@@ -173,36 +173,36 @@ module games::small_raffle {
     /// functions are allowed, the calling function might abort the transaction depending on the winner.)
     /// Gas based attacks are not possible since the gas cost of this function is independent of the winner.
     entry fun close(game: Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
-        assert!(game.end_time <= clock::timestamp_ms(clock), EGameInProgress);
+        assert!(game.end_time <= clock.timestamp_ms(), EGameInProgress);
         let Game { id, cost_in_sui: _, participants, end_time: _, balance, mut participants_table } = game;
         if (participants > 0) {
             let mut generator = new_generator(r, ctx);
-            let winner = random::generate_u32_in_range(&mut generator, 1, participants);
-            let winner_address = *table::borrow(&participants_table, winner);
+            let winner = generator.generate_u32_in_range(1, participants);
+            let winner_address = participants_table[winner];
             let reward = coin::from_balance(balance, ctx);
             transfer::public_transfer(reward, winner_address);
         } else {
-            balance::destroy_zero(balance);
+            balance.destroy_zero();
         };
 
         let mut i = 1;
         while (i <= participants) {
-            table::remove(&mut participants_table, i);
+            participants_table.remove(i);
             i = i + 1;
         };
-        table::destroy_empty(participants_table);
+        participants_table.destroy_empty();
         object::delete(id);
     }
 
     /// Anyone can play.
     public fun play(game: &mut Game, coin: Coin<SUI>, clock: &Clock, ctx: &mut TxContext) {
-        assert!(game.end_time > clock::timestamp_ms(clock), EGameAlreadyCompleted);
-        assert!(coin::value(&coin) == game.cost_in_sui, EInvalidAmount);
+        assert!(game.end_time > clock.timestamp_ms(), EGameAlreadyCompleted);
+        assert!(coin.value() == game.cost_in_sui, EInvalidAmount);
         assert!(game.participants < MaxParticipants, EReachedMaxParticipants);
 
         game.participants = game.participants + 1;
         coin::put(&mut game.balance, coin);
-        table::add(&mut game.participants_table, game.participants, ctx.sender());
+        game.participants_table.add(game.participants, ctx.sender());
     }
 
     #[test_only]
@@ -222,6 +222,6 @@ module games::small_raffle {
 
     #[test_only]
     public fun get_balance(game: &Game): u64 {
-        balance::value(&game.balance)
+        game.balance.value()
     }
 }

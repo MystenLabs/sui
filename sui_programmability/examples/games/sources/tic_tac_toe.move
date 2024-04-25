@@ -76,9 +76,9 @@ module games::tic_tac_toe {
         let id = object::new(ctx);
         let game_id = object::uid_to_inner(&id);
         let gameboard = vector[
-            vector[.none(), .none(), .none()],
-            vector[.none(), .none(), .none()],
-            vector[.none(), .none(), .none()],
+            vector[option::none(), option::none(), option::none()],
+            vector[option::none(), option::none(), option::none()],
+            vector[option::none(), option::none(), option::none()],
         ];
         let game = TicTacToe {
             id,
@@ -257,14 +257,14 @@ module games::tic_tac_toe {
         let cell2 = get_cell_ref(game, row2, col2);
         let cell3 = get_cell_ref(game, row3, col3);
         if (cell1.is_some() && cell2.is_some() && cell3.is_some()) {
-            let cell1_player = *cell1.borrow().player;
-            let cell2_player = *cell2.borrow().player;
-            let cell3_player = *cell3.borrow().player;
+            let cell1_player = cell1.borrow().player;
+            let cell2_player = cell2.borrow().player;
+            let cell3_player = cell3.borrow().player;
             if (&cell1_player == &cell2_player && &cell1_player == &cell3_player) {
                 return option::some(cell1_player)
             };
         };
-        .none()
+        option::none()
     }
 
     fun delete_mark(mark: Mark) {

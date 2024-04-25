@@ -4,7 +4,7 @@
 /// Example of a game character with basic attributes, inventory, and
 /// associated logic.
 module games::hero {
-    use sui::coin::{Self, Coin};
+    use sui::coin::Coin;
     use sui::event;
     use sui::math;
     use sui::sui::SUI;
@@ -380,7 +380,7 @@ module games::hero {
             test_scenario::return_immutable(game);
         };
         // Player slays the boar!
-        scenario/next_tx(player);
+        scenario.next_tx(player);
         {
             let game = scenario.take_immutable<GameInfo>();
             let game_ref = &game;

@@ -26,7 +26,6 @@
 module games::drand_based_scratch_card {
     use games::drand_lib;
     use sui::balance::Balance;
-    use sui::balance::{Self};
     use sui::coin::{Self, Coin};
     use sui::hmac::hmac_sha3_256;
 

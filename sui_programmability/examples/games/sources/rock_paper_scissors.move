@@ -91,8 +91,8 @@ module games::rock_paper_scissors {
     /// entry point and limits the ability to select a winner, if one of the secrets hasn't
     /// been revealed yet.
     public fun status(game: &Game): u8 {
-        let h1_len = vector::length(&game.hash_one);
-        let h2_len = vector::length(&game.hash_two);
+        let h1_len = game.hash_one.length();
+        let h2_len = game.hash_two.length();
 
         if (game.gesture_one != NONE && game.gesture_two != NONE) {
             STATUS_REVEALED
@@ -123,7 +123,7 @@ module games::rock_paper_scissors {
             hash_two: vector[],
             gesture_one: NONE,
             gesture_two: NONE,
-        }, tx_context::sender(ctx));
+        }, ctx.sender());
     }
 
     /// Transfer [`PlayerTurn`] to the game owner. Nobody at this point knows what move
@@ -134,7 +134,7 @@ module games::rock_paper_scissors {
         transfer::transfer(PlayerTurn {
             hash,
             id: object::new(ctx),
-            player: tx_context::sender(ctx),
+            player: ctx.sender(),
         }, at);
     }
 
@@ -147,9 +147,9 @@ module games::rock_paper_scissors {
         assert!(status == STATUS_HASH_SUBMISSION || status == STATUS_READY, 0);
         assert!(game.player_one == player || game.player_two == player, 0);
 
-        if (player == game.player_one && vector::length(&game.hash_one) == 0) {
+        if (player == game.player_one && game.hash_one.length() == 0) {
             game.hash_one = hash;
-        } else if (player == game.player_two && vector::length(&game.hash_two) == 0) {
+        } else if (player == game.player_two && game.hash_two.length() == 0) {
             game.hash_two = hash;
         } else {
             abort 0 // unreachable!()
@@ -164,7 +164,7 @@ module games::rock_paper_scissors {
         transfer::transfer(Secret {
             id: object::new(ctx),
             salt,
-            player: tx_context::sender(ctx),
+            player: ctx.sender(),
         }, at);
     }
 
@@ -213,7 +213,7 @@ module games::rock_paper_scissors {
         } else if (p2_wins) {
             transfer::public_transfer(prize, player_two)
         } else {
-            transfer::public_transfer(prize, tx_context::sender(ctx))
+            transfer::public_transfer(prize, ctx.sender())
         };
     }
 
@@ -247,7 +247,7 @@ module games::rock_paper_scissors {
     /// that nobody knows the gesture until the end, but at the same time each player commits
     /// to the result with his hash;
     fun hash(gesture: u8, mut salt: vector<u8>): vector<u8> {
-        vector::push_back(&mut salt, gesture);
+        salt.push_back(gesture);
         hash::sha2_256(salt)
     }
 }
