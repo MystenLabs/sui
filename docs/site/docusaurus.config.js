@@ -7,7 +7,6 @@ import math from "remark-math";
 import katex from "rehype-katex";
 
 require("dotenv").config();
-const path = require("path");
 
 /** @type {import('@docusaurus/types').Config} */
 const config = {
