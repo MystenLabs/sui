@@ -63,7 +63,7 @@ jobs:
       - name: Set env
         run: |
           echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
-          echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=info RUST_BACKTRACE=1 $(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
+          echo "E2E_RUN_LOCAL_NET_CMD=($(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}

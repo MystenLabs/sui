@@ -15,7 +15,8 @@
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
-		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"prepare:e2e": "docker-compose --project-directory ../../sdk/typescript down && docker-compose --project-directory ../../sdk/typescript up -d && cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator -- --with-indexer --pg-port 5435 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125"
 	},
 	"dependencies": {
 		"@mysten/bcs": "workspace:*",
@@ -23,6 +24,7 @@
 		"commander": "^11.0.0"
 	},
 	"devDependencies": {
+		"cross-env": "^7.0.3",
 		"vitest": "^0.33.0"
 	}
 }

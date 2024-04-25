@@ -583,6 +583,9 @@ importers:
         specifier: ^11.0.0
         version: 11.0.0
     devDependencies:
+      cross-env:
+        specifier: ^7.0.3
+        version: 7.0.3
       vitest:
         specifier: ^0.33.0
         version: 0.33.0(jsdom@23.0.0)
