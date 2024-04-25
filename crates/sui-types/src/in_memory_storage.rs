@@ -7,6 +7,8 @@ use crate::inner_temporary_store::WrittenObjects;
 use crate::storage::{
     get_module, get_module_by_id, load_package_object_from_object_store, PackageObject,
 };
+use crate::transaction::TransactionDataAPI;
+use crate::transaction::{InputObjectKind, InputObjects, ObjectReadResult, Transaction};
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
@@ -171,6 +173,22 @@ impl InMemoryStorage {
             persistent.insert(o.id(), o);
         }
         Self { persistent }
+    }
+
+    pub fn read_input_objects_for_transaction(&self, transaction: &Transaction) -> InputObjects {
+        let mut input_objects = Vec::new();
+        for kind in transaction.transaction_data().input_objects().unwrap() {
+            let obj: Object = match kind {
+                InputObjectKind::MovePackage(id)
+                | InputObjectKind::ImmOrOwnedMoveObject((id, _, _))
+                | InputObjectKind::SharedMoveObject { id, .. } => {
+                    self.get_object(&id).unwrap().clone()
+                }
+            };
+
+            input_objects.push(ObjectReadResult::new(kind, obj.into()));
+        }
+        input_objects.into()
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {

@@ -22,7 +22,6 @@ use move_core_types::{
 };
 use prometheus::Registry;
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::Intent;
 use similar::{ChangeTag, TextDiff};
 use std::{
     collections::{BTreeMap, HashSet},
@@ -31,27 +30,20 @@ use std::{
     sync::Mutex,
 };
 use sui_config::node::ExpensiveSafetyCheckConfig;
-use sui_core::{
-    authority::{
-        authority_per_epoch_store::AuthorityPerEpochStore,
-        epoch_start_configuration::EpochStartConfiguration,
-        test_authority_builder::TestAuthorityBuilder, AuthorityState, NodeStateDump,
-    },
-    epoch::epoch_metrics::EpochMetrics,
-    module_cache_metrics::ResolverMetrics,
-    signature_verifier::SignatureVerifierMetrics,
-};
+use sui_core::authority::NodeStateDump;
 use sui_execution::Executor;
 use sui_framework::BuiltInFramework;
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
-use sui_types::storage::{get_module, PackageObject};
+use sui_types::in_memory_storage::InMemoryStorage;
+use sui_types::storage::{get_module, InMemorySharedLocks, PackageObject};
+use sui_types::transaction::TransactionKey;
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
     committee::EpochId,
-    digests::{ChainIdentifier, CheckpointDigest, ObjectDigest, TransactionDigest},
+    digests::{ObjectDigest, TransactionDigest},
     error::{ExecutionError, SuiError, SuiResult},
     executable_transaction::VerifiedExecutableTransaction,
     gas::SuiGasStatus,
@@ -60,7 +52,6 @@ use sui_types::{
     object::{Data, Object, Owner},
     storage::get_module_by_id,
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
-    sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{
         CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
         SenderSignedData, Transaction, TransactionDataAPI, TransactionKind, VerifiedTransaction,
@@ -801,64 +792,58 @@ impl LocalExec {
             pre_run_sandbox.transaction_info.chain,
         );
         let required_objects = pre_run_sandbox.required_objects.clone();
+        let store = InMemoryStorage::new(required_objects.clone());
         let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
-        assert_eq!(
-            pre_run_sandbox
-                .transaction_info
-                .sender_signed_data
-                .intent_message()
-                .intent,
-            Intent::sui_transaction()
+        let transaction =
+            Transaction::new(pre_run_sandbox.transaction_info.sender_signed_data.clone());
+
+        let new_tx_digest = transaction.digest();
+        let mut shared_locks = InMemorySharedLocks::new();
+        shared_locks.add_shared_locks(
+            TransactionKey::Digest(*new_tx_digest),
+            shared_object_refs
+                .iter()
+                .map(|(id, version, _)| (*id, *version))
+                .collect(),
         );
 
-        // Begin state prep
-        let (authority_state, epoch_store) = prep_network(
-            &required_objects,
-            reference_gas_price,
+        // TODO: This will not work for deleted shared objects. We need to persist that information in the sandbox.
+        // TODO: A lot of the following code is replicated in several places. We should introduce a few
+        // traits and make them shared so that we don't have to fix one by one when we have major execution
+        // layer changes.
+        let input_objects = store.read_input_objects_for_transaction(&transaction);
+        let executable = VerifiedExecutableTransaction::new_from_quorum_execution(
+            VerifiedTransaction::new_unchecked(transaction),
             executed_epoch,
-            epoch_start_timestamp,
+        );
+        let (gas_status, input_objects) = sui_transaction_checks::check_certificate_input(
+            &executable,
+            input_objects,
             &protocol_config,
+            reference_gas_price,
         )
-        .await;
-
-        let certificate = VerifiedExecutableTransaction::new_from_quorum_execution(
-            VerifiedTransaction::new_unchecked(Transaction::new(
-                pre_run_sandbox.transaction_info.sender_signed_data.clone(),
-            )),
-            executed_epoch,
+        .unwrap();
+        let (kind, signer, gas) = executable.transaction_data().execution_parts();
+        let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
+        let (_, _, effects, exec_res) = executor.execute_transaction_to_effects(
+            &store,
+            &protocol_config,
+            Arc::new(LimitsMetrics::new(&Registry::new())),
+            true,
+            &HashSet::new(),
+            &executed_epoch,
+            epoch_start_timestamp,
+            input_objects,
+            gas,
+            gas_status,
+            kind,
+            signer,
+            *executable.digest(),
         );
 
-        let new_tx_digest = certificate.digest();
-
-        epoch_store
-            .set_shared_object_versions_for_testing(
-                new_tx_digest,
-                &shared_object_refs
-                    .iter()
-                    .map(|(id, version, _)| (*id, *version))
-                    .collect::<Vec<_>>(),
-            )
-            .unwrap();
-
-        // hack to simulate an epoch change just for this transaction
-        {
-            let mut execution_lock = authority_state.execution_lock_for_reconfiguration().await;
-            *execution_lock = executed_epoch;
-            drop(execution_lock);
-        }
-
-        let res = authority_state
-            .try_execute_immediately(&certificate, None, &epoch_store)
-            .await
-            .map_err(ReplayEngineError::from)?;
-
-        let exec_res = match res.1 {
-            Some(q) => Err(q),
-            None => Ok(()),
-        };
         let effects =
-            SuiTransactionBlockEffects::try_from(res.0).map_err(ReplayEngineError::from)?;
+            SuiTransactionBlockEffects::try_from(effects).map_err(ReplayEngineError::from)?;
 
         Ok(ExecutionSandboxState {
             transaction_info: pre_run_sandbox.transaction_info.clone(),
@@ -2003,97 +1988,4 @@ pub fn get_executor(
     let silent = true;
     sui_execution::executor(&protocol_config, silent, enable_profiler)
         .expect("Creating an executor should not fail here")
-}
-
-async fn prep_network(
-    objects: &[Object],
-    reference_gas_price: u64,
-    executed_epoch: u64,
-    epoch_start_timestamp: u64,
-    protocol_config: &ProtocolConfig,
-) -> (Arc<AuthorityState>, Arc<AuthorityPerEpochStore>) {
-    let authority_state = authority_state(protocol_config, objects, reference_gas_price).await;
-    let epoch_store = create_epoch_store(
-        &authority_state,
-        reference_gas_price,
-        executed_epoch,
-        epoch_start_timestamp,
-        protocol_config.version.as_u64(),
-    )
-    .await;
-    *authority_state.execution_lock_for_reconfiguration().await = executed_epoch;
-
-    (authority_state, epoch_store)
-}
-
-async fn authority_state(
-    protocol_config: &ProtocolConfig,
-    objects: &[Object],
-    reference_gas_price: u64,
-) -> Arc<AuthorityState> {
-    // Initiaize some network
-    TestAuthorityBuilder::new()
-        .with_protocol_config(protocol_config.clone())
-        .with_reference_gas_price(reference_gas_price)
-        .with_starting_objects(objects)
-        .build()
-        .await
-}
-
-async fn create_epoch_store(
-    authority_state: &Arc<AuthorityState>,
-    reference_gas_price: u64,
-    executed_epoch: u64,
-    epoch_start_timestamp: u64,
-    protocol_version: u64,
-) -> Arc<AuthorityPerEpochStore> {
-    let sys_state = EpochStartSystemState::new_v1(
-        executed_epoch,
-        protocol_version,
-        reference_gas_price,
-        false,
-        epoch_start_timestamp,
-        ONE_DAY_MS,
-        vec![], // TODO: add validators
-    );
-
-    let path = {
-        let dir = std::env::temp_dir();
-        let store_base_path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        std::fs::create_dir(&store_base_path).unwrap();
-        store_base_path
-    };
-
-    let epoch_start_config = EpochStartConfiguration::new(
-        sys_state,
-        CheckpointDigest::random(),
-        &authority_state.get_object_store(),
-        None,
-    )
-    .unwrap();
-
-    let registry = Registry::new();
-    let cache_metrics = Arc::new(ResolverMetrics::new(&registry));
-    let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
-    let mut committee = authority_state.committee_store().get_latest_committee();
-
-    // Overwrite the epoch so it matches this TXs
-    committee.epoch = executed_epoch;
-
-    let name = committee.names().next().unwrap();
-    AuthorityPerEpochStore::new(
-        *name,
-        Arc::new(committee.clone()),
-        &path,
-        None,
-        EpochMetrics::new(&registry),
-        epoch_start_config,
-        authority_state.get_execution_cache(),
-        cache_metrics,
-        signature_verifier_metrics,
-        &ExpensiveSafetyCheckConfig::default(),
-        // TODO(william) use correct chain ID and generally make replayer
-        // work with chain specific configs
-        ChainIdentifier::from(CheckpointDigest::random()),
-    )
 }

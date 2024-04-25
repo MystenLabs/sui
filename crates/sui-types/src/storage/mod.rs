@@ -527,3 +527,34 @@ pub trait GetSharedLocks: Send + Sync {
         key: &TransactionKey,
     ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError>;
 }
+
+#[derive(Default)]
+pub struct InMemorySharedLocks {
+    shared_version_map: BTreeMap<TransactionKey, Vec<(ObjectID, SequenceNumber)>>,
+}
+
+impl InMemorySharedLocks {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn add_shared_locks(
+        &mut self,
+        tx_key: TransactionKey,
+        locks: Vec<(ObjectID, SequenceNumber)>,
+    ) {
+        self.shared_version_map.insert(tx_key, locks);
+    }
+}
+
+impl GetSharedLocks for InMemorySharedLocks {
+    fn get_shared_locks(
+        &self,
+        key: &TransactionKey,
+    ) -> Result<Vec<(ObjectID, SequenceNumber)>, SuiError> {
+        self.shared_version_map
+            .get(key)
+            .cloned()
+            .ok_or_else(|| SuiError::Unknown(format!("No shared locks found for {:?}", key)))
+    }
+}
