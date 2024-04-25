@@ -2116,8 +2116,8 @@ impl ProtocolConfig {
                 44 => {
                     // Enable consensus digest in consensus commit prologue on all networks..
                     cfg.feature_flags.include_consensus_digest_in_prologue = true;
-                    // Switch between Narwhal and Mysticeti per epoch in tests and devnet.
-                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                    // Switch between Narwhal and Mysticeti per epoch in tests, devnet and testnet.
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_choice = ConsensusChoice::SwapEachEpoch;
                     }
                 }
