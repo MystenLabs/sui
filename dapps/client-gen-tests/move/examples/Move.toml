@@ -1,0 +1,11 @@
+[package]
+name = "Examples"
+version = "0.0.1"
+published-at = "0x75818a1083fface3dec10fc5f7466d3adafe7bcf2485248160ea4bb17b8afabe"
+edition = "2024.beta"
+
+[dependencies]
+Sui = { local = "../../../../crates/sui-framework/packages/sui-framework" }
+
+[addresses]
+examples = "0x8b699fdce543505aeb290ee1b6b5d20fcaa8e8b1a5fc137a8b3facdfa2902209"

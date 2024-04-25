@@ -571,6 +571,18 @@ importers:
         specifier: ^5.8.0
         version: 5.8.0
 
+  dapps/client-gen-tests:
+    dependencies:
+      '@mysten/bcs':
+        specifier: workspace:*
+        version: link:../../sdk/bcs
+      '@mysten/sui.js':
+        specifier: workspace:*
+        version: link:../../sdk/typescript
+      commander:
+        specifier: ^11.0.0
+        version: 11.0.0
+
   dapps/kiosk:
     dependencies:
       '@headlessui/react':
@@ -1485,6 +1497,8 @@ importers:
       wasm-pack:
         specifier: ^0.12.1
         version: 0.12.1
+
+  sdk/move-bytecode-template/pkg: {}
 
   sdk/suins-toolkit:
     dependencies:

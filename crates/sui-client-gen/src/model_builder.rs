@@ -8,11 +8,11 @@ use codespan_reporting::{
 use colored::*;
 use core::fmt;
 use futures::future;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::{
     CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex,
 };
 use move_bytecode_utils::Modules;
+use move_compiler::editions as ME;
 use move_core_types::account_address::AccountAddress;
 use move_model::ast::ModuleName;
 use move_model::model::{FunId, FunctionData, GlobalEnv, Loc, ModuleData, ModuleId, StructId};
@@ -140,6 +140,7 @@ async fn build_source_model<Progress: Write>(
     // TODO: allow some of these options to be passed in as flags
     let build_config = MoveBuildConfig {
         skip_fetch_latest_git_deps: true,
+        default_flavor: Some(ME::Flavor::Sui),
         ..Default::default()
     };
     let resolved_graph = build_config.resolution_graph_for_package(stub_path, &mut io::stderr())?;

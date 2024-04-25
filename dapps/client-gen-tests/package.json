@@ -1,0 +1,19 @@
+{
+	"name": "client-gen-tests",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"dependencies": {
+		"@mysten/bcs": "workspace:*",
+		"@mysten/sui.js": "workspace:*",
+		"commander": "^11.0.0"
+	}
+}
