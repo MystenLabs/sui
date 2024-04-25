@@ -69,7 +69,7 @@ jobs:
 
       - name: Run client-gen tests
         if: ${{ needs.diff.outputs.isClientGenTests == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm dlx concurrently --kill-others --success command-1 "echo 1" 'pnpm --filter client-gen-tests test:e2e'
+        run: pnpm --filter client-gen-tests test:e2e
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
