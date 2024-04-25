@@ -3,7 +3,6 @@
 
 module deepbook::clob_v2 {
     use std::type_name::{Self, TypeName};
-    use std::debug;
 
     use sui::balance::{Self, Balance};
     use sui::clock::{Self, Clock};
@@ -2358,8 +2357,6 @@ module deepbook::clob_v2 {
         order_left: &Order,
         order_right: &Order,
     ): bool {
-        // debug::print(order_left);
-        // debug::print(order_right);
         return (order_left.order_id == order_right.order_id) &&
             (order_left.price == order_right.price) &&
             (order_left.quantity == order_right.quantity) &&

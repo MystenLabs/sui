@@ -5,7 +5,6 @@
 /// Tests for the pool module.
 /// They are sequential and based on top of each other.
 module deepbook::clob_test {
-    use std::debug;
     use sui::clock::{Self, Clock};
     use sui::coin::{Self, mint_for_testing, burn_for_testing};
     use sui::sui::SUI;
@@ -2004,7 +2003,6 @@ module deepbook::clob_test {
                 mint_for_testing<USD>(45000, ctx(&mut test)),
                 ctx(&mut test)
             );
-            debug::print(&coin::value(&quote_coin));
             assert!(coin::value(&base_coin) == 10000 + 4000, 0);
             assert!(coin::value(&quote_coin) == 4800, 0);
             burn_for_testing(base_coin);
@@ -2079,7 +2077,6 @@ module deepbook::clob_test {
             let (base_custodian, quote_custodian) = clob::borrow_custodian(&pool);
             clob::check_balance_invariants_for_account(&alice_account_cap, quote_custodian, base_custodian, &pool);
 
-            debug::print(&coin::value(&quote_coin));
             assert!(coin::value(&base_coin) == 0, 0);
             assert!(coin::value(&quote_coin) == 59700, 0);
             burn_for_testing(base_coin);
@@ -3036,8 +3033,6 @@ module deepbook::clob_test {
                 MAX_PRICE,
                 0,
             );
-            debug::print(&base_quantity_filled);
-            debug::print(&quote_quantity_filled);
             assert!(base_quantity_filled == 10000 + 4000, 0);
             assert!(quote_quantity_filled == 40200, 0);
             test::return_shared(pool);
@@ -3699,8 +3694,6 @@ module deepbook::clob_test {
                 MAX_PRICE,
                 1,
             );
-            debug::print(&base_quantity_filled);
-            debug::print(&quote_quantity_filled);
             assert!(base_quantity_filled == 10000 + 4000, 0);
             assert!(quote_quantity_filled == 40200, 0);
             test::return_shared(pool);
