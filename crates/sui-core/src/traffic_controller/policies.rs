@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::fmt::Debug;
 use std::time::Duration;
 use std::time::{Instant, SystemTime};
-use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, ServiceResponse};
+use sui_types::traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, Weight};
 use tracing::info;
 
 pub struct TrafficSketch {
@@ -121,7 +121,7 @@ impl TrafficSketch {
 pub struct TrafficTally {
     pub connection_ip: Option<IpAddr>,
     pub proxy_ip: Option<IpAddr>,
-    pub result: ServiceResponse,
+    pub weight: Weight,
     pub timestamp: SystemTime,
 }
 
@@ -392,13 +392,13 @@ mod tests {
         let alice = TrafficTally {
             connection_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
             proxy_ip: None,
-            result: ServiceResponse::Validator(Ok(())),
+            weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
         let bob = TrafficTally {
             connection_ip: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
             proxy_ip: None,
-            result: ServiceResponse::Validator(Ok(())),
+            weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
 
