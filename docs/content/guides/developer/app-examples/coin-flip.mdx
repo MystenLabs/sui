@@ -335,7 +335,7 @@ module satoshi_flip::single_player_satoshi {
     const EInsufficientHouseBalance: u64 = 5;
     const EGameDoesNotExist: u64 = 6;
 
-    spublic struct NewGame has copy, drop {
+    public struct NewGame has copy, drop {
         game_id: ID,
         player: address,
         vrf_input: vector<u8>,
