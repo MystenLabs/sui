@@ -1,0 +1,15 @@
+{
+	"extends": "../../sdk/build-scripts/tsconfig.shared.json",
+	"include": ["examples", "tests"],
+	"compilerOptions": {
+		"noEmit": true,
+		"noUnusedParameters": false,
+		"emitDeclarationOnly": false,
+		"module": "CommonJS",
+		"outDir": "dist/cjs",
+		"isolatedModules": true,
+		"jsx": "react-jsx",
+		"rootDir": "."
+	},
+	"references": [{ "path": "../../sdk/typescript" }]
+}
