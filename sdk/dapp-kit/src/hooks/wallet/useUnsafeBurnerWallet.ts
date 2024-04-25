@@ -135,16 +135,19 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockV2Method = async (
 			transactionInput,
 		) => {
-			const { rawEffects, balanceChanges } = await suiClient.signAndExecuteTransactionBlock({
-				signer: keypair,
-				transactionBlock: TransactionBlock.from(transactionInput.transactionBlock),
-				options: {
-					showRawEffects: true,
-					showBalanceChanges: true,
+			const { rawEffects, balanceChanges, digest } = await suiClient.signAndExecuteTransactionBlock(
+				{
+					signer: keypair,
+					transactionBlock: TransactionBlock.from(transactionInput.transactionBlock),
+					options: {
+						showRawEffects: true,
+						showBalanceChanges: true,
+					},
 				},
-			});
+			);
 
 			return {
+				digest,
 				effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
 				balanceChanges:
 					balanceChanges?.map(({ coinType, amount, owner }) => {

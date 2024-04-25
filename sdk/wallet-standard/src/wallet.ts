@@ -79,16 +79,18 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 			version: '2.0.0',
 			signAndExecuteTransactionBlock: async (input) => {
 				const transactionBlock = TransactionBlock.from(input.transactionBlock);
-				const { rawEffects, balanceChanges } = await signAndExecuteTransactionBlock({
+				const { digest, rawEffects, balanceChanges } = await signAndExecuteTransactionBlock({
 					...input,
 					transactionBlock,
 					options: {
 						showRawEffects: true,
 						showBalanceChanges: true,
+						showRawInput: true,
 					},
 				});
 
 				return {
+					digest,
 					effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
 					balanceChanges:
 						balanceChanges?.map(({ coinType, amount, owner }) => {

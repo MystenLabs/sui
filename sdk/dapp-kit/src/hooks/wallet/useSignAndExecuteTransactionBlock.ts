@@ -114,7 +114,7 @@ export function useSignAndExecuteTransactionBlock({
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
 
-			const { rawEffects, balanceChanges } = await client.executeTransactionBlock({
+			const { rawEffects, balanceChanges, digest } = await client.executeTransactionBlock({
 				transactionBlock: transactionBlockBytes,
 				signature,
 				options: {
@@ -124,6 +124,7 @@ export function useSignAndExecuteTransactionBlock({
 			});
 
 			return {
+				digest,
 				effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
 				balanceChanges:
 					balanceChanges?.map(({ coinType, amount, owner }) => {
