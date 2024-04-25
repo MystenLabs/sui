@@ -4,14 +4,12 @@
 
 use crate::{
     binary_config::{BinaryConfig, TableConfig},
-    CompiledModule,
     errors::BinaryLoaderResult,
     file_format::*,
+    CompiledModule,
 };
 use move_core_types::{
-    account_address::AccountAddress,
-    identifier::Identifier,
-    vm_status::StatusCode,
+    account_address::AccountAddress, identifier::Identifier, vm_status::StatusCode,
 };
 // Add simple proptest tests
 // use proptest::prelude::*;
@@ -25,7 +23,7 @@ fn deserialize(
     let mut bytes = vec![];
     module.serialize(&mut bytes).unwrap();
     // deserialize the module just serialized (round trip)
-    CompiledModule::deserialize_with_config(&bytes, &binary_config)
+    CompiledModule::deserialize_with_config(&bytes, binary_config)
 }
 
 //
@@ -273,12 +271,10 @@ fn binary_limits_test() {
     });
     module_test.struct_defs.push(StructDefinition {
         struct_handle: StructHandleIndex(0),
-        field_information: StructFieldInformation::Declared(vec![
-            FieldDefinition {
-                name: IdentifierIndex(0),
-                signature: TypeSignature(SignatureToken::Bool),
-            },
-        ]),
+        field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+            name: IdentifierIndex(0),
+            signature: TypeSignature(SignatureToken::Bool),
+        }]),
     });
     check_limit!(
         module_test,
@@ -301,12 +297,10 @@ fn binary_limits_test() {
     });
     module_test.struct_defs.push(StructDefinition {
         struct_handle: StructHandleIndex(0),
-        field_information: StructFieldInformation::Declared(vec![
-            FieldDefinition {
-                name: IdentifierIndex(0),
-                signature: TypeSignature(SignatureToken::Bool),
-            },
-        ]),
+        field_information: StructFieldInformation::Declared(vec![FieldDefinition {
+            name: IdentifierIndex(0),
+            signature: TypeSignature(SignatureToken::Bool),
+        }]),
     });
     module_test.field_handles.push(FieldHandle {
         owner: StructDefinitionIndex(0),

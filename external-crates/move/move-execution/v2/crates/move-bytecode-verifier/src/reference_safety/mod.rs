@@ -11,7 +11,7 @@
 mod abstract_state;
 
 use crate::{
-    absint::{AbstractInterpreter, TransferFunctions},
+    absint::{AbstractInterpreter, FunctionContext, TransferFunctions},
     reference_safety::abstract_state::{
         STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
     },
@@ -19,8 +19,6 @@ use crate::{
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, IdentifierIndex,
@@ -37,7 +35,7 @@ use std::{
 
 struct ReferenceSafetyAnalysis<'a> {
     resolver: &'a CompiledModule,
-    function_view: &'a FunctionView<'a>,
+    function_context: &'a FunctionContext<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     stack: AbstractStack<AbstractValue>,
 }
@@ -45,12 +43,12 @@ struct ReferenceSafetyAnalysis<'a> {
 impl<'a> ReferenceSafetyAnalysis<'a> {
     fn new(
         resolver: &'a CompiledModule,
-        function_view: &'a FunctionView<'a>,
+        function_context: &'a FunctionContext<'a>,
         name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     ) -> Self {
         Self {
             resolver,
-            function_view,
+            function_context,
             name_def_map,
             stack: AbstractStack::new(),
         }
@@ -69,14 +67,14 @@ impl<'a> ReferenceSafetyAnalysis<'a> {
 
 pub(crate) fn verify<'a>(
     resolver: &'a CompiledModule,
-    function_view: &FunctionView,
+    function_context: &FunctionContext,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(function_view);
+    let initial_state = AbstractState::new(function_context);
 
-    let mut verifier = ReferenceSafetyAnalysis::new(resolver, function_view, name_def_map);
-    verifier.analyze_function(initial_state, function_view, meter)
+    let mut verifier = ReferenceSafetyAnalysis::new(resolver, function_context, name_def_map);
+    verifier.analyze_function(initial_state, function_context, meter)
 }
 
 fn call(
@@ -285,7 +283,7 @@ fn execute_inner(
 
         Bytecode::Ret => {
             let mut return_values = vec![];
-            for _ in 0..verifier.function_view.return_().len() {
+            for _ in 0..verifier.function_context.return_().len() {
                 return_values.push(safe_unwrap_err!(verifier.stack.pop()));
             }
             return_values.reverse();

@@ -12,7 +12,7 @@ use std::{
 use crate::{
     diag,
     diagnostics::Diagnostic,
-    shared::{format_oxford_list, CompilationEnv},
+    shared::{string_utils::format_oxford_list, CompilationEnv},
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;

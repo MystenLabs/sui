@@ -14,8 +14,6 @@
 //! 4. Passed to a function cal::;
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::FunctionView,
     errors::PartialVMError,
     file_format::{
         Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex, FunctionHandle, LocalIndex,
@@ -23,7 +21,7 @@ use move_binary_format::{
     },
 };
 use move_bytecode_verifier::absint::{
-    AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions,
+    AbstractDomain, AbstractInterpreter, FunctionContext, JoinResult, TransferFunctions,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{
@@ -138,7 +136,7 @@ fn verify_id_leak(
         };
         let handle = module.function_handle_at(func_def.function);
         let func_view =
-            FunctionView::function(module, FunctionDefinitionIndex(index as u16), code, handle);
+            FunctionContext::new(module, FunctionDefinitionIndex(index as u16), code, handle);
         let initial_state = AbstractState::new(&func_view);
         let mut verifier = IDLeakAnalysis::new(module, &func_view);
         let function_to_verify = verifier.cur_function();
@@ -178,12 +176,12 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(function_view: &FunctionView) -> Self {
+    pub fn new(function_context: &FunctionContext) -> Self {
         let mut state = AbstractState {
             locals: BTreeMap::new(),
         };
 
-        for param_idx in 0..function_view.parameters().len() {
+        for param_idx in 0..function_context.parameters().len() {
             state
                 .locals
                 .insert(param_idx as LocalIndex, AbstractValue::Other);
@@ -219,15 +217,15 @@ impl AbstractDomain for AbstractState {
 
 struct IDLeakAnalysis<'a> {
     binary_view: &'a CompiledModule,
-    function_view: &'a FunctionView<'a>,
+    function_context: &'a FunctionContext<'a>,
     stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> IDLeakAnalysis<'a> {
-    fn new(binary_view: &'a CompiledModule, function_view: &'a FunctionView<'a>) -> Self {
+    fn new(binary_view: &'a CompiledModule, function_context: &'a FunctionContext<'a>) -> Self {
         Self {
             binary_view,
-            function_view,
+            function_context,
             stack: AbstractStack::new(),
         }
     }
@@ -267,7 +265,7 @@ impl<'a> IDLeakAnalysis<'a> {
     fn cur_function(&self) -> FunctionIdent<'a> {
         let fdef = self
             .binary_view
-            .function_def_at(self.function_view.index().unwrap());
+            .function_def_at(self.function_context.index().unwrap());
         let handle = self.binary_view.function_handle_at(fdef.function);
         self.resolve_function(handle)
     }
@@ -494,7 +492,7 @@ fn execute_inner(
         }
 
         Bytecode::Ret => {
-            verifier.stack_popn(verifier.function_view.return_().len() as u64)?
+            verifier.stack_popn(verifier.function_context.return_().len() as u64)?
         }
 
         Bytecode::BrTrue(_) | Bytecode::BrFalse(_) | Bytecode::Abort => {

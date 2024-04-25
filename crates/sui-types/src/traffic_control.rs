@@ -6,7 +6,9 @@ use core::hash::Hash;
 use jsonrpsee::core::server::helpers::MethodResponse;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fmt::Debug;
+use std::{fmt::Debug, path::PathBuf};
+
+const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
 #[derive(Clone, Debug)]
 pub enum ServiceResponse {
@@ -50,7 +52,7 @@ impl ServiceResponse {
 }
 
 #[serde_as]
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct RemoteFirewallConfig {
     pub remote_fw_url: String,
@@ -59,6 +61,20 @@ pub struct RemoteFirewallConfig {
     pub delegate_spam_blocking: bool,
     #[serde(default)]
     pub delegate_error_blocking: bool,
+    #[serde(default = "default_drain_path")]
+    pub drain_path: PathBuf,
+    /// Time in secs, after which no registered ingress traffic
+    /// will trigger dead mans switch to drain any firewalls
+    #[serde(default = "default_drain_timeout")]
+    pub drain_timeout_secs: u64,
+}
+
+fn default_drain_path() -> PathBuf {
+    PathBuf::from("/tmp/drain")
+}
+
+fn default_drain_timeout() -> u64 {
+    TRAFFIC_SINK_TIMEOUT_SEC
 }
 
 // Serializable representation of policy types, used in config
@@ -98,6 +114,8 @@ pub struct PolicyConfig {
     pub error_policy_type: PolicyType,
     #[serde(default = "default_channel_capacity")]
     pub channel_capacity: usize,
+    #[serde(default = "default_dry_run")]
+    pub dry_run: bool,
 }
 
 impl Default for PolicyConfig {
@@ -108,6 +126,7 @@ impl Default for PolicyConfig {
             spam_policy_type: PolicyType::NoOp,
             error_policy_type: PolicyType::NoOp,
             channel_capacity: 100,
+            dry_run: default_dry_run(),
         }
     }
 }
@@ -117,4 +136,8 @@ pub fn default_connection_blocklist_ttl_sec() -> u64 {
 }
 pub fn default_channel_capacity() -> usize {
     100
+}
+
+pub fn default_dry_run() -> bool {
+    true
 }

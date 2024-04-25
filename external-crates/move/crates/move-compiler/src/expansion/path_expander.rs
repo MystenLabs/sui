@@ -43,7 +43,7 @@ pub enum Access {
     ApplyNamed,
     ApplyPositional,
     Term,
-    Variant,
+    Pattern,
     Module, // Just used for errors
 }
 
@@ -342,7 +342,7 @@ impl Move2024PathExpander {
                     | Access::ApplyNamed
                     | Access::ApplyPositional
                     | Access::Term
-                    | Access::Variant => NameSpace::ModuleMembers,
+                    | Access::Pattern => NameSpace::ModuleMembers,
                     Access::Module => NameSpace::LeadingAccess,
                 };
 
@@ -651,7 +651,7 @@ impl PathExpander for Move2024PathExpander {
                     }
                 }
             }
-            Access::Term | Access::Variant => match chain.value {
+            Access::Term | Access::Pattern => match chain.value {
                 PN::Single(path_entry!(name, tyargs, is_macro))
                     if !is_valid_datatype_or_constant_name(&name.to_string()) =>
                 {
@@ -662,14 +662,6 @@ impl PathExpander for Move2024PathExpander {
                         self.resolve_name_access_chain(context, access, chain);
                     match resolved_name {
                         NR::UnresolvedName(_, name) => (EN::Name(name), tyargs, is_macro),
-                        NR::ModuleAccess(_loc, _mident, _member) if access == Access::Variant => {
-                            context.env.add_diag(unexpected_access_error(
-                                resolved_name.loc(),
-                                resolved_name.name(),
-                                access,
-                            ));
-                            return None;
-                        }
                         NR::ModuleAccess(_loc, mident, member) => {
                             let access = E::ModuleAccess_::ModuleAccess(mident, member);
                             (access, tyargs, is_macro)
@@ -784,7 +776,7 @@ fn unexpected_access_error(loc: Loc, result: String, access: Access) -> Diagnost
         Access::Type | Access::ApplyNamed => "type",
         Access::ApplyPositional => "expression",
         Access::Term => "expression",
-        Access::Variant => "variant",
+        Access::Pattern => "pattern constructor",
         Access::Module => "module",
     };
     let unexpected_msg = if result.starts_with('a') | result.starts_with('e') {
@@ -967,7 +959,7 @@ impl PathExpander for LegacyPathExpander {
         use P::{LeadingNameAccess_ as LN, NameAccessChain_ as PN};
 
         let tn_: ModuleAccessResult = match (access, ptn_) {
-            (Access::Variant, _) => {
+            (Access::Pattern, _) => {
                 context.env.add_diag(ice!((
                     loc,
                     "Attempted to expand a variant with the legacy path expander"
@@ -1175,7 +1167,7 @@ fn unexpected_address_module_error(loc: Loc, nloc: Loc, access: Access) -> Diagn
     let case = match access {
         Access::Type | Access::ApplyNamed | Access::ApplyPositional => "type",
         Access::Term => "expression",
-        Access::Variant => "variant",
+        Access::Pattern => "pattern constructor",
         Access::Module => {
             return ice!(
                 (

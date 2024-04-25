@@ -9,7 +9,6 @@ mod checked {
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
     use crate::type_layout_resolver::TypeLayoutResolver;
-    use move_binary_format::access::ModuleAccess;
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};

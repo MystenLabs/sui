@@ -82,7 +82,7 @@ pub fn publish(
 
     let bytecode_version = get_bytecode_version_from_env();
 
-    // use the the publish_module API from the VM if we do not allow breaking changes
+    // use the publish_module API from the VM if we do not allow breaking changes
     if !ignore_breaking_changes {
         let vm = MoveVM::new(natives).unwrap();
         let mut gas_status = get_gas_status(cost_table, None)?;

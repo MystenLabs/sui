@@ -111,8 +111,7 @@ module crypto::ec_ops {
         vector::append(&mut to_hash, *group_ops::bytes(a3));
         let mut hash = blake2b256(&to_hash);
         // Make sure we are in the right field. Note that for security we only need the lower 128 bits.
-        let len = vector::length(&hash);
-        *vector::borrow_mut(&mut hash, len-1) = 0;
+        *vector::borrow_mut(&mut hash, 0) = 0;
         bls12381::scalar_from_bytes(&hash)
     }
 

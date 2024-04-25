@@ -111,7 +111,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
         }
     }
 
-    /// Finalize the the given type, producing an error if it is not complete.
+    /// Finalize the given type, producing an error if it is not complete.
     fn finalize_type(&self, node_id: NodeId, ty: &Type) -> Type {
         let ty = self.subs.specialize(ty);
         if ty.is_incomplete() {

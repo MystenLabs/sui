@@ -4,10 +4,8 @@
 
 //! This module defines the abstract state for the local safety analysis.
 
-use crate::absint::{AbstractDomain, JoinResult};
+use crate::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},
     CompiledModule,
@@ -42,23 +40,26 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(resolver: &CompiledModule, function_view: &FunctionView) -> PartialVMResult<Self> {
-        let num_args = function_view.parameters().len();
-        let num_locals = num_args + function_view.locals().len();
+    pub fn new(
+        module: &CompiledModule,
+        function_context: &FunctionContext,
+    ) -> PartialVMResult<Self> {
+        let num_args = function_context.parameters().len();
+        let num_locals = num_args + function_context.locals().len();
         let local_states = (0..num_locals)
             .map(|i| if i < num_args { Available } else { Unavailable })
             .collect();
 
-        let all_local_abilities = function_view
+        let all_local_abilities = function_context
             .parameters()
             .0
             .iter()
-            .chain(function_view.locals().0.iter())
-            .map(|st| resolver.abilities(st, function_view.type_parameters()))
+            .chain(function_context.locals().0.iter())
+            .map(|st| module.abilities(st, function_context.type_parameters()))
             .collect::<PartialVMResult<Vec<_>>>()?;
 
         Ok(Self {
-            current_function: function_view.index(),
+            current_function: function_context.index(),
             local_states,
             all_local_abilities,
         })

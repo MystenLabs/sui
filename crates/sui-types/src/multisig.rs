@@ -82,21 +82,10 @@ impl AuthenticatorTrait for MultiSig {
         max_epoch_upper_bound_delta: Option<u64>,
     ) -> Result<(), SuiError> {
         // If there is any zkLogin signatures, filter and check epoch for each.
+        // TODO: call this on all sigs to avoid future lapses
         self.get_zklogin_sigs()?.iter().try_for_each(|s| {
             s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
         })
-    }
-
-    fn verify_uncached_checks<T>(
-        &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _verify_params: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        Ok(())
     }
 
     fn verify_claims<T>(

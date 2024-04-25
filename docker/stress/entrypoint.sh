@@ -4,7 +4,16 @@
 
 export RUST_BACKTRACE=1
 
-sleep "${STARTUP_DELAY_SECONDS:-10}"
+READY=0
+while [ $READY -eq 0 ]
+do
+    READY=`curl --location --request POST $FULLNODE_RPC_ADDRESS \
+    --header 'Content-Type: application/json' \
+    --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}' | grep result | wc -l`
+    sleep 10
+done
+
+echo 'Setup Complete'
 
 /usr/local/bin/stress \
     --staggered-start-max-multiplier "${STRESS_STAGGERED_START_MAX_MULTIPLIER:-0}" \

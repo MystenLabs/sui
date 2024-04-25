@@ -7,10 +7,11 @@ pub mod nodefw_test_server;
 pub mod policies;
 
 use dashmap::DashMap;
+use fs::File;
 use prometheus::IntGauge;
+use std::fs;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
-use tracing::info;
 
 use self::metrics::TrafficControllerMetrics;
 use crate::traffic_controller::nodefw_client::{BlockAddress, BlockAddresses, NodeFWClient};
@@ -25,7 +26,7 @@ use sui_types::error::SuiError;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, ServiceResponse};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
-use tracing::{debug, warn};
+use tracing::{debug, error, info, warn};
 
 type BlocklistT = Arc<DashMap<IpAddr, SystemTime>>;
 
@@ -40,6 +41,7 @@ pub struct TrafficController {
     tally_channel: mpsc::Sender<TrafficTally>,
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
+    dry_run_mode: bool,
 }
 
 impl Debug for TrafficController {
@@ -65,11 +67,20 @@ impl Debug for TrafficController {
 impl TrafficController {
     pub fn spawn(
         policy_config: PolicyConfig,
-        fw_config: Option<RemoteFirewallConfig>,
         metrics: TrafficControllerMetrics,
+        fw_config: Option<RemoteFirewallConfig>,
     ) -> Self {
         let metrics = Arc::new(metrics);
         let (tx, rx) = mpsc::channel(policy_config.channel_capacity);
+        // Memoized drainfile existence state. This is passed into delegation
+        // funtions to prevent them from continuing to populate blocklists
+        // if drain is set, as otherwise it will grow without bounds
+        // without the firewall running to periodically clear it.
+        let mem_drainfile_present = fw_config
+            .as_ref()
+            .map(|config| config.drain_path.exists())
+            .unwrap_or(false);
+
         let ret = Self {
             tally_channel: tx,
             blocklists: Blocklists {
@@ -77,6 +88,7 @@ impl TrafficController {
                 proxy_ips: Arc::new(DashMap::new()),
             },
             metrics: metrics.clone(),
+            dry_run_mode: policy_config.dry_run,
         };
         let blocklists = ret.blocklists.clone();
         spawn_monitored_task!(run_tally_loop(
@@ -84,9 +96,18 @@ impl TrafficController {
             policy_config,
             fw_config,
             blocklists,
-            metrics
+            metrics,
+            mem_drainfile_present,
         ));
         ret
+    }
+
+    pub fn spawn_for_test(
+        policy_config: PolicyConfig,
+        fw_config: Option<RemoteFirewallConfig>,
+    ) -> Self {
+        let metrics = TrafficControllerMetrics::new(&prometheus::Registry::new());
+        Self::spawn(policy_config, metrics, fw_config)
     }
 
     pub fn tally(&self, tally: TrafficTally) {
@@ -98,7 +119,7 @@ impl TrafficController {
         match self.tally_channel.try_send(tally) {
             Err(TrySendError::Full(_)) => {
                 warn!("TrafficController tally channel full, dropping tally");
-                // TODO: metric
+                self.metrics.tally_channel_overflow.inc();
                 // TODO: once we've verified this doesn't happen under normal
                 // conditions, we can consider dropping the request itself given
                 // that clearly the system is overloaded
@@ -128,6 +149,10 @@ impl TrafficController {
         );
         let (conn_check, proxy_check) = futures::future::join(connection_check, proxy_check).await;
         conn_check && proxy_check
+    }
+
+    pub fn dry_run_mode(&self) -> bool {
+        self.dry_run_mode
     }
 
     async fn check_and_clear_blocklist(
@@ -191,55 +216,75 @@ async fn run_tally_loop(
     fw_config: Option<RemoteFirewallConfig>,
     blocklists: Blocklists,
     metrics: Arc<TrafficControllerMetrics>,
+    mut mem_drainfile_present: bool,
 ) {
     let mut spam_policy = TrafficControlPolicy::from_spam_config(policy_config.clone()).await;
     let mut error_policy = TrafficControlPolicy::from_error_config(policy_config.clone()).await;
     let spam_blocklists = Arc::new(blocklists.clone());
     let error_blocklists = Arc::new(blocklists);
-    let node_fw_client = if let Some(fw_config) = &fw_config {
-        if !(fw_config.delegate_spam_blocking || fw_config.delegate_error_blocking) {
-            None
-        } else {
-            Some(NodeFWClient::new(fw_config.remote_fw_url.clone()))
-        }
-    } else {
-        None
-    };
+    let node_fw_client = fw_config
+        .as_ref()
+        .map(|fw_config| NodeFWClient::new(fw_config.remote_fw_url.clone()));
+
+    let timeout = fw_config
+        .as_ref()
+        .map(|fw_config| fw_config.drain_timeout_secs)
+        .unwrap_or(300);
 
     loop {
         tokio::select! {
-            received = receiver.recv() => match received {
-                Some(tally) => {
-                    if let Err(err) = handle_spam_tally(
-                        &mut spam_policy,
-                        &policy_config,
-                        &node_fw_client,
-                        &fw_config,
-                        tally.clone(),
-                        spam_blocklists.clone(),
-                        metrics.clone(),
-                    )
-                    .await {
-                        warn!("Error handling spam tally: {}", err);
+            received = receiver.recv() => {
+                metrics.tallies.inc();
+                match received {
+                    Some(tally) => {
+                        // TODO: spawn a task to handle tallying concurrently
+                        if let Err(err) = handle_spam_tally(
+                            &mut spam_policy,
+                            &policy_config,
+                            &node_fw_client,
+                            &fw_config,
+                            tally.clone(),
+                            spam_blocklists.clone(),
+                            metrics.clone(),
+                            mem_drainfile_present,
+                        )
+                        .await {
+                            warn!("Error handling spam tally: {}", err);
+                        }
+                        if let Err(err) = handle_error_tally(
+                            &mut error_policy,
+                            &policy_config,
+                            &node_fw_client,
+                            &fw_config,
+                            tally,
+                            error_blocklists.clone(),
+                            metrics.clone(),
+                            mem_drainfile_present,
+                        )
+                        .await {
+                            warn!("Error handling error tally: {}", err);
+                        }
                     }
-
-                    if let Err(err) = handle_error_tally(
-                        &mut error_policy,
-                        &policy_config,
-                        &node_fw_client,
-                        &fw_config,
-                        tally,
-                        error_blocklists.clone(),
-                        metrics.clone(),
-                    )
-                    .await {
-                        warn!("Error handling error tally: {}", err);
+                    None => {
+                        info!("TrafficController tally channel closed by all senders");
+                        return;
                     }
                 }
-                None => {
-                    info!("TrafficController tally channel closed by all senders");
-                    return;
-                },
+            }
+            // Dead man's switch - if we suspect something is sinking all traffic to node, disable nodefw
+            _ = tokio::time::sleep(tokio::time::Duration::from_secs(timeout)) => {
+                if let Some(fw_config) = &fw_config {
+                    error!("No traffic tallies received in {} seconds.", fw_config.drain_timeout_secs);
+                    if mem_drainfile_present {
+                        continue;
+                    }
+                    if !fw_config.drain_path.exists() {
+                        mem_drainfile_present = true;
+                        warn!("Draining Node firewall.");
+                        File::create(&fw_config.drain_path)
+                            .expect("Failed to touch nodefw drain file");
+                    }
+                }
             }
         }
     }
@@ -253,6 +298,7 @@ async fn handle_error_tally(
     tally: TrafficTally,
     blocklists: Arc<Blocklists>,
     metrics: Arc<TrafficControllerMetrics>,
+    mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
     if tally.result.is_ok() {
         return Ok(());
@@ -262,7 +308,7 @@ async fn handle_error_tally(
     }
     let resp = policy.handle_tally(tally.clone());
     if let Some(fw_config) = fw_config {
-        if fw_config.delegate_error_blocking {
+        if fw_config.delegate_error_blocking && !mem_drainfile_present {
             let client = nodefw_client
                 .as_ref()
                 .expect("Expected NodeFWClient for blocklist delegation");
@@ -288,10 +334,11 @@ async fn handle_spam_tally(
     tally: TrafficTally,
     blocklists: Arc<Blocklists>,
     metrics: Arc<TrafficControllerMetrics>,
+    mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
     let resp = policy.handle_tally(tally.clone());
     if let Some(fw_config) = fw_config {
-        if fw_config.delegate_spam_blocking {
+        if fw_config.delegate_spam_blocking && !mem_drainfile_present {
             let client = nodefw_client
                 .as_ref()
                 .expect("Expected NodeFWClient for blocklist delegation");

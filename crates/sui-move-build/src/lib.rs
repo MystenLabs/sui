@@ -12,7 +12,6 @@ use std::{
 
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
-    access::ModuleAccess,
     normalized::{self, Type},
     CompiledModule,
 };

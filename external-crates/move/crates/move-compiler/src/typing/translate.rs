@@ -476,7 +476,11 @@ mod check_valid_constant {
             //*****************************************
             // Error cases handled elsewhere
             //*****************************************
-            E::Use(_) | E::Continue(_) | E::Give(_, _) | E::UnresolvedError => return,
+            E::Use(_)
+            | E::Continue(_)
+            | E::Give(_, _)
+            | E::UnresolvedError
+            | E::InvalidAccess(_) => return,
 
             //*****************************************
             // Valid cases
@@ -663,7 +667,7 @@ fn struct_def(context: &mut Context, s: &mut N::StructDefinition) {
 
     let field_map = match &mut s.fields {
         N::StructFields::Native(_) => return,
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
 
     // instantiate types and check constraints
@@ -2167,8 +2171,17 @@ fn match_pattern_(
         };
     }
 
+    macro_rules! maybe_add_drop {
+        ($ty:expr, $msg:expr) => {
+            // If the thing we are matching isn't a ref, a wildcard (or lit/const) drops it.
+            if mut_ref.is_none() && wildcard_needs_drop {
+                context.add_ability_constraint(loc, Some($msg), $ty.clone(), Ability_::Drop);
+            }
+        };
+    }
+
     match pat_ {
-        P::Constructor(m, enum_, variant, tys_opt, fields) => {
+        P::Variant(m, enum_, variant, tys_opt, fields) => {
             let (bt, targs) = core::make_enum_type(context, loc, &m, &enum_, tys_opt);
             let typed_fields = add_variant_field_types(
                 context,
@@ -2182,19 +2195,19 @@ fn match_pattern_(
             );
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
                 let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
-                let fty_ref = rtype!(fty);
-                let fty_out = subtype(
+                let fty_ref = rtype!(fty.clone());
+                subtype(
                     context,
                     f.loc(),
                     || "Invalid pattern field type",
                     tpat.ty.clone(),
                     fty_ref,
                 );
-                (idx, (fty_out, tpat))
+                (idx, (fty, tpat))
             });
             if !context.is_current_module(&m) {
                 let msg = format!(
-                    "Invalid deconstructing pattern for '{}::{}::{}'.\n All enums can only be \
+                    "Invalid pattern for '{}::{}::{}'.\n All enums can only be \
                      matched in the module in which they are declared",
                     &m, &enum_, &variant
                 );
@@ -2204,11 +2217,77 @@ fn match_pattern_(
             }
             let bt = rtype!(bt);
             let pat_ = if let Some(mut_) = mut_ref {
-                TP::BorrowConstructor(*mut_, m, enum_, variant, targs, tfields)
+                TP::BorrowVariant(*mut_, m, enum_, variant, targs, tfields)
             } else {
-                TP::Constructor(m, enum_, variant, targs, tfields)
+                TP::Variant(m, enum_, variant, targs, tfields)
             };
             T::pat(bt, sp(loc, pat_))
+        }
+        P::Struct(m, struct_, tys_opt, fields) => {
+            let (bt, targs) = core::make_struct_type(context, loc, &m, &struct_, tys_opt);
+            let typed_fields = add_struct_field_types(
+                context,
+                loc,
+                "pattern",
+                &m,
+                &struct_,
+                targs.clone(),
+                fields,
+            );
+            let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
+                let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
+                let fty_ref = rtype!(fty.clone());
+                subtype(
+                    context,
+                    f.loc(),
+                    || "Invalid pattern field type",
+                    tpat.ty.clone(),
+                    fty_ref,
+                );
+                (idx, (fty, tpat))
+            });
+            if !context.is_current_module(&m) {
+                let msg = format!(
+                    "Invalid pattern for '{}::{}'.\n All struct can only be \
+                     matched in the module in which they are declared",
+                    &m, &struct_,
+                );
+                context
+                    .env
+                    .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
+            }
+            let bt = rtype!(bt);
+            let pat_ = if let Some(mut_) = mut_ref {
+                TP::BorrowStruct(*mut_, m, struct_, targs, tfields)
+            } else {
+                TP::Struct(m, struct_, targs, tfields)
+            };
+            T::pat(bt, sp(loc, pat_))
+        }
+        P::Constant(m, const_) => {
+            let ty = core::make_constant_type(context, loc, &m, &const_);
+            context
+                .used_module_members
+                .entry(m.value)
+                .or_default()
+                .insert(const_.value());
+            context.add_ability_constraint(
+                loc,
+                Some(format!(
+                    "Invalid 'copy' of value with the '{}' ability. \
+                    Literal patterns copy their values for equality checking",
+                    Ability_::Copy
+                )),
+                ty.clone(),
+                Ability_::Copy,
+            );
+            let msg = format!(
+                "Cannot match constants against values without the '{}' ability. \
+                              Constant patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
+            T::pat(rtype!(ty), sp(loc, TP::Constant(m, const_)))
         }
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
@@ -2226,30 +2305,29 @@ fn match_pattern_(
             context.add_ability_constraint(
                 loc,
                 Some(format!(
-                    "Cannot ignore values without the '{}' ability. \
+                    "Invalid 'copy' of value with the '{}' ability. \
                     Literal patterns copy their values for equality checking",
                     Ability_::Copy
                 )),
                 ty.clone(),
                 Ability_::Copy,
             );
+            let msg = format!(
+                "Cannot match literals against values without the '{}' ability. \
+                              Literal patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
             T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
-            if mut_ref.is_none() && wildcard_needs_drop {
-                // If the thing we are matching isn't a ref, a wildcard drops it.
-                context.add_ability_constraint(
-                    loc,
-                    Some(format!(
-                        "Cannot ignore values without the '{}' ability. \
-                        '_' patterns discard their values",
-                        Ability_::Drop
-                    )),
-                    ty.clone(),
-                    Ability_::Drop,
-                );
-            }
+            let msg = format!(
+                "Cannot ignore values without the '{}' ability. \
+                              '_' patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
             T::pat(rtype!(ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
@@ -2378,13 +2456,17 @@ fn match_pattern_has_rhs_binders(
         N::MatchPattern_::At(x, _, inner) => {
             rhs_binders.contains(x) || match_pattern_has_rhs_binders(inner, rhs_binders)
         }
-        N::MatchPattern_::Constructor(_, _, _, _, fields) => fields
+        N::MatchPattern_::Variant(_, _, _, _, fields) => fields
+            .iter()
+            .any(|(_, _, (_, x))| match_pattern_has_rhs_binders(x, rhs_binders)),
+        N::MatchPattern_::Struct(_, _, _, fields) => fields
             .iter()
             .any(|(_, _, (_, x))| match_pattern_has_rhs_binders(x, rhs_binders)),
         N::MatchPattern_::Or(lhs, rhs) => {
             match_pattern_has_rhs_binders(lhs, rhs_binders)
                 || match_pattern_has_rhs_binders(rhs, rhs_binders)
         }
+        N::MatchPattern_::Constant(_, _) => false,
         N::MatchPattern_::Literal(_) => false,
         N::MatchPattern_::Wildcard => false,
         N::MatchPattern_::ErrorPat => false,
@@ -2717,7 +2799,7 @@ fn add_struct_field_types<T>(
 ) -> Fields<(Type, T)> {
     let maybe_fields_ty = core::make_struct_field_types(context, loc, m, n, targs);
     let mut fields_ty = match maybe_fields_ty {
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
         N::StructFields::Native(nloc) => {
             let msg = format!(
                 "Invalid {} usage for native struct '{}::{}'. Native structs cannot be directly \
@@ -2932,6 +3014,7 @@ enum ExpDottedAccess {
         args: Spanned<Vec<T::Exp>>,
         base_type: Type, /* base (non-ref) return type */
     },
+    UnresolvedError(/* dot's location */ Loc), // whatever came after dot could not be parsed
 }
 
 #[derive(Debug)]
@@ -2960,6 +3043,7 @@ impl ExpDotted {
             match accessor {
                 ExpDottedAccess::Field(_, ty) => ty.clone(),
                 ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
+                ExpDottedAccess::UnresolvedError(_) => sp(Loc::invalid(), Type_::UnresolvedError),
             }
         } else {
             self.base_type.clone()
@@ -3011,6 +3095,11 @@ fn process_exp_dotted(
                 .push(ExpDottedAccess::Field(field, field_type));
             inner
         }
+        N::ExpDotted_::DotUnresolved(loc, ndot) => {
+            let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
+            inner.accessors.push(ExpDottedAccess::UnresolvedError(loc));
+            inner
+        }
         N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
             let inner_ty = inner.last_type();
@@ -3050,7 +3139,7 @@ fn exp_dotted_usage(
     let constraint_verb = match &ndotted.value {
         N::ExpDotted_::Exp(_) => None,
         _ if matches!(usage, DottedUsage::Borrow(_)) => Some("borrow"),
-        N::ExpDotted_::Dot(_, _) => Some("dot access"),
+        N::ExpDotted_::Dot(_, _) | N::ExpDotted_::DotUnresolved(_, _) => Some("dot access"),
         N::ExpDotted_::Index(_, _) => Some("index"),
     };
     let edotted = process_exp_dotted(context, constraint_verb, ndotted);
@@ -3344,6 +3433,11 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 }
                 exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
             }
+            ExpDottedAccess::UnresolvedError(loc) => {
+                let t = sp(Loc::invalid(), Type_::UnresolvedError);
+                exp = Box::new(T::exp(t, sp(loc, T::UnannotatedExp_::InvalidAccess(exp))));
+                break;
+            }
         }
     }
     exp
@@ -3372,6 +3466,10 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
             ExpDottedAccess::Index { base_type, .. } => {
                 ("index result".to_string(), base_type.clone())
             }
+            ExpDottedAccess::UnresolvedError(_) => (
+                "unresolved field".to_string(),
+                sp(Loc::invalid(), Type_::UnresolvedError),
+            ),
         }
     } else {
         context.env.add_diag(ice!((

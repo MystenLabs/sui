@@ -270,7 +270,8 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         | E::Dereference(er)
         | E::UnaryExp(_, er)
         | E::Borrow(_, er, _)
-        | E::TempBorrow(_, er) => exp(context, er),
+        | E::TempBorrow(_, er)
+        | E::InvalidAccess(er) => exp(context, er),
         E::Mutate(el, er) => {
             exp(context, el);
             exp(context, er)
@@ -387,7 +388,14 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
     use T::UnannotatedPat_ as P;
     type_(context, &mut p.ty);
     match &mut p.pat.value {
-        P::Constructor(_, _, _, bts, fields) | P::BorrowConstructor(_, _, _, _, bts, fields) => {
+        P::Variant(_, _, _, bts, fields) | P::BorrowVariant(_, _, _, _, bts, fields) => {
+            types(context, bts);
+            for (_, _, (_, (bt, innerb))) in fields.iter_mut() {
+                type_(context, bt);
+                pat(context, innerb)
+            }
+        }
+        P::Struct(_, _, bts, fields) | P::BorrowStruct(_, _, _, bts, fields) => {
             types(context, bts);
             for (_, _, (_, (bt, innerb))) in fields.iter_mut() {
                 type_(context, bt);
@@ -416,7 +424,7 @@ fn pat(context: &mut Context, p: &mut T::MatchPattern) {
             pat(context, rhs);
         }
         P::At(_var, inner) => pat(context, inner),
-        P::ErrorPat | P::Literal(_) | P::Binder(_, _) | P::Wildcard => (),
+        P::Constant(_, _) | P::ErrorPat | P::Literal(_) | P::Binder(_, _) | P::Wildcard => (),
     }
 }
 

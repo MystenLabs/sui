@@ -233,6 +233,9 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, Box<Type>),
     Annotate(Box<Exp>, Box<Type>),
 
+    // unfinished dot access (e.g. `some_field.`)
+    InvalidAccess(Box<Exp>),
+
     ErrorConstant(Option<ConstantName>),
     UnresolvedError,
 }
@@ -266,14 +269,14 @@ pub type MatchArm = Spanned<MatchArm_>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnannotatedPat_ {
-    Constructor(
+    Variant(
         ModuleIdent,
         DatatypeName,
         VariantName,
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
-    BorrowConstructor(
+    BorrowVariant(
         bool,
         ModuleIdent,
         DatatypeName,
@@ -281,6 +284,20 @@ pub enum UnannotatedPat_ {
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
+    Struct(
+        ModuleIdent,
+        DatatypeName,
+        Vec<Type>,
+        Fields<(Type, MatchPattern)>,
+    ),
+    BorrowStruct(
+        bool,
+        ModuleIdent,
+        DatatypeName,
+        Vec<Type>,
+        Fields<(Type, MatchPattern)>,
+    ),
+    Constant(ModuleIdent, ConstantName),
     Binder(Mutability, Var),
     Literal(Value),
     Wildcard,
@@ -295,10 +312,6 @@ pub type UnannotatedPat = Spanned<UnannotatedPat_>;
 pub struct MatchPattern {
     pub ty: Type,
     pub pat: Spanned<UnannotatedPat_>,
-}
-
-pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
-    MatchPattern { pat, ty }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -360,6 +373,10 @@ pub fn splat_item(env: &mut CompilationEnv, splat_loc: Loc, e: Exp) -> ExpListIt
         }
     };
     ExpListItem::Splat(splat_loc, e, ss)
+}
+
+pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
+    MatchPattern { ty, pat }
 }
 
 //**************************************************************************************************
@@ -806,6 +823,10 @@ impl AstDebug for UnannotatedExp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
+            E::InvalidAccess(e) => {
+                e.ast_debug(w);
+                w.write(".");
+            }
             E::UnresolvedError => w.write("_|_"),
             E::ErrorConstant(constant) => {
                 w.write("ErrorConstant");
@@ -903,7 +924,7 @@ impl AstDebug for MatchPattern {
 impl AstDebug for UnannotatedPat_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         match self {
-            UnannotatedPat_::BorrowConstructor(mut_, m, e, v, tys, fields) => {
+            UnannotatedPat_::BorrowVariant(mut_, m, e, v, tys, fields) => {
                 w.write("&");
                 if *mut_ {
                     w.write("mut ");
@@ -921,7 +942,7 @@ impl AstDebug for UnannotatedPat_ {
                 });
                 w.write("}");
             }
-            UnannotatedPat_::Constructor(m, e, v, tys, fields) => {
+            UnannotatedPat_::Variant(m, e, v, tys, fields) => {
                 w.write(&format!("{}::{}::{}", m, e, v));
                 w.write("<");
                 tys.ast_debug(w);
@@ -934,6 +955,41 @@ impl AstDebug for UnannotatedPat_ {
                     a.ast_debug(w);
                 });
                 w.write("}");
+            }
+            UnannotatedPat_::BorrowStruct(mut_, m, s, tys, fields) => {
+                w.write("&");
+                if *mut_ {
+                    w.write("mut ");
+                }
+                w.write(&format!("{}::{}", m, s));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            UnannotatedPat_::Struct(m, e, tys, fields) => {
+                w.write(&format!("{}::{}", m, e));
+                w.write("<");
+                tys.ast_debug(w);
+                w.write(">");
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_bt_a)| {
+                    let (idx, (bt, a)) = idx_bt_a;
+                    w.annotate(|w| w.write(&format!("{}#{}", idx, f)), bt);
+                    w.write(": ");
+                    a.ast_debug(w);
+                });
+                w.write("}");
+            }
+            UnannotatedPat_::Constant(m, c) => {
+                w.write(&format!("{}::{}", m, c));
             }
             UnannotatedPat_::Or(lhs, rhs) => {
                 w.write("(");

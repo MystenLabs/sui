@@ -156,6 +156,7 @@ impl PTB {
             .read_api()
             .get_reference_gas_price()
             .await?;
+
         // create the transaction data that will be sent to the network
         let tx_data = TransactionData::new_programmable(
             sender,
@@ -164,6 +165,17 @@ impl PTB {
             program_metadata.gas_budget.value,
             gas_price,
         );
+
+        if program_metadata.dry_run_set {
+            let response = context
+                .get_client()
+                .await?
+                .read_api()
+                .dry_run_transaction_block(tx_data)
+                .await?;
+            println!("{}", SuiClientCommandResult::DryRun(response));
+            return Ok(());
+        }
 
         if program_metadata.serialize_unsigned_set {
             serialize_or_execute!(tx_data, true, false, context, PTB).print(true);

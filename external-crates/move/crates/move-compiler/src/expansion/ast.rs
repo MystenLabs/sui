@@ -327,6 +327,7 @@ pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Name),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
+    DotUnresolved(Loc, Box<ExpDotted>), // dot where Name could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -463,7 +464,7 @@ pub enum MatchPattern_ {
         Fields<MatchPattern>,
         Option<Loc>,
     ),
-    HeadConstructor(ModuleAccess, Option<Vec<Type>>),
+    ModuleAccessName(ModuleAccess, Option<Vec<Type>>),
     Binder(Mutability, Var),
     Literal(Value),
     ErrorPat,
@@ -1734,6 +1735,10 @@ impl AstDebug for ExpDotted_ {
                 w.comma(&rhs.value, |w, e| e.ast_debug(w));
                 w.write("]");
             }
+            D::DotUnresolved(_, e) => {
+                e.ast_debug(w);
+                w.write(".")
+            }
         }
     }
 }
@@ -1800,7 +1805,7 @@ impl AstDebug for MatchPattern_ {
                 }
                 w.write("} ");
             }
-            HeadConstructor(name, tys_opt) => {
+            ModuleAccessName(name, tys_opt) => {
                 name.ast_debug(w);
                 if let Some(ss) = tys_opt {
                     w.write("<");

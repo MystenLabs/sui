@@ -4,7 +4,6 @@
 
 //! This module contains verification of usage of dependencies for modules and scripts.
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex,
@@ -502,7 +501,7 @@ fn verify_all_script_visibility_usage(context: &Context) -> PartialVMResult<()> 
                     Some(code) => &code.code,
                 };
                 verify_script_visibility_usage(
-                    &context.resolver,
+                    context.resolver,
                     script_functions,
                     fdef.is_entry,
                     FunctionDefinitionIndex(idx as TableIndex),

@@ -23,7 +23,7 @@ pub(crate) struct WatermarkTask {
     sleep: Duration,
     cancel: CancellationToken,
     sender: watch::Sender<u64>,
-    _receiver: watch::Receiver<u64>,
+    receiver: watch::Receiver<u64>,
 }
 
 pub(crate) type WatermarkLock = Arc<RwLock<Watermark>>;
@@ -46,7 +46,7 @@ impl WatermarkTask {
         sleep: Duration,
         cancel: CancellationToken,
     ) -> Self {
-        let (sender, _receiver) = watch::channel(0);
+        let (sender, receiver) = watch::channel(0);
 
         Self {
             watermark: Default::default(),
@@ -55,7 +55,7 @@ impl WatermarkTask {
             sleep,
             cancel,
             sender,
-            _receiver,
+            receiver,
         }
     }
 
@@ -96,8 +96,9 @@ impl WatermarkTask {
         self.watermark.clone()
     }
 
-    pub(crate) fn _receiver(&self) -> watch::Receiver<u64> {
-        self._receiver.clone()
+    /// Receiver for subscribing to epoch changes.
+    pub(crate) fn epoch_receiver(&self) -> watch::Receiver<u64> {
+        self.receiver.clone()
     }
 }
 

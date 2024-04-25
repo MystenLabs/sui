@@ -12,7 +12,6 @@ use crate::{
 };
 use derive_more::Display;
 use fastcrypto::hash::HashFunction;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
 use move_binary_format::normalized;
@@ -585,11 +584,12 @@ where
                 error: error.to_string(),
             }
         })?;
-        let d = Disassembler::from_view(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
-            SuiError::ObjectSerializationError {
-                error: e.to_string(),
-            }
-        })?;
+        let d =
+            Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc).map_err(|e| {
+                SuiError::ObjectSerializationError {
+                    error: e.to_string(),
+                }
+            })?;
         let bytecode_str = d
             .disassemble()
             .map_err(|e| SuiError::ObjectSerializationError {

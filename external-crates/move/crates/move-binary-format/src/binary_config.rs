@@ -1,7 +1,6 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-
 use crate::file_format_common::VERSION_MAX;
 
 /// Configuration for the binary format related to table size.
@@ -98,4 +97,3 @@ impl BinaryConfig {
         }
     }
 }
-

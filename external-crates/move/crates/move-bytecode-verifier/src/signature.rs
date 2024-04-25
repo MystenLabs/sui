@@ -6,7 +6,6 @@
 //! parameters, locals, and fields of structs are well-formed. References can only occur at the
 //! top-level in all tokens.  Additionally, references cannot occur at all in field types.
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CodeUnit, CompiledModule, FunctionDefinition, FunctionHandle,
@@ -20,7 +19,7 @@ use move_core_types::vm_status::StatusCode;
 use std::collections::{HashMap, HashSet};
 
 pub struct SignatureChecker<'a> {
-    resolver: &'a CompiledModule,
+    module: &'a CompiledModule,
     abilities_cache: HashMap<SignatureIndex, HashSet<Vec<AbilitySet>>>,
 }
 
@@ -31,7 +30,7 @@ impl<'a> SignatureChecker<'a> {
 
     fn verify_module_impl(module: &'a CompiledModule) -> PartialVMResult<()> {
         let mut sig_check = Self {
-            resolver: module,
+            module,
             abilities_cache: HashMap::new(),
         };
         sig_check.verify_signature_pool(module.signatures())?;
@@ -72,7 +71,7 @@ impl<'a> SignatureChecker<'a> {
                 StructFieldInformation::Native => continue,
                 StructFieldInformation::Declared(fields) => fields,
             };
-            let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
+            let struct_handle = self.module.struct_handle_at(struct_def.struct_handle);
             let err_handler = |err: PartialVMError, idx| {
                 err.at_index(IndexKind::FieldDefinition, idx as TableIndex)
                     .at_index(IndexKind::StructDefinition, struct_def_idx as TableIndex)
@@ -129,9 +128,9 @@ impl<'a> SignatureChecker<'a> {
         for (offset, instr) in code.code.iter().enumerate() {
             let result = match instr {
                 CallGeneric(idx) => {
-                    let func_inst = self.resolver.function_instantiation_at(*idx);
-                    let func_handle = self.resolver.function_handle_at(func_inst.handle);
-                    let type_arguments = &self.resolver.signature_at(func_inst.type_parameters).0;
+                    let func_inst = self.module.function_instantiation_at(*idx);
+                    let func_handle = self.module.function_handle_at(func_inst.handle);
+                    let type_arguments = &self.module.signature_at(func_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
                     self.check_generic_instance(
                         type_arguments,
@@ -146,10 +145,10 @@ impl<'a> SignatureChecker<'a> {
                 | MoveToGenericDeprecated(idx)
                 | ImmBorrowGlobalGenericDeprecated(idx)
                 | MutBorrowGlobalGenericDeprecated(idx) => {
-                    let struct_inst = self.resolver.struct_instantiation_at(*idx);
-                    let struct_def = self.resolver.struct_def_at(struct_inst.def);
-                    let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
-                    let type_arguments = &self.resolver.signature_at(struct_inst.type_parameters).0;
+                    let struct_inst = self.module.struct_instantiation_at(*idx);
+                    let struct_def = self.module.struct_def_at(struct_inst.def);
+                    let struct_handle = self.module.struct_handle_at(struct_def.struct_handle);
+                    let type_arguments = &self.module.signature_at(struct_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
                     self.check_generic_instance(
                         type_arguments,
@@ -158,11 +157,11 @@ impl<'a> SignatureChecker<'a> {
                     )
                 }
                 ImmBorrowFieldGeneric(idx) | MutBorrowFieldGeneric(idx) => {
-                    let field_inst = self.resolver.field_instantiation_at(*idx);
-                    let field_handle = self.resolver.field_handle_at(field_inst.handle);
-                    let struct_def = self.resolver.struct_def_at(field_handle.owner);
-                    let struct_handle = self.resolver.struct_handle_at(struct_def.struct_handle);
-                    let type_arguments = &self.resolver.signature_at(field_inst.type_parameters).0;
+                    let field_inst = self.module.field_instantiation_at(*idx);
+                    let field_handle = self.module.field_handle_at(field_inst.handle);
+                    let struct_def = self.module.struct_def_at(field_handle.owner);
+                    let struct_handle = self.module.struct_handle_at(struct_def.struct_handle);
+                    let type_arguments = &self.module.signature_at(field_inst.type_parameters).0;
                     self.check_signature_tokens(type_arguments)?;
                     self.check_generic_instance(
                         type_arguments,
@@ -178,7 +177,7 @@ impl<'a> SignatureChecker<'a> {
                 | VecPopBack(idx)
                 | VecUnpack(idx, _)
                 | VecSwap(idx) => {
-                    let type_arguments = &self.resolver.signature_at(*idx).0;
+                    let type_arguments = &self.module.signature_at(*idx).0;
                     if type_arguments.len() != 1 {
                         return Err(PartialVMError::new(
                             StatusCode::NUMBER_OF_TYPE_ARGUMENTS_MISMATCH,
@@ -271,7 +270,7 @@ impl<'a> SignatureChecker<'a> {
             SignatureToken::Vector(ty) => self.check_phantom_params(ty, false, type_parameters)?,
             SignatureToken::StructInstantiation(struct_inst) => {
                 let (idx, type_arguments) = &**struct_inst;
-                let sh = self.resolver.struct_handle_at(*idx);
+                let sh = self.module.struct_handle_at(*idx);
                 for (i, ty) in type_arguments.iter().enumerate() {
                     self.check_phantom_params(
                         ty,
@@ -310,7 +309,7 @@ impl<'a> SignatureChecker<'a> {
     /// Checks if the given type is well defined in the given context.
     /// References are only permitted at the top level.
     fn check_signature(&self, idx: SignatureIndex) -> PartialVMResult<()> {
-        for token in &self.resolver.signature_at(idx).0 {
+        for token in &self.module.signature_at(idx).0 {
             match token {
                 SignatureToken::Reference(inner) | SignatureToken::MutableReference(inner) => {
                     self.check_signature_token(inner)?
@@ -361,7 +360,7 @@ impl<'a> SignatureChecker<'a> {
                 return Ok(());
             }
         };
-        for ty in &self.resolver.signature_at(idx).0 {
+        for ty in &self.module.signature_at(idx).0 {
             self.check_type_instantiation(ty, type_parameters)?
         }
         let checked_abilities = self.abilities_cache.entry(idx).or_default();
@@ -374,7 +373,7 @@ impl<'a> SignatureChecker<'a> {
         s: &SignatureToken,
         type_parameters: &[AbilitySet],
     ) -> PartialVMResult<()> {
-        if self.resolver.version() >= VERSION_6 {
+        if self.module.version() >= VERSION_6 {
             for ty in s.preorder_traversal() {
                 self.check_type_instantiation_(ty, type_parameters)?
             }
@@ -397,7 +396,7 @@ impl<'a> SignatureChecker<'a> {
                 // Cannot be checked completely if we do not know the constraints of type parameters
                 // i.e. it cannot be checked unless we are inside some module member. The only case
                 // where that happens is when checking the signature pool itself
-                let sh = self.resolver.struct_handle_at(*idx);
+                let sh = self.module.struct_handle_at(*idx);
                 self.check_generic_instance(
                     type_arguments,
                     sh.type_param_constraints(),
@@ -441,7 +440,7 @@ impl<'a> SignatureChecker<'a> {
         }
 
         for (constraint, ty) in constraints.into_iter().zip(type_arguments) {
-            let given = self.resolver.abilities(ty, global_abilities)?;
+            let given = self.module.abilities(ty, global_abilities)?;
             if !constraint.is_subset(given) {
                 return Err(PartialVMError::new(StatusCode::CONSTRAINT_NOT_SATISFIED)
                     .with_message(format!(

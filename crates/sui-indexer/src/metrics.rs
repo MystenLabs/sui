@@ -406,7 +406,7 @@ impl IndexerMetrics {
             )
             .unwrap(),
             checkpoint_db_commit_latency_objects_snapshot: register_histogram_with_registry!(
-                "checkpoint_db_commit_latency_objects_snapshots",
+                "checkpoint_db_commit_latency_objects_snapshot",
                 "Time spent commiting objects snapshots",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,

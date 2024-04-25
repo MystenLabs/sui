@@ -11,7 +11,7 @@ use lsp_types::{
     HoverProviderCapability, OneOf, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
     TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgressOptions,
 };
-use move_compiler::{command_line::compiler::FullyCompiledProgram, linters::LintLevel};
+use move_compiler::linters::LintLevel;
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -53,7 +53,7 @@ fn main() {
     let (connection, io_threads) = Connection::stdio();
     let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
     let pkg_deps = Arc::new(Mutex::new(
-        BTreeMap::<PathBuf, Arc<FullyCompiledProgram>>::new(),
+        BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
     ));
     let ide_files_root: VfsPath = MemoryFS::new().into();
     let context = Context {
@@ -260,7 +260,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
-    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, Arc<FullyCompiledProgram>>>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecompiledPkgDeps>>>,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {

@@ -1,22 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::VecDeque;
-use std::ops::Range;
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    ops::Bound::{Excluded, Included},
+    collections::{BTreeMap, BTreeSet, VecDeque},
+    ops::{
+        Bound::{Excluded, Included},
+        Range,
+    },
 };
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use super::{CommitInfo, Store, WriteBatch};
-use crate::block::Slot;
-use crate::commit::{CommitAPI as _, TrustedCommit};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, VerifiedBlock},
-    commit::{CommitDigest, CommitIndex},
+    block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRef, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -63,10 +62,10 @@ impl Store for MemStore {
                 block_ref.round,
                 block_ref.digest,
             ));
-            for commit in block.commit_votes() {
+            for vote in block.commit_votes() {
                 inner
                     .commit_votes
-                    .insert((commit.index, commit.digest, block_ref));
+                    .insert((vote.index, vote.digest, block_ref));
             }
         }
         if let Some(last_commit) = write_batch.commits.last().cloned() {
@@ -75,12 +74,13 @@ impl Store for MemStore {
                     .commits
                     .insert((commit.index(), commit.digest()), commit);
             }
-            let commit_info = CommitInfo {
-                last_committed_rounds: write_batch.last_committed_rounds,
-            };
-            inner
-                .commit_info
-                .insert((last_commit.index(), last_commit.digest()), commit_info);
+            // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
+            if let Some(last_commit_info) = write_batch.last_commit_info {
+                inner.commit_info.insert(
+                    (last_commit.index(), last_commit.digest()),
+                    last_commit_info,
+                );
+            }
         }
         Ok(())
     }
@@ -192,8 +192,24 @@ impl Store for MemStore {
         Ok(commits)
     }
 
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>> {
+    fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>> {
         let inner = self.inner.read();
-        Ok(inner.commit_info.last_key_value().map(|(_k, v)| v.clone()))
+        let votes = inner
+            .commit_votes
+            .range((
+                Included((commit_index, CommitDigest::MIN, BlockRef::MIN)),
+                Included((commit_index, CommitDigest::MAX, BlockRef::MAX)),
+            ))
+            .map(|(_, _, block_ref)| *block_ref)
+            .collect();
+        Ok(votes)
+    }
+
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
+        let inner = self.inner.read();
+        Ok(inner
+            .commit_info
+            .last_key_value()
+            .map(|(k, v)| (CommitRef::new(k.0, k.1), v.clone())))
     }
 }

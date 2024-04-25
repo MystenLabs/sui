@@ -1,4 +1,4 @@
-This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. 
+This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. Auto-generated documentation for this crate is [here](https://mystenlabs.github.io/sui/sui_sdk/index.html).
 
 ## Getting started
 

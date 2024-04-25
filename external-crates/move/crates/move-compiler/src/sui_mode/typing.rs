@@ -122,7 +122,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.set_module(ident);
         self.in_test = mdef.attributes.is_test_or_test_only();
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
-            let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
+            let valid_fields = if let N::StructFields::Defined(_, fields) = &sdef.fields {
                 invalid_otw_field_loc(fields).is_none()
             } else {
                 true
@@ -187,7 +187,7 @@ fn struct_def(context: &mut Context, name: DatatypeName, sdef: &N::StructDefinit
         return;
     };
 
-    let StructFields::Defined(fields) = fields else {
+    let StructFields::Defined(_, fields) = fields else {
         return;
     };
     let invalid_first_field = if fields.is_empty() {
@@ -476,7 +476,7 @@ fn check_otw_type(
         valid = false;
     }
 
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         let invalid_otw_opt = invalid_otw_field_loc(fields);
         if let Some(invalid_otw_opt) = invalid_otw_opt {
             let msg_base = format!(

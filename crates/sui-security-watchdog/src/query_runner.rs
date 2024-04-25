@@ -109,7 +109,10 @@ impl SnowflakeQueryRunner {
         })
     }
 
-    pub fn from_config(config: &SecurityWatchdogConfig) -> anyhow::Result<Self> {
+    pub fn from_config(
+        config: &SecurityWatchdogConfig,
+        sf_password: String,
+    ) -> anyhow::Result<Self> {
         Self::new(
             config
                 .sf_account_identifier
@@ -122,7 +125,7 @@ impl SnowflakeQueryRunner {
             config.sf_schema.as_ref().cloned().unwrap().as_str(),
             config.sf_username.as_ref().cloned().unwrap().as_str(),
             config.sf_role.as_ref().cloned().unwrap().as_str(),
-            config.sf_password.as_ref().cloned().unwrap().as_str(),
+            sf_password.clone().as_str(),
         )
     }
 

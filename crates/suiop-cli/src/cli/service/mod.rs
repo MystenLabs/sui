@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-mod init;
+pub mod init;
 
 use anyhow::Result;
 use clap::Parser;

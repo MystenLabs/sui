@@ -38,6 +38,11 @@ runs:
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
+          - 'Cargo.lock'
+          - 'Cargo.toml'
+          - 'deny.toml'
+          - 'rust-toolchain.toml'
+          - 'rustfmt.toml'
         isDoc:
           - 'docs/content/**'
           - '*.mdx'

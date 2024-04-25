@@ -7,10 +7,9 @@
 
 use std::num::NonZeroU64;
 
+use crate::absint::FunctionContext;
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::FunctionView,
     control_flow_graph::ControlFlowGraph,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
@@ -53,17 +52,17 @@ impl<'a> Locals<'a> {
 
 struct TypeSafetyChecker<'a> {
     resolver: &'a CompiledModule,
-    function_view: &'a FunctionView<'a>,
+    function_context: &'a FunctionContext<'a>,
     locals: Locals<'a>,
     stack: AbstractStack<SignatureToken>,
 }
 
 impl<'a> TypeSafetyChecker<'a> {
-    fn new(resolver: &'a CompiledModule, function_view: &'a FunctionView<'a>) -> Self {
-        let locals = Locals::new(function_view.parameters(), function_view.locals());
+    fn new(resolver: &'a CompiledModule, function_context: &'a FunctionContext<'a>) -> Self {
+        let locals = Locals::new(function_context.parameters(), function_context.locals());
         Self {
             resolver,
-            function_view,
+            function_context,
             locals,
             stack: AbstractStack::new(),
         }
@@ -75,12 +74,12 @@ impl<'a> TypeSafetyChecker<'a> {
 
     fn abilities(&self, t: &SignatureToken) -> PartialVMResult<AbilitySet> {
         self.resolver
-            .abilities(t, self.function_view.type_parameters())
+            .abilities(t, self.function_context.type_parameters())
     }
 
     fn error(&self, status: StatusCode, offset: CodeOffset) -> PartialVMError {
         PartialVMError::new(status).at_code_offset(
-            self.function_view
+            self.function_context
                 .index()
                 .unwrap_or(FunctionDefinitionIndex(0)),
             offset,
@@ -143,14 +142,14 @@ impl<'a> TypeSafetyChecker<'a> {
 
 pub(crate) fn verify<'a>(
     resolver: &'a CompiledModule,
-    function_view: &'a FunctionView<'a>,
+    function_context: &'a FunctionContext<'a>,
     meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let verifier = &mut TypeSafetyChecker::new(resolver, function_view);
+    let verifier = &mut TypeSafetyChecker::new(resolver, function_context);
 
-    for block_id in function_view.cfg().blocks() {
-        for offset in function_view.cfg().instr_indexes(block_id) {
-            let instr = &verifier.function_view.code().code[offset as usize];
+    for block_id in function_context.cfg().blocks() {
+        for offset in function_context.cfg().instr_indexes(block_id) {
+            let instr = &verifier.function_context.code().code[offset as usize];
             verify_instr(verifier, instr, offset, meter)?
         }
     }
@@ -468,7 +467,7 @@ fn verify_instr(
             let operand = safe_unwrap_err!(verifier.stack.pop());
             let abilities = verifier
                 .resolver
-                .abilities(&operand, verifier.function_view.type_parameters());
+                .abilities(&operand, verifier.function_context.type_parameters());
             if !abilities?.has_drop() {
                 return Err(verifier.error(StatusCode::POP_WITHOUT_DROP_ABILITY, offset));
             }
@@ -496,7 +495,7 @@ fn verify_instr(
         }
 
         Bytecode::Ret => {
-            let return_ = &verifier.function_view.return_().0;
+            let return_ = &verifier.function_context.return_().0;
             for return_type in return_.iter().rev() {
                 let operand = safe_unwrap_err!(verifier.stack.pop());
                 if &operand != return_type {
@@ -584,7 +583,10 @@ fn verify_instr(
             let local_signature = verifier.local_at(*idx).clone();
             if !verifier
                 .resolver
-                .abilities(&local_signature, verifier.function_view.type_parameters())?
+                .abilities(
+                    &local_signature,
+                    verifier.function_context.type_parameters(),
+                )?
                 .has_copy()
             {
                 return Err(verifier.error(StatusCode::COPYLOC_WITHOUT_COPY_ABILITY, offset));

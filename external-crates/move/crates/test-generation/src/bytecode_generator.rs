@@ -11,14 +11,11 @@ use crate::{
     control_flow_graph::CFG,
     substitute, summaries,
 };
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
-        FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
-        FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
-        StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
-    },
+use move_binary_format::file_format::{
+    Bytecode, CodeOffset, CompiledModule, ConstantPoolIndex, FieldHandleIndex,
+    FieldInstantiationIndex, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,
+    FunctionInstantiationIndex, LocalIndex, SignatureToken, StructDefInstantiation,
+    StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation, TableIndex,
 };
 use move_core_types::u256::U256;
 use rand::{rngs::StdRng, Rng};
@@ -376,13 +373,15 @@ impl<'a> BytecodeGenerator<'a> {
                 }
                 BytecodeType::U128(instruction) => {
                     // Generate a random u128 constant to load
-                    Some(instruction(Box::new(self.rng.gen_range(0..u128::max_value()))))
+                    Some(instruction(Box::new(
+                        self.rng.gen_range(0..u128::max_value()),
+                    )))
                 }
                 BytecodeType::U256(instruction) => {
                     // Generate a random u256 constant to load
-                    Some(instruction(
-                        Box::new(self.rng.gen_range(U256::zero()..U256::max_value())),
-                    ))
+                    Some(instruction(Box::new(
+                        self.rng.gen_range(U256::zero()..U256::max_value()),
+                    )))
                 }
                 BytecodeType::ConstantPoolIndex(instruction) => {
                     // Select a random address from the module's address pool

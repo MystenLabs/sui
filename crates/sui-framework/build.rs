@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use move_binary_format::CompiledModule;
+use move_binary_format::{file_format::Visibility, CompiledModule};
 use move_compiler::editions::Edition;
 use move_package::{BuildConfig as MoveBuildConfig, LintFlag};
 use std::{
@@ -14,6 +14,7 @@ use std::{
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 
 const DOCS_DIR: &str = "docs";
+const PUBLISHED_API_DIR: &str = "published_api.txt";
 
 /// Save revision info to environment variable
 fn main() {
@@ -160,10 +161,14 @@ fn build_packages_with_move_config(
     let deepbook = deepbook_pkg.get_deepbook_modules();
     let move_stdlib = framework_pkg.get_stdlib_modules();
 
-    serialize_modules_to_file(sui_system, &out_dir.join(system_dir)).unwrap();
-    serialize_modules_to_file(sui_framework, &out_dir.join(framework_dir)).unwrap();
-    serialize_modules_to_file(deepbook, &out_dir.join(deepbook_dir)).unwrap();
-    serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
+    let sui_system_members =
+        serialize_modules_to_file(sui_system, &out_dir.join(system_dir)).unwrap();
+    let sui_framework_members =
+        serialize_modules_to_file(sui_framework, &out_dir.join(framework_dir)).unwrap();
+    let deepbook_members =
+        serialize_modules_to_file(deepbook, &out_dir.join(deepbook_dir)).unwrap();
+    let stdlib_members = serialize_modules_to_file(move_stdlib, &out_dir.join(stdlib_dir)).unwrap();
+
     // write out generated docs
     if write_docs {
         // Remove the old docs directory -- in case there was a module that was deleted (could
@@ -193,6 +198,16 @@ fn build_packages_with_move_config(
             fs::create_dir_all(dst_path.parent().unwrap()).unwrap();
             fs::write(dst_path, doc).unwrap();
         }
+
+        let published_api = [
+            sui_system_members.join("\n"),
+            sui_framework_members.join("\n"),
+            deepbook_members.join("\n"),
+            stdlib_members.join("\n"),
+        ]
+        .join("\n");
+
+        fs::write(PUBLISHED_API_DIR, published_api).unwrap();
     }
 }
 
@@ -242,9 +257,29 @@ fn relocate_docs(prefix: &str, files: &[(String, String)], output: &mut BTreeMap
 fn serialize_modules_to_file<'a>(
     modules: impl Iterator<Item = &'a CompiledModule>,
     file: &Path,
-) -> Result<()> {
+) -> Result<Vec<String>> {
     let mut serialized_modules = Vec::new();
+    let mut members = vec![];
     for module in modules {
+        let module_name = module.self_id().short_str_lossless();
+        for def in module.struct_defs() {
+            let sh = module.struct_handle_at(def.struct_handle);
+            let sn = module.identifier_at(sh.name);
+            members.push(format!("{sn}\n\tpublic struct\n\t{module_name}"));
+        }
+
+        for def in module.function_defs() {
+            let fh = module.function_handle_at(def.function);
+            let fn_ = module.identifier_at(fh.name);
+            let viz = match def.visibility {
+                Visibility::Public => "public ",
+                Visibility::Friend => "public(package) ",
+                Visibility::Private => "",
+            };
+            let entry = if def.is_entry { "entry " } else { "" };
+            members.push(format!("{fn_}\n\t{viz}{entry}fun\n\t{module_name}"));
+        }
+
         let mut buf = Vec::new();
         module.serialize(&mut buf)?;
         serialized_modules.push(buf);
@@ -258,5 +293,5 @@ fn serialize_modules_to_file<'a>(
 
     fs::write(file, binary)?;
 
-    Ok(())
+    Ok(members)
 }
