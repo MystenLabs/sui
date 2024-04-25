@@ -35,6 +35,8 @@ module.exports = {
 		'storybook-static',
 		'.next',
 		'sdk/docs/public/typedoc',
+		'dapps/client-gen-tests/examples/gen',
+		'dapps/client-gen-tests/tests/gen',
 	],
 	rules: {
 		'no-case-declarations': 'off',

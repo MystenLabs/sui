@@ -1,0 +1,12 @@
+[config]
+rpc = "https://fullnode.testnet.sui.io:443"
+
+[packages]
+ExamplesChain = { id = "0x75818a1083fface3dec10fc5f7466d3adafe7bcf2485248160ea4bb17b8afabe" }
+SuiChain = { id = "0x2" }
+MoveStdlibChain = { id = "0x1" }
+
+AMM = { local = "../move/amm" }
+Examples = { local = "../move/examples" }
+Sui = { local = "../../../crates/sui-framework/packages/sui-framework" }
+MoveStdlib = { local = "../../../crates/sui-framework/packages/move-stdlib" }
