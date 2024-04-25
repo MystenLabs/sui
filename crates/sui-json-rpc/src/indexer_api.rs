@@ -217,6 +217,10 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 )
                 .await
                 .map_err(Error::from)?;
+            // De-dup digests, duplicate digests are possible, for example,
+            // when get_transactions_by_move_function with module or function being None.
+            let mut seen = std::collections::HashSet::new();
+            digests.retain(|digest| seen.insert(*digest));
 
             // extract next cursor
             let has_next_page = digests.len() > limit;
