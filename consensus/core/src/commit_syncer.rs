@@ -151,7 +151,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                         if range_end > quorum_commit_index {
                             break 'pending;
                         }
-                        pending_fetches.insert(CommitRange::new(range_start..range_end));
+                        pending_fetches.insert((range_start..range_end).into());
                         // quorum_commit_index should be non-decreasing, so highest_scheduled_index should not
                         // decrease either.
                         highest_scheduled_index = Some(range_end);
@@ -178,7 +178,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                     let (commit_start, commit_end) = (commits.first().unwrap().index(), commits.last().unwrap().index());
                     // Allow returning partial results, and try fetching the rest separately.
                     if commit_end < target_end {
-                        pending_fetches.insert(CommitRange::new(commit_end + 1..target_end));
+                        pending_fetches.insert((commit_end + 1..target_end).into());
                     }
                     // Make sure synced_commit_index is up to date.
                     synced_commit_index = synced_commit_index.max(inner.dag_state.read().last_commit_index());

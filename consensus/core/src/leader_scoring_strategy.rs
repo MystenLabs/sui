@@ -307,7 +307,6 @@ mod tests {
     use super::*;
     use crate::{
         block::{timestamp_utc_ms, BlockTimestampMs, TestBlock, VerifiedBlock},
-        commit::CommitRange,
         context::Context,
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -329,7 +328,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, (1..1).into());
     }
 
     #[test]
@@ -344,7 +343,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, (1..1).into());
     }
 
     #[test]
@@ -359,7 +358,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, (1..1).into());
     }
 
     #[test]
@@ -374,7 +373,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, (1..1).into());
     }
 
     fn basic_setup() -> (

@@ -3,7 +3,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
-    ops::Bound::{Excluded, Included, Unbounded},
+    ops::Bound::{Excluded, Included},
 };
 
 use consensus_config::AuthorityIndex;
@@ -29,7 +29,7 @@ struct Inner {
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
     commits: BTreeMap<(CommitIndex, CommitDigest), TrustedCommit>,
     commit_votes: BTreeSet<(CommitIndex, CommitDigest, BlockRef)>,
-    commit_info: BTreeMap<CommitRange, CommitInfo>,
+    commit_info: BTreeMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
 impl MemStore {
@@ -79,6 +79,7 @@ impl Store for MemStore {
         if let Some((commit_ref, last_commit_info)) = write_batch.last_commit_info {
             inner
                 .commit_info
+                .insert((commit_index, commit_digest), commit_info);
                 .insert((commit_ref.index, commit_ref.digest), last_commit_info);
         }
 
@@ -205,11 +206,15 @@ impl Store for MemStore {
         Ok(votes)
     }
 
+    fn read_last_commit_info(
+        &self,
+    ) -> ConsensusResult<Option<((CommitIndex, CommitDigest), CommitInfo)>> {
     fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>> {
         let inner = self.inner.read();
         Ok(inner
             .commit_info
             .last_key_value()
+            .map(|(k, v)| (*k, v.clone())))
             .map(|(k, v)| (CommitRef::new(k.0, k.1), v.clone())))
     }
 }
