@@ -81,14 +81,14 @@ module games::shared_tic_tac_toe {
     public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
         assert!(row < 3 && col < 3, EInvalidLocation);
         assert!(game.game_status == IN_PROGRESS, EGameEnded);
-        let addr = get_cur_turn_address(game);
+        let addr = game.get_cur_turn_address();
         assert!(addr == ctx.sender(), EInvalidTurn);
 
         let cell = &mut game.gameboard[row as u64][col as u64];
         assert!(*cell == MARK_EMPTY, ECellOccupied);
 
         *cell = game.cur_turn % 2;
-        update_winner(game);
+        game.update_winner();
         game.cur_turn = game.cur_turn + 1;
 
         if (game.game_status != IN_PROGRESS) {

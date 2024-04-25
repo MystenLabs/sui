@@ -128,20 +128,20 @@ module games::tic_tac_toe {
     public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContext) {
         // If we are placing the mark at the wrong turn, or if game has ended,
         // destroy the mark.
-        let addr = get_cur_turn_address(game);
+        let addr = game.get_cur_turn_address();
         if (game.game_status != IN_PROGRESS || &addr != &mark.player) {
-            delete_mark(mark);
+            mark.delete();
             return
         };
         let cell = get_cell_mut_ref(game, mark.row, mark.col);
         if (cell.is_some()) {
             // There is already a mark in the desired location.
             // Destroy the mark.
-            delete_mark(mark);
+            mark.delete();
             return
         };
         cell.fill(mark);
-        update_winner(game);
+        game.update_winner();
         game.cur_turn = game.cur_turn + 1;
 
         if (game.game_status != IN_PROGRESS) {
@@ -163,7 +163,7 @@ module games::tic_tac_toe {
                 let mut element = row.pop_back();
                 if (element.is_some()) {
                     let mark = element.extract();
-                    delete_mark(mark);
+                    mark.delete();
                 };
                 element.destroy_none();
             };
@@ -266,6 +266,8 @@ module games::tic_tac_toe {
         };
         option::none()
     }
+
+    use fun delete_mark as Mark.delete;
 
     fun delete_mark(mark: Mark) {
         let Mark { id, player: _, row: _, col: _ } = mark;
