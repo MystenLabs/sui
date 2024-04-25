@@ -8,7 +8,7 @@
 		"generate:tests": "cargo run --bin sui client-gen -m tests/gen.toml -o tests/gen",
 		"generate:move": "cargo run --bin sui move build -p move/amm && cargo run --bin sui move build -p move/examples",
 		"generate": "pnpm run generate:move && pnpm run generate:example && pnpm run generate:tests",
-		"type-check": "tsc --noEmit",
+		"type-check": "tsc -b",
 		"test:e2e": "pnpm generate && pnpm type-check && vitest run tests",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
