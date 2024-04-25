@@ -1,5 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::collections::HashSet;
+use std::sync::Arc;
 
 use anyhow::bail;
 use async_trait::async_trait;
@@ -13,7 +15,6 @@ use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_core_types::language_storage::TypeTag;
 use mysten_metrics::spawn_monitored_task;
 use serde::Serialize;
-use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_api::{
@@ -219,7 +220,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
                 .map_err(Error::from)?;
             // De-dup digests, duplicate digests are possible, for example,
             // when get_transactions_by_move_function with module or function being None.
-            let mut seen = std::collections::HashSet::new();
+            let mut seen = HashSet::new();
             digests.retain(|digest| seen.insert(*digest));
 
             // extract next cursor
