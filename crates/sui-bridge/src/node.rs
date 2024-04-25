@@ -6,6 +6,7 @@ use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     config::{BridgeClientConfig, BridgeNodeConfig},
     eth_syncer::EthSyncer,
+    events::init_all_struct_tags,
     orchestrator::BridgeOrchestrator,
     server::{handler::BridgeRequestHandler, run_server},
     storage::BridgeOrchestratorTables,
@@ -23,6 +24,7 @@ use tokio::task::JoinHandle;
 use tracing::info;
 
 pub async fn run_bridge_node(config: BridgeNodeConfig) -> anyhow::Result<JoinHandle<()>> {
+    init_all_struct_tags();
     let (server_config, client_config) = config.validate().await?;
 
     // Start Client

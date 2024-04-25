@@ -6,6 +6,8 @@
 //! Bridge module. We rely on structures in this file to decode
 //! the bcs content of the emitted events.
 
+#![allow(non_upper_case_globals)]
+
 use std::str::FromStr;
 
 use crate::error::BridgeError;
@@ -23,10 +25,11 @@ use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
 
+use sui_types::bridge::MoveTypeBridgeMessageKey;
 use sui_types::digests::TransactionDigest;
 use sui_types::BRIDGE_PACKAGE_ID;
 
-// This is the event structure defined and emitted in Move
+// `TokenBridgeEvent` emitted in bridge.move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct MoveTokenBridgeEvent {
     pub message_type: u8,
@@ -37,6 +40,30 @@ pub struct MoveTokenBridgeEvent {
     pub target_address: Vec<u8>,
     pub token_type: u8,
     pub amount_sui_adjusted: u64,
+}
+
+// `TokenTransferApproved` emitted in bridge.move
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct MoveTokenTransferApproved {
+    pub message_key: MoveTypeBridgeMessageKey,
+}
+
+// `TokenTransferClaimed` emitted in bridge.move
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct MoveTokenTransferClaimed {
+    pub message_key: MoveTypeBridgeMessageKey,
+}
+
+// `TokenTransferAlreadyApproved` emitted in bridge.move
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct MoveTokenTransferAlreadyApproved {
+    pub message_key: MoveTypeBridgeMessageKey,
+}
+
+// `TokenTransferAlreadyClaimed` emitted in bridge.move
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct MoveTokenTransferAlreadyClaimed {
+    pub message_key: MoveTypeBridgeMessageKey,
 }
 
 // Sanitized version of MoveTokenBridgeEvent
@@ -50,6 +77,102 @@ pub struct EmittedSuiToEthTokenBridgeV1 {
     pub token_id: u8,
     // The amount of tokens deposited with decimal points on Sui side
     pub amount_sui_adjusted: u64,
+}
+
+// Sanitized version of MoveTokenTransferApproved
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+pub struct TokenTransferApproved {
+    pub nonce: u64,
+    pub source_chain: BridgeChainId,
+}
+
+impl TryFrom<MoveTokenTransferApproved> for TokenTransferApproved {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveTokenTransferApproved) -> BridgeResult<Self> {
+        let source_chain = BridgeChainId::try_from(event.message_key.source_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferApproved to TokenTransferApproved. Failed to convert source chain {} to BridgeChainId",
+                event.message_key.source_chain,
+            ))
+        })?;
+        Ok(Self {
+            nonce: event.message_key.bridge_seq_num,
+            source_chain,
+        })
+    }
+}
+
+// Sanitized version of MoveTokenTransferClaimed
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+pub struct TokenTransferClaimed {
+    pub nonce: u64,
+    pub source_chain: BridgeChainId,
+}
+
+impl TryFrom<MoveTokenTransferClaimed> for TokenTransferClaimed {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveTokenTransferClaimed) -> BridgeResult<Self> {
+        let source_chain = BridgeChainId::try_from(event.message_key.source_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferClaimed to TokenTransferClaimed. Failed to convert source chain {} to BridgeChainId",
+                event.message_key.source_chain,
+            ))
+        })?;
+        Ok(Self {
+            nonce: event.message_key.bridge_seq_num,
+            source_chain,
+        })
+    }
+}
+
+// Sanitized version of MoveTokenTransferAlreadyApproved
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+pub struct TokenTransferAlreadyApproved {
+    pub nonce: u64,
+    pub source_chain: BridgeChainId,
+}
+
+impl TryFrom<MoveTokenTransferAlreadyApproved> for TokenTransferAlreadyApproved {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveTokenTransferAlreadyApproved) -> BridgeResult<Self> {
+        let source_chain = BridgeChainId::try_from(event.message_key.source_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferAlreadyApproved to TokenTransferAlreadyApproved. Failed to convert source chain {} to BridgeChainId",
+                event.message_key.source_chain,
+            ))
+        })?;
+        Ok(Self {
+            nonce: event.message_key.bridge_seq_num,
+            source_chain,
+        })
+    }
+}
+
+// Sanitized version of MoveTokenTransferAlreadyClaimed
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
+pub struct TokenTransferAlreadyClaimed {
+    pub nonce: u64,
+    pub source_chain: BridgeChainId,
+}
+
+impl TryFrom<MoveTokenTransferAlreadyClaimed> for TokenTransferAlreadyClaimed {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveTokenTransferAlreadyClaimed) -> BridgeResult<Self> {
+        let source_chain = BridgeChainId::try_from(event.message_key.source_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTokenTransferAlreadyClaimed to TokenTransferAlreadyClaimed. Failed to convert source chain {} to BridgeChainId",
+                event.message_key.source_chain,
+            ))
+        })?;
+        Ok(Self {
+            nonce: event.message_key.bridge_seq_num,
+            source_chain,
+        })
+    }
 }
 
 impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
@@ -112,18 +235,14 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
     }
 }
 
-// TODO: update this once we have bridge package on sui framework
-pub fn get_bridge_event_struct_tag() -> &'static str {
-    static BRIDGE_EVENT_STRUCT_TAG: OnceCell<String> = OnceCell::new();
-    BRIDGE_EVENT_STRUCT_TAG.get_or_init(|| {
-        let bridge_package_id = BRIDGE_PACKAGE_ID;
-        format!("0x{}::bridge::TokenBridgeEvent", bridge_package_id.to_hex())
-    })
-}
-
 crate::declare_events!(
-    SuiToEthTokenBridgeV1(EmittedSuiToEthTokenBridgeV1) => (get_bridge_event_struct_tag(), MoveTokenBridgeEvent)
-    // Add new event types here. Format: EnumVariantName(Struct) => ("StructTagString", CorrespondingMoveStruct)
+    SuiToEthTokenBridgeV1(EmittedSuiToEthTokenBridgeV1) => ("bridge::TokenBridgeEvent", MoveTokenBridgeEvent),
+    TokenTransferApproved(TokenTransferApproved) => ("bridge::TokenTransferApproved", MoveTokenTransferApproved),
+    TokenTransferClaimed(TokenTransferClaimed) => ("bridge::TokenTransferClaimed", MoveTokenTransferClaimed),
+    TokenTransferAlreadyApproved(TokenTransferAlreadyApproved) => ("bridge::TokenTransferAlreadyApproved", MoveTokenTransferAlreadyApproved),
+    TokenTransferAlreadyClaimed(TokenTransferAlreadyClaimed) => ("bridge::TokenTransferAlreadyClaimed", MoveTokenTransferAlreadyClaimed),
+    // Add new event types here. Format:
+    // EnumVariantName(Struct) => ("{module}::{event_struct}", CorrespondingMoveStruct)
 );
 
 #[macro_export]
@@ -135,12 +254,11 @@ macro_rules! declare_events {
             $($variant($type),)*
         }
 
-        #[allow(non_upper_case_globals)]
-        $(pub(crate) static $variant: OnceCell<StructTag> = OnceCell::new();)*
+        $(pub static $variant: OnceCell<StructTag> = OnceCell::new();)*
 
         pub(crate) fn init_all_struct_tags() {
             $($variant.get_or_init(|| {
-                StructTag::from_str($event_tag).unwrap()
+                StructTag::from_str(&format!("0x{}::{}", BRIDGE_PACKAGE_ID.to_hex(), $event_tag)).unwrap()
             });)*
         }
 
@@ -176,21 +294,21 @@ impl SuiBridgeEvent {
                     sui_bridge_event: event.clone(),
                 }))
             }
+            SuiBridgeEvent::TokenTransferApproved(_event) => None,
+            SuiBridgeEvent::TokenTransferClaimed(_event) => None,
+            SuiBridgeEvent::TokenTransferAlreadyApproved(_event) => None,
+            SuiBridgeEvent::TokenTransferAlreadyClaimed(_event) => None,
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
-    use super::get_bridge_event_struct_tag;
-    use super::EmittedSuiToEthTokenBridgeV1;
-    use super::MoveTokenBridgeEvent;
+    use super::*;
     use crate::types::BridgeAction;
     use crate::types::BridgeActionType;
     use crate::types::SuiToEthBridgeAction;
     use ethers::types::Address as EthAddress;
-    use move_core_types::language_storage::StructTag;
-    use std::str::FromStr;
     use sui_json_rpc_types::SuiEvent;
     use sui_types::base_types::ObjectID;
     use sui_types::base_types::SuiAddress;
@@ -202,6 +320,7 @@ pub mod tests {
 
     /// Returns a test SuiEvent and corresponding BridgeAction
     pub fn get_test_sui_event_and_action(identifier: Identifier) -> (SuiEvent, BridgeAction) {
+        init_all_struct_tags(); // Ensure all tags are initialized
         let sanitized_event = EmittedSuiToEthTokenBridgeV1 {
             nonce: 1,
             sui_chain_id: BridgeChainId::SuiTestnet,
@@ -230,8 +349,7 @@ pub mod tests {
             sui_bridge_event: sanitized_event.clone(),
         });
         let event = SuiEvent {
-            // For this test to pass, match what is in events.rs
-            type_: StructTag::from_str(get_bridge_event_struct_tag()).unwrap(),
+            type_: SuiToEthTokenBridgeV1.get().unwrap().clone(),
             bcs: bcs::to_bytes(&emitted_event).unwrap(),
             id: EventID {
                 tx_digest,

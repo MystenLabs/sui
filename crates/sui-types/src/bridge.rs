@@ -419,7 +419,7 @@ pub struct MoveTypeCommitteeMember {
 }
 
 /// Rust version of the Move message::BridgeMessageKey type.
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct MoveTypeBridgeMessageKey {
     pub source_chain: u8,
     pub message_type: u8,
