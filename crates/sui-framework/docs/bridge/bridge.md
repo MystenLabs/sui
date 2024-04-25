@@ -1018,11 +1018,8 @@ title: Module `0xb::bridge`
 ) {
     <b>let</b> (token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="../sui-framework/clock.md#0x2_clock">clock</a>, <a href="bridge.md#0xb_bridge">bridge</a>, source_chain, bridge_seq_num, ctx);
     <b>if</b> (token.is_some()) {
-        <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(
-            token.destroy_some(),
-        owner
-        )
-    }<b>else</b>{
+        <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(token.destroy_some(), owner)
+    } <b>else</b> {
         token.destroy_none();
     };
 }
