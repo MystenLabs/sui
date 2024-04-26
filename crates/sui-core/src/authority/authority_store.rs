@@ -140,18 +140,22 @@ impl AuthorityStore {
     pub async fn open(
         perpetual_tables: Arc<AuthorityPerpetualTables>,
         genesis: &Genesis,
-        indirect_objects_threshold: usize,
-        enable_epoch_sui_conservation_check: bool,
+        config: &NodeConfig,
         registry: &Registry,
     ) -> SuiResult<Arc<Self>> {
+        let indirect_objects_threshold = config.indirect_objects_threshold;
+        let enable_epoch_sui_conservation_check = config
+            .expensive_safety_check_config
+            .enable_epoch_sui_conservation_check();
+
         let epoch_start_configuration = if perpetual_tables.database_is_empty()? {
             info!("Creating new epoch start config from genesis");
 
             #[allow(unused_mut)]
-            let mut initial_epoch_flags = None;
+            let mut initial_epoch_flags = EpochFlag::default_flags_for_new_epoch(config);
             fail_point_arg!("initial_epoch_flags", |flags: Vec<EpochFlag>| {
                 info!("Setting initial epoch flags to {:?}", flags);
-                initial_epoch_flags = Some(flags);
+                initial_epoch_flags = flags;
             });
 
             let epoch_start_configuration = EpochStartConfiguration::new(

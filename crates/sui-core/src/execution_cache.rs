@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::epoch_start_configuration::EpochFlag;
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -115,22 +115,55 @@ impl ExecutionCacheTraitPointers {
 
 static ENABLE_WRITEBACK_CACHE_ENV_VAR: &str = "ENABLE_WRITEBACK_CACHE";
 
+#[derive(Debug)]
+pub enum ExecutionCacheConfigType {
+    WritebackCache,
+    PassthroughCache,
+}
+
+pub fn choose_execution_cache(config: &ExecutionCacheConfig) -> ExecutionCacheConfigType {
+    #[cfg(msim)]
+    {
+        let mut use_random_cache = None;
+        sui_macros::fail_point_if!("select-random-cache", || {
+            let random = rand::random::<bool>();
+            tracing::info!("Randomly selecting cache: {}", random);
+            use_random_cache = Some(random);
+        });
+        if let Some(random) = use_random_cache {
+            if random {
+                return ExecutionCacheConfigType::PassthroughCache;
+            } else {
+                return ExecutionCacheConfigType::WritebackCache;
+            }
+        }
+    }
+
+    if std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
+        || matches!(config, ExecutionCacheConfig::WritebackCache { .. })
+    {
+        ExecutionCacheConfigType::WritebackCache
+    } else {
+        ExecutionCacheConfigType::PassthroughCache
+    }
+}
+
 pub fn build_execution_cache(
-    config: &ExecutionCacheConfig,
+    epoch_start_config: &EpochStartConfiguration,
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
-    let enable_write_back_cache = std::env::var(ENABLE_WRITEBACK_CACHE_ENV_VAR).is_ok()
-        || matches!(config, ExecutionCacheConfig::WritebackCache { .. });
-    if enable_write_back_cache {
-        ExecutionCacheTraitPointers::new(
+
+    let cache = epoch_start_config.execution_cache_type();
+    tracing::info!("using cache impl {:?}", cache);
+    match cache {
+        ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
             WritebackCache::new(store.clone(), execution_cache_metrics).into(),
-        )
-    } else {
-        ExecutionCacheTraitPointers::new(
+        ),
+        ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
             PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
-        )
+        ),
     }
 }
 

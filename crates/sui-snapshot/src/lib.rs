@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
+use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::epoch_start_configuration::EpochStartConfiguration;
 use sui_core::checkpoints::CheckpointStore;
 use sui_core::epoch::committee_store::CommitteeStore;
@@ -227,11 +228,12 @@ pub async fn setup_db_state(
         .get_epoch_last_checkpoint(epoch)
         .expect("Error loading last checkpoint for current epoch")
         .expect("Could not load last checkpoint for current epoch");
+    let flags = EpochFlag::default_for_no_config();
     let epoch_start_configuration = EpochStartConfiguration::new(
         new_epoch_start_state,
         *last_checkpoint.digest(),
         &perpetual_db,
-        None,
+        flags,
     )
     .unwrap();
     perpetual_db.set_epoch_start_configuration(&epoch_start_configuration)?;

@@ -257,6 +257,8 @@ mod test {
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
 
+        register_fail_point_if("select-random-cache", || true);
+
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 1000)
                 .with_num_unpruned_validators(4)
