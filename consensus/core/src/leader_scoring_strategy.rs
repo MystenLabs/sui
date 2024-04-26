@@ -306,7 +306,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::{timestamp_utc_ms, BlockTimestampMs, TestBlock, VerifiedBlock},
+        block::{BlockTimestampMs, TestBlock, VerifiedBlock},
         context::Context,
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -448,7 +448,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             commit_index,
         )];
         (context, committer, unscored_subdags)

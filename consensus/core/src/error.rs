@@ -8,7 +8,7 @@ use typed_store::TypedStoreError;
 
 use crate::{
     block::{BlockRef, Round},
-    commit::{Commit, CommitIndex, CommitRange},
+    commit::{Commit, CommitIndex},
 };
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.

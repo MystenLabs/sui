@@ -10,7 +10,6 @@ use std::{
 };
 
 use consensus_config::AuthorityIndex;
-use serde::{Deserialize, Serialize};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -339,7 +338,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::{timestamp_utc_ms, BlockTimestampMs, TestBlock},
+        block::{BlockTimestampMs, TestBlock},
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         leader_scoring_strategy::VoteScoringStrategy,
@@ -468,7 +467,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             commit_index,
         )];
         let mut calculator = ReputationScoreCalculator::new(
@@ -540,7 +539,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             1,
         )];
         let mut calculator = ReputationScoreCalculator::new(
@@ -623,7 +622,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             commit_index,
         )];
         let mut calculator = ReputationScoreCalculator::new(
