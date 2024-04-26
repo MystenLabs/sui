@@ -152,8 +152,10 @@ mod tests {
         context::Context,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
-        test_dag::{build_dag, get_all_uncommitted_leader_blocks},
+        test_dag::{get_all_uncommitted_leader_blocks},
     };
+    use crate::block::BlockRef;
+    use crate::test_dag_builder::DagBuilder;
 
     #[test]
     fn test_handle_commit() {
@@ -169,7 +171,9 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
-        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=num_rounds).persist_layers(dag_state.clone());
+
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule,
@@ -219,24 +223,27 @@ mod tests {
         let mut linearizer = Linearizer::new(dag_state.clone());
         let wave_length = DEFAULT_WAVE_LENGTH;
 
-        let mut blocks = vec![];
-        let mut ancestors = None;
         let leader_round_wave_1 = 3;
+        let leader_round_wave_2 = leader_round_wave_1 + wave_length;
 
-        // Build dag layers for rounds 0 ~ 2 and maintain list of blocks to be included
-        // in the subdag of the leader of wave 1.
-        for n in 0..leader_round_wave_1 {
-            ancestors = Some(build_dag(context.clone(), dag_state.clone(), ancestors, n));
-            blocks.extend(ancestors.clone().unwrap());
-        }
+        // Build a Dag from round 1..=6
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=leader_round_wave_2).build().persist_layers(dag_state.clone());
 
-        // Build dag layer for round 3 which is the leader round of wave 1
-        ancestors = Some(build_dag(
-            context.clone(),
-            dag_state.clone(),
-            ancestors,
-            leader_round_wave_1,
-        ));
+        // Now retrieve all the blocks up to round leader_round_wave_1 - 1
+        // And then only the leader of round leader_round_wave_1
+        // Also store those to DagState
+        let blocks = dag_builder
+            .blocks
+            .iter()
+            .flat_map(|(block_ref ,block)|{
+            if block_ref.round < leader_round_wave_1 || (block_ref.round == leader_round_wave_1 && block_ref.author == leader_schedule.elect_leader(leader_round_wave_1, 0)) {
+                Some(block.reference())
+            } else {
+                None
+            }
+        }).collect::<Vec<BlockRef>>();
+
 
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
@@ -246,15 +253,6 @@ mod tests {
             false,
             1,
         );
-
-        // Add leader block to first committed subdag blocks
-        blocks.push(leaders[0].reference());
-
-        let mut last_committed_rounds = vec![0; num_authorities];
-        for block in blocks.iter() {
-            let last_committed_round = last_committed_rounds[block.author];
-            last_committed_rounds[block.author] = std::cmp::max(last_committed_round, block.round);
-        }
 
         let first_leader = leaders[0].clone();
         let mut last_commit_index = 1;
@@ -267,34 +265,21 @@ mod tests {
         );
         dag_state.write().add_commit(first_commit_data);
 
-        blocks.clear();
-        let leader_round_wave_2 = leader_round_wave_1 + wave_length;
-
-        // Add all nonleader blocks from round 3 to the blocks which will be part
-        // of the second committed subdag
-        blocks.extend(
-            ancestors
-                .clone()
-                .unwrap()
-                .into_iter()
-                .filter(|block_ref| block_ref.author != first_leader.author())
-                .collect::<Vec<_>>(),
-        );
-
-        // Build dag layers for rounds 4 ~ 5 and maintain list of blocks to be included
-        // in the subdag of the leader of wave 1.
-        for n in leader_round_wave_1 + 1..leader_round_wave_2 {
-            ancestors = Some(build_dag(context.clone(), dag_state.clone(), ancestors, n));
-            blocks.extend(ancestors.clone().unwrap());
-        }
-
-        // Build dag layer for round 6 which is the leader round of wave 2
-        build_dag(
-            context.clone(),
-            dag_state.clone(),
-            ancestors,
-            leader_round_wave_2,
-        );
+        let mut blocks = dag_builder
+            .blocks
+            .iter()
+            .flat_map(|(block_ref ,block)|{
+                // Add all nonleader blocks from round 3
+                if (block_ref.round == leader_round_wave_1 && block_ref.author != leader_schedule.elect_leader(leader_round_wave_1, 0)) ||
+                    (block_ref.round > leader_round_wave_1 && block_ref.round < leader_round_wave_2) ||
+                    // Add leader block which is the leader round of wave 2 (round == 6)
+                    (block_ref.round == leader_round_wave_2 && block_ref.author == leader_schedule.elect_leader(leader_round_wave_2, 0)) {
+                    Some(block.reference())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<BlockRef>>();
 
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
@@ -304,9 +289,6 @@ mod tests {
             false,
             1,
         );
-
-        // Add leader block to second committed subdag blocks
-        blocks.push(leaders[1].reference());
 
         last_commit_index += 1;
         let second_leader = leaders[1].clone();
