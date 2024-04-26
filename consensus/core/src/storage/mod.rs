@@ -13,6 +13,7 @@ use crate::{
     block::{BlockRef, Round, Slot, VerifiedBlock},
     commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
+    CommitIndex,
 };
 
 /// A common interface for consensus storage.
@@ -64,19 +65,19 @@ pub(crate) trait Store: Send + Sync {
 pub(crate) struct WriteBatch {
     pub(crate) blocks: Vec<VerifiedBlock>,
     pub(crate) commits: Vec<TrustedCommit>,
-    pub(crate) last_commit_info: Option<(CommitRef, CommitInfo)>,
+    pub(crate) commit_info: Vec<(CommitRef, CommitInfo)>,
 }
 
 impl WriteBatch {
     pub(crate) fn new(
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
-        last_commit_info: Option<(CommitRef, CommitInfo)>,
+        commit_info: Vec<(CommitRef, CommitInfo)>,
     ) -> Self {
         WriteBatch {
             blocks,
             commits,
-            last_commit_info,
+            commit_info,
         }
     }
 
@@ -95,11 +96,8 @@ impl WriteBatch {
     }
 
     #[cfg(test)]
-    pub(crate) fn last_commit_info(
-        mut self,
-        last_commit_info: Vec<(CommitRef, CommitInfo)>,
-    ) -> Self {
-        self.last_commit_info = last_commit_info;
+    pub(crate) fn commit_info(mut self, commit_info: Vec<(CommitRef, CommitInfo)>) -> Self {
+        self.commit_info = commit_info;
         self
     }
 }

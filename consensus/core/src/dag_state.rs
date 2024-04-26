@@ -20,7 +20,7 @@ use crate::{
     },
     commit::{
         load_committed_subdag_from_store, CommitAPI as _, CommitDigest, CommitIndex, CommitInfo,
-        CommitRange, CommitInfo, CommitVote, CommittedSubDag, TrustedCommit,
+        CommitRef, CommitVote, CommittedSubDag, TrustedCommit,
     },
     context::Context,
     leader_scoring::ReputationScores,
@@ -77,7 +77,7 @@ pub(crate) struct DagState {
     // Buffer the reputation scores & last_committed_rounds to be flushed with the
     // next dag state flush. This is okay because we can recover reputation scores
     // & last_committed_rounds from the commits as needed.
-    commit_info_to_write: Vec<((CommitIndex, CommitDigest), CommitInfo)>,
+    commit_info_to_write: Vec<(CommitRef, CommitInfo)>,
 
     // Persistent storage for blocks, commits and other consensus data.
     store: Arc<dyn Store>,
@@ -108,16 +108,14 @@ impl DagState {
                 .read_last_commit_info()
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
             if let Some((commit_ref, commit_info)) = commit_info {
-                let mut last_committed_rounds = commit_info.committed_rounds;
+                let mut committed_rounds = commit_info.committed_rounds;
                 let last_commit = last_commit
                     .as_ref()
                     .expect("There exists commit info, so the last commit should exist as well.");
 
                 if last_commit.index() > commit_ref.index {
-                    let commit_range =
-                        CommitRange::new((commit_ref.index + 1)..last_commit.index() + 1);
                     let committed_blocks = store
-                        .scan_commits(((commit_index + 1)..last_commit.index() + 1).into())
+                        .scan_commits(((commit_ref.index + 1)..last_commit.index() + 1).into())
                         .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
                         .iter()
                         .flat_map(|commit| {
@@ -129,12 +127,12 @@ impl DagState {
                         .collect::<Vec<_>>();
 
                     for block in committed_blocks {
-                        last_committed_rounds[block.author()] =
-                            max(last_committed_rounds[block.author()], block.round());
+                        committed_rounds[block.author()] =
+                            max(committed_rounds[block.author()], block.round());
                     }
                 }
 
-                last_committed_rounds
+                committed_rounds
             } else {
                 vec![0; num_authorities]
             }
@@ -611,14 +609,14 @@ impl DagState {
 
         let commit_info = CommitInfo {
             reputation_scores,
-            last_committed_rounds: self.last_committed_rounds.clone(),
+            committed_rounds: self.last_committed_rounds.clone(),
         };
         let last_commit = self
             .last_commit
             .as_ref()
             .expect("Last commit should already be set.");
         self.commit_info_to_write
-            .push(((last_commit.index(), last_commit.digest()), commit_info));
+            .push((last_commit.reference(), commit_info));
     }
 
     pub(crate) fn take_commit_votes(&mut self, limit: usize) -> Vec<CommitVote> {
@@ -770,7 +768,8 @@ impl DagState {
             .store
             .read_last_commit_info()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-        if let Some(((_, _), commit_info)) = commit_info {
+        if let Some((commit_ref, commit_info)) = commit_info {
+            assert!(commit_ref.index <= self.last_commit.as_ref().unwrap().index());
             Some(commit_info.reputation_scores)
         } else {
             None
@@ -1499,6 +1498,7 @@ mod test {
         dag_state.add_commit(TrustedCommit::new_for_test(
             1 as CommitIndex,
             CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
             all_blocks.last().unwrap().reference(),
             all_blocks
                 .into_iter()

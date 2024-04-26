@@ -420,10 +420,8 @@ impl Debug for LeaderSwapTable {
 mod tests {
     use super::*;
     use crate::{
-        block::{
-            timestamp_utc_ms, BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock,
-        },
-        commit::{CommitDigest, CommitInfo, CommittedSubDag, TrustedCommit},
+        block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
+        commit::{CommitDigest, CommitInfo, CommitRef, CommittedSubDag, TrustedCommit},
         storage::{mem_store::MemStore, Store, WriteBatch},
         universal_committer::universal_committer_builder::UniversalCommitterBuilder,
     };
@@ -486,7 +484,7 @@ mod tests {
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
 
-        let leader_timestamp = timestamp_utc_ms();
+        let leader_timestamp = context.clock.timestamp_utc_ms();
         let blocks = vec![
             VerifiedBlock::new_for_test(
                 TestBlock::new(10, 2)
@@ -504,6 +502,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
             leader_ref,
             blocks
                 .iter()
@@ -515,17 +514,17 @@ mod tests {
         // info that LeaderSchedule will be recovered from
         let commit_range = (1..10).into();
         let reputation_scores = ReputationScores::new(commit_range, vec![4, 1, 1, 3]);
-        let last_committed_rounds = vec![9, 9, 10, 9];
-
+        let committed_rounds = vec![9, 9, 10, 9];
+        let commit_ref = CommitRef::new(10, CommitDigest::MIN);
         let commit_info = CommitInfo {
             reputation_scores,
-            last_committed_rounds,
+            committed_rounds,
         };
 
         store
             .write(
                 WriteBatch::default()
-                    .commit_info(vec![((10, CommitDigest::MIN), commit_info)])
+                    .commit_info(vec![(commit_ref, commit_info)])
                     .blocks(blocks)
                     .commits(vec![last_commit]),
             )
@@ -534,7 +533,7 @@ mod tests {
         // CommitIndex '11' will be written to store. This should result in the cached
         // last_committed_rounds & unscored subdags in DagState to be updated with the
         // latest commit information on recovery.
-        let leader_timestamp = timestamp_utc_ms();
+        let leader_timestamp = context.clock.timestamp_utc_ms();
         let blocks = vec![
             VerifiedBlock::new_for_test(
                 TestBlock::new(11, 3)
@@ -561,6 +560,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
             leader_ref,
             blocks
                 .iter()
@@ -613,13 +613,13 @@ mod tests {
         let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
 
         let dag_state = Arc::new(RwLock::new(DagState::new(
-            context,
+            context.clone(),
             Arc::new(MemStore::new()),
         )));
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             vec![],
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             1,
         )];
         dag_state
@@ -705,6 +705,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             commit_index,
             CommitDigest::MIN,
+            context.clock.timestamp_utc_ms(),
             leader_ref,
             blocks
                 .iter()
@@ -715,7 +716,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             commit_index,
         )];
 
