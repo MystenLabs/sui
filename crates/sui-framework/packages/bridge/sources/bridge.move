@@ -51,9 +51,7 @@ module bridge::bridge {
         paused: bool,
     }
 
-    public struct TokenBridgeEvent has copy, drop {
-        // TODO: do we need message_type here?
-        message_type: u8,
+    public struct TokenDepositedEvent has copy, drop {
         seq_num: u64,
         source_chain: u8,
         sender_address: vector<u8>,
@@ -221,8 +219,7 @@ module bridge::bridge {
 
         // emit event
         emit(
-            TokenBridgeEvent {
-                message_type: message_types::token(),
+            TokenDepositedEvent {
                 seq_num: bridge_seq_num,
                 source_chain: inner.chain_id,
                 sender_address: address::to_bytes(ctx.sender()),

@@ -13,7 +13,6 @@ use std::str::FromStr;
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
 use crate::types::BridgeAction;
-use crate::types::BridgeActionType;
 use crate::types::SuiToEthBridgeAction;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
@@ -29,10 +28,9 @@ use sui_types::bridge::MoveTypeBridgeMessageKey;
 use sui_types::digests::TransactionDigest;
 use sui_types::BRIDGE_PACKAGE_ID;
 
-// `TokenBridgeEvent` emitted in bridge.move
+// `TokendDepositedEvent` emitted in bridge.move
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
-pub struct MoveTokenBridgeEvent {
-    pub message_type: u8,
+pub struct MoveTokenDepositedEvent {
     pub seq_num: u64,
     pub source_chain: u8,
     pub sender_address: Vec<u8>,
@@ -66,7 +64,7 @@ pub struct MoveTokenTransferAlreadyClaimed {
     pub message_key: MoveTypeBridgeMessageKey,
 }
 
-// Sanitized version of MoveTokenBridgeEvent
+// Sanitized version of MoveTokenDepositedEvent
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Hash)]
 pub struct EmittedSuiToEthTokenBridgeV1 {
     pub nonce: u64,
@@ -175,27 +173,20 @@ impl TryFrom<MoveTokenTransferAlreadyClaimed> for TokenTransferAlreadyClaimed {
     }
 }
 
-impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
+impl TryFrom<MoveTokenDepositedEvent> for EmittedSuiToEthTokenBridgeV1 {
     type Error = BridgeError;
 
-    fn try_from(event: MoveTokenBridgeEvent) -> BridgeResult<Self> {
-        if event.message_type != BridgeActionType::TokenTransfer as u8 {
-            return Err(BridgeError::Generic(format!(
-                "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Expected message type {}, got {}",
-                BridgeActionType::TokenTransfer as u8,
-                event.message_type
-            )));
-        }
+    fn try_from(event: MoveTokenDepositedEvent) -> BridgeResult<Self> {
         let token_id = event.token_type;
         let sui_chain_id = BridgeChainId::try_from(event.source_chain).map_err(|_e| {
             BridgeError::Generic(format!(
-                "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert source chain {} to BridgeChainId",
+                "Failed to convert MoveTokenDepositedEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert source chain {} to BridgeChainId",
                 event.token_type,
             ))
         })?;
         let eth_chain_id = BridgeChainId::try_from(event.target_chain).map_err(|_e| {
             BridgeError::Generic(format!(
-                "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert target chain {} to BridgeChainId",
+                "Failed to convert MoveTokenDepositedEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert target chain {} to BridgeChainId",
                 event.token_type,
             ))
         })?;
@@ -204,7 +195,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
             BridgeChainId::SuiMainnet | BridgeChainId::SuiTestnet | BridgeChainId::SuiCustom => {}
             _ => {
                 return Err(BridgeError::Generic(format!(
-                    "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Invalid source chain {}",
+                    "Failed to convert MoveTokenDepositedEvent to EmittedSuiToEthTokenBridgeV1. Invalid source chain {}",
                     event.source_chain
                 )));
             }
@@ -213,14 +204,14 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
             BridgeChainId::EthMainnet | BridgeChainId::EthSepolia | BridgeChainId::EthCustom => {}
             _ => {
                 return Err(BridgeError::Generic(format!(
-                    "Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Invalid target chain {}",
+                    "Failed to convert MoveTokenDepositedEvent to EmittedSuiToEthTokenBridgeV1. Invalid target chain {}",
                     event.target_chain
                 )));
             }
         }
 
         let sui_address = SuiAddress::from_bytes(event.sender_address)
-            .map_err(|e| BridgeError::Generic(format!("Failed to convert MoveTokenBridgeEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert sender_address to SuiAddress: {:?}", e)))?;
+            .map_err(|e| BridgeError::Generic(format!("Failed to convert MoveTokenDepositedEvent to EmittedSuiToEthTokenBridgeV1. Failed to convert sender_address to SuiAddress: {:?}", e)))?;
         let eth_address = EthAddress::from_str(&Hex::encode(&event.target_address))?;
 
         Ok(Self {
@@ -236,7 +227,7 @@ impl TryFrom<MoveTokenBridgeEvent> for EmittedSuiToEthTokenBridgeV1 {
 }
 
 crate::declare_events!(
-    SuiToEthTokenBridgeV1(EmittedSuiToEthTokenBridgeV1) => ("bridge::TokenBridgeEvent", MoveTokenBridgeEvent),
+    SuiToEthTokenBridgeV1(EmittedSuiToEthTokenBridgeV1) => ("bridge::TokenDepositedEvent", MoveTokenDepositedEvent),
     TokenTransferApproved(TokenTransferApproved) => ("bridge::TokenTransferApproved", MoveTokenTransferApproved),
     TokenTransferClaimed(TokenTransferClaimed) => ("bridge::TokenTransferClaimed", MoveTokenTransferClaimed),
     TokenTransferAlreadyApproved(TokenTransferAlreadyApproved) => ("bridge::TokenTransferAlreadyApproved", MoveTokenTransferAlreadyApproved),
@@ -306,7 +297,6 @@ impl SuiBridgeEvent {
 pub mod tests {
     use super::*;
     use crate::types::BridgeAction;
-    use crate::types::BridgeActionType;
     use crate::types::SuiToEthBridgeAction;
     use ethers::types::Address as EthAddress;
     use sui_json_rpc_types::SuiEvent;
@@ -330,8 +320,7 @@ pub mod tests {
             token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
         };
-        let emitted_event = MoveTokenBridgeEvent {
-            message_type: BridgeActionType::TokenTransfer as u8,
+        let emitted_event = MoveTokenDepositedEvent {
             seq_num: sanitized_event.nonce,
             source_chain: sanitized_event.sui_chain_id as u8,
             sender_address: sanitized_event.sui_address.to_vec(),

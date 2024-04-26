@@ -607,7 +607,7 @@ mod tests {
     use crate::crypto::BridgeAuthorityKeyPair;
     use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
     use crate::{
-        events::{EmittedSuiToEthTokenBridgeV1, MoveTokenBridgeEvent},
+        events::{EmittedSuiToEthTokenBridgeV1, MoveTokenDepositedEvent},
         sui_mock_client::SuiMockClient,
         test_utils::{
             approve_action_with_validator_secrets, bridge_token, get_test_eth_to_sui_bridge_action,
@@ -655,8 +655,7 @@ mod tests {
             token_id: TOKEN_ID_SUI,
             amount_sui_adjusted: 100,
         };
-        let emitted_event_1 = MoveTokenBridgeEvent {
-            message_type: BridgeActionType::TokenTransfer as u8,
+        let emitted_event_1 = MoveTokenDepositedEvent {
             seq_num: sanitized_event_1.nonce,
             source_chain: sanitized_event_1.sui_chain_id as u8,
             sender_address: sanitized_event_1.sui_address.to_vec(),

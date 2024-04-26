@@ -323,12 +323,12 @@ mod tests {
     use super::*;
     use crate::{
         eth_mock_provider::EthMockProvider,
-        events::{init_all_struct_tags, MoveTokenBridgeEvent, SuiToEthTokenBridgeV1},
+        events::{init_all_struct_tags, MoveTokenDepositedEvent, SuiToEthTokenBridgeV1},
         sui_mock_client::SuiMockClient,
         test_utils::{
             get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
         },
-        types::{BridgeActionType, EmergencyAction, EmergencyActionType, LimitUpdateAction},
+        types::{EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
     use sui_json_rpc_types::SuiEvent;
@@ -412,8 +412,7 @@ mod tests {
         // and BridgeEventNotActionable to be cached
 
         // Test `sign` caches Ok result
-        let emitted_event_1 = MoveTokenBridgeEvent {
-            message_type: BridgeActionType::TokenTransfer as u8,
+        let emitted_event_1 = MoveTokenDepositedEvent {
             seq_num: 1,
             source_chain: BridgeChainId::SuiCustom as u8,
             sender_address: SuiAddress::random_for_testing_only().to_vec(),
