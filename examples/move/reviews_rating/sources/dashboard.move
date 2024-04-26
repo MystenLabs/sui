@@ -13,7 +13,7 @@ module reviews_rating::dashboard {
     }
 
     /// Create a new dashboard
-    public entry fun create_dashboard(
+    public fun create_dashboard(
         service_type: String,
         ctx: &mut TxContext,
     ) {
