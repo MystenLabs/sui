@@ -13,6 +13,7 @@ parser.add_argument('--test', type=str, help='Name of the test to run', required
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
 parser.add_argument('--seed-start', type=int, help='Starting seed value', default=random.randint(0, 10000))
 parser.add_argument('--concurrency', type=int, help='Number of concurrent tests to run', default=os.cpu_count())
+parser.add_argument('--no-build', type=bool, help='Skip building the test binary', default=False)
 args = parser.parse_args()
 
 def run_command(command, env_vars):
@@ -57,6 +58,10 @@ def main(commands):
 
 if __name__ == "__main__":
     repo_root = subprocess.check_output(["git", "rev-parse", "--show-toplevel"]).decode("utf-8").strip()
+
+    if not args.no_build:
+        os.chdir(repo_root)
+        subprocess.run(["cargo", "simtest", "build", "--test", args.binary], check=True)
 
     # if binary contains no slashes, search for it in <repo_root>/target/simulator/deps/
     # otherwise, use the pathname as is
