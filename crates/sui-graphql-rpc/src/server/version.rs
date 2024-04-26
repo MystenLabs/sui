@@ -7,7 +7,6 @@ use axum::{
     http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    TypedHeader,
 };
 
 use crate::{
@@ -50,57 +49,51 @@ impl headers::Header for SuiRpcVersion {
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
 pub(crate) async fn check_version_middleware<B>(
-    user_version: Option<TypedHeader<SuiRpcVersion>>,
     State(version): State<Version>,
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if let Some(TypedHeader(SuiRpcVersion(req_version, rest))) = user_version {
-        if !rest.is_empty() {
-            return (
-                StatusCode::BAD_REQUEST,
-                graphql_error_response(
-                    code::BAD_REQUEST,
-                    format!("Failed to parse {VERSION_HEADER}: Multiple possible versions found."),
-                ),
-            )
-                .into_response();
-        }
-
-        let Ok(req_version) = std::str::from_utf8(&req_version) else {
-            return (
-                StatusCode::BAD_REQUEST,
-                graphql_error_response(
-                    code::BAD_REQUEST,
-                    format!("Failed to parse {VERSION_HEADER}: Not a UTF8 string."),
-                ),
-            )
-                .into_response();
-        };
-
-        let Some((year, month)) = parse_version(req_version) else {
-            return (
-                StatusCode::BAD_REQUEST,
-                graphql_error_response(
-                    code::BAD_REQUEST,
-                    format!(
-                        "Failed to parse {VERSION_HEADER}: '{req_version}' not a valid \
-                         <YEAR>.<MONTH> version.",
+    let route = request.uri().path();
+    let parts = route.split_once("/graphql");
+    if let Some((_, rest)) = parts {
+        if rest.starts_with("/") {
+            let query_version = &rest[1..];
+            println!("{query_version}");
+            let Ok(req_version) = std::str::from_utf8(query_version.as_bytes()) else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    graphql_error_response(
+                        code::BAD_REQUEST,
+                        format!("Failed to parse path {route}: Not a UTF8 string."),
                     ),
-                ),
-            )
-                .into_response();
-        };
+                )
+                    .into_response();
+            };
 
-        if year != version.year || month != version.month {
-            return (
-                StatusCode::MISDIRECTED_REQUEST,
-                graphql_error_response(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Version '{req_version}' not supported."),
-                ),
-            )
-                .into_response();
+            let Some((year, month)) = parse_version(req_version) else {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    graphql_error_response(
+                        code::BAD_REQUEST,
+                        format!(
+                            "Failed to parse path {route}: '{req_version}' not a valid \
+                         <YEAR>.<MONTH> version.",
+                        ),
+                    ),
+                )
+                    .into_response();
+            };
+
+            if year != version.year || month != version.month {
+                return (
+                    StatusCode::MISDIRECTED_REQUEST,
+                    graphql_error_response(
+                        code::INTERNAL_SERVER_ERROR,
+                        format!("Version '{req_version}' not supported."),
+                    ),
+                )
+                    .into_response();
+            }
         }
     };
 
@@ -175,6 +168,7 @@ mod tests {
 
         Router::new()
             .route("/", get(|| async { "Hello, Versioning!" }))
+            .route("/graphql/:version", get(|| async { "Hello, Versioning!" }))
             .layer(middleware::from_fn_with_state(
                 state.version,
                 check_version_middleware,
@@ -187,6 +181,13 @@ mod tests {
 
     fn plain_request() -> Request<Body> {
         Request::builder().uri("/").body(Body::empty()).unwrap()
+    }
+
+    fn version_request(version: &str) -> Request<Body> {
+        Request::builder()
+            .uri(format!("/graphql/{}", version))
+            .body(Body::empty())
+            .unwrap()
     }
 
     fn header_request(kvps: &[(&HeaderName, &[u8])]) -> Request<Body> {
@@ -224,26 +225,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn case_insensitive() {
-        let version = Version::for_testing();
-        let major_version = format!("{}.{}", version.year, version.month);
-        let service = service();
-        let response = service
-            .oneshot(header_request(&[(
-                &HeaderName::try_from("x-sUi-RpC-vERSION").unwrap(),
-                major_version.as_bytes(),
-            )]))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(
-            response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(version.full))
-        );
-    }
-
-    #[tokio::test]
     async fn default_version() {
         let version = Version::for_testing();
         let service = service();
@@ -260,10 +241,7 @@ mod tests {
     async fn incompatible_version() {
         let version = Version::for_testing();
         let service = service();
-        let response = service
-            .oneshot(header_request(&[(&VERSION_HEADER, "0.0".as_bytes())]))
-            .await
-            .unwrap();
+        let response = service.oneshot(version_request("0.0")).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::MISDIRECTED_REQUEST);
         assert_eq!(
@@ -287,47 +265,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn multiple_versions() {
-        let version = Version::for_testing();
-        let service = service();
-        let response = service
-            .oneshot(header_request(&[
-                (&VERSION_HEADER, "0.0".as_bytes()),
-                (&VERSION_HEADER, "1.0".as_bytes()),
-            ]))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(version.full))
-        );
-
-        let expect = expect![[r#"
-            {
-              "data": null,
-              "errors": [
-                {
-                  "message": "Failed to parse x-sui-rpc-version: Multiple possible versions found.",
-                  "extensions": {
-                    "code": "BAD_REQUEST"
-                  }
-                }
-              ]
-            }"#]];
-        expect.assert_eq(&response_body(response).await);
-    }
-
-    #[tokio::test]
     async fn not_a_version() {
         let version = Version::for_testing();
         let service = service();
         let response = service
-            .oneshot(header_request(&[(&VERSION_HEADER, b"not-a-version")]))
+            .oneshot(version_request("not-a-version"))
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
@@ -339,40 +283,7 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Failed to parse x-sui-rpc-version: 'not-a-version' not a valid <YEAR>.<MONTH> version.",
-                  "extensions": {
-                    "code": "BAD_REQUEST"
-                  }
-                }
-              ]
-            }"#]];
-        expect.assert_eq(&response_body(response).await);
-    }
-
-    #[tokio::test]
-    async fn not_a_string() {
-        let version = Version::for_testing();
-        let service = service();
-        let response = service
-            .oneshot(header_request(&[(
-                &VERSION_HEADER,
-                &[0xf1, 0xf2, 0xf3, 0xf4],
-            )]))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(version.full))
-        );
-
-        let expect = expect![[r#"
-            {
-              "data": null,
-              "errors": [
-                {
-                  "message": "Failed to parse x-sui-rpc-version: Not a UTF8 string.",
+                  "message": "Failed to parse path /graphql/not-a-version: 'not-a-version' not a valid <YEAR>.<MONTH> version.",
                   "extensions": {
                     "code": "BAD_REQUEST"
                   }
