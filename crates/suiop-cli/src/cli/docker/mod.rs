@@ -3,7 +3,7 @@
 
 use anyhow::Result;
 use clap::Parser;
-use tracing::{error, info};
+use tracing::info;
 
 #[derive(Parser, Debug, Clone)]
 pub struct DockerArgs {
