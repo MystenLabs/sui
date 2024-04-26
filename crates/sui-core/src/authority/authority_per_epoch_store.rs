@@ -2707,6 +2707,9 @@ impl AuthorityPerEpochStore {
             self.write_pending_checkpoint(&mut batch, &pending_checkpoint)?;
 
             // Generate pending checkpoint for user tx with randomness.
+            // Note if randomness is not generated for this commit, we will skip the
+            // checkpoint with the associated height. Therefore checkpoint heights may
+            // not be contiguous.
             if let Some(randomness_round) = randomness_round {
                 randomness_roots.insert(TransactionKey::RandomnessRound(
                     self.epoch(),
@@ -2718,9 +2721,6 @@ impl AuthorityPerEpochStore {
                     details: PendingCheckpointInfo {
                         timestamp_ms: commit_timestamp,
                         last_of_epoch: final_round,
-                        // Note if randomness is not generated for this commit, we will skip the
-                        // checkpoint with the associated height. Therefore checkpoint heights may
-                        // not be contiguous.
                         checkpoint_height: checkpoint_height + 1,
                     },
                 });
