@@ -7,8 +7,8 @@ const path = require("path");
 const addCodeInject = function (source) {
   let fileString = source;
   const callback = this.async();
-
   const options = this.getOptions();
+
   const markdownFilename = path.basename(this.resourcePath);
   const repoPath = path.join(__dirname, "../../../../..");
 
@@ -29,32 +29,17 @@ const addCodeInject = function (source) {
         if (match.startsWith(key)) {
           const parts = match.split(" ");
           const [, , ...options] = parts.length > 2 ? parts : [];
-          let injectFileFull = parts[1];
-          // Remove trailing } if necessary
-          if (parts.length === 2 && parts[1].endsWith("}")) {
-            injectFileFull = injectFileFull.replace(/}$/, "");
-          }
+          let injectFileFull = parts[1].replace(/\}$/, "");
+
           const injectFile = injectFileFull.split("#")[0];
 
-          /*
-          const injectFile = injectFileFull.substring(
-            0,
-            injectFileFull.indexOf("#") > 0
-              ? injectFileFull.indexOf("#")
-              : injectFileFull.length,
-          );
-          */
           let fileExt = injectFile.substring(injectFile.lastIndexOf(".") + 1);
           let language = "";
           const fullPath = path.join(repoPath, injectFile);
 
-          // Assuming rust manifests and locks never being used
           switch (fileExt) {
-            case "toml":
-              language = "move";
-              break;
             case "lock":
-              language = "move";
+              language = "toml";
               break;
             case "sh":
               language = "shell";
@@ -75,6 +60,22 @@ const addCodeInject = function (source) {
               injectFileFull.indexOf("#") > 0
                 ? injectFileFull.substring(injectFileFull.indexOf("#"))
                 : null;
+
+            const formatOutput = (language, title, content) => {
+              return `\`\`\`${language} title="${title}"\n${content}\n\`\`\``;
+            };
+
+            // Remove comments. TODO: Add other langs
+            const removeComments = (text) => {
+              const cont = options.some((element) =>
+                element.toLowerCase().includes("nocomment"),
+              );
+              if (cont) {
+                return text.replace(/^\s*\/\/\/?.*$(?:\r\n?|\n)?/gm, "");
+              } else {
+                return text;
+              }
+            };
 
             if (marker) {
               const checkBracesBalance = (str) => {
@@ -267,17 +268,6 @@ const addCodeInject = function (source) {
                 "",
               );
 
-              const removeComments = (text) => {
-                const cont = options.some((element) =>
-                  element.toLowerCase().includes("nocomment"),
-                );
-                if (cont) {
-                  return text.replace(/^\s*\/\/\/?.*$(?:\r\n?|\n)?/gm, "");
-                } else {
-                  return text;
-                }
-              };
-
               injectFileContent = removeComments(injectFileContent);
 
               const trimContent = (content) => {
@@ -297,13 +287,22 @@ const addCodeInject = function (source) {
               };
 
               injectFileContent = trimContent(injectFileContent);
-              injectFileContent = `\`\`\`${language} title="${injectFile}"\n${injectFileContent}\n\`\`\``;
+              injectFileContent = formatOutput(
+                language,
+                injectFile,
+                injectFileContent,
+              );
 
               res = res.replace(replacer, injectFileContent);
               res = addMarkdownIncludes(res);
             } else {
-              res = res.replace(replacer, injectFileContent);
-              res = addMarkdownIncludes(res);
+              // Handle import of all the code
+              injectFileContent = formatOutput(
+                language,
+                injectFile,
+                injectFileContent,
+              );
+              res = res.replace(replacer, removeComments(injectFileContent));
             }
           } else {
             res = res.replace(
