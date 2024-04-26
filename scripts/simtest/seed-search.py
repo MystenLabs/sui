@@ -13,7 +13,11 @@ parser = argparse.ArgumentParser(description='Run the simulator with different s
 parser.add_argument('binary', type=str, help='Name of simulator binary, or full path to binary')
 parser.add_argument('--test', type=str, help='Name of the test to run', required=True)
 parser.add_argument('--num-seeds', type=int, help='Number of seeds to run', default=200)
-parser.add_argument('--seed-start', type=int, help='Starting seed value', default=random.randint(0, 10000))
+parser.add_argument(
+    '--seed-start',
+    type=int, help='Starting seed value (defaults to seconds since epoch)',
+    default=int(subprocess.check_output(["date", "+%s"]).decode("utf-8").strip()) * 1000
+)
 parser.add_argument('--concurrency', type=int, help='Number of concurrent tests to run', default=os.cpu_count())
 parser.add_argument('--no-build', type=bool, help='Skip building the test binary', default=False)
 args = parser.parse_args()
