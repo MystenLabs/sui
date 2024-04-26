@@ -611,16 +611,12 @@ impl RandomnessManager {
             .send_partial_signatures(epoch, randomness_round);
     }
 
-    /// Returns true if DKG has permanently failed to complete.
-    pub fn is_dkg_failed(&self) -> bool {
-        self.dkg_output
-            .get()
-            .map_or(false, |output| output.is_none())
-    }
-
-    /// Returns true if DKG has completed successfully.
-    pub fn is_dkg_successful(&self) -> bool {
-        self.dkg_output.get().and_then(|opt| opt.as_ref()).is_some()
+    pub fn dkg_status(&self) -> DkgStatus {
+        match self.dkg_output.get() {
+            Some(Some(_)) => DkgStatus::Successful,
+            Some(None) => DkgStatus::Failed,
+            None => DkgStatus::Pending,
+        }
     }
 
     /// Generates a new RandomnessReporter for reporting observed rounds to this RandomnessManager.
@@ -713,6 +709,13 @@ impl RandomnessReporter {
             .complete_round(epoch_store.committee().epoch(), round);
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DkgStatus {
+    Pending,
+    Failed,
+    Successful,
 }
 
 #[cfg(test)]
@@ -846,7 +849,7 @@ mod tests {
 
         // Verify DKG completed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager.is_dkg_successful());
+            assert_eq!(DkgStatus::Successful, randomness_manager.dkg_status());
         }
     }
 
@@ -940,7 +943,7 @@ mod tests {
 
         // Verify DKG failed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager.is_dkg_failed());
+            assert_eq!(DkgStatus::Failed, randomness_manager.dkg_status());
         }
     }
 }

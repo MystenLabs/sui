@@ -65,7 +65,7 @@ use crate::consensus_handler::{
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::epoch::randomness::{RandomnessManager, RandomnessReporter};
+use crate::epoch::randomness::{DkgStatus, RandomnessManager, RandomnessReporter};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_cache::{ExecutionCache, ExecutionCacheRead};
 use crate::module_cache_metrics::ResolverMetrics;
@@ -2564,58 +2564,51 @@ impl AuthorityPerEpochStore {
         }
         sequenced_transactions.extend(current_commit_sequenced_consensus_transactions);
 
-        // If DKG is closed, we should now load any previously-deferred randomness-using tx
-        // so we can decide what to do with them (execute or ignore, depending on whether
-        // DKG was successful).
         let mut randomness_manager = match self.randomness_manager.get() {
             Some(rm) => Some(rm.lock().await),
             None => None,
         };
-        let dkg_failed = self.randomness_state_enabled()
-            && randomness_manager
-                .as_ref()
-                .expect("randomness manager should exist if randomness is enabled")
-                .is_dkg_failed();
-        if dkg_failed {
-            self.load_and_process_deferred_transactions_for_randomness(
-                &mut batch,
-                &mut previously_deferred_tx_digests,
-                &mut sequenced_randomness_transactions,
-            )?;
-        }
-
-        // Generate randomness for this commit if:
-        // 1. randomness is enabled
-        // 2. DKG is completed successfully
-        // 3. we are still accepting certs
-        let randomness_round = if !dkg_failed
-            && self.randomness_state_enabled()
-            && randomness_manager
-                .as_ref()
-                .expect("randomness manager should exist if randomness is enabled")
-                .is_dkg_successful()
-            // It is ok to just release lock here as functions called by this one are the
-            // only place that transition into RejectAllCerts state, and this function
-            // itself is always executed from consensus task.
-            && self
-                .get_reconfig_state_read_lock_guard()
-                .should_accept_tx()
-        {
-            randomness_manager
+        let mut dkg_failed = false;
+        let randomness_round = if self.randomness_state_enabled() {
+            let randomness_manager = randomness_manager
                 .as_mut()
-                .expect("randomness manager should exist if randomness is enabled")
-                .reserve_next_randomness(commit_timestamp, &mut batch)?
+                .expect("randomness manager should exist if randomness is enabled");
+            match randomness_manager.dkg_status() {
+                DkgStatus::Pending => None,
+                DkgStatus::Failed => {
+                    dkg_failed = true;
+                    None
+                }
+                DkgStatus::Successful => {
+                    // Generate randomness for this commit if DKG is successful and we are still
+                    // accepting certs.
+                    if self
+                        // It is ok to just release lock here as functions called by this one are the
+                        // only place that transition into RejectAllCerts state, and this function
+                        // itself is always executed from consensus task.
+                        .get_reconfig_state_read_lock_guard()
+                        .should_accept_tx()
+                    {
+                        randomness_manager.reserve_next_randomness(commit_timestamp, &mut batch)?
+                    } else {
+                        None
+                    }
+                }
+            }
         } else {
             None
         };
-        if randomness_round.is_some() {
+
+        // We should load any previously-deferred randomness-using tx:
+        // - if DKG is failed, so we can ignore them
+        // - if randomness is being generated, so we can process them
+        if dkg_failed || randomness_round.is_some() {
             self.load_and_process_deferred_transactions_for_randomness(
                 &mut batch,
                 &mut previously_deferred_tx_digests,
                 &mut sequenced_randomness_transactions,
             )?;
         }
-
         sequenced_randomness_transactions.extend(current_commit_sequenced_randomness_transactions);
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
