@@ -25,8 +25,7 @@ use sui_types::messages_grpc::{
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::traffic_control::ServiceResponse;
-use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -685,17 +684,17 @@ impl ValidatorService {
         proxy_ip: Option<SocketAddr>,
         response: &Result<tonic::Response<T>, tonic::Status>,
     ) {
-        let result: SuiResult = if let Err(status) = response {
-            Err(SuiError::from(status.clone()))
+        let error: Option<SuiError> = if let Err(status) = response {
+            Some(SuiError::from(status.clone()))
         } else {
-            Ok(())
+            None
         };
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
             traffic_controller.tally(TrafficTally {
                 connection_ip: connection_ip.map(|ip| ip.ip()),
                 proxy_ip: proxy_ip.map(|ip| ip.ip()),
-                result: ServiceResponse::Validator(result),
+                weight: error.map(normalize).unwrap_or(Weight::zero()),
                 timestamp: SystemTime::now(),
             })
         }
@@ -712,6 +711,20 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
     };
     request.extensions_mut().insert(tcp_connect_info);
     request
+}
+
+// TODO: refine error matching here
+fn normalize(err: SuiError) -> Weight {
+    match err {
+        SuiError::UserInputError { .. }
+        | SuiError::InvalidSignature { .. }
+        | SuiError::SignerSignatureAbsent { .. }
+        | SuiError::SignerSignatureNumberMismatch { .. }
+        | SuiError::IncorrectSigner { .. }
+        | SuiError::UnknownSigner { .. }
+        | SuiError::WrongEpoch { .. } => Weight::one(),
+        _ => Weight::zero(),
+    }
 }
 
 /// Implements generic pre- and post-processing. Since this is on the critical

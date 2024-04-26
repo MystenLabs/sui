@@ -18,12 +18,10 @@ use crate::traffic_controller::nodefw_client::{BlockAddress, BlockAddresses, Nod
 use crate::traffic_controller::policies::{
     Policy, PolicyResponse, TrafficControlPolicy, TrafficTally,
 };
-use jsonrpsee::types::error::ErrorCode;
 use mysten_metrics::spawn_monitored_task;
 use std::fmt::Debug;
 use std::time::{Duration, SystemTime};
-use sui_types::error::SuiError;
-use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, ServiceResponse};
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::TrySendError;
 use tracing::{debug, error, info, warn};
@@ -182,34 +180,6 @@ impl TrafficController {
     }
 }
 
-// TODO: Needs thorough testing/auditing before this can be used in error policy
-//
-/// Errors that are tallied and can be used to determine if a request should be blocked.
-fn is_tallyable_error(response: &ServiceResponse) -> bool {
-    match response {
-        ServiceResponse::Validator(Err(err)) => {
-            matches!(
-                err,
-                SuiError::UserInputError { .. }
-                    | SuiError::InvalidSignature { .. }
-                    | SuiError::SignerSignatureAbsent { .. }
-                    | SuiError::SignerSignatureNumberMismatch { .. }
-                    | SuiError::IncorrectSigner { .. }
-                    | SuiError::UnknownSigner { .. }
-                    | SuiError::WrongEpoch { .. }
-            )
-        }
-        ServiceResponse::Fullnode(resp) => {
-            matches!(
-                resp.error_code.map(ErrorCode::from),
-                Some(ErrorCode::InvalidRequest) | Some(ErrorCode::InvalidParams)
-            )
-        }
-
-        _ => false,
-    }
-}
-
 async fn run_tally_loop(
     mut receiver: mpsc::Receiver<TrafficTally>,
     policy_config: PolicyConfig,
@@ -300,10 +270,7 @@ async fn handle_error_tally(
     metrics: Arc<TrafficControllerMetrics>,
     mem_drainfile_present: bool,
 ) -> Result<(), reqwest::Error> {
-    if tally.result.is_ok() {
-        return Ok(());
-    }
-    if !is_tallyable_error(&tally.result) {
+    if tally.weight == Weight::zero() {
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
