@@ -12903,6 +12903,7 @@ dependencies = [
  "bcs",
  "hyper",
  "jsonrpsee",
+ "move-core-types",
  "move-package",
  "prometheus",
  "rand 0.8.5",
