@@ -87,7 +87,7 @@ const addCodeInject = function (source) {
               const removeLeadingSpaces = (matchArray, prepend = "") => {
                 const numSpaces = matchArray[1] ? matchArray[1].length - 1 : 0;
                 if (numSpaces === 0) {
-                  return prepend + matchArray[0];
+                  return [prepend, matchArray[0]].join("\n");
                 }
                 const lines = matchArray[0].split("\n");
 
@@ -96,7 +96,23 @@ const addCodeInject = function (source) {
                   lines.map((line) => line.substring(numSpaces)).join("\n"),
                 ].join("\n");
               };
-              const funKey = "#function=";
+
+              const capturePrepend = (match) => {
+                const numSpaces = match[1] ? match[1].length - 1 : 0;
+                let preFun = injectFileContent.substring(0, match.index - 1);
+                const lines = preFun.split("\n");
+                let pre = [];
+                for (let x = lines.length - 1; x > 0; x--) {
+                  if (lines[x].trim() === "}" || lines[x].trim() === "") {
+                    break;
+                  } else {
+                    pre.push(lines[x].substring(numSpaces));
+                  }
+                }
+                return pre.reverse().join("\n");
+              };
+
+              const funKey = "#fun=";
               const structKey = "#struct=";
               const moduleKey = "#module=";
               const getName = (mark, key) => {
@@ -112,21 +128,7 @@ const addCodeInject = function (source) {
                 const funRE = new RegExp(funStr, "ms");
                 const funMatch = funRE.exec(injectFileContent);
                 if (funMatch) {
-                  const numSpaces = funMatch[1] ? funMatch[1].length - 1 : 0;
-                  let preFun = injectFileContent.substring(
-                    0,
-                    funMatch.index - 1,
-                  );
-                  const lines = preFun.split("\n");
-                  let pre = [];
-                  for (let x = lines.length - 1; x > 0; x--) {
-                    if (lines[x].trim() === "}") {
-                      break;
-                    } else {
-                      pre.push(lines[x].substring(numSpaces));
-                    }
-                  }
-                  preFun = pre.reverse().join("\n");
+                  let preFun = capturePrepend(funMatch);
                   if (!checkBracesBalance(injectFileContent)) {
                     injectFileContent =
                       "Could not find valid function definition. If code is formatted correctly, consider using code comments instead.";
@@ -141,12 +143,13 @@ const addCodeInject = function (source) {
                 if (structMatch) {
                   if (!checkBracesBalance(structMatch[0])) {
                     injectFileContent =
-                      "Could not find valid struct definition. If code is formatted correctly, consider using code comments instead";
+                      "Could not find valid struct definition. If code is formatted correctly, consider using code comments instead.";
                   } else {
                     injectFileContent = removeLeadingSpaces(structMatch);
                   }
                 } else {
-                  injectFileContent = "Struct not found.";
+                  injectFileContent =
+                    "Struct not found. If code is formatted correctly, consider using code comments instead.";
                 }
               } else if (moduleName) {
                 const modStr = `^(\\s*)*module \\b${moduleName}\\b(?=[^\\w]).*?}\\n(?=\\n)`;
@@ -155,23 +158,25 @@ const addCodeInject = function (source) {
                 if (modMatch) {
                   const abridged = injectFileContent.substring(modMatch.index);
                   const lines = abridged.split("\n");
-                  var open = [];
-                  var close = [];
+                  let open = [];
+                  let close = [];
                   let modLines = [];
                   for (let line of lines) {
                     modLines.push(line);
                     open = [...open, ...(line.match(/{/g) || [])];
                     close = [...close, ...(line.match(/}/g) || [])];
-                    console.log(`Open: ${open}\nClose: ${close}`);
                     if (open.length !== 0 && close.length === open.length) {
-                      console.log("BOOBAH");
-                      console.log(modLines.join("/n"));
-                      process.abort();
                       break;
                     }
                   }
-                  //console.log(modLines.join("\n"));
-                  //process.abort();
+                  const preMod = capturePrepend(modMatch);
+                  injectFileContent = removeLeadingSpaces(
+                    [modLines.join("\n"), modMatch[1]],
+                    preMod,
+                  );
+                } else {
+                  injectFileContent =
+                    "Module not found. If code is formatted correctly, consider using code comments instead.";
                 }
               } else {
                 const regexStr = `\\/\\/\\s?docs::${marker.trim()}\\b([\\s\\S]*)\\/\\/\\s*docs::\\/\\s?${marker.trim()}\\b`;
@@ -217,7 +222,7 @@ const addCodeInject = function (source) {
                 const pauseStr = `\\/\\/\\s?docs::${marker.trim()}-pause:?(.*)`;
                 const pauseRE = new RegExp(pauseStr, "g");
                 let matches = injectFileContent.match(pauseRE);
-                for (let match in matches) {
+                for (let match of matches) {
                   const test = matches[match].replace(
                     /[.*+?^${}()|[\]\\]/g,
                     "\\$&",
@@ -294,6 +299,9 @@ const addCodeInject = function (source) {
               injectFileContent = trimContent(injectFileContent);
               injectFileContent = `\`\`\`${language} title="${injectFile}"\n${injectFileContent}\n\`\`\``;
 
+              res = res.replace(replacer, injectFileContent);
+              res = addMarkdownIncludes(res);
+            } else {
               res = res.replace(replacer, injectFileContent);
               res = addMarkdownIncludes(res);
             }
