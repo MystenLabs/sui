@@ -1,5 +1,11 @@
 # @mysten/zklogin
 
+## 0.6.0
+
+### Minor Changes
+
+- e279098cff: add support for verify zklogin signature in sdk
+
 ## 0.5.3
 
 ### Patch Changes
