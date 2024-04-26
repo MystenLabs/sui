@@ -823,7 +823,6 @@ mod tests {
     use narwhal_test_utils::latest_protocol_version;
     use narwhal_types::{Batch, Certificate, CommittedSubDag, HeaderV1Builder, ReputationScores};
     use prometheus::Registry;
-    use shared_crypto::intent::Intent;
     use sui_protocol_config::{ConsensusTransactionOrdering, SupportedProtocolVersions};
     use sui_types::{
         base_types::{random_object_ref, AuthorityName, SuiAddress},
@@ -1111,7 +1110,6 @@ mod tests {
                 1000 * gas_price,
                 gas_price,
             ),
-            Intent::sui_transaction(),
             vec![],
         );
         txn(ConsensusTransactionKind::UserTransaction(Box::new(
