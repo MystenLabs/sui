@@ -12,11 +12,11 @@ There are four actors in the typical workflow of the reviews rating example.
 
 ```mermaid
 sequenceDiagram
-  Service ->> Dashboard: Add service to dashboard.
-  Service ->> User: Send proof of experience.
-  User ->> Service: Send review
-  Service ->> User: Send reward
-  Service ->> Moderator: Add as a service moderator
+  Service ->> Dashboard: Add service to dashboard
+  Service ->> Reviewer: Send proof of experience
+  Reviewer ->> Service: Send review
+  Service ->> Reviewer: Send reward
+  Review reader ->> Service: Vote on review
   Moderator ->> Service: Remove abused review
 ```
 
@@ -443,6 +443,6 @@ Multiple additional custom hooks, such as [useDashboardCreation](https://github.
 
 :::info
 
-The complete app example can be found in [the reviews-rating repo](https://github.com/MystenLabs/reviews-ratings-poc).
+The complete app example can be found in [the reviews-rating example](https://github.com/MystenLabs/sui/tree/main/examples/move/reviews_rating).
 
 :::

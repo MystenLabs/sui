@@ -155,8 +155,7 @@ module reviews_rating::service {
     fun prune_top_reviews(
         service: &mut Service
     ) {
-        let len = service.top_reviews.length();
-        if (len > MAX_REVIEWERS_TO_REWARD) {
+        while (service.top_reviews.length() > MAX_REVIEWERS_TO_REWARD) {
             service.top_reviews.pop_back();
         };
     }
@@ -248,7 +247,7 @@ module reviews_rating::service {
         review_id: ID,
     ) {
         assert!(service.reviews.contains(review_id), ENotExists);
-        let record = df::remove<ID, ReviewRecord>(&mut service.id, review_id);
+        let record: ReviewRecord = df::remove(&mut service.id, review_id);
         service.overall_rate = service.overall_rate - (record.overall_rate as u64);
         let (contains, i) = service.top_reviews.index_of(&review_id);
         if (contains) {
