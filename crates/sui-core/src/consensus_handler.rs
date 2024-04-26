@@ -306,9 +306,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .expect("Unrecoverable error in consensus handler");
 
         if !new_jwks.is_empty() {
-            debug!("adding AuthenticatorStateUpdate tx: {:?}", new_jwks);
             let authenticator_state_update_transaction =
                 self.authenticator_state_update_transaction(round, new_jwks);
+            debug!(
+                "adding AuthenticatorStateUpdate({:?}) tx: {:?}",
+                authenticator_state_update_transaction.digest(),
+                authenticator_state_update_transaction,
+            );
 
             transactions.push((
                 empty_bytes.as_slice(),
@@ -448,7 +452,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 self.cache_reader.as_ref(),
                 round,
                 timestamp,
-                &self.metrics.skipped_consensus_txns,
+                &self.metrics,
             )
             .await
             .expect("Unrecoverable error in consensus handler");
@@ -507,7 +511,7 @@ impl AsyncTransactionScheduler {
 /// During initialization, the sender is passed into Mysticeti which can send consensus output
 /// to the channel.
 pub struct MysticetiConsensusHandler {
-    handle: tokio::task::JoinHandle<()>,
+    handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl MysticetiConsensusHandler {
@@ -522,13 +526,24 @@ impl MysticetiConsensusHandler {
                     .await;
             }
         });
-        Self { handle }
+        Self {
+            handle: Some(handle),
+        }
+    }
+
+    pub async fn abort(&mut self) {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+            let _ = handle.await;
+        }
     }
 }
 
 impl Drop for MysticetiConsensusHandler {
     fn drop(&mut self) {
-        self.handle.abort();
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
     }
 }
 

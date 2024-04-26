@@ -9,9 +9,6 @@
 
 /// Test create id limits enforced
 module Test::M1 {
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
-    use std::vector;
 
     public entry fun create_n_ids(n: u64, ctx: &mut TxContext) {
         let mut v: vector<UID> = vector::empty();

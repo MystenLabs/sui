@@ -19,29 +19,16 @@ use sui_types::{
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
 };
-use tempfile::tempdir;
+use sui_types::{
+    effects::{TestEffectsBuilder, TransactionEffectsAPI},
+    event::Event,
+};
 
 use super::*;
 use crate::{
-    authority::{authority_store_tables::AuthorityPerpetualTables, AuthorityStore},
+    authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState, AuthorityStore},
     execution_cache::ExecutionCacheAPI,
-    test_utils::init_state_parameters_from_rng,
 };
-
-async fn init_authority_store() -> Arc<AuthorityStore> {
-    let seed = [1u8; 32];
-    let (genesis, _) = init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
-    let committee = genesis.committee().unwrap();
-
-    // Create a random directory to store the DB
-    let dir = tempdir().unwrap();
-    let db_path = dir.path();
-
-    let perpetual_tables = Arc::new(AuthorityPerpetualTables::open(db_path, None));
-    AuthorityStore::open_with_committee_for_testing(perpetual_tables, &committee, &genesis, 0)
-        .await
-        .unwrap()
-}
 
 trait AssertInserted {
     fn assert_inserted(&self);
@@ -61,9 +48,11 @@ impl AssertInserted for bool {
 
 type ActionCb = Box<dyn Fn(&mut Scenario) + Send>;
 
-struct Scenario {
-    store: Arc<AuthorityStore>,
-    cache: Arc<WritebackCache>,
+pub(crate) struct Scenario {
+    pub authority: Arc<AuthorityState>,
+    pub store: Arc<AuthorityStore>,
+    pub epoch_store: Arc<AuthorityPerEpochStore>,
+    pub cache: Arc<WritebackCache>,
 
     id_map: BTreeMap<u32, ObjectID>,
     objects: BTreeMap<ObjectID, Object>,
@@ -76,13 +65,19 @@ struct Scenario {
 
 impl Scenario {
     async fn new(do_after: Option<(u32, ActionCb)>, action_count: Arc<AtomicU32>) -> Self {
-        let store = init_authority_store().await;
+        let authority = TestAuthorityBuilder::new().build().await;
+
+        let store = authority.database_for_testing().clone();
+        let epoch_store = authority.epoch_store_for_testing().clone();
+
         static METRICS: once_cell::sync::Lazy<Arc<ExecutionCacheMetrics>> =
             once_cell::sync::Lazy::new(|| Arc::new(ExecutionCacheMetrics::new(default_registry())));
 
         let cache = Arc::new(WritebackCache::new(store.clone(), (*METRICS).clone()));
         Self {
+            authority,
             store,
+            epoch_store,
             cache,
             id_map: BTreeMap::new(),
             objects: BTreeMap::new(),
@@ -91,20 +86,6 @@ impl Scenario {
 
             action_count,
             do_after,
-        }
-    }
-
-    fn new_with_store_and_cache(store: Arc<AuthorityStore>, cache: Arc<WritebackCache>) -> Self {
-        Self {
-            store,
-            cache,
-            id_map: BTreeMap::new(),
-            objects: BTreeMap::new(),
-            outputs: Self::new_outputs(),
-            transactions: BTreeSet::new(),
-
-            action_count: Arc::new(AtomicU32::new(0)),
-            do_after: None,
         }
     }
 
@@ -124,7 +105,7 @@ impl Scenario {
 
     // This method runs a test scenario multiple times, and each time it clears the
     // evictable caches after a different step.
-    async fn iterate<F, Fut>(f: F)
+    pub async fn iterate<F, Fut>(f: F)
     where
         F: Fn(Scenario) -> Fut,
         Fut: Future<Output = ()>,
@@ -161,12 +142,16 @@ impl Scenario {
             .build_and_sign(&keypair);
 
         let tx = VerifiedTransaction::new_unchecked(tx);
-        let effects = TransactionEffects::new_with_tx(tx.inner());
+        let events: TransactionEvents = Default::default();
+
+        let effects = TestEffectsBuilder::new(tx.inner())
+            .with_events_digest(events.digest())
+            .build();
 
         TransactionOutputs {
             transaction: Arc::new(tx),
             effects,
-            events: Default::default(),
+            events,
             markers: Default::default(),
             wrapped: Default::default(),
             deleted: Default::default(),
@@ -223,7 +208,7 @@ impl Scenario {
         inner.into()
     }
 
-    fn with_child(&mut self, short_id: u32, owner: u32) {
+    pub fn with_child(&mut self, short_id: u32, owner: u32) {
         let owner_id = self.id_map.get(&owner).expect("no such object");
         let object = Self::new_child(*owner_id);
         self.outputs
@@ -235,7 +220,7 @@ impl Scenario {
         self.objects.insert(id, object).assert_inserted();
     }
 
-    fn with_created(&mut self, short_ids: &[u32]) {
+    pub fn with_created(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, create an object with that id if it doesn't exist
         for short_id in short_ids {
             let object = Self::new_object();
@@ -249,7 +234,18 @@ impl Scenario {
         }
     }
 
-    fn with_packages(&mut self, short_ids: &[u32]) {
+    pub fn with_events(&mut self) {
+        let mut events: TransactionEvents = Default::default();
+        events.data.push(Event::random_for_testing());
+
+        let effects = TestEffectsBuilder::new(self.outputs.transaction.inner())
+            .with_events_digest(events.digest())
+            .build();
+        self.outputs.events = events;
+        self.outputs.effects = effects;
+    }
+
+    pub fn with_packages(&mut self, short_ids: &[u32]) {
         for short_id in short_ids {
             let object = Self::new_package();
             let id = object.id();
@@ -259,7 +255,7 @@ impl Scenario {
         }
     }
 
-    fn with_mutated(&mut self, short_ids: &[u32]) {
+    pub fn with_mutated(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, and
         // mutate it
         for short_id in short_ids {
@@ -277,7 +273,7 @@ impl Scenario {
         }
     }
 
-    fn with_deleted(&mut self, short_ids: &[u32]) {
+    pub fn with_deleted(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, and
         // delete it
         for short_id in short_ids {
@@ -291,7 +287,7 @@ impl Scenario {
         }
     }
 
-    fn with_wrapped(&mut self, short_ids: &[u32]) {
+    pub fn with_wrapped(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, and
         // wrap it
         for short_id in short_ids {
@@ -305,7 +301,7 @@ impl Scenario {
         }
     }
 
-    fn with_received(&mut self, short_ids: &[u32]) {
+    pub fn with_received(&mut self, short_ids: &[u32]) {
         // for every id in short_ids, assert than an object with that id exists, that
         // it has a new lock (which proves it was mutated) and then write a received
         // marker for it
@@ -324,7 +320,7 @@ impl Scenario {
         }
     }
 
-    fn take_outputs(&mut self) -> Arc<TransactionOutputs> {
+    pub fn take_outputs(&mut self) -> Arc<TransactionOutputs> {
         let mut outputs = Self::new_outputs();
         std::mem::swap(&mut self.outputs, &mut outputs);
         Arc::new(outputs)
@@ -332,7 +328,7 @@ impl Scenario {
 
     // Commit the current tx to the cache, return its digest, and reset the transaction
     // outputs to a new empty one.
-    async fn do_tx(&mut self) -> TransactionDigest {
+    pub async fn do_tx(&mut self) -> TransactionDigest {
         // Resets outputs, but not objects, so that subsequent runs must respect
         // the state so far.
         let outputs = self.take_outputs();
@@ -350,23 +346,23 @@ impl Scenario {
     }
 
     // commit a transaction to the database
-    async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
-        let res = self.cache().commit_transaction_outputs(1, &tx).await;
+    pub async fn commit(&mut self, tx: TransactionDigest) -> SuiResult {
+        let res = self.cache().commit_transaction_outputs(1, &[tx]).await;
         self.count_action();
         res
     }
 
-    async fn clear_state_end_of_epoch(&self) {
+    pub async fn clear_state_end_of_epoch(&self) {
         let execution_guard = tokio::sync::RwLock::new(1u64);
         let lock = execution_guard.write().await;
         self.cache().clear_state_end_of_epoch(&lock);
     }
 
-    fn evict_caches(&self) {
+    pub fn evict_caches(&self) {
         self.cache.clear_caches();
     }
 
-    fn reset_cache(&mut self) {
+    pub fn reset_cache(&mut self) {
         self.cache = Arc::new(WritebackCache::new(
             self.store.clone(),
             self.cache.metrics.clone(),
@@ -388,7 +384,7 @@ impl Scenario {
         });
     }
 
-    fn assert_live(&self, short_ids: &[u32]) {
+    pub fn assert_live(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
             let expected = self.objects.get(id).expect("no such object");
@@ -413,7 +409,7 @@ impl Scenario {
         }
     }
 
-    fn assert_packages(&self, short_ids: &[u32]) {
+    pub fn assert_packages(&self, short_ids: &[u32]) {
         self.assert_live(short_ids);
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
@@ -423,7 +419,7 @@ impl Scenario {
         }
     }
 
-    fn get_from_dirty_cache(&self, short_id: u32) -> Option<Object> {
+    pub fn get_from_dirty_cache(&self, short_id: u32) -> Option<Object> {
         let id = self.id_map.get(&short_id).expect("no such object");
         let object = self.objects.get(id).expect("no such object");
         self.cache
@@ -434,7 +430,7 @@ impl Scenario {
             .map(|e| e.unwrap_object().clone())
     }
 
-    fn assert_dirty(&self, short_ids: &[u32]) {
+    pub fn assert_dirty(&self, short_ids: &[u32]) {
         // assert that all ids are in the dirty cache
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
@@ -447,7 +443,7 @@ impl Scenario {
         }
     }
 
-    fn assert_not_dirty(&self, short_ids: &[u32]) {
+    pub fn assert_not_dirty(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             assert!(
                 self.get_from_dirty_cache(*short_id).is_none(),
@@ -456,7 +452,7 @@ impl Scenario {
         }
     }
 
-    fn assert_cached(&self, short_ids: &[u32]) {
+    pub fn assert_cached(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
             let object = self.objects.get(id).expect("no such object");
@@ -476,7 +472,7 @@ impl Scenario {
         }
     }
 
-    fn assert_received(&self, short_ids: &[u32]) {
+    pub fn assert_received(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such object");
             let object = self.objects.get(id).expect("no such object");
@@ -494,7 +490,7 @@ impl Scenario {
         }
     }
 
-    fn assert_not_exists(&self, short_ids: &[u32]) {
+    pub fn assert_not_exists(&self, short_ids: &[u32]) {
         for short_id in short_ids {
             let id = self.id_map.get(short_id).expect("no such id");
 
@@ -505,15 +501,28 @@ impl Scenario {
         }
     }
 
-    fn obj_id(&self, short_id: u32) -> ObjectID {
+    pub fn obj_id(&self, short_id: u32) -> ObjectID {
         *self.id_map.get(&short_id).expect("no such id")
     }
 
-    fn object(&self, short_id: u32) -> Object {
+    pub fn object(&self, short_id: u32) -> Object {
         self.objects
             .get(&self.obj_id(short_id))
             .expect("no such object")
             .clone()
+    }
+
+    pub fn obj_ref(&self, short_id: u32) -> ObjectRef {
+        self.object(short_id).compute_object_reference()
+    }
+
+    pub fn make_signed_transaction(&self, tx: &VerifiedTransaction) -> VerifiedSignedTransaction {
+        VerifiedSignedTransaction::new(
+            self.epoch_store.epoch(),
+            tx.clone(),
+            self.authority.name,
+            &*self.authority.secret,
+        )
     }
 }
 
@@ -541,7 +550,7 @@ async fn test_committed() {
         s.assert_live(&[1, 2]);
         s.assert_dirty(&[1, 2]);
         s.cache()
-            .commit_transaction_outputs(1, &tx)
+            .commit_transaction_outputs(1, &[tx])
             .await
             .expect("commit failed");
         s.assert_not_dirty(&[1, 2]);
@@ -618,6 +627,62 @@ async fn test_received() {
 }
 
 #[tokio::test]
+async fn test_extra_outputs() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        // make sure that events, effects, transactions are all
+        // returned correctly no matter the cache state.
+        s.with_created(&[1, 2]);
+        s.with_events();
+
+        let tx = s.do_tx().await;
+
+        s.cache.get_transaction_block(&tx).unwrap().unwrap();
+        let fx = s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        let events_digest = fx.events_digest().unwrap();
+        s.cache.get_events(events_digest).unwrap().unwrap();
+
+        s.commit(tx).await.unwrap();
+
+        s.cache.get_transaction_block(&tx).unwrap().unwrap();
+        s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        s.cache.get_events(events_digest).unwrap().unwrap();
+
+        // clear cache
+        s.reset_cache();
+
+        s.cache.get_transaction_block(&tx).unwrap().unwrap();
+        s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        s.cache.get_events(events_digest).unwrap().unwrap();
+
+        s.with_created(&[3]);
+        let tx = s.do_tx().await;
+
+        // when Events is empty, it should be treated as None
+        let fx = s.cache.get_executed_effects(&tx).unwrap().unwrap();
+        let events_digest = fx.events_digest().unwrap();
+        assert!(
+            s.cache.get_events(events_digest).unwrap().is_none(),
+            "empty events should be none"
+        );
+
+        s.commit(tx).await.unwrap();
+        assert!(
+            s.cache.get_events(events_digest).unwrap().is_none(),
+            "empty events should be none"
+        );
+
+        s.reset_cache();
+        assert!(
+            s.cache.get_events(events_digest).unwrap().is_none(),
+            "empty events should be none"
+        );
+    })
+    .await;
+}
+
+#[tokio::test]
+#[should_panic(expected = "version must be the oldest in the map")]
 async fn test_out_of_order_commit() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
@@ -702,14 +767,29 @@ async fn test_missing_reverts_panic() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "transaction must exist")]
-async fn test_revert_commited_tx_panics() {
+#[should_panic(expected = "attempt to revert committed transaction")]
+async fn test_revert_committed_tx_panics() {
     telemetry_subscribers::init_for_testing();
     Scenario::iterate(|mut s| async move {
         s.with_created(&[1]);
         let tx1 = s.do_tx().await;
         s.commit(tx1).await.unwrap();
         s.cache().revert_state_update(&tx1).unwrap();
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn test_revert_unexecuted_tx() {
+    telemetry_subscribers::init_for_testing();
+    Scenario::iterate(|mut s| async move {
+        s.with_created(&[1]);
+        let tx1 = s.do_tx().await;
+        s.commit(tx1).await.unwrap();
+        let random_digest = TransactionDigest::random();
+        // must not panic - pending_consensus_transactions is a super set of
+        // executed but un-checkpointed transactions
+        s.cache().revert_state_update(&random_digest).unwrap();
     })
     .await;
 }
@@ -797,11 +877,8 @@ async fn test_concurrent_readers() {
         tokio::task::yield_now().await;
     });
 
-    let store = init_authority_store().await;
-    let registry = prometheus::Registry::new(); // One time registry for testing.
-    let cache = Arc::new(WritebackCache::new_for_tests(store.clone(), &registry));
-
-    let mut s = Scenario::new_with_store_and_cache(store.clone(), cache.clone());
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
     let mut txns = Vec::new();
 
     for i in 0..100 {
@@ -872,4 +949,86 @@ async fn test_concurrent_readers() {
 
     t1.await.unwrap();
     t2.await.unwrap();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+async fn test_concurrent_lockers() {
+    telemetry_subscribers::init_for_testing();
+
+    let mut s = Scenario::new(None, Arc::new(AtomicU32::new(0))).await;
+    let cache = s.cache.clone();
+    let mut txns = Vec::new();
+
+    for i in 0..1000 {
+        let a = i * 4;
+        let b = i * 4 + 1;
+        let c = i * 4 + 2;
+        let d = i * 4 + 3;
+        s.with_created(&[a, b]);
+        s.do_tx().await;
+
+        let a_ref = s.obj_ref(a);
+        let b_ref = s.obj_ref(b);
+
+        // these contents of these txns are never used, they are just unique transactions to use for
+        // attempted equivocation
+        s.with_created(&[c]);
+        let tx1 = s.take_outputs();
+
+        s.with_created(&[d]);
+        let tx2 = s.take_outputs();
+
+        let tx1 = s.make_signed_transaction(&tx1.transaction);
+        let tx2 = s.make_signed_transaction(&tx2.transaction);
+
+        txns.push((tx1, tx2, a_ref, b_ref));
+    }
+
+    let barrier = Arc::new(tokio::sync::Barrier::new(2));
+
+    let t1 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (tx1, _, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx1)
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let t2 = {
+        let txns = txns.clone();
+        let cache = cache.clone();
+        let barrier = barrier.clone();
+        let epoch_store = s.epoch_store.clone();
+        tokio::task::spawn(async move {
+            let mut results = Vec::new();
+            for (_, tx2, a_ref, b_ref) in txns {
+                results.push(
+                    cache
+                        .acquire_transaction_locks(&epoch_store, &[a_ref, b_ref], tx2)
+                        .await,
+                );
+                barrier.wait().await;
+            }
+            results
+        })
+    };
+
+    let results1 = t1.await.unwrap();
+    let results2 = t2.await.unwrap();
+
+    for (r1, r2) in results1.into_iter().zip(results2) {
+        // exactly one should succeed in each case
+        assert_eq!(r1.is_ok(), r2.is_err());
+    }
 }

@@ -17,13 +17,15 @@ use crate::{
     error::{ConsensusError, ConsensusResult},
 };
 
-const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
+const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
 enum CoreThreadCommand {
     /// Add blocks to be processed and accepted
     AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
-    /// Called when a leader timeout occurs and a block should be produced
-    ForceNewBlock(Round, oneshot::Sender<()>),
+    /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
+    /// When the command is called with `force = true`, then the block will be created for `round` skipping
+    /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
+    NewBlock(Round, oneshot::Sender<()>, bool),
     /// Request missing blocks that need to be synced.
     GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
 }
@@ -41,7 +43,7 @@ pub trait CoreThreadDispatcher: Sync + Send + 'static {
     async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
         -> Result<BTreeSet<BlockRef>, CoreError>;
 
-    async fn force_new_block(&self, round: Round) -> Result<(), CoreError>;
+    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
 
     async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
 }
@@ -77,8 +79,8 @@ impl CoreThread {
                     let missing_blocks = self.core.add_blocks(blocks)?;
                     sender.send(missing_blocks).ok();
                 }
-                CoreThreadCommand::ForceNewBlock(round, sender) => {
-                    self.core.force_new_block(round)?;
+                CoreThreadCommand::NewBlock(round, sender, force) => {
+                    self.core.new_block(round, force)?;
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
@@ -159,9 +161,9 @@ impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
         receiver.await.map_err(Shutdown)
     }
 
-    async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
+    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
         let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
+        self.send(CoreThreadCommand::NewBlock(round, sender, force))
             .await;
         receiver.await.map_err(Shutdown)
     }
@@ -186,6 +188,7 @@ mod test {
         context::Context,
         core::CoreSignals,
         dag_state::DagState,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         CommitConsumer,
@@ -205,7 +208,7 @@ mod test {
         );
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
         let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
-        let (signals, signal_receivers) = CoreSignals::new();
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let (sender, _receiver) = unbounded_channel();
         let commit_observer = CommitObserver::new(
@@ -214,8 +217,13 @@ mod test {
             dag_state.clone(),
             store,
         );
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
         let core = Core::new(
             context.clone(),
+            leader_schedule,
             transaction_consumer,
             block_manager,
             commit_observer,

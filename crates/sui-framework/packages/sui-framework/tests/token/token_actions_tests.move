@@ -7,8 +7,6 @@
 ///
 /// It also tests custom actions which can be implemented by policy owner.
 module sui::token_actions_tests {
-    use std::option;
-    use std::string;
     use sui::token;
     use sui::token_test_utils as test;
 
@@ -22,17 +20,17 @@ module sui::token_actions_tests {
         let token = test::mint(1000, ctx);
         let request = token::transfer(token, @0x2, ctx);
 
-        assert!(token::action(&request) == token::transfer_action(), 0);
-        assert!(token::amount(&request) == 1000, 1);
-        assert!(token::sender(&request) == @0x0, 2);
+        assert!(request.action() == token::transfer_action(), 0);
+        assert!(request.amount() == 1000, 1);
+        assert!(request.sender() == @0x0, 2);
 
-        let recipient = token::recipient(&request);
+        let recipient = request.recipient();
 
-        assert!(option::is_some(&recipient), 3);
-        assert!(option::borrow(&recipient) == &@0x2, 4);
-        assert!(option::is_none(&token::spent(&request)), 5);
+        assert!(recipient.is_some(), 3);
+        assert!(recipient.borrow() == &@0x2, 4);
+        assert!(request.spent().is_none(), 5);
 
-        token::confirm_with_policy_cap(&cap, request, ctx);
+        cap.confirm_with_policy_cap(request, ctx);
         test::return_policy(policy, cap);
     }
 
@@ -41,19 +39,19 @@ module sui::token_actions_tests {
     /// confirm request in the policy making sure the balance is updated.
     fun test_spend_action() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
+        let (mut policy, cap) = test::get_policy(ctx);
 
         let token = test::mint(1000, ctx);
         let request = token::spend(token, ctx);
 
-        token::allow(&mut policy, &cap, token::spend_action(), ctx);
+        policy.allow(&cap, token::spend_action(), ctx);
 
-        assert!(token::action(&request) == token::spend_action(), 0);
-        assert!(token::amount(&request) == 1000, 1);
-        assert!(token::sender(&request) == @0x0, 2);
-        assert!(option::is_none(&token::recipient(&request)), 3);
-        assert!(option::is_some(&token::spent(&request)), 4);
-        assert!(option::borrow(&token::spent(&request)) == &1000, 5);
+        assert!(request.action() == token::spend_action(), 0);
+        assert!(request.amount() == 1000, 1);
+        assert!(request.sender() == @0x0, 2);
+        assert!(request.recipient().is_none(), 3);
+        assert!(request.spent().is_some(), 4);
+        assert!(request.spent().borrow() == &1000, 5);
 
         token::confirm_request_mut(&mut policy, request, ctx);
 
@@ -70,25 +68,25 @@ module sui::token_actions_tests {
         let (policy, cap) = test::get_policy(ctx);
 
         let token = test::mint(1000, ctx);
-        let (coin, to_request) = token::to_coin(token, ctx);
+        let (coin, to_request) = token.to_coin(ctx);
 
-        assert!(token::action(&to_request) == token::to_coin_action(), 0);
-        assert!(token::amount(&to_request) == 1000, 1);
-        assert!(token::sender(&to_request) == @0x0, 2);
-        assert!(option::is_none(&token::recipient(&to_request)), 3);
-        assert!(option::is_none(&token::spent(&to_request)), 4);
+        assert!(to_request.action() == token::to_coin_action(), 0);
+        assert!(to_request.amount() == 1000, 1);
+        assert!(to_request.sender() == @0x0, 2);
+        assert!(to_request.recipient().is_none(), 3);
+        assert!(to_request.spent().is_none(), 4);
 
         let (token, from_request) = token::from_coin(coin, ctx);
 
-        assert!(token::action(&from_request) == token::from_coin_action(), 5);
-        assert!(token::amount(&from_request) == 1000, 6);
-        assert!(token::sender(&from_request) == @0x0, 7);
-        assert!(option::is_none(&token::recipient(&from_request)), 8);
-        assert!(option::is_none(&token::spent(&from_request)), 9);
+        assert!(from_request.action() == token::from_coin_action(), 5);
+        assert!(from_request.amount() == 1000, 6);
+        assert!(from_request.sender() == @0x0, 7);
+        assert!(from_request.recipient().is_none(), 8);
+        assert!(from_request.spent().is_none(), 9);
 
-        token::keep(token, ctx);
-        token::confirm_with_policy_cap(&cap, to_request, ctx);
-        token::confirm_with_policy_cap(&cap, from_request, ctx);
+        token.keep(ctx);
+        cap.confirm_with_policy_cap(to_request, ctx);
+        cap.confirm_with_policy_cap(from_request, ctx);
         test::return_policy(policy, cap);
     }
 
@@ -98,10 +96,10 @@ module sui::token_actions_tests {
     /// policy.
     fun test_custom_action() {
         let ctx = &mut test::ctx(@0x0);
-        let (policy, cap) = test::get_policy(ctx);
-        let custom_action = string::utf8(b"custom");
+        let (mut policy, cap) = test::get_policy(ctx);
+        let custom_action = b"custom".to_string();
 
-        token::allow(&mut policy, &cap, custom_action, ctx);
+        policy.allow(&cap, custom_action, ctx);
 
         let request = token::new_request(
             custom_action,
@@ -111,13 +109,13 @@ module sui::token_actions_tests {
             ctx
         );
 
-        assert!(token::action(&request) == custom_action, 0);
-        assert!(token::amount(&request) == 1000, 1);
-        assert!(token::sender(&request) == @0x0, 2);
-        assert!(option::is_none(&token::recipient(&request)), 3);
-        assert!(option::is_none(&token::spent(&request)), 4);
+        assert!(request.action() == custom_action, 0);
+        assert!(request.amount() == 1000, 1);
+        assert!(request.sender() == @0x0, 2);
+        assert!(request.recipient().is_none(), 3);
+        assert!(request.spent().is_none(), 4);
 
-        token::confirm_request(&policy, request, ctx);
+        policy.confirm_request(request, ctx);
         test::return_policy(policy, cap);
     }
 }

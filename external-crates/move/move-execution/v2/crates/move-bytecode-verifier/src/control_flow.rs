@@ -13,24 +13,21 @@
 //!
 //! For bytecode versions 5 and below, delegates to `control_flow_v5`.
 use crate::{
+    absint::FunctionContext,
     control_flow_v5,
     loop_summary::{LoopPartition, LoopSummary},
-    meter::Meter,
 };
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
-    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
-    file_format::{
-        CodeOffset, CodeUnit, CompiledScript, FunctionDefinition, FunctionDefinitionIndex,
-    },
+    file_format::{CodeOffset, CodeUnit, FunctionDefinition, FunctionDefinitionIndex},
     CompiledModule,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 use std::collections::BTreeSet;
 
-/// Perform control flow verification on the compiled function, returning its `FunctionView` if
+/// Perform control flow verification on the compiled function, returning its `FunctionContext` if
 /// verification was successful.
 pub fn verify_function<'a>(
     verifier_config: &'a VerifierConfig,
@@ -38,35 +35,18 @@ pub fn verify_function<'a>(
     index: FunctionDefinitionIndex,
     function_definition: &'a FunctionDefinition,
     code: &'a CodeUnit,
-    _meter: &mut impl Meter, // TODO: metering
-) -> PartialVMResult<FunctionView<'a>> {
+    _meter: &mut (impl Meter + ?Sized), // TODO: metering
+) -> PartialVMResult<FunctionContext<'a>> {
     let function_handle = module.function_handle_at(function_definition.function);
 
     if module.version() <= 5 {
         control_flow_v5::verify(verifier_config, Some(index), code)?;
-        Ok(FunctionView::function(module, index, code, function_handle))
+        Ok(FunctionContext::new(module, index, code, function_handle))
     } else {
         verify_fallthrough(Some(index), code)?;
-        let function_view = FunctionView::function(module, index, code, function_handle);
-        verify_reducibility(verifier_config, &function_view)?;
-        Ok(function_view)
-    }
-}
-
-/// Perform control flow verification on the compiled script, returning its `FunctionView` if
-/// verification was successful.
-pub fn verify_script<'a>(
-    verifier_config: &'a VerifierConfig,
-    script: &'a CompiledScript,
-) -> PartialVMResult<FunctionView<'a>> {
-    if script.version() <= 5 {
-        control_flow_v5::verify(verifier_config, None, &script.code)?;
-        Ok(FunctionView::script(script))
-    } else {
-        verify_fallthrough(None, &script.code)?;
-        let function_view = FunctionView::script(script);
-        verify_reducibility(verifier_config, &function_view)?;
-        Ok(function_view)
+        let function_context = FunctionContext::new(module, index, code, function_handle);
+        verify_reducibility(verifier_config, &function_context)?;
+        Ok(function_context)
     }
 }
 
@@ -86,7 +66,7 @@ fn verify_fallthrough(
     }
 }
 
-/// Test that `function_view`'s control-flow graph is reducible using Tarjan's algorithm [1].
+/// Test that `function_context`'s control-flow graph is reducible using Tarjan's algorithm [1].
 /// Optionally test loop depth bounded by `verifier_config.max_loop_depth`.
 ///
 /// A CFG, `G`, with starting block `s` is reducible if and only if [2] any of the following
@@ -116,14 +96,16 @@ fn verify_fallthrough(
 ///  2. Hecht, M. S., Ullman J. D.  1974.  Characterizations of Reducible Flow Graphs.
 fn verify_reducibility<'a>(
     verifier_config: &VerifierConfig,
-    function_view: &'a FunctionView<'a>,
+    function_context: &'a FunctionContext<'a>,
 ) -> PartialVMResult<()> {
-    let current_function = function_view.index().unwrap_or(FunctionDefinitionIndex(0));
+    let current_function = function_context
+        .index()
+        .unwrap_or(FunctionDefinitionIndex(0));
     let err = move |code: StatusCode, offset: CodeOffset| {
         Err(PartialVMError::new(code).at_code_offset(current_function, offset))
     };
 
-    let summary = LoopSummary::new(function_view.cfg());
+    let summary = LoopSummary::new(function_context.cfg());
     let mut partition = LoopPartition::new(&summary);
 
     // Iterate through nodes in reverse pre-order so more deeply nested loops (which would appear

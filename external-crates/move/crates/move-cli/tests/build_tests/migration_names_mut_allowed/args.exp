@@ -16,22 +16,21 @@ BUILDING A
 The following changes will be made.
 ============================================================
 
---- sources/mut_name.move
-+++ sources/mut_name.move
-@@ -3,1 +3,1 @@
+--- ./sources/mut_name.move
++++ ./sources/mut_name.move
+@@ -3 +3 @@
 -    fun dumpster_fire(mut x: u64, mut: u64): u64 {
 +    fun dumpster_fire(mut x: u64, `mut`: u64): u64 {
-@@ -5,1 +5,1 @@
+@@ -5,2 +5,2 @@
 -        let mut: u64 = mut + 2;
-+        let `mut`: u64 = `mut` + 2;
-@@ -6,1 +6,1 @@
 -        mut + y + x
++        let `mut`: u64 = `mut` + 2;
 +        `mut` + y + x
 
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "sources/mut_name.move" . . .
+Updating "./sources/mut_name.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

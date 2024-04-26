@@ -9,7 +9,7 @@ use sui_protocol_config::ProtocolConfig;
 use tap::tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::oneshot;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::block::Transaction;
 use crate::context::Context;
@@ -134,7 +134,7 @@ impl TransactionClient {
         let included_in_block = self.submit_no_wait(transaction).await?;
         included_in_block
             .await
-            .tap_err(|e| error!("Transaction acknowledge failed with {:?}", e))
+            .tap_err(|e| warn!("Transaction acknowledge failed with {:?}", e))
             .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))
     }
 

@@ -149,6 +149,10 @@ impl Worker for ArchivalWorker {
             return Ok(());
         }
         let epoch = checkpoint.checkpoint_summary.epoch;
+        if state.buffer.is_empty() {
+            assert!(epoch == state.epoch || epoch == state.epoch + 1);
+            state.epoch = epoch;
+        }
         let full_checkpoint_contents = FullCheckpointContents::from_contents_and_execution_data(
             checkpoint.checkpoint_contents,
             checkpoint

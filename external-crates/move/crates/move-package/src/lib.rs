@@ -11,7 +11,7 @@ pub mod package_hooks;
 pub mod resolution;
 pub mod source_package;
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::*;
 use lock_file::LockFile;
 use move_compiler::{
@@ -22,7 +22,11 @@ use move_core_types::account_address::AccountAddress;
 use move_model::model::GlobalEnv;
 use resolution::{dependency_graph::DependencyGraphBuilder, resolution_graph::ResolvedGraph};
 use serde::{Deserialize, Serialize};
-use source_package::{layout::SourcePackageLayout, parsed_manifest::DependencyKind};
+use source_package::{
+    layout::SourcePackageLayout,
+    manifest_parser::{parse_move_manifest_string, parse_source_manifest},
+    parsed_manifest::DependencyKind,
+};
 use std::{
     collections::BTreeMap,
     io::{BufRead, Write},
@@ -271,7 +275,8 @@ impl BuildConfig {
         let path = SourcePackageLayout::try_find_root(path)?;
         let manifest_string =
             std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
-        let lock_string = std::fs::read_to_string(path.join(SourcePackageLayout::Lock.path())).ok();
+        let lock_path = path.join(SourcePackageLayout::Lock.path());
+        let lock_string = std::fs::read_to_string(lock_path.clone()).ok();
         let _mutx = PackageLock::lock(); // held until function returns
 
         let install_dir_set = self.install_dir.is_some();
@@ -292,7 +297,7 @@ impl BuildConfig {
         if modified || install_dir_set {
             // (1) Write the Move.lock file if the existing one is `modified`, or
             // (2) `install_dir` is set explicitly, which may be a different directory, and where a Move.lock does not exist yet.
-            let lock = dependency_graph.write_to_lock(install_dir)?;
+            let lock = dependency_graph.write_to_lock(install_dir, Some(lock_path))?;
             if let Some(lock_path) = &self.lock_file {
                 lock.commit(lock_path)?;
             }
@@ -325,20 +330,34 @@ impl BuildConfig {
 
     pub fn update_lock_file_toolchain_version(
         &self,
-        path: &PathBuf,
+        path: &Path,
         compiler_version: String,
     ) -> Result<()> {
         let Some(lock_file) = self.lock_file.as_ref() else {
             return Ok(());
         };
+        let path = &SourcePackageLayout::try_find_root(path)
+            .map_err(|e| anyhow!("Unable to find package root for {}: {e}", path.display()))?;
+
+        // Resolve edition and flavor from `Move.toml` or assign defaults.
+        let manifest_string =
+            std::fs::read_to_string(path.join(SourcePackageLayout::Manifest.path()))?;
+        let toml_manifest = parse_move_manifest_string(manifest_string.clone())?;
+        let root_manifest = parse_source_manifest(toml_manifest)?;
+        let edition = root_manifest
+            .package
+            .edition
+            .or(self.default_edition)
+            .unwrap_or_default();
+        let flavor = root_manifest
+            .package
+            .flavor
+            .or(self.default_flavor)
+            .unwrap_or_default();
+
         let install_dir = self.install_dir.as_ref().unwrap_or(path).to_owned();
         let mut lock = LockFile::from(install_dir, lock_file)?;
-        update_compiler_toolchain(
-            &mut lock,
-            compiler_version,
-            self.default_edition.unwrap_or_default(),
-            self.default_flavor.unwrap_or_default(),
-        )?;
+        update_compiler_toolchain(&mut lock, compiler_version, edition, flavor)?;
         let _mutx = PackageLock::lock();
         lock.commit(lock_file)?;
         Ok(())

@@ -6,10 +6,6 @@
 //# publish
 
 module t3::o3 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     public struct Obj3 has key, store {
         id: UID,
     }
@@ -23,9 +19,6 @@ module t3::o3 {
 //# publish --dependencies t3
 
 module t2::o2 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use t3::o3::Obj3;
 
     public struct Obj2 has key, store {
@@ -55,9 +48,6 @@ module t2::o2 {
 //# publish --dependencies t2 t3
 
 module t1::o1 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use t2::o2::Obj2;
     use t3::o3::Obj3;
 

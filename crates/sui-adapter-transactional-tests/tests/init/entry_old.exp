@@ -1,13 +1,13 @@
-processed 3 tasks
+processed 4 tasks
 
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-15:
+task 1 'publish'. lines 8-20:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 5639200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 17-32:
+task 3 'run'. lines 24-39:
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0

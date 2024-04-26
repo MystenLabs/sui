@@ -3,15 +3,15 @@ processed 4 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-35:
+task 1 'publish'. lines 6-33:
 created: object(1,0), object(1,1), object(1,2), object(1,3), object(1,4), object(1,5)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 15663600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 37-37:
+task 2 'create-checkpoint'. lines 35-35:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 39-87:
+task 3 'run-graphql'. lines 37-85:
 Response: {
   "data": {
     "suiCoins": {

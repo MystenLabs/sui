@@ -11,9 +11,7 @@ use crate::tasks::{
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use clap::Parser;
-use move_binary_format::{
-    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::CompiledModule,
-};
+use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_command_line_common::{
     address::ParsedAddress,
@@ -26,7 +24,7 @@ use move_command_line_common::{
 use move_compiler::{
     compiled_unit::AnnotatedCompiledUnit,
     diagnostics::{Diagnostics, FilesSourceText, WarningFilters},
-    editions::Edition,
+    editions::{Edition, Flavor},
     shared::{NumericalAddress, PackageConfig},
     FullyCompiledProgram,
 };
@@ -56,6 +54,7 @@ pub struct CompiledState {
     pub named_address_mapping: BTreeMap<String, NumericalAddress>,
     default_named_address_mapping: Option<NumericalAddress>,
     edition: Edition,
+    flavor: Flavor,
     modules: BTreeMap<ModuleId, CompiledModule>,
     temp_files: BTreeMap<String, NamedTempFile>,
 }
@@ -197,11 +196,13 @@ pub trait MoveTestAdapter<'a>: Sized + Send {
                     let MaybeNamedCompiledModule {
                         module, source_map, ..
                     } = m;
-                    let view = BinaryIndexedView::Module(&module);
                     let source_mapping = match source_map {
-                        Some(m) => SourceMapping::new(m, view),
-                        None => SourceMapping::new_from_view(view, Spanned::unsafe_no_loc(()).loc)
-                            .expect("Unable to build dummy source mapping"),
+                        Some(m) => SourceMapping::new(m, &module),
+                        None => SourceMapping::new_without_source_map(
+                            &module,
+                            Spanned::unsafe_no_loc(()).loc,
+                        )
+                        .expect("Unable to build dummy source mapping"),
                     };
                     let disassembler =
                         Disassembler::new(source_mapping, DisassemblerOptions::new());
@@ -405,6 +406,7 @@ impl CompiledState {
         pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
         default_named_address_mapping: Option<NumericalAddress>,
         compiler_edition: Option<Edition>,
+        flavor: Option<Flavor>,
     ) -> Self {
         let pre_compiled_ids = match pre_compiled_deps.clone() {
             None => BTreeSet::new(),
@@ -427,6 +429,7 @@ impl CompiledState {
             compiled_module_named_address_mapping: BTreeMap::new(),
             named_address_mapping,
             edition: compiler_edition.unwrap_or(Edition::LEGACY),
+            flavor: flavor.unwrap_or(Flavor::Core),
             default_named_address_mapping,
             temp_files: BTreeMap::new(),
         };
@@ -633,6 +636,7 @@ pub fn compile_source_units(
     // a lot of them!) so let's suppress them function warnings, so let's suppress these
     let warning_filter = WarningFilters::unused_warnings_filter_for_test();
     let (mut files, comments_and_compiler_res) = move_compiler::Compiler::from_files(
+        None,
         vec![file_name.as_ref().to_str().unwrap().to_owned()],
         state.source_files().cloned().collect::<Vec<_>>(),
         named_address_mapping,
@@ -642,6 +646,7 @@ pub fn compile_source_units(
     .set_warning_filter(Some(warning_filter))
     .set_default_config(PackageConfig {
         edition: state.edition,
+        flavor: state.flavor,
         ..PackageConfig::default()
     })
     .run::<PASS_COMPILATION>()?;

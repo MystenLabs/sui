@@ -11,15 +11,12 @@ module games::sea_hero_helper {
     use games::sea_hero::{Self, SeaMonster, RUM};
     use games::hero::Hero;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
-    struct HelpMeSlayThisMonster has key {
+    public struct HelpMeSlayThisMonster has key {
         id: UID,
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
@@ -71,7 +68,7 @@ module games::sea_hero_helper {
             helper_reward
         } = wrapper;
         object::delete(id);
-        let owner_reward = sea_hero::slay(hero, monster);
+        let mut owner_reward = sea_hero::slay(hero, monster);
         let helper_reward = coin::take(&mut owner_reward, helper_reward, ctx);
         transfer::public_transfer(coin::from_balance(owner_reward, ctx), monster_owner);
         helper_reward

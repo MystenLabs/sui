@@ -3,37 +3,55 @@ processed 8 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 8-15:
+task 1 'publish'. lines 8-12:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 4628400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 17-19:
+task 2 'programmable'. lines 14-16:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 21-21:
+task 3 'view-object'. lines 18-18:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 4 'programmable'. lines 23-25:
+task 4 'programmable'. lines 20-22:
 created: object(4,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 5 'view-object'. lines 27-27:
+task 5 'view-object'. lines 24-24:
 Owner: Shared
 Version: 3
-Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(4,0)}}}
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(4,0),
+        },
+    },
+}
 
-task 6 'programmable'. lines 29-31:
+task 6 'programmable'. lines 26-28:
 created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2219200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 7 'view-object'. lines 33-33:
+task 7 'view-object'. lines 30-30:
 Owner: Immutable
 Version: 4
-Contents: test::m1::Pub {id: sui::object::UID {id: sui::object::ID {bytes: fake(6,0)}}}
+Contents: test::m1::Pub {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(6,0),
+        },
+    },
+}

@@ -3,7 +3,7 @@
 
 module c::m {
     #[allow(unused_field)]
-    struct T0 {
+    public struct T0 {
         t: a::n::T0,
         u: a::n::T1,
         v: a::m::T2,
@@ -13,7 +13,7 @@ module c::m {
 
     public fun foo() {}
 
-    public(friend) fun bar(_t0: &T0, _t1: &mut a::n::T1): u64 { 42 }
+    public(package) fun bar(_t0: &T0, _t1: &mut a::n::T1): u64 { 42 }
 
     #[allow(unused_function)]
     fun baz(x: u8): (u16, u32) { ((x as u16), (x as u32)) }

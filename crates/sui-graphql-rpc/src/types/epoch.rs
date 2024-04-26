@@ -4,11 +4,12 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::context_data::db_data_provider::{convert_to_validators, PgManager};
-use crate::data::{Db, DbConnection, QueryExecutor};
+use crate::data::{DataLoader, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
+use crate::server::watermark_task::Watermark;
 
 use super::big_int::BigInt;
-use super::checkpoint::{self, Checkpoint, CheckpointId};
+use super::checkpoint::{self, Checkpoint};
 use super::cursor::Page;
 use super::date_time::DateTime;
 use super::protocol_config::ProtocolConfigs;
@@ -16,7 +17,7 @@ use super::system_state_summary::SystemStateSummary;
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::validator_set::ValidatorSet;
 use async_graphql::connection::Connection;
-use async_graphql::dataloader::{DataLoader, Loader};
+use async_graphql::dataloader::Loader;
 use async_graphql::*;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
@@ -27,15 +28,15 @@ use sui_types::messages_checkpoint::CheckpointCommitment as EpochCommitment;
 #[derive(Clone)]
 pub(crate) struct Epoch {
     pub stored: QueryableEpochInfo,
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
 }
 
 /// DataLoader key for fetching an `Epoch` by its ID, optionally constrained by a consistency
 /// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
-pub(crate) struct EpochKey {
+struct EpochKey {
     pub epoch_id: u64,
-    pub checkpoint_viewed_at: Option<u64>,
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Operation of the Sui network is temporally partitioned into non-overlapping epochs,
@@ -64,13 +65,11 @@ impl Epoch {
             .fetch_sui_system_state(Some(self.stored.epoch as u64))
             .await?;
 
-        let checkpoint_viewed_at = match self.checkpoint_viewed_at {
-            Some(value) => Ok(value),
-            None => Checkpoint::query_latest_checkpoint_sequence_number(ctx.data_unchecked()).await,
-        }?;
-
-        let active_validators =
-            convert_to_validators(system_state.active_validators, None, checkpoint_viewed_at);
+        let active_validators = convert_to_validators(
+            system_state.active_validators,
+            None,
+            self.checkpoint_viewed_at,
+        );
         let validator_set = ValidatorSet {
             total_stake: Some(BigInt::from(self.stored.total_stake)),
             active_validators: Some(active_validators),
@@ -83,7 +82,7 @@ impl Epoch {
             inactive_pools_size: Some(system_state.inactive_pools_size),
             validator_candidates_id: Some(system_state.validator_candidates_id.into()),
             validator_candidates_size: Some(system_state.validator_candidates_size),
-            checkpoint_viewed_at,
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
         };
         Ok(Some(validator_set))
     }
@@ -105,13 +104,12 @@ impl Epoch {
     async fn total_checkpoints(&self, ctx: &Context<'_>) -> Result<Option<BigInt>> {
         let last = match self.stored.last_checkpoint_id {
             Some(last) => last as u64,
-            None => Checkpoint::query(ctx.data_unchecked(), CheckpointId::default(), None)
-                .await
-                .extend()?
-                .map_or(self.stored.first_checkpoint_id as u64, |c| {
-                    c.sequence_number_impl()
-                }),
+            None => {
+                let Watermark { checkpoint, .. } = *ctx.data_unchecked();
+                checkpoint
+            }
         };
+
         Ok(Some(BigInt::from(
             last - self.stored.first_checkpoint_id as u64,
         )))
@@ -273,10 +271,10 @@ impl Epoch {
     pub(crate) async fn query(
         ctx: &Context<'_>,
         filter: Option<u64>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         if let Some(epoch_id) = filter {
-            let dl: &DataLoader<Db> = ctx.data_unchecked();
+            let DataLoader(dl) = ctx.data_unchecked();
             dl.load_one(EpochKey {
                 epoch_id,
                 checkpoint_viewed_at,
@@ -292,43 +290,29 @@ impl Epoch {
     /// cursor).
     pub(crate) async fn query_latest_at(
         db: &Db,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use epochs::dsl;
 
-        let (stored, checkpoint_viewed_at): (Option<QueryableEpochInfo>, u64) = db
-            .execute_repeatable(move |conn| {
-                let checkpoint_viewed_at = match checkpoint_viewed_at {
-                    Some(value) => Ok(value),
-                    None => Checkpoint::available_range(conn).map(|(_, rhs)| rhs),
-                }?;
-
-                let stored = conn
-                    .first(move || {
-                        let mut query = dsl::epochs
-                            .select(QueryableEpochInfo::as_select())
-                            .order_by(dsl::epoch.desc())
-                            .into_boxed();
-
-                        // Bound the query on `checkpoint_viewed_at` by filtering for the epoch
-                        // whose `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch
-                        // with the largest `first_checkpoint_id` among the filtered set.
-                        query = query
-                            .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
-                            .order_by(dsl::first_checkpoint_id.desc());
-
-                        query
-                    })
-                    .optional()?;
-
-                Ok::<_, diesel::result::Error>((stored, checkpoint_viewed_at))
+        let stored: Option<QueryableEpochInfo> = db
+            .execute(move |conn| {
+                conn.first(move || {
+                    // Bound the query on `checkpoint_viewed_at` by filtering for the epoch
+                    // whose `first_checkpoint_id <= checkpoint_viewed_at`, selecting the epoch
+                    // with the largest `first_checkpoint_id` among the filtered set.
+                    dsl::epochs
+                        .select(QueryableEpochInfo::as_select())
+                        .filter(dsl::first_checkpoint_id.le(checkpoint_viewed_at as i64))
+                        .order_by(dsl::first_checkpoint_id.desc())
+                })
+                .optional()
             })
             .await
             .map_err(|e| Error::Internal(format!("Failed to fetch epoch: {e}")))?;
 
         Ok(stored.map(|stored| Epoch {
             stored,
-            checkpoint_viewed_at: Some(checkpoint_viewed_at),
+            checkpoint_viewed_at,
         }))
     }
 }
@@ -372,11 +356,7 @@ impl Loader<EpochKey> for Db {
                 // encode it in the SQL query makes the query much simpler and therefore easier for
                 // the DB to plan.
                 let start = epoch.stored.first_checkpoint_id as u64;
-                if matches!(key.checkpoint_viewed_at, Some(cp) if cp < start) {
-                    None
-                } else {
-                    Some((*key, epoch))
-                }
+                (key.checkpoint_viewed_at >= start).then_some((*key, epoch))
             })
             .collect())
     }

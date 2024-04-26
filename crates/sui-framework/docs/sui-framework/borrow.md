@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::borrow`
 ---
@@ -165,7 +164,7 @@ hot potato.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow">borrow</a>&lt;T: key + store&gt;(self: &<b>mut</b> <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt;): (T, <a href="borrow.md#0x2_borrow_Borrow">Borrow</a>) {
-    <b>let</b> value = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.value);
+    <b>let</b> value = self.value.extract();
     <b>let</b> id = <a href="object.md#0x2_object_id">object::id</a>(&value);
 
     (value, <a href="borrow.md#0x2_borrow_Borrow">Borrow</a> {
@@ -200,7 +199,7 @@ Put an object and the <code><a href="borrow.md#0x2_borrow_Borrow">Borrow</a></co
 
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(&value) == obj, <a href="borrow.md#0x2_borrow_EWrongValue">EWrongValue</a>);
     <b>assert</b>!(self.id == ref, <a href="borrow.md#0x2_borrow_EWrongBorrow">EWrongBorrow</a>);
-    <a href="../move-stdlib/option.md#0x1_option_fill">option::fill</a>(&<b>mut</b> self.value, value);
+    self.value.fill(value);
 }
 </code></pre>
 
@@ -226,7 +225,7 @@ Unpack the <code><a href="borrow.md#0x2_borrow_Referent">Referent</a></code> str
 
 <pre><code><b>public</b> <b>fun</b> <a href="borrow.md#0x2_borrow_destroy">destroy</a>&lt;T: key + store&gt;(self: <a href="borrow.md#0x2_borrow_Referent">Referent</a>&lt;T&gt;): T {
     <b>let</b> <a href="borrow.md#0x2_borrow_Referent">Referent</a> { id: _, value } = self;
-    <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(value)
+    value.destroy_some()
 }
 </code></pre>
 

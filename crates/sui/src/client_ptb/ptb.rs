@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    client_commands::SuiClientCommandResult,
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
@@ -12,6 +13,8 @@ use crate::{
     sp,
 };
 
+use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
+use crate::serialize_or_execute;
 use anyhow::{anyhow, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
@@ -27,10 +30,10 @@ use sui_types::{
     digests::TransactionDigest,
     gas::GasCostSummary,
     quorum_driver_types::ExecuteTransactionRequestType,
-    transaction::{ProgrammableTransaction, Transaction, TransactionData},
+    transaction::{
+        ProgrammableTransaction, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
+    },
 };
-
-use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -87,6 +90,10 @@ impl PTB {
             }
             Ok(parsed) => parsed,
         };
+
+        if program_metadata.serialize_unsigned_set && program_metadata.serialize_signed_set {
+            anyhow::bail!("Cannot serialize both signed and unsigned PTBs");
+        }
 
         if program_metadata.preview_set {
             println!(
@@ -149,6 +156,7 @@ impl PTB {
             .read_api()
             .get_reference_gas_price()
             .await?;
+
         // create the transaction data that will be sent to the network
         let tx_data = TransactionData::new_programmable(
             sender,
@@ -157,6 +165,28 @@ impl PTB {
             program_metadata.gas_budget.value,
             gas_price,
         );
+
+        if program_metadata.dry_run_set {
+            let response = context
+                .get_client()
+                .await?
+                .read_api()
+                .dry_run_transaction_block(tx_data)
+                .await?;
+            println!("{}", SuiClientCommandResult::DryRun(response));
+            return Ok(());
+        }
+
+        if program_metadata.serialize_unsigned_set {
+            serialize_or_execute!(tx_data, true, false, context, PTB).print(true);
+            return Ok(());
+        }
+
+        if program_metadata.serialize_signed_set {
+            serialize_or_execute!(tx_data, false, true, context, PTB).print(true);
+            return Ok(());
+        }
+
         // sign the tx
         let signature =
             context
@@ -381,6 +411,16 @@ pub fn ptb_description() -> clap::Command {
         .arg(arg!(
             --"preview"
             "Preview the list of PTB transactions instead of executing them."
+        ))
+        .arg(arg!(
+            --"serialize-unsigned-transaction"
+            "Instead of executing the transaction, serialize the bcs bytes of the unsigned \
+            transaction data using base64 encoding."
+        ))
+        .arg(arg!(
+            --"serialize-signed-transaction"
+            "Instead of executing the transaction, serialize the bcs bytes of the signed \
+            transaction data using base64 encoding."
         ))
         .arg(arg!(
             --"summary"

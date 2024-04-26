@@ -5,13 +5,20 @@
 //! [move] table).  This module does not support serialization because of limitations in the `toml`
 //! crate related to serializing types as inline tables.
 
-use std::io::{Read, Seek, Write};
+use std::{
+    collections::HashMap,
+    io::{Read, Seek, Write},
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use tempfile::NamedTempFile;
 use toml::value::Value;
-use toml_edit::{Item::Value as EItem, Value as EValue};
+use toml_edit::{
+    ArrayOfTables,
+    Item::{self, Value as EItem},
+    Value as EValue,
+};
 
 use move_compiler::editions::{Edition, Flavor};
 
@@ -23,7 +30,8 @@ use super::LockFile;
 ///
 /// V0: Base version.
 /// V1: Adds toolchain versioning support.
-pub const VERSION: u64 = 1;
+/// V2: Adds support for managing addresses on package publish and upgrades.
+pub const VERSION: u64 = 2;
 
 /// Table for storing package info under an environment.
 const ENV_TABLE_NAME: &str = "env";
@@ -88,6 +96,18 @@ pub struct ToolchainVersion {
     pub flavor: Flavor,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ManagedPackage {
+    #[serde(rename = "chain-id")]
+    pub chain_id: String,
+    #[serde(rename = "original-published-id")]
+    pub original_published_id: String,
+    #[serde(rename = "latest-published-id")]
+    pub latest_published_id: String,
+    #[serde(rename = "published-version")]
+    pub version: String,
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Header {
     pub version: u64,
@@ -145,6 +165,24 @@ impl ToolchainVersion {
     }
 }
 
+impl ManagedPackage {
+    pub fn read(lock: &mut impl Read) -> Result<HashMap<String, ManagedPackage>> {
+        let contents = {
+            let mut buf = String::new();
+            lock.read_to_string(&mut buf).context("Reading lock file")?;
+            buf
+        };
+
+        #[derive(Deserialize)]
+        struct Lookup {
+            env: HashMap<String, ManagedPackage>,
+        }
+        let Lookup { env } = toml::de::from_str::<Lookup>(&contents)
+            .context("Deserializing managed package in environment")?;
+        Ok(env)
+    }
+}
+
 impl Header {
     /// Read lock file header after verifying that the version of the lock is not newer than the version
     /// supported by this library.
@@ -193,7 +231,56 @@ pub(crate) fn write_prologue(
     })?;
 
     write!(file, "{}", prologue)?;
+    Ok(())
+}
 
+pub fn update_dependency_graph(
+    file: &mut LockFile,
+    manifest_digest: String,
+    deps_digest: String,
+    dependencies: Option<toml_edit::Value>,
+    dev_dependencies: Option<toml_edit::Value>,
+    packages: Option<ArrayOfTables>,
+) -> Result<()> {
+    use toml_edit::value;
+    let mut toml_string = String::new();
+    file.read_to_string(&mut toml_string)?;
+    let mut toml = toml_string.parse::<toml_edit::Document>()?;
+    let move_table = toml
+        .entry("move")
+        .or_insert(Item::Table(toml_edit::Table::new()))
+        .as_table_mut()
+        .ok_or_else(|| anyhow!("Could not find or create move table in Move.lock"))?;
+
+    // Update `manifest_digest` and `deps_digest` in `[move]` table section.
+    move_table["manifest_digest"] = value(manifest_digest);
+    move_table["deps_digest"] = value(deps_digest);
+
+    // Update `dependencies = [ ... ]` in `[move]` table section.
+    if let Some(dependencies) = dependencies {
+        move_table["dependencies"] = Item::Value(dependencies.clone());
+    } else {
+        move_table.remove("dependencies");
+    }
+
+    // Update `dev-dependencies = [ ... ]` in `[move]` table section.
+    if let Some(dev_dependencies) = dev_dependencies {
+        move_table["dev-dependencies"] = Item::Value(dev_dependencies.clone());
+    } else {
+        move_table.remove("dev-dependencies");
+    }
+
+    // Update the [[move.package]] Array of Tables.
+    if let Some(packages) = packages {
+        toml["move"]["package"] = Item::ArrayOfTables(packages.clone());
+    } else if let Some(packages_table) = toml["move"]["package"].as_table_mut() {
+        packages_table.remove("package");
+    }
+
+    file.set_len(0)?;
+    file.rewind()?;
+    write!(file, "{}", toml)?;
+    file.flush()?;
     Ok(())
 }
 
@@ -265,7 +352,7 @@ pub fn update_managed_address(
     environment: &str,
     managed_address_update: ManagedAddressUpdate,
 ) -> Result<()> {
-    use toml_edit::{value, Document, Item, Table};
+    use toml_edit::{value, Document, Table};
 
     let mut toml_string = String::new();
     file.read_to_string(&mut toml_string)?;

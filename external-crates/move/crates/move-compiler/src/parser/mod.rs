@@ -8,6 +8,7 @@ pub(crate) mod filter;
 pub mod keywords;
 pub mod lexer;
 pub(crate) mod syntax;
+mod token_set;
 pub(crate) mod verification_attribute_filter;
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
 };
 use anyhow::anyhow;
 use comments::*;
-use move_command_line_common::files::{find_move_filenames_vfs, FileHash};
+use move_command_line_common::files::FileHash;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -30,37 +31,13 @@ use vfs::VfsPath;
 pub(crate) fn parse_program(
     compilation_env: &mut CompilationEnv,
     named_address_maps: NamedAddressMaps,
-    targets: Vec<IndexedVfsPackagePath>,
-    deps: Vec<IndexedVfsPackagePath>,
+    mut targets: Vec<IndexedVfsPackagePath>,
+    mut deps: Vec<IndexedVfsPackagePath>,
 ) -> anyhow::Result<(FilesSourceText, parser::ast::Program, CommentMap)> {
-    fn find_move_filenames_with_address_mapping(
-        paths_with_mapping: Vec<IndexedVfsPackagePath>,
-    ) -> anyhow::Result<Vec<IndexedVfsPackagePath>> {
-        let mut res = vec![];
-        for IndexedVfsPackagePath {
-            package,
-            path,
-            named_address_map: named_address_mapping,
-        } in paths_with_mapping
-        {
-            res.extend(
-                find_move_filenames_vfs(&[path], true)?
-                    .into_iter()
-                    .map(|s| IndexedVfsPackagePath {
-                        package,
-                        path: s,
-                        named_address_map: named_address_mapping,
-                    }),
-            );
-        }
-        // sort the filenames so errors about redefinitions, or other inter-file conflicts, are
-        // deterministic
-        res.sort_by(|p1, p2| p1.path.as_str().cmp(p2.path.as_str()));
-        Ok(res)
-    }
-
-    let targets = find_move_filenames_with_address_mapping(targets)?;
-    let mut deps = find_move_filenames_with_address_mapping(deps)?;
+    // sort the filenames so errors about redefinitions, or other inter-file conflicts, are
+    // deterministic
+    targets.sort_by(|p1, p2| p1.path.as_str().cmp(p2.path.as_str()));
+    deps.sort_by(|p1, p2| p1.path.as_str().cmp(p2.path.as_str()));
     ensure_targets_deps_dont_intersect(compilation_env, &targets, &mut deps)?;
     let mut files: FilesSourceText = HashMap::new();
     let mut source_definitions = Vec::new();
@@ -154,10 +131,10 @@ fn parse_file(
     let fname = Symbol::from(path.as_str());
     let source_str = Arc::from(source_buffer);
     if let Err(ds) = verify_string(file_hash, &source_str) {
-            compilation_env.add_diags(ds);
+        compilation_env.add_diags(ds);
         files.insert(file_hash, (fname, source_str));
-            return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
-        }
+        return Ok((vec![], MatchedFileCommentMap::new(), file_hash));
+    }
     let (defs, comments) = match parse_file_string(compilation_env, file_hash, &source_str, package)
     {
         Ok(defs_and_comments) => defs_and_comments,

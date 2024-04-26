@@ -18,15 +18,14 @@ use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
-use move_compiler::editions::Edition;
 use move_compiler::{
-    shared::{NumberFormat, NumericalAddress, PackagePaths},
+    editions::{Edition, Flavor},
+    shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
     Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
 };
@@ -69,6 +68,7 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
@@ -95,7 +95,7 @@ use sui_types::{
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tempfile::NamedTempFile;
+use tempfile::{tempdir, NamedTempFile};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -217,6 +217,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             default_gas_price,
             object_snapshot_min_checkpoint_lag,
             object_snapshot_max_checkpoint_lag,
+            flavor,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -231,6 +232,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -269,6 +271,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 )
             }
             None => {
@@ -279,6 +282,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     protocol_config,
                     false,
                     false,
+                    None,
                     None,
                     None,
                     None,
@@ -329,6 +333,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     NumberFormat::Hex,
                 )),
                 Some(Edition::E2024_ALPHA),
+                flavor.or(Some(Flavor::Sui)),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,
@@ -643,10 +648,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
-                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
+                                .unwrap();
 
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {:#}",
                             &obj.owner,
                             obj.version().value(),
                             move_struct
@@ -1840,7 +1846,8 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
 });
 
 pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
-    // TODO invoke package system?
+    // TODO invoke package system? Or otherwise pull the versions for these packages as per their
+    // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
     let sui_system_sources = {
         let mut buf = sui_files.to_path_buf();
@@ -1862,9 +1869,14 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
+    let config = PackageConfig {
+        edition: Edition::E2024_BETA,
+        flavor: Flavor::Sui,
+        ..Default::default()
+    };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
-            name: None,
+            name: Some(("sui-framework".into(), config)),
             paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
@@ -2056,15 +2068,18 @@ async fn init_sim_executor(
 
     // Create the simulator with the specific account configs, which also crates objects
 
-    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
-        rng,
-        DEFAULT_CHAIN_START_TIMESTAMP,
-        protocol_config.version,
-        acc_cfgs,
-        key_copy.map(|q| vec![q]),
-        reference_gas_price,
-        None,
-    );
+    let (mut sim, read_replica) =
+        PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+            rng,
+            DEFAULT_CHAIN_START_TIMESTAMP,
+            protocol_config.version,
+            acc_cfgs,
+            key_copy.map(|q| vec![q]),
+            reference_gas_price,
+            None,
+        );
+    let data_ingestion_path = tempdir().unwrap().into_path();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
 
     // Hash the file path to create custom unique DB name
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -2091,6 +2106,7 @@ async fn init_sim_executor(
             object_snapshot_max_checkpoint_lag,
             Some(1),
         )),
+        data_ingestion_path,
     )
     .await;
 

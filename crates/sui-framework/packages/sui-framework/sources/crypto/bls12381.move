@@ -27,10 +27,10 @@ module sui::bls12381 {
     /////////////////////////////////////////////
     ////// Elliptic curve operations //////
 
-    struct Scalar {}
-    struct G1 {}
-    struct G2 {}
-    struct GT {}
+    public struct Scalar {}
+    public struct G1 {}
+    public struct G2 {}
+    public struct GT {}
 
 
     // Scalars are encoded using big-endian byte order.
@@ -64,7 +64,7 @@ module sui::bls12381 {
     }
 
     public fun scalar_from_u64(x: u64): Element<Scalar> {
-        let bytes = SCALAR_ZERO_BYTES;
+        let mut bytes = SCALAR_ZERO_BYTES;
         group_ops::set_as_prefix(x, true, &mut bytes);
         group_ops::from_bytes(SCALAR_TYPE, &bytes, true)
     }

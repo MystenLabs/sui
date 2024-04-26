@@ -133,7 +133,9 @@ use typed_store::TypedStoreError;
 use crate::authority::authority_per_epoch_store::{AuthorityPerEpochStore, CertTxGuard};
 use crate::authority::authority_per_epoch_store_pruner::AuthorityPerEpochStorePruner;
 use crate::authority::authority_store::{ExecutionLockReadGuard, ObjectLockStatus};
-use crate::authority::authority_store_pruner::AuthorityStorePruner;
+use crate::authority::authority_store_pruner::{
+    AuthorityStorePruner, EPOCH_DURATION_MS_FOR_TESTING,
+};
 use crate::authority::epoch_start_configuration::EpochStartConfigTrait;
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::checkpoints::checkpoint_executor::CheckpointExecutor;
@@ -154,6 +156,11 @@ use crate::state_accumulator::{AccumulatorStore, StateAccumulator, WrappedObject
 use crate::subscription_handler::SubscriptionHandler;
 use crate::transaction_input_loader::TransactionInputLoader;
 use crate::transaction_manager::TransactionManager;
+
+#[cfg(msim)]
+pub use crate::checkpoints::checkpoint_executor::{
+    init_checkpoint_timeout_config, CheckpointTimeoutConfig,
+};
 
 #[cfg(msim)]
 use sui_types::committee::CommitteeTrait;
@@ -193,6 +200,8 @@ pub mod authority_store_pruner;
 pub mod authority_store_tables;
 pub mod authority_store_types;
 pub mod epoch_start_configuration;
+pub mod shared_object_congestion_tracker;
+pub mod shared_object_version_manager;
 pub mod test_authority_builder;
 
 pub(crate) mod authority_notify_read;
@@ -263,6 +272,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_processed: IntCounterVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
+    pub consensus_handler_deferred_transactions: IntCounter,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -638,6 +648,11 @@ impl AuthorityMetrics {
                 &["authority"],
                 registry,
             ).unwrap(),
+            consensus_handler_deferred_transactions: register_int_counter_with_registry!(
+                "consensus_handler_deferred_transactions",
+                "Number of transactions deferred by consensus handler",
+                registry,
+            ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
@@ -816,26 +831,15 @@ impl AuthorityState {
         self.committee_store.clone()
     }
 
-    pub fn max_txn_age_in_queue(&self) -> Duration {
-        self.authority_overload_config.max_txn_age_in_queue
+    pub fn overload_config(&self) -> &AuthorityOverloadConfig {
+        &self.authority_overload_config
     }
 
     pub fn get_epoch_state_commitments(
         &self,
         epoch: EpochId,
     ) -> SuiResult<Option<Vec<CheckpointCommitment>>> {
-        let commitments =
-            self.checkpoint_store
-                .get_epoch_last_checkpoint(epoch)?
-                .map(|checkpoint| {
-                    checkpoint
-                        .end_of_epoch_data
-                        .as_ref()
-                        .expect("Last checkpoint of epoch expected to have EndOfEpochData")
-                        .epoch_commitments
-                        .clone()
-                });
-        Ok(commitments)
+        self.checkpoint_store.get_epoch_state_commitments(epoch)
     }
 
     /// This is a private method and should be kept that way. It doesn't check whether
@@ -994,7 +998,7 @@ impl AuthorityState {
             self.check_authority_overload(tx_data)?;
         }
         self.transaction_manager
-            .check_execution_overload(self.max_txn_age_in_queue(), tx_data)?;
+            .check_execution_overload(self.overload_config(), tx_data)?;
         consensus_adapter.check_consensus_overload()?;
         Ok(())
     }
@@ -1029,6 +1033,13 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         assert!(self.is_fullnode(epoch_store));
+        // NOTE: the fullnode can change epoch during local execution. It should not cause
+        // data inconsistency, but can be problematic for certain tests.
+        // The check below mitigates the issue, but it is not a fundamental solution to
+        // avoid race between local execution and reconfiguration.
+        if self.epoch_store.load().epoch() != epoch_store.epoch() {
+            return Err(SuiError::EpochEnded(epoch_store.epoch()));
+        }
         let _metrics_guard = self
             .metrics
             .execute_certificate_with_effects_latency
@@ -1219,7 +1230,7 @@ impl AuthorityState {
 
     fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
         self.execution_cache
-            .check_owned_object_locks_exist(owned_object_refs)
+            .check_owned_objects_are_live(owned_object_refs)
     }
 
     /// This function captures the required state to debug a forked transaction.
@@ -1661,6 +1672,36 @@ impl AuthorityState {
             });
         }
 
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
+            .await
+    }
+
+    pub async fn dry_exec_transaction_for_benchmark(
+        &self,
+        transaction: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
+        let epoch_store = self.load_epoch_store_one_call_per_task();
+        self.dry_exec_transaction_impl(&epoch_store, transaction, transaction_digest)
+            .await
+    }
+
+    async fn dry_exec_transaction_impl(
+        &self,
+        epoch_store: &AuthorityPerEpochStore,
+        transaction: TransactionData,
+        transaction_digest: TransactionDigest,
+    ) -> SuiResult<(
+        DryRunTransactionBlockResponse,
+        BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
+        TransactionEffects,
+        Option<ObjectID>,
+    )> {
         // Cheap validity checks for a transaction, including input size limits.
         transaction.check_version_supported(epoch_store.protocol_config())?;
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
@@ -2733,6 +2774,7 @@ impl AuthorityState {
             metrics,
             config.indirect_objects_threshold,
             archive_readers,
+            EPOCH_DURATION_MS_FOR_TESTING,
         )
         .await
     }
@@ -2751,6 +2793,15 @@ impl AuthorityState {
     ) {
         self.transaction_manager
             .enqueue_certificates(certs, epoch_store)
+    }
+
+    pub(crate) fn enqueue_with_expected_effects_digest(
+        &self,
+        certs: Vec<(VerifiedExecutableTransaction, TransactionEffectsDigest)>,
+        epoch_store: &AuthorityPerEpochStore,
+    ) {
+        self.transaction_manager
+            .enqueue_with_expected_effects_digest(certs, epoch_store)
     }
 
     fn create_owner_index_if_empty(

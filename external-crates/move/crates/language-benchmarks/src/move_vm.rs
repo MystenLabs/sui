@@ -25,9 +25,9 @@ static MOVE_BENCH_SRC_PATH: Lazy<PathBuf> = Lazy::new(|| {
 /// Entry point for the bench, provide a function name to invoke in Module Bench in bench.move.
 pub fn bench<M: Measurement + 'static>(c: &mut Criterion<M>, fun: &str) {
     let modules = compile_modules();
-    let move_vm = MoveVM::new(move_stdlib::natives::all_natives(
+    let move_vm = MoveVM::new(move_stdlib_natives::all_natives(
         AccountAddress::from_hex_literal("0x1").unwrap(),
-        move_stdlib::natives::GasParameters::zeros(),
+        move_stdlib_natives::GasParameters::zeros(),
     ))
     .unwrap();
     execute(c, &move_vm, modules, fun);
@@ -38,6 +38,7 @@ fn compile_modules() -> Vec<CompiledModule> {
     let mut src_files = move_stdlib::move_stdlib_files();
     src_files.push(MOVE_BENCH_SRC_PATH.to_str().unwrap().to_owned());
     let (_files, compiled_units) = Compiler::from_files(
+        None,
         src_files,
         vec![],
         move_stdlib::move_stdlib_named_addresses(),

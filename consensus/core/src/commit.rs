@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    cmp::Ordering,
     fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::Deref,
+    ops::{Deref, Range},
     sync::Arc,
 };
 
@@ -17,11 +18,14 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    leader_scoring::ReputationScores,
     storage::Store,
 };
 
 /// Index of a commit among all consensus commits.
 pub type CommitIndex = u32;
+
+pub(crate) const GENESIS_COMMIT_INDEX: CommitIndex = 0;
 
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
@@ -35,12 +39,12 @@ pub(crate) const MINIMUM_WAVE_LENGTH: Round = 3;
 /// round, at least one voting round, and one decision round.
 pub(crate) type WaveNumber = u32;
 
-/// Versioned representation of a consensus commit.
+/// [`Commit`] summarizes [`CommittedSubDag`] for storage and network communications.
 ///
-/// Commit is used to persist commit metadata for recovery. It is also exchanged over the network.
-/// To balance being functional and succinct, a field must meet these requirements to be added
-/// to the struct:
-/// - helps with recoverying CommittedSubDag locally and for peers catching up.
+/// Validators should be able to reconstruct a sequence of CommittedSubDag from the
+/// corresponding Commit and blocks referenced in the Commit.
+/// A field must meet these requirements to be added to Commit:
+/// - helps with recovery locally and for peers catching up.
 /// - cannot be derived from a sequence of Commits and other persisted values.
 ///
 /// For example, transactions in blocks should not be included in Commit, because they can be
@@ -58,12 +62,14 @@ impl Commit {
     pub(crate) fn new(
         index: CommitIndex,
         previous_digest: CommitDigest,
+        timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
         Commit::V1(CommitV1 {
             index,
             previous_digest,
+            timestamp_ms,
             leader,
             blocks,
         })
@@ -81,6 +87,7 @@ pub(crate) trait CommitAPI {
     fn round(&self) -> Round;
     fn index(&self) -> CommitIndex;
     fn previous_digest(&self) -> CommitDigest;
+    fn timestamp_ms(&self) -> BlockTimestampMs;
     fn leader(&self) -> BlockRef;
     fn blocks(&self) -> &[BlockRef];
 }
@@ -95,6 +102,8 @@ pub(crate) struct CommitV1 {
     /// Digest of the previous commit.
     /// Set to CommitDigest::MIN for the first commit after genesis.
     previous_digest: CommitDigest,
+    /// Timestamp of the commit, max of the timestamp of the leader block and previous Commit timestamp.
+    timestamp_ms: BlockTimestampMs,
     /// A reference to the commit leader.
     leader: BlockRef,
     /// Refs to committed blocks, in the commit order.
@@ -112,6 +121,10 @@ impl CommitAPI for CommitV1 {
 
     fn previous_digest(&self) -> CommitDigest {
         self.previous_digest
+    }
+
+    fn timestamp_ms(&self) -> BlockTimestampMs {
+        self.timestamp_ms
     }
 
     fn leader(&self) -> BlockRef {
@@ -151,10 +164,11 @@ impl TrustedCommit {
     pub(crate) fn new_for_test(
         index: CommitIndex,
         previous_digest: CommitDigest,
+        timestamp_ms: BlockTimestampMs,
         leader: BlockRef,
         blocks: Vec<BlockRef>,
     ) -> Self {
-        let commit = Commit::new(index, previous_digest, leader, blocks);
+        let commit = Commit::new(index, previous_digest, timestamp_ms, leader, blocks);
         let serialized = commit.serialize().unwrap();
         Self::new_trusted(commit, serialized)
     }
@@ -174,7 +188,7 @@ impl TrustedCommit {
         &self.serialized
     }
 
-    fn compute_digest(serialized: &[u8]) -> CommitDigest {
+    pub(crate) fn compute_digest(serialized: &[u8]) -> CommitDigest {
         let mut hasher = DefaultHashFunction::new();
         hasher.update(serialized);
         CommitDigest(hasher.finalize().into())
@@ -237,12 +251,37 @@ impl fmt::Debug for CommitDigest {
 /// Uniquely identifies a commit with its index and digest.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitRef {
-    pub index: CommitIndex,
-    pub digest: CommitDigest,
+    pub(crate) index: CommitIndex,
+    pub(crate) digest: CommitDigest,
 }
 
-/// The output of consensus is an ordered list of [`CommittedSubDag`]. The application
-/// can arbitrarily sort the blocks within each sub-dag (but using a deterministic algorithm).
+impl CommitRef {
+    pub(crate) fn new(index: CommitIndex, digest: CommitDigest) -> Self {
+        Self { index, digest }
+    }
+}
+
+impl fmt::Display for CommitRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "C{}({})", self.index, self.digest)
+    }
+}
+
+impl fmt::Debug for CommitRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(f, "C{}({:?})", self.index, self.digest)
+    }
+}
+
+// Represents a vote on a Commit.
+pub type CommitVote = CommitRef;
+
+/// The output of consensus to execution is an ordered list of [`CommittedSubDag`].
+/// Each CommittedSubDag contains the information needed to execution transactions in
+/// the consensus commit.
+///
+/// The application processing CommittedSubDag can arbitrarily sort the blocks within
+/// each sub-dag (but using a deterministic algorithm).
 #[derive(Clone, PartialEq)]
 pub struct CommittedSubDag {
     /// A reference to the leader of the sub-dag
@@ -262,7 +301,7 @@ impl CommittedSubDag {
     pub fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
-        timestamp_ms: u64,
+        timestamp_ms: BlockTimestampMs,
         commit_index: CommitIndex,
     ) -> Self {
         Self {
@@ -313,11 +352,11 @@ impl fmt::Debug for CommittedSubDag {
 
 // Recovers the full CommittedSubDag from block store, based on Commit.
 pub fn load_committed_subdag_from_store(
-    block_store: &dyn Store,
+    store: &dyn Store,
     commit: TrustedCommit,
 ) -> CommittedSubDag {
     let mut leader_block_idx = None;
-    let commit_blocks = block_store
+    let commit_blocks = store
         .read_blocks(commit.blocks())
         .expect("We should have the block referenced in the commit data");
     let blocks = commit_blocks
@@ -334,8 +373,12 @@ pub fn load_committed_subdag_from_store(
         .collect::<Vec<_>>();
     let leader_block_idx = leader_block_idx.expect("Leader block must be in the sub-dag");
     let leader_block_ref = blocks[leader_block_idx].reference();
-    let timestamp_ms = blocks[leader_block_idx].timestamp_ms();
-    CommittedSubDag::new(leader_block_ref, blocks, timestamp_ms, commit.index())
+    CommittedSubDag::new(
+        leader_block_ref,
+        blocks,
+        commit.timestamp_ms(),
+        commit.index(),
+    )
 }
 
 pub struct CommitConsumer {
@@ -434,6 +477,81 @@ impl Display for LeaderStatus {
     }
 }
 
+/// Per-commit properties that can be regenerated from past values, and do not need to be part of
+/// the Commit struct.
+/// Only the latest version is needed for recovery, but more versions are stored for debugging,
+/// and potentially restoring from an earlier state.
+// TODO: version this struct.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct CommitInfo {
+    pub(crate) committed_rounds: Vec<Round>,
+    pub(crate) reputation_scores: ReputationScores,
+}
+
+impl CommitInfo {
+    // Returns a new CommitInfo.
+    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
+        CommitInfo {
+            committed_rounds,
+            reputation_scores,
+        }
+    }
+}
+
+/// CommitRange stores a range of CommitIndex. The range contains the start and
+/// end commit indices and can be ordered for use as the key of a table.
+/// Note: If used as a key for a table it is useful to ensure the key ranges don't
+/// intersect using the provided helper methods so that ordering becomes clear.
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CommitRange(Range<CommitIndex>);
+
+#[allow(unused)]
+impl CommitRange {
+    pub(crate) fn new(range: Range<CommitIndex>) -> Self {
+        Self(range)
+    }
+
+    pub(crate) fn start(&self) -> CommitIndex {
+        self.0.start
+    }
+
+    pub(crate) fn end(&self) -> CommitIndex {
+        self.0.end
+    }
+
+    /// Check if the provided range is sequentially after this range with the same
+    /// range length.
+    pub(crate) fn is_next_range(&self, other: &Self) -> bool {
+        self.0.len() == other.0.len() && self.end() + 1 == other.start()
+    }
+
+    /// Check if two CommitRange intersect. An intersection is true if any point
+    /// of the range intersects inclusive of the start and end indices.
+    pub(crate) fn has_intersection(&self, other: &Self) -> bool {
+        self.start() <= other.end() && self.end() >= other.start()
+    }
+}
+
+impl Ord for CommitRange {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.start()
+            .cmp(&other.start())
+            .then_with(|| self.end().cmp(&other.end()))
+    }
+}
+
+impl PartialOrd for CommitRange {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl From<Range<CommitIndex>> for CommitRange {
+    fn from(range: Range<CommitIndex>) -> Self {
+        Self(range)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;
@@ -446,7 +564,7 @@ mod tests {
     };
 
     #[test]
-    fn test_new_subdag_from_commit_data() {
+    fn test_new_subdag_from_commit() {
         let store = Arc::new(MemStore::new());
         let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
@@ -504,10 +622,10 @@ mod tests {
         let commit = TrustedCommit::new_for_test(
             commit_index,
             CommitDigest::MIN,
+            leader_block.timestamp_ms(),
             leader_ref,
             blocks.clone(),
         );
-
         let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
@@ -516,5 +634,36 @@ mod tests {
             (num_authorities * wave_length) as usize + 1
         );
         assert_eq!(subdag.commit_index, commit_index);
+    }
+
+    #[test]
+    fn test_commit_range() {
+        let range1 = CommitRange::new(1..5);
+        let range2 = CommitRange::new(2..6);
+        let range3 = CommitRange::new(5..10);
+        let range4 = CommitRange::new(6..10);
+        let range5 = CommitRange::new(6..9);
+
+        assert_eq!(range1.start(), 1);
+        assert_eq!(range1.end(), 5);
+
+        // Test range intersection check
+        assert!(range1.has_intersection(&range2));
+        assert!(range1.has_intersection(&range3));
+        assert!(range3.has_intersection(&range1));
+        assert!(range3.has_intersection(&range4));
+        assert!(!range1.has_intersection(&range4));
+        assert!(!range4.has_intersection(&range1));
+
+        // Test next range check
+        assert!(!range1.is_next_range(&range2));
+        assert!(!range1.is_next_range(&range3));
+        assert!(range1.is_next_range(&range4));
+        assert!(!range1.is_next_range(&range5));
+
+        // Test range ordering
+        assert!(range1 < range2);
+        assert!(range2 < range3);
+        assert!(range3 < range4);
     }
 }

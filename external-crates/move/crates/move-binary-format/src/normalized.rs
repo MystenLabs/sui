@@ -2,16 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    access::ModuleAccess,
-    file_format::{
-        AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, FieldDefinition,
-        FieldHandle, FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex,
-        FunctionDefinition, FunctionHandle, FunctionHandleIndex, FunctionInstantiation, LocalIndex,
-        SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructTypeParameter,
-        TypeParameterIndex, Visibility,
-    },
+use crate::file_format::{
+    AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, FieldDefinition, FieldHandle,
+    FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex, FunctionDefinition,
+    FunctionHandle, FunctionHandleIndex, FunctionInstantiation, LocalIndex, SignatureIndex,
+    SignatureToken, StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
+    StructDefinitionIndex, StructFieldInformation, StructTypeParameter, TypeParameterIndex,
+    Visibility,
 };
 use move_core_types::{
     account_address::AccountAddress,

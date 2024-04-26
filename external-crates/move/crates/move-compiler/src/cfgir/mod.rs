@@ -17,7 +17,7 @@ mod optimize;
 use crate::{
     expansion::ast::{AbilitySet, Attributes, ModuleIdent, Mutability},
     hlir::ast::{FunctionSignature, Label, SingleType, Var, Visibility},
-    parser::ast::StructName,
+    parser::ast::DatatypeName,
     shared::{unique_map::UniqueMap, CompilationEnv, Name},
 };
 use cfg::*;
@@ -30,7 +30,8 @@ pub struct CFGContext<'a> {
     pub package: Option<Symbol>,
     pub module: ModuleIdent,
     pub member: MemberName,
-    pub struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
+    pub datatype_declared_abilities:
+        &'a UniqueMap<ModuleIdent, UniqueMap<DatatypeName, AbilitySet>>,
     pub attributes: &'a Attributes,
     pub entry: Option<Loc>,
     pub visibility: Visibility,

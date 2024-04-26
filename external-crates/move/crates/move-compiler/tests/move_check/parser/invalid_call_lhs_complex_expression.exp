@@ -7,3 +7,12 @@ error[E01002]: unexpected token
   │                             Unexpected '('
   │                             Expected ';'
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/invalid_call_lhs_complex_expression.move:4:27
+  │
+4 │         (while (false) {})(0, 1);
+  │                           ^
+  │                           │
+  │                           Unexpected '('
+  │                           Expected ';'
+

@@ -3,29 +3,29 @@ processed 13 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 14-61:
+task 1 'publish'. lines 14-58:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7949600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 63-65:
+task 2 'programmable'. lines 60-62:
 created: object(2,0), object(2,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 67-67:
+task 3 'run'. lines 64-64:
 created: object(3,0)
 mutated: object(0,0), object(2,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
 
-task 4 'run'. lines 69-69:
+task 4 'run'. lines 66-66:
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 5 'create-checkpoint'. lines 71-71:
+task 5 'create-checkpoint'. lines 68-68:
 Checkpoint created: 1
 
-task 6 'run-graphql'. lines 73-130:
+task 6 'run-graphql'. lines 70-127:
 Response: {
   "data": {
     "latest": {
@@ -123,15 +123,15 @@ Response: {
   }
 }
 
-task 7 'run'. lines 132-132:
+task 7 'run'. lines 129-129:
 mutated: object(0,0), object(2,1)
 deleted: object(2,0), object(3,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
 
-task 8 'create-checkpoint'. lines 134-134:
+task 8 'create-checkpoint'. lines 131-131:
 Checkpoint created: 2
 
-task 9 'run-graphql'. lines 136-187:
+task 9 'run-graphql'. lines 133-184:
 Response: {
   "data": {
     "latest": {
@@ -167,14 +167,14 @@ Response: {
   }
 }
 
-task 10 'run'. lines 189-189:
+task 10 'run'. lines 186-186:
 mutated: object(0,0), object(2,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 11 'create-checkpoint'. lines 191-191:
+task 11 'create-checkpoint'. lines 188-188:
 Checkpoint created: 3
 
-task 12 'run-graphql'. lines 193-256:
+task 12 'run-graphql'. lines 190-253:
 Response: {
   "data": {
     "latest": {

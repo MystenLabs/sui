@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::clock`
 ---
@@ -124,7 +123,7 @@ called exactly once, during genesis.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/clock.md#0x2_clock_create">create</a>(ctx: &TxContext) {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
 
     <a href="../sui-framework/transfer.md#0x2_transfer_share_object">transfer::share_object</a>(<a href="../sui-framework/clock.md#0x2_clock_Clock">Clock</a> {
         id: <a href="../sui-framework/object.md#0x2_object_clock">object::clock</a>(),
@@ -161,7 +160,7 @@ called exactly once, during genesis.
     ctx: &TxContext,
 ) {
     // Validator will make a special system call <b>with</b> sender set <b>as</b> 0x0.
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
+    <b>assert</b>!(ctx.sender() == @0x0, <a href="../sui-framework/clock.md#0x2_clock_ENotSystemAddress">ENotSystemAddress</a>);
 
     <a href="../sui-framework/clock.md#0x2_clock">clock</a>.timestamp_ms = timestamp_ms
 }

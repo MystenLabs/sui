@@ -5,14 +5,11 @@
 use crate::format_module_id;
 use codespan_reporting::files::{Files, SimpleFiles};
 use colored::{control, Colorize};
-use move_binary_format::{
-    access::ModuleAccess,
-    errors::{ExecutionState, Location, VMError, VMResult},
-};
+use move_binary_format::errors::{ExecutionState, Location, VMError, VMResult};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     diagnostics::{self, Diagnostic, Diagnostics},
-    unit_test::{ModuleTestPlan, TestName, TestPlan},
+    unit_test::{ModuleTestPlan, MoveErrorType, TestName, TestPlan},
 };
 use move_core_types::{language_storage::ModuleId, vm_status::StatusType};
 use move_ir_types::location::Loc;
@@ -33,7 +30,7 @@ pub enum FailureReason {
     // Aborted with the wrong code
     WrongError(String, MoveError, MoveError),
     // Aborted with the wrong code, without location specified
-    WrongAbortDEPRECATED(String, u64, MoveError),
+    WrongAbortDEPRECATED(String, MoveErrorType, MoveError),
     // Error wasn't expected, but it did
     UnexpectedError(String, MoveError),
     // Test timed out
@@ -97,7 +94,7 @@ impl FailureReason {
         )
     }
 
-    pub fn wrong_abort_deprecated(expected: u64, actual: MoveError) -> Self {
+    pub fn wrong_abort_deprecated(expected: MoveErrorType, actual: MoveError) -> Self {
         FailureReason::WrongAbortDEPRECATED(
             "Test did not abort with expected code".to_string(),
             expected,

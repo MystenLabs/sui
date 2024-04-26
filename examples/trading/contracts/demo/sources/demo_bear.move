@@ -10,15 +10,15 @@ module demo::demo_bear {
     use sui::display;
 
     /// our demo struct.
-    struct DemoBear has key, store {
+    public struct DemoBear has key, store {
         id: UID,
         name: String
     }
 
     /// our OTW to create display.
-    struct DEMO_BEAR has drop {}
+    public struct DEMO_BEAR has drop {}
 
-    // It's recommened to create Display using PTBs instead of 
+    // It's recommened to create Display using PTBs instead of
     // directly on the contracts.
     // We are only creating it here for demo purposes (one-step setup).
     fun init(otw: DEMO_BEAR, ctx: &mut TxContext){
@@ -40,15 +40,15 @@ module demo::demo_bear {
         ];
 
         // Get a new `Display` object for the `Hero` type.
-        let display = display::new_with_fields<DemoBear>(
+        let mut display = display::new_with_fields<DemoBear>(
             &publisher, keys, values, ctx
         );
 
         // Commit first version of `Display` to apply changes.
         display::update_version(&mut display);
 
-        sui::transfer::public_transfer(display, sender(ctx));
-        sui::transfer::public_transfer(publisher, sender(ctx))
+        sui::transfer::public_transfer(display, ctx.sender());
+        sui::transfer::public_transfer(publisher, ctx.sender())
     }
 
     public fun new(name: String, ctx: &mut TxContext): DemoBear {

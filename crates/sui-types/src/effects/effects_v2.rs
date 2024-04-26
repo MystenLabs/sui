@@ -14,9 +14,7 @@ use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
-use crate::message_envelope::Message;
 use crate::object::{Owner, OBJECT_START_VERSION};
-use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 #[cfg(debug_assertions)]
@@ -450,34 +448,6 @@ impl TransactionEffectsV2 {
         result.check_invariant();
 
         result
-    }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            lamport_version: gas_object.0 .1,
-            changed_objects: vec![(
-                gas_object.0 .0,
-                EffectsObjectChange {
-                    input_state: ObjectIn::Exist((
-                        (SequenceNumber::default(), ObjectDigest::MIN),
-                        gas_object.1,
-                    )),
-                    output_state: ObjectOut::ObjectWrite((gas_object.0 .2, gas_object.1)),
-                    id_operation: IDOperation::None,
-                },
-            )],
-            gas_object_index: Some(0),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            status,
-            ..Default::default()
-        }
     }
 
     /// This function demonstrates what's the invariant of the effects.

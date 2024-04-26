@@ -10,10 +10,7 @@ module crypto::ec_ops {
     use sui::bls12381;
     use sui::group_ops::Element;
     use sui::group_ops;
-    use std::vector;
     use sui::hash::blake2b256;
-    use std::option::Option;
-    use std::option;
     #[test_only]
     use std::hash::sha2_256;
     #[test_only]
@@ -51,7 +48,7 @@ module crypto::ec_ops {
     ////// Proof of plaintext equality of ElGamal encryptions //////
 
     // An encryption of group element m under pk is (r*G, r*pk + m) for random r.
-    struct ElGamalEncryption has drop, store {
+    public struct ElGamalEncryption has drop, store {
         ephemeral: Element<bls12381::G1>,
         ciphertext: Element<bls12381::G1>,
     }
@@ -85,7 +82,7 @@ module crypto::ec_ops {
 
     // Basic sigma protocol for proving equality of two ElGamal encryptions.
     // See https://crypto.stackexchange.com/questions/30010/is-there-a-way-to-prove-equality-of-plaintext-that-was-encrypted-using-different
-    struct EqualityProof has drop, store {
+    public struct EqualityProof has drop, store {
         a1: Element<bls12381::G1>,
         a2: Element<bls12381::G1>,
         a3: Element<bls12381::G1>,
@@ -102,7 +99,7 @@ module crypto::ec_ops {
         a2: &Element<bls12381::G1>,
         a3: &Element<bls12381::G1>,
     ): Element<bls12381::Scalar> {
-        let to_hash = vector::empty<u8>();
+        let mut to_hash = vector::empty<u8>();
         vector::append(&mut to_hash, *group_ops::bytes(pk1));
         vector::append(&mut to_hash, *group_ops::bytes(pk2));
         vector::append(&mut to_hash, *group_ops::bytes(&enc1.ephemeral));
@@ -112,10 +109,9 @@ module crypto::ec_ops {
         vector::append(&mut to_hash, *group_ops::bytes(a1));
         vector::append(&mut to_hash, *group_ops::bytes(a2));
         vector::append(&mut to_hash, *group_ops::bytes(a3));
-        let hash = blake2b256(&to_hash);
+        let mut hash = blake2b256(&to_hash);
         // Make sure we are in the right field. Note that for security we only need the lower 128 bits.
-        let len = vector::length(&hash);
-        *vector::borrow_mut(&mut hash, len-1) = 0;
+        *vector::borrow_mut(&mut hash, 0) = 0;
         bls12381::scalar_from_bytes(&hash)
     }
 
@@ -138,9 +134,9 @@ module crypto::ec_ops {
         let a1 = bls12381::g1_mul(&b1, &bls12381::g1_generator());
         // a2 = b2*g (for proving knowledge of r2)
         let a2 = bls12381::g1_mul(&b2, &bls12381::g1_generator());
-        let scalars = vector::singleton(b1);
+        let mut scalars = vector::singleton(b1);
         vector::push_back(&mut scalars, bls12381::scalar_neg(&b2));
-        let points = vector::singleton(enc1.ephemeral);
+        let mut points = vector::singleton(enc1.ephemeral);
         vector::push_back(&mut points, *pk2);
         let a3 = bls12381::g1_multi_scalar_multiplication(&scalars, &points);
         // RO challenge
@@ -176,11 +172,11 @@ module crypto::ec_ops {
             return false
         };
         // Check if a3 = c*(ct2 - ct1) + z1*eph1 - z2*pk2
-        let scalars = vector::singleton(c);
+        let mut scalars = vector::singleton(c);
         vector::push_back(&mut scalars, bls12381::scalar_neg(&c));
         vector::push_back(&mut scalars, proof.z1);
         vector::push_back(&mut scalars, bls12381::scalar_neg(&proof.z2));
-        let points = vector::singleton(enc2.ciphertext);
+        let mut points = vector::singleton(enc2.ciphertext);
         vector::push_back(&mut points, enc1.ciphertext);
         vector::push_back(&mut points, enc1.ephemeral);
         vector::push_back(&mut points, *pk2);
@@ -221,7 +217,7 @@ module crypto::ec_ops {
     ////// tlock (an IBE decryption) //////
 
     /// An encryption of 32 bytes message following https://eprint.iacr.org/2023/189.pdf.
-    struct IbeEncryption has store, drop, copy {
+    public struct IbeEncryption has store, drop, copy {
         u: Element<bls12381::G2>,
         v: vector<u8>,
         w: vector<u8>,
@@ -229,21 +225,21 @@ module crypto::ec_ops {
 
     public fun ibe_encryption_from_bytes(bytes: &vector<u8>): IbeEncryption {
         assert!(vector::length(bytes) == 96 + 32 + 32, 0);
-        let buffer = vector::empty();
-        let i = 0;
+        let mut buffer = vector::empty();
+        let mut i = 0;
         while (i < 96) {
             vector::push_back(&mut buffer, *vector::borrow(bytes, i));
             i = i + 1;
         };
         let u = bls12381::g2_from_bytes(&buffer);
 
-        let v = vector::empty();
+        let mut v = vector::empty();
         while (i < 96 + 32) {
             vector::push_back(&mut v, *vector::borrow(bytes, i));
             i = i + 1;
         };
 
-        let w = vector::empty();
+        let mut w = vector::empty();
         while (i < 96 + 32 + 32) {
             vector::push_back(&mut w, *vector::borrow(bytes, i));
             i = i + 1;
@@ -265,7 +261,7 @@ module crypto::ec_ops {
 
         // r = H3(sigma | m) as a scalar
         assert!(vector::length(m) == vector::length(sigma), 0);
-        let to_hash = b"HASH3 - ";
+        let mut to_hash = b"HASH3 - ";
         vector::append(&mut to_hash, *sigma);
         vector::append(&mut to_hash, *m);
         let r = modulo_order(&blake2b256(&to_hash));
@@ -276,22 +272,22 @@ module crypto::ec_ops {
 
         // V = sigma xor H2(pk_rho^r)
         let pk_rho_r = bls12381::gt_mul(&r, &pk_rho);
-        let to_hash = b"HASH2 - ";
+        let mut to_hash = b"HASH2 - ";
         vector::append(&mut to_hash, *group_ops::bytes(&pk_rho_r));
         let hash_pk_rho_r = blake2b256(&to_hash);
-        let v = vector::empty();
-        let i = 0;
+        let mut v = vector::empty();
+        let mut i = 0;
         while (i < vector::length(sigma)) {
             vector::push_back(&mut v, *vector::borrow(sigma, i) ^ *vector::borrow(&hash_pk_rho_r, i));
             i = i + 1;
         };
 
         // W = m xor H4(sigma)
-        let to_hash = b"HASH4 - ";
+        let mut to_hash = b"HASH4 - ";
         vector::append(&mut to_hash, *sigma);
         let hash = blake2b256(&to_hash);
-        let w = vector::empty();
-        let i = 0;
+        let mut w = vector::empty();
+        let mut i = 0;
         while (i < vector::length(m)) {
             vector::push_back(&mut w, *vector::borrow(m, i) ^ *vector::borrow(&hash, i));
             i = i + 1;
@@ -304,29 +300,29 @@ module crypto::ec_ops {
     public fun ibe_decrypt(enc: IbeEncryption, target_key: &Element<bls12381::G1>): Option<vector<u8>> {
         // sigma_prime = V xor H2(e(target_key, u))
         let e = bls12381::pairing(target_key, &enc.u);
-        let to_hash = b"HASH2 - ";
+        let mut to_hash = b"HASH2 - ";
         vector::append(&mut to_hash, *group_ops::bytes(&e));
         let hash = blake2b256(&to_hash);
-        let sigma_prime = vector::empty();
-        let i = 0;
+        let mut sigma_prime = vector::empty();
+        let mut i = 0;
         while (i < vector::length(&enc.v)) {
             vector::push_back(&mut sigma_prime, *vector::borrow(&hash, i) ^ *vector::borrow(&enc.v, i));
             i = i + 1;
         };
 
         // m_prime = W xor H4(sigma_prime)
-        let to_hash = b"HASH4 - ";
+        let mut to_hash = b"HASH4 - ";
         vector::append(&mut to_hash, sigma_prime);
         let hash = blake2b256(&to_hash);
-        let m_prime = vector::empty();
-        let i = 0;
+        let mut m_prime = vector::empty();
+        let mut i = 0;
         while (i < vector::length(&enc.w)) {
             vector::push_back(&mut m_prime, *vector::borrow(&hash, i) ^ *vector::borrow(&enc.w, i));
             i = i + 1;
         };
 
         // r = H3(sigma_prime | m_prime) as a scalar (the paper has a typo)
-        let to_hash = b"HASH3 - ";
+        let mut to_hash = b"HASH3 - ";
         vector::append(&mut to_hash, sigma_prime);
         vector::append(&mut to_hash, m_prime);
         // If the encryption is generated correctly, this should always be a valid scalar (before the modulo).
@@ -353,7 +349,7 @@ module crypto::ec_ops {
         let msg = x"0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
 
         // Derive the 'target' for the specific round (see drand_lib.move).
-        let round_bytes = bcs::to_bytes(&round);
+        let mut round_bytes = bcs::to_bytes(&round);
         vector::reverse(&mut round_bytes);
         let target = sha2_256(round_bytes);
 
@@ -363,13 +359,13 @@ module crypto::ec_ops {
         assert!(bls12381::bls12381_min_sig_verify(&sig_bytes, &pk_bytes, &target), 0);
 
         let enc = insecure_ibe_encrypt(&pk, &target, &msg, &x"A123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF");
-        let decrypted_msg = ibe_decrypt(enc, &target_key);
+        let mut decrypted_msg = ibe_decrypt(enc, &target_key);
         assert!(option::extract(&mut decrypted_msg) == msg, 0);
 
         // Test an example output that was generated by the Rust CLI.
         let enc = x"b598e92e55ac1a2e78b61ce4a223c3c6b17db2dc4e5c807965649d882c71f05e1a7eac110e40c7b7faae4d556d6b418c03521e351504b371e91c1e7637292e4fb9f7ad4a8b6a1fecebd2b3208e18cab594b081d11cbfb1f15b7b18b4af6876fd796026a67def0b05222aadabcf86eaace0e708f469f491483f681e184f9178236f4e749635de4478f3bf44fb9264d35d6e83d58b3e5e686414b0953e99142a62";
         let enc = ibe_encryption_from_bytes(&enc);
-        let decrypted_msg = ibe_decrypt(enc, &target_key);
+        let mut decrypted_msg = ibe_decrypt(enc, &target_key);
         assert!(option::extract(&mut decrypted_msg) == msg, 0);
     }
 
@@ -380,9 +376,9 @@ module crypto::ec_ops {
     fun try_substract(x: &vector<u8>): Option<vector<u8>> {
         assert!(vector::length(x) == 32, EInvalidLength);
         let order = BLS12381_ORDER;
-        let c = vector::empty();
-        let i = 0;
-        let carry: u8 = 0;
+        let mut c = vector::empty();
+        let mut i = 0;
+        let mut carry: u8 = 0;
         while (i < 32) {
             let curr = 31 - i;
             let b1 = *vector::borrow(x, curr);
@@ -408,7 +404,7 @@ module crypto::ec_ops {
     }
 
     fun modulo_order(x: &vector<u8>): vector<u8> {
-        let res = *x;
+        let mut res = *x;
         // Since 2^256 < 3*ORDER, this loop won't run many times.
         while (true) {
             let minus_order = try_substract(&res);

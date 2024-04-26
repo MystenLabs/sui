@@ -120,7 +120,7 @@ impl UniversalCommitter {
         self.context
             .metrics
             .node_metrics
-            .decided_leaders_total
+            .committed_leaders_total
             .with_label_values(&[&authority, &status])
             .inc();
     }
@@ -137,7 +137,7 @@ pub(crate) mod universal_committer_builder {
 
     pub(crate) struct UniversalCommitterBuilder {
         context: Arc<Context>,
-        leader_schedule: LeaderSchedule,
+        leader_schedule: Arc<LeaderSchedule>,
         dag_state: Arc<RwLock<DagState>>,
         wave_length: Round,
         number_of_leaders: usize,
@@ -145,8 +145,11 @@ pub(crate) mod universal_committer_builder {
     }
 
     impl UniversalCommitterBuilder {
-        pub(crate) fn new(context: Arc<Context>, dag_state: Arc<RwLock<DagState>>) -> Self {
-            let leader_schedule = LeaderSchedule::new(context.clone());
+        pub(crate) fn new(
+            context: Arc<Context>,
+            leader_schedule: Arc<LeaderSchedule>,
+            dag_state: Arc<RwLock<DagState>>,
+        ) -> Self {
             Self {
                 context,
                 leader_schedule,

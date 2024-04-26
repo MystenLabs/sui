@@ -7,15 +7,11 @@ pub(crate) mod rocksdb_store;
 #[cfg(test)]
 mod store_tests;
 
-use std::ops::Range;
-
 use consensus_config::AuthorityIndex;
-use serde::{Deserialize, Serialize};
 
-use crate::block::Slot;
 use crate::{
-    block::{BlockRef, Round, VerifiedBlock},
-    commit::{CommitIndex, TrustedCommit},
+    block::{BlockRef, Round, Slot, VerifiedBlock},
+    commit::{CommitIndex, CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -54,10 +50,13 @@ pub(crate) trait Store: Send + Sync {
     fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>>;
 
     /// Reads all commits from start (inclusive) until end (exclusive).
-    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>>;
+    fn scan_commits(&self, range: CommitRange) -> ConsensusResult<Vec<TrustedCommit>>;
 
-    /// Reads the last commit info, including last committed round per authority.
-    fn read_last_commit_info(&self) -> ConsensusResult<Option<CommitInfo>>;
+    /// Reads all blocks voting on a particular commit.
+    fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>>;
+
+    /// Reads the last commit info, written atomically with the last commit.
+    fn read_last_commit_info(&self) -> ConsensusResult<Option<(CommitRef, CommitInfo)>>;
 }
 
 /// Represents data to be written to the store together atomically.
@@ -65,19 +64,19 @@ pub(crate) trait Store: Send + Sync {
 pub(crate) struct WriteBatch {
     pub(crate) blocks: Vec<VerifiedBlock>,
     pub(crate) commits: Vec<TrustedCommit>,
-    pub(crate) last_committed_rounds: Vec<Round>,
+    pub(crate) last_commit_info: Option<(CommitRef, CommitInfo)>,
 }
 
 impl WriteBatch {
     pub(crate) fn new(
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
-        last_committed_rounds: Vec<Round>,
+        last_commit_info: Option<(CommitRef, CommitInfo)>,
     ) -> Self {
         WriteBatch {
             blocks,
             commits,
-            last_committed_rounds,
+            last_commit_info,
         }
     }
 
@@ -94,13 +93,4 @@ impl WriteBatch {
         self.commits = commits;
         self
     }
-}
-
-/// Per-commit properties that can be derived and do not need to be part of the Commit struct.
-/// Only the latest version is needed for CommitInfo, but more versions are stored for
-/// debugging and potential recovery.
-// TODO: version this struct.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct CommitInfo {
-    pub(crate) last_committed_rounds: Vec<Round>,
 }

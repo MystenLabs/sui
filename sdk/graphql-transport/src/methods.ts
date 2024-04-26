@@ -1326,6 +1326,7 @@ export const RPC_METHODS: {
 		const attributes: Record<string, ProtocolConfigValue | null> = {};
 
 		const configTypeMap: Record<string, string> = {
+			max_accumulated_txn_cost_per_object_in_checkpoint: 'u64',
 			max_arguments: 'u32',
 			max_gas_payment_objects: 'u32',
 			max_modules_in_publish: 'u32',
@@ -1358,9 +1359,12 @@ export const RPC_METHODS: {
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
-			attributes[key] = {
-				[configTypeMap[key] ?? 'u64']: value,
-			} as ProtocolConfigValue;
+			attributes[key] =
+				value === null
+					? null
+					: ({
+							[configTypeMap[key] ?? 'u64']: value,
+					  } as ProtocolConfigValue);
 		}
 
 		for (const { key, value } of protocolConfig.featureFlags) {

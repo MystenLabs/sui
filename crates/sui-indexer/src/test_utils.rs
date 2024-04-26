@@ -3,17 +3,21 @@
 
 use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
+use secrecy::ExposeSecret;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
+use diesel::r2d2::R2D2Connection;
 use std::env;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use sui_json_rpc_types::SuiTransactionBlockResponse;
 use tracing::info;
 
-use crate::db::{new_pg_connection_pool, reset_database};
+use crate::db::{new_connection_pool_with_config, ConnectionPoolConfig};
 use crate::errors::IndexerError;
+use crate::handlers::objects_snapshot_processor::SnapshotLagConfig;
 use crate::indexer::Indexer;
-use crate::processors::objects_snapshot_processor::SnapshotLagConfig;
 use crate::store::PgIndexerStore;
 use crate::{IndexerConfig, IndexerMetrics};
 
@@ -36,20 +40,31 @@ impl ReaderWriterConfig {
     }
 }
 
-pub async fn start_test_indexer(
+pub async fn start_test_indexer<T: R2D2Connection + Send>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
-    start_test_indexer_impl(db_url, rpc_url, reader_writer_config, None).await
+    data_ingestion_path: PathBuf,
+) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
+    start_test_indexer_impl(
+        db_url,
+        rpc_url,
+        reader_writer_config,
+        None,
+        Some(data_ingestion_path),
+        CancellationToken::new(),
+    )
+    .await
 }
 
-pub async fn start_test_indexer_impl(
+pub async fn start_test_indexer_impl<T: R2D2Connection>(
     db_url: Option<String>,
     rpc_url: String,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
-) -> (PgIndexerStore, JoinHandle<Result<(), IndexerError>>) {
+    data_ingestion_path: Option<PathBuf>,
+    cancel: CancellationToken,
+) -> (PgIndexerStore<T>, JoinHandle<Result<(), IndexerError>>) {
     // Reduce the connection pool size to 10 for testing
     // to prevent maxing out
     info!("Setting DB_POOL_SIZE to 10");
@@ -62,13 +77,17 @@ pub async fn start_test_indexer_impl(
         format!("postgres://postgres:{pw}@{pg_host}:{pg_port}")
     });
 
-    // Default writer mode
+    let pool_config = ConnectionPoolConfig::default();
+
+    // Default to writer mode
     let mut config = IndexerConfig {
-        db_url: Some(db_url.clone()),
+        db_url: Some(db_url.clone().into()),
         rpc_client_url: rpc_url,
         reset_db: true,
         fullnode_sync_worker: true,
         rpc_server_worker: false,
+        remote_store_url: None,
+        data_ingestion_path,
         ..Default::default()
     };
 
@@ -82,10 +101,11 @@ pub async fn start_test_indexer_impl(
 
     if let Some(new_database) = new_database {
         // Switch to default to create a new database
-        let (default_db_url, _) = replace_db_name(&parsed_url, "postgres");
+        let (default_db_url, _) = replace_db_name(parsed_url.expose_secret(), "postgres");
 
         // Open in default mode
-        let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+        let blocking_pool =
+            new_connection_pool_with_config::<T>(&default_db_url, Some(5), pool_config).unwrap();
         let mut default_conn = blocking_pool.get().unwrap();
 
         // Delete the old db if it exists
@@ -97,10 +117,14 @@ pub async fn start_test_indexer_impl(
         default_conn
             .batch_execute(&format!("CREATE DATABASE {}", new_database))
             .unwrap();
-        parsed_url = replace_db_name(&parsed_url, &new_database).0;
+        parsed_url = replace_db_name(parsed_url.expose_secret(), &new_database)
+            .0
+            .into();
     }
 
-    let blocking_pool = new_pg_connection_pool(&parsed_url, Some(5)).unwrap();
+    let blocking_pool =
+        new_connection_pool_with_config::<T>(parsed_url.expose_secret(), Some(5), pool_config)
+            .unwrap();
     let store = PgIndexerStore::new(blocking_pool.clone(), indexer_metrics.clone());
 
     let handle = match reader_writer_config {
@@ -114,20 +138,23 @@ pub async fn start_test_indexer_impl(
             config.rpc_server_worker = true;
             config.rpc_server_url = reader_mode_rpc_url.ip().to_string();
             config.rpc_server_port = reader_mode_rpc_url.port();
-            tokio::spawn(async move { Indexer::start_reader(&config, &registry, db_url).await })
+            tokio::spawn(
+                async move { Indexer::start_reader::<T>(&config, &registry, db_url).await },
+            )
         }
         ReaderWriterConfig::Writer { snapshot_config } => {
             if config.reset_db {
-                reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
+                crate::db::reset_database(&mut blocking_pool.get().unwrap(), true).unwrap();
             }
             let store_clone = store.clone();
 
             tokio::spawn(async move {
-                Indexer::start_writer_with_config(
+                Indexer::start_writer_with_config::<PgIndexerStore<T>, T>(
                     &config,
                     store_clone,
                     indexer_metrics,
                     snapshot_config,
+                    cancel,
                 )
                 .await
             })
@@ -147,13 +174,15 @@ fn replace_db_name(db_url: &str, new_db_name: &str) -> (String, String) {
     )
 }
 
-pub async fn force_delete_database(db_url: String) {
+pub async fn force_delete_database<T: R2D2Connection + 'static>(db_url: String) {
     // Replace the database name with the default `postgres`, which should be the last string after `/`
     // This is necessary because you can't drop a database while being connected to it.
     // Hence switch to the default `postgres` database to drop the active database.
     let (default_db_url, db_name) = replace_db_name(&db_url, "postgres");
+    let pool_config = ConnectionPoolConfig::default();
 
-    let blocking_pool = new_pg_connection_pool(&default_db_url, Some(5)).unwrap();
+    let blocking_pool =
+        new_connection_pool_with_config::<T>(&default_db_url, Some(5), pool_config).unwrap();
     blocking_pool
         .get()
         .unwrap()

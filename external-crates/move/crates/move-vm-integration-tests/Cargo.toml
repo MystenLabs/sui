@@ -26,6 +26,7 @@ move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-types.workspace = true
 move-vm-test-utils.workspace = true
+move-stdlib-natives.workspace = true
 move-stdlib.workspace = true
 
 [features]

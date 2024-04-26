@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID, ID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
     public struct A has key, store {
         id: UID,
@@ -20,7 +18,7 @@ module tto::M1 {
     public struct Fake<phantom T> has drop { }
 
     public struct FakeSameLayout<phantom T> has drop {
-        id: ID, 
+        id: ID,
         version: u64,
     }
 

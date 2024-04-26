@@ -1,13 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::context_data::package_cache::PackageCache;
 use async_graphql::*;
 use move_binary_format::file_format::AbilitySet;
 use move_core_types::{annotated_value as A, language_storage::TypeTag};
 use serde::{Deserialize, Serialize};
-use sui_package_resolver::Resolver;
 
+use crate::data::package_resolver::PackageResolver;
 use crate::error::Error;
 
 use super::open_move_type::MoveAbility;
@@ -123,7 +122,7 @@ impl MoveType {
 
     /// Structured representation of the "shape" of values that match this type.
     async fn layout(&self, ctx: &Context<'_>) -> Result<MoveTypeLayout> {
-        let resolver: &Resolver<PackageCache> = ctx
+        let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
@@ -133,7 +132,7 @@ impl MoveType {
 
     /// The abilities this concrete type has.
     async fn abilities(&self, ctx: &Context<'_>) -> Result<Vec<MoveAbility>> {
-        let resolver: &Resolver<PackageCache> = ctx
+        let resolver: &PackageResolver = ctx
             .data()
             .map_err(|_| Error::Internal("Unable to fetch Package Cache.".to_string()))
             .extend()?;
@@ -159,7 +158,7 @@ impl MoveType {
 
     pub(crate) async fn layout_impl(
         &self,
-        resolver: &Resolver<PackageCache>,
+        resolver: &PackageResolver,
     ) -> Result<A::MoveTypeLayout, Error> {
         resolver
             .type_layout(self.native.clone())
@@ -174,7 +173,7 @@ impl MoveType {
 
     pub(crate) async fn abilities_impl(
         &self,
-        resolver: &Resolver<PackageCache>,
+        resolver: &PackageResolver,
     ) -> Result<AbilitySet, Error> {
         resolver.abilities(self.native.clone()).await.map_err(|e| {
             Error::Internal(format!(
