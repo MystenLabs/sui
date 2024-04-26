@@ -2791,6 +2791,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "count-min-sketch"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca319fe30d7b68949da20d78b612215708af87157d49665a4545dadcc20fecc7"
+dependencies = [
+ "rand 0.8.5",
+ "siphasher",
+]
+
+[[package]]
 name = "cpp_demangle"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11697,7 +11707,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11898,7 +11908,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11951,7 +11961,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -12225,6 +12235,7 @@ dependencies = [
  "clap",
  "consensus-config",
  "consensus-core",
+ "count-min-sketch",
  "criterion",
  "dashmap",
  "diffy",
@@ -12507,7 +12518,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12734,7 +12745,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13024,7 +13035,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -13067,7 +13078,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -13209,7 +13220,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -13259,7 +13270,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13295,7 +13306,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13325,7 +13336,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "move-package",
@@ -13544,7 +13555,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13573,7 +13584,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13608,7 +13619,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -13717,7 +13728,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13843,7 +13854,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13984,7 +13995,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anemo",
  "anemo-cli",

@@ -134,6 +134,9 @@ describe('Publickey', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 		const parsed = parseSerializedSignature(multisig);
 
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 		expect(publicKey).toBeInstanceOf(MultiSigPublicKey);
 		expect(publicKey.getPublicKeys()).toEqual([

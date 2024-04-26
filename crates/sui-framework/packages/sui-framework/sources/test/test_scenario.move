@@ -388,7 +388,7 @@ module sui::test_scenario {
     }
 
     /// Deallocate a `Receiving<T>` receiving ticket. This must be done in
-    /// order to use the object further (unless the object was recieved) in a
+    /// order to use the object further (unless the object was received) in a
     /// test scenario.
     public fun return_receiving_ticket<T: key>(ticket: sui::transfer::Receiving<T>) {
         let id = sui::transfer::receiving_id(&ticket);

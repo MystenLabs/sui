@@ -1,8 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
 use parking_lot::RwLock;
 use tokio::sync::mpsc::UnboundedSender;
@@ -107,7 +106,7 @@ impl CommitObserver {
         // We should not send the last processed commit again, so last_processed_commit_index+1
         let unsent_commits = self
             .store
-            .scan_commits((last_processed_commit_index + 1)..CommitIndex::MAX)
+            .scan_commits(((last_processed_commit_index + 1)..CommitIndex::MAX).into())
             .expect("Scanning commits should not fail");
 
         // Resend all the committed subdags to the consensus output channel
@@ -271,7 +270,9 @@ mod tests {
         // Check commits have been persisted to storage
         let last_commit = mem_store.read_last_commit().unwrap().unwrap();
         assert_eq!(last_commit.index(), commits.last().unwrap().commit_index);
-        let all_stored_commits = mem_store.scan_commits(0..CommitIndex::MAX).unwrap();
+        let all_stored_commits = mem_store
+            .scan_commits((0..CommitIndex::MAX).into())
+            .unwrap();
         assert_eq!(all_stored_commits.len(), leaders.len());
         let blocks_existence = mem_store.contains_blocks(&expected_stored_refs).unwrap();
         assert!(blocks_existence.iter().all(|exists| *exists));

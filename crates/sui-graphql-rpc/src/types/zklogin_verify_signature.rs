@@ -37,7 +37,7 @@ pub(crate) enum ZkLoginIntentScope {
 #[derive(SimpleObject, Clone, Debug)]
 pub(crate) struct ZkLoginVerifyResult {
     /// The boolean result of the verification. If true, errors should be empty.
-    success: bool,
+    pub success: bool,
     /// The errors field captures any verification error
     pub errors: Vec<String>,
 }
