@@ -37,6 +37,8 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
 
+use super::epoch_start_configuration::EpochFlag;
+
 #[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
     store_base_path: Option<PathBuf>,
@@ -54,7 +56,7 @@ pub struct TestAuthorityBuilder<'a> {
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
     authority_overload_config: Option<AuthorityOverloadConfig>,
-    cache_config: ExecutionCacheConfig,
+    cache_config: Option<ExecutionCacheConfig>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -151,6 +153,11 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
+    pub fn with_cache_config(mut self, config: ExecutionCacheConfig) -> Self {
+        self.cache_config = Some(config);
+        self
+    }
+
     pub async fn build(self) -> Arc<AuthorityState> {
         let mut local_network_config_builder =
             sui_swarm_config::network_config_builder::ConfigBuilder::new_with_temp_dir()
@@ -187,6 +194,10 @@ impl<'a> TestAuthorityBuilder<'a> {
             }
         };
         let mut config = local_network_config.validator_configs()[0].clone();
+        if let Some(cache_config) = self.cache_config {
+            config.execution_cache = cache_config;
+        }
+
         let keypair = if let Some(keypair) = self.node_keypair {
             keypair
         } else {
@@ -211,11 +222,12 @@ impl<'a> TestAuthorityBuilder<'a> {
                 config
             })
         };
+        let epoch_flags = EpochFlag::default_flags_for_new_epoch(&config);
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
             &genesis.objects(),
-            None,
+            epoch_flags,
         )
         .unwrap();
         let expensive_safety_checks = match self.expensive_safety_checks {
@@ -223,7 +235,8 @@ impl<'a> TestAuthorityBuilder<'a> {
             Some(config) => config,
         };
 
-        let cache_traits = build_execution_cache(&self.cache_config, &registry, &authority_store);
+        let cache_traits =
+            build_execution_cache(&epoch_start_configuration, &registry, &authority_store);
 
         let epoch_store = AuthorityPerEpochStore::new(
             name,

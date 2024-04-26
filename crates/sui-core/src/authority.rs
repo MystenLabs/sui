@@ -765,7 +765,7 @@ pub struct AuthorityState {
     /// Take db checkpoints of different dbs
     db_checkpoint_config: DBCheckpointConfig,
 
-    config: NodeConfig,
+    pub config: NodeConfig,
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
