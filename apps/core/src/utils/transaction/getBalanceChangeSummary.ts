@@ -4,8 +4,8 @@ import {
 	type DryRunTransactionBlockResponse,
 	type ObjectOwner,
 	type SuiTransactionBlockResponse,
-} from '@mysten/sui.js/client';
-import { normalizeSuiObjectId, parseStructTag } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { normalizeSuiObjectId, parseStructTag } from '@mysten/sui/utils';
 
 export type BalanceChange = {
 	coinType: string;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { type SuiClient } from '@mysten/sui.js/client';
+import { type SuiClient } from '@mysten/sui/client';
 
 import type { BackgroundClient } from '.';
 import { WalletSigner } from '../WalletSigner';

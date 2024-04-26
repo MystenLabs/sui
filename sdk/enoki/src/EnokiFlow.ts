@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiClient } from '@mysten/sui.js/client';
-import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import type { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
-import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
+import type { SuiClient } from '@mysten/sui/client';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type { TransactionBlock } from '@mysten/sui/transactions';
+import { fromB64, toB64 } from '@mysten/sui/utils';
+import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { decodeJwt } from 'jose';
 import type { WritableAtom } from 'nanostores';
 import { atom, onMount, onSet } from 'nanostores';

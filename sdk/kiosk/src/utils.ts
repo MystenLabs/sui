@@ -9,13 +9,13 @@ import type {
 	SuiObjectDataFilter,
 	SuiObjectDataOptions,
 	SuiObjectResponse,
-} from '@mysten/sui.js/client';
+} from '@mysten/sui/client';
 import {
 	fromB64,
 	normalizeStructTag,
 	normalizeSuiAddress,
 	parseStructTag,
-} from '@mysten/sui.js/utils';
+} from '@mysten/sui/utils';
 
 import { KioskType } from './bcs.js';
 import type { Kiosk, KioskData, KioskListing, TransferPolicyCap } from './types/index.js';

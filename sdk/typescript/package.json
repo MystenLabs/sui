@@ -1,5 +1,5 @@
 {
-	"name": "@mysten/sui.js",
+	"name": "@mysten/sui",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui TypeScript API(Work in Progress)",
 	"homepage": "https://sdk.mystenlabs.com",

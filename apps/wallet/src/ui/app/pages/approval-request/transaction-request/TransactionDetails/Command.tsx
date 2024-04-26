@@ -7,8 +7,8 @@ import {
 	type Argument,
 	type TransactionBlockData,
 	type Transactions,
-} from '@mysten/sui.js/transactions';
-import { toB64 } from '@mysten/sui.js/utils';
+} from '@mysten/sui/transactions';
+import { toB64 } from '@mysten/sui/utils';
 import { useState } from 'react';
 
 type TransactionType = TransactionBlockData['transactions'][0];

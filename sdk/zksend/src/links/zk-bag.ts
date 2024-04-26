@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type {
-	TransactionArgument,
+	Argument,
 	TransactionBlock,
 	TransactionObjectArgument,
-} from '@mysten/sui.js/transactions';
+} from '@mysten/sui/transactions';
 
 export interface ZkBagContractOptions {
 	packageId: string;
@@ -34,10 +34,7 @@ export class ZkBag<IDs> {
 		{
 			arguments: [store, receiver],
 		}: {
-			arguments: [
-				store: TransactionObjectArgument | string,
-				receiver: TransactionArgument | string,
-			];
+			arguments: [store: TransactionObjectArgument | string, receiver: Argument | string];
 		},
 	) {
 		txb.moveCall({
@@ -57,12 +54,12 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				store: TransactionObjectArgument | string,
-				receiver: TransactionArgument | string,
+				receiver: Argument | string,
 				item: TransactionObjectArgument | string,
 			];
 			typeArguments: [string];
 		},
-	): Extract<TransactionArgument, { $kind: 'Result' }> {
+	): Extract<Argument, { $kind: 'Result' }> {
 		return txb.moveCall({
 			target: `${this.#package}::${this.#module}::add`,
 			arguments: [
@@ -95,10 +92,7 @@ export class ZkBag<IDs> {
 		{
 			arguments: [store, receiver],
 		}: {
-			arguments: [
-				store: TransactionObjectArgument | string,
-				receiver: TransactionArgument | string,
-			];
+			arguments: [store: TransactionObjectArgument | string, receiver: Argument | string];
 		},
 	) {
 		const [bag, claimProof] = txb.moveCall({
@@ -120,12 +114,12 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				claim: Extract<TransactionArgument, { $kind: 'NestedResult' }>,
+				claim: Extract<Argument, { $kind: 'NestedResult' }>,
 				id: TransactionObjectArgument | string,
 			];
 			typeArguments: [string];
 		},
-	): Extract<TransactionArgument, { $kind: 'Result' }> {
+	): Extract<Argument, { $kind: 'Result' }> {
 		return txb.moveCall({
 			target: `${this.#package}::${this.#module}::claim`,
 			arguments: [txb.object(bag), txb.object(claim), typeof id === 'string' ? txb.object(id) : id],
@@ -140,7 +134,7 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				claim: Extract<TransactionArgument, { $kind: 'NestedResult' }>,
+				claim: Extract<Argument, { $kind: 'NestedResult' }>,
 			];
 		},
 	) {
@@ -157,8 +151,8 @@ export class ZkBag<IDs> {
 		}: {
 			arguments: [
 				bag: TransactionObjectArgument | string,
-				from: TransactionArgument | string,
-				to: TransactionArgument | string,
+				from: Argument | string,
+				to: Argument | string,
 			];
 		},
 	) {

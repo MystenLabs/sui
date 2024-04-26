@@ -4,8 +4,8 @@
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
-import { type TransactionBlockInput } from '@mysten/sui.js/transactions';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { type TransactionBlockInput } from '@mysten/sui/transactions';
+import { formatAddress } from '@mysten/sui/utils';
 
 interface InputProps {
 	input: TransactionBlockInput;

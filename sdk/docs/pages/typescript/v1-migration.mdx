@@ -1,4 +1,11 @@
-# Changes
+# TS SDK v1.0.0 Migration Guide
+
+This migration guide covers changes and new features for the Sui TS SDK, and well as related changes
+to `@mysten/bcs` and `@mysten/dapp-kit`.
+
+## `@mysten/sui`
+
+Ad part of the 1.0 release the `@mysten/sui.js` package has been renamed to `@mysten/sui`
 
 ## /bcs
 
@@ -66,6 +73,7 @@ Removed `is` and `assert` helpers
 - default maxSize of writer = Infinity
 - renamed `size` to `initialSize` in writer
 
-# TODO
+# dapp-kit
 
-- Update wallet standard
+- changed useSignAndExecuteTransactionBlock
+- transactions are now executed in wallets rather than in dapps by default

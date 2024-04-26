@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       isWallet: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), 'sui-wallet')) }}
-      isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui.js')) }}
+      isTypescriptSDK: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/sui')) }}
       isGraphQlTransport: ${{ (steps.turbo.outputs.packages && contains(fromJson(steps.turbo.outputs.packages), '@mysten/graphql-transport')) }}
       isRust: ${{ steps.diff.outputs.isRust }}
     steps:
@@ -66,7 +66,7 @@ jobs:
 
       - name: Run TS SDK e2e tests
         if: ${{ needs.diff.outputs.isTypescriptSDK == 'true' || needs.diff.outputs.isRust == 'true'}}
-        run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js test:e2e'
+        run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui test:e2e'
 
       - name: Run RPC/GrpahQL comaptability e2e tests
         if: ${{ needs.diff.outputs.isGraphQlTransport == 'true' || needs.diff.outputs.isRust == 'true'}}

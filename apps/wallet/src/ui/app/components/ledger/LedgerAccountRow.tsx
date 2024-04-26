@@ -5,7 +5,7 @@ import { Text } from '_src/ui/app/shared/text';
 import { useFormatCoin, useResolveSuiNSName } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { CheckFill16 } from '@mysten/icons';
-import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui/utils';
 import cl from 'clsx';
 
 import { useCoinsReFetchingConfig } from '../../hooks';

@@ -1,12 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getFullnodeUrl, SuiClient, SuiObjectChange } from '@mysten/sui.js/client';
-import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
-// import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { toB64 } from '@mysten/sui.js/utils';
+import { getFullnodeUrl, SuiClient, SuiObjectChange } from '@mysten/sui/client';
+import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
+// import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { toB64 } from '@mysten/sui/utils';
 import { describe } from 'node:test';
 import { expect, test } from 'vitest';
 

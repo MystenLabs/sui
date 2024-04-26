@@ -1,13 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type { CoinStruct, SuiTransaction } from '@mysten/sui.js/client';
-import type { Keypair } from '@mysten/sui.js/cryptography';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import type { TransactionObjectArgument } from '@mysten/sui.js/transactions';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { bcs } from '@mysten/sui/bcs';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import type { CoinStruct, SuiTransaction } from '@mysten/sui/client';
+import type { Keypair } from '@mysten/sui/cryptography';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import type { TransactionObjectArgument } from '@mysten/sui/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import {
 	fromB64,
 	normalizeStructTag,
@@ -16,7 +16,7 @@ import {
 	parseStructTag,
 	SUI_TYPE_ARG,
 	toB64,
-} from '@mysten/sui.js/utils';
+} from '@mysten/sui/utils';
 
 import type { ZkSendLinkBuilderOptions } from './builder.js';
 import { ZkSendLinkBuilder } from './builder.js';
@@ -227,7 +227,7 @@ export class ZkSendLink {
 			? this.#contract.reclaim(txb, { arguments: [store, this.address] })
 			: this.#contract.init_claim(txb, { arguments: [store] });
 
-		const objectsToTransfer = [];
+		const objectsToTransfer: TransactionObjectArgument[] = [];
 
 		const objects = [...(this.assets?.coins ?? []), ...(this.assets?.nfts ?? [])];
 

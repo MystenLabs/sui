@@ -13,7 +13,7 @@ npm install --save @mysten/graphql-transport
 
 ```ts
 import { SuiClientGraphQLTransport } from '@mysten/graphql-transport';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
 const client = new SuiClient({
 	transport: new SuiClientGraphQLTransport({

@@ -29,7 +29,7 @@
 		"@mysten/enoki": "workspace:*",
 		"@mysten/graphql-transport": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@mysten/zksend": "workspace:*",
 		"@tanstack/react-query": "^5.0.0",

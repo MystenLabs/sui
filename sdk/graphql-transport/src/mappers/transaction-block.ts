@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB58 } from '@mysten/bcs';
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcs } from '@mysten/sui/bcs';
 import type {
 	SuiArgument,
 	SuiCallArg,
@@ -12,8 +12,8 @@ import type {
 	SuiTransactionBlockKind,
 	SuiTransactionBlockResponse,
 	SuiTransactionBlockResponseOptions,
-} from '@mysten/sui.js/client';
-import { normalizeSuiAddress } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { normalizeSuiAddress } from '@mysten/sui/utils';
 
 import type { Rpc_Transaction_FieldsFragment } from '../generated/queries.js';
 import { toShortTypeString } from './util.js';

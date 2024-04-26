@@ -422,7 +422,6 @@ Array [
 
 </details>
 
-
 Following best practices, use the Sui Client CLI to call `sui::package::make_immutable` on the `UpgradeCap` to make the policy immutable.
 
 ```bash
@@ -495,7 +494,6 @@ Array [
 
 </details>
 
-
 ### Creating a package for testing {#creating-testing-package}
 
 With a policy now available on chain, you need a package to upgrade. This topic creates a basic package and references it in the following scenarios, but you can use any package you might have available instead of creating a new one.
@@ -531,7 +529,7 @@ Create a new directory to store a Node.js project. You can use the `npm init` fu
 Open a terminal or console to the root of your Node.js project. Run the following command to add the Sui TypeScript SDK as a dependency:
 
 ```bash
-npm install @mysten/sui.js
+npm install @mysten/sui
 ```
 
 ### Publishing a package with custom policy {#publishing-custom-policy}
@@ -553,32 +551,28 @@ import { execSync } from 'child_process';
 import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { fromB64 } from '@mysten/sui/utils';
 
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const signer = (() => {
-    const keystore = JSON.parse(
-        readFileSync(
-            path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'),
-            'utf8',
-        )
-    );
+	const keystore = JSON.parse(
+		readFileSync(path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'), 'utf8'),
+	);
 
-    for (const priv of keystore) {
-        const raw = fromB64(priv);
-        if (raw[0] !== 0) {
-            continue;
-        }
+	for (const priv of keystore) {
+		const raw = fromB64(priv);
+		if (raw[0] !== 0) {
+			continue;
+		}
 
-        const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
-        if (pair.getPublicKey().toSuiAddress() === sender) {
-            return pair;
-        }
-    }
+		const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
+		if (pair.getPublicKey().toSuiAddress() === sender) {
+			return pair;
+		}
+	}
 
-    throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`keypair not found for sender: ${sender}`);
 })();
 ```
 
@@ -597,26 +591,25 @@ Next, build the package:
 
 ```js
 const { modules, dependencies } = JSON.parse(
-    execSync(
-        `${SUI} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-        { encoding: 'utf-8'},
-    ),
+	execSync(`${SUI} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
+		encoding: 'utf-8',
+	}),
 );
 ```
 
 Next, construct the transaction to publish the package. Wrap its `UpgradeCap` in a "day of the week" policy, which permits upgrades on Tuesdays, and send the new policy back:
 
 ```js
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 const tx = new TransactionBlock();
 const packageUpgradeCap = tx.publish({ modules, dependencies });
 const tuesdayUpgradeCap = tx.moveCall({
-    target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
-    arguments: [
-        packageUpgradeCap,
-        tx.pure(1), // Tuesday
-    ],
+	target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
+	arguments: [
+		packageUpgradeCap,
+		tx.pure(1), // Tuesday
+	],
 });
 
 tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
@@ -625,26 +618,25 @@ tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
 And finally, execute that transaction and display its effects to the console. The following snippet assumes that you're running your examples against a local network. Pass `devnet`, `testnet`, or `mainnet` to the `getFullnodeUrl()` function to run on Devnet, Testnet, or Mainnet respectively:
 
 ```js
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 
-const client = new SuiClient({ url: getFullnodeUrl('localnet')})
+const client = new SuiClient({ url: getFullnodeUrl('localnet') });
 const result = await client.signAndExecuteTransactionBlock({
-    signer,
-    transactionBlock: tx,
-    options: {
-        showEffects: true,
-        showObjectChanges: true,
-    }
+	signer,
+	transactionBlock: tx,
+	options: {
+		showEffects: true,
+		showObjectChanges: true,
+	},
 });
 
-console.log(result)
+console.log(result);
 ```
 
 <details>
   <summary>
   Toggle complete script
   </summary>
-
 
 The complete `publish.js` script follows:
 
@@ -654,75 +646,69 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { fromB64 } from '@mysten/sui/utils';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const signer = (() => {
-    const keystore = JSON.parse(
-        readFileSync(
-            path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'),
-            'utf8',
-        )
-    );
+	const keystore = JSON.parse(
+		readFileSync(path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'), 'utf8'),
+	);
 
-    for (const priv of keystore) {
-        const raw = fromB64(priv);
-        if (raw[0] !== 0) {
-            continue;
-        }
+	for (const priv of keystore) {
+		const raw = fromB64(priv);
+		if (raw[0] !== 0) {
+			continue;
+		}
 
-        const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
-        if (pair.getPublicKey().toSuiAddress() === sender) {
-            return pair;
-        }
-    }
+		const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
+		if (pair.getPublicKey().toSuiAddress() === sender) {
+			return pair;
+		}
+	}
 
-    throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`keypair not found for sender: ${sender}`);
 })();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packagePath = path.join(__dirname, 'example');
 
 const { modules, dependencies } = JSON.parse(
-    execSync(
-        `${SUI} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-        { encoding: 'utf-8'},
-    ),
+	execSync(`${SUI} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
+		encoding: 'utf-8',
+	}),
 );
 
 const tx = new TransactionBlock();
 const packageUpgradeCap = tx.publish({ modules, dependencies });
 const tuesdayUpgradeCap = tx.moveCall({
-    target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
-    arguments: [
-        packageUpgradeCap,
-        tx.pure(1), // Tuesday
-    ],
+	target: `${POLICY_PACKAGE_ID}::day_of_week::new_policy`,
+	arguments: [
+		packageUpgradeCap,
+		tx.pure(1), // Tuesday
+	],
 });
 
 tx.transferObjects([tuesdayUpgradeCap], tx.pure(sender));
 
-const client = new SuiClient({ url: getFullnodeUrl('localnet')})
+const client = new SuiClient({ url: getFullnodeUrl('localnet') });
 const result = await client.signAndExecuteTransactionBlock({
-    signer,
-    transactionBlock: tx,
-    options: {
-        showEffects: true,
-        showObjectChanges: true,
-    }
+	signer,
+	transactionBlock: tx,
+	options: {
+		showEffects: true,
+		showObjectChanges: true,
+	},
 });
 
-console.log(result)
+console.log(result);
 ```
 
 </details>
-
 
 Save your `publish.js` file, and then use Node.js to run the script:
 
@@ -798,7 +784,6 @@ BUILDING example
 
 </details>
 
-
 :::tip
 
 If you receive a `ReferenceError: fetch is not defined` error, use Node.js version 18 or greater.
@@ -814,12 +799,10 @@ sui client call --gas-budget 10000000 \
     --function 'nudge' \
 ```
 
-
 <details>
   <summary>
   Toggle output
   </summary>
-
 
 A successful call responds with the following:
 
@@ -891,7 +874,6 @@ Array [
 
 </details>
 
-
 If you used the example package provided, notice you have an `Events` section that contains a field `x` with value `41`.
 
 ### Upgrading a package with custom policy {#upgrading-custom-policy}
@@ -904,11 +886,10 @@ import { readFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { fileURLToPath } from 'url';
-
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock, UpgradePolicy } from '@mysten/sui.js/transactions';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock, UpgradePolicy } from '@mysten/sui/transactions';
+import { fromB64 } from '@mysten/sui/utils';
 
 const SUI = 'sui';
 const POLICY_PACKAGE_ID = '<POLICY-PACKAGE>';
@@ -916,69 +897,61 @@ const EXAMPLE_PACKAGE_ID = '<EXAMPLE-PACKAGE>';
 const CAP_ID = '<EXAMPLE-UPGRADE-CAP>';
 const sender = execSync(`${SUI} client active-address`, { encoding: 'utf8' }).trim();
 const signer = (() => {
-    const keystore = JSON.parse(
-        readFileSync(
-            path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'),
-            'utf8',
-        )
-    );
+	const keystore = JSON.parse(
+		readFileSync(path.join(homedir(), '.sui', 'sui_config', 'sui.keystore'), 'utf8'),
+	);
 
-    for (const priv of keystore) {
-        const raw = fromB64(priv);
-        if (raw[0] !== 0) {
-            continue;
-        }
+	for (const priv of keystore) {
+		const raw = fromB64(priv);
+		if (raw[0] !== 0) {
+			continue;
+		}
 
-        const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
-        if (pair.getPublicKey().toSuiAddress() === sender) {
-            return pair;
-        }
-    }
+		const pair = Ed25519Keypair.fromSecretKey(raw.slice(1));
+		if (pair.getPublicKey().toSuiAddress() === sender) {
+			return pair;
+		}
+	}
 
-    throw new Error(`keypair not found for sender: ${sender}`);
+	throw new Error(`keypair not found for sender: ${sender}`);
 })();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packagePath = path.join(__dirname, 'example');
 
 const { modules, dependencies, digest } = JSON.parse(
-    execSync(
-        `${SUI} move build --dump-bytecode-as-base64 --path ${packagePath}`,
-        { encoding: 'utf-8'},
-    ),
+	execSync(`${SUI} move build --dump-bytecode-as-base64 --path ${packagePath}`, {
+		encoding: 'utf-8',
+	}),
 );
 
 const tx = new TransactionBlock();
 const cap = tx.object(CAP_ID);
 const ticket = tx.moveCall({
-    target: `${POLICY_PACKAGE_ID}::day_of_week::authorize_upgrade`,
-    arguments: [
-        cap,
-        tx.pure(UpgradePolicy.COMPATIBLE),
-        tx.pure(digest),
-    ],
+	target: `${POLICY_PACKAGE_ID}::day_of_week::authorize_upgrade`,
+	arguments: [cap, tx.pure(UpgradePolicy.COMPATIBLE), tx.pure(digest)],
 });
 
 const receipt = tx.upgrade({
-    modules,
-    dependencies,
-    packageId: EXAMPLE_PACKAGE_ID,
-    ticket,
+	modules,
+	dependencies,
+	packageId: EXAMPLE_PACKAGE_ID,
+	ticket,
 });
 
 tx.moveCall({
-    target: `${POLICY_PACKAGE_ID}::day_of_week::commit_upgrade`,
-    arguments: [cap, receipt],
+	target: `${POLICY_PACKAGE_ID}::day_of_week::commit_upgrade`,
+	arguments: [cap, receipt],
 });
 
 const client = new SuiClient({ url: getFullnodeUrl('localnet') });
 const result = await client.signAndExecuteTransactionBlock({
-    signer,
-    transactionBlock: tx,
-    options: {
-        showEffects: true,
-        showObjectChanges: true,
-    }
+	signer,
+	transactionBlock: tx,
+	options: {
+		showEffects: true,
+		showObjectChanges: true,
+	},
 });
 
 console.log(result);
@@ -1059,7 +1032,6 @@ BUILDING example
 ```
 
 </details>
-
 
 Use the Sui Client CLI to test the upgraded package (the package ID is **different** from the original version of your example package):
 

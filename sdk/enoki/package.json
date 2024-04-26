@@ -55,7 +55,7 @@
 		"vite": "^4.4.4"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@nanostores/react": "^0.7.1",
 		"jose": "^5.2.3",

@@ -3,8 +3,8 @@
 
 import { useFormatCoin } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 
 export function useTransactionData(sender?: string | null, transaction?: TransactionBlock | null) {

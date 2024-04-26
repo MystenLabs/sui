@@ -180,11 +180,11 @@ This component renders a button that enables the user to create a counter. Now, 
 
 To do this, you need to construct a `TransactionBlock`, with the appropriate `moveCall` transaction, and then sign and execute the programmable transaction block (PTB).
 
-First, import `TransactionBlock` from `@mysten/sui.js`, `COUNTER_PACKAGE_ID` from your constants.ts file created previously, and `useSignAndExecuteTransactionBlock` from `@mysten/dapp-kit`.
+First, import `TransactionBlock` from `@mysten/sui`, `COUNTER_PACKAGE_ID` from your constants.ts file created previously, and `useSignAndExecuteTransactionBlock` from `@mysten/dapp-kit`.
 
 ```ts
 import { useSignAndExecuteTransactionBlock } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 import { COUNTER_PACKAGE_ID } from './constants';
 ```
@@ -299,7 +299,7 @@ Now that your users can create counters, you need a way to route to them. Routin
 
 ```ts
 import { ConnectButton, useCurrentAccount } from '@mysten/dapp-kit';
-import { isValidSuiObjectId } from '@mysten/sui.js/utils';
+import { isValidSuiObjectId } from '@mysten/sui/utils';
 import { useState } from 'react';
 
 export default function App() {
@@ -345,7 +345,7 @@ For your counter, you want to display three elements:
 
 ```ts
 import { useCurrentAccount, useSuiClientQuery } from '@mysten/dapp-kit';
-import { SuiObjectData } from '@mysten/sui.js/client';
+import { SuiObjectData } from '@mysten/sui/client';
 
 export function Counter({ id }: { id: string }) {
 	const currentAccount = useCurrentAccount();
@@ -396,8 +396,8 @@ import {
 	useSuiClient,
 	useSuiClientQuery,
 } from '@mysten/dapp-kit';
-import { SuiObjectData } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiObjectData } from '@mysten/sui/client';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 import { COUNTER_PACKAGE_ID } from './constants';
 

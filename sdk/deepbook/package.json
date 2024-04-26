@@ -38,7 +38,7 @@
 		"prepare:e2e": "cargo build --bin sui-test-validator --bin sui --profile dev && cross-env RUST_LOG=info,sui=error,anemo_tower=warn,consensus=off cargo run --bin sui-test-validator"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*"
+		"@mysten/sui": "workspace:*"
 	},
 	"devDependencies": {
 		"@mysten/build-scripts": "workspace:*",

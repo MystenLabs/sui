@@ -9,7 +9,7 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       with:
         ref: ${{ inputs.ref }}
     # Disabled for now as it makes test runs take longer
@@ -44,7 +44,7 @@ runs:
       shell: bash
 
     # checkout current branch
-    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       with:
         clean: false
 
@@ -64,5 +64,5 @@ runs:
       shell: bash
 
     - name: Run TS SDK e2e tests
-      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js --filter @mysten/graphql-transport test:e2e'
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui --filter @mysten/graphql-transport test:e2e'
       shell: bash

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import { SuiObjectDataOptions, SuiObjectResponse } from '@mysten/sui.js/client';
+import { SuiObjectDataOptions, SuiObjectResponse } from '@mysten/sui/client';
 import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 
 import { chunkArray } from '../utils/chunkArray';
