@@ -18,10 +18,11 @@ use crate::{
         genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot,
         VerifiedBlock, GENESIS_ROUND,
     },
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitVote, TrustedCommit},
     context::Context,
+    leader_scoring::ReputationScores,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
-    storage::{CommitInfo, Store, WriteBatch},
+    storage::{Store, WriteBatch},
 };
 
 /// DagState provides the API to write and read accepted blocks from the DAG.
@@ -635,7 +636,13 @@ impl DagState {
         let last_commit_info = if commits.is_empty() {
             None
         } else {
-            Some(CommitInfo::new(self.last_committed_rounds.clone()))
+            let last_commit_ref = commits.last().as_ref().unwrap().reference();
+            // TODO: Replace this with calculated reputation scores
+            let commit_info = CommitInfo::new(
+                self.last_committed_rounds.clone(),
+                ReputationScores::default(),
+            );
+            Some((last_commit_ref, commit_info))
         };
         self.store
             .write(WriteBatch::new(
