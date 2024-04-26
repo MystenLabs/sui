@@ -860,7 +860,7 @@ impl AuthorityState {
         let (input_objects, receiving_objects) = self
             .input_loader
             .read_objects_for_signing(
-                tx_digest,
+                Some(tx_digest),
                 &input_object_kinds,
                 &receiving_objects_refs,
                 epoch_store.epoch(),
@@ -1161,11 +1161,7 @@ impl AuthorityState {
         let input_objects = &certificate.data().transaction_data().input_objects()?;
         if certificate.data().transaction_data().is_end_of_epoch_tx() {
             self.input_loader
-                .read_objects_for_synchronous_execution(
-                    certificate.digest(),
-                    input_objects,
-                    epoch_store.protocol_config(),
-                )
+                .read_objects_for_synchronous_execution(input_objects)
                 .await
         } else {
             self.input_loader
@@ -1708,11 +1704,12 @@ impl AuthorityState {
 
         let (input_objects, receiving_objects) = self
             .input_loader
-            .read_objects_for_dry_run_exec(
-                &transaction_digest,
+            .read_objects_for_signing(
+                // We don't want to cache this transaction since it's a dry run.
+                None,
                 &input_object_kinds,
                 &receiving_object_refs,
-                epoch_store.protocol_config(),
+                epoch_store.epoch(),
             )
             .await?;
 
@@ -1927,10 +1924,12 @@ impl AuthorityState {
 
         let (mut input_objects, receiving_objects) = self
             .input_loader
-            .read_objects_for_dev_inspect(
+            .read_objects_for_signing(
+                // We don't want to cache this transaction since it's a dev inspect.
+                None,
                 &input_object_kinds,
                 &receiving_object_refs,
-                protocol_config,
+                epoch_store.epoch(),
             )
             .await?;
 
@@ -4534,13 +4533,11 @@ impl AuthorityState {
         let input_objects = self
             .input_loader
             .read_objects_for_synchronous_execution(
-                tx_digest,
                 &executable_tx
                     .data()
                     .intent_message()
                     .value
                     .input_objects()?,
-                epoch_store.protocol_config(),
             )
             .await?;
 
