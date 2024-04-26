@@ -367,6 +367,7 @@ enum TryAcceptResult {
 mod tests {
     use std::{collections::BTreeSet, sync::Arc};
 
+    use consensus_config::AuthorityIndex;
     use parking_lot::RwLock;
     use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 
@@ -392,9 +393,16 @@ mod tests {
         let mut block_manager =
             BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
-        // create a DAG of 2 rounds
+        // create a DAG
         let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=3).build();
+        dag_builder
+            .layers(1..=2) // 2 rounds
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(2),
+            ]) // Create equivocating blocks for 2 authorities
+            .equivocate(3)
+            .build();
 
         // Take only the blocks of round 2 and try to accept them
         let round_2_blocks = dag_builder
@@ -438,9 +446,16 @@ mod tests {
         let mut block_manager =
             BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
-        // create a DAG of 4 rounds
+        // create a DAG
         let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=4).build();
+        dag_builder
+            .layers(1..=4) // 4 rounds
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(2),
+            ]) // Create equivocating blocks for 2 authorities
+            .equivocate(3) // Use 3 equivocations blocks per authority
+            .build();
 
         // Take the blocks from round 4 up to 2 (included). Only the first block of each round should return missing
         // ancestors when try to accept
