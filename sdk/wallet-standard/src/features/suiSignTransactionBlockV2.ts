@@ -31,9 +31,7 @@ export interface SuiSignTransactionBlockV2Input {
 }
 
 /** Output of signing transactions. */
-export interface SuiSignTransactionBlockV2Output extends SignedTransactionBlock {}
-
-export interface SignedTransactionBlock {
-	transactionBlockBytes: string;
+export interface SuiSignTransactionBlockV2Output {
+	bytes: string;
 	signature: string;
 }

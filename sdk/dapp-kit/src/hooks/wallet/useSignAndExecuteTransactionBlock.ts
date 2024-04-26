@@ -53,7 +53,7 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
  */
 export function useSignAndExecuteTransactionBlock({
 	mutationKey,
-	executeFromWallet = false,
+	executeFromWallet,
 	...mutationOptions
 }: UseSignAndExecuteTransactionBlockMutationOptions = {}): UseMutationResult<
 	UseSignAndExecuteTransactionBlockResult,
@@ -78,7 +78,12 @@ export function useSignAndExecuteTransactionBlock({
 				);
 			}
 
-			if (executeFromWallet) {
+			const shouldExecuteFromWallet =
+				executeFromWallet ||
+				(executeFromWallet === undefined &&
+					currentWallet.features['sui:signAndExecuteTransactionBlock:v2']);
+
+			if (shouldExecuteFromWallet) {
 				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
 				if (!walletFeature) {
 					throw new WalletFeatureNotSupportedError(
@@ -104,7 +109,7 @@ export function useSignAndExecuteTransactionBlock({
 				);
 			}
 
-			const { signature, transactionBlockBytes } = await walletFeature.signTransactionBlock({
+			const { signature, bytes } = await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
 				transactionBlock: await transactionBlock.toJSON({
 					supportedIntents,
@@ -115,7 +120,7 @@ export function useSignAndExecuteTransactionBlock({
 			});
 
 			const { rawEffects, balanceChanges, digest } = await client.executeTransactionBlock({
-				transactionBlock: transactionBlockBytes,
+				transactionBlock: bytes,
 				signature,
 				options: {
 					showRawEffects: true,
@@ -125,7 +130,9 @@ export function useSignAndExecuteTransactionBlock({
 
 			return {
 				digest,
-				effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
+				bytes,
+				signature,
+				effects: toB64(new Uint8Array(rawEffects!)),
 				balanceChanges:
 					balanceChanges?.map(({ coinType, amount, owner }) => {
 						const address =

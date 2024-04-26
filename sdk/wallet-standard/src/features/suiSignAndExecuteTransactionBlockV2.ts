@@ -1,7 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SuiSignTransactionBlockV2Input } from './suiSignTransactionBlockV2.js';
+import type {
+	SuiSignTransactionBlockV2Input,
+	SuiSignTransactionBlockV2Output,
+} from './suiSignTransactionBlockV2.js';
 
 /** The latest API version of the signAndExecuteTransactionBlock API. */
 export type SuiSignAndExecuteTransactionBlockV2Version = '2.0.0';
@@ -28,9 +31,9 @@ export type SuiSignAndExecuteTransactionBlockV2Method = (
 export interface SuiSignAndExecuteTransactionBlockV2Input extends SuiSignTransactionBlockV2Input {}
 
 /** Output of signing and sending transactions. */
-export interface SuiSignAndExecuteTransactionBlockV2Output {
+export interface SuiSignAndExecuteTransactionBlockV2Output extends SuiSignTransactionBlockV2Output {
 	digest: string;
-	effects: string | null;
+	effects: string;
 	balanceChanges:
 		| {
 				address: string;

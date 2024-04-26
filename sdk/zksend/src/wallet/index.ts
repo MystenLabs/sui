@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui/bcs';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
@@ -13,8 +14,8 @@ import type {
 	StandardEventsOnMethod,
 	SuiSignPersonalMessageFeature,
 	SuiSignPersonalMessageMethod,
-	SuiSignTransactionBlockFeature,
-	SuiSignTransactionBlockMethod,
+	SuiSignTransactionBlockV2Feature,
+	SuiSignTransactionBlockV2Method,
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wallet-standard';
@@ -60,7 +61,7 @@ export class StashedWallet implements Wallet {
 	get features(): StandardConnectFeature &
 		StandardDisconnectFeature &
 		StandardEventsFeature &
-		SuiSignTransactionBlockFeature &
+		SuiSignTransactionBlockV2Feature &
 		SuiSignPersonalMessageFeature {
 		return {
 			'standard:connect': {
@@ -75,8 +76,8 @@ export class StashedWallet implements Wallet {
 				version: '1.0.0',
 				on: this.#on,
 			},
-			'sui:signTransactionBlock': {
-				version: '1.0.0',
+			'sui:signTransactionBlock:v2': {
+				version: '2.0.0',
 				signTransactionBlock: this.#signTransactionBlock,
 			},
 			'sui:signPersonalMessage': {
@@ -105,10 +106,14 @@ export class StashedWallet implements Wallet {
 		}
 	}
 
-	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
-		transactionBlock.setSenderIfNotSet(account.address);
+	#signTransactionBlock: SuiSignTransactionBlockV2Method = async ({
+		transactionBlock,
+		account,
+	}) => {
+		const txb = TransactionBlock.from(transactionBlock);
+		txb.setSenderIfNotSet(account.address);
 
-		const data = transactionBlock.serialize();
+		const data = txb.serialize();
 
 		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest({
@@ -118,7 +123,7 @@ export class StashedWallet implements Wallet {
 		});
 
 		return {
-			transactionBlockBytes: response.bytes,
+			bytes: response.bytes,
 			signature: response.signature,
 		};
 	};

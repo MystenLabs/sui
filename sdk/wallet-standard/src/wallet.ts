@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB64 } from '@mysten/sui.js/utils';
+import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import type { Wallet, WalletWithFeatures } from '@wallet-standard/core';
 import { getWallets } from '@wallet-standard/core';
 
@@ -9,6 +9,7 @@ import { isWalletWithRequiredFeatureSet } from './detect.js';
 
 import './features/index.js';
 
+import { bcs } from '@mysten/sui.js/bcs';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 
 import type { MinimallyRequiredFeatures, SuiWalletFeatures } from './features/index.js';
@@ -64,7 +65,7 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 					transactionBlock,
 				});
 
-				return { transactionBlockBytes, signature };
+				return { bytes: transactionBlockBytes, signature };
 			},
 		};
 	}
@@ -79,19 +80,31 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 			version: '2.0.0',
 			signAndExecuteTransactionBlock: async (input) => {
 				const transactionBlock = TransactionBlock.from(input.transactionBlock);
-				const { digest, rawEffects, balanceChanges } = await signAndExecuteTransactionBlock({
-					...input,
-					transactionBlock,
-					options: {
-						showRawEffects: true,
-						showBalanceChanges: true,
-						showRawInput: true,
+				const { digest, rawEffects, balanceChanges, rawTransaction } =
+					await signAndExecuteTransactionBlock({
+						...input,
+						transactionBlock,
+						options: {
+							showRawEffects: true,
+							showBalanceChanges: true,
+							showRawInput: true,
+						},
+					});
+
+				const [
+					{
+						txSignatures: [signature],
+						intentMessage: { value: bcsTransaction },
 					},
-				});
+				] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+
+				const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
 
 				return {
 					digest,
-					effects: rawEffects ? toB64(new Uint8Array(rawEffects)) : null,
+					signature,
+					bytes,
+					effects: toB64(new Uint8Array(rawEffects!)),
 					balanceChanges:
 						balanceChanges?.map(({ coinType, amount, owner }) => {
 							const address =
@@ -110,7 +123,26 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 	}
 
 	return {
-		...wallet,
-		features,
+		get id() {
+			return wallet.id;
+		},
+		get name() {
+			return wallet.name;
+		},
+		get version() {
+			return wallet.version;
+		},
+		get icon() {
+			return wallet.icon;
+		},
+		get chains() {
+			return wallet.chains;
+		},
+		get features() {
+			return features;
+		},
+		get accounts() {
+			return wallet.accounts;
+		},
 	};
 }

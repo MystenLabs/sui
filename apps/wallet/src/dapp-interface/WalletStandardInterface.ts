@@ -28,6 +28,7 @@ import {
 } from '_src/shared/messaging/messages/payloads/QredoConnect';
 import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
+import { bcs } from '@mysten/sui/bcs';
 import { isTransactionBlock } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import {
@@ -44,9 +45,11 @@ import {
 	type StandardEventsOnMethod,
 	type SuiFeatures,
 	type SuiSignAndExecuteTransactionBlockMethod,
+	type SuiSignAndExecuteTransactionBlockV2Method,
 	type SuiSignMessageMethod,
 	type SuiSignPersonalMessageMethod,
 	type SuiSignTransactionBlockMethod,
+	type SuiSignTransactionBlockV2Method,
 	type Wallet,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
@@ -131,9 +134,17 @@ export class SuiWallet implements Wallet {
 				version: '1.0.0',
 				signTransactionBlock: this.#signTransactionBlock,
 			},
+			'sui:signTransactionBlock:v2': {
+				version: '2.0.0',
+				signTransactionBlock: this.#signTransactionBlockV2,
+			},
 			'sui:signAndExecuteTransactionBlock': {
 				version: '1.0.0',
 				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
+			},
+			'sui:signAndExecuteTransactionBlock:v2': {
+				version: '2.0.0',
+				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlockV2,
 			},
 			'sui:signMessage': {
 				version: '1.0.0',
@@ -240,7 +251,7 @@ export class SuiWallet implements Wallet {
 	}) => {
 		if (!isTransactionBlock(transactionBlock)) {
 			throw new Error(
-				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
+				'Unexpected transaction format found. Ensure that you are using the `Transaction` class.',
 			);
 		}
 
@@ -259,10 +270,33 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
+	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
+		transactionBlock,
+		account,
+		...input
+	}) => {
+		return mapToPromise(
+			this.#send<SignTransactionRequest, SignTransactionResponse>({
+				type: 'sign-transaction-request',
+				transaction: {
+					...input,
+					// account might be undefined if previous version of adapters is used
+					// in that case use the first account address
+					account: account?.address || this.#accounts[0]?.address || '',
+					transaction: transactionBlock,
+				},
+			}),
+			({ result: { signature, transactionBlockBytes: bytes } }) => ({
+				signature,
+				bytes,
+			}),
+		);
+	};
+
 	#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (input) => {
 		if (!isTransactionBlock(input.transactionBlock)) {
 			throw new Error(
-				'Unexpect transaction format found. Ensure that you are using the `Transaction` class.',
+				'Unexpected transaction format found. Ensure that you are using the `Transaction` class.',
 			);
 		}
 
@@ -279,6 +313,55 @@ export class SuiWallet implements Wallet {
 				},
 			}),
 			(response) => response.result,
+		);
+	};
+
+	#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method = async (input) => {
+		return mapToPromise(
+			this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
+				type: 'execute-transaction-request',
+				transaction: {
+					type: 'transaction',
+					data: input.transactionBlock,
+					options: {
+						showBalanceChanges: true,
+						showRawEffects: true,
+						showRawInput: true,
+					},
+					// account might be undefined if previous version of adapters is used
+					// in that case use the first account address
+					account: input.account?.address || this.#accounts[0]?.address || '',
+				},
+			}),
+			({ result: { rawEffects, rawTransaction, balanceChanges, digest } }) => {
+				const [
+					{
+						txSignatures: [signature],
+						intentMessage: { value: bcsTransaction },
+					},
+				] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+
+				const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
+
+				return {
+					digest,
+					signature,
+					bytes,
+					effects: toB64(new Uint8Array(rawEffects!)),
+					balanceChanges:
+						balanceChanges?.map(({ coinType, amount, owner }) => {
+							const address =
+								(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
+								(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
+
+							return {
+								coinType,
+								amount,
+								address,
+							};
+						}) ?? null,
+				};
+			},
 		);
 	};
 

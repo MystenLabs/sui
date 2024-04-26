@@ -4,8 +4,6 @@
 import type { TransactionBlock } from '@mysten/sui/transactions';
 import type { IdentifierString, WalletAccount } from '@wallet-standard/core';
 
-import type { SignedTransactionBlock } from './suiSignTransactionBlockV2.js';
-
 /** The latest API version of the signTransactionBlock API. */
 export type SuiSignTransactionBlockVersion = '1.0.0';
 
@@ -39,3 +37,8 @@ export interface SuiSignTransactionBlockInput {
 
 /** Output of signing transactions. */
 export interface SuiSignTransactionBlockOutput extends SignedTransactionBlock {}
+
+export interface SignedTransactionBlock {
+	transactionBlockBytes: string;
+	signature: string;
+}
