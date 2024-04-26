@@ -56,9 +56,7 @@ pub(crate) async fn check_version_middleware<B>(
     let route = request.uri().path();
     let parts = route.split_once("/graphql");
     if let Some((_, rest)) = parts {
-        if rest.starts_with("/") {
-            let query_version = &rest[1..];
-            println!("{query_version}");
+        if let Some(query_version) = rest.strip_prefix('/') {
             let Ok(req_version) = std::str::from_utf8(query_version.as_bytes()) else {
                 return (
                     StatusCode::BAD_REQUEST,
