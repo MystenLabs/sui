@@ -5,6 +5,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sui_core::authority::authority_store_tables::LiveObject;
+use sui_core::state_accumulator::AccumulatorStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     object::Owner,
@@ -38,15 +39,19 @@ impl SurferTask {
             .iter()
             .map(|address| (*address, (None, HashMap::new())))
             .collect();
-        let validator = cluster
+        let node = cluster
             .swarm
-            .validator_nodes()
+            .all_nodes()
             .next()
             .unwrap()
             .get_node_handle()
             .unwrap();
-        let all_live_objects: Vec<_> =
-            validator.with(|node| node.state().db().iter_live_object_set(false).collect());
+        let all_live_objects: Vec<_> = node.with(|node| {
+            node.state()
+                .get_execution_cache()
+                .iter_live_object_set(false)
+                .collect()
+        });
         for obj in all_live_objects {
             match obj {
                 LiveObject::Normal(obj) => {

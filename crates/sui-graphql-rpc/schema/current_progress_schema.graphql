@@ -89,7 +89,7 @@ type Address implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
 	manage the associated domain.
@@ -386,11 +386,6 @@ type Checkpoint {
 	"""
 	previousCheckpointDigest: String
 	"""
-	A commitment by the committee at the end of epoch on the contents of the live object set at
-	that time. This can be used to verify state snapshots.
-	"""
-	liveObjectSetDigest: String
-	"""
 	The total number of transaction blocks in the network by the end of this checkpoint.
 	"""
 	networkTotalTransactions: Int
@@ -478,7 +473,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -637,7 +632,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -822,6 +817,11 @@ type DisplayEntry {
 	An error string describing why the template could not be rendered.
 	"""
 	error: String
+}
+
+enum DomainFormat {
+	AT
+	DOT
 }
 
 type DryRunEffect {
@@ -1009,6 +1009,10 @@ type Epoch {
 	"""
 	totalCheckpoints: BigInt
 	"""
+	The total number of transaction blocks in this epoch.
+	"""
+	totalTransactions: Int
+	"""
 	The total amount of gas fees (in MIST) that were paid in this epoch.
 	"""
 	totalGasFees: BigInt
@@ -1069,6 +1073,11 @@ type Epoch {
 	Parameters related to the subsidy that supplements staking rewards
 	"""
 	systemStakeSubsidy: StakeSubsidy
+	"""
+	A commitment by the committee at the end of epoch on the contents of the live object set at
+	that time. This can be used to verify state snapshots.
+	"""
+	liveObjectSetDigest: String
 	"""
 	The epoch's corresponding checkpoints.
 	"""
@@ -1426,7 +1435,7 @@ interface IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the capability to manage the associated domain.
 	"""
@@ -1760,7 +1769,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -1940,7 +1949,7 @@ type MovePackage implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
 	manage the associated domain.
@@ -2222,14 +2231,18 @@ type Mutation {
 	"""
 	Execute a transaction, committing its effects on chain.
 	
-	`txBytes` is a `TransactionData` struct that has been BCS-encoded
-	and then Base64-encoded.
-	`signatures` are a list of `flag || signature || pubkey` bytes,
-	Base64-encoded.
+	- `txBytes` is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+	- `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
 	
-	Waits until the transaction has been finalized on chain to return
-	its transaction digest.  If the transaction could not be
-	finalized, returns the errors that prevented it, instead.
+	Waits until the transaction has reached finality on chain to return its transaction digest,
+	or returns the error that prevented finality if that was not possible. A transaction is
+	final when its effects are guaranteed on chain (it cannot be revoked).
+	
+	There may be a delay between transaction finality and when GraphQL requests (including the
+	request that issued the transaction) reflect its effects. As a result, queries that depend
+	on indexing the state of the chain (e.g. contents of output objects, address-level balance
+	information at the time of the transaction), must wait for indexing to catch up by polling
+	for the transaction digest using `Query.transactionBlock`.
 	"""
 	executeTransactionBlock(txBytes: String!, signatures: [String!]!): ExecutionResult!
 }
@@ -2267,7 +2280,7 @@ type Object implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -2477,18 +2490,14 @@ input ObjectKey {
 
 enum ObjectKind {
 	"""
-	The object is loaded from serialized data, such as the contents of a transaction.
+	The object is loaded from serialized data, such as the contents of a transaction that hasn't
+	been indexed yet.
 	"""
 	NOT_INDEXED
 	"""
-	The object is currently live and is not deleted or wrapped.
+	The object is fetched from the index.
 	"""
-	LIVE
-	"""
-	The object is referenced at some version, and thus is fetched from the snapshot or
-	historical objects table.
-	"""
-	HISTORICAL
+	INDEXED
 	"""
 	The object is deleted or wrapped and only partial information can be loaded from the
 	indexer.
@@ -2612,7 +2621,7 @@ type Owner implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the
 	capability to manage the associated domain.
@@ -2896,6 +2905,20 @@ type Query {
 	The coin metadata associated with the given coin type.
 	"""
 	coinMetadata(coinType: String!): CoinMetadata
+	"""
+	Verify a zkLogin signature based on the provided transaction or personal message
+	based on current epoch, chain id, and latest JWKs fetched on-chain. If the
+	signature is valid, the function returns a `ZkLoginVerifyResult` with success as
+	true and an empty list of errors. If the signature is invalid, the function returns
+	a `ZkLoginVerifyResult` with success as false with a list of errors.
+	
+	- `bytes` is either the personal message in raw bytes or transaction data bytes in
+	BCS-encoded and then Base64-encoded.
+	- `signature` is a serialized zkLogin signature that is Base64-encoded.
+	- `intentScope` is an enum that specifies the intent scope to be used to parse bytes.
+	- `author` is the address of the signer of the transaction or personal msg.
+	"""
+	verifyZkloginSignature(bytes: Base64!, signature: Base64!, intentScope: ZkLoginIntentScope!, author: SuiAddress!): ZkLoginVerifyResult!
 }
 
 type RandomnessStateCreateTransaction {
@@ -3220,7 +3243,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3318,6 +3341,10 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	The epoch at which this object was requested to join a stake pool.
 	"""
 	requestedEpoch: Epoch
+	"""
+	The object id of the validator staking pool this stake belongs to.
+	"""
+	poolId: SuiAddress
 	"""
 	The SUI that was initially staked.
 	"""
@@ -3418,7 +3445,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3569,7 +3596,7 @@ type SystemParameters {
 	"""
 	validatorLowStakeThreshold: BigInt
 	"""
-	Validators with stake below this threshold will be removed from the the active validator set
+	Validators with stake below this threshold will be removed from the active validator set
 	at the next epoch boundary, without a grace period.
 	"""
 	validatorVeryLowStakeThreshold: BigInt
@@ -4071,14 +4098,73 @@ type ValidatorSet {
 	to `activeValidators`.
 	"""
 	pendingRemovals: [Int!]
+	"""
+	Object ID of the wrapped object `TableVec` storing the pending active validators.
+	"""
+	pendingActiveValidatorsId: SuiAddress
+	"""
+	Size of the pending active validators table.
+	"""
 	pendingActiveValidatorsSize: Int
-	stakePoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+	of the corresponding validators. This is needed because a validator's address
+	can potentially change but the object ID of its pool will not.
+	"""
+	stakingPoolMappingsId: SuiAddress
+	"""
+	Size of the stake pool mappings `Table`.
+	"""
+	stakingPoolMappingsSize: Int
+	"""
+	Object ID of the `Table` storing the inactive staking pools.
+	"""
+	inactivePoolsId: SuiAddress
+	"""
+	Size of the inactive pools `Table`.
+	"""
 	inactivePoolsSize: Int
+	"""
+	Object ID of the `Table` storing the validator candidates.
+	"""
+	validatorCandidatesId: SuiAddress
+	"""
+	Size of the validator candidates `Table`.
+	"""
 	validatorCandidatesSize: Int
 	"""
 	The current set of active validators.
 	"""
 	activeValidators(first: Int, before: String, last: Int, after: String): ValidatorConnection!
+}
+
+"""
+An enum that specifies the intent scope to be used to parse the bytes for signature
+verification.
+"""
+enum ZkLoginIntentScope {
+	"""
+	Indicates that the bytes are to be parsed as transaction data bytes.
+	"""
+	TRANSACTION_DATA
+	"""
+	Indicates that the bytes are to be parsed as a personal message.
+	"""
+	PERSONAL_MESSAGE
+}
+
+"""
+The result of the zkLogin signature verification.
+"""
+type ZkLoginVerifyResult {
+	"""
+	The boolean result of the verification. If true, errors should be empty.
+	"""
+	success: Boolean!
+	"""
+	The errors field captures any verification error
+	"""
+	errors: [String!]!
 }
 
 schema {

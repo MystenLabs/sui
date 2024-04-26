@@ -7,8 +7,8 @@ pub mod disassemble;
 pub mod docgen;
 pub mod errmap;
 pub mod info;
+pub mod migrate;
 pub mod new;
-pub mod prove;
 pub mod test;
 
 use move_package::source_package::layout::SourcePackageLayout;

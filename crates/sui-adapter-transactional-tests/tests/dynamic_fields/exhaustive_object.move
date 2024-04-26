@@ -11,14 +11,12 @@
 module a::m {
 
 use sui::dynamic_object_field::{add, exists_, borrow, borrow_mut, remove};
-use sui::object::{Self, UID};
-use sui::tx_context::{sender, TxContext};
 
-struct Obj has key, store {
+public struct Obj has key, store {
     id: UID,
 }
 
-struct Counter has key, store {
+public struct Counter has key, store {
     id: UID,
     count: u64,
 }
@@ -44,7 +42,7 @@ fun destroy(counter: Counter): u64 {
 
 entry fun t0(ctx: &mut TxContext) {
     let id = object::new(ctx);
-    sui::transfer::public_transfer(Obj { id }, sender(ctx))
+    sui::transfer::public_transfer(Obj { id }, ctx.sender())
 }
 
 entry fun t1(obj: &mut Obj, ctx: &mut TxContext) {

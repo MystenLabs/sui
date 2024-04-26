@@ -11,13 +11,12 @@ use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, AuthorityStorePruningConfig, CheckpointExecutorConfig,
-    DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
-    OverloadThresholdConfig, StateArchiveConfig, StateSnapshotConfig,
-    DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
+    CheckpointExecutorConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis,
+    KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
-use sui_config::p2p::{P2pConfig, SeedPeer};
+use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
 use sui_config::{
     local_ip_utils, ConsensusConfig, NodeConfig, AUTHORITIES_DB_NAME, CONSENSUS_DB_NAME,
     FULL_NODE_DB_PATH,
@@ -25,6 +24,7 @@ use sui_config::{
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, NetworkKeyPair, SuiKeyPair};
 use sui_types::multiaddr::Multiaddr;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 /// This builder contains information that's not included in ValidatorGenesisConfig for building
 /// a validator NodeConfig. It can be used to build either a genesis validator or a new validator.
@@ -34,8 +34,10 @@ pub struct ValidatorConfigBuilder {
     supported_protocol_versions: Option<SupportedProtocolVersions>,
     force_unpruned_checkpoints: bool,
     jwk_fetch_interval: Option<Duration>,
-    overload_threshold_config: Option<OverloadThresholdConfig>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: Option<RemoteFirewallConfig>,
 }
 
 impl ValidatorConfigBuilder {
@@ -68,13 +70,23 @@ impl ValidatorConfigBuilder {
         self
     }
 
-    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
-        self.overload_threshold_config = Some(config);
+    pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
+        self.authority_overload_config = Some(config);
         self
     }
 
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.firewall_config = config;
         self
     }
 
@@ -128,6 +140,12 @@ impl ValidatorConfigBuilder {
                     .unwrap()
             }),
             external_address: Some(validator.p2p_address),
+            // Set a shorter timeout for checkpoint content download in tests, since
+            // checkpoint pruning also happens much faster, and network is local.
+            state_sync: Some(StateSyncConfig {
+                checkpoint_content_timeout_ms: Some(10_000),
+                ..Default::default()
+            }),
             ..Default::default()
         };
 
@@ -188,8 +206,11 @@ impl ValidatorConfigBuilder {
                 .map(|i| i.as_secs())
                 .unwrap_or(3600),
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
-            overload_threshold_config: self.overload_threshold_config.unwrap_or_default(),
+            authority_overload_config: self.authority_overload_config.unwrap_or_default(),
             run_with_range: None,
+            websocket_only: false,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
         }
     }
 
@@ -222,6 +243,8 @@ pub struct FullnodeConfigBuilder {
     p2p_listen_address: Option<SocketAddr>,
     network_key_pair: Option<KeyPairWithPath>,
     run_with_range: Option<RunWithRange>,
+    policy_config: Option<PolicyConfig>,
+    fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl FullnodeConfigBuilder {
@@ -319,6 +342,16 @@ impl FullnodeConfigBuilder {
         self
     }
 
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fw_config = config;
+        self
+    }
+
     pub fn build<R: rand::RngCore + rand::CryptoRng>(
         self,
         rng: &mut R,
@@ -364,6 +397,12 @@ impl FullnodeConfigBuilder {
                     .p2p_external_address
                     .or(Some(validator_config.p2p_address.clone())),
                 seed_peers,
+                // Set a shorter timeout for checkpoint content download in tests, since
+                // checkpoint pruning also happens much faster, and network is local.
+                state_sync: Some(StateSyncConfig {
+                    checkpoint_content_timeout_ms: Some(10_000),
+                    ..Default::default()
+                }),
                 ..Default::default()
             }
         };
@@ -434,8 +473,11 @@ impl FullnodeConfigBuilder {
             // note: not used by fullnodes.
             jwk_fetch_interval_seconds: 3600,
             zklogin_oauth_providers: default_zklogin_oauth_providers(),
-            overload_threshold_config: Default::default(),
+            authority_overload_config: Default::default(),
             run_with_range: self.run_with_range,
+            websocket_only: false,
+            policy_config: self.policy_config,
+            firewall_config: self.fw_config,
         }
     }
 }

@@ -11,16 +11,12 @@
 
 //# publish --sender A
 module test::regulated_coin {
-    use std::option;
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
 
-    struct REGULATED_COIN has drop {}
+    public struct REGULATED_COIN has drop {}
 
     fun init(otw: REGULATED_COIN, ctx: &mut TxContext) {
-        let (treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
+        let (mut treasury_cap, deny_cap, metadata) = coin::create_regulated_currency(
             otw,
             9,
             b"RC",

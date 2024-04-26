@@ -1,116 +1,111 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{http::StatusCode, routing::get, Router};
+use axum::{routing::get, Router};
 
+pub mod accept;
 mod checkpoints;
 mod client;
-pub mod headers;
-pub mod node_state_getter;
+mod error;
+mod health;
+mod info;
 mod objects;
+mod response;
+pub mod types;
 
 pub use client::Client;
-use node_state_getter::NodeStateGetter;
+pub use error::{RestError, Result};
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-
-async fn health_check() -> StatusCode {
-    StatusCode::OK
-}
-
-pub struct Bcs<T>(pub T);
+use sui_types::storage::ReadStore;
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
 pub const APPLICATION_JSON: &str = "application/json";
 
-impl<T> axum::response::IntoResponse for Bcs<T>
-where
-    T: serde::Serialize,
-{
-    fn into_response(self) -> axum::response::Response {
-        match bcs::to_bytes(&self.0) {
-            Ok(buf) => (
-                [(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static(APPLICATION_BCS),
-                )],
-                buf,
-            )
-                .into_response(),
-            Err(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(
-                    axum::http::header::CONTENT_TYPE,
-                    axum::http::HeaderValue::from_static(TEXT_PLAIN_UTF_8),
-                )],
-                err.to_string(),
-            )
-                .into_response(),
+#[derive(Clone)]
+pub struct RestService {
+    store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+    chain_id: sui_types::digests::ChainIdentifier,
+    software_version: &'static str,
+}
+
+impl RestService {
+    pub fn new(
+        store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+        chain_id: sui_types::digests::ChainIdentifier,
+        software_version: &'static str,
+    ) -> Self {
+        Self {
+            store,
+            chain_id,
+            software_version,
         }
+    }
+
+    pub fn new_without_version(
+        store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+        chain_id: sui_types::digests::ChainIdentifier,
+    ) -> Self {
+        Self::new(store, chain_id, "unknown")
+    }
+
+    pub fn chain_id(&self) -> sui_types::digests::ChainIdentifier {
+        self.chain_id
+    }
+
+    pub fn software_version(&self) -> &'static str {
+        self.software_version
+    }
+
+    pub fn into_router(self) -> Router {
+        rest_router(self.store.clone())
+            .merge(
+                Router::new()
+                    .route("/", get(info::node_info))
+                    .with_state(self.clone()),
+            )
+            .layer(axum::middleware::map_response_with_state(
+                self,
+                response::append_info_headers,
+            ))
+    }
+
+    pub async fn start_service(self, socket_address: std::net::SocketAddr, base: Option<String>) {
+        let mut app = self.into_router();
+
+        if let Some(base) = base {
+            app = Router::new().nest(&base, app);
+        }
+
+        axum::Server::bind(&socket_address)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
     }
 }
 
-pub fn rest_router(state: std::sync::Arc<dyn NodeStateGetter>) -> Router {
+fn rest_router<S>(state: S) -> Router
+where
+    S: ReadStore + Clone + Send + Sync + 'static,
+{
     Router::new()
-        .route("/", get(health_check))
+        .route(health::HEALTH_PATH, get(health::health::<S>))
         .route(
             checkpoints::GET_FULL_CHECKPOINT_PATH,
-            get(checkpoints::get_full_checkpoint),
+            get(checkpoints::get_full_checkpoint::<S>),
         )
         .route(
             checkpoints::GET_CHECKPOINT_PATH,
-            get(checkpoints::get_checkpoint),
+            get(checkpoints::get_checkpoint::<S>),
         )
         .route(
             checkpoints::GET_LATEST_CHECKPOINT_PATH,
-            get(checkpoints::get_latest_checkpoint),
+            get(checkpoints::get_latest_checkpoint::<S>),
         )
-        .route(objects::GET_OBJECT_PATH, get(objects::get_object))
+        .route(objects::GET_OBJECT_PATH, get(objects::get_object::<S>))
         .route(
             objects::GET_OBJECT_WITH_VERSION_PATH,
-            get(objects::get_object_with_version),
+            get(objects::get_object_with_version::<S>),
         )
         .with_state(state)
-}
-
-pub async fn start_service(
-    socket_address: std::net::SocketAddr,
-    state: std::sync::Arc<dyn NodeStateGetter>,
-    base: Option<String>,
-) {
-    let app = if let Some(base) = base {
-        Router::new().nest(&base, rest_router(state))
-    } else {
-        rest_router(state)
-    };
-
-    axum::Server::bind(&socket_address)
-        .serve(app.into_make_service())
-        .await
-        .unwrap();
-}
-
-// Make our own error that wraps `anyhow::Error`.
-pub struct AppError(anyhow::Error);
-
-// Tell axum how to convert `AppError` into a response.
-impl axum::response::IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Something went wrong: {}", self.0),
-        )
-            .into_response()
-    }
-}
-
-// This enables using `?` on functions that return `Result<_, anyhow::Error>` to turn them into
-// `Result<_, AppError>`. That way you don't need to do that manually.
-impl<E> From<E> for AppError
-where
-    E: Into<anyhow::Error>,
-{
-    fn from(err: E) -> Self {
-        Self(err.into())
-    }
 }

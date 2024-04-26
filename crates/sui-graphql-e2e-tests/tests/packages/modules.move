@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses pkg=0x0 --simulator
+//# init --protocol-version 39 --addresses pkg=0x0 --simulator
 
 //# publish
 
@@ -64,7 +64,7 @@ fragment Modules on Object {
     }
 }
 
-//# run-graphql --cursors "m" "o"
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 fragment NodeNames on MoveModuleConnection {
     edges {
         cursor
@@ -103,7 +103,7 @@ fragment Modules on Object {
     }
 }
 
-//# run-graphql --cursors "m" "o"
+//# run-graphql --cursors {"n":"m","c":1} {"n":"o","c":1}
 fragment NodeNames on MoveModuleConnection {
     edges {
         cursor

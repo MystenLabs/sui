@@ -15,6 +15,7 @@ aws-sdk-s3.workspace = true
 backoff.workspace = true
 base64-url.workspace = true
 bcs.workspace = true
+byteorder.workspace = true
 bytes.workspace = true
 futures.workspace = true
 mysten-metrics.workspace = true
@@ -27,10 +28,11 @@ prometheus.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tracing.workspace = true
+sui-archival.workspace = true
 sui-storage.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-types.workspace = true
 url.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

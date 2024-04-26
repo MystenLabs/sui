@@ -1,5 +1,5 @@
-module M {
-    struct S<T1, phantom> {
+module 0x42::M {
+    struct S<phantom T1, phantom> {
         f1: u64
     }
 }

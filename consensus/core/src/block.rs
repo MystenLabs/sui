@@ -6,46 +6,36 @@ use std::{
     hash::{Hash, Hasher},
     ops::Deref,
     sync::Arc,
-    time::SystemTime,
 };
 
 use bytes::Bytes;
 use consensus_config::{
-    AuthorityIndex, DefaultHashFunction, Epoch, NetworkKeySignature, DIGEST_LENGTH,
+    AuthorityIndex, DefaultHashFunction, Epoch, ProtocolKeyPair, ProtocolKeySignature,
+    ProtocolPublicKey, DIGEST_LENGTH,
 };
 use enum_dispatch::enum_dispatch;
 use fastcrypto::hash::{Digest, HashFunction};
-use fastcrypto::traits::{Signer, ToFromBytes};
 use serde::{Deserialize, Serialize};
+use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 
-use crate::authority_signature::{to_consensus_block_intent, AuthoritySignature};
-use crate::context::Context;
-use crate::ensure;
-use crate::error::{ConsensusError, ConsensusResult};
-
-const GENESIS_ROUND: Round = 0;
+use crate::{
+    commit::CommitVote, context::Context, ensure, error::ConsensusError, error::ConsensusResult,
+};
 
 /// Round number of a block.
 pub type Round = u32;
 
+pub(crate) const GENESIS_ROUND: Round = 0;
+
 /// Block proposal timestamp in milliseconds.
 pub type BlockTimestampMs = u64;
 
-// Returns the current time expressed as UNIX timestamp in milliseconds.
-pub fn timestamp_utc_ms() -> BlockTimestampMs {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(n) => n.as_millis() as BlockTimestampMs,
-        Err(_) => panic!("SystemTime before UNIX EPOCH!"),
-    }
-}
-
-/// The transaction serialised bytes
+/// Sui transaction in serialised bytes
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default, Debug)]
 pub struct Transaction {
     data: Bytes,
 }
 
-#[allow(dead_code)]
 impl Transaction {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data: data.into() }
@@ -70,34 +60,17 @@ pub enum Block {
     V1(BlockV1),
 }
 
-impl Block {
-    /// Generate the genesis blocks for the latest Block version. The tuple contains (my_genesis_block, others_genesis_blocks).
-    /// The blocks are returned in authority index order.
-    pub(crate) fn genesis(context: Arc<Context>) -> (VerifiedBlock, Vec<VerifiedBlock>) {
-        let (my_block, others_block): (Vec<_>, Vec<_>) = context
-            .committee
-            .authorities()
-            .map(|(authority_index, _)| {
-                let signed = SignedBlock::new_genesis(Block::V1(BlockV1::genesis(
-                    authority_index,
-                    context.committee.epoch(),
-                )));
-                VerifiedBlock::new_verified_unserialized(signed)
-                    .expect("Shouldn't fail when creating verified block for genesis")
-            })
-            .partition(|block| block.author() == context.own_index);
-        (my_block[0].clone(), others_block)
-    }
-}
-
 #[enum_dispatch]
 pub trait BlockAPI {
     fn epoch(&self) -> Epoch;
     fn round(&self) -> Round;
     fn author(&self) -> AuthorityIndex;
+    fn slot(&self) -> Slot;
     fn timestamp_ms(&self) -> BlockTimestampMs;
     fn ancestors(&self) -> &[BlockRef];
     fn transactions(&self) -> &[Transaction];
+    fn commit_votes(&self) -> &[CommitVote];
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport];
 }
 
 #[derive(Clone, Default, Deserialize, Serialize)]
@@ -109,10 +82,11 @@ pub struct BlockV1 {
     timestamp_ms: BlockTimestampMs,
     ancestors: Vec<BlockRef>,
     transactions: Vec<Transaction>,
+    commit_votes: Vec<CommitVote>,
+    misbehavior_reports: Vec<MisbehaviorReport>,
 }
 
 impl BlockV1 {
-    #[allow(dead_code)]
     pub(crate) fn new(
         epoch: Epoch,
         round: Round,
@@ -120,37 +94,50 @@ impl BlockV1 {
         timestamp_ms: BlockTimestampMs,
         ancestors: Vec<BlockRef>,
         transactions: Vec<Transaction>,
+        commit_votes: Vec<CommitVote>,
+        misbehavior_reports: Vec<MisbehaviorReport>,
     ) -> BlockV1 {
         Self {
+            epoch,
             round,
             author,
             timestamp_ms,
             ancestors,
             transactions,
-            epoch,
+            commit_votes,
+            misbehavior_reports,
         }
     }
 
-    /// Generate the block that is meant to be used for genesis
-    pub(crate) fn genesis(author: AuthorityIndex, epoch: Epoch) -> BlockV1 {
+    fn genesis_block(epoch: Epoch, author: AuthorityIndex) -> Self {
         Self {
+            epoch,
             round: GENESIS_ROUND,
             author,
             timestamp_ms: 0,
             ancestors: vec![],
             transactions: vec![],
-            epoch,
+            commit_votes: vec![],
+            misbehavior_reports: vec![],
         }
     }
 }
 
 impl BlockAPI for BlockV1 {
+    fn epoch(&self) -> Epoch {
+        self.epoch
+    }
+
     fn round(&self) -> Round {
         self.round
     }
 
     fn author(&self) -> AuthorityIndex {
         self.author
+    }
+
+    fn slot(&self) -> Slot {
+        Slot::new(self.round, self.author)
     }
 
     fn timestamp_ms(&self) -> BlockTimestampMs {
@@ -165,12 +152,17 @@ impl BlockAPI for BlockV1 {
         &self.transactions
     }
 
-    fn epoch(&self) -> Epoch {
-        self.epoch
+    fn commit_votes(&self) -> &[CommitVote] {
+        &self.commit_votes
+    }
+
+    fn misbehavior_reports(&self) -> &[MisbehaviorReport] {
+        &self.misbehavior_reports
     }
 }
 
-/// BlockRef is the minimum info that uniquely identify a block.
+/// `BlockRef` uniquely identifies a `VerifiedBlock` via `digest`. It also contains the slot
+/// info (round and author) so it can be used in logic such as aggregating stakes for a round.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockRef {
     pub round: Round,
@@ -178,8 +170,19 @@ pub struct BlockRef {
     pub digest: BlockDigest,
 }
 
-#[allow(unused)]
 impl BlockRef {
+    pub const MIN: Self = Self {
+        round: 0,
+        author: AuthorityIndex::MIN,
+        digest: BlockDigest::MIN,
+    };
+
+    pub const MAX: Self = Self {
+        round: u32::MAX,
+        author: AuthorityIndex::MAX,
+        digest: BlockDigest::MAX,
+    };
+
     pub fn new(round: Round, author: AuthorityIndex, digest: BlockDigest) -> Self {
         Self {
             round,
@@ -192,13 +195,13 @@ impl BlockRef {
 // TODO: re-evaluate formats for production debugging.
 impl fmt::Display for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{})", self.round, self.author, self.digest)
     }
 }
 
 impl fmt::Debug for BlockRef {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}{}({:?})", self.author, self.round, self.digest)
+        write!(f, "B{}({},{:?})", self.round, self.author, self.digest)
     }
 }
 
@@ -208,7 +211,11 @@ impl Hash for BlockRef {
     }
 }
 
-/// Hash of a block, covers all fields except signature.
+/// Digest of a `VerifiedBlock` or verified `SignedBlock`, which covers the `Block` and its
+/// signature.
+///
+/// Note: the signature algorithm is assumed to be non-malleable, so it is impossible for another
+/// party to create an altered but valid signature, producing an equivocating `BlockDigest`.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct BlockDigest([u8; consensus_config::DIGEST_LENGTH]);
 
@@ -261,7 +268,7 @@ impl AsRef<[u8]> for BlockDigest {
 /// Slot is the position of blocks in the DAG. It can contain 0, 1 or multiple blocks
 /// from the same authority at the same round.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Default, Hash)]
-pub(crate) struct Slot {
+pub struct Slot {
     pub round: Round,
     pub authority: AuthorityIndex,
 }
@@ -269,6 +276,14 @@ pub(crate) struct Slot {
 impl Slot {
     pub fn new(round: Round, authority: AuthorityIndex) -> Self {
         Self { round, authority }
+    }
+
+    #[cfg(test)]
+    pub fn new_for_test(round: Round, authority: u32) -> Self {
+        Self {
+            round,
+            authority: AuthorityIndex::new_for_test(authority),
+        }
     }
 }
 
@@ -291,8 +306,10 @@ impl fmt::Debug for Slot {
     }
 }
 
-/// Unverified block only allows limited access to its content.
-#[allow(unused)]
+/// A Block with its signature, before they are verified.
+///
+/// Note: `BlockDigest` is computed over this struct, so any added field (without `#[serde(skip)]`)
+/// will affect the values of `BlockDigest` and `BlockRef`.
 #[derive(Deserialize, Serialize)]
 pub(crate) struct SignedBlock {
     inner: Block,
@@ -300,8 +317,6 @@ pub(crate) struct SignedBlock {
 }
 
 impl SignedBlock {
-    // TODO: add verification.
-
     /// Should only be used when constructing the genesis blocks
     pub(crate) fn new_genesis(block: Block) -> Self {
         Self {
@@ -309,36 +324,33 @@ impl SignedBlock {
             signature: Bytes::default(),
         }
     }
-    pub(crate) fn new<S>(block: Block, signer: &S) -> ConsensusResult<Self>
-    where
-        S: Signer<NetworkKeySignature>,
-    {
-        let digest = compute_digest(&block)?;
-        let signature = NetworkKeySignature::new(&to_consensus_block_intent(digest), signer);
-        let signature_bytes = signature.as_bytes();
+
+    pub(crate) fn new(block: Block, protocol_keypair: &ProtocolKeyPair) -> ConsensusResult<Self> {
+        let signature = compute_block_signature(&block, protocol_keypair)?;
         Ok(Self {
             inner: block,
-            signature: signature_bytes.to_vec().into(),
+            signature: Bytes::copy_from_slice(signature.to_bytes()),
         })
     }
 
-    #[allow(unused)]
-    /// This method is only verifying the block's signature for now. It does not do any kind of validation so it can
-    /// fail for numerous reasons.
-    pub(crate) fn verify(&self, context: &Context) -> ConsensusResult<()> {
-        let digest = compute_digest(&self.inner)?;
+    pub(crate) fn signature(&self) -> &Bytes {
+        &self.signature
+    }
 
+    /// This method only verifies this block's signature. Verification of the full block
+    /// should be done via BlockVerifier.
+    pub(crate) fn verify_signature(&self, context: &Context) -> ConsensusResult<()> {
+        let block = &self.inner;
+        let committee = &context.committee;
         ensure!(
-            context.committee.exists(self.inner.author()),
-            ConsensusError::UnknownAuthority(self.inner.author().to_string())
+            committee.is_valid_index(block.author()),
+            ConsensusError::InvalidAuthorityIndex {
+                index: block.author(),
+                max: committee.size() - 1
+            }
         );
-        let authority = context.committee.authority(self.inner.author());
-
-        let signature = NetworkKeySignature::from_bytes(self.signature.as_ref())?;
-
-        signature
-            .verify(&to_consensus_block_intent(digest), &authority.network_key)
-            .map_err(ConsensusError::SignatureVerificationFailure)
+        let authority = committee.authority(block.author());
+        verify_block_signature(block, self.signature(), &authority.protocol_key)
     }
 
     /// Serialises the block using the bcs serializer
@@ -346,12 +358,73 @@ impl SignedBlock {
         let bytes = bcs::to_bytes(self)?;
         Ok(bytes.into())
     }
+
+    /// Clears signature for testing.
+    #[cfg(test)]
+    pub(crate) fn clear_signature(&mut self) {
+        self.signature = Bytes::default();
+    }
+}
+
+/// Digest of a block, covering all `Block` fields without its signature.
+/// This is used during Block signing and signature verification.
+/// This should never be used outside of this file, to avoid confusion with `BlockDigest`.
+#[derive(Serialize, Deserialize)]
+struct InnerBlockDigest([u8; consensus_config::DIGEST_LENGTH]);
+
+/// Computes the digest of a Block, only for signing and verifications.
+fn compute_inner_block_digest(block: &Block) -> ConsensusResult<InnerBlockDigest> {
+    let mut hasher = DefaultHashFunction::new();
+    hasher.update(bcs::to_bytes(block).map_err(ConsensusError::SerializationFailure)?);
+    Ok(InnerBlockDigest(hasher.finalize().into()))
+}
+
+/// Wrap a InnerBlockDigest in the intent message.
+fn to_consensus_block_intent(digest: InnerBlockDigest) -> IntentMessage<InnerBlockDigest> {
+    IntentMessage::new(Intent::consensus_app(IntentScope::ConsensusBlock), digest)
+}
+
+/// Process for signing & verying a block signature:
+/// 1. Compute the digest of `Block`.
+/// 2. Wrap the digest in `IntentMessage`.
+/// 3. Sign the serialized `IntentMessage`, or verify signature against it.
+fn compute_block_signature(
+    block: &Block,
+    protocol_keypair: &ProtocolKeyPair,
+) -> ConsensusResult<ProtocolKeySignature> {
+    let digest = compute_inner_block_digest(block)?;
+    let message = bcs::to_bytes(&to_consensus_block_intent(digest))
+        .map_err(ConsensusError::SerializationFailure)?;
+    Ok(protocol_keypair.sign(&message))
+}
+fn verify_block_signature(
+    block: &Block,
+    signature: &[u8],
+    protocol_pubkey: &ProtocolPublicKey,
+) -> ConsensusResult<()> {
+    let digest = compute_inner_block_digest(block)?;
+    let message = bcs::to_bytes(&to_consensus_block_intent(digest))
+        .map_err(ConsensusError::SerializationFailure)?;
+    let sig =
+        ProtocolKeySignature::from_bytes(signature).map_err(ConsensusError::MalformedSignature)?;
+    protocol_pubkey
+        .verify(&message, &sig)
+        .map_err(ConsensusError::SignatureVerificationFailure)
+}
+
+/// Allow quick access on the underlying Block without having to always refer to the inner block ref.
+impl Deref for SignedBlock {
+    type Target = Block;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 /// VerifiedBlock allows full access to its content.
-/// It should be relatively cheap to copy.
+/// Note: clone() is relatively cheap with most underlying data refcounted.
 #[derive(Clone)]
-pub(crate) struct VerifiedBlock {
+pub struct VerifiedBlock {
     block: Arc<SignedBlock>,
 
     // Cached Block digest and serialized SignedBlock, to avoid re-computing these values.
@@ -360,29 +433,18 @@ pub(crate) struct VerifiedBlock {
 }
 
 impl VerifiedBlock {
-    /// Creates VerifiedBlock from verified SignedBlock and its serialized bytes.
-    pub(crate) fn new_verified(
-        signed_block: SignedBlock,
-        serialized: Bytes,
-    ) -> Result<Self, bcs::Error> {
-        let digest = compute_digest(&signed_block.inner)?;
-        Ok(VerifiedBlock {
+    /// Creates VerifiedBlock from a verified SignedBlock and its serialized bytes.
+    pub(crate) fn new_verified(signed_block: SignedBlock, serialized: Bytes) -> Self {
+        let digest = Self::compute_digest(&serialized);
+        VerifiedBlock {
             block: Arc::new(signed_block),
             digest,
             serialized,
-        })
-    }
-
-    /// Creates a new VerifiedBlock from a SignedBlock and the serialized bytes aren't available. Primarily this should be
-    /// used when proposing a new block and the bytes aren't available.
-    pub(crate) fn new_verified_unserialized(signed_block: SignedBlock) -> Result<Self, bcs::Error> {
-        let serialized = signed_block.serialize()?;
-        Self::new_verified(signed_block, serialized)
+        }
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_test(block: Block) -> Self {
-        let digest = compute_digest(&block).unwrap();
         // Use empty signature in test.
         let signed_block = SignedBlock {
             inner: block,
@@ -391,6 +453,7 @@ impl VerifiedBlock {
         let serialized: Bytes = bcs::to_bytes(&signed_block)
             .expect("Serialization should not fail")
             .into();
+        let digest = Self::compute_digest(&serialized);
         VerifiedBlock {
             block: Arc::new(signed_block),
             digest,
@@ -415,12 +478,13 @@ impl VerifiedBlock {
     pub(crate) fn serialized(&self) -> &Bytes {
         &self.serialized
     }
-}
 
-fn compute_digest(block: &Block) -> Result<BlockDigest, bcs::Error> {
-    let mut hasher = DefaultHashFunction::new();
-    hasher.update(bcs::to_bytes(block)?);
-    Ok(BlockDigest(hasher.finalize().into()))
+    /// Computes digest from the serialized block with signature.
+    pub(crate) fn compute_digest(serialized: &[u8]) -> BlockDigest {
+        let mut hasher = DefaultHashFunction::new();
+        hasher.update(serialized);
+        BlockDigest(hasher.finalize().into())
+    }
 }
 
 /// Allow quick access on the underlying Block without having to always refer to the inner block ref.
@@ -449,22 +513,43 @@ impl fmt::Debug for VerifiedBlock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
-            "{:?}({}ms;{:?};{}v)",
+            "{:?}({}ms;{:?};{}t;{}c)",
             self.reference(),
             self.timestamp_ms(),
             self.ancestors(),
-            self.transactions().len()
+            self.transactions().len(),
+            self.commit_votes().len(),
         )
     }
 }
 
+/// Generates the genesis blocks for the current Committee.
+/// The blocks are returned in authority index order.
+pub(crate) fn genesis_blocks(context: Arc<Context>) -> Vec<VerifiedBlock> {
+    context
+        .committee
+        .authorities()
+        .map(|(authority_index, _)| {
+            let signed_block = SignedBlock::new_genesis(Block::V1(BlockV1::genesis_block(
+                context.committee.epoch(),
+                authority_index,
+            )));
+            let serialized = signed_block
+                .serialize()
+                .expect("Genesis block serialization failed.");
+            // Unnecessary to verify genesis blocks.
+            VerifiedBlock::new_verified(signed_block, serialized)
+        })
+        .collect::<Vec<VerifiedBlock>>()
+}
+
 /// Creates fake blocks for testing.
 #[cfg(test)]
+#[derive(Clone)]
 pub(crate) struct TestBlock {
     block: BlockV1,
 }
 
-#[allow(unused)]
 #[cfg(test)]
 impl TestBlock {
     pub(crate) fn new(round: Round, author: u32) -> Self {
@@ -475,6 +560,11 @@ impl TestBlock {
                 ..Default::default()
             },
         }
+    }
+
+    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
+        self.block.epoch = epoch;
+        self
     }
 
     pub(crate) fn set_round(mut self, round: Round) -> Self {
@@ -502,8 +592,8 @@ impl TestBlock {
         self
     }
 
-    pub(crate) fn set_epoch(mut self, epoch: Epoch) -> Self {
-        self.block.epoch = epoch;
+    pub(crate) fn set_commit_votes(mut self, commit_votes: Vec<CommitVote>) -> Self {
+        self.block.commit_votes = commit_votes;
         self
     }
 
@@ -512,19 +602,36 @@ impl TestBlock {
     }
 }
 
+/// A block can attach reports of misbehavior by other authorities.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub struct MisbehaviorReport {
+    pub target: AuthorityIndex,
+    pub proof: MisbehaviorProof,
+}
+
+/// Proof of misbehavior are usually signed block(s) from the misbehaving authority.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum MisbehaviorProof {
+    InvalidBlock(BlockRef),
+}
+
 // TODO: add basic verification for BlockRef and BlockDigest.
 // TODO: add tests for SignedBlock and VerifiedBlock conversion.
 
 #[cfg(test)]
 mod tests {
-    use crate::block::{SignedBlock, TestBlock};
-    use crate::context::Context;
-    use crate::error::ConsensusError;
-    use fastcrypto::error::FastCryptoError;
     use std::sync::Arc;
 
+    use fastcrypto::error::FastCryptoError;
+
+    use crate::{
+        block::{SignedBlock, TestBlock},
+        context::Context,
+        error::ConsensusError,
+    };
+
     #[test]
-    fn test_block_signing() {
+    fn test_sign_and_verify() {
         let (context, key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 
@@ -532,20 +639,20 @@ mod tests {
         let block = TestBlock::new(10, 2).build();
 
         // Create a signed block with authority's 2 private key
-        let author_two_key = &key_pairs[2].0;
+        let author_two_key = &key_pairs[2].1;
         let signed_block = SignedBlock::new(block, author_two_key).expect("Shouldn't fail signing");
 
         // Now verify the block's signature
-        let result = signed_block.verify(&context);
+        let result = signed_block.verify_signature(&context);
         assert!(result.is_ok());
 
         // Try to sign authority's 2 block with authority's 1 key
         let block = TestBlock::new(10, 2).build();
-        let author_one_key = &key_pairs[1].0;
+        let author_one_key = &key_pairs[1].1;
         let signed_block = SignedBlock::new(block, author_one_key).expect("Shouldn't fail signing");
 
         // Now verify the block, it should fail
-        let result = signed_block.verify(&context);
+        let result = signed_block.verify_signature(&context);
         match result.err().unwrap() {
             ConsensusError::SignatureVerificationFailure(err) => {
                 assert_eq!(err, FastCryptoError::InvalidSignature);

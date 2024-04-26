@@ -111,7 +111,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
         }
     }
 
-    /// Finalize the the given type, producing an error if it is not complete.
+    /// Finalize the given type, producing an error if it is not complete.
     fn finalize_type(&self, node_id: NodeId, ty: &Type) -> Type {
         let ty = self.subs.specialize(ty);
         if ty.is_incomplete() {
@@ -217,7 +217,7 @@ impl<'env, 'translator, 'module_translator> ExpTranslator<'env, 'translator, 'mo
     /// enters them into the environment. Returns a vector for representing them in the target AST.
     pub fn analyze_and_add_params(
         &mut self,
-        params: &[(PA::Mutability, PA::Var, EA::Type)],
+        params: &[(EA::Mutability, PA::Var, EA::Type)],
     ) -> Vec<(Symbol, Type)> {
         params
             .iter()

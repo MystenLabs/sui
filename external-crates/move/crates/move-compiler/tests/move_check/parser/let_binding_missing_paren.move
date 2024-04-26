@@ -1,5 +1,5 @@
-module M {
+module 0x42::M {
     fun f() {
-        let (x1, x2 = (1, 2); // Test a missing right parenthesis
+        let (_x1, _x2 = (1, 2); // Test a missing right parenthesis
     }
 }

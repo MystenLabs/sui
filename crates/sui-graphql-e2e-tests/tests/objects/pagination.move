@@ -1,15 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 A=0x42 --simulator
+//# init --protocol-version 39 --addresses Test=0x0 A=0x42 --simulator
 
 //# publish
 module Test::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
-
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         value: u64,
     }
@@ -58,13 +54,13 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
+//# run-graphql --cursors @{obj_5_0}
 {
   address(address: "@{A}") {
     # select the 2nd and 3rd objects
     # note that order does not correspond
     # to order in which objects were created
-    objects(first: 2 after: "@{obj_5_0_cursor}") {
+    objects(first: 2 after: "@{cursor_0}") {
       edges {
         cursor
       }
@@ -72,11 +68,11 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
+//# run-graphql --cursors @{obj_4_0}
 {
   address(address: "@{A}") {
     # select 4th and last object
-    objects(first: 2 after: "@{obj_4_0_cursor}") {
+    objects(first: 2 after: "@{cursor_0}") {
       edges {
         cursor
       }
@@ -84,11 +80,11 @@ module Test::M1 {
   }
 }
 
-//# run-graphql
+//# run-graphql --cursors @{obj_3_0}
 {
   address(address: "@{A}") {
     # select 3rd and 4th object
-    objects(last: 2 before: "@{obj_3_0_cursor}") {
+    objects(last: 2 before: "@{cursor_0}") {
       edges {
         cursor
       }

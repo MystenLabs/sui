@@ -189,8 +189,6 @@ impl Extension for QueryLimitsChecker {
             )?;
             max_depth_seen = max_depth_seen.max(running_costs.depth);
         }
-        let elapsed = instant.elapsed().as_millis() as u64;
-
         if ctx.data_opt::<ShowUsage>().is_some() {
             *self.validation_result.lock().await = Some(ValidationRes {
                 input_nodes: running_costs.input_nodes,
@@ -201,7 +199,7 @@ impl Extension for QueryLimitsChecker {
                 num_fragments: doc.fragments.len() as u32,
             });
         }
-        metrics.query_validation_latency(elapsed);
+        metrics.query_validation_latency(instant.elapsed());
         metrics
             .request_metrics
             .input_nodes

@@ -1,0 +1,205 @@
+processed 10 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 18-57:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7600000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 59-62:
+created: object(2,0), object(2,1), object(2,2)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 4924800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 64-64:
+created: object(3,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 4 'run'. lines 66-66:
+mutated: object(0,0), object(2,0), object(2,1)
+deleted: object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
+
+task 5 'run'. lines 68-68:
+created: object(5,0)
+mutated: object(0,0), object(2,0), object(2,2)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 6 'run'. lines 70-70:
+mutated: object(0,0), object(2,0), object(2,2)
+deleted: object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
+
+task 7 'run'. lines 72-72:
+created: object(3,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 8 'create-checkpoint'. lines 74-74:
+Checkpoint created: 1
+
+task 9 'run-graphql'. lines 76-156:
+Response: {
+  "data": {
+    "latest": {
+      "version": 7,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ILQV+HOQDdjh7IperJooIpHFQJYT3dl40C+2QHGDyKulAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "owner_view": {
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ILQV+HOQDdjh7IperJooIpHFQJYT3dl40C+2QHGDyKulAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "v2": {
+      "version": 2,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "v3": {
+      "version": 3,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ILQV+HOQDdjh7IperJooIpHFQJYT3dl40C+2QHGDyKulAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "v4": {
+      "version": 4,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "v7": {
+      "version": 7,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "ILQV+HOQDdjh7IperJooIpHFQJYT3dl40C+2QHGDyKulAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x339c0e58f32e426fac88d3ddb68911f85e11503894057214d88a2b4548631f99",
+              "count": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

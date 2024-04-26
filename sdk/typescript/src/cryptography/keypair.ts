@@ -35,7 +35,7 @@ export interface SignatureWithBytes {
 /**
  * TODO: Document
  */
-export abstract class BaseSigner {
+export abstract class Signer {
 	abstract sign(bytes: Uint8Array): Promise<Uint8Array>;
 	/**
 	 * Sign messages with a specific intent. By combining the message bytes with the intent before hashing and signing,
@@ -93,7 +93,7 @@ export abstract class BaseSigner {
 	abstract getPublicKey(): PublicKey;
 }
 
-export abstract class Keypair extends BaseSigner {
+export abstract class Keypair extends Signer {
 	/**
 	 * This returns the Bech32 secret key string for this keypair.
 	 */

@@ -17,13 +17,14 @@ use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
+use sui_types::signature_verification::verify_sender_signed_data_message_signatures;
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     digests::CertificateDigest,
     error::{SuiError, SuiResult},
-    message_envelope::{AuthenticatedMessage, Message},
+    message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
@@ -116,8 +117,12 @@ struct ZkLoginParams {
     pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
+    /// Flag to determine whether legacy address (derived from padded address seed) should be verified.
     pub verify_legacy_zklogin_address: bool,
+    // Flag to determine whether zkLogin inside multisig is accepted.
     pub accept_zklogin_in_multisig: bool,
+    /// Value that sets the upper bound for max_epoch in zkLogin signature.
+    pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 impl SignatureVerifier {
@@ -129,6 +134,7 @@ impl SignatureVerifier {
         env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
             committee,
@@ -155,6 +161,7 @@ impl SignatureVerifier {
                 env,
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
+                zklogin_max_epoch_upper_bound_delta,
             },
         }
     }
@@ -166,6 +173,7 @@ impl SignatureVerifier {
         zklogin_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -175,6 +183,7 @@ impl SignatureVerifier {
             zklogin_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
+            zklogin_max_epoch_upper_bound_delta,
         )
     }
 
@@ -352,16 +361,20 @@ impl SignatureVerifier {
         self.signed_data_cache.is_verified(
             signed_tx.full_message_digest(),
             || {
-                signed_tx.verify_epoch(self.committee.epoch())?;
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(
                     jwks,
                     self.zk_login_params.supported_providers.clone(),
-                    self.zk_login_params.env.clone(),
+                    self.zk_login_params.env,
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
+                    self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 );
-                signed_tx.verify_message_signature(&verify_params)
+                verify_sender_signed_data_message_signatures(
+                    signed_tx,
+                    self.committee.epoch(),
+                    &verify_params,
+                )
             },
             || Ok(()),
         )
@@ -509,6 +522,7 @@ pub fn batch_verify_certificates(
         Default::default(),
         true,
         true,
+        Some(30),
     );
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],

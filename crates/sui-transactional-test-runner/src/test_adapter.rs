@@ -9,6 +9,7 @@ use crate::{TransactionalAdapter, ValidatorWithFullnode};
 use anyhow::{anyhow, bail};
 use async_trait::async_trait;
 use bimap::btree::BiBTreeMap;
+use criterion::Criterion;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding};
 use fastcrypto::traits::ToFromBytes;
@@ -18,13 +19,13 @@ use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
-    shared::{NumberFormat, NumericalAddress, PackagePaths},
+    editions::{Edition, Flavor},
+    shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
     Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
 };
@@ -32,7 +33,7 @@ use move_symbol_pool::Symbol;
 use move_transactional_test_runner::framework::MaybeNamedCompiledModule;
 use move_transactional_test_runner::{
     framework::{compile_any, store_modules, CompiledState, MoveTestAdapter},
-    tasks::{InitCommand, SyntaxChoice, TaskInput},
+    tasks::{InitCommand, RunCommand, SyntaxChoice, TaskInput},
 };
 use move_vm_runtime::session::SerializedReturnValues;
 use once_cell::sync::Lazy;
@@ -56,23 +57,22 @@ use sui_graphql_rpc::test_infra::cluster::{serve_executor, SnapshotLagConfig};
 use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::{DevInspectResults, SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_protocol_config::{Chain, ProtocolConfig};
-use sui_rest_api::node_state_getter::NodeStateGetter;
 use sui_storage::{
     key_value_store::TransactionKeyValueStore, key_value_store_metrics::KeyValueStoreMetrics,
 };
 use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::{SequenceNumber, VersionNumber};
-use sui_types::crypto::get_authority_key_pair;
+use sui_types::crypto::{get_authority_key_pair, RandomnessRound};
 use sui_types::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
-use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
-use sui_types::storage::{ObjectKey, ObjectStore};
+use sui_types::object::bounded_visitor::BoundedVisitor;
+use sui_types::storage::ObjectStore;
+use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::DEEPBOOK_PACKAGE_ID;
 use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
@@ -94,7 +94,8 @@ use sui_types::{
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
-use tempfile::NamedTempFile;
+use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
+use tempfile::{tempdir, NamedTempFile};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -112,6 +113,7 @@ const WELL_KNOWN_OBJECTS: &[ObjectID] = &[
     SUI_SYSTEM_STATE_OBJECT_ID,
     SUI_CLOCK_OBJECT_ID,
     SUI_DENY_LIST_OBJECT_ID,
+    SUI_RANDOMNESS_STATE_OBJECT_ID,
 ];
 // TODO use the file name as a seed
 const RNG_SEED: [u8; 32] = [
@@ -124,8 +126,8 @@ const GAS_FOR_TESTING: u64 = GAS_VALUE_FOR_TESTING;
 
 const DEFAULT_CHAIN_START_TIMESTAMP: u64 = 0;
 
-pub struct SuiTestAdapter<'a> {
-    pub(crate) compiled_state: CompiledState<'a>,
+pub struct SuiTestAdapter {
+    pub(crate) compiled_state: CompiledState,
     /// For upgrades: maps an upgraded package name to the original package name.
     package_upgrade_mapping: BTreeMap<Symbol, Symbol>,
     accounts: BTreeMap<String, TestAccount>,
@@ -167,14 +169,14 @@ struct TxnSummary {
 }
 
 #[async_trait]
-impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
+impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
     type ExtraPublishArgs = SuiPublishArgs;
     type ExtraRunArgs = SuiRunArgs;
-    type Subcommand = SuiSubcommand;
     type ExtraInitArgs = SuiInitArgs;
     type ExtraValueArgs = SuiExtraValueArgs;
+    type Subcommand = SuiSubcommand<Self::ExtraValueArgs, Self::ExtraRunArgs>;
 
-    fn compiled_state(&mut self) -> &mut CompiledState<'a> {
+    fn compiled_state(&mut self) -> &mut CompiledState {
         &mut self.compiled_state
     }
 
@@ -189,7 +191,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
     }
     async fn init(
         default_syntax: SyntaxChoice,
-        pre_compiled_deps: Option<&'a FullyCompiledProgram>,
+        pre_compiled_deps: Option<Arc<FullyCompiledProgram>>,
         task_opt: Option<
             move_transactional_test_runner::tasks::TaskInput<(
                 move_transactional_test_runner::tasks::InitCommand,
@@ -215,6 +217,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             default_gas_price,
             object_snapshot_min_checkpoint_lag,
             object_snapshot_max_checkpoint_lag,
+            flavor,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -229,6 +232,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -267,6 +271,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 )
             }
             None => {
@@ -277,6 +282,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     protocol_config,
                     false,
                     false,
+                    None,
                     None,
                     None,
                     None,
@@ -326,7 +332,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
                 )),
-                None,
+                Some(Edition::E2024_ALPHA),
+                flavor.or(Some(Flavor::Sui)),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,
@@ -476,33 +483,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
         extra: Self::ExtraRunArgs,
     ) -> anyhow::Result<(Option<String>, SerializedReturnValues)> {
         self.next_task();
-        assert!(signers.is_empty(), "signers are not used");
-        let SuiRunArgs {
-            sender,
-            gas_price,
-            summarize,
-        } = extra;
-        let mut builder = ProgrammableTransactionBuilder::new();
-        let arguments = args
-            .into_iter()
-            .map(|arg| arg.into_argument(&mut builder, self))
-            .collect::<anyhow::Result<_>>()?;
-        let package_id = ObjectID::from(*module_id.address());
-
-        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
-        let gas_price = gas_price.unwrap_or(self.gas_price);
-        let data = |sender, gas| {
-            builder.command(Command::move_call(
-                package_id,
-                module_id.name().to_owned(),
-                function.to_owned(),
-                type_args,
-                arguments,
-            ));
-            let pt = builder.finish();
-            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
-        };
-        let transaction = self.sign_txn(sender, data);
+        let SuiRunArgs { summarize, .. } = extra;
+        let transaction = self.build_function_call_tx(
+            module_id, function, type_args, signers, args, gas_budget, extra,
+        )?;
         let summary = self.execute_txn(transaction).await?;
         let output = self.object_summary_output(&summary, summarize);
         let empty = SerializedReturnValues {
@@ -548,6 +532,30 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
             }};
         }
         match command {
+            SuiSubcommand::ForceObjectSnapshotCatchup(ForceObjectSnapshotCatchup {
+                start_cp,
+                end_cp,
+            }) => {
+                let cluster = self.cluster.as_ref().unwrap();
+                let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
+
+                if end_cp > highest_checkpoint {
+                    bail!(
+                        "end_cp {} is greater than highest checkpoint {}",
+                        end_cp,
+                        highest_checkpoint,
+                    );
+                }
+
+                cluster
+                    .force_objects_snapshot_catchup(start_cp, end_cp)
+                    .await;
+
+                Ok(Some(format!(
+                    "Objects snapshot updated to [{} to {})",
+                    start_cp, end_cp
+                )))
+            }
             SuiSubcommand::RunGraphql(RunGraphqlCommand {
                 show_usage,
                 show_headers,
@@ -559,14 +567,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let cluster = self.cluster.as_ref().unwrap();
                 let highest_checkpoint = self.executor.get_latest_checkpoint_sequence_number()?;
                 cluster
-                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(30))
+                    .wait_for_checkpoint_catchup(highest_checkpoint, Duration::from_secs(60))
                     .await;
 
                 cluster
-                    .wait_for_objects_snapshot_catchup(Duration::from_secs(30))
+                    .wait_for_objects_snapshot_catchup(Duration::from_secs(60))
                     .await;
 
-                let interpolated = self.interpolate_query(&contents, &cursors)?;
+                let interpolated =
+                    self.interpolate_query(&contents, &cursors, highest_checkpoint)?;
                 let resp = cluster
                     .graphql_client
                     .execute_to_graphql(interpolated.trim().to_owned(), show_usage, vec![], vec![])
@@ -587,7 +596,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_chk = self.executor.get_latest_checkpoint_sequence_number()?;
                 let chk = self
                     .executor
-                    .get_verified_checkpoint_by_sequence_number(latest_chk)?;
+                    .get_checkpoint_by_sequence_number(latest_chk)?
+                    .unwrap();
                 Ok(Some(format!("{}", chk.data())))
             }
             SuiSubcommand::CreateCheckpoint(CreateCheckpointCommand { count }) => {
@@ -624,7 +634,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                 let latest_epoch = self.get_latest_epoch_id()?;
                 let tx = VerifiedTransaction::new_randomness_state_update(
                     latest_epoch,
-                    randomness_round,
+                    RandomnessRound(randomness_round),
                     random_bytes,
                     SequenceNumber::from_u64(randomness_initial_version),
                 );
@@ -638,10 +648,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
-                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
+                                .unwrap();
 
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {:#}",
                             &obj.owner,
                             obj.version().value(),
                             move_struct
@@ -1014,6 +1025,72 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
                 Ok(None)
             }
+            SuiSubcommand::Bench(
+                RunCommand {
+                    signers,
+                    args,
+                    type_args,
+                    gas_budget,
+                    syntax,
+                    name,
+                },
+                extra_args,
+            ) => {
+                let (raw_addr, module_name, name) = name.unwrap();
+
+                assert!(
+                    syntax.is_none(),
+                    "syntax flag meaningless with function execution"
+                );
+
+                let addr = self.compiled_state().resolve_address(&raw_addr);
+                let module_id = ModuleId::new(addr, module_name);
+                let type_args = self.compiled_state().resolve_type_args(type_args)?;
+                let args = self.compiled_state().resolve_args(args)?;
+
+                let tx = self
+                    .build_function_call_tx(
+                        &module_id,
+                        name.as_ident_str(),
+                        type_args.clone(),
+                        signers.clone(),
+                        args.clone(),
+                        gas_budget,
+                        extra_args.clone(),
+                    )
+                    .unwrap();
+
+                let objects = self.executor.read_input_objects(tx.clone()).await?;
+
+                // only run benchmarks in release mode
+                if !cfg!(debug_assertions) {
+                    let mut c = Criterion::default();
+
+                    c.bench_function("benchmark_tx", |b| {
+                        let tx = tx.clone();
+                        let objects = objects.clone();
+                        b.iter(|| {
+                            self.executor
+                                .prepare_txn(tx.clone(), objects.clone())
+                                .unwrap();
+                        })
+                    });
+                }
+
+                // Run the tx for real after the benchmark, so that its effects are persisted and
+                // available to subsequent commands
+                self.call_function(
+                    &module_id,
+                    name.as_ident_str(),
+                    type_args,
+                    signers,
+                    args,
+                    gas_budget,
+                    extra_args,
+                )
+                .await?;
+                Ok(merge_output(None, None))
+            }
         }
     }
 
@@ -1051,7 +1128,7 @@ fn merge_output(left: Option<String>, right: Option<String>) -> Option<String> {
     }
 }
 
-impl<'a> SuiTestAdapter<'a> {
+impl<'a> SuiTestAdapter {
     pub fn is_simulator(&self) -> bool {
         self.is_simulator
     }
@@ -1064,35 +1141,21 @@ impl<'a> SuiTestAdapter<'a> {
         self.executor
     }
 
-    fn named_variables(&self, cursors: &[String]) -> BTreeMap<String, String> {
+    fn named_variables(
+        &self,
+        cursors: &[String],
+        highest_checkpoint: u64,
+    ) -> BTreeMap<String, String> {
         let mut variables = BTreeMap::new();
+        let mut objects_mapping: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+
         let named_addrs = self
             .compiled_state
             .named_address_mapping
             .iter()
             .map(|(name, addr)| (name.clone(), format!("{:#02x}", addr)));
 
-        let objects = self
-            .object_enumeration
-            .iter()
-            .flat_map(|(oid, fid)| match fid {
-                FakeID::Known(_) => vec![],
-                FakeID::Enumerated(x, y) => vec![
-                    (format!("obj_{x}_{y}"), oid.to_string()),
-                    // Add a binding to treat this object as a cursor
-                    (
-                        format!("obj_{x}_{y}_cursor"),
-                        Base64::encode(bcs::to_bytes(&oid.to_vec()).unwrap_or_default()),
-                    ),
-                ],
-            });
-
-        let cursors = cursors
-            .iter()
-            .enumerate()
-            .map(|(idx, c)| (format!("cursor_{idx}"), Base64::encode(c)));
-
-        for (name, addr) in named_addrs.chain(objects).chain(cursors) {
+        for (name, addr) in named_addrs {
             let addr = addr.to_string();
 
             // Required variant
@@ -1101,11 +1164,54 @@ impl<'a> SuiTestAdapter<'a> {
             let name = name.to_string() + "_opt";
             variables.insert(name.clone(), addr.clone());
         }
+
+        for (oid, fid) in &self.object_enumeration {
+            if let FakeID::Enumerated(x, y) = fid {
+                objects_mapping.insert(format!("obj_{x}_{y}"), oid.to_vec());
+                variables.insert(format!("obj_{x}_{y}"), oid.to_string());
+                variables.insert(format!("obj_{x}_{y}_opt"), oid.to_string());
+            }
+        }
+
+        for (idx, s) in cursors.iter().enumerate() {
+            // an object cursor may be either @{obj_x_y} or @{obj_x_y,n}
+            // if the former, then use highest_checkpoint
+            if s.starts_with("@{obj_") && s.ends_with('}') {
+                let end_of_key = s.find(',').unwrap_or(s.len() - 1);
+                let obj_lookup = s[2..end_of_key].to_string();
+
+                let obj_id = objects_mapping.get(&obj_lookup).unwrap_or_else(|| {
+                    panic!(
+                        "Unknown object lookup: {}\nAllowed variable mappings are {:#?}",
+                        obj_lookup, variables
+                    )
+                });
+
+                let checkpoint = if end_of_key == s.len() - 1 {
+                    highest_checkpoint
+                } else {
+                    s[end_of_key + 1..s.len() - 1].parse::<u64>().unwrap()
+                };
+
+                let bcsd = bcs::to_bytes(&(obj_id.clone(), checkpoint)).unwrap_or_default();
+                let base64d = Base64::encode(bcsd);
+
+                variables.insert(format!("cursor_{idx}"), base64d);
+            } else {
+                variables.insert(format!("cursor_{idx}"), Base64::encode(s));
+            }
+        }
+
         variables
     }
 
-    fn interpolate_query(&self, contents: &str, cursors: &[String]) -> anyhow::Result<String> {
-        let variables = self.named_variables(cursors);
+    fn interpolate_query(
+        &self,
+        contents: &str,
+        cursors: &[String],
+        highest_checkpoint: u64,
+    ) -> anyhow::Result<String> {
+        let variables = self.named_variables(cursors, highest_checkpoint);
         let mut interpolated_query = contents.to_string();
 
         let re = regex::Regex::new(r"@\{([^\}]+)\}").unwrap();
@@ -1249,6 +1355,43 @@ impl<'a> SuiTestAdapter<'a> {
             },
             None => &self.default_account,
         }
+    }
+
+    fn build_function_call_tx(
+        &mut self,
+        module_id: &ModuleId,
+        function: &IdentStr,
+        type_args: Vec<TypeTag>,
+        signers: Vec<ParsedAddress>,
+        args: Vec<SuiValue>,
+        gas_budget: Option<u64>,
+        extra: SuiRunArgs,
+    ) -> anyhow::Result<Transaction> {
+        assert!(signers.is_empty(), "signers are not used");
+        let SuiRunArgs {
+            sender, gas_price, ..
+        } = extra;
+        let mut builder = ProgrammableTransactionBuilder::new();
+        let arguments = args
+            .into_iter()
+            .map(|arg| arg.into_argument(&mut builder, self))
+            .collect::<anyhow::Result<_>>()?;
+        let package_id = ObjectID::from(*module_id.address());
+
+        let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
+        let gas_price = gas_price.unwrap_or(self.gas_price);
+        let data = |sender, gas| {
+            builder.command(Command::move_call(
+                package_id,
+                module_id.name().to_owned(),
+                function.to_owned(),
+                type_args,
+                arguments,
+            ));
+            let pt = builder.finish();
+            TransactionData::new_programmable(sender, vec![gas], pt, gas_budget, gas_price)
+        };
+        Ok(self.sign_txn(sender, data))
     }
 
     async fn execute_txn(&mut self, transaction: Transaction) -> anyhow::Result<TxnSummary> {
@@ -1647,7 +1790,7 @@ impl<'a> SuiTestAdapter<'a> {
     }
 }
 
-impl<'a> GetModule for &'a SuiTestAdapter<'_> {
+impl<'a> GetModule for &'a SuiTestAdapter {
     type Error = anyhow::Error;
 
     type Item = &'a CompiledModule;
@@ -1703,7 +1846,8 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
 });
 
 pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
-    // TODO invoke package system?
+    // TODO invoke package system? Or otherwise pull the versions for these packages as per their
+    // actual Move.toml files. They way they are treated here is odd, too, though.
     let sui_files: &Path = Path::new(DEFAULT_FRAMEWORK_PATH);
     let sui_system_sources = {
         let mut buf = sui_files.to_path_buf();
@@ -1725,9 +1869,14 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         buf.extend(["packages", "deepbook", "sources"]);
         buf.to_string_lossy().to_string()
     };
+    let config = PackageConfig {
+        edition: Edition::E2024_BETA,
+        flavor: Flavor::Sui,
+        ..Default::default()
+    };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
-            name: None,
+            name: Some(("sui-framework".into(), config)),
             paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
@@ -1919,15 +2068,18 @@ async fn init_sim_executor(
 
     // Create the simulator with the specific account configs, which also crates objects
 
-    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
-        rng,
-        DEFAULT_CHAIN_START_TIMESTAMP,
-        protocol_config.version,
-        acc_cfgs,
-        key_copy.map(|q| vec![q]),
-        reference_gas_price,
-        None,
-    );
+    let (mut sim, read_replica) =
+        PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+            rng,
+            DEFAULT_CHAIN_START_TIMESTAMP,
+            protocol_config.version,
+            acc_cfgs,
+            key_copy.map(|q| vec![q]),
+            reference_gas_price,
+            None,
+        );
+    let data_ingestion_path = tempdir().unwrap().into_path();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
 
     // Hash the file path to create custom unique DB name
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -1935,18 +2087,8 @@ async fn init_sim_executor(
     let hash = hasher.finish();
     let db_name = format!("sui_graphql_test_{}", hash);
 
-    // Take the last 4 digits of the has and use it as the port number
-    let base_port = hash
-        .to_string()
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<String>()
-        .chars()
-        .rev()
-        .collect::<String>()
-        .parse::<u16>()
-        .unwrap();
+    // Use the hash as a seed to generate a random port number
+    let base_port = hash as u16 % 8192;
 
     let graphql_port = 20000 + base_port;
     let graphql_prom_port = graphql_port + 1;
@@ -1964,6 +2106,7 @@ async fn init_sim_executor(
             object_snapshot_max_checkpoint_lag,
             Some(1),
         )),
+        data_ingestion_path,
     )
     .await;
 
@@ -2069,63 +2212,120 @@ async fn update_named_address_mapping(
     }
 }
 
-impl NodeStateGetter for SuiTestAdapter<'_> {
-    fn get_verified_checkpoint_by_sequence_number(
+impl ObjectStore for SuiTestAdapter {
+    fn get_object(
         &self,
-        sequence_number: CheckpointSequenceNumber,
-    ) -> SuiResult<VerifiedCheckpoint> {
-        self.executor
-            .get_verified_checkpoint_by_sequence_number(sequence_number)
-    }
-
-    fn get_latest_checkpoint_sequence_number(&self) -> SuiResult<CheckpointSequenceNumber> {
-        self.executor.get_latest_checkpoint_sequence_number()
-    }
-
-    fn get_checkpoint_contents(
-        &self,
-        content_digest: CheckpointContentsDigest,
-    ) -> SuiResult<CheckpointContents> {
-        self.executor.get_checkpoint_contents(content_digest)
-    }
-
-    fn multi_get_transaction_blocks(
-        &self,
-        tx_digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<VerifiedTransaction>>> {
-        self.executor.multi_get_transaction_blocks(tx_digests)
-    }
-
-    fn multi_get_executed_effects(
-        &self,
-        digests: &[TransactionDigest],
-    ) -> SuiResult<Vec<Option<TransactionEffects>>> {
-        self.executor.multi_get_executed_effects(digests)
-    }
-
-    fn multi_get_events(
-        &self,
-        event_digests: &[TransactionEventsDigest],
-    ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-        self.executor.multi_get_events(event_digests)
-    }
-
-    fn multi_get_object_by_key(
-        &self,
-        object_keys: &[ObjectKey],
-    ) -> Result<Vec<Option<Object>>, SuiError> {
-        self.executor.multi_get_object_by_key(object_keys)
+        object_id: &ObjectID,
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        ObjectStore::get_object(&*self.executor, object_id)
     }
 
     fn get_object_by_key(
         &self,
         object_id: &ObjectID,
         version: VersionNumber,
-    ) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object_by_key(&*self.executor, object_id, version).map_err(Into::into)
+    ) -> sui_types::storage::error::Result<Option<Object>> {
+        ObjectStore::get_object_by_key(&*self.executor, object_id, version)
+    }
+}
+
+impl ReadStore for SuiTestAdapter {
+    fn get_committee(
+        &self,
+        epoch: sui_types::committee::EpochId,
+    ) -> sui_types::storage::error::Result<Option<Arc<sui_types::committee::Committee>>> {
+        self.executor.get_committee(epoch)
     }
 
-    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
-        ObjectStore::get_object(&*self.executor, object_id).map_err(Into::into)
+    fn get_latest_checkpoint(&self) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        ReadStore::get_latest_checkpoint(&self.executor)
+    }
+
+    fn get_highest_verified_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.executor.get_highest_verified_checkpoint()
+    }
+
+    fn get_highest_synced_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<VerifiedCheckpoint> {
+        self.executor.get_highest_synced_checkpoint()
+    }
+
+    fn get_lowest_available_checkpoint(
+        &self,
+    ) -> sui_types::storage::error::Result<CheckpointSequenceNumber> {
+        self.executor.get_lowest_available_checkpoint()
+    }
+
+    fn get_checkpoint_by_digest(
+        &self,
+        digest: &sui_types::messages_checkpoint::CheckpointDigest,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.executor.get_checkpoint_by_digest(digest)
+    }
+
+    fn get_checkpoint_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<VerifiedCheckpoint>> {
+        self.executor
+            .get_checkpoint_by_sequence_number(sequence_number)
+    }
+
+    fn get_checkpoint_contents_by_digest(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.executor.get_checkpoint_contents_by_digest(digest)
+    }
+
+    fn get_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<Option<CheckpointContents>> {
+        self.executor
+            .get_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_transaction(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<Arc<VerifiedTransaction>>> {
+        self.executor.get_transaction(tx_digest)
+    }
+
+    fn get_transaction_effects(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEffects>> {
+        self.executor.get_transaction_effects(tx_digest)
+    }
+
+    fn get_events(
+        &self,
+        event_digest: &TransactionEventsDigest,
+    ) -> sui_types::storage::error::Result<Option<TransactionEvents>> {
+        self.executor.get_events(event_digest)
+    }
+
+    fn get_full_checkpoint_contents_by_sequence_number(
+        &self,
+        sequence_number: CheckpointSequenceNumber,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        self.executor
+            .get_full_checkpoint_contents_by_sequence_number(sequence_number)
+    }
+
+    fn get_full_checkpoint_contents(
+        &self,
+        digest: &CheckpointContentsDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::FullCheckpointContents>,
+    > {
+        self.executor.get_full_checkpoint_contents(digest)
     }
 }

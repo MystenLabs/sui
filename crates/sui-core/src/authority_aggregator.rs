@@ -6,6 +6,7 @@ use crate::authority_client::{
     make_authority_clients_with_timeout_config, make_network_authority_clients_with_network_config,
     AuthorityAPI, NetworkAuthorityClient,
 };
+use crate::execution_cache::ExecutionCacheRead;
 use crate::safe_client::{SafeClient, SafeClientMetrics, SafeClientMetricsBase};
 use fastcrypto::traits::ToFromBytes;
 use futures::{future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -13,6 +14,7 @@ use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
+use std::net::SocketAddr;
 use sui_authority_aggregation::ReduceOutput;
 use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout, AsyncResult};
 use sui_config::genesis::Genesis;
@@ -55,7 +57,6 @@ use sui_types::messages_grpc::{
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tokio::time::{sleep, timeout};
 
-use crate::authority::AuthorityStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator, StakeAggregator};
 
@@ -246,6 +247,18 @@ pub enum AggregatorProcessTransactionError {
 
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSignatures,
+
+    #[error(
+        "{} of the validators by stake are overloaded and requested the client to retry after {} seconds. Validator errors: {:?}",
+        overload_stake,
+        retry_after_secs,
+        errors
+    )]
+    SystemOverloadRetryAfter {
+        overload_stake: StakeUnit,
+        errors: GroupedErrors,
+        retry_after_secs: u64,
+    },
 }
 
 #[derive(Error, Debug)]
@@ -294,6 +307,8 @@ struct ProcessTransactionState {
     object_or_package_not_found_stake: StakeUnit,
     // Validators that are overloaded with txns pending execution.
     overloaded_stake: StakeUnit,
+    // Validators that are overloaded and request client to retry.
+    retryable_overloaded_stake: StakeUnit,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -395,21 +410,28 @@ struct ProcessCertificateState {
 
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
-    Certified(CertifiedTransaction),
+    Certified {
+        certificate: CertifiedTransaction,
+        /// Whether this certificate is newly created by aggregating 2f+1 signatures.
+        /// If a validator returned a cert directly, this will be false.
+        /// This is used to inform the quorum driver, which could make better decisions on telemetry
+        /// such as settlement latency.
+        newly_formed: bool,
+    },
     Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
     pub fn into_cert_for_testing(self) -> CertifiedTransaction {
         match self {
-            Self::Certified(cert) => cert,
+            Self::Certified { certificate, .. } => certificate,
             Self::Executed(..) => panic!("Wrong type"),
         }
     }
 
     pub fn into_effects_for_testing(self) -> VerifiedCertifiedTransactionEffects {
         match self {
-            Self::Certified(..) => panic!("Wrong type"),
+            Self::Certified { .. } => panic!("Wrong type"),
             Self::Executed(effects, ..) => effects,
         }
     }
@@ -623,7 +645,7 @@ impl AuthorityAggregator<NetworkAuthorityClient> {
     /// This function needs metrics parameters because registry will panic
     /// if we attempt to register already-registered metrics again.
     pub fn new_from_local_system_state(
-        store: &Arc<AuthorityStore>,
+        store: &Arc<dyn ExecutionCacheRead>,
         committee_store: &Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
@@ -995,6 +1017,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
@@ -1014,6 +1037,7 @@ where
             object_or_package_not_found_stake: 0,
             non_retryable_stake: 0,
             overloaded_stake: 0,
+            retryable_overloaded_stake: 0,
             retryable: true,
             conflicting_tx_digests: Default::default(),
             conflicting_tx_total_stake: 0,
@@ -1033,7 +1057,7 @@ where
                     Box::pin(
                         async move {
                             let _guard = GaugeGuard::acquire(&self.metrics.inflight_transaction_requests);
-                            client.handle_transaction(transaction_ref.clone()).await
+                            client.handle_transaction(transaction_ref.clone(), client_addr).await
                         },
                     )
                 },
@@ -1073,7 +1097,20 @@ where
                                     // Special case for validator overload too. Once we have >= 2f + 1
                                     // overloaded validators we consider the system overloaded so we exit
                                     // and notify the user.
+                                    // Note that currently, this overload account for
+                                    //   - per object queue overload
+                                    //   - consensus overload
                                     state.overloaded_stake += weight;
+                                }
+                                else if err.is_retryable_overload() {
+                                    // Different from above overload error, retryable overload targets authority overload (entire
+                                    // authority server is overload). In this case, the retry behavior is different from
+                                    // above that we may perform continuous retry due to that objects may have been locked
+                                    // in the validator.
+                                    //
+                                    // TODO: currently retryable overload and above overload error look redundant. We want to have a unified
+                                    // code path to handle both overload scenarios.
+                                    state.retryable_overloaded_stake += weight;
                                 }
                                 else if !retryable && !state.record_conflicting_transaction_if_any(name, weight, &err) {
                                     // We don't count conflicting transactions as non-retryable errors here
@@ -1102,8 +1139,9 @@ where
                             return ReduceOutput::Failed(state);
                         }
 
+                        // TODO: add more comments to explain each condition.
                         if state.non_retryable_stake >= validity_threshold
-                            || state.object_or_package_not_found_stake >= quorum_threshold
+                            || state.object_or_package_not_found_stake >= quorum_threshold // In normal case, object/package not found should be more than f+1
                             || state.overloaded_stake >= quorum_threshold {
                             // We have hit an exit condition, f+1 non-retryable err or 2f+1 object not found or overload,
                             // so we no longer consider the transaction state as retryable.
@@ -1213,6 +1251,20 @@ where
             };
         }
 
+        // When state is in a retryable state and process transaction was not successful, it indicates that
+        // we have heard from *all* validators. Check if any SystemOverloadRetryAfter error caused the txn
+        // to fail. If so, return explicit SystemOverloadRetryAfter error for continuous retry (since objects)
+        // are locked in validators. If not, retry regular RetryableTransaction error.
+        if state.tx_signatures.total_votes() + state.retryable_overloaded_stake >= quorum_threshold
+        {
+            // TODO: make use of retry_after_secs, which is currently not used.
+            return AggregatorProcessTransactionError::SystemOverloadRetryAfter {
+                overload_stake: state.retryable_overloaded_stake,
+                errors: group_errors(state.errors),
+                retry_after_secs: 0,
+            };
+        }
+
         // No conflicting transaction, the system is not overloaded and transaction state is still retryable.
         AggregatorProcessTransactionError::RetryableTransaction {
             errors: group_errors(state.errors),
@@ -1289,10 +1341,13 @@ where
             }
             InsertResult::Failed { error } => Err(error),
             InsertResult::QuorumReached(cert_sig) => {
-                let ct =
+                let certificate =
                     CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
-                ct.verify_committee_sigs_only(&self.committee)?;
-                Ok(Some(ProcessTransactionResult::Certified(ct)))
+                certificate.verify_committee_sigs_only(&self.committee)?;
+                Ok(Some(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed: true,
+                }))
             }
         }
     }
@@ -1309,7 +1364,10 @@ where
                 // If we get a certificate in the same epoch, then we use it.
                 // A certificate in a past epoch does not guarantee finality
                 // and validators may reject to process it.
-                Ok(Some(ProcessTransactionResult::Certified(certificate)))
+                Ok(Some(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed: false,
+                }))
             }
             _ => {
                 // If we get 2f+1 effects, it's a proof that the transaction
@@ -1418,6 +1476,7 @@ where
     pub async fn process_certificate(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<
         (VerifiedCertifiedTransactionEffects, TransactionEvents),
         AggregatorProcessCertificateError,
@@ -1457,7 +1516,7 @@ where
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
                     client
-                        .handle_certificate_v2(cert_ref)
+                        .handle_certificate_v2(cert_ref, client_addr)
                         .instrument(
                             tracing::trace_span!("handle_certificate", authority =? name.concise()),
                         )
@@ -1643,14 +1702,15 @@ where
     pub async fn execute_transaction_block(
         &self,
         transaction: &Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
-            .process_transaction(transaction.clone())
+            .process_transaction(transaction.clone(), client_addr)
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
-            ProcessTransactionResult::Certified(cert) => cert,
+            ProcessTransactionResult::Certified { certificate, .. } => certificate,
             ProcessTransactionResult::Executed(effects, _) => {
                 return Ok(effects);
             }
@@ -1660,7 +1720,7 @@ where
 
         let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
-            .process_certificate(cert.clone())
+            .process_certificate(cert.clone(), client_addr)
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 

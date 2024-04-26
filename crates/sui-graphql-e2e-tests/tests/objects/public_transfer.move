@@ -1,19 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses P0=0x0 --accounts A --simulator
 
 //# publish
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
-    struct Foo has key, store {
+    public struct Foo has key, store {
         id: UID,
     }
 
-    struct Bar has key {
+    public struct Bar has key {
         id: UID,
     }
 

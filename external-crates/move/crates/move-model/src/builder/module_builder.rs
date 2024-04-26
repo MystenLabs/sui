@@ -7,13 +7,15 @@ use std::collections::BTreeMap;
 use itertools::Itertools;
 
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{Constant, FunctionDefinitionIndex, StructDefinitionIndex},
-    views::{FunctionHandleView, StructHandleView},
     CompiledModule,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_compiler::{expansion::ast as EA, parser::ast as PA, shared::Name};
+use move_compiler::{
+    expansion::ast as EA,
+    parser::ast as PA,
+    shared::{unique_map::UniqueMap, Name, TName},
+};
 use move_ir_types::ast::ConstantName;
 
 use crate::{
@@ -122,6 +124,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 );
                 (Some(module_name), self.symbol_pool().make(n.value.as_str()))
             }
+            EA::ModuleAccess_::Variant(..) => panic!("Variants are not supported by move model."),
         }
     }
 
@@ -140,7 +143,10 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 /// # Attribute Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    pub fn translate_attributes(&mut self, attrs: &EA::Attributes) -> Vec<Attribute> {
+    pub fn translate_attributes<T: TName>(
+        &mut self,
+        attrs: &UniqueMap<T, EA::Attribute>,
+    ) -> Vec<Attribute> {
         attrs
             .iter()
             .map(|(_, _, attr)| self.translate_attribute(attr))
@@ -175,6 +181,18 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                                 // Error reported
                                 Value::Bool(false)
                             };
+                        AttributeValue::Value(value_node_id, val)
+                    }
+                    EA::AttributeValue_::Address(a) => {
+                        let val = move_ir_types::location::sp(v.loc, EA::Value_::Address(*a));
+                        let val = if let Some((val, _)) =
+                            ExpTranslator::new(self).translate_value(&val)
+                        {
+                            val
+                        } else {
+                            // Error reported
+                            Value::Bool(false)
+                        };
                         AttributeValue::Value(value_node_id, val)
                     }
                     EA::AttributeValue_::Module(mident) => {
@@ -215,6 +233,9 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                                 Some(module_name),
                                 self.symbol_pool().make(n.value.as_str()),
                             )
+                        }
+                        EA::ModuleAccess_::Variant(..) => {
+                            panic!("Variants are not supported by move model.")
                         }
                     },
                 };
@@ -270,7 +291,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
             .define_const(qsym, ConstEntry { loc, ty, value });
     }
 
-    fn decl_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn decl_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let struct_id = StructId::new(qsym.symbol);
         let attrs = self.translate_attributes(&def.attributes);
@@ -335,7 +356,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
 /// ## Struct Definition Analysis
 
 impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
-    fn def_ana_struct(&mut self, name: &PA::StructName, def: &EA::StructDefinition) {
+    fn def_ana_struct(&mut self, name: &PA::DatatypeName, def: &EA::StructDefinition) {
         let qsym = self.qualified_by_module_from_name(&name.0);
         let type_params = self
             .parent
@@ -423,8 +444,7 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 let def_idx = StructDefinitionIndex(idx as u16);
                 let handle_idx = module.struct_def_at(def_idx).struct_handle;
                 let handle = module.struct_handle_at(handle_idx);
-                let view = StructHandleView::new(&module, handle);
-                let name = self.symbol_pool().make(view.name().as_str());
+                let name = self.symbol_pool().make(module.identifier_at(handle.name).as_str());
                 if let Some(entry) = self
                     .parent
                     .struct_table
@@ -453,15 +473,14 @@ impl<'env, 'translator> ModuleBuilder<'env, 'translator> {
                 let def_idx = FunctionDefinitionIndex(idx as u16);
                 let handle_idx = module.function_def_at(def_idx).function;
                 let handle = module.function_handle_at(handle_idx);
-                let view = FunctionHandleView::new(&module, handle);
-                let name_str = view.name().as_str();
+                let name_str = module.identifier_at(handle.name).as_str();
                 let name = if name_str == SCRIPT_BYTECODE_FUN_NAME {
                     // This is a pseudo script module, which has exactly one function. Determine
                     // the name of this function.
-                    self.parent.fun_table.iter().filter_map(|(k, _)| {
+                    self.parent.fun_table.iter().find_map(|(k, _)| {
                         if k.module_name == self.module_name
                         { Some(k.symbol) } else { None }
-                    }).next().expect("unexpected script with multiple or no functions")
+                    }).expect("unexpected script with multiple or no functions")
                 } else {
                     self.symbol_pool().make(name_str)
                 };

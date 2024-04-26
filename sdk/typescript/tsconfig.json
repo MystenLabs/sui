@@ -5,7 +5,16 @@
 		"module": "CommonJS",
 		"outDir": "dist/cjs",
 		"rootDir": "src",
-		"isolatedModules": true
+		"isolatedModules": true,
+		"plugins": [
+			{
+				"name": "@0no-co/graphqlsp",
+				"schema": "../../crates/sui-graphql-rpc/schema/current_progress_schema.graphql",
+				"tadaOutputLocation": "./src/graphql/generated/2024-01/tada-env.d.ts",
+				"trackFieldUsage": false,
+				"shouldCheckForColocatedFragments": false
+			}
+		]
 	},
 	"references": [{ "path": "../bcs" }]
 }

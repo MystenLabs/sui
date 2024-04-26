@@ -21,45 +21,6 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,
 };
 
-impl CompiledScript {
-    /// Serializes a `CompiledScript` into a binary. The mutable `Vec<u8>` will contain the
-    /// binary blob on return.
-    pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_for_version(None, binary)
-    }
-
-    /// Serialize into binary, at given version.
-    pub fn serialize_for_version(
-        &self,
-        bytecode_version: Option<u32>,
-        binary: &mut Vec<u8>,
-    ) -> Result<()> {
-        let version = bytecode_version.unwrap_or(VERSION_MAX);
-        validate_version(version)?;
-        let mut binary_data = BinaryData::from(binary.clone());
-        let mut ser = ScriptSerializer::new(version);
-        let mut temp = BinaryData::new();
-
-        ser.common.serialize_common_tables(&mut temp, self)?;
-        if temp.len() > TABLE_CONTENT_SIZE_MAX as usize {
-            bail!(
-                "table content size ({}) cannot exceed ({})",
-                temp.len(),
-                TABLE_CONTENT_SIZE_MAX
-            );
-        }
-        ser.common.serialize_header(&mut binary_data)?;
-        ser.common.serialize_table_indices(&mut binary_data)?;
-
-        binary_data.extend(temp.as_inner())?;
-
-        ser.serialize_main(&mut binary_data, self)?;
-
-        *binary = binary_data.into_inner();
-        Ok(())
-    }
-}
-
 fn write_as_uleb128<T1, T2>(binary: &mut BinaryData, x: T1, max: T2) -> Result<()>
 where
     T1: Into<u64>,
@@ -285,12 +246,6 @@ struct ModuleSerializer {
     friend_decls: (u32, u32),
 }
 
-/// Holds data to compute the header of a transaction script binary.
-#[derive(Debug)]
-struct ScriptSerializer {
-    common: CommonSerializer,
-}
-
 //
 // Helpers
 //
@@ -338,44 +293,6 @@ trait CommonTables {
     fn get_constant_pool(&self) -> &[Constant];
     fn get_signatures(&self) -> &[Signature];
     fn get_metadata(&self) -> &[Metadata];
-}
-
-impl CommonTables for CompiledScript {
-    fn get_module_handles(&self) -> &[ModuleHandle] {
-        &self.module_handles
-    }
-
-    fn get_struct_handles(&self) -> &[StructHandle] {
-        &self.struct_handles
-    }
-
-    fn get_function_handles(&self) -> &[FunctionHandle] {
-        &self.function_handles
-    }
-
-    fn get_function_instantiations(&self) -> &[FunctionInstantiation] {
-        &self.function_instantiations
-    }
-
-    fn get_identifiers(&self) -> &[Identifier] {
-        &self.identifiers
-    }
-
-    fn get_address_identifiers(&self) -> &[AccountAddress] {
-        &self.address_identifiers
-    }
-
-    fn get_constant_pool(&self) -> &[Constant] {
-        &self.constant_pool
-    }
-
-    fn get_signatures(&self) -> &[Signature] {
-        &self.signatures
-    }
-
-    fn get_metadata(&self) -> &[Metadata] {
-        &self.metadata
-    }
 }
 
 impl CommonTables for CompiledModule {
@@ -655,7 +572,8 @@ fn serialize_signature_token_single_node_impl(
             binary.push(SerializedType::STRUCT as u8)?;
             serialize_struct_handle_index(binary, idx)?;
         }
-        SignatureToken::StructInstantiation(idx, type_params) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, type_params) = &**struct_inst;
             binary.push(SerializedType::STRUCT_INST as u8)?;
             serialize_struct_handle_index(binary, idx)?;
             serialize_signature_size(binary, type_params.len())?;
@@ -777,7 +695,7 @@ fn serialize_instruction_inner(
         }
         Bytecode::LdU128(value) => {
             binary.push(Opcodes::LD_U128 as u8)?;
-            write_u128(binary, *value)
+            write_u128(binary, **value)
         }
         Bytecode::CastU8 => binary.push(Opcodes::CAST_U8 as u8),
         Bytecode::CastU64 => binary.push(Opcodes::CAST_U64 as u8),
@@ -955,7 +873,7 @@ fn serialize_instruction_inner(
         }
         Bytecode::LdU256(value) => {
             binary.push(Opcodes::LD_U256 as u8)?;
-            write_u256(binary, *value)
+            write_u256(binary, **value)
         }
         Bytecode::CastU16 => binary.push(Opcodes::CAST_U16 as u8),
         Bytecode::CastU32 => binary.push(Opcodes::CAST_U32 as u8),
@@ -1453,22 +1371,6 @@ impl ModuleSerializer {
             }
             self.friend_decls.1 = checked_calculate_table_size(binary, self.friend_decls.0)?;
         }
-        Ok(())
-    }
-}
-
-impl ScriptSerializer {
-    fn new(major_version: u32) -> ScriptSerializer {
-        ScriptSerializer {
-            common: CommonSerializer::new(major_version),
-        }
-    }
-
-    /// Serializes the main function.
-    fn serialize_main(&mut self, binary: &mut BinaryData, script: &CompiledScript) -> Result<()> {
-        serialize_ability_sets(binary, &script.type_parameters)?;
-        serialize_signature_index(binary, &script.parameters)?;
-        serialize_code_unit(self.common.major_version(), binary, &script.code)?;
         Ok(())
     }
 }

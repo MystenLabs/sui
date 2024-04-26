@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::ed25519::Ed25519KeyPair;
-use fastcrypto::traits::KeyPair;
+use fastcrypto::{ed25519::Ed25519KeyPair, traits::KeyPair};
 use fastcrypto_zkp::bn254::zk_login::{parse_jwks, OIDCProvider, ZkLoginInputs};
 use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
-    crypto::{get_key_pair, AccountKeyPair, PublicKey, Signature, SuiKeyPair},
+    crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
     error::{SuiError, UserInputError},
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
@@ -19,7 +19,7 @@ use sui_types::{
         AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionExpiration,
         TransactionKind,
     },
-    utils::{to_sender_signed_transaction, TestData},
+    utils::{load_test_vectors, to_sender_signed_transaction},
     zk_login_authenticator::ZkLoginAuthenticator,
     zk_login_util::DEFAULT_JWK_BYTES,
 };
@@ -395,9 +395,10 @@ async fn do_transaction_test_impl(
         .unwrap();
 
     post_sign_mutations(&mut transfer_transaction);
+    let socket_addr = make_socket_addr();
 
     let err = client
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(transfer_transaction.clone(), Some(socket_addr))
         .await
         .unwrap_err();
     err_check(&err);
@@ -424,10 +425,16 @@ async fn do_transaction_test_impl(
 
         let ct = CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
 
-        let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+        let err = client
+            .handle_certificate_v2(ct.clone(), Some(socket_addr))
+            .await
+            .unwrap_err();
         err_check(&err);
         epoch_store.clear_signature_cache();
-        let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+        let err = client
+            .handle_certificate_v2(ct.clone(), Some(socket_addr))
+            .await
+            .unwrap_err();
         err_check(&err);
     }
 }
@@ -452,15 +459,36 @@ async fn test_zklogin_transfer_with_bad_ephemeral_sig() {
     )
     .await;
 }
+#[sim_test]
+async fn test_zklogin_transfer_with_large_address_seed() {
+    telemetry_subscribers::init_for_testing();
+    let (object_ids, gas_object_ids, authority_state, _epoch_store, _, _, _server, client) =
+        setup_zklogin_network(|_| {}).await;
 
-fn zklogin_key_pair_and_inputs() -> Vec<(Ed25519KeyPair, ZkLoginInputs)> {
-    let key1 = Ed25519KeyPair::generate(&mut StdRng::from_seed([1; 32]));
-    let key2 = Ed25519KeyPair::generate(&mut StdRng::from_seed([2; 32]));
+    let ephemeral_key = Ed25519KeyPair::generate(&mut StdRng::from_seed([3; 32]));
 
-    let inputs1 = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap();
-    let inputs2 = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", "20794788559620669596206457022966176986688727876128223628113916380927502737911").unwrap();
+    let large_address_seed =
+        num_bigint::BigInt::from_bytes_be(num_bigint::Sign::Plus, &[1; 33]).to_string();
+    let zklogin = ZkLoginInputs::from_json("{\"proofPoints\":{\"a\":[\"7351610957585487046328875967050889651854514987235893782501043846344306437586\",\"15901581830174345085102528605366245320934422564305327249129736514949843983391\",\"1\"],\"b\":[[\"8511334686125322419369086121569737536249817670014553268281989325333085952301\",\"4879445774811020644521006463993914729416121646921376735430388611804034116132\"],[\"17435652898871739253945717312312680537810513841582909477368887889905134847157\",\"14885460127400879557124294989610467103783286587437961743305395373299049315863\"],[\"1\",\"0\"]],\"c\":[\"18935582624804960299209074901817240117999581542763303721451852621662183299378\",\"5367019427921492326304024952457820199970536888356564030410757345854117465786\",\"1\"]},\"issBase64Details\":{\"value\":\"wiaXNzIjoiaHR0cHM6Ly9pZC50d2l0Y2gudHYvb2F1dGgyIiw\",\"indexMod4\":2},\"headerBase64\":\"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6IjEifQ\"}", &large_address_seed).unwrap();
+    let sender = SuiAddress::generate(StdRng::from_seed([3; 32]));
+    let recipient = dbg_addr(2);
 
-    vec![(key1, inputs1), (key2, inputs2)]
+    let tx = init_zklogin_transfer(
+        &authority_state,
+        object_ids[2],
+        gas_object_ids[2],
+        recipient,
+        sender,
+        |_| {},
+        &ephemeral_key,
+        &zklogin,
+    )
+    .await;
+
+    assert!(client
+        .handle_transaction(tx, Some(make_socket_addr()))
+        .await
+        .is_err());
 }
 
 #[sim_test]
@@ -476,11 +504,12 @@ async fn zklogin_test_cached_proof_wrong_key() {
         _server,
         client,
     ) = setup_zklogin_network(|_| {}).await;
+    let socket_addr = make_socket_addr();
 
-    assert!(client
-        .handle_transaction(transfer_transaction)
-        .await
-        .is_ok());
+    let res = client
+        .handle_transaction(transfer_transaction, Some(socket_addr))
+        .await;
+    assert!(res.is_ok());
 
     /*
     assert_eq!(
@@ -493,8 +522,13 @@ async fn zklogin_test_cached_proof_wrong_key() {
     );
     */
 
-    let (ephemeral_key, zklogin) = &zklogin_key_pair_and_inputs()[0];
-    let sender = SuiAddress::try_from_padded(zklogin).unwrap();
+    let (skp, _eph_pk, zklogin) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let ephemeral_key = match skp {
+        SuiKeyPair::Ed25519(kp) => kp,
+        _ => panic!(),
+    };
+    let sender = SuiAddress::try_from_unpadded(zklogin).unwrap();
     let recipient = dbg_addr(2);
 
     let mut transfer_transaction2 = init_zklogin_transfer(
@@ -525,7 +559,7 @@ async fn zklogin_test_cached_proof_wrong_key() {
 
     // This tx should fail, but passes because we skip the ephemeral sig check when hitting the zklogin check!
     assert!(client
-        .handle_transaction(transfer_transaction2)
+        .handle_transaction(transfer_transaction2, Some(socket_addr))
         .await
         .is_err());
 
@@ -566,7 +600,7 @@ async fn do_zklogin_transaction_test(
     post_sign_mutations(&mut transfer_transaction);
 
     assert!(client
-        .handle_transaction(transfer_transaction)
+        .handle_transaction(transfer_transaction, Some(make_socket_addr()))
         .await
         .is_err());
 
@@ -617,8 +651,12 @@ async fn setup_zklogin_network(
     AuthorityServerHandle,
     NetworkAuthorityClient,
 ) {
-    let (ephemeral_key, zklogin) = &zklogin_key_pair_and_inputs()[0];
-
+    let (skp, _eph_pk, zklogin) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let ephemeral_key = match skp {
+        SuiKeyPair::Ed25519(kp) => kp,
+        _ => panic!(),
+    };
     let sender = SuiAddress::try_from_unpadded(zklogin).unwrap();
 
     let recipient = dbg_addr(2);
@@ -632,8 +670,7 @@ async fn setup_zklogin_network(
 
     let object_id = object_ids[0];
     let gas_object_id = gas_object_ids[0];
-    let jwks = "{\"keys\":[{\"alg\":\"RS256\",\"e\":\"AQAB\",\"kid\":\"1\",\"kty\":\"RSA\",\"n\":\"6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw\",\"use\":\"sig\"}]}";
-    let jwks = parse_jwks(jwks.as_bytes(), &OIDCProvider::Twitch).unwrap();
+    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Twitch).unwrap();
     let epoch_store = authority_state.epoch_store_for_testing();
     epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
         epoch: 0,
@@ -728,11 +765,87 @@ async fn init_zklogin_transfer(
     };
     let authenticator = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
         zklogin.clone(),
-        10,
+        2,
         signature,
     ));
     tx.data_mut_for_testing().tx_signatures_mut_for_testing()[0] = authenticator;
     tx
+}
+
+fn make_socket_addr() -> std::net::SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0)
+}
+
+#[tokio::test]
+async fn zklogin_txn_fail_if_missing_jwk() {
+    telemetry_subscribers::init_for_testing();
+
+    // Initialize an authorty state with some objects under a zklogin address.
+    let (skp, _eph_pk, zklogin) =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+    let ephemeral_key = match skp {
+        SuiKeyPair::Ed25519(kp) => kp,
+        _ => panic!(),
+    };
+    let sender = SuiAddress::try_from_unpadded(zklogin).unwrap();
+    let recipient = dbg_addr(2);
+    let objects: Vec<_> = (0..10).map(|_| (sender, ObjectID::random())).collect();
+    let gas_objects: Vec<_> = (0..10).map(|_| (sender, ObjectID::random())).collect();
+    let object_ids: Vec<_> = objects.iter().map(|(_, id)| *id).collect();
+    let gas_object_ids: Vec<_> = gas_objects.iter().map(|(_, id)| *id).collect();
+    let authority_state =
+        init_state_with_ids(objects.into_iter().chain(gas_objects).collect::<Vec<_>>()).await;
+
+    // Initialize an authenticator state with a Google JWK.
+    let jwks = parse_jwks(DEFAULT_JWK_BYTES, &OIDCProvider::Google).unwrap();
+    let epoch_store = authority_state.epoch_store_for_testing();
+    epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
+        epoch: 0,
+        round: 0,
+        new_active_jwks: jwks
+            .into_iter()
+            .map(|(jwk_id, jwk)| ActiveJwk {
+                jwk_id,
+                jwk,
+                epoch: 0,
+            })
+            .collect(),
+        authenticator_obj_initial_shared_version: 1.into(),
+    });
+
+    // Case 1: Submit a transaction with zklogin signature derived from a Twitch JWT should fail.
+    let txn1 = init_zklogin_transfer(
+        &authority_state,
+        object_ids[2],
+        gas_object_ids[2],
+        recipient,
+        sender,
+        |_| {},
+        ephemeral_key,
+        zklogin,
+    )
+    .await;
+    execute_transaction_assert_err(authority_state.clone(), txn1.clone(), object_ids.clone()).await;
+
+    // Initialize an authenticator state with Twitch's kid as "nosuckkey".
+    pub const BAD_JWK_BYTES: &[u8] = r#"{"keys":[{"alg":"RS256","e":"AQAB","kid":"nosuchkey","kty":"RSA","n":"6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw","use":"sig"}]}"#.as_bytes();
+    let jwks = parse_jwks(BAD_JWK_BYTES, &OIDCProvider::Twitch).unwrap();
+    epoch_store.update_authenticator_state(&AuthenticatorStateUpdate {
+        epoch: 0,
+        round: 0,
+        new_active_jwks: jwks
+            .into_iter()
+            .map(|(jwk_id, jwk)| ActiveJwk {
+                jwk_id,
+                jwk,
+                epoch: 0,
+            })
+            .collect(),
+        authenticator_obj_initial_shared_version: 1.into(),
+    });
+
+    // Case 2: Submit a transaction with zklogin signature derived from a Twitch JWT with kid "1" should fail.
+    execute_transaction_assert_err(authority_state, txn1, object_ids).await;
 }
 
 #[tokio::test]
@@ -795,34 +908,23 @@ async fn zk_multisig_test() {
         rgp,
     );
 
-    // Poof of concept for bypassing zklogin verification starts here.
     // Step 1. construct 2 zklogin signatures
-    // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
-
-    let file = std::fs::File::open("../sui-types/src/unit_tests/zklogin_test_vectors.json")
-        .expect("Unable to open file");
-    let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
-    let mut pks = vec![];
-    let mut kps_and_zklogin_inputs = vec![];
-    for test in test_datum {
-        let kp = SuiKeyPair::decode(&test.kp).unwrap();
-        let inputs = ZkLoginInputs::from_json(&test.zklogin_inputs, &test.address_seed).unwrap();
-        let pk_zklogin = PublicKey::from_zklogin_inputs(&inputs).unwrap();
-        pks.push(pk_zklogin);
-        kps_and_zklogin_inputs.push((kp, inputs));
-    }
-
+    let test_vectors =
+        &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1..];
     let mut zklogin_sigs = vec![];
-    for (kp, inputs) in kps_and_zklogin_inputs {
+    for (kp, _pk_zklogin, inputs) in test_vectors {
         let intent_message = IntentMessage::new(Intent::sui_transaction(), data.clone());
-        let eph_sig = Signature::new_secure(&intent_message, &kp);
-        let zklogin_sig =
-            GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(inputs, 10, eph_sig));
+        let eph_sig = Signature::new_secure(&intent_message, kp);
+        let zklogin_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            inputs.clone(),
+            2,
+            eph_sig,
+        ));
         zklogin_sigs.push(zklogin_sig);
     }
 
     // Step 2. Construct the fake multisig with the zklogin signatures.
-    let multisig = MultiSig::new(
+    let multisig = MultiSig::insecure_new(
         vec![
             zklogin_sigs[0].clone().to_compressed().unwrap(),
             zklogin_sigs[1].clone().to_compressed().unwrap(),
@@ -830,11 +932,17 @@ async fn zk_multisig_test() {
         3,
         multisig_pk,
     );
-
     let generic_sig = GenericSignature::MultiSig(multisig);
-
     let transfer_transaction = Transaction::from_generic_sig_data(data, vec![generic_sig]);
 
+    execute_transaction_assert_err(authority_state, transfer_transaction, vec![object_id]).await;
+}
+
+async fn execute_transaction_assert_err(
+    authority_state: Arc<AuthorityState>,
+    txn: Transaction,
+    object_ids: Vec<ObjectID>,
+) {
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
 
     let server = AuthorityServer::new_for_test(
@@ -848,14 +956,13 @@ async fn zk_multisig_test() {
     let client = NetworkAuthorityClient::connect(server_handle.address())
         .await
         .unwrap();
-
     let err = client
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(txn.clone(), Some(make_socket_addr()))
         .await;
 
     assert!(dbg!(err).is_err());
 
-    check_locks(authority_state.clone(), vec![object_id]).await;
+    check_locks(authority_state.clone(), object_ids).await;
 }
 
 #[tokio::test]
@@ -908,7 +1015,9 @@ async fn test_oversized_txn() {
         .await
         .unwrap();
 
-    let res = client.handle_transaction(txn).await;
+    let res = client
+        .handle_transaction(txn, Some(make_socket_addr()))
+        .await;
     // The txn should be rejected due to its size.
     assert!(res
         .err()
@@ -962,9 +1071,10 @@ async fn test_very_large_certificate() {
     let client = NetworkAuthorityClient::connect(server_handle.address())
         .await
         .unwrap();
+    let socket_addr = make_socket_addr();
 
     let auth_sig = client
-        .handle_transaction(transfer_transaction.clone())
+        .handle_transaction(transfer_transaction.clone(), Some(socket_addr))
         .await
         .unwrap()
         .status
@@ -994,7 +1104,7 @@ async fn test_very_large_certificate() {
         quorum_signature,
     );
 
-    let res = client.handle_certificate_v2(cert).await;
+    let res = client.handle_certificate_v2(cert, Some(socket_addr)).await;
     assert!(res.is_err());
     let err = res.err().unwrap();
     // The resulting error should be a RpcError with a message length too large.
@@ -1068,8 +1178,13 @@ async fn test_handle_certificate_errors() {
         &committee_1,
     )
     .unwrap();
+    let socket_addr = make_socket_addr();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(socket_addr))
+        .await
+        .unwrap_err();
+
     assert_matches!(
         err,
         SuiError::WrongEpoch {
@@ -1081,7 +1196,7 @@ async fn test_handle_certificate_errors() {
     // Test handle certificate with invalid user input
     let signed_transaction = VerifiedSignedTransaction::new(
         epoch_store.epoch(),
-        VerifiedTransaction::new_unchecked(transfer_transaction.clone()),
+        VerifiedTransaction::new_unchecked(transfer_transaction.clone().clone()),
         authority_state.name,
         &*authority_state.secret,
     );
@@ -1098,7 +1213,10 @@ async fn test_handle_certificate_errors() {
     )
     .unwrap();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(socket_addr))
+        .await
+        .unwrap_err();
 
     assert_matches!(
         err,
@@ -1115,7 +1233,10 @@ async fn test_handle_certificate_errors() {
     )
     .unwrap();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(socket_addr))
+        .await
+        .unwrap_err();
 
     assert_matches!(
         err,
@@ -1133,7 +1254,10 @@ async fn test_handle_certificate_errors() {
         &committee,
     )
     .unwrap();
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(socket_addr))
+        .await
+        .unwrap_err();
 
     assert_matches!(
         err,
@@ -1155,7 +1279,10 @@ async fn test_handle_certificate_errors() {
     )
     .unwrap();
 
-    let err = client.handle_certificate_v2(ct.clone()).await.unwrap_err();
+    let err = client
+        .handle_certificate_v2(ct.clone(), Some(socket_addr))
+        .await
+        .unwrap_err();
 
     assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
 }

@@ -6,27 +6,13 @@ const concepts = [
 	'concepts/components',
 	{
 		type: 'category',
-		label: 'Sui GraphQL RPC',
-		link: {
-			type: 'doc',
-			id: 'concepts/graphql-rpc',
-		},
-		items: [
-			'concepts/graphql-rpc/headers',
-			'concepts/graphql-rpc/variables',
-			'concepts/graphql-rpc/fragments',
-			'concepts/graphql-rpc/pagination',
-			'concepts/graphql-rpc/limits',
-		],
-	},
-	{
-		type: 'category',
 		label: 'App Developers',
 		link: {
 			type: 'doc',
 			id: 'concepts/app-devs',
 		},
 		items: [
+			'concepts/graphql-rpc',
 			{
 				type: 'category',
 				label: 'Object Model',
@@ -56,22 +42,16 @@ const concepts = [
 							type: 'doc',
 							id: 'concepts/dynamic-fields',
 						},
-						items: [
-							'concepts/dynamic-fields/dynamic-object-fields',
-							'concepts/dynamic-fields/tables-bags',
-						],
+						items: ['concepts/dynamic-fields/tables-bags'],
 					},
 					{
 						type: 'category',
 						label: 'Transfers',
 						link: {
 							type: 'doc',
-							id: 'concepts/dynamic-fields/transfers',
+							id: 'concepts/transfers',
 						},
-						items: [
-							'concepts/dynamic-fields/transfers/custom-rules',
-							'concepts/dynamic-fields/transfers/transfer-to-object',
-						],
+						items: ['concepts/transfers/custom-rules', 'concepts/transfers/transfer-to-object'],
 					},
 					'concepts/events',
 					'concepts/versioning',
@@ -92,7 +72,7 @@ const concepts = [
 					'concepts/sui-move-concepts/one-time-witness',
 					{
 						type: 'category',
-						label: 'Packages',
+						label: 'Package Upgrades',
 						link: {
 							type: 'doc',
 							id: 'concepts/sui-move-concepts/packages',
@@ -100,22 +80,6 @@ const concepts = [
 						items: [
 							'concepts/sui-move-concepts/packages/upgrade',
 							'concepts/sui-move-concepts/packages/custom-policies',
-						],
-					},
-					{
-						type: 'category',
-						label: 'Patterns',
-						link: {
-							type: 'doc',
-							id: 'concepts/sui-move-concepts/patterns',
-						},
-						items: [
-							'concepts/sui-move-concepts/patterns/capabilities',
-							'concepts/sui-move-concepts/patterns/witness',
-							'concepts/sui-move-concepts/patterns/transferrable-witness',
-							'concepts/sui-move-concepts/patterns/hot-potato',
-							'concepts/sui-move-concepts/patterns/id-pointer',
-							'concepts/sui-move-concepts/patterns/app-extensions',
 						],
 					},
 					'concepts/sui-move-concepts/conventions',
@@ -159,16 +123,9 @@ const concepts = [
 					'concepts/cryptography/transaction-auth/intent-signing',
 				],
 			},
-			{
-				type: 'category',
-				label: 'zkLogin',
-				link: {
-					type: 'doc',
-					id: 'concepts/cryptography/zklogin',
-				},
-				items: ['concepts/cryptography/zklogin/zklogin-example'],
-			},
-			{
+			'concepts/cryptography/zklogin',
+			'concepts/cryptography/system/checkpoint-verification',
+			/*{
 				type: 'category',
 				label: 'System',
 				link: {
@@ -180,7 +137,7 @@ const concepts = [
 					'concepts/cryptography/system/intents-for-validation',
 					'concepts/cryptography/system/checkpoint-verification',
 				],
-			},
+			},*/
 		],
 	},
 	{
@@ -193,7 +150,7 @@ const concepts = [
 		items: [
 			'concepts/sui-architecture/high-level',
 			'concepts/sui-architecture/sui-security',
-			'concepts/transactions/transaction-lifecycle',
+			'concepts/sui-architecture/transaction-lifecycle',
 			'concepts/sui-architecture/consensus',
 			'concepts/sui-architecture/indexer-functions',
 			'concepts/sui-architecture/epochs',
@@ -213,12 +170,13 @@ const concepts = [
 			'concepts/tokenomics/proof-of-stake',
 			'concepts/tokenomics/validators-staking',
 			'concepts/tokenomics/staking-unstaking',
-			'concepts/tokenomics/sui-token',
+			'concepts/tokenomics/sui-coin',
 			'concepts/tokenomics/sui-bridging',
 			'concepts/tokenomics/storage-fund',
 			'concepts/tokenomics/gas-pricing',
 			'concepts/tokenomics/gas-in-sui',
 		],
 	},
+	'concepts/research-papers',
 ];
 module.exports = concepts;

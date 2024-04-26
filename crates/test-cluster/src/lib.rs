@@ -12,7 +12,7 @@ use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
+use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{NodeConfig, PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::authority_aggregator::AuthorityAggregator;
@@ -50,6 +50,7 @@ use sui_types::object::Object;
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 use sui_types::transaction::{
     CertifiedTransaction, Transaction, TransactionData, TransactionDataAPI, TransactionKind,
 };
@@ -166,6 +167,13 @@ impl TestCluster {
             .collect()
     }
 
+    pub fn all_validator_handles(&self) -> Vec<SuiNodeHandle> {
+        self.swarm
+            .validator_nodes()
+            .map(|n| n.get_node_handle().unwrap())
+            .collect()
+    }
+
     pub fn get_validator_pubkeys(&self) -> Vec<AuthorityName> {
         self.swarm.active_validators().map(|v| v.name()).collect()
     }
@@ -241,7 +249,7 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .state()
-            .db()
+            .get_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
             .unwrap()
             .unwrap()
@@ -267,9 +275,11 @@ impl TestCluster {
             .fullnode_handle
             .sui_node
             .with(|node| node.subscribe_to_epoch_change());
-        timeout(timeout_dur, async move {
+        let mut state = Option::None;
+        timeout(timeout_dur, async {
             while let Ok(system_state) = epoch_rx.recv().await {
                 info!("received epoch {}", system_state.epoch());
+                state = Some(system_state.clone());
                 match target_epoch {
                     Some(target_epoch) if system_state.epoch() >= target_epoch => {
                         return system_state;
@@ -283,7 +293,12 @@ impl TestCluster {
             unreachable!("Broken reconfig channel");
         })
         .await
-        .expect("Timed out waiting for cluster to target epoch")
+        .unwrap_or_else(|_| {
+            if let Some(state) = state {
+                panic!("Timed out waiting for cluster to reach epoch {target_epoch:?}. Current epoch: {}", state.epoch());
+            }
+            panic!("Timed out waiting for cluster to target epoch {target_epoch:?}")
+        })
     }
 
     pub async fn wait_for_run_with_range_shutdown_signal(&self) -> Option<RunWithRange> {
@@ -470,7 +485,7 @@ impl TestCluster {
                 while let Some(tx) = txns.next().await {
                     let digest = *tx.transaction_digest();
                     let tx = state
-                        .database
+                        .get_cache_reader()
                         .get_transaction_block(&digest)
                         .unwrap()
                         .unwrap();
@@ -563,9 +578,13 @@ impl TestCluster {
     pub async fn create_certificate(
         &self,
         tx: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> anyhow::Result<CertifiedTransaction> {
         let agg = self.authority_aggregator();
-        Ok(agg.process_transaction(tx).await?.into_cert_for_testing())
+        Ok(agg
+            .process_transaction(tx, client_addr)
+            .await?
+            .into_cert_for_testing())
     }
 
     /// Execute a transaction on specified list of validators, and bypassing authority aggregator.
@@ -579,7 +598,10 @@ impl TestCluster {
         pubkeys: &[AuthorityName],
     ) -> anyhow::Result<(TransactionEffects, TransactionEvents)> {
         let agg = self.authority_aggregator();
-        let certificate = agg.process_transaction(tx).await?.into_cert_for_testing();
+        let certificate = agg
+            .process_transaction(tx, None)
+            .await?
+            .into_cert_for_testing();
         let replies = loop {
             let futures: Vec<_> = agg
                 .authority_clients
@@ -593,7 +615,7 @@ impl TestCluster {
                 })
                 .map(|client| {
                     let cert = certificate.clone();
-                    async move { client.handle_certificate_v2(cert).await }
+                    async move { client.handle_certificate_v2(cert, None).await }
                 })
                 .collect();
 
@@ -626,6 +648,31 @@ impl TestCluster {
             all_effects.into_values().next().unwrap(),
             all_events.into_values().next().unwrap(),
         ))
+    }
+
+    /// This call sends some funds from the seeded address to the funding
+    /// address for the given amount and returns the gas object ref. This
+    /// is useful to construct transactions from the funding address.
+    pub async fn fund_address_and_return_gas(
+        &self,
+        rgp: u64,
+        amount: Option<u64>,
+        funding_address: SuiAddress,
+    ) -> ObjectRef {
+        let context = &self.wallet;
+        let (sender, gas) = context.get_one_gas_object().await.unwrap().unwrap();
+        let tx = context.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas, rgp)
+                .transfer_sui(amount, funding_address)
+                .build(),
+        );
+        context.execute_transaction_must_succeed(tx).await;
+
+        context
+            .get_one_gas_object_owned_by_address(funding_address)
+            .await
+            .unwrap()
+            .unwrap()
     }
 
     #[cfg(msim)]
@@ -718,9 +765,11 @@ pub struct TestClusterBuilder {
     jwk_fetch_interval: Option<Duration>,
     config_dir: Option<PathBuf>,
     default_jwks: bool,
-    overload_threshold_config: Option<OverloadThresholdConfig>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
+    fullnode_policy_config: Option<PolicyConfig>,
+    fullnode_fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl TestClusterBuilder {
@@ -740,9 +789,11 @@ impl TestClusterBuilder {
             jwk_fetch_interval: None,
             config_dir: None,
             default_jwks: false,
-            overload_threshold_config: None,
+            authority_overload_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
+            fullnode_policy_config: None,
+            fullnode_fw_config: None,
         }
     }
 
@@ -750,6 +801,16 @@ impl TestClusterBuilder {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
         }
+        self
+    }
+
+    pub fn with_fullnode_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.fullnode_policy_config = config;
+        self
+    }
+
+    pub fn with_fullnode_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fullnode_fw_config = config;
         self
     }
 
@@ -888,9 +949,9 @@ impl TestClusterBuilder {
         self
     }
 
-    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
+    pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
         assert!(self.network_config.is_none());
-        self.overload_threshold_config = Some(config);
+        self.authority_overload_config = Some(config);
         self
     }
 
@@ -953,7 +1014,7 @@ impl TestClusterBuilder {
             .unwrap();
 
         let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
-        let wallet = WalletContext::new(&wallet_conf, None, None).await.unwrap();
+        let wallet = WalletContext::new(&wallet_conf, None, None).unwrap();
 
         TestCluster {
             swarm,
@@ -980,7 +1041,9 @@ impl TestClusterBuilder {
                     .unwrap_or(self.validator_supported_protocol_versions_config.clone()),
             )
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
-            .with_fullnode_run_with_range(self.fullnode_run_with_range);
+            .with_fullnode_run_with_range(self.fullnode_run_with_range)
+            .with_fullnode_policy_config(self.fullnode_policy_config.clone())
+            .with_fullnode_fw_config(self.fullnode_fw_config.clone());
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);
@@ -990,8 +1053,8 @@ impl TestClusterBuilder {
             builder = builder.with_network_config(network_config);
         }
 
-        if let Some(overload_threshold_config) = self.overload_threshold_config.take() {
-            builder = builder.with_overload_threshold_config(overload_threshold_config);
+        if let Some(authority_overload_config) = self.authority_overload_config.take() {
+            builder = builder.with_authority_overload_config(authority_overload_config);
         }
 
         if let Some(fullnode_rpc_port) = self.fullnode_rpc_port {

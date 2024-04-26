@@ -3,14 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{borrow_graph::BorrowGraph, error::VMError};
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        empty_module, Ability, AbilitySet, CompiledModule, FieldInstantiation,
-        FieldInstantiationIndex, FunctionHandleIndex, FunctionInstantiation,
-        FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
-        StructDefInstantiation, StructDefInstantiationIndex, StructDefinitionIndex, TableIndex,
-    },
+use move_binary_format::file_format::{
+    empty_module, Ability, AbilitySet, CompiledModule, FieldInstantiation, FieldInstantiationIndex,
+    FunctionHandleIndex, FunctionInstantiation, FunctionInstantiationIndex, Signature,
+    SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
+    StructDefinitionIndex, TableIndex,
 };
 use std::{
     collections::{HashMap, HashSet},
@@ -55,7 +52,7 @@ impl AbstractValue {
         assert!(
             match token {
                 SignatureToken::Struct(_)
-                | SignatureToken::StructInstantiation(_, _)
+                | SignatureToken::StructInstantiation(_)
                 | SignatureToken::Reference(_)
                 | SignatureToken::MutableReference(_)
                 | SignatureToken::Signer
@@ -112,7 +109,7 @@ impl AbstractValue {
     fn is_generic_token(token: &SignatureToken) -> bool {
         match token {
             SignatureToken::TypeParameter(_) => true,
-            SignatureToken::StructInstantiation(_, _) => true,
+            SignatureToken::StructInstantiation(_) => true,
             SignatureToken::Reference(tok) | SignatureToken::MutableReference(tok) => {
                 Self::is_generic_token(tok)
             }

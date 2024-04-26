@@ -27,6 +27,9 @@ CompiledPackageInfo {
         silence_warnings: false,
         warnings_are_errors: false,
         additional_named_addresses: {},
-        no_lint: false,
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
     },
 }

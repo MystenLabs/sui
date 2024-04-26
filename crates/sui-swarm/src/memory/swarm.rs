@@ -13,8 +13,9 @@ use std::{
     ops,
     path::{Path, PathBuf},
 };
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
-use sui_config::node::{DBCheckpointConfig, OverloadThresholdConfig, RunWithRange};
+use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
 use sui_config::NodeConfig;
 use sui_macros::nondeterministic;
 use sui_node::SuiNodeHandle;
@@ -28,6 +29,7 @@ use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::AuthorityName;
 use sui_types::object::Object;
 use tempfile::TempDir;
+use tracing::info;
 
 pub struct SwarmBuilder<R = OsRng> {
     rng: R,
@@ -46,9 +48,11 @@ pub struct SwarmBuilder<R = OsRng> {
     db_checkpoint_config: DBCheckpointConfig,
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
-    overload_threshold_config: Option<OverloadThresholdConfig>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
     fullnode_run_with_range: Option<RunWithRange>,
+    fullnode_policy_config: Option<PolicyConfig>,
+    fullnode_fw_config: Option<RemoteFirewallConfig>,
 }
 
 impl SwarmBuilder {
@@ -69,9 +73,11 @@ impl SwarmBuilder {
             db_checkpoint_config: DBCheckpointConfig::default(),
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
-            overload_threshold_config: None,
+            authority_overload_config: None,
             data_ingestion_dir: None,
             fullnode_run_with_range: None,
+            fullnode_policy_config: None,
+            fullnode_fw_config: None,
         }
     }
 }
@@ -94,9 +100,11 @@ impl<R> SwarmBuilder<R> {
             db_checkpoint_config: self.db_checkpoint_config,
             jwk_fetch_interval: self.jwk_fetch_interval,
             num_unpruned_validators: self.num_unpruned_validators,
-            overload_threshold_config: self.overload_threshold_config,
+            authority_overload_config: self.authority_overload_config,
             data_ingestion_dir: self.data_ingestion_dir,
             fullnode_run_with_range: self.fullnode_run_with_range,
+            fullnode_policy_config: self.fullnode_policy_config,
+            fullnode_fw_config: self.fullnode_fw_config,
         }
     }
 
@@ -218,12 +226,12 @@ impl<R> SwarmBuilder<R> {
         self
     }
 
-    pub fn with_overload_threshold_config(
+    pub fn with_authority_overload_config(
         mut self,
-        overload_threshold_config: OverloadThresholdConfig,
+        authority_overload_config: AuthorityOverloadConfig,
     ) -> Self {
         assert!(self.network_config.is_none());
-        self.overload_threshold_config = Some(overload_threshold_config);
+        self.authority_overload_config = Some(authority_overload_config);
         self
     }
 
@@ -236,6 +244,16 @@ impl<R> SwarmBuilder<R> {
         if let Some(run_with_range) = run_with_range {
             self.fullnode_run_with_range = Some(run_with_range);
         }
+        self
+    }
+
+    pub fn with_fullnode_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.fullnode_policy_config = config;
+        self
+    }
+
+    pub fn with_fullnode_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.fullnode_fw_config = config;
         self
     }
 
@@ -273,9 +291,9 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                 config_builder = config_builder.with_jwk_fetch_interval(jwk_fetch_interval);
             }
 
-            if let Some(overload_threshold_config) = self.overload_threshold_config {
+            if let Some(authority_overload_config) = self.authority_overload_config {
                 config_builder =
-                    config_builder.with_overload_threshold_config(overload_threshold_config);
+                    config_builder.with_authority_overload_config(authority_overload_config);
             }
 
             if let Some(path) = self.data_ingestion_dir {
@@ -295,13 +313,21 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
         let mut nodes: HashMap<_, _> = network_config
             .validator_configs()
             .iter()
-            .map(|config| (config.protocol_public_key(), Node::new(config.to_owned())))
+            .map(|config| {
+                info!(
+                    "SwarmBuilder configuring validator with name {}",
+                    config.protocol_public_key()
+                );
+                (config.protocol_public_key(), Node::new(config.to_owned()))
+            })
             .collect();
 
         let mut fullnode_config_builder = FullnodeConfigBuilder::new()
             .with_config_directory(dir.as_ref().into())
             .with_db_checkpoint_config(self.db_checkpoint_config.clone())
-            .with_run_with_range(self.fullnode_run_with_range);
+            .with_run_with_range(self.fullnode_run_with_range)
+            .with_policy_config(self.fullnode_policy_config)
+            .with_fw_config(self.fullnode_fw_config);
         if let Some(spvc) = &self.fullnode_supported_protocol_versions_config {
             let supported_versions = match spvc {
                 ProtocolVersionsConfig::Default => SupportedProtocolVersions::SYSTEM_DEFAULT,
@@ -326,6 +352,10 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     }
                 }
                 let config = builder.build(&mut OsRng, &network_config);
+                info!(
+                    "SwarmBuilder configuring full node with name {}",
+                    config.protocol_public_key()
+                );
                 nodes.insert(config.protocol_public_key(), Node::new(config));
             });
         }

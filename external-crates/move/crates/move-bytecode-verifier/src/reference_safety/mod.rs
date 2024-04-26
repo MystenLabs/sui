@@ -11,8 +11,7 @@
 mod abstract_state;
 
 use crate::{
-    absint::{AbstractInterpreter, TransferFunctions},
-    meter::{Meter, Scope},
+    absint::{AbstractInterpreter, FunctionContext, TransferFunctions},
     reference_safety::abstract_state::{
         STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
     },
@@ -20,14 +19,14 @@ use crate::{
 use abstract_state::{AbstractState, AbstractValue};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, FunctionDefinitionIndex, FunctionHandle, IdentifierIndex,
         SignatureIndex, SignatureToken, StructDefinition, StructFieldInformation,
     },
-    safe_assert, safe_unwrap, safe_unwrap_err,
+    safe_assert, safe_unwrap, safe_unwrap_err, CompiledModule,
 };
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::{
     collections::{BTreeSet, HashMap},
@@ -35,21 +34,21 @@ use std::{
 };
 
 struct ReferenceSafetyAnalysis<'a> {
-    resolver: &'a BinaryIndexedView<'a>,
-    function_view: &'a FunctionView<'a>,
+    module: &'a CompiledModule,
+    function_context: &'a FunctionContext<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     stack: AbstractStack<AbstractValue>,
 }
 
 impl<'a> ReferenceSafetyAnalysis<'a> {
     fn new(
-        resolver: &'a BinaryIndexedView<'a>,
-        function_view: &'a FunctionView<'a>,
+        module: &'a CompiledModule,
+        function_context: &'a FunctionContext<'a>,
         name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
     ) -> Self {
         Self {
-            resolver,
-            function_view,
+            module,
+            function_context,
             name_def_map,
             stack: AbstractStack::new(),
         }
@@ -67,15 +66,15 @@ impl<'a> ReferenceSafetyAnalysis<'a> {
 }
 
 pub(crate) fn verify<'a>(
-    resolver: &'a BinaryIndexedView<'a>,
-    function_view: &FunctionView,
+    module: &'a CompiledModule,
+    function_context: &FunctionContext,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let initial_state = AbstractState::new(function_view);
+    let initial_state = AbstractState::new(function_context);
 
-    let mut verifier = ReferenceSafetyAnalysis::new(resolver, function_view, name_def_map);
-    verifier.analyze_function(initial_state, function_view, meter)
+    let mut verifier = ReferenceSafetyAnalysis::new(module, function_context, name_def_map);
+    verifier.analyze_function(initial_state, function_context, meter)
 }
 
 fn call(
@@ -83,9 +82,9 @@ fn call(
     state: &mut AbstractState,
     offset: CodeOffset,
     function_handle: &FunctionHandle,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
-    let parameters = verifier.resolver.signature_at(function_handle.parameters);
+    let parameters = verifier.module.signature_at(function_handle.parameters);
     let arguments = parameters
         .0
         .iter()
@@ -95,8 +94,8 @@ fn call(
 
     let acquired_resources = match verifier.name_def_map.get(&function_handle.name) {
         Some(idx) => {
-            let func_def = verifier.resolver.function_def_at(*idx)?;
-            let fh = verifier.resolver.function_handle_at(func_def.function);
+            let func_def = verifier.module.function_def_at(*idx);
+            let fh = verifier.module.function_handle_at(func_def.function);
             if function_handle == fh {
                 func_def.acquires_global_resources.iter().cloned().collect()
             } else {
@@ -105,7 +104,7 @@ fn call(
         }
         None => BTreeSet::new(),
     };
-    let return_ = verifier.resolver.signature_at(function_handle.return_);
+    let return_ = verifier.module.signature_at(function_handle.return_);
     let values = state.call(offset, arguments, &acquired_resources, return_, meter)?;
     for value in values {
         verifier.push(value)?
@@ -146,7 +145,7 @@ fn vec_element_type(
     verifier: &mut ReferenceSafetyAnalysis,
     idx: SignatureIndex,
 ) -> PartialVMResult<SignatureToken> {
-    match verifier.resolver.signature_at(idx).0.first() {
+    match verifier.module.signature_at(idx).0.first() {
         Some(ty) => Ok(ty.clone()),
         None => Err(PartialVMError::new(
             StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -159,7 +158,7 @@ fn execute_inner(
     state: &mut AbstractState,
     bytecode: &Bytecode,
     offset: CodeOffset,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
 ) -> PartialVMResult<()> {
     meter.add(Scope::Function, STEP_BASE_COST)?;
     meter.add_items(Scope::Function, STEP_PER_LOCAL_COST, state.local_count())?;
@@ -221,9 +220,7 @@ fn execute_inner(
             verifier.push(value)?
         }
         Bytecode::MutBorrowFieldGeneric(field_inst_index) => {
-            let field_inst = verifier
-                .resolver
-                .field_instantiation_at(*field_inst_index)?;
+            let field_inst = verifier.module.field_instantiation_at(*field_inst_index);
             let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
             let value = state.borrow_field(offset, true, id, field_inst.handle)?;
             verifier.push(value)?
@@ -234,9 +231,7 @@ fn execute_inner(
             verifier.push(value)?
         }
         Bytecode::ImmBorrowFieldGeneric(field_inst_index) => {
-            let field_inst = verifier
-                .resolver
-                .field_instantiation_at(*field_inst_index)?;
+            let field_inst = verifier.module.field_instantiation_at(*field_inst_index);
             let id = safe_unwrap!(safe_unwrap_err!(verifier.stack.pop()).ref_id());
             let value = state.borrow_field(offset, false, id, field_inst.handle)?;
             verifier.push(value)?
@@ -249,7 +244,7 @@ fn execute_inner(
         }
         Bytecode::MutBorrowGlobalGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.module.struct_instantiation_at(*idx);
             let value = state.borrow_global(offset, true, struct_inst.def)?;
             verifier.push(value)?
         }
@@ -260,7 +255,7 @@ fn execute_inner(
         }
         Bytecode::ImmBorrowGlobalGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.module.struct_instantiation_at(*idx);
             let value = state.borrow_global(offset, false, struct_inst.def)?;
             verifier.push(value)?
         }
@@ -271,24 +266,24 @@ fn execute_inner(
         }
         Bytecode::MoveFromGenericDeprecated(idx) => {
             safe_assert!(safe_unwrap_err!(verifier.stack.pop()).is_value());
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
+            let struct_inst = verifier.module.struct_instantiation_at(*idx);
             let value = state.move_from(offset, struct_inst.def)?;
             verifier.push(value)?
         }
 
         Bytecode::Call(idx) => {
-            let function_handle = verifier.resolver.function_handle_at(*idx);
+            let function_handle = verifier.module.function_handle_at(*idx);
             call(verifier, state, offset, function_handle, meter)?
         }
         Bytecode::CallGeneric(idx) => {
-            let func_inst = verifier.resolver.function_instantiation_at(*idx);
-            let function_handle = verifier.resolver.function_handle_at(func_inst.handle);
+            let func_inst = verifier.module.function_instantiation_at(*idx);
+            let function_handle = verifier.module.function_handle_at(func_inst.handle);
             call(verifier, state, offset, function_handle, meter)?
         }
 
         Bytecode::Ret => {
             let mut return_values = vec![];
-            for _ in 0..verifier.function_view.return_().len() {
+            for _ in 0..verifier.function_context.return_().len() {
                 return_values.push(safe_unwrap_err!(verifier.stack.pop()));
             }
             return_values.reverse();
@@ -328,7 +323,7 @@ fn execute_inner(
         Bytecode::LdU128(_) => verifier.push(state.value_for(&SignatureToken::U128))?,
         Bytecode::LdU256(_) => verifier.push(state.value_for(&SignatureToken::U256))?,
         Bytecode::LdConst(idx) => {
-            let signature = &verifier.resolver.constant_at(*idx).type_;
+            let signature = &verifier.module.constant_at(*idx).type_;
             verifier.push(state.value_for(signature))?
         }
 
@@ -355,21 +350,21 @@ fn execute_inner(
         }
 
         Bytecode::Pack(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.module.struct_def_at(*idx);
             pack(verifier, struct_def)?
         }
         Bytecode::PackGeneric(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.module.struct_instantiation_at(*idx);
+            let struct_def = verifier.module.struct_def_at(struct_inst.def);
             pack(verifier, struct_def)?
         }
         Bytecode::Unpack(idx) => {
-            let struct_def = verifier.resolver.struct_def_at(*idx)?;
+            let struct_def = verifier.module.struct_def_at(*idx);
             unpack(verifier, struct_def)?
         }
         Bytecode::UnpackGeneric(idx) => {
-            let struct_inst = verifier.resolver.struct_instantiation_at(*idx)?;
-            let struct_def = verifier.resolver.struct_def_at(struct_inst.def)?;
+            let struct_inst = verifier.module.struct_instantiation_at(*idx);
+            let struct_def = verifier.module.struct_def_at(struct_inst.def);
             unpack(verifier, struct_def)?
         }
 
@@ -444,7 +439,7 @@ impl<'a> TransferFunctions for ReferenceSafetyAnalysis<'a> {
         bytecode: &Bytecode,
         index: CodeOffset,
         last_index: CodeOffset,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
         execute_inner(self, state, bytecode, index, meter)?;
         if index == last_index {

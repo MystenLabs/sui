@@ -18,18 +18,18 @@ use crate::{
     editions::Flavor,
     expansion::ast::AbilitySet,
     hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
-    parser::ast::{Ability_, StructName},
+    parser::ast::{Ability_, DatatypeName},
     shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
 use std::collections::BTreeMap;
 
 use super::{
-    AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, CLOCK_MODULE_NAME,
-    DENY_LIST_CREATE, DENY_LIST_MODULE_NAME, ID_LEAK_DIAG, OBJECT_MODULE_NAME,
-    OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE, SUI_ADDR_NAME,
-    SUI_CLOCK_CREATE, SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE, SUI_SYSTEM_MODULE_NAME,
-    UID_TYPE_NAME,
+    AUTHENTICATOR_STATE_CREATE, AUTHENTICATOR_STATE_MODULE_NAME, BRIDGE_ADDR_NAME, BRIDGE_CREATE,
+    BRIDGE_MODULE_NAME, CLOCK_MODULE_NAME, DENY_LIST_CREATE, DENY_LIST_MODULE_NAME, ID_LEAK_DIAG,
+    OBJECT_MODULE_NAME, OBJECT_NEW_UID_FROM_HASH, RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE,
+    SUI_ADDR_NAME, SUI_CLOCK_CREATE, SUI_SYSTEM_ADDR_NAME, SUI_SYSTEM_CREATE,
+    SUI_SYSTEM_MODULE_NAME, UID_TYPE_NAME,
 };
 
 pub const FRESH_ID_FUNCTIONS: &[(Symbol, Symbol, Symbol)] = &[
@@ -55,6 +55,7 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
         RANDOMNESS_STATE_CREATE,
     ),
     (SUI_ADDR_NAME, DENY_LIST_MODULE_NAME, DENY_LIST_CREATE),
+    (BRIDGE_ADDR_NAME, BRIDGE_MODULE_NAME, BRIDGE_CREATE),
 ];
 
 //**************************************************************************************************
@@ -63,7 +64,7 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
 
 pub struct IDLeakVerifier;
 pub struct IDLeakVerifierAI<'a> {
-    declared_abilities: &'a UniqueMap<StructName, AbilitySet>,
+    declared_abilities: &'a UniqueMap<DatatypeName, AbilitySet>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -118,7 +119,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             }
         }
 
-        let declared_abilities = context.struct_declared_abilities.get(module).unwrap();
+        let declared_abilities = context.datatype_declared_abilities.get(module).unwrap();
         Some(IDLeakVerifierAI { declared_abilities })
     }
 }

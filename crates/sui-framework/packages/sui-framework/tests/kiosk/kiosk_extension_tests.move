@@ -3,11 +3,8 @@
 
 #[test_only]
 module sui::kiosk_marketplace_ext {
-    use sui::bag;
     use sui::sui::SUI;
-    use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID};
-    use sui::tx_context::TxContext;
+    use sui::coin::Coin;
     use sui::kiosk_extension as ext;
     use sui::kiosk::{Self, KioskOwnerCap, Kiosk, PurchaseCap};
     use sui::transfer_policy::{Self as policy, TransferPolicy, TransferRequest};
@@ -22,10 +19,10 @@ module sui::kiosk_marketplace_ext {
     const ENotInstalled: u64 = 3;
 
     /// The Extension Witness.
-    struct Ext<phantom Market> has drop {}
+    public struct Ext<phantom Market> has drop {}
 
     /// A Bid on an item of type `T`.
-    struct Bid<phantom T> has copy, store, drop {}
+    public struct Bid<phantom T> has copy, store, drop {}
 
     /// Add the `Marketplace` extension to the given `Kiosk`.
     ///
@@ -42,14 +39,10 @@ module sui::kiosk_marketplace_ext {
     public fun bid<Market, T: key + store>(
         kiosk: &mut Kiosk, cap: &KioskOwnerCap, bid: Coin<SUI>
     ) {
-        assert!(kiosk::has_access(kiosk, cap), ENotOwner);
+        assert!(kiosk.has_access(cap), ENotOwner);
         assert!(ext::is_installed<Ext<Market>>(kiosk), ENotInstalled);
 
-        bag::add(
-            ext::storage_mut(Ext<Market> {}, kiosk),
-            Bid<T> {},
-            bid
-        );
+        ext::storage_mut(Ext<Market> {}, kiosk).add(Bid<T> {}, bid);
     }
 
     /// Collection bidding: offer the `T` and receive the bid.
@@ -60,18 +53,15 @@ module sui::kiosk_marketplace_ext {
         policy: &TransferPolicy<T>,
         lock: bool
     ): (TransferRequest<T>, TransferRequest<Market>) {
-        let bid: Coin<SUI> = bag::remove(
-            ext::storage_mut(Ext<Market> {}, destination),
-            Bid<T> {}
-        );
+        let bid: Coin<SUI> = ext::storage_mut(Ext<Market> {}, destination).remove(Bid<T> {});
 
         // form the request while we have all the data (not yet consumed)
         let market_request = policy::new_request(
-            kiosk::purchase_cap_item(&purchase_cap), coin::value(&bid), object::id(source)
+            kiosk::purchase_cap_item(&purchase_cap), bid.value(), object::id(source)
         );
 
         assert!(kiosk::purchase_cap_kiosk(&purchase_cap) == object::id(source), EIncorrectKiosk);
-        assert!(kiosk::purchase_cap_min_price(&purchase_cap) <= coin::value(&bid), EIncorrectAmount);
+        assert!(kiosk::purchase_cap_min_price(&purchase_cap) <= bid.value(), EIncorrectAmount);
 
         let (item, request) = kiosk::purchase_with_cap(source, purchase_cap, bid);
 
@@ -92,15 +82,9 @@ module sui::kiosk_marketplace_ext {
     public fun list<Market, T: key + store>(
         kiosk: &mut Kiosk, cap: &KioskOwnerCap, item_id: ID, price: u64, ctx: &mut TxContext
     ) {
-        let purchase_cap = kiosk::list_with_purchase_cap<T>(
-            kiosk, cap, item_id, price, ctx
-        );
+        let purchase_cap = kiosk.list_with_purchase_cap<T>(cap, item_id, price, ctx);
 
-        bag::add(
-            ext::storage_mut(Ext<Market> {}, kiosk),
-            item_id,
-            purchase_cap
-        );
+        ext::storage_mut(Ext<Market> {}, kiosk).add(item_id, purchase_cap);
     }
 
     /// Purchase an item from the Kiosk while following the Marketplace policy.
@@ -109,14 +93,11 @@ module sui::kiosk_marketplace_ext {
         item_id: ID,
         payment: Coin<SUI>,
     ): (T, TransferRequest<T>, TransferRequest<Market>) {
-        let purchase_cap: PurchaseCap<T> = bag::remove(
-            ext::storage_mut(Ext<Market> {}, kiosk),
-            item_id
-        );
+        let purchase_cap: PurchaseCap<T> = ext::storage_mut(Ext<Market> {}, kiosk).remove(item_id);
 
-        assert!(coin::value(&payment) == kiosk::purchase_cap_min_price(&purchase_cap), EIncorrectAmount);
-        let market_request = policy::new_request(item_id, coin::value(&payment), object::id(kiosk));
-        let (item, request) = kiosk::purchase_with_cap(kiosk, purchase_cap, payment);
+        assert!(payment.value() == kiosk::purchase_cap_min_price(&purchase_cap), EIncorrectAmount);
+        let market_request = policy::new_request(item_id, payment.value(), object::id(kiosk));
+        let (item, request) = kiosk.purchase_with_cap(purchase_cap, payment);
 
         (
             item,
@@ -133,13 +114,9 @@ module sui::kiosk_marketplace_ext {
         cap: &KioskOwnerCap,
         item_id: ID,
     ) {
-        assert!(kiosk::has_access(kiosk, cap), ENotOwner);
-        let purchase_cap: PurchaseCap<T> = bag::remove(
-            ext::storage_mut(Ext<Market> {}, kiosk),
-            item_id
-        );
-
-        kiosk::return_purchase_cap(kiosk, purchase_cap);
+        assert!(kiosk.has_access(cap), ENotOwner);
+        let purchase_cap: PurchaseCap<T> = ext::storage_mut(Ext<Market> {}, kiosk).remove(item_id);
+        kiosk.return_purchase_cap(purchase_cap);
     }
 }
 
@@ -148,17 +125,16 @@ module sui::kiosk_marketplace_ext {
 module sui::kiosk_extensions_tests {
     use sui::kiosk_test_utils::{Self as test};
     use sui::kiosk_extension as ext;
-    use sui::kiosk;
 
     /// The `Ext` witness to use for testing.
-    struct Extension has drop {}
+    public struct Extension has drop {}
 
     // === Default Behavior ===
 
     #[test]
     fun test_default_behavior() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 3, ctx);
 
@@ -195,7 +171,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 0, ctx);
         ext::lock(Extension {}, &mut kiosk, asset, &policy);
@@ -208,7 +184,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 1, ctx);
         ext::lock(Extension {}, &mut kiosk, asset, &policy);
@@ -221,7 +197,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 0, ctx);
         ext::place(Extension {}, &mut kiosk, asset, &policy);
@@ -234,12 +210,12 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, policy_cap) = test::get_policy(ctx);
         let (asset, asset_id) = test::get_asset(ctx);
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::add(Extension {}, &mut kiosk, &owner_cap, 2, ctx);
         ext::place(Extension {}, &mut kiosk, asset, &policy);
 
-        let asset = kiosk::take(&mut kiosk, &owner_cap, asset_id);
+        let asset = kiosk.take(&owner_cap, asset_id);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_policy(policy, policy_cap, ctx);
@@ -260,7 +236,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_enable_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::enable<Extension>(&mut kiosk, &owner_cap);
 
@@ -270,7 +246,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_disable_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::disable<Extension>(&mut kiosk, &owner_cap);
 
@@ -280,7 +256,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_remove_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
         ext::remove<Extension>(&mut kiosk, &owner_cap);
 
@@ -300,7 +276,7 @@ module sui::kiosk_extensions_tests {
     #[test, expected_failure(abort_code = sui::kiosk_extension::EExtensionNotInstalled)]
     fun test_storage_mut_not_installed() {
         let ctx = &mut test::ctx();
-        let (kiosk, _owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, _owner_cap) = test::get_kiosk(ctx);
 
         let _ = ext::storage_mut(Extension {}, &mut kiosk);
 
@@ -312,7 +288,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, _owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, _owner_cap) = test::get_kiosk(ctx);
 
         ext::lock(Extension {}, &mut kiosk, asset, &policy);
 
@@ -324,7 +300,7 @@ module sui::kiosk_extensions_tests {
         let ctx = &mut test::ctx();
         let (policy, _policy_cap) = test::get_policy(ctx);
         let (asset, _asset_id) = test::get_asset(ctx);
-        let (kiosk, _owner_cap) = test::get_kiosk(ctx);
+        let (mut kiosk, _owner_cap) = test::get_kiosk(ctx);
 
         ext::place(Extension {}, &mut kiosk, asset, &policy);
 

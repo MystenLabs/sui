@@ -26,11 +26,14 @@
 // Label 2:
 //     ...
 
+use move_proc_macros::growing_stack;
+
 use crate::{
     cfgir::{
         ast::remap_labels,
         cfg::{MutForwardCFG, CFG},
     },
+    expansion::ast::Mutability,
     hlir::ast::{BasicBlocks, Command, Command_, FunctionSignature, Label, SingleType, Value, Var},
     parser::ast::ConstantName,
     shared::unique_map::UniqueMap,
@@ -41,7 +44,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// returns true if anything changed
 pub fn optimize(
     _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     _constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -76,7 +79,9 @@ fn find_forwarding_jump_destinations(blocks: &BasicBlocks) -> LabelMap {
     let mut final_jumps: LabelMap = BTreeMap::new();
 
     for start in forwarding_jumps.keys() {
-        if final_jumps.contains_key(start) { break };
+        if final_jumps.contains_key(start) {
+            break;
+        };
         let mut target = *start;
         let mut seen = BTreeSet::new();
         while let Some(next_target) = forwarding_jumps.get(&target) {
@@ -120,6 +125,7 @@ fn optimize_forwarding_jumps(
     changed
 }
 
+#[growing_stack]
 fn optimize_cmd(sp!(_, cmd_): &mut Command, final_jumps: &BTreeMap<Label, Label>) -> bool {
     use Command_ as C;
     match cmd_ {

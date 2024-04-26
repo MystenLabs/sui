@@ -1,0 +1,6 @@
+error[E03006]: unexpected name in this position
+  ┌─ tests/move_2024/expansion/self_leading_access.move:6:9
+  │
+6 │         foo::S()
+  │         ^^^ Expected an address or module in this position, not a module member
+

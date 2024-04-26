@@ -55,7 +55,7 @@ export class SuiHTTPTransport implements SuiTransport {
 	fetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
 		const fetch = this.#options.fetch ?? globalThis.fetch;
 
-		if (!this.fetch) {
+		if (!fetch) {
 			throw new Error(
 				'The current environment does not support fetch, you can provide a fetch implementation in the options for SuiHTTPTransport.',
 			);
@@ -76,7 +76,7 @@ export class SuiHTTPTransport implements SuiTransport {
 			this.#websocketClient = new WebsocketClient(
 				this.#options.websocket?.url ?? this.#options.url,
 				{
-					WebSocketConstructor: this.#options.WebSocketConstructor,
+					WebSocketConstructor,
 					...this.#options.websocket,
 				},
 			);

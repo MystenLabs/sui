@@ -15,11 +15,16 @@ import {
 	useCoinsReFetchingConfig,
 	useSortedCoinsByCategories,
 } from '_hooks';
+import {
+	DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	DELEGATED_STAKES_QUERY_STALE_TIME,
+} from '_shared/constants';
 import { ampli } from '_src/shared/analytics/ampli';
 import { API_ENV } from '_src/shared/api-env';
 import { FEATURES } from '_src/shared/experimentation/features';
 import { AccountsList } from '_src/ui/app/components/accounts/AccountsList';
 import { UnlockAccountButton } from '_src/ui/app/components/accounts/UnlockAccountButton';
+import { BuyNLargeHomePanel } from '_src/ui/app/components/buynlarge/HomePanel';
 import { useActiveAccount } from '_src/ui/app/hooks/useActiveAccount';
 import { usePinnedCoinTypes } from '_src/ui/app/hooks/usePinnedCoinTypes';
 import FaucetRequestButton from '_src/ui/app/shared/faucet/FaucetRequestButton';
@@ -30,6 +35,7 @@ import {
 	useBalanceInUSD,
 	useCoinMetadata,
 	useFormatCoin,
+	useGetDelegatedStake,
 	useResolveSuiNSName,
 } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
@@ -349,6 +355,12 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 		},
 	);
 
+	const { data: delegatedStake } = useGetDelegatedStake({
+		address: activeAccountAddress || '',
+		staleTime: DELEGATED_STAKES_QUERY_STALE_TIME,
+		refetchInterval: DELEGATED_STAKES_QUERY_REFETCH_INTERVAL,
+	});
+
 	const walletInterstitialConfig = useFeature<InterstitialConfig>(
 		FEATURES.WALLET_INTERSTITIAL_CONFIG,
 	).value;
@@ -412,6 +424,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 					data-testid="coin-page"
 				>
 					<AccountsList />
+					<BuyNLargeHomePanel />
 					<div className="flex flex-col w-full">
 						<PortfolioName
 							name={activeAccount.nickname ?? domainName ?? formatAddress(activeAccountAddress)}
@@ -513,7 +526,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 									</div>
 
 									<div className="w-full">
-										{activeCoinType === SUI_TYPE_ARG && accountHasSui ? (
+										{accountHasSui || delegatedStake?.length ? (
 											<TokenIconLink
 												disabled={!tokenBalance}
 												accountAddress={activeAccountAddress}

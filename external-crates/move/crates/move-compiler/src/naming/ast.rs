@@ -6,14 +6,17 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
-        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Value, Value_,
-        Visibility,
+        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, Value,
+        Value_, Visibility,
     },
     parser::ast::{
-        Ability_, BinOp, ConstantName, Field, FunctionName, Mutability, StructName, UnaryOp,
-        ENTRY_MODIFIER,
+        self as P, Ability_, BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp,
+        VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
-    shared::{ast_debug::*, program_info::NamingProgramInfo, unique_map::UniqueMap, *},
+    shared::{
+        ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
+        unique_map::UniqueMap, *,
+    },
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
@@ -45,6 +48,10 @@ pub enum Neighbor_ {
 }
 pub type Neighbor = Spanned<Neighbor_>;
 
+//**************************************************************************************************
+// Use Funs
+//**************************************************************************************************
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UseFunKind {
     Explicit,
@@ -59,6 +66,7 @@ pub struct UseFun {
     pub loc: Loc,
     pub attributes: Attributes,
     pub is_public: Option<Loc>,
+    pub tname: TypeName,
     pub target_function: (ModuleIdent, FunctionName),
     // If None, disregard any use/unused information.
     // If Some, we track whether or not the associated function alias was used prior to receiver
@@ -72,11 +80,55 @@ pub struct UseFun {
 // Mapping from type to their possible "methods"
 pub type ResolvedUseFuns = BTreeMap<TypeName, UniqueMap<Name, UseFun>>;
 
+// Color for scopes of use funs and variables
+pub type Color = u16;
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct UseFuns {
+    pub color: Color,
     pub resolved: ResolvedUseFuns,
     pub implicit_candidates: UniqueMap<Name, ImplicitUseFunCandidate>,
 }
+
+//**************************************************************************************************
+// Syntax Methods
+//**************************************************************************************************
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Ord, PartialOrd)]
+pub enum SyntaxMethodKind_ {
+    Index,
+    IndexMut,
+    // ForMut,
+    // ForImm,
+    // ForVal,
+    // Assign,
+}
+
+pub type SyntaxMethodKind = Spanned<SyntaxMethodKind_>;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SyntaxMethod {
+    pub loc: Loc,
+    pub public_visibility: Loc,
+    pub tname: TypeName,
+    pub target_function: (ModuleIdent, FunctionName),
+    pub kind: SyntaxMethodKind,
+    // We don't track usage because we require these to be public.
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexSyntaxMethods {
+    pub index_mut: Option<Box<SyntaxMethod>>,
+    pub index: Option<Box<SyntaxMethod>>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
+pub struct SyntaxMethodEntry {
+    pub index: Option<Box<IndexSyntaxMethods>>,
+}
+
+// Mapping from type to their possible "syntax methods"
+pub type SyntaxMethods = BTreeMap<TypeName, SyntaxMethodEntry>;
 
 //**************************************************************************************************
 // Modules
@@ -91,15 +143,23 @@ pub struct ModuleDefinition {
     pub attributes: Attributes,
     pub is_source_module: bool,
     pub use_funs: UseFuns,
+    pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Friend>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
+    pub structs: UniqueMap<DatatypeName, StructDefinition>,
+    pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
 }
 
 //**************************************************************************************************
-// Structs
+// Data Types
 //**************************************************************************************************
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DatatypeTypeParameter {
+    pub param: TParam,
+    pub is_phantom: bool,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StructDefinition {
@@ -108,20 +168,39 @@ pub struct StructDefinition {
     pub index: usize,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
     pub fields: StructFields,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StructTypeParameter {
-    pub param: TParam,
-    pub is_phantom: bool,
+pub enum StructFields {
+    Defined(/* positional */ bool, Fields<Type>),
+    Native(Loc),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum StructFields {
-    Defined(Fields<Type>),
-    Native(Loc),
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDefinition {
+    pub warning_filter: WarningFilters,
+    // index in the original order as defined in the source file
+    pub index: usize,
+    pub attributes: Attributes,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
+    pub variants: UniqueMap<VariantName, VariantDefinition>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariantDefinition {
+    // index in the original order as defined in the source file
+    pub index: usize,
+    pub loc: Loc,
+    pub fields: VariantFields,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VariantFields {
+    Defined(/* positional */ bool, Fields<Type>),
+    Empty,
 }
 
 //**************************************************************************************************
@@ -150,6 +229,7 @@ pub struct Function {
     pub attributes: Attributes,
     pub visibility: Visibility,
     pub entry: Option<Loc>,
+    pub macro_: Option<Loc>,
     pub signature: FunctionSignature,
     pub body: FunctionBody,
 }
@@ -204,7 +284,7 @@ pub enum TypeName_ {
     // exp-list/tuple type
     Multiple(usize),
     Builtin(BuiltinTypeName),
-    ModuleType(ModuleIdent, StructName),
+    ModuleType(ModuleIdent, DatatypeName),
 }
 pub type TypeName = Spanned<TypeName_>;
 
@@ -228,6 +308,7 @@ pub enum Type_ {
     Ref(bool, Box<Type>),
     Param(TParam),
     Apply(Option<AbilitySet>, TypeName, Vec<Type>),
+    Fun(Vec<Type>, Box<Type>),
     Var(TVar),
     Anything,
     UnresolvedError,
@@ -242,32 +323,40 @@ pub type Type = Spanned<Type_>;
 pub struct Var_ {
     pub name: Symbol,
     pub id: u16,
-    pub color: u16,
+    pub color: Color,
 }
 pub type Var = Spanned<Var_>;
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, PartialOrd, Ord)]
-pub struct BlockLabel(pub Var);
+pub struct BlockLabel {
+    pub label: Var,
+    pub is_implicit: bool,
+}
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum LValue_ {
     Ignore,
     Var {
-        mut_: Mutability,
+        mut_: Option<Mutability>,
         var: Var,
         unused_binding: bool,
     },
-    Unpack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<LValue>),
+    Unpack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<LValue>),
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
 pub type LValueList = Spanned<LValueList_>;
 
+pub type LambdaLValues_ = Vec<(LValueList, Option<Type>)>;
+pub type LambdaLValues = Spanned<LambdaLValues_>;
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Field),
+    Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
+    DotUnresolved(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -275,9 +364,38 @@ pub type ExpDotted = Spanned<ExpDotted_>;
 #[allow(clippy::large_enum_variant)]
 pub enum BuiltinFunction_ {
     Freeze(Option<Type>),
-    Assert(/* is_macro */ bool),
+    Assert(/* is_macro */ Option<Loc>),
 }
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+pub enum NominalBlockUsage {
+    Return,
+    Break,
+    Continue,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Lambda {
+    pub parameters: LambdaLValues,
+    pub return_type: Option<Type>,
+    pub return_label: BlockLabel,
+    pub use_fun_color: Color,
+    pub body: Box<Exp>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Block {
+    pub name: Option<BlockLabel>,
+    pub from_macro_argument: Option<MacroArgument>,
+    pub seq: Sequence,
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum MacroArgument {
+    Lambda(Loc),
+    Substituted(Loc),
+}
 
 #[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
@@ -289,18 +407,27 @@ pub enum Exp_ {
     ModuleCall(
         ModuleIdent,
         FunctionName,
+        /* is_macro */ Option<Loc>,
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
-    MethodCall(ExpDotted, Name, Option<Vec<Type>>, Spanned<Vec<Exp>>),
+    MethodCall(
+        ExpDotted,
+        Name,
+        /* is_macro */ Option<Loc>,
+        Option<Vec<Type>>,
+        Spanned<Vec<Exp>>,
+    ),
+    VarCall(Var, Spanned<Vec<Exp>>),
     Builtin(BuiltinFunction, Spanned<Vec<Exp>>),
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
-    While(Box<Exp>, BlockLabel, Box<Exp>),
+    Match(Box<Exp>, Spanned<Vec<MatchArm>>),
+    While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
-    NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
+    Block(Block),
+    Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
     FieldMutate(ExpDotted, Box<Exp>),
@@ -308,14 +435,21 @@ pub enum Exp_ {
 
     Return(Box<Exp>),
     Abort(Box<Exp>),
-    Give(BlockLabel, Box<Exp>),
+    Give(NominalBlockUsage, BlockLabel, Box<Exp>),
     Continue(BlockLabel),
 
     Dereference(Box<Exp>),
     UnaryExp(UnaryOp, Box<Exp>),
     BinopExp(Box<Exp>, BinOp, Box<Exp>),
 
-    Pack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<Exp>),
+    Pack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<Exp>),
+    PackVariant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Option<Vec<Type>>,
+        Fields<Exp>,
+    ),
     ExpList(Vec<Exp>),
     Unit {
         trailing: bool,
@@ -326,6 +460,8 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
 
+    ErrorConstant,
+
     UnresolvedError,
 }
 pub type Exp = Spanned<Exp_>;
@@ -333,11 +469,49 @@ pub type Exp = Spanned<Exp_>;
 pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
 #[derive(Debug, PartialEq, Clone)]
 pub enum SequenceItem_ {
-    Seq(Exp),
+    Seq(Box<Exp>),
     Declare(LValueList, Option<Type>),
-    Bind(LValueList, Exp),
+    Bind(LValueList, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm_ {
+    pub pattern: MatchPattern,
+    pub binders: Vec<(Mutability, Var)>,
+    pub guard: Option<Box<Exp>>,
+    pub guard_binders: UniqueMap<Var, Var>, // pattern binder name -> guard var name
+    pub rhs_binders: BTreeSet<Var>,         // pattern binders used in the right-hand side
+    pub rhs: Box<Exp>,
+}
+
+pub type MatchArm = Spanned<MatchArm_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchPattern_ {
+    Variant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Struct(
+        ModuleIdent,
+        DatatypeName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Constant(ModuleIdent, ConstantName),
+    Binder(Mutability, Var, /* unused binding */ bool),
+    Literal(Value),
+    Wildcard,
+    Or(Box<MatchPattern>, Box<MatchPattern>),
+    At(Var, /* unused binding */ bool, Box<MatchPattern>),
+    ErrorPat,
+}
+
+pub type MatchPattern = Spanned<MatchPattern_>;
 
 //**************************************************************************************************
 // traits
@@ -366,6 +540,53 @@ impl TName for Var {
 //**************************************************************************************************
 // impls
 //**************************************************************************************************
+
+impl UseFuns {
+    pub fn new(color: Color) -> Self {
+        Self {
+            color,
+            resolved: BTreeMap::new(),
+            implicit_candidates: UniqueMap::new(),
+        }
+    }
+}
+
+impl IndexSyntaxMethods {
+    pub fn get_name_for_typing(&self) -> Option<(ModuleIdent, FunctionName)> {
+        // We prefer `index` over `index_mut` because its type is subject and return type are higher
+        // in the subtyping lattice.
+        if let Some(index) = &self.index {
+            Some(index.target_function)
+        } else {
+            self.index_mut
+                .as_ref()
+                .map(|index_mut| index_mut.target_function)
+        }
+    }
+}
+
+impl SyntaxMethodEntry {
+    pub fn lookup_kind_entry<'entry>(
+        &'entry mut self,
+        sp!(_, kind): &SyntaxMethodKind,
+    ) -> &'entry mut Option<Box<SyntaxMethod>> {
+        match kind {
+            SyntaxMethodKind_::Index => &mut self.index_entry().index,
+            SyntaxMethodKind_::IndexMut => &mut self.index_entry().index_mut,
+        }
+    }
+
+    fn index_entry(&mut self) -> &mut IndexSyntaxMethods {
+        if self.index.is_none() {
+            let new_index_syntax_method = IndexSyntaxMethods {
+                index: None,
+                index_mut: None,
+            };
+            self.index = Some(Box::new(new_index_syntax_method));
+        }
+        self.index.as_mut().unwrap()
+    }
+}
 
 static BUILTIN_TYPE_ALL_NAMES: Lazy<BTreeSet<Symbol>> = Lazy::new(|| {
     [
@@ -541,6 +762,20 @@ impl TypeName_ {
             }
         }
     }
+
+    pub fn single_type(&self) -> Option<TypeName_> {
+        match self {
+            TypeName_::Multiple(_) => None,
+            TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
+        }
+    }
+
+    pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
+        match self {
+            TypeName_::Builtin(_) | TypeName_::Multiple(_) => None,
+            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
+        }
+    }
 }
 
 impl Type_ {
@@ -627,10 +862,26 @@ impl Type_ {
         }
     }
 
+    pub fn unfold_to_builtin_type_name(&self) -> Option<&BuiltinTypeName> {
+        match self {
+            Type_::Apply(_, sp!(_, TypeName_::Builtin(b)), _) => Some(b),
+            Type_::Ref(_, inner) => inner.value.unfold_to_builtin_type_name(),
+            _ => None,
+        }
+    }
+
     pub fn unfold_to_type_name(&self) -> Option<&TypeName> {
         match self {
             Type_::Apply(_, tn, _) => Some(tn),
-            Type_::Ref(_, inner) => return inner.value.unfold_to_type_name(),
+            Type_::Ref(_, inner) => inner.value.unfold_to_type_name(),
+            _ => None,
+        }
+    }
+
+    pub fn type_arguments(&self) -> Option<&Vec<Type>> {
+        match self {
+            Type_::Apply(_, _, tyargs) => Some(tyargs),
+            Type_::Ref(_, inner) => inner.value.type_arguments(),
             _ => None,
         }
     }
@@ -652,6 +903,7 @@ impl Type_ {
             Type_::Unit => Some(AbilitySet::collection(loc)),
             Type_::Ref(_, _) => Some(AbilitySet::references(loc)),
             Type_::Anything | Type_::UnresolvedError => Some(AbilitySet::all(loc)),
+            Type_::Fun(_, _) => Some(AbilitySet::functions(loc)),
             Type_::Var(_) => None,
         }
     }
@@ -663,14 +915,60 @@ impl Type_ {
             Type_::Unit => Some(AbilitySet::COLLECTION.contains(&ability)),
             Type_::Ref(_, _) => Some(AbilitySet::REFERENCES.contains(&ability)),
             Type_::Anything | Type_::UnresolvedError => Some(true),
+            Type_::Fun(_, _) => Some(AbilitySet::FUNCTIONS.contains(&ability)),
             Type_::Var(_) => None,
+        }
+    }
+
+    // Returns an option holding the ref's mutability (or None, if it is not a reference type).
+    // Also return None for `Anything`, `Var`, or other values that might be compatible wifh `Ref`
+    // types.
+    pub fn is_ref(&self) -> Option<bool> {
+        match self {
+            Type_::Ref(mut_, _) => Some(*mut_),
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => None,
+        }
+    }
+
+    // Unwraps refs
+    pub fn base_type_(&self) -> Self {
+        match self {
+            Type_::Ref(_, inner) => inner.value.clone(),
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => self.clone(),
         }
     }
 }
 
-impl Exp_ {
-    // base symbol to used when making names forunnamed loops
-    pub const LOOP_NAME_SYMBOL: Symbol = symbol!("loop");
+impl Var_ {
+    pub fn starts_with_underscore(&self) -> bool {
+        P::Var::starts_with_underscore_name(self.name)
+    }
+
+    pub fn is_syntax_identifier(&self) -> bool {
+        P::Var::is_syntax_identifier_name(self.name)
+    }
+
+    pub fn is_valid(&self) -> bool {
+        P::Var::is_valid_name(self.name)
+    }
+}
+
+impl BlockLabel {
+    // base symbol to used when making names for unnamed loops or lambdas
+    pub const IMPLICIT_LABEL_SYMBOL: Symbol = symbol!("%implicit");
+    pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("%macro");
 }
 
 impl Value_ {
@@ -728,6 +1026,29 @@ impl fmt::Display for TypeName_ {
     }
 }
 
+impl std::fmt::Display for NominalBlockUsage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                NominalBlockUsage::Return => "return",
+                NominalBlockUsage::Break => "break",
+                NominalBlockUsage::Continue => "continue",
+            }
+        )
+    }
+}
+
+impl fmt::Display for SyntaxMethodKind_ {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        let msg = match self {
+            SyntaxMethodKind_::IndexMut | SyntaxMethodKind_::Index => SyntaxAttribute::INDEX,
+        };
+        write!(f, "{}", msg)
+    }
+}
+
 //**************************************************************************************************
 // Debug
 //**************************************************************************************************
@@ -764,6 +1085,7 @@ impl AstDebug for UseFun {
             loc: _,
             attributes,
             is_public,
+            tname: _,
             target_function: (target_m, target_f),
             kind,
             used,
@@ -806,16 +1128,61 @@ impl AstDebug for ResolvedUseFuns {
 impl AstDebug for UseFuns {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
+            color,
             resolved,
             implicit_candidates,
         } = self;
+        w.write(&format!("use_funs#{} ", color));
         resolved.ast_debug(w);
-        w.write("unresolved ");
-        w.block(|w| {
-            for (_, _, implicit) in implicit_candidates {
-                implicit.ast_debug(w)
+        if !implicit_candidates.is_empty() {
+            w.write("unresolved ");
+            w.block(|w| {
+                for (_, _, implicit) in implicit_candidates {
+                    implicit.ast_debug(w)
+                }
+            });
+        }
+        w.new_line();
+    }
+}
+
+impl AstDebug for SyntaxMethod {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let SyntaxMethod {
+            loc: _,
+            tname,
+            target_function: (target_m, target_f),
+            public_visibility: _,
+            kind,
+        } = self;
+        let kind_str = format!("{:?}", kind.value);
+        w.write(&format!(
+            "syntax({kind_str}) for {tname} -> {target_m}::{target_f}\n"
+        ));
+    }
+}
+
+impl AstDebug for (&TypeName, &SyntaxMethodEntry) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (_tn, methods) = *self;
+        let SyntaxMethodEntry { index } = methods;
+        if let Some(index) = &index {
+            let IndexSyntaxMethods { index_mut, index } = &**index;
+            if let Some(index) = index.as_ref() {
+                index.ast_debug(w)
             }
-        })
+            if let Some(index_mut) = index_mut.as_ref() {
+                index_mut.ast_debug(w)
+            }
+        }
+    }
+}
+
+impl AstDebug for SyntaxMethods {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        for entry in self {
+            entry.ast_debug(w);
+        }
     }
 }
 
@@ -828,8 +1195,10 @@ impl AstDebug for ModuleDefinition {
             attributes,
             is_source_module,
             use_funs,
+            syntax_methods,
             friends,
             structs,
+            enums,
             constants,
             functions,
         } = self;
@@ -844,12 +1213,17 @@ impl AstDebug for ModuleDefinition {
             w.writeln("source module")
         }
         use_funs.ast_debug(w);
+        syntax_methods.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
         }
         for sdef in structs.key_cloned_iter() {
             sdef.ast_debug(w);
+            w.new_line();
+        }
+        for edef in enums.key_cloned_iter() {
+            edef.ast_debug(w);
             w.new_line();
         }
         for cdef in constants.key_cloned_iter() {
@@ -863,7 +1237,7 @@ impl AstDebug for ModuleDefinition {
     }
 }
 
-impl AstDebug for (StructName, &StructDefinition) {
+impl AstDebug for (DatatypeName, &StructDefinition) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (
             name,
@@ -884,7 +1258,10 @@ impl AstDebug for (StructName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
+        if let StructFields::Defined(is_positional, fields) = fields {
+            if *is_positional {
+                w.write("#positional");
+            }
             w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;
@@ -893,6 +1270,64 @@ impl AstDebug for (StructName, &StructDefinition) {
                     true
                 })
             })
+        }
+    }
+}
+
+impl AstDebug for (DatatypeName, &EnumDefinition) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (
+            name,
+            EnumDefinition {
+                index,
+                attributes,
+                abilities,
+                type_parameters,
+                variants,
+                warning_filter,
+            },
+        ) = self;
+        warning_filter.ast_debug(w);
+        attributes.ast_debug(w);
+
+        w.write(&format!("enum#{index} {name}"));
+        type_parameters.ast_debug(w);
+        ability_modifiers_ast_debug(w, abilities);
+        w.block(|w| {
+            for variant in variants.key_cloned_iter() {
+                variant.ast_debug(w);
+            }
+        });
+    }
+}
+
+impl AstDebug for (VariantName, &VariantDefinition) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (
+            name,
+            VariantDefinition {
+                index,
+                fields,
+                loc: _,
+            },
+        ) = self;
+
+        w.write(&format!("variant#{index} {name}"));
+        match fields {
+            VariantFields::Defined(is_positional, fields) => {
+                if *is_positional {
+                    w.write("#positional");
+                }
+                w.block(|w| {
+                    w.list(fields, ",", |w, (_, f, idx_st)| {
+                        let (idx, st) = idx_st;
+                        w.write(&format!("{}#{}: ", idx, f));
+                        st.ast_debug(w);
+                        true
+                    });
+                })
+            }
+            VariantFields::Empty => (),
         }
     }
 }
@@ -906,6 +1341,7 @@ impl AstDebug for (FunctionName, &Function) {
                 index,
                 attributes,
                 visibility,
+                macro_,
                 entry,
                 signature,
                 body,
@@ -917,8 +1353,11 @@ impl AstDebug for (FunctionName, &Function) {
         if entry.is_some() {
             w.write(&format!("{} ", ENTRY_MODIFIER));
         }
+        if macro_.is_some() {
+            w.write(&format!("{} ", MACRO_MODIFIER));
+        }
         if let FunctionBody_::Native = &body.value {
-            w.write("native ");
+            w.write(&format!("{} ", NATIVE_MODIFIER));
         }
         w.write(&format!("fun#{index} {name}"));
         signature.ast_debug(w);
@@ -939,9 +1378,7 @@ impl AstDebug for FunctionSignature {
         type_parameters.ast_debug(w);
         w.write("(");
         w.comma(parameters, |w, (mut_, v, st)| {
-            if mut_.is_some() {
-                w.write("mut ");
-            }
+            mut_.ast_debug(w);
             v.ast_debug(w);
             w.write(": ");
             st.ast_debug(w);
@@ -968,12 +1405,15 @@ impl AstDebug for Var_ {
 
 impl AstDebug for BlockLabel {
     fn ast_debug(&self, w: &mut AstWriter) {
-        let Var_ { name, id, color } = self.0.value;
+        let BlockLabel {
+            is_implicit: _,
+            label: sp!(_, Var_ { name, id, color }),
+        } = self;
         w.write(&format!("'{name}"));
-        if id != 0 {
+        if *id != 0 {
             w.write(&format!("#{id}"));
         }
-        if color != 0 {
+        if *color != 0 {
             w.write(&format!("#{color}"));
         }
     }
@@ -989,7 +1429,7 @@ impl AstDebug for Vec<TParam> {
     }
 }
 
-impl AstDebug for Vec<StructTypeParameter> {
+impl AstDebug for Vec<DatatypeTypeParameter> {
     fn ast_debug(&self, w: &mut AstWriter) {
         if !self.is_empty() {
             w.write("<");
@@ -1050,7 +1490,7 @@ impl AstDebug for TParam {
     }
 }
 
-impl AstDebug for StructTypeParameter {
+impl AstDebug for DatatypeTypeParameter {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self { is_phantom, param } = self;
         if *is_phantom {
@@ -1106,6 +1546,12 @@ impl AstDebug for Type_ {
                         })
                     }),
                 }
+            }
+            Type_::Fun(args, result) => {
+                w.write("|");
+                w.comma(args, |w, ty| ty.ast_debug(w));
+                w.write("|");
+                result.ast_debug(w);
             }
             Type_::Var(tv) => w.write(&format!("#{}", tv.0)),
             Type_::Anything => w.write("_"),
@@ -1163,8 +1609,11 @@ impl AstDebug for Exp_ {
             E::Value(v) => v.ast_debug(w),
             E::Var(v) => v.ast_debug(w),
             E::Constant(m, c) => w.write(&format!("{}::{}", m, c)),
-            E::ModuleCall(m, f, tys_opt, sp!(_, rhs)) => {
+            E::ModuleCall(m, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 w.write(&format!("{}::{}", m, f));
+                if is_macro.is_some() {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
@@ -1174,14 +1623,23 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::MethodCall(e, f, tys_opt, sp!(_, rhs)) => {
+            E::MethodCall(e, f, is_macro, tys_opt, sp!(_, rhs)) => {
                 e.ast_debug(w);
                 w.write(&format!(".{}", f));
+                if is_macro.is_some() {
+                    w.write("!");
+                }
                 if let Some(ss) = tys_opt {
                     w.write("<");
                     ss.ast_debug(w);
                     w.write(">");
                 }
+                w.write("(");
+                w.comma(rhs, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
+            E::VarCall(var, sp!(_, rhs)) => {
+                var.ast_debug(w);
                 w.write("(");
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
@@ -1218,6 +1676,21 @@ impl AstDebug for Exp_ {
                 });
                 w.write("}");
             }
+            E::PackVariant(m, e, v, tys_opt, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_e)| {
+                    let (idx, e) = idx_e;
+                    w.write(&format!("{}#{}: ", idx, f));
+                    e.ast_debug(w);
+                });
+                w.write("}");
+            }
             E::IfElse(b, t, f) => {
                 w.write("if (");
                 b.ast_debug(w);
@@ -1226,27 +1699,33 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
-            E::While(b, name, e) => {
-                w.write("while ");
-                w.write(" (");
-                b.ast_debug(w);
+            E::Match(subject, arms) => {
+                w.write("match (");
+                subject.ast_debug(w);
                 w.write(") ");
+                w.block(|w| {
+                    w.list(&arms.value, ", ", |w, arm| {
+                        arm.ast_debug(w);
+                        true
+                    })
+                });
+            }
+            E::While(name, b, e) => {
                 name.ast_debug(w);
                 w.write(": ");
+                w.write("while (");
+                b.ast_debug(w);
+                w.write(") ");
                 e.ast_debug(w);
             }
             E::Loop(name, e) => {
-                w.write("loop ");
                 name.ast_debug(w);
                 w.write(": ");
+                w.write("loop ");
                 e.ast_debug(w);
             }
-            E::NamedBlock(name, seq) => {
-                name.ast_debug(w);
-                w.write(": ");
-                seq.ast_debug(w);
-            }
             E::Block(seq) => seq.ast_debug(w),
+            E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));
@@ -1278,8 +1757,8 @@ impl AstDebug for Exp_ {
                 w.write("abort ");
                 e.ast_debug(w);
             }
-            E::Give(name, e) => {
-                w.write("give @");
+            E::Give(usage, name, e) => {
+                w.write(&format!("give#{usage} '"));
                 name.ast_debug(w);
                 w.write(" ");
                 e.ast_debug(w);
@@ -1330,7 +1809,47 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
+            E::ErrorConstant => w.write("ErrorConstant"),
         }
+    }
+}
+
+impl AstDebug for Lambda {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Lambda {
+            parameters: sp!(_, bs),
+            return_type,
+            return_label,
+            use_fun_color,
+            body: e,
+        } = self;
+        return_label.ast_debug(w);
+        w.write(": ");
+        bs.ast_debug(w);
+        if let Some(ty) = return_type {
+            w.write(" -> ");
+            ty.ast_debug(w);
+        }
+        w.write(&format!("use_funs#{}", use_fun_color));
+        e.ast_debug(w);
+    }
+}
+
+impl AstDebug for Block {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let Block {
+            name,
+            from_macro_argument,
+            seq,
+        } = self;
+        if let Some(name) = name {
+            name.ast_debug(w);
+            w.write(": ");
+        }
+        if from_macro_argument.is_some() {
+            w.write("substituted_macro_arg#");
+        }
+        seq.ast_debug(w);
     }
 }
 
@@ -1359,6 +1878,96 @@ impl AstDebug for ExpDotted_ {
                 e.ast_debug(w);
                 w.write(&format!(".{}", n))
             }
+            D::Index(e, sp!(_, args)) => {
+                e.ast_debug(w);
+                w.write("(");
+                w.comma(args, |w, e| e.ast_debug(w));
+                w.write(")");
+            }
+            D::DotUnresolved(_, e) => {
+                e.ast_debug(w);
+                w.write(".")
+            }
+        }
+    }
+}
+
+impl AstDebug for MatchArm_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let MatchArm_ {
+            pattern,
+            binders: _,
+            guard,
+            guard_binders: _,
+            rhs_binders: _,
+            rhs,
+        } = self;
+        pattern.ast_debug(w);
+        if let Some(exp) = guard.as_ref() {
+            w.write(" if (");
+            exp.ast_debug(w);
+        }
+        w.write(") => ");
+        rhs.ast_debug(w);
+    }
+}
+
+impl AstDebug for MatchPattern_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use MatchPattern_::*;
+        match self {
+            Variant(mident, enum_, variant, tys_opt, fields) => {
+                w.write(format!("{}::{}::{}", mident, enum_, variant));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Struct(mident, struct_, tys_opt, fields) => {
+                w.write(format!("{}::{}", mident, struct_,));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Constant(mident, const_) => {
+                w.write(format!("const#{}::{}", mident, const_));
+            }
+            Binder(mut_, name, unused_binding) => {
+                mut_.ast_debug(w);
+                name.ast_debug(w);
+                if *unused_binding {
+                    w.write("#unused");
+                }
+            }
+            Literal(v) => v.ast_debug(w),
+            Wildcard => w.write("_"),
+            Or(lhs, rhs) => {
+                lhs.ast_debug(w);
+                w.write(" | ");
+                rhs.ast_debug(w);
+            }
+            At(x, unused_binding, pat) => {
+                x.ast_debug(w);
+                if *unused_binding {
+                    w.write("#unused");
+                }
+                w.write(" @ ");
+                pat.ast_debug(w);
+            }
+            ErrorPat => w.write("#err"),
         }
     }
 }
@@ -1386,8 +1995,8 @@ impl AstDebug for LValue_ {
                 var,
                 unused_binding,
             } => {
-                if mut_.is_some() {
-                    w.write("mut ");
+                if let Some(mut_) = mut_ {
+                    mut_.ast_debug(w);
                 }
                 var.ast_debug(w);
                 if *unused_binding {
@@ -1410,5 +2019,19 @@ impl AstDebug for LValue_ {
                 w.write("}");
             }
         }
+    }
+}
+
+impl AstDebug for LambdaLValues_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        w.write("|");
+        w.comma(self, |w, (lv, ty_opt)| {
+            lv.ast_debug(w);
+            if let Some(ty) = ty_opt {
+                w.write(": ");
+                ty.ast_debug(w);
+            }
+        });
+        w.write("| ");
     }
 }

@@ -9,11 +9,10 @@
 
 /// Test vector length limits enforced
 module Test::M1 {
-    use std::vector;
 
     public entry fun push_n_items(n: u64) {
-        let v: vector<u64> = vector::empty();
-        let i = 0;
+        let mut v: vector<u64> = vector::empty();
+        let mut i = 0;
         while (i < n) {
             vector::push_back(&mut v, i);
             i = i + 1;

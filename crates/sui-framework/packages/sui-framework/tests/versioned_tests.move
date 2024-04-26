@@ -3,13 +3,12 @@
 
 #[test_only]
 module sui::versioned_tests {
-    use sui::tx_context;
     use sui::versioned;
 
     #[test]
     fun test_upgrade() {
-        let ctx = tx_context::dummy();
-        let wrapper = versioned::create(1, 1000, &mut ctx);
+        let mut ctx = tx_context::dummy();
+        let mut wrapper = versioned::create(1, 1000, &mut ctx);
         assert!(versioned::version(&wrapper) == 1, 0);
         assert!(versioned::load_value(&wrapper) == &1000, 0);
         let (old, cap) = versioned::remove_value_for_upgrade(&mut wrapper);

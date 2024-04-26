@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::local_ip_utils;
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
 use sui_macros::nondeterministic;
@@ -26,7 +26,7 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
+use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
 use sui_types::error::SuiError;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
@@ -71,7 +71,7 @@ pub async fn send_and_confirm_transaction(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify_authenticated(&committee, &Default::default())
+            .try_into_verified(&committee, &Default::default())
             .unwrap();
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -79,7 +79,7 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new(authority.database.clone());
+    let state_acc = StateAccumulator::new(authority.get_execution_cache().clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -180,15 +180,11 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         committee,
     )
     .unwrap();
-    let effects = dummy_transaction_effects(&transaction);
+    let effects = TestEffectsBuilder::new(transaction.data()).build();
     (
         ExecutionDigests::new(*transaction.digest(), effects.digest()),
         cert,
     )
-}
-
-pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects::new_with_tx(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
@@ -287,7 +283,7 @@ pub async fn init_local_authorities(
 pub async fn init_local_authorities_with_overload_thresholds(
     committee_size: usize,
     genesis_objects: Vec<Object>,
-    overload_thresholds: OverloadThresholdConfig,
+    overload_thresholds: AuthorityOverloadConfig,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
@@ -298,7 +294,7 @@ pub async fn init_local_authorities_with_overload_thresholds(
     let authorities = join_all(key_pairs.iter().map(|(_, key_pair)| {
         TestAuthorityBuilder::new()
             .with_genesis_and_keypair(&genesis, key_pair)
-            .with_overload_threshold_config(overload_thresholds.clone())
+            .with_authority_overload_config(overload_thresholds.clone())
             .build()
     }))
     .await;

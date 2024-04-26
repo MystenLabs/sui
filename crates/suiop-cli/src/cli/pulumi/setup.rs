@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::{debug, error, info};
 
 const PULUMI: &str = "pulumi";
-const POETRY: &str = "poetry";
+const GO: &str = "go";
 
 fn get_current_time() -> std::time::Duration {
     SystemTime::now()
@@ -53,7 +53,7 @@ fn is_binary_in_path(binary: &str) -> bool {
 }
 
 fn ensure_prereqs() -> Result<()> {
-    let binaries = [PULUMI, POETRY];
+    let binaries = [PULUMI, GO];
     let mut missing_binaries = vec![];
     for binary in binaries.iter() {
         if !is_binary_in_path(binary) {
@@ -63,10 +63,7 @@ fn ensure_prereqs() -> Result<()> {
 
     let install_guide = HashMap::from([
         (PULUMI, "https://www.pulumi.com/docs/install/"),
-        (
-            POETRY,
-            "https://python-poetry.org/docs/#installing-with-the-official-installer",
-        ),
+        (GO, "`brew install go`"),
     ]);
 
     if missing_binaries.is_empty() {
@@ -167,7 +164,7 @@ pub fn ensure_setup() -> Result<()> {
         // our work here is done, it's set up!
         Ok(())
     } else {
-        ensure_prereqs()?; // make sure poetry and pulumi are installed
+        ensure_prereqs()?; // make sure golang and pulumi are installed
         ensure_pulumi_authed()?;
         // create marker file
         let prefix = setup_marker.parent().unwrap();

@@ -1,16 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses test=0x0 --accounts A --simulator
 
 //# publish --sender A
 module test::fake {
-    use std::option;
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
-    struct FAKE has drop {}
+    public struct FAKE has drop {}
 
     fun init(witness: FAKE, ctx: &mut TxContext){
         let (treasury_cap, metadata) = coin::create_currency(witness, 2, b"FAKE", b"", b"", option::none(), ctx);

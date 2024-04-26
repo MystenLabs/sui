@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{string_input::impl_string_input, sui_address::SuiAddress};
-use crate::data::{DieselBackend, Query};
+use crate::raw_query::RawQuery;
+use crate::{
+    data::{DieselBackend, Query},
+    filter,
+};
 use async_graphql::*;
 use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
@@ -102,6 +106,43 @@ impl TypeFilter {
                 query.filter(field.eq(exact))
             }
         }
+    }
+
+    /// Modify `query` to apply this filter to `field`, returning the new query.
+    pub(crate) fn apply_raw(&self, mut query: RawQuery, field: &str) -> RawQuery {
+        match self {
+            TypeFilter::ByModule(ModuleFilter::ByPackage(p)) => {
+                let pattern = format!("{p}::%");
+                let statement = field.to_string() + " LIKE {}";
+                query = filter!(query, statement, pattern);
+            }
+
+            TypeFilter::ByModule(ModuleFilter::ByModule(p, m)) => {
+                let pattern = format!("{p}::{m}::%");
+                let statement = field.to_string() + " LIKE {}";
+                query = filter!(query, statement, pattern);
+            }
+
+            // A type filter without type parameters is interpreted as either an exact match, or a
+            // match for all generic instantiations of the type.
+            TypeFilter::ByType(TypeTag::Struct(tag)) if tag.type_params.is_empty() => {
+                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
+                let generic_pattern =
+                    format!("{}<%", tag.to_canonical_display(/* with_prefix */ true));
+
+                let statement = format!("({field} = {{}} OR {field} LIKE {{}})");
+
+                query = filter!(query, statement, exact_pattern, generic_pattern);
+            }
+
+            TypeFilter::ByType(tag) => {
+                let exact_pattern = tag.to_canonical_string(/* with_prefix */ true);
+                let statement = field.to_string() + " = {}";
+                query = filter!(query, statement, exact_pattern);
+            }
+        }
+
+        query
     }
 
     /// Try to create a filter whose results are the intersection of the results of the input

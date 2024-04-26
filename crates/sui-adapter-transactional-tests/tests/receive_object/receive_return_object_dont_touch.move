@@ -5,15 +5,13 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 
-    struct B has key, store {
+    public struct B has key, store {
         id: UID,
     }
 
@@ -37,7 +35,7 @@ module tto::M1 {
 //# view-object 2,1
 
 // Can receive the object, but if you don't do anything with it the transaction will fail
-//# programmable --inputs object(2,0) receiving(2,1) 
+//# programmable --inputs object(2,0) receiving(2,1)
 //> 0: tto::M1::receiver(Input(0), Input(1))
 
 //# view-object 2,0

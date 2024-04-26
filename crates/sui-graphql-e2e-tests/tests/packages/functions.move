@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses P0=0x0 P1=0x0 --accounts A --simulator
 
 //# run-graphql
 
@@ -135,7 +135,7 @@ fragment Functions on Object {
     }
 }
 
-//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 
 fragment Signatures on MoveFunctionConnection {
     edges {
@@ -172,7 +172,7 @@ fragment Signatures on MoveFunctionConnection {
     }
 }
 
-//# run-graphql --cursors "consensus_commit_prologue" "timestamp_ms"
+//# run-graphql --cursors {"n":"consensus_commit_prologue","c":2} {"n":"timestamp_ms","c":2}
 
 fragment Signatures on MoveFunctionConnection {
     edges {

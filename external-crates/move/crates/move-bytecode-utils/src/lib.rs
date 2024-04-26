@@ -7,11 +7,7 @@ pub mod layout;
 pub mod module_cache;
 
 use crate::dependency_graph::DependencyGraph;
-use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
-    file_format::{CompiledModule, SignatureToken, StructHandleIndex},
-};
+use move_binary_format::file_format::{CompiledModule, SignatureToken, StructHandleIndex};
 use move_core_types::{
     account_address::AccountAddress, identifier::IdentStr, language_storage::ModuleId,
 };
@@ -101,19 +97,19 @@ impl<'a> Modules<'a> {
     }
 }
 
-pub fn resolve_struct<'a>(
-    view: &'a BinaryIndexedView,
+pub fn resolve_struct(
+    module: &CompiledModule,
     sidx: StructHandleIndex,
-) -> (&'a AccountAddress, &'a IdentStr, &'a IdentStr) {
-    let shandle = view.struct_handle_at(sidx);
-    let mhandle = view.module_handle_at(shandle.module);
-    let address = view.address_identifier_at(mhandle.address);
-    let module_name = view.identifier_at(mhandle.name);
-    let struct_name = view.identifier_at(shandle.name);
+) -> (&AccountAddress, &IdentStr, &IdentStr) {
+    let shandle = module.struct_handle_at(sidx);
+    let mhandle = module.module_handle_at(shandle.module);
+    let address = module.address_identifier_at(mhandle.address);
+    let module_name = module.identifier_at(mhandle.name);
+    let struct_name = module.identifier_at(shandle.name);
     (address, module_name, struct_name)
 }
 
-pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> String {
+pub fn format_signature_token(module: &CompiledModule, t: &SignatureToken) -> String {
     match t {
         SignatureToken::Bool => "bool".to_string(),
         SignatureToken::U8 => "u8".to_string(),
@@ -125,27 +121,28 @@ pub fn format_signature_token(view: &BinaryIndexedView, t: &SignatureToken) -> S
         SignatureToken::Address => "address".to_string(),
         SignatureToken::Signer => "signer".to_string(),
         SignatureToken::Vector(inner) => {
-            format!("vector<{}>", format_signature_token(view, inner))
+            format!("vector<{}>", format_signature_token(module, inner))
         }
-        SignatureToken::Reference(inner) => format!("&{}", format_signature_token(view, inner)),
+        SignatureToken::Reference(inner) => format!("&{}", format_signature_token(module, inner)),
         SignatureToken::MutableReference(inner) => {
-            format!("&mut {}", format_signature_token(view, inner))
+            format!("&mut {}", format_signature_token(module, inner))
         }
         SignatureToken::TypeParameter(i) => format!("T{}", i),
 
-        SignatureToken::Struct(idx) => format_signature_token_struct(view, *idx, &[]),
-        SignatureToken::StructInstantiation(idx, ty_args) => {
-            format_signature_token_struct(view, *idx, ty_args)
+        SignatureToken::Struct(idx) => format_signature_token_struct(module, *idx, &[]),
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, ty_args) = &**struct_inst;
+            format_signature_token_struct(module, *idx, ty_args)
         }
     }
 }
 
 pub fn format_signature_token_struct(
-    view: &BinaryIndexedView,
+    module: &CompiledModule,
     sidx: StructHandleIndex,
     ty_args: &[SignatureToken],
 ) -> String {
-    let (address, module_name, struct_name) = resolve_struct(view, sidx);
+    let (address, module_name, struct_name) = resolve_struct(module, sidx);
     let s;
     let ty_args_string = if ty_args.is_empty() {
         ""
@@ -154,7 +151,7 @@ pub fn format_signature_token_struct(
             "<{}>",
             ty_args
                 .iter()
-                .map(|t| format_signature_token(view, t))
+                .map(|t| format_signature_token(module, t))
                 .collect::<Vec<_>>()
                 .join(", ")
         );

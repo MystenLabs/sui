@@ -395,6 +395,7 @@ fn get_relinker_tests_modules_with_deps<'s>(
     }
 
     let (_, units) = Compiler::from_files(
+        None,
         vec![fixture_string_path(module)],
         deps.into_iter().map(fixture_string_path).collect(),
         BTreeMap::<String, _>::new(),
@@ -1013,7 +1014,7 @@ fn publish_bundle_with_err_retry() {
 }
 
 #[test]
-fn deep_dependency_list_err_0() {
+fn deep_dependency_list_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1029,11 +1030,11 @@ fn deep_dependency_list_err_0() {
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]
-fn deep_dependency_list_err_1() {
+fn deep_dependency_list_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1049,7 +1050,7 @@ fn deep_dependency_list_err_1() {
     let dep_name = format!("A{}", max - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]
@@ -1093,7 +1094,7 @@ fn deep_dependency_list_ok_1() {
 }
 
 #[test]
-fn deep_dependency_tree_err_0() {
+fn deep_dependency_tree_0() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1111,11 +1112,11 @@ fn deep_dependency_tree_err_0() {
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]
-fn deep_dependency_tree_err_1() {
+fn deep_dependency_tree_1() {
     let data_store = InMemoryStorage::new();
     let mut adapter = Adapter::new(data_store);
 
@@ -1133,7 +1134,7 @@ fn deep_dependency_tree_err_1() {
     let dep_name = format!("A_{}_{}", height - 1, width - 1);
     let deps = vec![dep_name];
     let module = empty_module_with_dependencies(name, deps);
-    adapter.publish_modules_with_error(vec![module]);
+    adapter.publish_module_bundle(vec![module]);
 }
 
 #[test]

@@ -11,7 +11,7 @@ use crate::{
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
 use move_binary_format::{
-    access::ModuleAccess,
+    binary_config::BinaryConfig,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, LocalIndex},
     CompiledModule, IndexKind,
@@ -81,10 +81,12 @@ impl VMRuntime {
             .map(|blob| {
                 CompiledModule::deserialize_with_config(
                     blob,
-                    self.loader.vm_config().max_binary_format_version,
-                    self.loader
-                        .vm_config()
-                        .check_no_extraneous_bytes_during_deserialization,
+                    &BinaryConfig::legacy(
+                        self.loader.vm_config().max_binary_format_version,
+                        self.loader
+                            .vm_config()
+                            .check_no_extraneous_bytes_during_deserialization,
+                    ),
                 )
             })
             .collect::<PartialVMResult<Vec<_>>>()
@@ -387,9 +389,9 @@ impl VMRuntime {
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
-        use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
+        use move_binary_format::file_format::SignatureIndex;
         fn check_is_entry(
-            _resolver: &BinaryIndexedView,
+            _resolver: &CompiledModule,
             is_entry: bool,
             _parameters_idx: SignatureIndex,
             _return_idx: Option<SignatureIndex>,
@@ -427,44 +429,6 @@ impl VMRuntime {
             additional_signature_checks,
         )?;
 
-        // execute the function
-        self.execute_function_impl(
-            func,
-            type_arguments,
-            parameters,
-            return_,
-            serialized_args,
-            data_store,
-            gas_meter,
-            extensions,
-        )
-    }
-
-    // See Session::execute_script for what contracts to follow.
-    pub(crate) fn execute_script(
-        &self,
-        script: impl Borrow<[u8]>,
-        type_arguments: Vec<Type>,
-        serialized_args: Vec<impl Borrow<[u8]>>,
-        data_store: &mut impl DataStore,
-        gas_meter: &mut impl GasMeter,
-        extensions: &mut NativeContextExtensions,
-    ) -> VMResult<SerializedReturnValues> {
-        // load the script, perform verification
-        let (
-            func,
-            LoadedFunctionInstantiation {
-                parameters,
-                return_,
-            },
-        ) = self
-            .loader
-            .load_script(script.borrow(), &type_arguments, data_store)?;
-        move_vm_profiler::gas_profiler_feature_enabled! {
-            use move_vm_profiler::GasProfiler;
-            let rem = gas_meter.remaining_gas().into();
-            gas_meter.set_profiler(GasProfiler::init_default_cfg(func.pretty_string(), rem));
-        }
         // execute the function
         self.execute_function_impl(
             func,

@@ -6,12 +6,10 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use fastcrypto::traits::KeyPair;
-use multiaddr::Multiaddr;
-use rand::{rngs::StdRng, SeedableRng};
+use mysten_network::Multiaddr;
 use serde::{Deserialize, Serialize};
 
-use crate::{NetworkKeyPair, NetworkPublicKey, ProtocolKeyPair, ProtocolPublicKey};
+use crate::{AuthorityPublicKey, NetworkPublicKey, ProtocolPublicKey};
 
 /// Committee of the consensus protocol is updated each epoch.
 pub type Epoch = u64;
@@ -23,7 +21,7 @@ pub type Stake = u64;
 
 /// Committee is the set of authorities that participate in the consensus protocol for this epoch.
 /// Its configuration is stored and computed on chain.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Committee {
     /// The epoch number of this committee
     epoch: Epoch,
@@ -45,6 +43,7 @@ impl Committee {
             "Too many authorities ({})!",
             authorities.len()
         );
+
         let total_stake = authorities.iter().map(|a| a.stake).sum();
         assert_ne!(total_stake, 0, "Total stake cannot be zero!");
         let quorum_threshold = 2 * total_stake / 3 + 1;
@@ -58,31 +57,8 @@ impl Committee {
         }
     }
 
-    pub fn new_for_test(
-        epoch: Epoch,
-        authorities_stake: Vec<Stake>,
-    ) -> (Self, Vec<(NetworkKeyPair, ProtocolKeyPair)>) {
-        let mut authorities = vec![];
-        let mut key_pairs = vec![];
-        let mut rng = StdRng::from_seed([9; 32]);
-        for (i, stake) in authorities_stake.into_iter().enumerate() {
-            let network_keypair = NetworkKeyPair::generate(&mut rng);
-            let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
-            authorities.push(Authority {
-                stake,
-                address: Multiaddr::empty(),
-                hostname: format!("test_host {i}").to_string(),
-                network_key: network_keypair.public().clone(),
-                protocol_key: protocol_keypair.public().clone(),
-            });
-            key_pairs.push((network_keypair, protocol_keypair));
-        }
-
-        let committee = Committee::new(epoch, authorities);
-        (committee, key_pairs)
-    }
-
-    /// Public accessors for Committee fields.
+    /// -----------------------------------------------------------------------
+    /// Accessors to Committee fields.
 
     pub fn epoch(&self) -> Epoch {
         self.epoch
@@ -100,26 +76,8 @@ impl Committee {
         self.validity_threshold
     }
 
-    /// Returns true if the provided stake has reached quorum (2f+1)
-    pub fn reached_quorum(&self, stake: Stake) -> bool {
-        stake >= self.quorum_threshold()
-    }
-
-    /// Returns true if the provided stake has reached validity (f+1)
-    pub fn reached_validity(&self, stake: Stake) -> bool {
-        stake >= self.validity_threshold()
-    }
-
     pub fn stake(&self, authority_index: AuthorityIndex) -> Stake {
         self.authorities[authority_index].stake
-    }
-
-    pub fn to_authority_index(&self, index: usize) -> Option<AuthorityIndex> {
-        if index < self.authorities.len() {
-            Some(AuthorityIndex(index as u32))
-        } else {
-            None
-        }
     }
 
     pub fn authority(&self, authority_index: AuthorityIndex) -> &Authority {
@@ -133,10 +91,35 @@ impl Committee {
             .map(|(i, a)| (AuthorityIndex(i as u32), a))
     }
 
-    pub fn exists(&self, index: AuthorityIndex) -> bool {
+    /// -----------------------------------------------------------------------
+    /// Helpers for Committee properties.
+
+    /// Returns true if the provided stake has reached quorum (2f+1).
+    pub fn reached_quorum(&self, stake: Stake) -> bool {
+        stake >= self.quorum_threshold()
+    }
+
+    /// Returns true if the provided stake has reached validity (f+1).
+    pub fn reached_validity(&self, stake: Stake) -> bool {
+        stake >= self.validity_threshold()
+    }
+
+    /// Coverts an index to an AuthorityIndex, if valid.
+    /// Returns None if index is out of bound.
+    pub fn to_authority_index(&self, index: usize) -> Option<AuthorityIndex> {
+        if index < self.authorities.len() {
+            Some(AuthorityIndex(index as u32))
+        } else {
+            None
+        }
+    }
+
+    /// Returns true if the provided index is valid.
+    pub fn is_valid_index(&self, index: AuthorityIndex) -> bool {
         index.value() < self.size()
     }
 
+    /// Returns number of authorities in the committee.
     pub fn size(&self) -> usize {
         self.authorities.len()
     }
@@ -146,7 +129,7 @@ impl Committee {
 ///
 /// NOTE: this is intentionally un-cloneable, to encourage only copying relevant fields.
 /// AuthorityIndex should be used to reference an authority instead.
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Authority {
     /// Voting power of the authority in the committee.
     pub stake: Stake,
@@ -154,10 +137,12 @@ pub struct Authority {
     pub address: Multiaddr,
     /// The authority's hostname, for metrics and logging.
     pub hostname: String,
-    /// The authority's ed25519 publicKey for signing network messages and blocks.
-    pub network_key: NetworkPublicKey,
-    /// The authority's bls public key for random beacon.
+    /// The authority's public key as Sui identity.
+    pub authority_key: AuthorityPublicKey,
+    /// The authority's public key for verifying blocks.
     pub protocol_key: ProtocolPublicKey,
+    /// The authority's public key for TLS and as network identity.
+    pub network_key: NetworkPublicKey,
 }
 
 /// Each authority is uniquely identified by its AuthorityIndex in the Committee.
@@ -172,8 +157,12 @@ pub struct Authority {
 pub struct AuthorityIndex(u32);
 
 impl AuthorityIndex {
-    // Minimum committee size is 4, so 0 index is always valid.
-    pub const ZERO: AuthorityIndex = AuthorityIndex(0);
+    // Minimum committee size is 1, so 0 index is always valid.
+    pub const ZERO: Self = Self(0);
+
+    // Only for scanning rows in the database. Invalid elsewhere.
+    pub const MIN: Self = Self::ZERO;
+    pub const MAX: Self = Self(u32::MAX);
 
     pub fn value(&self) -> usize {
         self.0 as usize
@@ -228,7 +217,8 @@ impl<T> IndexMut<AuthorityIndex> for Vec<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Committee, Stake};
+    use super::*;
+    use crate::local_committee_and_keys;
 
     #[test]
     fn committee_basic() {
@@ -236,7 +226,7 @@ mod tests {
         let epoch = 100;
         let num_of_authorities = 9;
         let authority_stakes = (1..=9).map(|s| s as Stake).collect();
-        let (committee, _) = Committee::new_for_test(epoch, authority_stakes);
+        let (committee, _) = local_committee_and_keys(epoch, authority_stakes);
 
         // THEN make sure the output Committee fields are populated correctly.
         assert_eq!(committee.size(), num_of_authorities);

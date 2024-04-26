@@ -11,17 +11,15 @@
 module a::m {
 
 use sui::dynamic_object_field::add;
-use sui::object;
-use sui::tx_context::{sender, TxContext};
 
-struct Obj has key, store {
+public struct Obj has key, store {
     id: object::UID,
 }
 
 entry fun t1(ctx: &mut TxContext) {
-    let id = object::new(ctx);
+    let mut id = object::new(ctx);
     add(&mut id, 0, Obj { id: object::new(ctx) });
-    sui::transfer::public_transfer(Obj { id }, sender(ctx))
+    sui::transfer::public_transfer(Obj { id }, ctx.sender())
 }
 
 entry fun t2(obj: &mut Obj, ctx: &mut TxContext) {

@@ -4,7 +4,7 @@
 
 use crate::{
     account_address::AccountAddress,
-    fmt_list,
+    annotated_visitor::{visit_struct, visit_value, Error as VError, Visitor},
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
     runtime_value as R, u256,
@@ -99,8 +99,44 @@ pub enum MoveTypeLayout {
 }
 
 impl MoveValue {
+    /// TODO (annotated-visitor): Port legacy uses of this method to `BoundedVisitor`.
     pub fn simple_deserialize(blob: &[u8], ty: &MoveTypeLayout) -> AResult<Self> {
         Ok(bcs::from_bytes_seed(ty, blob)?)
+    }
+
+    /// Deserialize `blob` as a Move value with the given `ty`-pe layout, and visit its
+    /// sub-structure with the given `visitor`. The visitor dictates the return value that is built
+    /// up during deserialization.
+    ///
+    /// # Nested deserialization
+    ///
+    /// Vectors and structs are nested structures that can be met during deserialization. Visitors
+    /// are passed a driver (`VecDriver` or `StructDriver` correspondingly) which controls how
+    /// nested elements or fields are visited including whether a given nested element/field is
+    /// explored, which visitor to use (the visitor can pass `self` to recursively explore them) and
+    /// whether a given element is visited or skipped.
+    ///
+    /// The visitor may leave elements unvisited at the end of the vector or struct, which
+    /// implicitly skips them.
+    ///
+    /// # Errors
+    ///
+    /// Deserialization can fail because of an issue in the serialized format (data doesn't match
+    /// layout, unexpected bytes or trailing bytes), or a custom error expressed by the visitor.
+    pub fn visit_deserialize<V: Visitor>(
+        mut blob: &[u8],
+        ty: &MoveTypeLayout,
+        visitor: &mut V,
+    ) -> AResult<V::Value>
+    where
+        V::Error: std::error::Error + Send + Sync + 'static,
+    {
+        let res = visit_value(&mut blob, ty, visitor)?;
+        if blob.is_empty() {
+            Ok(res)
+        } else {
+            Err(VError::TrailingBytes(blob.len()).into())
+        }
     }
 
     pub fn simple_serialize(&self) -> Option<Vec<u8>> {
@@ -143,8 +179,28 @@ impl MoveStruct {
         Self { type_, fields }
     }
 
+    /// TODO (annotated-visitor): Port legacy uses of this method to `BoundedVisitor`.
     pub fn simple_deserialize(blob: &[u8], ty: &MoveStructLayout) -> AResult<Self> {
         Ok(bcs::from_bytes_seed(ty, blob)?)
+    }
+
+    /// Like `MoveValue::visit_deserialize` (see for details), but specialized to visiting a struct
+    /// (the `blob` is known to be a serialized Move struct, and the layout is a
+    /// `MoveStructLayout`).
+    pub fn visit_deserialize<V: Visitor>(
+        mut blob: &[u8],
+        ty: &MoveStructLayout,
+        visitor: &mut V,
+    ) -> AResult<V::Value>
+    where
+        V::Error: std::error::Error + Send + Sync + 'static,
+    {
+        let res = visit_struct(&mut blob, ty, visitor)?;
+        if blob.is_empty() {
+            Ok(res)
+        } else {
+            Err(VError::TrailingBytes(blob.len()).into())
+        }
     }
 
     pub fn into_fields(self) -> Vec<MoveValue> {
@@ -410,7 +466,15 @@ impl fmt::Display for MoveValue {
             MoveValue::Bool(true) => write!(f, "true"),
             MoveValue::Address(a) => write!(f, "{}", a.to_hex_literal()),
             MoveValue::Signer(a) => write!(f, "signer({})", a.to_hex_literal()),
-            MoveValue::Vector(v) => fmt_list(f, "vector[", v, "]"),
+            MoveValue::Vector(v) => {
+                use DebugAsDisplay as DD;
+                write!(f, "vector")?;
+                let mut list = f.debug_list();
+                for val in v {
+                    list.entry(&DD(val));
+                }
+                list.finish()
+            }
             MoveValue::Struct(s) => fmt::Display::fmt(s, f),
         }
     }
@@ -418,16 +482,13 @@ impl fmt::Display for MoveValue {
 
 impl fmt::Display for MoveStruct {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use DebugAsDisplay as DD;
         fmt::Display::fmt(&self.type_, f)?;
-        fmt_list(f, " {", self.fields.iter().map(DisplayFieldBinding), "}")
-    }
-}
-
-struct DisplayFieldBinding<'a>(&'a (Identifier, MoveValue));
-
-impl fmt::Display for DisplayFieldBinding<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let DisplayFieldBinding((field, value)) = self;
-        write!(f, "{}: {}", field, value)
+        write!(f, " ")?;
+        let mut map = f.debug_map();
+        for (field, value) in &self.fields {
+            map.entry(&DD(field), &DD(value));
+        }
+        map.finish()
     }
 }

@@ -32,6 +32,7 @@ pub struct VerifyParams {
     pub zk_login_env: ZkLoginEnv,
     pub verify_legacy_zklogin_address: bool,
     pub accept_zklogin_in_multisig: bool,
+    pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 impl VerifyParams {
@@ -41,6 +42,7 @@ impl VerifyParams {
         zk_login_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
             oidc_provider_jwks,
@@ -48,6 +50,7 @@ impl VerifyParams {
             zk_login_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
+            zklogin_max_epoch_upper_bound_delta,
         }
     }
 }
@@ -55,34 +58,13 @@ impl VerifyParams {
 /// A lightweight trait that all members of [enum GenericSignature] implement.
 #[enum_dispatch]
 pub trait AuthenticatorTrait {
-    fn verify_user_authenticator_epoch(&self, epoch: EpochId) -> SuiResult;
+    fn verify_user_authenticator_epoch(
+        &self,
+        epoch: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> SuiResult;
 
     fn verify_claims<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize;
-
-    fn verify_authenticator<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        epoch: Option<EpochId>,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
-        if let Some(epoch) = epoch {
-            self.verify_user_authenticator_epoch(epoch)?;
-        }
-        self.verify_claims(value, author, aux_verify_data)
-    }
-
-    fn verify_uncached_checks<T>(
         &self,
         value: &IntentMessage<T>,
         author: SuiAddress,
@@ -114,6 +96,23 @@ impl GenericSignature {
         matches!(self, GenericSignature::MultiSig(_))
     }
 
+    pub fn verify_authenticator<T>(
+        &self,
+        value: &IntentMessage<T>,
+        author: SuiAddress,
+        epoch: EpochId,
+        verify_params: &VerifyParams,
+    ) -> SuiResult
+    where
+        T: Serialize,
+    {
+        self.verify_user_authenticator_epoch(
+            epoch,
+            verify_params.zklogin_max_epoch_upper_bound_delta,
+        )?;
+        self.verify_claims(value, author, verify_params)
+    }
+
     /// Parse [enum CompressedSignature] from trait SuiSignature `flag || sig || pk`.
     /// This is useful for the MultiSig to combine partial signature into a MultiSig public key.
     pub fn to_compressed(&self) -> Result<CompressedSignature, SuiError> {
@@ -124,7 +123,7 @@ impl GenericSignature {
                     SignatureScheme::ED25519 => Ok(CompressedSignature::Ed25519(
                         (&Ed25519Signature::from_bytes(bytes).map_err(|_| {
                             SuiError::InvalidSignature {
-                                error: "Cannot parse sig".to_string(),
+                                error: "Cannot parse ed25519 sig".to_string(),
                             }
                         })?)
                             .into(),
@@ -132,7 +131,7 @@ impl GenericSignature {
                     SignatureScheme::Secp256k1 => Ok(CompressedSignature::Secp256k1(
                         (&Secp256k1Signature::from_bytes(bytes).map_err(|_| {
                             SuiError::InvalidSignature {
-                                error: "Cannot parse sig".to_string(),
+                                error: "Cannot parse secp256k1 sig".to_string(),
                             }
                         })?)
                             .into(),
@@ -140,7 +139,7 @@ impl GenericSignature {
                     SignatureScheme::Secp256r1 => Ok(CompressedSignature::Secp256r1(
                         (&Secp256r1Signature::from_bytes(bytes).map_err(|_| {
                             SuiError::InvalidSignature {
-                                error: "Cannot parse sig".to_string(),
+                                error: "Cannot parse secp256r1 sig".to_string(),
                             }
                         })?)
                             .into(),
@@ -168,19 +167,19 @@ impl GenericSignature {
                 match s.scheme() {
                     SignatureScheme::ED25519 => Ok(PublicKey::Ed25519(
                         (&Ed25519PublicKey::from_bytes(bytes).map_err(|_| {
-                            SuiError::KeyConversionError("Cannot parse pk".to_string())
+                            SuiError::KeyConversionError("Cannot parse ed25519 pk".to_string())
                         })?)
                             .into(),
                     )),
                     SignatureScheme::Secp256k1 => Ok(PublicKey::Secp256k1(
                         (&Secp256k1PublicKey::from_bytes(bytes).map_err(|_| {
-                            SuiError::KeyConversionError("Cannot parse pk".to_string())
+                            SuiError::KeyConversionError("Cannot parse secp256k1 pk".to_string())
                         })?)
                             .into(),
                     )),
                     SignatureScheme::Secp256r1 => Ok(PublicKey::Secp256r1(
                         (&Secp256r1PublicKey::from_bytes(bytes).map_err(|_| {
-                            SuiError::KeyConversionError("Cannot parse pk".to_string())
+                            SuiError::KeyConversionError("Cannot parse secp256r1 pk".to_string())
                         })?)
                             .into(),
                     )),
@@ -278,18 +277,7 @@ impl<'de> ::serde::Deserialize<'de> for GenericSignature {
 
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> SuiResult {
-        Ok(())
-    }
-    fn verify_uncached_checks<T>(
-        &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
+    fn verify_user_authenticator_epoch(&self, _: EpochId, _: Option<EpochId>) -> SuiResult {
         Ok(())
     }
 

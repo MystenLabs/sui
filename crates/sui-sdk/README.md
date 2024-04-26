@@ -1,4 +1,4 @@
-This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. 
+This crate provides the Sui Rust SDK, containing APIs to interact with the Sui network. Auto-generated documentation for this crate is [here](https://mystenlabs.github.io/sui/sui_sdk/index.html).
 
 ## Getting started
 
@@ -38,33 +38,13 @@ async fn main() -> Result<(), anyhow::Error> {
 
 ### Building documentation locally
 
-You can also build the documentation locally. To do so, open a Terminal or Console to the `sui/crates/sui-sdk` directory:
+You can also build the documentation locally. To do so,
 
-1. Use the `rustup toolchain` command to install the `nightly` release channel.
+1. Clone the `sui` repo locally. Open a Terminal or Console and go to the `sui/crates/sui-sdk` directory.
 
-   ```rust
-   rustup toolchain install nightly
-   ```
+1. Run `cargo doc` to build the documentation into the `sui/target` directory. Take note of location of the generated file from the last line of the output, for example `Generated /Users/foo/sui/target/doc/sui_sdk/index.html`.
 
-1. Use the `rustup override` command to set the `nightly` release channel as active.
-
-   ```rust
-   rustup override set nightly
-   ```
-
-1. Use `cargo doc` with the following `RUSTDOCFLAGS` set to build the documentation into the `sui/target` directory.  
-
-   ```rust
-   RUSTDOCFLAGS="--enable-index-page -Zunstable-options" cargo doc --no-deps
-   ```
-
-1. Open the `sui/target/doc/sui_sdk/index.html` file with a browser, like Chrome.
-
-1. After building the docs, use the `rustup override` command again to return to the default toolchain.
-
-   ```rust
-   rustup override unset
-   ```
+1. Use a web browser, like Chrome, to open the `.../target/doc/sui_sdk/index.html` file at the location your console reported in the previous step.
 
 ## Rust SDK examples
 
@@ -160,18 +140,18 @@ See the programmable transactions [example](https://github.com/MystenLabs/sui/bl
 ### Tic Tac Toe quick start
 
 1. Prepare the environment 
-   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md##install-sui-binaries) docs.
-   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/connect-sui-network.md).
-   1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#add-existing-accounts-to-clientyaml) by using the `new-address` command to create new addresses:
+   1. Install `sui` binary following the [Sui installation](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-install.mdx) docs.
+   1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/connect.mdx).
+   1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/get-address.mdx) by using the `new-address` command to create new addresses:
       ```shell
       sui client new-address ed25519
       ```
       You must specify the key scheme, one of `ed25519` or `secp256k1` or `secp256r1`.
       You can skip this step if you are going to play with a friend. :)
-   1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#sui-tokens) for all addresses that will be used to join the game.
+   1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/get-coins.mdx) for all addresses that will be used to join the game.
 
 2. Publish the move contract
-   1. [Download the Sui source code](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#source-code).
+   1. [Download the Sui source code](https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/getting-started/sui-install.mdx).
    1. Publish the [`games` package](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/games) 
       using the Sui client:
       ```shell

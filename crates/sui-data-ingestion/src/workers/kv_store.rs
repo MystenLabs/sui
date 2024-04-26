@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::Worker;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
+use aws_config::timeout::TimeoutConfig;
 use aws_sdk_dynamodb::primitives::Blob;
 use aws_sdk_dynamodb::types::{AttributeValue, PutRequest, WriteRequest};
 use aws_sdk_dynamodb::Client;
@@ -15,9 +15,13 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::iter::repeat;
+use std::time::{Duration, Instant};
+use sui_data_ingestion_core::Worker;
 use sui_storage::http_key_value_store::TaggedKey;
 use sui_types::full_checkpoint_content::CheckpointData;
 use sui_types::storage::ObjectKey;
+
+const TIMEOUT: Duration = Duration::from_secs(60);
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct KVStoreTaskConfig {
@@ -55,9 +59,15 @@ impl KVStoreWorker {
             None,
             "dynamodb",
         );
+        let timeout_config = TimeoutConfig::builder()
+            .operation_timeout(Duration::from_secs(3))
+            .operation_attempt_timeout(Duration::from_secs(10))
+            .connect_timeout(Duration::from_secs(3))
+            .build();
         let aws_config = aws_config::from_env()
             .credentials_provider(credentials)
             .region(Region::new(config.aws_region))
+            .timeout_config(timeout_config)
             .load()
             .await;
         let dynamo_client = Client::new(&aws_config);
@@ -75,6 +85,7 @@ impl KVStoreWorker {
         table: KVTable,
         values: impl IntoIterator<Item = (Vec<u8>, V)> + std::marker::Send,
     ) -> anyhow::Result<()> {
+        let instant = Instant::now();
         let mut items = vec![];
         let mut seen = HashSet::new();
         for (digest, value) in values {
@@ -102,6 +113,9 @@ impl KVStoreWorker {
         let mut backoff = ExponentialBackoff::default();
         let mut queue: VecDeque<Vec<_>> = items.chunks(25).map(|ck| ck.to_vec()).collect();
         while let Some(chunk) = queue.pop_front() {
+            if instant.elapsed() > TIMEOUT {
+                return Err(anyhow!("key value worker timed out"));
+            }
             let response = self
                 .dynamo_client
                 .batch_write_item()

@@ -12,7 +12,7 @@ The Sui TypeScript SDK supports three signing schemes:
 | ECDSA Secp256r1 | `Secp256r1Keypair` | `@mysten/sui.js/keypairs/secp256r1` |
 
 For information on these schemes, see the
-[Sui Wallet Specifications](https://docs.sui.io/testnet/learn/cryptography/sui-wallet-specs) topic.
+[Signatures](https://docs.sui.io/concepts/cryptography/transaction-auth/signatures) topic.
 
 To use, import the key pair class your project uses from the `@mysten/sui.js/keypairs` folder. For
 example, to use the Ed25519 scheme, import the `Ed25519Keypair` class from
@@ -125,6 +125,30 @@ const exampleMnemonic = 'result crisp session latin ...';
 
 const keyPair = Ed25519Keypair.deriveKeypair(exampleMnemonic);
 ```
+
+## Deriving a `Keypair` from a Bech32 encoded secret key
+
+You can derive a `Keypair` by converting the 33-byte secret key encoded in Bech32 string to a
+`Uint8Array` and passing it to the `fromSecretKey` method of a `Keypair` class.
+
+```typescript
+import { decodeSuiPrivateKey, encodeSuiPrivateKey } from '@mysten/sui.js/cryptography/keypair';
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+
+const encoded = encodeSuiPrivateKey(
+	[
+		59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203, 174, 253, 102,
+		39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
+	],
+	'ED25519',
+);
+const { schema, secretKey } = decodeSuiPrivateKey(encoded);
+// use schema to choose the correct key pair
+const keypair = Ed25519Keypair.fromSecretKey(secretKey);
+```
+
+See [SIP-15](https://github.com/sui-foundation/sips/blob/main/sips/sip-15.md) for additional context
+and motivation.
 
 ## Deriving a `Keypair` from a hex encoded secret key
 

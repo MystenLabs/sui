@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+mod binary_limits_tests;
 mod binary_tests;
 mod compatibility_tests;
 mod control_flow_graph_tests;

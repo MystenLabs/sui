@@ -8,6 +8,7 @@ use crate::error::{BridgeError, BridgeResult};
 use crate::server::APPLICATION_JSON;
 use crate::types::{BridgeAction, BridgeCommittee, VerifiedSignedBridgeAction};
 use fastcrypto::encoding::{Encoding, Hex};
+use fastcrypto::traits::ToFromBytes;
 use std::str::FromStr;
 use std::sync::Arc;
 use url::Url;
@@ -48,7 +49,7 @@ impl BridgeClient {
         self.committee = committee;
     }
 
-    // Important: the paths need to match the ones in server.rs
+    // Important: the paths need to match the ones in mod.rs
     fn bridge_action_to_path(event: &BridgeAction) -> String {
         match event {
             BridgeAction::SuiToEthBridgeAction(e) => format!(
@@ -60,6 +61,53 @@ impl BridgeClient {
                 Hex::encode(e.eth_tx_hash.0),
                 e.eth_event_index
             ),
+            BridgeAction::BlocklistCommitteeAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let type_ = (a.blocklist_type as u8).to_string();
+                let keys = a
+                    .blocklisted_members
+                    .iter()
+                    .map(|k| Hex::encode(k.as_bytes()))
+                    .collect::<Vec<_>>()
+                    .join(",");
+                format!("sign/update_committee_blocklist/{chain_id}/{nonce}/{type_}/{keys}")
+            }
+            BridgeAction::EmergencyAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let type_ = (a.action_type as u8).to_string();
+                format!("sign/emergency_button/{chain_id}/{nonce}/{type_}")
+            }
+            BridgeAction::LimitUpdateAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let sending_chain_id = (a.sending_chain_id as u8).to_string();
+                let new_usd_limit = a.new_usd_limit.to_string();
+                format!("sign/update_limit/{chain_id}/{nonce}/{sending_chain_id}/{new_usd_limit}")
+            }
+            BridgeAction::AssetPriceUpdateAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let token_id = (a.token_id as u8).to_string();
+                let new_usd_price = a.new_usd_price.to_string();
+                format!("sign/update_asset_price/{chain_id}/{nonce}/{token_id}/{new_usd_price}")
+            }
+            BridgeAction::EvmContractUpgradeAction(a) => {
+                let chain_id = (a.chain_id as u8).to_string();
+                let nonce = a.nonce.to_string();
+                let proxy_address = Hex::encode(a.proxy_address.as_bytes());
+                let new_impl_address = Hex::encode(a.new_impl_address.as_bytes());
+                let path = format!(
+                    "sign/upgrade_evm_contract/{chain_id}/{nonce}/{proxy_address}/{new_impl_address}"
+                );
+                if a.call_data.is_empty() {
+                    path
+                } else {
+                    let call_data = Hex::encode(a.call_data.clone());
+                    format!("{}/{}", path, call_data)
+                }
+            }
         }
     }
 
@@ -127,6 +175,7 @@ mod tests {
         test_utils::{get_test_authority_and_key, get_test_sui_to_eth_bridge_action},
         types::{BridgeChainId, SignedBridgeAction, TokenId},
     };
+    use fastcrypto::hash::{HashFunction, Keccak256};
     use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
 
@@ -349,6 +398,115 @@ mod tests {
                 Hex::encode(eth_tx_hash.0),
                 eth_event_index
             )
+        );
+
+        let pub_key_bytes = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279")
+                .unwrap(),
+        )
+        .unwrap();
+
+        let action =
+            BridgeAction::BlocklistCommitteeAction(crate::types::BlocklistCommitteeAction {
+                chain_id: BridgeChainId::EthSepolia,
+                nonce: 1,
+                blocklist_type: crate::types::BlocklistType::Blocklist,
+                blocklisted_members: vec![pub_key_bytes.clone()],
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_committee_blocklist/11/1/0/027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279",
+        );
+        let pub_key_bytes2 = BridgeAuthorityPublicKeyBytes::from_bytes(
+            &Hex::decode("02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4")
+                .unwrap(),
+        )
+        .unwrap();
+        let action =
+            BridgeAction::BlocklistCommitteeAction(crate::types::BlocklistCommitteeAction {
+                chain_id: BridgeChainId::EthSepolia,
+                nonce: 1,
+                blocklist_type: crate::types::BlocklistType::Blocklist,
+                blocklisted_members: vec![pub_key_bytes.clone(), pub_key_bytes2.clone()],
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_committee_blocklist/11/1/0/027f1178ff417fc9f5b8290bd8876f0a157a505a6c52db100a8492203ddd1d4279,02321ede33d2c2d7a8a152f275a1484edef2098f034121a602cb7d767d38680aa4",
+        );
+
+        let action = BridgeAction::EmergencyAction(crate::types::EmergencyAction {
+            chain_id: BridgeChainId::SuiLocalTest,
+            nonce: 5,
+            action_type: crate::types::EmergencyActionType::Pause,
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/emergency_button/3/5/0",
+        );
+
+        let action = BridgeAction::LimitUpdateAction(crate::types::LimitUpdateAction {
+            chain_id: BridgeChainId::SuiLocalTest,
+            nonce: 10,
+            sending_chain_id: BridgeChainId::EthLocalTest,
+            new_usd_limit: 100,
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_limit/3/10/12/100",
+        );
+
+        let action = BridgeAction::AssetPriceUpdateAction(crate::types::AssetPriceUpdateAction {
+            chain_id: BridgeChainId::SuiDevnet,
+            nonce: 8,
+            token_id: TokenId::BTC,
+            new_usd_price: 100_000_000,
+        });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/update_asset_price/2/8/1/100000000",
+        );
+
+        let action =
+            BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
+                nonce: 123,
+                chain_id: BridgeChainId::EthLocalTest,
+                proxy_address: EthAddress::repeat_byte(6),
+                new_impl_address: EthAddress::repeat_byte(9),
+                call_data: vec![],
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909",
+        );
+
+        let function_signature = "initializeV2()";
+        let selector = &Keccak256::digest(function_signature).digest[0..4];
+        let mut call_data = selector.to_vec();
+        let action =
+            BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
+                nonce: 123,
+                chain_id: BridgeChainId::EthLocalTest,
+                proxy_address: EthAddress::repeat_byte(6),
+                new_impl_address: EthAddress::repeat_byte(9),
+                call_data: call_data.clone(),
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/5cd8a76b",
+        );
+
+        call_data.extend(ethers::abi::encode(&[ethers::abi::Token::Uint(42.into())]));
+        let action =
+            BridgeAction::EvmContractUpgradeAction(crate::types::EvmContractUpgradeAction {
+                nonce: 123,
+                chain_id: BridgeChainId::EthLocalTest,
+                proxy_address: EthAddress::repeat_byte(6),
+                new_impl_address: EthAddress::repeat_byte(9),
+                call_data,
+            });
+        assert_eq!(
+            BridgeClient::bridge_action_to_path(&action),
+            "sign/upgrade_evm_contract/12/123/0606060606060606060606060606060606060606/0909090909090909090909090909090909090909/5cd8a76b000000000000000000000000000000000000000000000000000000000000002a",
         );
     }
 }

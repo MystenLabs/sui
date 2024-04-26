@@ -505,12 +505,18 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
 
     vec![
-        (MoveToDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
+        (
+            MoveToDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
         (
             MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
-        (MoveFromDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
+        (
+            MoveFromDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
         (
             MoveFromGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
@@ -541,7 +547,7 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (Lt, GasCost::new(0, 0)),
         (LdU8(0), GasCost::new(0, 0)),
         (LdU64(0), GasCost::new(0, 0)),
-        (LdU128(0), GasCost::new(0, 0)),
+        (LdU128(Box::new(0)), GasCost::new(0, 0)),
         (CastU8, GasCost::new(0, 0)),
         (CastU64, GasCost::new(0, 0)),
         (CastU128, GasCost::new(0, 0)),
@@ -572,7 +578,10 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(0, 0)),
         (Mod, GasCost::new(0, 0)),
         (BrFalse(0), GasCost::new(0, 0)),
-        (ExistsDeprecated(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
+        (
+            ExistsDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
         (
             ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
@@ -614,7 +623,7 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (VecSwap(SignatureIndex::new(0)), GasCost::new(0, 0)),
         (LdU16(0), GasCost::new(0, 0)),
         (LdU32(0), GasCost::new(0, 0)),
-        (LdU256(u256::U256::zero()), GasCost::new(0, 0)),
+        (LdU256(Box::new(u256::U256::zero())), GasCost::new(0, 0)),
         (CastU16, GasCost::new(0, 0)),
         (CastU32, GasCost::new(0, 0)),
         (CastU256, GasCost::new(0, 0)),
@@ -644,7 +653,10 @@ pub fn unit_cost_schedule() -> CostTable {
 pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
     vec![
-        (MoveToDeprecated(StructDefinitionIndex::new(0)), GasCost::new(13, 1)),
+        (
+            MoveToDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(13, 1),
+        ),
         (
             MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(27, 1),
@@ -683,7 +695,7 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (Lt, GasCost::new(1, 1)),
         (LdU8(0), GasCost::new(1, 1)),
         (LdU64(0), GasCost::new(1, 1)),
-        (LdU128(0), GasCost::new(1, 1)),
+        (LdU128(Box::new(0)), GasCost::new(1, 1)),
         (CastU8, GasCost::new(2, 1)),
         (CastU64, GasCost::new(1, 1)),
         (CastU128, GasCost::new(1, 1)),
@@ -714,7 +726,10 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(1, 1)),
         (Mod, GasCost::new(1, 1)),
         (BrFalse(0), GasCost::new(1, 1)),
-        (ExistsDeprecated(StructDefinitionIndex::new(0)), GasCost::new(41, 1)),
+        (
+            ExistsDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(41, 1),
+        ),
         (
             ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(34, 1),
@@ -756,7 +771,7 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (VecSwap(SignatureIndex::new(0)), GasCost::new(1436, 1)),
         (LdU16(0), GasCost::new(1, 1)),
         (LdU32(0), GasCost::new(1, 1)),
-        (LdU256(u256::U256::zero()), GasCost::new(1, 1)),
+        (LdU256(Box::new(u256::U256::zero())), GasCost::new(1, 1)),
         (CastU16, GasCost::new(2, 1)),
         (CastU32, GasCost::new(2, 1)),
         (CastU256, GasCost::new(2, 1)),

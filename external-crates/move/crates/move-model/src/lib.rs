@@ -17,9 +17,8 @@ use log::warn;
 use num::{BigUint, Num};
 
 use builder::module_builder::ModuleBuilder;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex},
+use move_binary_format::file_format::{
+    CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex,
 };
 use move_compiler::{
     self,
@@ -89,7 +88,7 @@ pub fn run_model_builder_with_options<
         move_sources,
         deps,
         options,
-        Flags::verification(),
+        Flags::empty(),
         warning_filter,
     )
 }
@@ -110,12 +109,13 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     env.set_extension(options);
 
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
-        .set_flags(flags)
-        .set_warning_filter(warning_filter)
-        .run::<PASS_PARSER>()?;
+    let (files, comments_and_compiler_res) =
+        Compiler::from_package_paths(None, move_sources, deps)?
+            .set_flags(flags)
+            .set_warning_filter(warning_filter)
+            .run::<PASS_PARSER>()?;
     let (comment_map, compiler) = match comments_and_compiler_res {
-        Err(diags) => {
+        Err((_pass, diags)) => {
             // Add source files so that the env knows how to translate locations of parse errors
             let empty_alias = Rc::new(BTreeMap::new());
             for (fhash, (fname, fsrc)) in &files {
@@ -200,7 +200,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         }
     };
     let (compiler, expansion_ast) = match compiler.at_parser(parsed_prog).run::<PASS_EXPANSION>() {
-        Err(diags) => {
+        Err((_pass, diags)) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
         }
@@ -210,7 +210,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         .at_expansion(expansion_ast.clone())
         .run::<PASS_TYPING>()
     {
-        Err(diags) => {
+        Err((_pass, diags)) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
         }
@@ -256,7 +256,7 @@ pub fn run_model_builder_with_options_and_compilation_flags<
 
     // Run the compiler fully to the compiled units
     let units = match compiler.at_typing(typing_ast).run::<PASS_COMPILATION>() {
-        Err(diags) => {
+        Err((_pass, diags)) => {
             add_move_lang_diagnostics(&mut env, diags);
             return Ok(env);
         }

@@ -7,8 +7,6 @@
 
 //# publish
 module test::m1 {
-    use std::option::Option;
-    use sui::object::ID;
     use std::string::String;
     use std::ascii;
 
@@ -17,7 +15,7 @@ module test::m1 {
     public fun addr(_: address) {}
     public fun id(_: ID) {}
 
-    public fun ascii(_: ascii::String) {}
+    public fun ascii_(_: ascii::String) {}
     public fun string(_: String) {}
 
     public fun vec<T: drop>(_: vector<T>) {}
@@ -28,7 +26,7 @@ module test::m1 {
 
 //# programmable --inputs "hello"
 
-//> 0: test::m1::ascii(Input(0));
+//> 0: test::m1::ascii_(Input(0));
 //> 1: test::m1::string(Input(0));
 //> 2: test::m1::fix<std::ascii::String>(Input(0));
 // now will fail as Input(0) if always a String

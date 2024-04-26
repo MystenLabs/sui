@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use async_graphql::{PathSegment, ServerError};
 use prometheus::{
@@ -95,25 +95,27 @@ impl Metrics {
     }
 
     /// Updates the DB related metrics (latency, error, success)
-    pub(crate) fn observe_db_data(&self, time: u64, succeeded: bool) {
+    pub(crate) fn observe_db_data(&self, time: Duration, succeeded: bool) {
         let label = if succeeded { "success" } else { "error" };
         self.db_metrics.db_fetches.with_label_values(&[label]).inc();
         self.db_metrics
             .db_fetch_latency
             .with_label_values(&[label])
-            .observe(time as f64);
+            .observe(time.as_secs_f64());
     }
 
     /// The total time needed for handling the query
-    pub(crate) fn query_latency(&self, time: u64) {
-        self.request_metrics.query_latency.observe(time as f64);
+    pub(crate) fn query_latency(&self, time: Duration) {
+        self.request_metrics
+            .query_latency
+            .observe(time.as_secs_f64());
     }
 
     /// The time needed for validating the query
-    pub(crate) fn query_validation_latency(&self, time: u64) {
+    pub(crate) fn query_validation_latency(&self, time: Duration) {
         self.request_metrics
             .query_validation_latency
-            .observe(time as f64);
+            .observe(time.as_secs_f64());
     }
 
     /// Increment the total number of queries by one
@@ -123,9 +125,9 @@ impl Metrics {
 
     /// Use this function to increment the number of errors per path and per error type.
     /// The error type is detected automatically from the passed errors.
-    pub(crate) fn inc_errors(&self, errors: Vec<ServerError>) {
+    pub(crate) fn inc_errors(&self, errors: &[ServerError]) {
         for err in errors {
-            if let Some(ext) = err.extensions {
+            if let Some(ext) = &err.extensions {
                 if let Some(async_graphql_value::ConstValue::String(val)) = ext.get("code") {
                     self.request_metrics
                         .num_errors

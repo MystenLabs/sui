@@ -5,11 +5,10 @@
 /// This module defines base testing utilities for the
 module sui::token_test_utils {
     use sui::coin::{Self, TreasuryCap};
-    use sui::tx_context::{Self, TxContext};
     use sui::token::{Self, Token, TokenPolicy, TokenPolicyCap};
 
     /// The type of the test Token.
-    struct TEST has drop {}
+    public struct TEST has drop {}
 
     /// Get a context for testing.
     public fun ctx(sender: address): TxContext {
@@ -22,7 +21,7 @@ module sui::token_test_utils {
         coin::create_treasury_cap_for_testing(ctx)
     }
 
-    #[lint_allow(share_owned)]
+    #[allow(lint(share_owned))]
     /// Return `TreasuryCap` (shares it for now).
     public fun return_treasury_cap(treasury_cap: TreasuryCap<TEST>) {
         sui::transfer::public_share_object(treasury_cap)
@@ -35,7 +34,7 @@ module sui::token_test_utils {
 
     /// Gracefully unpack policy after the tests have been performed.
     public fun return_policy(policy: TokenPolicy<TEST>, cap: TokenPolicyCap<TEST>) {
-        token::burn_policy_for_testing(policy, cap)
+        policy.burn_policy_for_testing(cap)
     }
 
     /// Mint a test token.
@@ -45,6 +44,6 @@ module sui::token_test_utils {
 
     /// Burn a test token.
     public fun burn(token: Token<TEST>) {
-        token::burn_for_testing(token)
+        token.burn_for_testing()
     }
 }

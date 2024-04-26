@@ -44,12 +44,14 @@ pub struct NarwhalManager {
     worker_nodes: WorkerNodes,
     storage_base_path: PathBuf,
     running: Mutex<Running>,
-    metrics: ConsensusManagerMetrics,
-    store_cache_metrics: CertificateStoreCacheMetrics,
+    metrics: Arc<ConsensusManagerMetrics>,
+    registry_service: RegistryService,
+    // NarwhalManager creates and unregisters the store cache metrics.
+    store_cache_metrics: parking_lot::Mutex<Option<Arc<CertificateStoreCacheMetrics>>>,
 }
 
 impl NarwhalManager {
-    pub fn new(config: NarwhalConfiguration, metrics: ConsensusManagerMetrics) -> Self {
+    pub fn new(config: NarwhalConfiguration, metrics: Arc<ConsensusManagerMetrics>) -> Self {
         // Create the Narwhal Primary with configuration
         let primary_node =
             PrimaryNode::new(config.parameters.clone(), config.registry_service.clone());
@@ -57,9 +59,6 @@ impl NarwhalManager {
         // Create Narwhal Workers with configuration
         let worker_nodes =
             WorkerNodes::new(config.registry_service.clone(), config.parameters.clone());
-
-        let store_cache_metrics =
-            CertificateStoreCacheMetrics::new(&config.registry_service.default_registry());
 
         Self {
             primary_node,
@@ -70,7 +69,8 @@ impl NarwhalManager {
             storage_base_path: config.storage_base_path,
             running: Mutex::new(Running::False),
             metrics,
-            store_cache_metrics,
+            registry_service: config.registry_service.clone(),
+            store_cache_metrics: parking_lot::Mutex::new(None),
         }
     }
 
@@ -98,7 +98,6 @@ impl ConsensusManagerTrait for NarwhalManager {
         consensus_handler_initializer: ConsensusHandlerInitializer,
         tx_validator: SuiTxValidator,
     ) {
-        let chain = epoch_store.get_chain_identifier();
         let system_state = epoch_store.epoch_start_state();
         let epoch = epoch_store.epoch();
         let committee = system_state.get_narwhal_committee();
@@ -122,9 +121,15 @@ impl ConsensusManagerTrait for NarwhalManager {
             .address;
         let worker_cache = system_state.get_narwhal_worker_cache(transactions_addr);
 
+        // Register store cache metrics.
+        let store_cache_metrics = Arc::new(CertificateStoreCacheMetrics::new(
+            self.registry_service.clone(),
+        ));
+        *self.store_cache_metrics.lock() = Some(store_cache_metrics.clone());
+
         // Create a new store
         let store_path = self.get_store_path(epoch);
-        let store = NodeStorage::reopen(store_path, Some(self.store_cache_metrics.clone()));
+        let store = NodeStorage::reopen(store_path, Some(store_cache_metrics));
 
         // Create a new client.
         let network_client = NetworkClient::new_from_keypair(&self.network_keypair);
@@ -141,7 +146,6 @@ impl ConsensusManagerTrait for NarwhalManager {
                     self.primary_keypair.copy(),
                     self.network_keypair.copy(),
                     committee.clone(),
-                    narwhal_config::ChainIdentifier::new(*chain.as_bytes()),
                     protocol_config.clone(),
                     worker_cache.clone(),
                     network_client.clone(),
@@ -218,14 +222,13 @@ impl ConsensusManagerTrait for NarwhalManager {
 
         self.primary_node.shutdown().await;
         self.worker_nodes.shutdown().await;
+        if let Some(store_cache_metrics) = self.store_cache_metrics.lock().take() {
+            store_cache_metrics.unregister();
+        }
     }
 
     async fn is_running(&self) -> bool {
         let running = self.running.lock().await;
         Running::False != *running
-    }
-
-    fn get_storage_base_path(&self) -> PathBuf {
-        self.storage_base_path.clone()
     }
 }

@@ -1,7 +1,6 @@
-
-<a name="0x2_zklogin_verified_id"></a>
-
-# Module `0x2::zklogin_verified_id`
+---
+title: Module `0x2::zklogin_verified_id`
+---
 
 
 
@@ -18,7 +17,7 @@
 -  [Function `check_zklogin_id_internal`](#0x2_zklogin_verified_id_check_zklogin_id_internal)
 
 
-<pre><code><b>use</b> <a href="dependencies/move-stdlib/string.md#0x1_string">0x1::string</a>;
+<pre><code><b>use</b> <a href="../move-stdlib/string.md#0x1_string">0x1::string</a>;
 <b>use</b> <a href="object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="tx_context.md#0x2_tx_context">0x2::tx_context</a>;
 </code></pre>
@@ -29,7 +28,7 @@
 
 ## Resource `VerifiedID`
 
-Posession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
+Possession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
 
 
 <pre><code><b>struct</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a> <b>has</b> key
@@ -55,25 +54,25 @@ Posession of a VerifiedID proves that the user's address was created using zklog
  The address this VerifiedID is associated with
 </dd>
 <dt>
-<code>key_claim_name: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
+<code>key_claim_name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
  The name of the key claim
 </dd>
 <dt>
-<code>key_claim_value: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
+<code>key_claim_value: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
  The value of the key claim
 </dd>
 <dt>
-<code>issuer: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
+<code>issuer: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
  The issuer
 </dd>
 <dt>
-<code>audience: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a></code>
+<code>audience: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a></code>
 </dt>
 <dd>
  The audience (wallet)
@@ -129,7 +128,7 @@ Returns the address associated with the given VerifiedID
 Returns the name of the key claim associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_key_claim_name">key_claim_name</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_key_claim_name">key_claim_name</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
 </code></pre>
 
 
@@ -154,7 +153,7 @@ Returns the name of the key claim associated with the given VerifiedID
 Returns the value of the key claim associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_key_claim_value">key_claim_value</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_key_claim_value">key_claim_value</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
 </code></pre>
 
 
@@ -179,7 +178,7 @@ Returns the value of the key claim associated with the given VerifiedID
 Returns the issuer associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_issuer">issuer</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_issuer">issuer</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
 </code></pre>
 
 
@@ -204,7 +203,7 @@ Returns the issuer associated with the given VerifiedID
 Returns the audience (wallet) associated with the given VerifiedID
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_audience">audience</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_audience">audience</a>(verified_id: &<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">zklogin_verified_id::VerifiedID</a>): &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
 </code></pre>
 
 
@@ -240,7 +239,7 @@ Delete a VerifiedID
 
 <pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_delete">delete</a>(verified_id: <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a>) {
     <b>let</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a> { id, owner: _, key_claim_name: _, key_claim_value: _, issuer: _, audience: _ } = verified_id;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.<a href="zklogin_verified_id.md#0x2_zklogin_verified_id_delete">delete</a>();
 }
 </code></pre>
 
@@ -255,7 +254,7 @@ Delete a VerifiedID
 This function has been disabled.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_verify_zklogin_id">verify_zklogin_id</a>(_key_claim_name: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _key_claim_value: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _issuer: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _audience: <a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _pin_hash: u256, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_verify_zklogin_id">verify_zklogin_id</a>(_key_claim_name: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _key_claim_value: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _issuer: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _audience: <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _pin_hash: u256, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -287,7 +286,7 @@ This function has been disabled.
 This function has been disabled.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_check_zklogin_id">check_zklogin_id</a>(_address: <b>address</b>, _key_claim_name: &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _key_claim_value: &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _issuer: &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _audience: &<a href="dependencies/move-stdlib/string.md#0x1_string_String">string::String</a>, _pin_hash: u256): bool
+<pre><code><b>public</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_check_zklogin_id">check_zklogin_id</a>(_address: <b>address</b>, _key_claim_name: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _key_claim_value: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _issuer: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _audience: &<a href="../move-stdlib/string.md#0x1_string_String">string::String</a>, _pin_hash: u256): bool
 </code></pre>
 
 
@@ -324,7 +323,7 @@ string or if the inputs are longer than the allowed upper bounds: <code>kc_name<
 <code>kc_value</code> must be at most 115 characters and <code>aud</code> must be at most 145 characters.
 
 
-<pre><code><b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_check_zklogin_id_internal">check_zklogin_id_internal</a>(<b>address</b>: <b>address</b>, key_claim_name: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, key_claim_value: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, issuer: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, audience: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, pin_hash: u256): bool
+<pre><code><b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_check_zklogin_id_internal">check_zklogin_id_internal</a>(<b>address</b>: <b>address</b>, key_claim_name: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, key_claim_value: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, issuer: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, audience: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, pin_hash: u256): bool
 </code></pre>
 
 
@@ -335,10 +334,10 @@ string or if the inputs are longer than the allowed upper bounds: <code>kc_name<
 
 <pre><code><b>native</b> <b>fun</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_check_zklogin_id_internal">check_zklogin_id_internal</a>(
     <b>address</b>: <b>address</b>,
-    key_claim_name: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    key_claim_value: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    issuer: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
-    audience: &<a href="dependencies/move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    key_claim_name: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    key_claim_value: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    issuer: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    audience: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     pin_hash: u256
 ): bool;
 </code></pre>

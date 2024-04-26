@@ -5,7 +5,7 @@ warning[Lint W05001]: possibly useless collections compare
    │              ^^ Comparing collections of type 'sui::bag::Bag' may yield unexpected result.
    │
    = Equality for collections of type 'sui::bag::Bag' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:21:14
@@ -14,7 +14,7 @@ warning[Lint W05001]: possibly useless collections compare
    │              ^^ Comparing collections of type 'sui::object_bag::ObjectBag' may yield unexpected result.
    │
    = Equality for collections of type 'sui::object_bag::ObjectBag' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:25:16
@@ -23,7 +23,7 @@ warning[Lint W05001]: possibly useless collections compare
    │                ^^ Comparing collections of type 'sui::table::Table' may yield unexpected result.
    │
    = Equality for collections of type 'sui::table::Table' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:32:20
@@ -32,7 +32,7 @@ warning[Lint W05001]: possibly useless collections compare
    │                    ^^ Comparing collections of type 'sui::object_table::ObjectTable' may yield unexpected result.
    │
    = Equality for collections of type 'sui::object_table::ObjectTable' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:36:16
@@ -41,7 +41,7 @@ warning[Lint W05001]: possibly useless collections compare
    │                ^^ Comparing collections of type 'sui::linked_table::LinkedTable' may yield unexpected result.
    │
    = Equality for collections of type 'sui::linked_table::LinkedTable' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:40:16
@@ -50,7 +50,7 @@ warning[Lint W05001]: possibly useless collections compare
    │                ^^ Comparing collections of type 'sui::table_vec::TableVec' may yield unexpected result.
    │
    = Equality for collections of type 'sui::table_vec::TableVec' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:44:14
@@ -59,7 +59,7 @@ warning[Lint W05001]: possibly useless collections compare
    │              ^^ Comparing collections of type 'sui::vec_map::VecMap' may yield unexpected result.
    │
    = Equality for collections of type 'sui::vec_map::VecMap' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W05001]: possibly useless collections compare
    ┌─ tests/sui_mode/linter/collection_equality.move:48:14
@@ -68,5 +68,5 @@ warning[Lint W05001]: possibly useless collections compare
    │              ^^ Comparing collections of type 'sui::vec_set::VecSet' may yield unexpected result.
    │
    = Equality for collections of type 'sui::vec_set::VecSet' IS NOT a structural check based on content
-   = This warning can be suppressed with '#[lint_allow(collection_equality)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(collection_equality))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

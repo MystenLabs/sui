@@ -13,7 +13,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
 use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
 use sui_types::digests::TransactionDigest;
-use sui_types::multisig::{MultiSig, MultiSigPublicKey};
+use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::object::Owner;
 use sui_types::signature::GenericSignature;
@@ -50,6 +50,7 @@ impl TestTransactionBuilder {
         self.gas_object
     }
 
+    // Use `with_type_args` below to provide type args if any
     pub fn move_call(
         mut self,
         package_id: ObjectID,
@@ -65,6 +66,16 @@ impl TestTransactionBuilder {
             args,
             type_args: vec![],
         });
+        self
+    }
+
+    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
+        if let TestTransactionData::Move(data) = &mut self.test_data {
+            assert!(data.type_args.is_empty());
+            data.type_args = type_args;
+        } else {
+            panic!("Cannot set type args for non-move call");
+        }
         self
     }
 
@@ -209,16 +220,6 @@ impl TestTransactionBuilder {
         )
     }
 
-    pub fn with_type_args(mut self, type_args: Vec<TypeTag>) -> Self {
-        if let TestTransactionData::Move(data) = &mut self.test_data {
-            assert!(data.type_args.is_empty());
-            data.type_args = type_args;
-        } else {
-            panic!("Cannot set type args for non-move call");
-        }
-        self
-    }
-
     pub fn transfer(mut self, object: ObjectRef, recipient: SuiAddress) -> Self {
         self.test_data = TestTransactionData::Transfer(TransferData { object, recipient });
         self
@@ -342,17 +343,22 @@ impl TestTransactionBuilder {
         self,
         multisig_pk: MultiSigPublicKey,
         signers: &[&dyn Signer<Signature>],
+        bitmap: BitmapUnit,
     ) -> Transaction {
         let data = self.build();
         let intent_msg = IntentMessage::new(Intent::sui_transaction(), data.clone());
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
+            signatures.push(
+                GenericSignature::from(Signature::new_secure(&intent_msg, *signer))
+                    .to_compressed()
+                    .unwrap(),
+            );
         }
 
         let multisig =
-            GenericSignature::MultiSig(MultiSig::combine(signatures, multisig_pk).unwrap());
+            GenericSignature::MultiSig(MultiSig::insecure_new(signatures, bitmap, multisig_pk));
 
         Transaction::from_generic_sig_data(data, vec![multisig])
     }
@@ -428,7 +434,8 @@ pub async fn batch_make_transfer_transactions(
     max_txn_num: usize,
 ) -> Vec<Transaction> {
     let recipient = get_key_pair::<AccountKeyPair>().0;
-    let accounts_and_objs = context.get_all_accounts_and_gas_objects().await.unwrap();
+    let result = context.get_all_accounts_and_gas_objects().await;
+    let accounts_and_objs = result.unwrap();
     let mut res = Vec::with_capacity(max_txn_num);
 
     let gas_price = context.get_reference_gas_price().await.unwrap();

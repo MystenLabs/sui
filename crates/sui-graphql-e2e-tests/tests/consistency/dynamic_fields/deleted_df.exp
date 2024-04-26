@@ -1,0 +1,319 @@
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 14-55:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 8474000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 57-57:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 59-59:
+Owner: Account Address ( A )
+Version: 2
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+}
+
+task 4 'run'. lines 61-61:
+created: object(4,0), object(4,1), object(4,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 8664000,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5 'view-object'. lines 63-63:
+Owner: Account Address ( A )
+Version: 3
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+}
+
+task 6 'run'. lines 65-65:
+created: object(6,0), object(6,1), object(6,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 8664000,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7 'view-object'. lines 67-67:
+Owner: Account Address ( A )
+Version: 4
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+}
+
+task 8 'run'. lines 69-69:
+mutated: object(0,0), object(2,0)
+deleted: object(4,0), object(4,1), object(4,2)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 8577360, non_refundable_storage_fee: 86640
+
+task 9 'run'. lines 71-71:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 10 'create-checkpoint'. lines 73-73:
+Checkpoint created: 1
+
+task 11 'run-graphql'. lines 75-138:
+Response: {
+  "data": {
+    "latest": {
+      "version": 6,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IKXGWe+nBcIVIVGFTXBTgY9ako4w4JonTvLh9vdhbqrRAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNA=="
+              },
+              "value": {
+                "json": "df4"
+              }
+            }
+          },
+          {
+            "cursor": "IKuxs0VlUuXSaNfJqH8VCuXpswzMlTw6peVODCV/uExsAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNg=="
+              },
+              "value": {
+                "json": "df6"
+              }
+            }
+          },
+          {
+            "cursor": "ILCliMJouz+kf9d2c/etItodOR0CFTmd9QnFg+LAV+6qAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNQ=="
+              },
+              "value": {
+                "json": "df5"
+              }
+            }
+          }
+        ]
+      },
+      "df1": null,
+      "df5": {
+        "name": {
+          "bcs": "A2RmNQ=="
+        },
+        "value": {
+          "json": "df5"
+        }
+      }
+    },
+    "df123_removed": {
+      "version": 5,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IKXGWe+nBcIVIVGFTXBTgY9ako4w4JonTvLh9vdhbqrRAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNA=="
+              },
+              "value": {
+                "json": "df4"
+              }
+            }
+          },
+          {
+            "cursor": "IKuxs0VlUuXSaNfJqH8VCuXpswzMlTw6peVODCV/uExsAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNg=="
+              },
+              "value": {
+                "json": "df6"
+              }
+            }
+          },
+          {
+            "cursor": "ILCliMJouz+kf9d2c/etItodOR0CFTmd9QnFg+LAV+6qAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNQ=="
+              },
+              "value": {
+                "json": "df5"
+              }
+            }
+          }
+        ]
+      },
+      "df1": null,
+      "df5": {
+        "name": {
+          "bcs": "A2RmNQ=="
+        },
+        "value": {
+          "json": "df5"
+        }
+      }
+    },
+    "df456_added": {
+      "version": 4,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IHFDUtG3IKC4wmoTLDanHPprxhQh7riT6vWCBslyV/ITAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMw=="
+              },
+              "value": {
+                "json": "df3"
+              }
+            }
+          },
+          {
+            "cursor": "IIwKLUiAvjCeG/YAW3K6soHX6Uz578yBmHHZ/AyNVOJnAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMQ=="
+              },
+              "value": {
+                "json": "df1"
+              }
+            }
+          },
+          {
+            "cursor": "IKXGWe+nBcIVIVGFTXBTgY9ako4w4JonTvLh9vdhbqrRAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNA=="
+              },
+              "value": {
+                "json": "df4"
+              }
+            }
+          },
+          {
+            "cursor": "IKuxs0VlUuXSaNfJqH8VCuXpswzMlTw6peVODCV/uExsAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNg=="
+              },
+              "value": {
+                "json": "df6"
+              }
+            }
+          },
+          {
+            "cursor": "ILCliMJouz+kf9d2c/etItodOR0CFTmd9QnFg+LAV+6qAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNQ=="
+              },
+              "value": {
+                "json": "df5"
+              }
+            }
+          },
+          {
+            "cursor": "ILTYOMPw5pkXNN9Jh52/cITA7YYu8XasgUflDQBD/J9cAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMg=="
+              },
+              "value": {
+                "json": "df2"
+              }
+            }
+          }
+        ]
+      },
+      "df1": {
+        "name": {
+          "bcs": "A2RmMQ=="
+        },
+        "value": {
+          "json": "df1"
+        }
+      },
+      "df5": {
+        "name": {
+          "bcs": "A2RmNQ=="
+        },
+        "value": {
+          "json": "df5"
+        }
+      }
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 140-178:
+Response: {
+  "data": {
+    "latest_owner": {
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IKXGWe+nBcIVIVGFTXBTgY9ako4w4JonTvLh9vdhbqrRAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNA=="
+              },
+              "value": {
+                "json": "df4"
+              }
+            }
+          },
+          {
+            "cursor": "IKuxs0VlUuXSaNfJqH8VCuXpswzMlTw6peVODCV/uExsAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNg=="
+              },
+              "value": {
+                "json": "df6"
+              }
+            }
+          },
+          {
+            "cursor": "ILCliMJouz+kf9d2c/etItodOR0CFTmd9QnFg+LAV+6qAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmNQ=="
+              },
+              "value": {
+                "json": "df5"
+              }
+            }
+          }
+        ]
+      },
+      "df1": null,
+      "df5": {
+        "name": {
+          "bcs": "A2RmNQ=="
+        },
+        "value": {
+          "json": "df5"
+        }
+      }
+    }
+  }
+}

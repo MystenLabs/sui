@@ -3,13 +3,12 @@
 
 module dynamic_fields::example {
     use sui::dynamic_object_field as ofield;
-    use sui::object::{Self, UID};
 
-    struct Parent has key {
+    public struct Parent has key {
         id: UID,
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
         count: u64,
     }
@@ -51,10 +50,10 @@ module dynamic_fields::example {
 
     #[test]
     fun test_add_delete() {
-        let ts = test_scenario::begin(@0xA);
+        let mut ts = test_scenario::begin(@0xA);
         let ctx = test_scenario::ctx(&mut ts);
 
-        let p = Parent { id: object::new(ctx) };
+        let mut p = Parent { id: object::new(ctx) };
         add_child(&mut p, Child { id: object::new(ctx), count: 0 });
 
         mutate_child_via_parent(&mut p);
@@ -68,15 +67,15 @@ module dynamic_fields::example {
 
     #[test]
     fun test_add_reclaim() {
-        let ts = test_scenario::begin(@0xA);
+        let mut ts = test_scenario::begin(@0xA);
         let ctx = test_scenario::ctx(&mut ts);
 
-        let p = Parent { id: object::new(ctx) };
+        let mut p = Parent { id: object::new(ctx) };
         add_child(&mut p, Child { id: object::new(ctx), count: 0 });
 
         mutate_child_via_parent(&mut p);
 
-        let c = reclaim_child(&mut p);
+        let mut c = reclaim_child(&mut p);
         assert!(c.count == 1, 0);
 
         mutate_child(&mut c);
@@ -96,10 +95,10 @@ module dynamic_fields::example {
     /// with dynamic fields still attached, and they become
     /// inaccessible.
     fun test_delete_with_child_attached() {
-        let ts = test_scenario::begin(@0xA);
+        let mut ts = test_scenario::begin(@0xA);
         let ctx = test_scenario::ctx(&mut ts);
 
-        let p = Parent { id: object::new(ctx) };
+        let mut p = Parent { id: object::new(ctx) };
         add_child(&mut p, Child { id: object::new(ctx), count: 0 });
 
         let Parent { id } = p;

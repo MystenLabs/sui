@@ -20,10 +20,6 @@
 /// specific list of other crates' features that any given crate enables should include all features
 /// defined in all the other crates that the decorated code in the current crate depends on.
 ///
-/// Additionally, if the new crate is outside of the main workspace,the new crate may need to get
-/// added to the list of traversal exclusions in `./config/hakari.toml` to prevent the feature
-/// from automatically getting added to a dependency in the `workspace-hack/Cargo.toml`.
-///
 /// Note this crate will always have the feature enabled in testing due to the addition of
 /// `sui = { path = ".", features = ["gas-profiler"] }` to our dev-dependencies.
 
@@ -57,7 +53,7 @@ async fn test_profiler() {
     };
 
     let command_result =
-        sui_replay::execute_replay_command(Some(testnet_url), false, false, None, cmd).await;
+        sui_replay::execute_replay_command(Some(testnet_url), false, false, None, None, cmd).await;
 
     assert!(command_result.is_ok());
 

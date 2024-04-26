@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::types::transaction_block_effects::TransactionBlockEffectsKind;
 use crate::{
     error::Error, types::execution_result::ExecutionResult,
     types::transaction_block_effects::TransactionBlockEffects,
@@ -22,14 +23,18 @@ pub struct Mutation;
 impl Mutation {
     /// Execute a transaction, committing its effects on chain.
     ///
-    /// `txBytes` is a `TransactionData` struct that has been BCS-encoded
-    ///     and then Base64-encoded.
-    /// `signatures` are a list of `flag || signature || pubkey` bytes,
-    ///     Base64-encoded.
+    /// - `txBytes` is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+    /// - `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
     ///
-    /// Waits until the transaction has been finalized on chain to return
-    /// its transaction digest.  If the transaction could not be
-    /// finalized, returns the errors that prevented it, instead.
+    /// Waits until the transaction has reached finality on chain to return its transaction digest,
+    /// or returns the error that prevented finality if that was not possible. A transaction is
+    /// final when its effects are guaranteed on chain (it cannot be revoked).
+    ///
+    /// There may be a delay between transaction finality and when GraphQL requests (including the
+    /// request that issued the transaction) reflect its effects. As a result, queries that depend
+    /// on indexing the state of the chain (e.g. contents of output objects, address-level balance
+    /// information at the time of the transaction), must wait for indexing to catch up by polling
+    /// for the transaction digest using `Query.transactionBlock`.
     async fn execute_transaction_block(
         &self,
         ctx: &Context<'_>,
@@ -124,10 +129,14 @@ impl Mutation {
             } else {
                 Some(result.errors)
             },
-            effects: TransactionBlockEffects::Executed {
-                tx_data,
-                native,
-                events,
+            effects: TransactionBlockEffects {
+                kind: TransactionBlockEffectsKind::Executed {
+                    tx_data,
+                    native,
+                    events,
+                },
+                // set to u64::MAX, as the executed transaction has not been indexed yet
+                checkpoint_viewed_at: u64::MAX,
             },
         })
     }

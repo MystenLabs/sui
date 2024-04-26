@@ -3,13 +3,24 @@ title: DeepBook Pools
 slug: /deepbook-pools
 ---
 
-At the center of DeepBook is a hyper-efficient per-current pair shared-object Pool structure. This architecture maximally utilizes Sui's Narwhal and Bullshark engine to minimize contention and achieve high throughput.
+At the center of DeepBook is a hyper-efficient per-current pair shared-object `Pool` structure. This architecture maximally utilizes Sui's Narwhal and Bullshark engine to minimize contention and achieve high throughput.
 
-For each base and quote asset trading pair, a globally shared Pool is created to 1) bookkeep open orders on the order book and 2) handle placement, cancelation, and settlement of orders. Under this architecture, transactions involving different trading pairs can be easily parallelized to maximize throughput.
+For each base and quote asset trading pair, a globally shared `Pool` is created to bookkeep open orders on the order book and handle placement, cancellation, and settlement of orders. Under this architecture, transactions involving different trading pairs can be easily parallelized to maximize throughput.
+
+DeepBook uses a critical bit (crit-bit) tree structure to process orders. Each left and right node is based on the critical bit of the price. Inside each of the nodes is a list of orders placed with a hierarchy based on the time each occurred.
+
+```mermaid
+flowchart TB
+    A{"Ask crit-bit tree"};
+    B("Price level: 1000000000\nOrders queue: A > B > ...");
+    C("Price level: 1100000000\nOrder queue: C");
+    A-->B;
+    A-->C;
+```
 
 ```move
 struct Pool<phantom BaseAsset, phantom QuoteAsset> has key {
-    // The key to the following Critbit Tree are order prices.
+    // The key to the following crit-bit tree are order prices.
     id: UID,
     // All open bid orders.
     bids: CritbitTree<TickLevel>,

@@ -1,27 +1,27 @@
 warning[Lint W00001]: possible owned object share
-   ┌─ tests/sui_mode/linter/share_owned.move:15:9
+   ┌─ tests/sui_mode/linter/share_owned.move:14:9
    │
-13 │     public entry fun arg_object(o: Obj) {
+12 │     public entry fun arg_object(o: Obj) {
    │                                 - A potentially owned object coming from here
-14 │         let arg = o;
-15 │         transfer::public_share_object(arg);
+13 │         let arg = o;
+14 │         transfer::public_share_object(arg);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                             │
    │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
    │         Potential abort from a (potentially) owned object created by a different transaction.
    │
-   = This warning can be suppressed with '#[lint_allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
 warning[Lint W00001]: possible owned object share
-   ┌─ tests/sui_mode/linter/share_owned.move:35:9
+   ┌─ tests/sui_mode/linter/share_owned.move:34:9
    │
-34 │         let Wrapper { id, i: _, o } = w;
+33 │         let Wrapper { id, i: _, o } = w;
    │                                 - A potentially owned object coming from here
-35 │         transfer::public_share_object(o);
+34 │         transfer::public_share_object(o);
    │         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    │         │                             │
    │         │                             Creating a fresh object and sharing it within the same function will ensure this does not abort.
    │         Potential abort from a (potentially) owned object created by a different transaction.
    │
-   = This warning can be suppressed with '#[lint_allow(share_owned)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+   = This warning can be suppressed with '#[allow(lint(share_owned))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 

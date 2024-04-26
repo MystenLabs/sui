@@ -37,8 +37,11 @@ pub trait ExecutionState {
     /// Execute the transaction and atomically persist the consensus index.
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput);
 
-    /// Load the last executed sub-dag index from storage
-    async fn last_executed_sub_dag_index(&self) -> u64;
+    /// The last executed sub-dag / commit leader round.
+    fn last_executed_sub_dag_round(&self) -> u64;
+
+    /// The last executed sub-dag / commit index.
+    fn last_executed_sub_dag_index(&self) -> u64;
 }
 
 /// A client subscribing to the consensus output and executing every transaction.
@@ -67,7 +70,7 @@ impl Executor {
         let arc_metrics = Arc::new(metrics);
 
         // Spawn the subscriber.
-        let subscriber_handle = spawn_subscriber(
+        let subscriber_handles = spawn_subscriber(
             authority_id,
             worker_cache,
             committee,
@@ -83,7 +86,7 @@ impl Executor {
         // Return the handle.
         info!("Consensus subscriber successfully started");
 
-        Ok(subscriber_handle)
+        Ok(subscriber_handles)
     }
 }
 
@@ -96,7 +99,7 @@ pub async fn get_restored_consensus_output<State: ExecutionState>(
     // whether the execution has been interrupted and there are still batches/transactions
     // that need to be sent for execution.
 
-    let last_executed_sub_dag_index = execution_state.last_executed_sub_dag_index().await;
+    let last_executed_sub_dag_index = execution_state.last_executed_sub_dag_index();
 
     let compressed_sub_dags =
         consensus_store.read_committed_sub_dags_from(&last_executed_sub_dag_index)?;

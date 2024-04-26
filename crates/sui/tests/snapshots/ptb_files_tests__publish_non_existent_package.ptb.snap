@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────╮
+│ PTB Preview                  │
+├────────────┬─────────────────┤
+│ command    │ values          │
+├────────────┼─────────────────┤
+│ publish    │ not_a_valid_pkg │
+├────────────┼─────────────────┤
+│ gas-budget │ 1000            │
+╰────────────┴─────────────────╯
+ === BUILDING PTB ERRORS === 
+  × Error when processing PTB
+   ╭─[2:1]
+ 1 │ --gas-budget 1000
+ 2 │ --publish not_a_valid_pkg 
+   · ────────────┬────────────
+   ·             ╰── No such file or directory (os error 2)
+   ╰────
+

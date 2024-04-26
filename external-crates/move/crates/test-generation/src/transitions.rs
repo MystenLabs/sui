@@ -9,14 +9,10 @@ use crate::{
     error::VMError,
     get_struct_handle_from_reference, get_type_actuals_from_reference, substitute,
 };
-use move_binary_format::{
-    access::*,
-    file_format::{
-        Ability, AbilitySet, FieldHandleIndex, FieldInstantiationIndex, FunctionHandleIndex,
-        FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
-        StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation,
-    },
-    views::{FunctionHandleView, StructDefinitionView, ViewInternals},
+use move_binary_format::file_format::{
+    Ability, AbilitySet, FieldHandleIndex, FieldInstantiationIndex, FunctionHandleIndex,
+    FunctionInstantiationIndex, Signature, SignatureIndex, SignatureToken,
+    StructDefInstantiationIndex, StructDefinitionIndex, StructFieldInformation,
 };
 
 use move_binary_format::file_format::TableIndex;
@@ -62,9 +58,11 @@ impl Subst {
             (SignatureToken::Struct(sig1), SignatureToken::Struct(sig2)) => sig1 == sig2,
             // Build a substitution from recursing into structs
             (
-                SignatureToken::StructInstantiation(sig1, params1),
-                SignatureToken::StructInstantiation(sig2, params2),
+                SignatureToken::StructInstantiation(struct_inst1),
+                SignatureToken::StructInstantiation(struct_inst2),
             ) => {
+                let (sig1, params1) = *struct_inst1;
+                let (sig2, params2) = *struct_inst2;
                 if sig1 != sig2 {
                     return false;
                 }
@@ -232,7 +230,7 @@ pub fn stack_top_is_castable_to(state: &AbstractState, typ: SignatureToken) -> b
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
             | SignatureToken::Struct(_)
-            | SignatureToken::StructInstantiation(_, _)
+            | SignatureToken::StructInstantiation(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
             | SignatureToken::TypeParameter(_) => false,
@@ -341,7 +339,7 @@ pub fn stack_ref_polymorphic_eq(state: &AbstractState, index1: usize, index2: us
                 | SignatureToken::Signer
                 | SignatureToken::Vector(_)
                 | SignatureToken::Struct(_)
-                | SignatureToken::StructInstantiation(_, _)
+                | SignatureToken::StructInstantiation(_)
                 | SignatureToken::TypeParameter(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
@@ -472,21 +470,24 @@ pub fn stack_satisfies_struct_signature(
 ) -> (bool, Subst) {
     let instantiation = instantiation.map(|index| state.module.instantiantiation_at(index));
     let struct_def = state.module.module.struct_def_at(struct_index);
-    let struct_def = StructDefinitionView::new(&state.module.module, struct_def);
+    let shandle = state
+        .module
+        .module
+        .struct_handle_at(struct_def.struct_handle);
     // Get the type formals for the struct, and the kinds that they expect.
-    let type_parameters = struct_def.type_parameters();
-    let field_token_views = struct_def
+    let type_parameters = shandle.type_parameters.clone();
+    let field_tokens = struct_def
         .fields()
         .into_iter()
         .flatten()
-        .map(|field| field.type_signature().token());
+        .map(|field| &field.signature.0);
     let mut satisfied = true;
     let mut substitution = Subst::new();
-    for (i, token_view) in field_token_views.rev().enumerate() {
+    for (i, token) in field_tokens.rev().enumerate() {
         let ty = if let Some(subst) = &instantiation {
-            substitute(token_view.as_inner(), subst)
+            substitute(token, subst)
         } else {
-            token_view.as_inner().clone()
+            token.clone()
         };
         let has = if let SignatureToken::TypeParameter(idx) = &ty {
             if stack_has_all_abilities(state, i, type_parameters[*idx as usize].constraints) {
@@ -500,7 +501,7 @@ pub fn stack_satisfies_struct_signature(
                 token: ty,
                 abilities: abilities(
                     &state.module.module,
-                    token_view.as_inner(),
+                    token,
                     &type_parameters
                         .iter()
                         .map(|param| param.constraints)
@@ -535,8 +536,11 @@ pub fn get_struct_instantiation_for_state(
     let struct_index = struct_inst.def;
     let mut partial_instantiation = stack_satisfies_struct_signature(state, struct_index, None).1;
     let struct_def = state.module.module.struct_def_at(struct_index);
-    let struct_def = StructDefinitionView::new(&state.module.module, struct_def);
-    let typs = struct_def.type_parameters();
+    let shandle = state
+        .module
+        .module
+        .struct_handle_at(struct_def.struct_handle);
+    let typs = &shandle.type_parameters;
     for (index, type_param) in typs.iter().enumerate() {
         if let Entry::Vacant(e) = partial_instantiation.subst.entry(index) {
             if type_param.constraints.has_key() {
@@ -556,8 +560,12 @@ pub fn stack_has_struct(state: &AbstractState, struct_index: StructDefinitionInd
     if state.stack_len() > 0 {
         if let Some(struct_value) = state.stack_peek(0) {
             match struct_value.token {
-                SignatureToken::Struct(struct_handle)
-                | SignatureToken::StructInstantiation(struct_handle, _) => {
+                SignatureToken::Struct(struct_handle) => {
+                    let struct_def = state.module.module.struct_def_at(struct_index);
+                    return struct_handle == struct_def.struct_handle;
+                }
+                SignatureToken::StructInstantiation(struct_inst) => {
+                    let (struct_handle, _) = *struct_inst;
                     let struct_def = state.module.module.struct_def_at(struct_index);
                     return struct_handle == struct_def.struct_handle;
                 }
@@ -668,7 +676,7 @@ pub fn stack_has_reference(state: &AbstractState, index: usize, mutability: Muta
                 | SignatureToken::Signer
                 | SignatureToken::Vector(_)
                 | SignatureToken::Struct(_)
-                | SignatureToken::StructInstantiation(_, _)
+                | SignatureToken::StructInstantiation(_)
                 | SignatureToken::TypeParameter(_)
                 | SignatureToken::U16
                 | SignatureToken::U32
@@ -699,8 +707,7 @@ pub fn stack_struct_popn(
     let state_copy = state.clone();
     let mut state = state.clone();
     let struct_def = state_copy.module.module.struct_def_at(struct_index);
-    let struct_def_view = StructDefinitionView::new(&state_copy.module.module, struct_def);
-    for _ in struct_def_view.fields().unwrap() {
+    for _ in struct_def.fields().unwrap() {
         state.stack_pop()?;
     }
     Ok(state)
@@ -729,7 +736,10 @@ pub fn create_struct(
         None => SignatureToken::Struct(struct_def.struct_handle),
         Some(inst) => {
             let ty_instantiation = state.module.instantiantiation_at(inst);
-            SignatureToken::StructInstantiation(struct_def.struct_handle, ty_instantiation.clone())
+            SignatureToken::StructInstantiation(Box::new((
+                struct_def.struct_handle,
+                ty_instantiation.clone(),
+            )))
         }
     };
     let struct_kind = abilities_for_token(&state, &sig_tok, &state.instantiation);
@@ -743,7 +753,8 @@ pub fn stack_unpack_struct_instantiation(
 ) -> (StructDefinitionIndex, Vec<SignatureToken>) {
     if let Some(av) = state.stack_peek(0) {
         match av.token {
-            SignatureToken::StructInstantiation(handle, toks) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (handle, toks) = *struct_inst;
                 let mut def_filter = state
                     .module
                     .module
@@ -800,16 +811,15 @@ pub fn stack_unpack_struct(
     };
     let abilities = abilities_for_instantiation(&state_copy, &ty_instantiation);
     let struct_def = state_copy.module.module.struct_def_at(struct_index);
-    let struct_def_view = StructDefinitionView::new(&state_copy.module.module, struct_def);
-    let token_views = struct_def_view
+    let tokens = struct_def
         .fields()
         .into_iter()
         .flatten()
-        .map(|field| field.type_signature().token());
-    for token_view in token_views {
+        .map(|field| &field.signature.0);
+    for token in tokens {
         let abstract_value = AbstractValue {
-            token: substitute(token_view.as_inner(), &ty_instantiation),
-            abilities: abilities_for_token(&state, token_view.as_inner(), &abilities),
+            token: substitute(token, &ty_instantiation),
+            abilities: abilities_for_token(&state, token, &abilities),
         };
         state = stack_push(&state, abstract_value)?;
     }
@@ -893,7 +903,7 @@ pub fn register_dereference(state: &AbstractState) -> Result<AbstractState, VMEr
             | SignatureToken::Signer
             | SignatureToken::Vector(_)
             | SignatureToken::Struct(_)
-            | SignatureToken::StructInstantiation(_, _)
+            | SignatureToken::StructInstantiation(_)
             | SignatureToken::TypeParameter(_)
             | SignatureToken::U16
             | SignatureToken::U32
@@ -1037,8 +1047,7 @@ pub fn get_function_instantiation_for_state(
         .function_instantiation_at(function_index);
     let mut partial_instantiation = stack_satisfies_function_signature(state, func_inst.handle).1;
     let function_handle = state.module.module.function_handle_at(func_inst.handle);
-    let function_handle = FunctionHandleView::new(&state.module.module, function_handle);
-    let typs = function_handle.type_parameters();
+    let typs = &function_handle.type_parameters;
     for (index, abilities) in typs.iter().enumerate() {
         if let Entry::Vacant(e) = partial_instantiation.subst.entry(index) {
             if abilities.has_key() {

@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_metrics::{metered_channel, monitored_scope};
-use std::{collections::HashSet, fmt::Debug, sync::Arc, thread};
+use std::{collections::BTreeSet, fmt::Debug, sync::Arc};
+
+use async_trait::async_trait;
+use mysten_metrics::{metered_channel, monitored_scope, spawn_logged_monitored_task};
 use thiserror::Error;
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::error::RecvError;
+use tokio::sync::{oneshot, oneshot::error::RecvError};
 use tracing::warn;
 
 use crate::{
@@ -13,26 +14,53 @@ use crate::{
     context::Context,
     core::Core,
     core_thread::CoreError::Shutdown,
+    error::{ConsensusError, ConsensusResult},
 };
 
-const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 32;
+const CORE_THREAD_COMMANDS_CHANNEL_SIZE: usize = 2000;
 
-#[allow(unused)]
-pub(crate) struct CoreThreadDispatcherHandle {
-    sender: metered_channel::Sender<CoreThreadCommand>,
-    join_handle: thread::JoinHandle<()>,
+enum CoreThreadCommand {
+    /// Add blocks to be processed and accepted
+    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<BTreeSet<BlockRef>>),
+    /// Called when the min round has passed or the leader timeout occurred and a block should be produced.
+    /// When the command is called with `force = true`, then the block will be created for `round` skipping
+    /// any checks (ex leader existence of previous round). More information can be found on the `Core` component.
+    NewBlock(Round, oneshot::Sender<()>, bool),
+    /// Request missing blocks that need to be synced.
+    GetMissing(oneshot::Sender<BTreeSet<BlockRef>>),
 }
 
-impl CoreThreadDispatcherHandle {
-    #[allow(unused)]
-    pub fn stop(self) {
+#[derive(Error, Debug)]
+pub enum CoreError {
+    #[error("Core thread shutdown: {0}")]
+    Shutdown(RecvError),
+}
+
+/// The interface to dispatch commands to CoreThread and Core.
+/// Also this allows the easier mocking during unit tests.
+#[async_trait]
+pub trait CoreThreadDispatcher: Sync + Send + 'static {
+    async fn add_blocks(&self, blocks: Vec<VerifiedBlock>)
+        -> Result<BTreeSet<BlockRef>, CoreError>;
+
+    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError>;
+
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError>;
+}
+
+pub(crate) struct CoreThreadHandle {
+    sender: metered_channel::Sender<CoreThreadCommand>,
+    join_handle: tokio::task::JoinHandle<()>,
+}
+
+impl CoreThreadHandle {
+    pub async fn stop(self) {
         // drop the sender, that will force all the other weak senders to not able to upgrade.
         drop(self.sender);
-        self.join_handle.join().ok();
+        self.join_handle.await.ok();
     }
 }
 
-#[allow(unused)]
 struct CoreThread {
     core: Core,
     receiver: metered_channel::Receiver<CoreThreadCommand>,
@@ -40,55 +68,39 @@ struct CoreThread {
 }
 
 impl CoreThread {
-    pub fn run(mut self) {
+    pub async fn run(mut self) -> ConsensusResult<()> {
         tracing::debug!("Started core thread");
 
-        while let Some(command) = self.receiver.blocking_recv() {
+        while let Some(command) = self.receiver.recv().await {
             let _scope = monitored_scope("CoreThread::loop");
             self.context.metrics.node_metrics.core_lock_dequeued.inc();
             match command {
                 CoreThreadCommand::AddBlocks(blocks, sender) => {
-                    let missing_blocks = self.core.add_blocks(blocks);
+                    let missing_blocks = self.core.add_blocks(blocks)?;
                     sender.send(missing_blocks).ok();
                 }
-                CoreThreadCommand::ForceNewBlock(round, sender) => {
-                    self.core.force_new_block(round);
+                CoreThreadCommand::NewBlock(round, sender, force) => {
+                    self.core.new_block(round, force)?;
                     sender.send(()).ok();
                 }
                 CoreThreadCommand::GetMissing(sender) => {
-                    // TODO: implement the logic to fetch the missing blocks.
-                    sender.send(vec![]).ok();
+                    sender.send(self.core.get_missing_blocks()).ok();
                 }
             }
         }
+
+        Ok(())
     }
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
-pub(crate) struct CoreThreadDispatcher {
+pub(crate) struct ChannelCoreThreadDispatcher {
     sender: metered_channel::WeakSender<CoreThreadCommand>,
     context: Arc<Context>,
 }
 
-enum CoreThreadCommand {
-    /// Add blocks to be processed and accepted
-    AddBlocks(Vec<VerifiedBlock>, oneshot::Sender<Vec<BlockRef>>),
-    /// Called when a leader timeout occurs and a block should be produced
-    ForceNewBlock(Round, oneshot::Sender<()>),
-    /// Request missing blocks that need to be synced.
-    GetMissing(oneshot::Sender<Vec<HashSet<BlockRef>>>),
-}
-
-#[derive(Error, Debug)]
-pub(crate) enum CoreError {
-    #[error("Core thread shutdown: {0}")]
-    Shutdown(RecvError),
-}
-
-#[allow(unused)]
-impl CoreThreadDispatcher {
-    pub fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadDispatcherHandle) {
+impl ChannelCoreThreadDispatcher {
+    pub(crate) fn start(core: Core, context: Arc<Context>) -> (Self, CoreThreadHandle) {
         let (sender, receiver) = metered_channel::channel_with_total(
             CORE_THREAD_COMMANDS_CHANNEL_SIZE,
             &context.metrics.channel_metrics.core_thread,
@@ -99,41 +111,29 @@ impl CoreThreadDispatcher {
             receiver,
             context: context.clone(),
         };
-        let join_handle = thread::Builder::new()
-            .name("consensus-core".to_string())
-            .spawn(move || core_thread.run())
-            .unwrap();
+
+        let join_handle = spawn_logged_monitored_task!(
+            async move {
+                if let Err(err) = core_thread.run().await {
+                    if !matches!(err, ConsensusError::Shutdown) {
+                        panic!("Fatal error occurred: {err}");
+                    }
+                }
+            },
+            "ConsensusCoreThread"
+        );
+
         // Explicitly using downgraded sender in order to allow sharing the CoreThreadDispatcher but
         // able to shutdown the CoreThread by dropping the original sender.
-        let dispatcher = CoreThreadDispatcher {
+        let dispatcher = ChannelCoreThreadDispatcher {
             sender: sender.downgrade(),
             context,
         };
-        let handler = CoreThreadDispatcherHandle {
+        let handle = CoreThreadHandle {
             join_handle,
             sender,
         };
-        (dispatcher, handler)
-    }
-
-    pub async fn add_blocks(&self, blocks: Vec<VerifiedBlock>) -> Result<Vec<BlockRef>, CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
-            .await;
-        receiver.await.map_err(Shutdown)
-    }
-
-    pub async fn force_new_block(&self, round: Round) -> Result<(), CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::ForceNewBlock(round, sender))
-            .await;
-        receiver.await.map_err(Shutdown)
-    }
-
-    pub async fn get_missing_blocks(&self) -> Result<Vec<HashSet<BlockRef>>, CoreError> {
-        let (sender, receiver) = oneshot::channel();
-        self.send(CoreThreadCommand::GetMissing(sender)).await;
-        receiver.await.map_err(Shutdown)
+        (dispatcher, handle)
     }
 
     async fn send(&self, command: CoreThreadCommand) {
@@ -149,32 +149,90 @@ impl CoreThreadDispatcher {
     }
 }
 
+#[async_trait]
+impl CoreThreadDispatcher for ChannelCoreThreadDispatcher {
+    async fn add_blocks(
+        &self,
+        blocks: Vec<VerifiedBlock>,
+    ) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::AddBlocks(blocks, sender))
+            .await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn new_block(&self, round: Round, force: bool) -> Result<(), CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::NewBlock(round, sender, force))
+            .await;
+        receiver.await.map_err(Shutdown)
+    }
+
+    async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
+        let (sender, receiver) = oneshot::channel();
+        self.send(CoreThreadCommand::GetMissing(sender)).await;
+        receiver.await.map_err(Shutdown)
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use parking_lot::RwLock;
+    use tokio::sync::mpsc::unbounded_channel;
+
     use super::*;
-    use crate::block_manager::BlockManager;
-    use crate::context::Context;
-    use crate::core::{CoreOptions, CoreSignals};
-    use crate::transactions_client::{TransactionsClient, TransactionsConsumer};
+    use crate::{
+        block_manager::BlockManager,
+        block_verifier::NoopBlockVerifier,
+        commit_observer::CommitObserver,
+        context::Context,
+        core::CoreSignals,
+        dag_state::DagState,
+        leader_schedule::{LeaderSchedule, LeaderSwapTable},
+        storage::mem_store::MemStore,
+        transaction::{TransactionClient, TransactionConsumer},
+        CommitConsumer,
+    };
 
     #[tokio::test]
     async fn test_core_thread() {
+        telemetry_subscribers::init_for_testing();
         let (context, mut key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
-        let block_manager = BlockManager::new();
-        let (_transactions_client, tx_receiver) = TransactionsClient::new(context.clone());
-        let transactions_consumer = TransactionsConsumer::new(tx_receiver);
-        let (signals, _signal_receivers) = CoreSignals::new();
+        let store = Arc::new(MemStore::new());
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
+        let block_manager = BlockManager::new(
+            context.clone(),
+            dag_state.clone(),
+            Arc::new(NoopBlockVerifier),
+        );
+        let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
+        let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let (signals, signal_receivers) = CoreSignals::new(context.clone());
+        let _block_receiver = signal_receivers.block_broadcast_receiver();
+        let (sender, _receiver) = unbounded_channel();
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            CommitConsumer::new(sender.clone(), 0, 0),
+            dag_state.clone(),
+            store,
+        );
+        let leader_schedule = Arc::new(LeaderSchedule::new(
+            context.clone(),
+            LeaderSwapTable::default(),
+        ));
         let core = Core::new(
             context.clone(),
-            transactions_consumer,
+            leader_schedule,
+            transaction_consumer,
             block_manager,
+            commit_observer,
             signals,
-            CoreOptions::default(),
-            key_pairs.remove(context.own_index.value()).0,
+            key_pairs.remove(context.own_index.value()).1,
+            dag_state,
         );
 
-        let (core_dispatcher, handle) = CoreThreadDispatcher::start(core, context);
+        let (core_dispatcher, handle) = ChannelCoreThreadDispatcher::start(core, context);
 
         // Now create some clones of the dispatcher
         let dispatcher_1 = core_dispatcher.clone();
@@ -185,7 +243,7 @@ mod test {
         assert!(dispatcher_2.add_blocks(vec![]).await.is_ok());
 
         // Now shutdown the dispatcher
-        handle.stop();
+        handle.stop().await;
 
         // Try to send some commands
         assert!(dispatcher_1.add_blocks(vec![]).await.is_err());

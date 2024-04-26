@@ -7,13 +7,14 @@ use std::{num::NonZeroUsize, path::Path, sync::Arc};
 
 use rand::rngs::OsRng;
 use sui_config::genesis::{TokenAllocation, TokenDistributionScheduleBuilder};
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
 use sui_types::object::Object;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
@@ -60,8 +61,10 @@ pub struct ConfigBuilder<R = OsRng> {
     additional_objects: Vec<Object>,
     jwk_fetch_interval: Option<Duration>,
     num_unpruned_validators: Option<usize>,
-    overload_threshold_config: Option<OverloadThresholdConfig>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: Option<RemoteFirewallConfig>,
 }
 
 impl ConfigBuilder {
@@ -76,8 +79,10 @@ impl ConfigBuilder {
             additional_objects: vec![],
             jwk_fetch_interval: None,
             num_unpruned_validators: None,
-            overload_threshold_config: None,
+            authority_overload_config: None,
             data_ingestion_dir: None,
+            policy_config: None,
+            firewall_config: None,
         }
     }
 
@@ -195,8 +200,18 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
-    pub fn with_overload_threshold_config(mut self, c: OverloadThresholdConfig) -> Self {
-        self.overload_threshold_config = Some(c);
+    pub fn with_authority_overload_config(mut self, c: AuthorityOverloadConfig) -> Self {
+        self.authority_overload_config = Some(c);
+        self
+    }
+
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.firewall_config = config;
         self
     }
 
@@ -211,8 +226,10 @@ impl<R> ConfigBuilder<R> {
             additional_objects: self.additional_objects,
             num_unpruned_validators: self.num_unpruned_validators,
             jwk_fetch_interval: self.jwk_fetch_interval,
-            overload_threshold_config: self.overload_threshold_config,
+            authority_overload_config: self.authority_overload_config,
             data_ingestion_dir: self.data_ingestion_dir,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
         }
     }
 
@@ -353,15 +370,17 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .enumerate()
             .map(|(idx, validator)| {
                 let mut builder = ValidatorConfigBuilder::new()
-                    .with_config_directory(self.config_directory.clone());
+                    .with_config_directory(self.config_directory.clone())
+                    .with_policy_config(self.policy_config.clone())
+                    .with_firewall_config(self.firewall_config.clone());
 
                 if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
                     builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);
                 }
 
-                if let Some(overload_threshold_config) = &self.overload_threshold_config {
+                if let Some(authority_overload_config) = &self.authority_overload_config {
                     builder =
-                        builder.with_overload_threshold_config(overload_threshold_config.clone());
+                        builder.with_authority_overload_config(authority_overload_config.clone());
                 }
 
                 if let Some(path) = &self.data_ingestion_dir {

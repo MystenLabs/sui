@@ -1,5 +1,55 @@
 # @mysten/kiosk
 
+## 0.8.7
+
+### Patch Changes
+
+- 0511cf3378: Adds pagination option for owned kiosks lookup
+- Updated dependencies [929db4976a]
+  - @mysten/sui.js@0.52.0
+
+## 0.8.6
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+
+## 0.8.5
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+
+## 0.8.4
+
+### Patch Changes
+
+- Updated dependencies [0cafa94027]
+  - @mysten/sui.js@0.51.0
+
+## 0.8.3
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+
+## 0.8.2
+
+### Patch Changes
+
+- a3971c3524: Fixes `lock` function arguments. `itemId` is replaced by `item`, which accepts an ObjectArgument instead of a string. `itemId` is still supported but deprecated, and will be removed in future versions.
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [c08e3569ef]
+- Updated dependencies [9a14e61db4]
+- Updated dependencies [13e922d9b1]
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [220a766d86]
+  - @mysten/sui.js@0.50.0
+
 ## 0.8.1
 
 ### Patch Changes

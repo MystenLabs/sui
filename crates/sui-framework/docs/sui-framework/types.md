@@ -1,7 +1,6 @@
-
-<a name="0x2_types"></a>
-
-# Module `0x2::types`
+---
+title: Module `0x2::types`
+---
 
 Sui types helpers and utilities
 
@@ -21,7 +20,7 @@ Tests if the argument type is a one-time witness, that is a type with only one i
 across the entire code base.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="types.md#0x2_types_is_one_time_witness">is_one_time_witness</a>&lt;T: drop&gt;(_: &T): bool
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/types.md#0x2_types_is_one_time_witness">is_one_time_witness</a>&lt;T: drop&gt;(_: &T): bool
 </code></pre>
 
 
@@ -30,7 +29,7 @@ across the entire code base.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="types.md#0x2_types_is_one_time_witness">is_one_time_witness</a>&lt;T: drop&gt;(_: &T): bool;
+<pre><code><b>public</b> <b>native</b> <b>fun</b> <a href="../sui-framework/types.md#0x2_types_is_one_time_witness">is_one_time_witness</a>&lt;T: drop&gt;(_: &T): bool;
 </code></pre>
 
 

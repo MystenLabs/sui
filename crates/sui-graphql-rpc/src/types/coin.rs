@@ -1,9 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::consistency::{build_objects_query, View};
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
+use crate::filter;
+use crate::raw_query::RawQuery;
 
+use super::available_range::AvailableRange;
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
@@ -16,16 +20,14 @@ use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectS
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
-use super::suins_registration::SuinsRegistration;
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
-use diesel::{ExpressionMethods, QueryDsl};
-use sui_indexer::models_v2::objects::StoredObject;
-use sui_indexer::schema_v2::objects;
-use sui_indexer::types_v2::OwnerType;
+use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
 
@@ -47,7 +49,7 @@ pub(crate) enum CoinDowncastError {
 #[Object]
 impl Coin {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.super_.super_.address).address().await
+        OwnerImpl::from(&self.super_.super_).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -60,7 +62,7 @@ impl Coin {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -72,7 +74,7 @@ impl Coin {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balance(ctx, type_)
             .await
     }
@@ -86,7 +88,7 @@ impl Coin {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -103,7 +105,7 @@ impl Coin {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -117,15 +119,19 @@ impl Coin {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.super_.super_.address)
-            .default_suins_name(ctx)
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
+        OwnerImpl::from(&self.super_.super_)
+            .default_suins_name(ctx, format)
             .await
     }
 
@@ -139,7 +145,7 @@ impl Coin {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.super_.super_.address)
+        OwnerImpl::from(&self.super_.super_)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -237,8 +243,8 @@ impl Coin {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_field(ctx, name)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_field(ctx, name, Some(self.super_.super_.version_impl()))
             .await
     }
 
@@ -254,8 +260,8 @@ impl Coin {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_object_field(ctx, name)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_object_field(ctx, name, Some(self.super_.super_.version_impl()))
             .await
     }
 
@@ -271,8 +277,15 @@ impl Coin {
         last: Option<u64>,
         before: Option<object::Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.super_.super_.address)
-            .dynamic_fields(ctx, first, after, last, before)
+        OwnerImpl::from(&self.super_.super_)
+            .dynamic_fields(
+                ctx,
+                first,
+                after,
+                last,
+                before,
+                Some(self.super_.super_.version_impl()),
+            )
             .await
     }
 
@@ -290,33 +303,40 @@ impl Coin {
         page: Page<object::Cursor>,
         coin_type: TypeTag,
         owner: Option<SuiAddress>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Coin>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
+        // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+        // paginated queries are consistent with the previous query that created the cursor.
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-                    query = query.filter(
-                        dsl::coin_type.eq(coin_type.to_canonical_string(/* with_prefix */ true)),
-                    );
+        let Some((prev, next, results)) = db
+            .execute_repeatable(move |conn| {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
-                    if let Some(owner) = &owner {
-                        // Leverage index on objects table
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
-                    }
-
-                    query
-                })
+                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
+                    conn,
+                    checkpoint_viewed_at,
+                    coins_query(coin_type, owner, range, &page),
+                )?))
             })
-            .await?;
+            .await?
+        else {
+            return Err(Error::Client(
+                "Requested data is outside the available range".to_string(),
+            ));
+        };
 
-        let mut conn = Connection::new(prev, next);
+        let mut conn: Connection<String, Coin> = Connection::new(prev, next);
 
         for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from(stored)?;
+            // To maintain consistency, the returned cursor should have the same upper-bound as the
+            // checkpoint found on the cursor.
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -350,4 +370,43 @@ impl TryFrom<&MoveObject> for Coin {
                 .map_err(CoinDowncastError::Bcs)?,
         })
     }
+}
+
+/// Constructs a raw query to fetch objects from the database. Since there are no point lookups for
+/// the coin query, objects are filtered out if they satisfy the criteria but have a later version
+/// in the same checkpoint.
+fn coins_query(
+    coin_type: TypeTag,
+    owner: Option<SuiAddress>,
+    range: AvailableRange,
+    page: &Page<object::Cursor>,
+) -> RawQuery {
+    build_objects_query(
+        View::Consistent,
+        range,
+        page,
+        move |query| apply_filter(query, &coin_type, owner),
+        move |newer| newer,
+    )
+}
+
+fn apply_filter(mut query: RawQuery, coin_type: &TypeTag, owner: Option<SuiAddress>) -> RawQuery {
+    if let Some(owner) = owner {
+        query = filter!(
+            query,
+            format!(
+                "owner_id = '\\x{}'::bytea AND owner_type = {}",
+                hex::encode(owner.into_vec()),
+                OwnerType::Address as i16
+            )
+        );
+    }
+
+    query = filter!(
+        query,
+        "coin_type IS NOT NULL AND coin_type = {}",
+        coin_type.to_canonical_display(/* with_prefix */ true)
+    );
+
+    query
 }

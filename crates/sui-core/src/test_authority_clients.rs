@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
+    net::SocketAddr,
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -35,6 +36,7 @@ pub struct LocalAuthorityClientFaultConfig {
     pub fail_after_handle_transaction: bool,
     pub fail_before_handle_confirmation: bool,
     pub fail_after_handle_confirmation: bool,
+    pub overload_retry_after_handle_transaction: bool,
 }
 
 impl LocalAuthorityClientFaultConfig {
@@ -54,6 +56,7 @@ impl AuthorityAPI for LocalAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         if self.fault_config.fail_before_handle_transaction {
             return Err(SuiError::from("Mock error before handle_transaction"));
@@ -70,12 +73,18 @@ impl AuthorityAPI for LocalAuthorityClient {
                 error: "Mock error after handle_transaction".to_owned(),
             });
         }
+        if self.fault_config.overload_retry_after_handle_transaction {
+            return Err(SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: 0,
+            });
+        }
         result
     }
 
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         let state = self.state.clone();
         let fault_config = self.fault_config;
@@ -173,8 +182,7 @@ impl LocalAuthorityClient {
                     .verify_cert(certificate)
                     .await?;
                 //let certificate = certificate.verify(epoch_store.committee())?;
-                state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store)?;
+                state.enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store);
                 let effects = state.notify_read_effects(&certificate).await?;
                 state.sign_effects(effects, &epoch_store)?
             }
@@ -228,6 +236,7 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         unimplemented!();
     }
@@ -236,6 +245,7 @@ impl AuthorityAPI for MockAuthorityApi {
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         unimplemented!()
     }
@@ -305,6 +315,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn handle_transaction(
         &self,
         _transaction: Transaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
         if let Some(duration) = self.sleep_duration_before_responding {
             tokio::time::sleep(duration).await;
@@ -315,6 +326,7 @@ impl AuthorityAPI for HandleTransactionTestAuthorityClient {
     async fn handle_certificate_v2(
         &self,
         _certificate: CertifiedTransaction,
+        _client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         if let Some(duration) = self.sleep_duration_before_responding {
             tokio::time::sleep(duration).await;

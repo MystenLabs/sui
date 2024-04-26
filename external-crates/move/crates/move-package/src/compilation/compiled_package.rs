@@ -28,8 +28,9 @@ use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
     diagnostics::FilesSourceText,
     editions::Flavor,
+    linters,
     shared::{NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths},
-    sui_mode::linters::{known_filters, linter_visitors},
+    sui_mode::{self},
     Compiler,
 };
 use move_docgen::{Docgen, DocgenOptions};
@@ -41,6 +42,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+use vfs::VfsPath;
 
 #[derive(Debug, Clone)]
 pub enum CompilationCachingStatus {
@@ -133,6 +135,14 @@ pub struct DependencyInfo<'a> {
     pub address_mapping: &'a ResolvedTable,
     pub compiler_config: PackageConfig,
     pub module_format: ModuleFormat,
+}
+
+pub(crate) struct BuildResult<T> {
+    root_package_name: Symbol,
+    sources_package_paths: PackagePaths,
+    immediate_dependencies: Vec<Symbol>,
+    deps_package_paths: Vec<(PackagePaths, ModuleFormat)>,
+    result: T,
 }
 
 impl OnDiskCompiledPackage {
@@ -424,17 +434,14 @@ impl CompiledPackage {
                     == resolved_package.resolved_table
     }
 
-    pub(crate) fn build_all<W: Write>(
+    pub(crate) fn build_for_driver<W: Write, T>(
         w: &mut W,
-        project_root: &Path,
+        vfs_root: Option<VfsPath>,
         resolved_package: Package,
         transitive_dependencies: Vec<DependencyInfo>,
         resolution_graph: &ResolvedGraph,
-        mut compiler_driver: impl FnMut(
-            Compiler,
-        )
-            -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
-    ) -> Result<CompiledPackage> {
+        mut compiler_driver: impl FnMut(Compiler) -> Result<T>,
+    ) -> Result<BuildResult<T>> {
         let immediate_dependencies = transitive_dependencies
             .iter()
             .filter(|&dep| dep.is_immediate)
@@ -476,22 +483,77 @@ impl CompiledPackage {
         let mut paths = src_deps;
         paths.push(sources_package_paths.clone());
 
-        let lint = !resolution_graph.build_options.no_lint;
+        let lint_level = resolution_graph.build_options.lint_flag.get();
         let sui_mode = resolution_graph
             .build_options
             .default_flavor
             .map_or(false, |f| f == Flavor::Sui);
 
-        let mut compiler = Compiler::from_package_paths(paths, bytecode_deps)
+        let mut compiler = Compiler::from_package_paths(vfs_root, paths, bytecode_deps)
             .unwrap()
             .set_flags(flags);
-        if lint && sui_mode {
-            let (filter_attr_name, filters) = known_filters();
+        if sui_mode {
+            let (filter_attr_name, filters) = sui_mode::linters::known_filters();
             compiler = compiler
-                .add_visitors(linter_visitors())
-                .add_custom_known_filters(filters, filter_attr_name);
+                .add_custom_known_filters(filter_attr_name, filters)
+                .add_visitors(sui_mode::linters::linter_visitors(lint_level))
         }
-        let (file_map, all_compiled_units) = compiler_driver(compiler)?;
+        let (filter_attr_name, filters) = linters::known_filters();
+        compiler = compiler
+            .add_custom_known_filters(filter_attr_name, filters)
+            .add_visitors(linters::linter_visitors(lint_level));
+        Ok(BuildResult {
+            root_package_name,
+            sources_package_paths,
+            immediate_dependencies,
+            deps_package_paths,
+            result: compiler_driver(compiler)?,
+        })
+    }
+
+    pub(crate) fn build_for_result<W: Write, T>(
+        w: &mut W,
+        vfs_root: Option<VfsPath>,
+        resolved_package: Package,
+        transitive_dependencies: Vec<DependencyInfo>,
+        resolution_graph: &ResolvedGraph,
+        compiler_driver: impl FnMut(Compiler) -> Result<T>,
+    ) -> Result<T> {
+        let build_result = Self::build_for_driver(
+            w,
+            vfs_root,
+            resolved_package,
+            transitive_dependencies,
+            resolution_graph,
+            compiler_driver,
+        )?;
+        Ok(build_result.result)
+    }
+
+    pub(crate) fn build_all<W: Write>(
+        w: &mut W,
+        vfs_root: Option<VfsPath>,
+        project_root: &Path,
+        resolved_package: Package,
+        transitive_dependencies: Vec<DependencyInfo>,
+        resolution_graph: &ResolvedGraph,
+        compiler_driver: impl FnMut(Compiler) -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
+    ) -> Result<CompiledPackage> {
+        let BuildResult {
+            root_package_name,
+            sources_package_paths,
+            immediate_dependencies,
+            deps_package_paths,
+            result,
+        } = Self::build_for_driver(
+            w,
+            vfs_root,
+            resolved_package.clone(),
+            transitive_dependencies,
+            resolution_graph,
+            compiler_driver,
+        )?;
+        let (file_map, all_compiled_units) = result;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];
         for annot_unit in all_compiled_units {
@@ -747,26 +809,7 @@ pub(crate) fn make_source_and_deps_for_compiler(
     /* sources */ PackagePaths,
     /* deps */ Vec<(PackagePaths, ModuleFormat)>,
 )> {
-    let deps_package_paths = deps
-        .into_iter()
-        .map(|dep| {
-            let paths = dep
-                .source_paths
-                .into_iter()
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>();
-            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
-            Ok((
-                PackagePaths {
-                    name: Some((dep.name, dep.compiler_config)),
-                    paths,
-                    named_address_map,
-                },
-                dep.module_format,
-            ))
-        })
-        .collect::<Result<Vec<_>>>()?;
+    let deps_package_paths = make_deps_for_compiler_internal(deps)?;
     let root_named_addrs = apply_named_address_renaming(
         root.source_package.package.name,
         named_address_mapping_for_compiler(&root.resolved_table),
@@ -785,4 +828,28 @@ pub(crate) fn make_source_and_deps_for_compiler(
         named_address_map: root_named_addrs,
     };
     Ok((source_package_paths, deps_package_paths))
+}
+
+pub(crate) fn make_deps_for_compiler_internal(
+    deps: Vec<DependencyInfo>,
+) -> Result<Vec<(PackagePaths, ModuleFormat)>> {
+    deps.into_iter()
+        .map(|dep| {
+            let paths = dep
+                .source_paths
+                .into_iter()
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>();
+            let named_address_map = named_address_mapping_for_compiler(dep.address_mapping);
+            Ok((
+                PackagePaths {
+                    name: Some((dep.name, dep.compiler_config)),
+                    paths,
+                    named_address_map,
+                },
+                dep.module_format,
+            ))
+        })
+        .collect::<Result<Vec<_>>>()
 }

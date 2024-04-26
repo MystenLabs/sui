@@ -9,20 +9,19 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::{Self, TxContext};
     use sui::dynamic_object_field as ofield;
 
-    struct S has key, store {
+    public struct S has key, store {
         id: sui::object::UID,
     }
 
-    struct R has key {
+    public struct R has key {
         id: sui::object::UID,
         s: S,
     }
 
     public entry fun test_wrap(ctx: &mut TxContext) {
-        let id = sui::object::new(ctx);
+        let mut id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
         ofield::add(&mut id, 0, child);
         let parent = S { id };

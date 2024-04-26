@@ -20,7 +20,7 @@ module utils::immutable_external_resource {
     ///
     /// Clients of this type MUST fetch the resource at `url`, compute its digest and compare it against `digest`. If
     /// the result is false, clients SHOULD indicate that to users or ignore the resource.
-    struct ImmutableExternalResource has store, copy, drop {
+    public struct ImmutableExternalResource has store, copy, drop {
         url: Url,
         digest: vector<u8>,
     }

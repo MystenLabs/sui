@@ -18,7 +18,7 @@ use std::{
 };
 use treeline::Tree;
 
-use crate::package_hooks::custom_resolve_pkg_name;
+use crate::package_hooks::{custom_resolve_pkg_id, PackageIdentifier};
 use crate::source_package::parsed_manifest as PM;
 use crate::{
     source_package::{
@@ -92,25 +92,25 @@ impl ResolvedGraph {
 
         // Resolve transitive dependencies in reverse topological order so that a package's
         // dependencies get resolved before it does.
-        for pkg_name in graph.topological_order().into_iter().rev() {
+        for pkg_id in graph.topological_order().into_iter().rev() {
             // Skip dev-mode packages if not in dev-mode.
-            if !(build_options.dev_mode || graph.always_deps.contains(&pkg_name)) {
+            if !(build_options.dev_mode || graph.always_deps.contains(&pkg_id)) {
                 continue;
             }
 
             // Make sure the package is available locally.
-            let package_path = if pkg_name == graph.root_package {
+            let package_path = if pkg_id == graph.root_package_id {
                 graph.root_path.clone()
             } else {
-                let pkg = &graph.package_table[&pkg_name];
+                let pkg = &graph.package_table[&pkg_id];
                 dependency_cache
-                    .download_and_update_if_remote(pkg_name, &pkg.kind, progress_output)
-                    .with_context(|| format!("Fetching '{pkg_name}'"))?;
+                    .download_and_update_if_remote(pkg_id, &pkg.kind, progress_output)
+                    .with_context(|| format!("Fetching '{pkg_id}'"))?;
                 graph.root_path.join(local_path(&pkg.kind))
             };
 
             let mut resolved_pkg = Package::new(package_path, &build_options)
-                .with_context(|| format!("Resolving package '{pkg_name}'"))?;
+                .with_context(|| format!("Resolving package '{pkg_id}'"))?;
 
             // Check dependencies package names from manifest are consistent with ther names
             // in parent (this) manifest. We do this check only for local and git
@@ -136,22 +136,22 @@ impl ResolvedGraph {
                 };
             }
 
-            let pkg_orig_name = resolved_pkg.source_package.package.name;
+            let pkg_name = resolved_pkg.source_package.package.name;
 
             resolved_pkg
                 .define_addresses_in_package(&mut resolving_table)
-                .with_context(|| format!("Resolving addresses for '{pkg_orig_name}'"))?;
+                .with_context(|| format!("Resolving addresses for '{pkg_name}'"))?;
 
-            for (dep_name, dep, _pkg) in graph.immediate_dependencies(pkg_name, dep_mode) {
-                let dep_orig_name = dep.dep_orig_name;
+            for (dep_id, dep, _pkg) in graph.immediate_dependencies(pkg_id, dep_mode) {
+                let dep_name = dep.dep_name;
                 resolved_pkg
-                    .process_dependency(dep_name, dep, &package_table, &mut resolving_table)
+                    .process_dependency(dep_id, dep, &package_table, &mut resolving_table)
                     .with_context(|| {
-                        format!("Processing dependency '{dep_orig_name}' of '{pkg_orig_name}'")
+                        format!("Processing dependency '{dep_name}' of '{pkg_name}'")
                     })?;
             }
 
-            package_table.insert(pkg_name, resolved_pkg);
+            package_table.insert(pkg_id, resolved_pkg);
         }
 
         // Add additional addresses to all package resolution tables.
@@ -166,12 +166,12 @@ impl ResolvedGraph {
             }
         }
 
-        let root_package = &package_table[&graph.root_package];
+        let root_package = &package_table[&graph.root_package_id];
 
         // Add dev addresses, but only for the root package
         if build_options.dev_mode {
             let mut addr_to_name_mapping = BTreeMap::new();
-            for (name, addr) in resolving_table.bindings(graph.root_package) {
+            for (name, addr) in resolving_table.bindings(graph.root_package_id) {
                 if let Some(addr) = addr {
                     addr_to_name_mapping
                         .entry(*addr)
@@ -186,14 +186,14 @@ impl ResolvedGraph {
                 .iter()
                 .flatten()
             {
-                let root_dev_addr = (graph.root_package, *name);
+                let root_dev_addr = (graph.root_package_id, *name);
                 if !resolving_table.contains(root_dev_addr) {
                     bail!(
                         "Found unbound dev address assignment '{} = 0x{}' in root package '{}'. \
                          Dev addresses cannot introduce new named addresses",
                         name,
                         addr.short_str_lossless(),
-                        graph.root_package_orig_name,
+                        graph.root_package_name,
                     );
                 }
 
@@ -203,7 +203,7 @@ impl ResolvedGraph {
                         format!(
                             "Unable to resolve named address '{}' in package '{}' when resolving \
                              dependencies in dev mode",
-                            name, graph.root_package_orig_name,
+                            name, graph.root_package_name,
                         )
                     })?;
 
@@ -216,7 +216,7 @@ impl ResolvedGraph {
                          Assignment conflicts with previous assignments: {conflicts} = 0x{addr}",
                         name = name,
                         addr = addr.short_str_lossless(),
-                        pkg = graph.root_package_orig_name,
+                        pkg = graph.root_package_name,
                         conflicts = conflicts
                             .iter()
                             .map(NamedAddress::as_str)
@@ -253,8 +253,8 @@ impl ResolvedGraph {
         })
     }
 
-    pub fn root_package(&self) -> PackageName {
-        self.graph.root_package
+    pub fn root_package(&self) -> PackageIdentifier {
+        self.graph.root_package_id
     }
 
     pub fn get_package(&self, name: PackageName) -> &Package {
@@ -346,58 +346,57 @@ impl Package {
     }
 
     fn define_addresses_in_package(&self, resolving_table: &mut ResolvingTable) -> Result<()> {
-        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+        let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
             format!(
                 "Resolving package name for '{}'",
                 &self.source_package.package.name
             )
         })?;
         for (name, addr) in self.source_package.addresses.iter().flatten() {
-            resolving_table.define((pkg_name, *name), *addr)?;
+            resolving_table.define((pkg_id, *name), *addr)?;
         }
         Ok(())
     }
 
     fn process_dependency(
         &mut self,
-        dep_name: PackageName,
+        dep_id: PackageName,
         dep: &DG::Dependency,
         package_table: &PackageTable,
         resolving_table: &mut ResolvingTable,
     ) -> Result<()> {
-        let pkg_orig_name = self.source_package.package.name;
-        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+        let pkg_name = self.source_package.package.name;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
             format!(
                 "Resolving package name for '{}'",
                 &self.source_package.package.name
             )
         })?;
-        let dep_orig_name = dep.dep_orig_name;
+        let dep_name = dep.dep_name;
 
         let mut dep_renaming = BTreeMap::new();
 
         for (to, subst) in dep.subst.iter().flatten() {
             match subst {
                 SubstOrRename::Assign(addr) => {
-                    resolving_table.define((pkg_name, *to), Some(*addr))?;
+                    resolving_table.define((pkg_id, *to), Some(*addr))?;
                 }
 
                 SubstOrRename::RenameFrom(from) => {
-                    if !resolving_table.contains((dep_name, *from)) {
+                    if !resolving_table.contains((dep_id, *from)) {
                         bail!(
                             "Tried to rename named address {0} from package '{1}', \
                              however {1} does not contain that address",
                             from,
-                            dep_orig_name,
+                            dep_name,
                         )
                     }
 
-                    if let Some((prev_dep, prev_from)) =
-                        self.renaming.insert(*to, (dep_name, *from))
+                    if let Some((prev_dep, prev_from)) = self.renaming.insert(*to, (dep_id, *from))
                     {
                         bail!(
                             "Duplicate renaming of named address '{to}' in dependencies of \
-                             '{pkg_orig_name}'. Substituted with '{from}' from dependency '{dep_orig_name}' \
+                             '{pkg_name}'. Substituted with '{from}' from dependency '{dep_name}' \
                              and '{prev_from}' from dependency '{prev_dep}'.",
                         )
                     }
@@ -408,26 +407,26 @@ impl Package {
         }
 
         let bound_in_dep: Vec<_> = resolving_table
-            .bindings(dep_name)
+            .bindings(dep_id)
             .map(|(from, _)| from)
             .collect();
 
         for from in bound_in_dep {
             let to = *dep_renaming.get(&from).unwrap_or(&from);
-            resolving_table.unify((pkg_name, to), (dep_name, from))?;
+            resolving_table.unify((pkg_id, to), (dep_id, from))?;
         }
 
-        let Some(resolved_dep) = package_table.get(&dep_name) else {
+        let Some(resolved_dep) = package_table.get(&dep_id) else {
             bail!(
-                "Unable to find resolved information for dependency '{dep_orig_name}' of \
-                 '{pkg_orig_name}'",
+                "Unable to find resolved information for dependency '{dep_name}' of \
+                 '{pkg_name}'",
             );
         };
 
         if let Some(digest) = dep.digest {
             if digest != resolved_dep.source_digest {
                 bail!(
-                    "Source digest mismatch in dependency '{dep_orig_name}' of '{pkg_orig_name}'. \
+                    "Source digest mismatch in dependency '{dep_name}' of '{pkg_name}'. \
                      Expected '{digest}' but got '{}'.",
                     resolved_dep.source_digest
                 )
@@ -438,8 +437,8 @@ impl Package {
     }
 
     fn finalize_address_resolution(&mut self, resolving_table: &ResolvingTable) -> Result<()> {
-        let pkg_orig_name = self.source_package.package.name;
-        let pkg_name = custom_resolve_pkg_name(&self.source_package).with_context(|| {
+        let pkg_name = self.source_package.package.name;
+        let pkg_id = custom_resolve_pkg_id(&self.source_package).with_context(|| {
             format!(
                 "Resolving package name for '{}'",
                 &self.source_package.package.name
@@ -447,15 +446,14 @@ impl Package {
         })?;
         let mut unresolved_addresses = Vec::new();
 
-        for (name, addr) in resolving_table.bindings(pkg_name) {
+        for (name, addr) in resolving_table.bindings(pkg_id) {
             match *addr {
                 Some(addr) => {
                     self.resolved_table.insert(name, addr);
                 }
                 None => {
-                    unresolved_addresses.push(format!(
-                        "  Named address '{name}' in package '{pkg_orig_name}'"
-                    ));
+                    unresolved_addresses
+                        .push(format!("  Named address '{name}' in package '{pkg_name}'"));
                 }
             }
         }
@@ -471,7 +469,7 @@ impl Package {
     }
 
     pub fn immediate_dependencies(&self, graph: &ResolvedGraph) -> BTreeSet<PackageName> {
-        let pkg_name = custom_resolve_pkg_name(&self.source_package)
+        let pkg_id = custom_resolve_pkg_id(&self.source_package)
             .with_context(|| {
                 format!(
                     "Resolving package name for '{}'",
@@ -483,7 +481,7 @@ impl Package {
         graph
             .graph
             .immediate_dependencies(
-                pkg_name,
+                pkg_id,
                 if graph.build_options.dev_mode {
                     DG::DependencyMode::DevOnly
                 } else {

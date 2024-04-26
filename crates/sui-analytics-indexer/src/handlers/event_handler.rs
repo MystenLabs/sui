@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use fastcrypto::encoding::{Base64, Encoding};
+use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 
 use std::path::Path;
 
@@ -48,6 +49,11 @@ impl Handler for EventHandler {
                     events,
                 )
                 .await?;
+            }
+            if checkpoint_summary.end_of_epoch_data.is_some() {
+                self.resolver
+                    .package_store()
+                    .evict(SYSTEM_PACKAGE_ADDRESSES.iter().copied());
             }
         }
         Ok(())

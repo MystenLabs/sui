@@ -3,57 +3,57 @@ processed 17 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 14-87:
+task 1 'publish'. lines 14-81:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 11263200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 89-89:
+task 2 'run'. lines 83-83:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 91-91:
+task 3 'run'. lines 85-85:
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 4 'run'. lines 93-93:
+task 4 'run'. lines 87-87:
 events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("Object"), type_params: [] })] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 5 'run'. lines 95-95:
+task 5 'run'. lines 89-89:
 created: object(5,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 6 'run'. lines 97-97:
+task 6 'run'. lines 91-91:
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 7 'run'. lines 99-99:
+task 7 'run'. lines 93-93:
 events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M2"), name: Identifier("Object"), type_params: [] })] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,0), object(5,0)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
 
-task 8 'create-checkpoint'. lines 101-101:
+task 8 'create-checkpoint'. lines 95-95:
 Checkpoint created: 1
 
-task 9 'run-graphql'. lines 103-123:
+task 9 'run-graphql'. lines 97-117:
 Response: {
   "data": {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -65,13 +65,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -83,13 +83,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NiwiZSI6MH0",
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventA"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -101,13 +101,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NywiZSI6MH0",
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::Object>"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -123,19 +123,19 @@ Response: {
   }
 }
 
-task 10 'run-graphql'. lines 125-145:
+task 10 'run-graphql'. lines 119-139:
 Response: {
   "data": {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -147,13 +147,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -165,13 +165,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NiwiZSI6MH0",
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventA"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -183,13 +183,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NywiZSI6MH0",
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M2"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M2::Object>"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -205,19 +205,19 @@ Response: {
   }
 }
 
-task 11 'run-graphql'. lines 147-167:
+task 11 'run-graphql'. lines 141-161:
 Response: {
   "data": {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -229,13 +229,13 @@ Response: {
           }
         },
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -251,19 +251,19 @@ Response: {
   }
 }
 
-task 12 'run-graphql'. lines 169-189:
+task 12 'run-graphql'. lines 163-183:
 Response: {
   "data": {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6MywiZSI6MH0",
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventA"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -279,19 +279,19 @@ Response: {
   }
 }
 
-task 13 'run-graphql'. lines 191-211:
+task 13 'run-graphql'. lines 185-205:
 Response: {
   "data": {
     "events": {
       "edges": [
         {
-          "cursor": "eyJ0eCI6NCwiZSI6MH0",
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
           "node": {
             "sendingModule": {
               "name": "M1"
             },
             "type": {
-              "repr": "0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::EventB<0x513d7d21f86753372860c0f11c434b897e9ed6164a7c586b70d1efb1932ae778::M1::Object>"
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
             },
             "sender": {
               "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
@@ -307,7 +307,7 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 213-233:
+task 14 'run-graphql'. lines 207-227:
 Response: {
   "data": null,
   "errors": [
@@ -326,7 +326,7 @@ Response: {
   ]
 }
 
-task 15 'run-graphql'. lines 235-255:
+task 15 'run-graphql'. lines 229-249:
 Response: {
   "data": null,
   "errors": [
@@ -345,7 +345,7 @@ Response: {
   ]
 }
 
-task 16 'run-graphql'. lines 257-277:
+task 16 'run-graphql'. lines 251-271:
 Response: {
   "data": null,
   "errors": [

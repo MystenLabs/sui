@@ -9,7 +9,6 @@ use move_binary_format::{
         ModuleHandleIndex, SignatureIndex, StructDefinitionIndex, StructHandleIndex, TableIndex,
     },
     internals::ModuleIndex,
-    views::{ModuleView, SignatureTokenView},
     IndexKind,
 };
 use move_core_types::vm_status::StatusCode;
@@ -324,19 +323,19 @@ impl ApplyOutOfBoundsContext {
 
     /// Returns the indexes of locals signatures that contain struct handles inside them.
     fn sig_structs(module: &CompiledModule) -> impl Iterator<Item = (SignatureIndex, usize)> + '_ {
-        let module_view = ModuleView::new(module);
-        module_view
+        module
             .signatures()
+            .iter()
             .enumerate()
             .flat_map(|(idx, signature)| {
                 let idx = SignatureIndex(idx as u16);
-                Self::find_struct_tokens(signature.tokens(), move |arg_idx| (idx, arg_idx))
+                Self::find_struct_tokens(&signature.0, move |arg_idx| (idx, arg_idx))
             })
     }
 
     #[inline]
     fn find_struct_tokens<'b, F, T>(
-        tokens: impl IntoIterator<Item = SignatureTokenView<'b, CompiledModule>> + 'b,
+        tokens: impl IntoIterator<Item = &'b SignatureToken> + 'b,
         map_fn: F,
     ) -> impl Iterator<Item = T> + 'b
     where
@@ -345,9 +344,7 @@ impl ApplyOutOfBoundsContext {
         tokens
             .into_iter()
             .enumerate()
-            .filter_map(move |(arg_idx, token)| {
-                struct_handle(token.signature_token()).map(|_| map_fn(arg_idx))
-            })
+            .filter_map(move |(arg_idx, token)| struct_handle(token).map(|_| map_fn(arg_idx)))
     }
 }
 
@@ -356,7 +353,10 @@ fn struct_handle(token: &SignatureToken) -> Option<StructHandleIndex> {
 
     match token {
         Struct(sh_idx) => Some(*sh_idx),
-        StructInstantiation(sh_idx, _) => Some(*sh_idx),
+        StructInstantiation(struct_inst) => {
+            let (sh_idx, _) = &**struct_inst;
+            Some(*sh_idx)
+        }
         Reference(token) | MutableReference(token) => struct_handle(token),
         Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address | Signer | Vector(_)
         | TypeParameter(_) => None,

@@ -3,8 +3,38 @@
 
 const standards = [
 	'standards',
+	'standards/coin',
+	{
+		type: 'category',
+		label: 'Closed-Loop Token',
+		link: {
+			type: 'doc',
+			id: 'standards/closed-loop-token',
+		},
+		items: [
+			'standards/closed-loop-token/action-request',
+			'standards/closed-loop-token/token-policy',
+			'standards/closed-loop-token/spending',
+			'standards/closed-loop-token/rules',
+			'standards/closed-loop-token/coin-token-comparison',
+		],
+	},
 	'standards/kiosk',
-	`standards/kiosk-apps`,
+	{
+		type: 'category',
+		label: 'Kiosk Apps',
+		link: {
+			type: 'doc',
+			id: 'standards/kiosk-apps',
+		},
+		items: [
+			{
+				type: 'doc',
+				label: 'NFT Rental Example',
+				id: 'standards/kiosk-apps/nft-rental',
+			},
+		],
+	},
 	{
 		type: 'category',
 		label: 'DeepBook',
@@ -23,21 +53,5 @@ const standards = [
 	},
 	'standards/display',
 	'standards/wallet-standard',
-	{
-		type: 'category',
-		label: 'Closed Loop Token',
-		link: {
-			type: 'doc',
-			id: 'standards/closed-loop-token',
-		},
-		items: [
-			'standards/closed-loop-token/overview',
-			'standards/closed-loop-token/action-request',
-			'standards/closed-loop-token/token-policy',
-			'standards/closed-loop-token/spending',
-			'standards/closed-loop-token/rules',
-			'standards/closed-loop-token/coin-token-comparison',
-		],
-	},
 ];
 module.exports = standards;

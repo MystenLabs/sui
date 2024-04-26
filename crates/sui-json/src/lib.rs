@@ -7,10 +7,8 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, bail};
 use fastcrypto::encoding::{Encoding, Hex};
-use move_binary_format::{
-    access::ModuleAccess, binary_views::BinaryIndexedView, file_format::SignatureToken,
-    file_format_common::VERSION_MAX,
-};
+use move_binary_format::CompiledModule;
+use move_binary_format::{binary_config::BinaryConfig, file_format::SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveFieldLayout;
@@ -29,12 +27,13 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Number, Value as JsonValue};
 
 use sui_types::base_types::{
-    ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION,
-    RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME, STD_OPTION_MODULE_NAME,
-    STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
+    is_primitive_type_tag, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
+    RESOLVED_STD_OPTION, RESOLVED_UTF8_STR, STD_ASCII_MODULE_NAME, STD_ASCII_STRUCT_NAME,
+    STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, STD_UTF8_MODULE_NAME, STD_UTF8_STRUCT_NAME,
 };
 use sui_types::id::{ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
 use sui_types::MOVE_STDLIB_ADDRESS;
 
@@ -154,7 +153,7 @@ impl SuiJsonValue {
             if let Some(s) = try_parse_string(layout, bytes) {
                 json!(s)
             } else {
-                let result = bcs::from_bytes_seed(layout, bytes).map_or_else(
+                let result = BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
                     |_| {
                         // fallback to array[u8] if fail to convert to json.
                         JsonValue::Array(
@@ -236,7 +235,10 @@ impl SuiJsonValue {
         }
     }
 
-    fn to_move_value(val: &JsonValue, ty: &MoveTypeLayout) -> Result<R::MoveValue, anyhow::Error> {
+    pub fn to_move_value(
+        val: &JsonValue,
+        ty: &MoveTypeLayout,
+    ) -> Result<R::MoveValue, anyhow::Error> {
         Ok(match (val, ty) {
             // Bool to Bool is simple
             (JsonValue::Bool(b), MoveTypeLayout::Bool) => R::MoveValue::Bool(*b),
@@ -542,45 +544,13 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
     check_valid_homogeneous_rec(&mut next_q)
 }
 
-fn is_primitive_type_tag(t: &TypeTag) -> bool {
-    match t {
-        TypeTag::Bool
-        | TypeTag::U8
-        | TypeTag::U16
-        | TypeTag::U32
-        | TypeTag::U64
-        | TypeTag::U128
-        | TypeTag::U256
-        | TypeTag::Address => true,
-        TypeTag::Vector(inner) => is_primitive_type_tag(inner),
-        TypeTag::Struct(st) => {
-            let StructTag {
-                address,
-                module,
-                name,
-                type_params: type_args,
-            } = &**st;
-            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
-            // is id or..
-            if resolved_struct == RESOLVED_SUI_ID {
-                return true;
-            }
-            // is option of a primitive
-            resolved_struct == RESOLVED_STD_OPTION
-                && type_args.len() == 1
-                && is_primitive_type_tag(&type_args[0])
-        }
-        TypeTag::Signer => false,
-    }
-}
-
 /// Checks if a give SignatureToken represents a primitive type and, if so, returns MoveTypeLayout
 /// for this type (if available). The reason we need to return both information about whether a
 /// SignatureToken represents a primitive and an Option representing MoveTypeLayout is that there
 /// can be signature tokens that represent primitives but that do not have corresponding
 /// MoveTypeLayout (e.g., SignatureToken::StructInstantiation).
 pub fn primitive_type(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_args: &[TypeTag],
     param: &SignatureToken,
 ) -> (bool, Option<MoveTypeLayout>) {
@@ -643,7 +613,8 @@ pub fn primitive_type(
                 (false, None)
             }
         }
-        SignatureToken::StructInstantiation(idx, targs) => {
+        SignatureToken::StructInstantiation(struct_inst) => {
+            let (idx, targs) = &**struct_inst;
             let resolved_struct = resolve_struct(view, *idx);
             // is option of a primitive
             if resolved_struct == RESOLVED_STD_OPTION && targs.len() == 1 {
@@ -735,7 +706,7 @@ fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID
 }
 
 fn resolve_call_arg(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_args: &[TypeTag],
     idx: usize,
     arg: &SuiJsonValue,
@@ -776,7 +747,7 @@ fn resolve_call_arg(
     // of objects (but not, for example, vectors of references)
     match param {
         SignatureToken::Struct(_)
-        | SignatureToken::StructInstantiation(_, _)
+        | SignatureToken::StructInstantiation(_)
         | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => Ok(ResolvedCallArg::Object(resolve_object_arg(
@@ -784,7 +755,7 @@ fn resolve_call_arg(
             &arg.to_json_value(),
         )?)),
         SignatureToken::Vector(inner) => match &**inner {
-            SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_, _) => {
+            SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_) => {
                 Ok(ResolvedCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?))
             }
             _ => {
@@ -805,7 +776,7 @@ fn resolve_call_arg(
     }
 }
 
-pub fn is_receiving_argument(view: &BinaryIndexedView, arg_type: &SignatureToken) -> bool {
+pub fn is_receiving_argument(view: &CompiledModule, arg_type: &SignatureToken) -> bool {
     use SignatureToken as ST;
 
     // Progress down into references to determine if the underlying type is a receiving
@@ -817,12 +788,12 @@ pub fn is_receiving_argument(view: &BinaryIndexedView, arg_type: &SignatureToken
 
     matches!(
         token,
-        ST::StructInstantiation(idx, targs) if resolve_struct(view, *idx) == RESOLVED_RECEIVING_STRUCT && targs.len() == 1
+        ST::StructInstantiation(struct_inst) if resolve_struct(view, struct_inst.0) == RESOLVED_RECEIVING_STRUCT && struct_inst.1.len() == 1
     )
 }
 
 fn resolve_call_args(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_args: &[TypeTag],
     json_args: &[SuiJsonValue],
     parameter_types: &[SignatureToken],
@@ -845,7 +816,7 @@ pub fn resolve_move_function_args(
     combined_args_json: Vec<SuiJsonValue>,
 ) -> Result<Vec<(ResolvedCallArg, SignatureToken)>, anyhow::Error> {
     // Extract the expected function signature
-    let module = package.deserialize_module(&module_ident, VERSION_MAX, true)?;
+    let module = package.deserialize_module(&module_ident, &BinaryConfig::standard())?;
     let function_str = function.as_ident_str();
     let fdef = module
         .function_defs
@@ -863,11 +834,11 @@ pub fn resolve_move_function_args(
     let function_signature = module.function_handle_at(fdef.function);
     let parameters = &module.signature_at(function_signature.parameters).0;
 
-    let view = BinaryIndexedView::Module(&module);
-
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if TxContext::kind(&view, param) != TxContextKind::None => parameters.len() - 1,
+        Some(param) if TxContext::kind(&module, param) != TxContextKind::None => {
+            parameters.len() - 1
+        }
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {
@@ -878,7 +849,7 @@ pub fn resolve_move_function_args(
         );
     }
     // Check that the args are valid and convert to the correct format
-    let call_args = resolve_call_args(&view, type_args, &combined_args_json, parameters)?;
+    let call_args = resolve_call_args(&module, type_args, &combined_args_json, parameters)?;
     let tupled_call_args = call_args
         .into_iter()
         .zip(parameters.iter())

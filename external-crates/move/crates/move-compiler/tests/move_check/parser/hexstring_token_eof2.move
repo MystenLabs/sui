@@ -1,3 +1,3 @@
-module M {
-    public fun foo(): vector<u8> {
+module 0x42::M {
+    public fun foo() {
         x"abcd

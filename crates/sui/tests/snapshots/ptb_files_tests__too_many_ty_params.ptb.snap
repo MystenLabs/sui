@@ -1,0 +1,34 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error at command 0 in PTB file 'tests/ptb_files/move_call/
+  │ too_many_ty_params.ptb'
+   ╭─[1:39]
+ 1 │ --move-call std::option::is_none<u64> <u64> none some(1)
+   ·                                       ──┬──
+   ·                                         ╰── Type arguments already specified in function call but also supplied here
+ 2 │ --move-call std::option::is_none <u64> <u64> none some(1)
+   ╰────
+
+  × Error at command 1 in PTB file 'tests/ptb_files/move_call/
+  │ too_many_ty_params.ptb'
+   ╭─[2:40]
+ 1 │ --move-call std::option::is_none<u64> <u64> none some(1)
+ 2 │ --move-call std::option::is_none <u64> <u64> none some(1)
+   ·                                        ──┬──
+   ·                                          ╰── Type arguments already specified in function call but also supplied here
+ 3 │ --move-call std::option::is_none <u64> <u64> none some(1)
+   ╰────
+
+  × Error at command 2 in PTB file 'tests/ptb_files/move_call/
+  │ too_many_ty_params.ptb'
+   ╭─[3:40]
+ 2 │ --move-call std::option::is_none <u64> <u64> none some(1)
+ 3 │ --move-call std::option::is_none <u64> <u64> none some(1)
+   ·                                        ──┬──
+   ·                                          ╰── Type arguments already specified in function call but also supplied here
+ 4 │ --gas-budget 1
+   ╰────
+

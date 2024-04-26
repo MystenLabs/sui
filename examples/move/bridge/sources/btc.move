@@ -2,15 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::btc {
-    use std::option;
-
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context::TxContext;
 
-    friend bridge::treasury;
-
-    struct BTC has drop {}
+    public struct BTC has drop {}
 
     fun init(witness: BTC, ctx: &mut TxContext) {
 
@@ -24,6 +18,6 @@ module bridge::btc {
             ctx
         );
         transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury_cap, @0xf82999a527fe455c8379a9132fa7f8a0e024575810bcef69e26d4d6dc2830647);
+        transfer::public_transfer(treasury_cap, tx_context::sender(ctx));
     }
 }

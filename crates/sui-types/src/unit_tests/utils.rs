@@ -36,7 +36,7 @@ pub struct TestData {
     pub zklogin_inputs: String,
     pub kp: String,
     pub pk_bigint: String,
-    pub randomness: String,
+    pub salt: String,
     pub address_seed: String,
 }
 
@@ -160,7 +160,7 @@ pub fn mock_certified_checkpoint<'a>(
 }
 
 mod zk_login {
-    use fastcrypto_zkp::bn254::{utils::big_int_str_to_bytes, zk_login::ZkLoginInputs};
+    use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
     use shared_crypto::intent::PersonalMessage;
 
     use crate::{crypto::PublicKey, zk_login_util::get_zklogin_inputs};
@@ -171,10 +171,9 @@ mod zk_login {
     pub static SHORT_ADDRESS_SEED: &str =
         "380704556853533152350240698167704405529973457670972223618755249929828551006";
 
-    pub fn load_test_vectors() -> Vec<(SuiKeyPair, PublicKey, ZkLoginInputs)> {
+    pub fn load_test_vectors(path: &str) -> Vec<(SuiKeyPair, PublicKey, ZkLoginInputs)> {
         // read in test files that has a list of matching zklogin_inputs and its ephemeral private keys.
-        let file = std::fs::File::open("./src/unit_tests/zklogin_test_vectors.json")
-            .expect("Unable to open file");
+        let file = std::fs::File::open(path).expect("Unable to open file");
 
         let test_datum: Vec<TestData> = serde_json::from_reader(file).unwrap();
         let mut res = vec![];
@@ -198,7 +197,7 @@ mod zk_login {
                 let iss_bytes = inputs.get_iss().as_bytes();
                 hasher.update([iss_bytes.len() as u8]);
                 hasher.update(iss_bytes);
-                hasher.update(big_int_str_to_bytes(inputs.get_address_seed()).unwrap());
+                hasher.update(inputs.get_address_seed().unpadded());
                 SuiAddress::from_bytes(hasher.finalize().digest).unwrap()
             };
         }

@@ -5,8 +5,7 @@
 
 //# publish --upgradeable --sender A
 module V0::base_module {
-    use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -21,15 +20,14 @@ module V0::b {
     public fun public_fun(): u64 { 0 }
 }
 module V0::other_module {
-    struct Y { }
+    public struct Y { }
     fun public_fun(): u64 { 0 }
 }
 
 // other_module::Y is missing in V1
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V1::base_module {
-    use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -50,8 +48,7 @@ module V1::other_module {
 // other_module missing in V1
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V1::base_module {
-    use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -69,8 +66,7 @@ module V1::b {
 // `b` missing in V1
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V1::base_module {
-    use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -82,15 +78,14 @@ module V1::a {
     fun call_friend(): u64 { V0::base_module::public_fun() }
 }
 module V1::other_module {
-    struct Y { }
+    public struct Y { }
     fun public_fun(): u64 { 0 }
 }
 
 // `a` missing in V1
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A
 module V0::base_module {
-    use sui::object::UID;
-    struct Object has key, store { 
+    public struct Object has key, store {
         id: UID,
         field0: u64,
         field1: u64,
@@ -102,6 +97,6 @@ module V0::b {
     public fun public_fun(): u64 { 0 }
 }
 module V0::other_module {
-    struct Y { }
+    public struct Y { }
     fun public_fun(): u64 { 0 }
 }

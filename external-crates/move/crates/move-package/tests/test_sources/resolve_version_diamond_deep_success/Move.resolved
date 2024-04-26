@@ -1,8 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/resolve_version_diamond_deep_success",
-        root_package: "Root",
-        root_package_orig_name: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -122,7 +122,10 @@ ResolvedGraph {
         silence_warnings: false,
         warnings_are_errors: false,
         additional_named_addresses: {},
-        no_lint: false,
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
     },
     package_table: {
         "A": Package {

@@ -7,15 +7,15 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_},
+    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
     hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
-        ast::{BuiltinTypeName_, StructTypeParameter, TParam},
+        ast::{BuiltinTypeName_, DatatypeTypeParameter, TParam},
         fake_natives,
     },
     parser::ast::{
-        Ability, Ability_, BinOp, BinOp_, ConstantName, Field, FunctionName, ModuleName,
-        StructName, UnaryOp, UnaryOp_,
+        Ability, Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName,
+        ModuleName, UnaryOp, UnaryOp_,
     },
     shared::{unique_map::UniqueMap, *},
     FullyCompiledProgram,
@@ -24,26 +24,25 @@ use move_binary_format::file_format as F;
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::account_address::AccountAddress as MoveAddress;
 use move_ir_types::{ast as IR, location::*};
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     convert::TryInto,
+    sync::Arc,
 };
 
 type CollectedInfos = UniqueMap<FunctionName, CollectedInfo>;
-type CollectedInfo = (Vec<(Var, H::SingleType)>, Attributes);
+type CollectedInfo = (Vec<(Mutability, Var, H::SingleType)>, Attributes);
 
 fn extract_decls(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: &G::Program,
 ) -> (
     HashMap<ModuleIdent, usize>,
-    HashMap<(ModuleIdent, StructName), (BTreeSet<IR::Ability>, Vec<IR::StructTypeParameter>)>,
-    HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, StructName)>, IR::FunctionSignature),
-    >,
+    DatatypeDeclarations,
+    HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) {
     let pre_compiled_modules = || {
         pre_compiled_lib.iter().flat_map(|pre_compiled| {
@@ -67,16 +66,27 @@ fn extract_decls(
     }
 
     let all_modules = || prog.modules.key_cloned_iter().chain(pre_compiled_modules());
-    let sdecls = all_modules()
+    let sdecls: DatatypeDeclarations = all_modules()
         .flat_map(|(m, mdef)| {
             mdef.structs.key_cloned_iter().map(move |(s, sdef)| {
                 let key = (m, s);
                 let abilities = abilities(&sdef.abilities);
-                let type_parameters = struct_type_parameters(sdef.type_parameters.clone());
+                let type_parameters = datatype_type_parameters(sdef.type_parameters.clone());
                 (key, (abilities, type_parameters))
             })
         })
         .collect();
+    let edecls: DatatypeDeclarations = all_modules()
+        .flat_map(|(m, mdef)| {
+            mdef.enums.key_cloned_iter().map(move |(e, edef)| {
+                let key = (m, e);
+                let abilities = abilities(&edef.abilities);
+                let type_parameters = datatype_type_parameters(edef.type_parameters.clone());
+                (key, (abilities, type_parameters))
+            })
+        })
+        .collect();
+    let ddecls: DatatypeDeclarations = sdecls.into_iter().chain(edecls).collect();
     let context = &mut Context::new(compilation_env, None, None);
     let fdecls = all_modules()
         .flat_map(|(m, mdef)| {
@@ -92,14 +102,22 @@ fn extract_decls(
                 // })
                 .map(move |(f, fdef)| {
                     let key = (m, f);
-                    let seen = seen_structs(&fdef.signature);
+                    let seen_datatypes = seen_datatypes(&fdef.signature);
                     let gsig = fdef.signature.clone();
-                    (key, (seen, gsig))
+                    (key, (seen_datatypes, gsig))
                 })
         })
-        .map(|(key, (seen, gsig))| (key, (seen, function_signature(context, gsig))))
+        .map(|(key, (seen_datatypes, sig))| {
+            (
+                key,
+                FunctionDeclaration {
+                    seen_datatypes,
+                    signature: function_signature(context, sig),
+                },
+            )
+        })
         .collect();
-    (orderings, sdecls, fdecls)
+    (orderings, ddecls, fdecls)
 }
 
 //**************************************************************************************************
@@ -108,12 +126,12 @@ fn extract_decls(
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: G::Program,
 ) -> Vec<AnnotatedCompiledUnit> {
     let mut units = vec![];
 
-    let (orderings, sdecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
+    let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
     let G::Program { modules: gmodules } = prog;
 
     let mut source_modules = gmodules
@@ -122,7 +140,7 @@ pub fn program(
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
-        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &sdecls, &fdecls) {
+        if let Some(unit) = module(compilation_env, m, mdef, &orderings, &ddecls, &fdecls) {
             units.push(unit)
         }
     }
@@ -134,28 +152,41 @@ fn module(
     ident: ModuleIdent,
     mdef: G::ModuleDefinition,
     dependency_orderings: &HashMap<ModuleIdent, usize>,
-    struct_declarations: &HashMap<
-        (ModuleIdent, StructName),
+    datatype_declarations: &HashMap<
+        (ModuleIdent, DatatypeName),
         (BTreeSet<IR::Ability>, Vec<IR::StructTypeParameter>),
     >,
-    function_declarations: &HashMap<
-        (ModuleIdent, FunctionName),
-        (BTreeSet<(ModuleIdent, StructName)>, IR::FunctionSignature),
-    >,
+    function_declarations: &HashMap<(ModuleIdent, FunctionName), FunctionDeclaration>,
 ) -> Option<AnnotatedCompiledUnit> {
     let G::ModuleDefinition {
         warning_filter: _warning_filter,
         package_name,
-        attributes: _attributes,
+        attributes,
         is_source_module: _is_source_module,
         dependency_order: _dependency_order,
         friends: gfriends,
         structs: gstructs,
+        enums: genums,
         constants: gconstants,
         functions: gfunctions,
     } = mdef;
+
+    if !genums.is_empty() {
+        for (name, _) in genums {
+            let mut diag = diag!(
+                Editions::FeatureInDevelopment,
+                (name.loc(), "Enums are not supported in bytecode.")
+            );
+            diag.add_note("This feature is currently in development.");
+            compilation_env.add_diag(diag);
+        }
+        return None;
+    }
+
     let mut context = Context::new(compilation_env, package_name, Some(&ident));
     let structs = struct_defs(&mut context, &ident, gstructs);
+    // let enums = struct_defs(&mut context, &ident, genums);
+
     let constants = constants(&mut context, &ident, gconstants);
     let (collected_function_infos, functions) = functions(&mut context, &ident, gfunctions);
 
@@ -174,7 +205,7 @@ fn module(
     let addr_bytes = context.resolve_address(ident.value.address);
     let (imports, explicit_dependency_declarations) = context.materialize(
         dependency_orderings,
-        struct_declarations,
+        datatype_declarations,
         function_declarations,
     );
 
@@ -221,6 +252,7 @@ fn module(
     };
     Some(AnnotatedCompiledModule {
         loc: ident_loc,
+        attributes,
         address_name: addr_name,
         module_name_loc: module_name.loc(),
         named_module: module,
@@ -283,7 +315,7 @@ fn function_info_map(
     let (params, attributes) = collected_function_infos.get_(&name).unwrap();
     let parameters = params
         .iter()
-        .map(|(v, ty)| var_info(&local_map, *v, ty.clone()))
+        .map(|(_mut, v, ty)| var_info(&local_map, *v, ty.clone()))
         .collect();
     let function_info = FunctionInfo {
         parameters,
@@ -311,7 +343,7 @@ fn var_info(
 fn struct_defs(
     context: &mut Context,
     m: &ModuleIdent,
-    structs: UniqueMap<StructName, H::StructDefinition>,
+    structs: UniqueMap<DatatypeName, H::StructDefinition>,
 ) -> Vec<IR::StructDefinition> {
     let mut structs = structs.into_iter().collect::<Vec<_>>();
     structs.sort_by_key(|(_, s)| s.index);
@@ -324,7 +356,7 @@ fn struct_defs(
 fn struct_def(
     context: &mut Context,
     m: &ModuleIdent,
-    s: StructName,
+    s: DatatypeName,
     sdef: H::StructDefinition,
 ) -> IR::StructDefinition {
     let H::StructDefinition {
@@ -338,7 +370,7 @@ fn struct_def(
     let loc = s.loc();
     let name = context.struct_definition_name(m, s);
     let abilities = abilities(&abs);
-    let type_formals = struct_type_parameters(tys);
+    let type_formals = datatype_type_parameters(tys);
     let fields = struct_fields(context, loc, fields);
     sp(
         loc,
@@ -379,7 +411,7 @@ fn struct_fields(
 }
 
 //**************************************************************************************************
-// Structs
+// Constants
 //**************************************************************************************************
 
 fn constants(
@@ -401,6 +433,9 @@ fn constant(
     n: ConstantName,
     c: G::Constant,
 ) -> IR::Constant {
+    let is_error_constant = c
+        .attributes
+        .contains_key_(&known_attributes::ErrorAttribute.into());
     let name = context.constant_definition_name(m, n);
     let signature = base_type(context, c.signature);
     let value = c.value.unwrap();
@@ -408,6 +443,7 @@ fn constant(
         name,
         signature,
         value,
+        is_error_constant,
     }
 }
 
@@ -452,7 +488,10 @@ fn function(
         warning_filter: _warning_filter,
         index: _index,
         attributes,
-        visibility: v,
+        compiled_visibility: v,
+        // original, declared visibility is ignored. This is primarily for marking entry functions
+        // as public in tests
+        visibility: _,
         entry,
         signature,
         body,
@@ -504,7 +543,7 @@ fn function_signature(context: &mut Context, sig: H::FunctionSignature) -> IR::F
     let formals = sig
         .parameters
         .into_iter()
-        .map(|(v, st)| (var(v), single_type(context, st)))
+        .map(|(_mut, v, st)| (var(v), single_type(context, st)))
         .collect();
     let type_parameters = fun_type_parameters(sig.type_parameters);
     IR::FunctionSignature {
@@ -514,36 +553,38 @@ fn function_signature(context: &mut Context, sig: H::FunctionSignature) -> IR::F
     }
 }
 
-fn seen_structs(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, StructName)> {
+fn seen_datatypes(sig: &H::FunctionSignature) -> BTreeSet<(ModuleIdent, DatatypeName)> {
     let mut seen = BTreeSet::new();
-    seen_structs_type(&mut seen, &sig.return_type);
+    seen_datatypes_type(&mut seen, &sig.return_type);
     sig.parameters
         .iter()
-        .for_each(|(_, st)| seen_structs_single_type(&mut seen, st));
+        .for_each(|(_, _, st)| seen_datatypes_single_type(&mut seen, st));
     seen
 }
 
-fn seen_structs_type(seen: &mut BTreeSet<(ModuleIdent, StructName)>, sp!(_, t_): &H::Type) {
+fn seen_datatypes_type(seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>, sp!(_, t_): &H::Type) {
     use H::Type_ as T;
     match t_ {
         T::Unit => (),
-        T::Single(st) => seen_structs_single_type(seen, st),
-        T::Multiple(ss) => ss.iter().for_each(|st| seen_structs_single_type(seen, st)),
+        T::Single(st) => seen_datatypes_single_type(seen, st),
+        T::Multiple(ss) => ss
+            .iter()
+            .for_each(|st| seen_datatypes_single_type(seen, st)),
     }
 }
 
-fn seen_structs_single_type(
-    seen: &mut BTreeSet<(ModuleIdent, StructName)>,
+fn seen_datatypes_single_type(
+    seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, st_): &H::SingleType,
 ) {
     use H::SingleType_ as S;
     match st_ {
-        S::Base(bt) | S::Ref(_, bt) => seen_structs_base_type(seen, bt),
+        S::Base(bt) | S::Ref(_, bt) => seen_datatypes_base_type(seen, bt),
     }
 }
 
-fn seen_structs_base_type(
-    seen: &mut BTreeSet<(ModuleIdent, StructName)>,
+fn seen_datatypes_base_type(
+    seen: &mut BTreeSet<(ModuleIdent, DatatypeName)>,
     sp!(_, bt_): &H::BaseType,
 ) {
     use H::{BaseType_ as B, TypeName_ as TN};
@@ -555,7 +596,7 @@ fn seen_structs_base_type(
             if let TN::ModuleType(m, s) = tn_ {
                 seen.insert((*m, *s));
             }
-            tys.iter().for_each(|st| seen_structs_base_type(seen, st))
+            tys.iter().for_each(|st| seen_datatypes_base_type(seen, st))
         }
         B::Param(TParam { .. }) => (),
     }
@@ -564,25 +605,25 @@ fn seen_structs_base_type(
 fn function_body(
     context: &mut Context,
     f: &FunctionName,
-    parameters: Vec<(Var, H::SingleType)>,
-    mut locals_map: UniqueMap<Var, H::SingleType>,
+    parameters: Vec<(Mutability, Var, H::SingleType)>,
+    mut locals_map: UniqueMap<Var, (Mutability, H::SingleType)>,
     block_info: BTreeMap<H::Label, G::BlockInfo>,
     start: H::Label,
     blocks_map: H::BasicBlocks,
 ) -> (Vec<(IR::Var, IR::Type)>, IR::BytecodeBlocks) {
     parameters
         .iter()
-        .for_each(|(var, _)| assert!(locals_map.remove(var).is_some()));
+        .for_each(|(_, var, _)| assert!(locals_map.remove(var).is_some()));
     let mut locals = locals_map
         .into_iter()
-        .filter(|(_, ty)| {
+        .filter(|(_, (_, ty))| {
             // filter out any locals generated for unreachable code
             let bt = match &ty.value {
                 H::SingleType_::Base(b) | H::SingleType_::Ref(_, b) => b,
             };
             !matches!(&bt.value, H::BaseType_::Unreachable)
         })
-        .map(|(v, ty)| (var(v), single_type(context, ty)))
+        .map(|(v, (_, ty))| (var(v), single_type(context, ty)))
         .collect();
     let mut blocks = blocks_map.into_iter().collect::<Vec<_>>();
     blocks.sort_by_key(|(lbl, _)| *lbl);
@@ -692,9 +733,9 @@ fn fun_type_parameters(tps: Vec<TParam>) -> Vec<(IR::TypeVar, BTreeSet<IR::Abili
         .collect()
 }
 
-fn struct_type_parameters(tps: Vec<StructTypeParameter>) -> Vec<IR::StructTypeParameter> {
+fn datatype_type_parameters(tps: Vec<DatatypeTypeParameter>) -> Vec<IR::StructTypeParameter> {
     tps.into_iter()
-        .map(|StructTypeParameter { is_phantom, param }| {
+        .map(|DatatypeTypeParameter { is_phantom, param }| {
             let name = type_var(param.user_specified_name);
             let constraints = abilities(&param.abilities);
             (is_phantom, name, constraints)
@@ -732,7 +773,7 @@ fn base_type(context: &mut Context, sp!(_, bt_): H::BaseType) -> IR::Type {
             IRT::Vector(Box::new(base_type(context, args.pop().unwrap())))
         }
         B::Apply(_, sp!(_, TN::ModuleType(m, s)), tys) => {
-            let n = context.qualified_struct_name(&m, s);
+            let n = context.qualified_datatype_name(&m, s);
             let tys = base_types(context, tys);
             IRT::Struct(n, tys)
         }
@@ -773,7 +814,7 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
     use H::Command_ as C;
     use IR::Bytecode_ as B;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             exp(context, code, e);
             lvalues(context, code, ls);
         }
@@ -806,6 +847,14 @@ fn command(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, cmd_): 
             code.push(sp(loc, B::BrFalse(label(if_false))));
             code.push(sp(loc, B::Branch(label(if_true))));
         }
+        C::VariantSwitch { .. } => {
+            let mut diag = diag!(
+                Editions::FeatureInDevelopment,
+                (loc, "Variant switching is not supported in bytecode.")
+            );
+            diag.add_note("This feature is currently in development.");
+            context.env.add_diag(diag);
+        }
         C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
@@ -828,12 +877,19 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
     use H::LValue_ as L;
     use IR::Bytecode_ as B;
     match l_ {
-        L::Ignore => {
-            code.push(sp(loc, B::Pop));
+        L::Ignore => code.push(sp(loc, B::Pop)),
+        L::Var {
+            var: v,
+            unused_assignment,
+            ty,
+        } => {
+            if unused_assignment && ty.value.abilities(loc).has_ability_(Ability_::Drop) {
+                code.push(sp(loc, B::Pop));
+            } else {
+                code.push(sp(loc, B::StLoc(var(v))));
+            }
         }
-        L::Var(v, _) => {
-            code.push(sp(loc, B::StLoc(var(v))));
-        }
+
         L::Unpack(s, tys, field_ls) if field_ls.is_empty() => {
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
             code.push(sp(loc, B::Unpack(n, base_types(context, tys))));
@@ -847,6 +903,15 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
 
             lvalues_(context, code, field_ls.into_iter().map(|(_, l)| l));
         }
+
+        L::UnpackVariant(..) => {
+            let mut diag = diag!(
+                Editions::FeatureInDevelopment,
+                (loc, "Switching is not supported in bytecode.")
+            );
+            diag.add_note("This feature is currently in development.");
+            context.env.add_diag(diag);
+        }
     }
 }
 
@@ -854,6 +919,7 @@ fn lvalue(context: &mut Context, code: &mut IR::BytecodeBlock, sp!(loc, l_): H::
 // Expressions
 //**************************************************************************************************
 
+#[growing_stack]
 fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
     use Value_ as V;
     use H::UnannotatedExp_ as E;
@@ -893,6 +959,22 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
         E::Copy { var: v, .. } => code.push(sp(loc, B::CopyLoc(var(v)))),
 
         E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
+
+        E::ErrorConstant(const_name) => {
+            let line_no = context.env.file_mapping().location(loc).start.line;
+
+            // Clamp line number to u16::MAX -- so if the line number exceeds u16::MAX, we don't
+            // record the line number essentially.
+            let line_number = std::cmp::min(line_no, u16::MAX as usize) as u16;
+
+            code.push(sp(
+                loc,
+                B::ErrorConstant {
+                    line_number,
+                    constant: const_name.map(|n| context.constant_name(n)),
+                },
+            ));
+        }
 
         E::ModuleCall(mcall) => {
             for arg in mcall.arguments {
@@ -946,6 +1028,15 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
             }
             let n = context.struct_definition_name(context.current_module().unwrap(), s);
             code.push(sp(loc, B::Pack(n, base_types(context, tys))))
+        }
+
+        E::PackVariant(..) => {
+            let mut diag = diag!(
+                Editions::FeatureInDevelopment,
+                (loc, "Variant packing is not supported in bytecode.")
+            );
+            diag.add_note("This feature is currently in development.");
+            context.env.add_diag(diag);
         }
 
         E::Vector(_, n, bt, args) => {

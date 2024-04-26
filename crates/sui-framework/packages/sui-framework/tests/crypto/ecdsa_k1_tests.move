@@ -4,7 +4,6 @@
 #[test_only]
 module sui::ecdsa_k1_tests {
     use sui::ecdsa_k1;
-    use std::vector;
     use sui::hash;
 
     #[test]
@@ -49,7 +48,7 @@ module sui::ecdsa_k1_tests {
         let sig = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd88600";
         let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 0);
         assert!(verify == false, 0);
-        
+
         let sig_1 = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd88601";
         let verify_1 = ecdsa_k1::secp256k1_verify(&sig_1, &pk, &msg, 0);
         assert!(verify_1 == false, 0);
@@ -63,7 +62,7 @@ module sui::ecdsa_k1_tests {
         let sig = x"7e4237ebfbc36613e166bfc5f6229360a9c1949242da97ca04867e4de57b2df30c8340bcb320328cf46d71bda51fcb519e3ce53b348eec62de852e350edbd886";
         let verify = ecdsa_k1::secp256k1_verify(&sig, &pk, &msg, 0);
         assert!(verify == true, 0);
-        
+
         // verify with sha256 hash
         let sig = x"e5847245b38548547f613aaea3421ad47f5b95a222366fb9f9b8c57568feb19c7077fc31e7d83e00acc1347d08c3e1ad50a4eeb6ab044f25c861ddc7be5b8f9f";
         let pk = x"02337cca2171fdbfcfd657fa59881f46269f1e590b5ffab6023686c7ad2ecc2c1c";
@@ -96,9 +95,9 @@ module sui::ecdsa_k1_tests {
     }
 
     // Helper Move function to recover signature directly to an ETH address.
-    fun ecrecover_eth_address(sig: vector<u8>, msg: vector<u8>): vector<u8> {
+    fun ecrecover_eth_address(mut sig: vector<u8>, msg: vector<u8>): vector<u8> {
         // Normalize the last byte of the signature to be 0 or 1.
-        let v = vector::borrow_mut(&mut sig, 64);
+        let v = &mut sig[64];
         if (*v == 27) {
             *v = 0;
         } else if (*v == 28) {
@@ -112,21 +111,21 @@ module sui::ecdsa_k1_tests {
         let uncompressed = ecdsa_k1::decompress_pubkey(&pubkey);
 
         // Take the last 64 bytes of the uncompressed pubkey.
-        let uncompressed_64 = vector::empty<u8>();
-        let i = 1;
+        let mut uncompressed_64 = vector<u8>[];
+        let mut i = 1;
         while (i < 65) {
-            let value = vector::borrow(&uncompressed, i);
-            vector::push_back(&mut uncompressed_64, *value);
+            let value = &uncompressed[i];
+            uncompressed_64.push_back(*value);
             i = i + 1;
         };
 
         // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
         let hashed = hash::keccak256(&uncompressed_64);
-        let addr = vector::empty<u8>();
-        let i = 12;
+        let mut addr = vector<u8>[];
+        let mut i = 12;
         while (i < 32) {
-            let value = vector::borrow(&hashed, i);
-            vector::push_back(&mut addr, *value);
+            let value = &hashed[i];
+            addr.push_back(*value);
             i = i + 1;
         };
 

@@ -4,9 +4,11 @@
 use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
+use std::net::SocketAddr;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
+use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
 use sui_macros::{register_fail_point_async, sim_test};
@@ -109,8 +111,9 @@ async fn shared_object_deletion_multiple_times() {
             .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
             .build();
         let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone())
+            .create_certificate(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         txs.push(signed);
@@ -172,8 +175,9 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
             .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
             .build();
         let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone())
+            .create_certificate(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         test_cluster
@@ -259,17 +263,18 @@ async fn shared_object_deletion_multi_certs() {
         .build();
     let inc_tx_b = test_cluster.sign_transaction(&inc_tx_b);
     let inc_tx_b_digest = *inc_tx_b.digest();
+    let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
     let _ = test_cluster
-        .create_certificate(delete_tx.clone())
+        .create_certificate(delete_tx.clone(), Some(client_ip))
         .await
         .unwrap();
     let _ = test_cluster
-        .create_certificate(inc_tx_a.clone())
+        .create_certificate(inc_tx_a.clone(), Some(client_ip))
         .await
         .unwrap();
     let _ = test_cluster
-        .create_certificate(inc_tx_b.clone())
+        .create_certificate(inc_tx_b.clone(), Some(client_ip))
         .await
         .unwrap();
 
@@ -533,8 +538,9 @@ async fn access_clock_object_test() {
 async fn shared_object_sync() {
     let test_cluster = TestClusterBuilder::new()
         // Set the threshold high enough so it won't be triggered.
-        .with_overload_threshold_config(OverloadThresholdConfig {
+        .with_authority_overload_config(AuthorityOverloadConfig {
             max_txn_age_in_queue: Duration::from_secs(60),
+            ..Default::default()
         })
         .build()
         .await;

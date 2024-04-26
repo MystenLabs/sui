@@ -2,18 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
-    file_format::{
-        CompiledModule, CompiledScript, SignatureToken, StructFieldInformation, TableIndex,
-    },
+    file_format::{CompiledModule, SignatureToken, StructFieldInformation, TableIndex},
     IndexKind,
 };
 use move_core_types::{runtime_value::MoveValue, vm_status::StatusCode};
 use move_vm_config::verifier::VerifierConfig;
 
 pub struct LimitsVerifier<'a> {
-    resolver: BinaryIndexedView<'a>,
+    module: &'a CompiledModule,
 }
 
 impl<'a> LimitsVerifier<'a> {
@@ -26,9 +23,7 @@ impl<'a> LimitsVerifier<'a> {
         config: &VerifierConfig,
         module: &'a CompiledModule,
     ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Module(module),
-        };
+        let limit_check = Self { module };
         limit_check.verify_constants(config)?;
         limit_check.verify_function_handles(config)?;
         limit_check.verify_struct_handles(config)?;
@@ -37,25 +32,9 @@ impl<'a> LimitsVerifier<'a> {
         limit_check.verify_definitions(config)
     }
 
-    pub fn verify_script(config: &VerifierConfig, module: &'a CompiledScript) -> VMResult<()> {
-        Self::verify_script_impl(config, module).map_err(|e| e.finish(Location::Script))
-    }
-
-    fn verify_script_impl(
-        config: &VerifierConfig,
-        script: &'a CompiledScript,
-    ) -> PartialVMResult<()> {
-        let limit_check = Self {
-            resolver: BinaryIndexedView::Script(script),
-        };
-        limit_check.verify_function_handles(config)?;
-        limit_check.verify_struct_handles(config)?;
-        limit_check.verify_type_nodes(config)
-    }
-
     fn verify_struct_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(limit) = config.max_generic_instantiation_length {
-            for (idx, struct_handle) in self.resolver.struct_handles().iter().enumerate() {
+            for (idx, struct_handle) in self.module.struct_handles().iter().enumerate() {
                 if struct_handle.type_parameters.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
                         .at_index(IndexKind::StructHandle, idx as u16));
@@ -66,7 +45,7 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_function_handles(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        for (idx, function_handle) in self.resolver.function_handles().iter().enumerate() {
+        for (idx, function_handle) in self.module.function_handles().iter().enumerate() {
             if let Some(limit) = config.max_generic_instantiation_length {
                 if function_handle.type_parameters.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_TYPE_PARAMETERS)
@@ -74,13 +53,7 @@ impl<'a> LimitsVerifier<'a> {
                 }
             };
             if let Some(limit) = config.max_function_parameters {
-                if self
-                    .resolver
-                    .signature_at(function_handle.parameters)
-                    .0
-                    .len()
-                    > limit
-                {
+                if self.module.signature_at(function_handle.parameters).0.len() > limit {
                     return Err(PartialVMError::new(StatusCode::TOO_MANY_PARAMETERS)
                         .at_index(IndexKind::FunctionHandle, idx as u16));
                 }
@@ -90,15 +63,16 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_type_nodes(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        for sign in self.resolver.signatures() {
+        for sign in self.module.signatures() {
             for ty in &sign.0 {
                 self.verify_type_node(config, ty)?
             }
         }
-        for cons in self.resolver.constant_pool() {
+        for cons in self.module.constant_pool() {
             self.verify_type_node(config, &cons.type_)?
         }
-        if let Some(sdefs) = self.resolver.struct_defs() {
+        let sdefs = self.module.struct_defs();
+        {
             for sdef in sdefs {
                 if let StructFieldInformation::Declared(fdefs) = &sdef.field_information {
                     for fdef in fdefs {
@@ -140,33 +114,32 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_definitions(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        if let Some(defs) = self.resolver.function_defs() {
-            if let Some(max_function_definitions) = config.max_function_definitions {
-                if defs.len() > max_function_definitions {
-                    return Err(PartialVMError::new(
-                        StatusCode::MAX_FUNCTION_DEFINITIONS_REACHED,
-                    ));
-                }
+        let defs = self.module.function_defs();
+        if let Some(max_function_definitions) = config.max_function_definitions {
+            if defs.len() > max_function_definitions {
+                return Err(PartialVMError::new(
+                    StatusCode::MAX_FUNCTION_DEFINITIONS_REACHED,
+                ));
             }
         }
-        if let Some(defs) = self.resolver.struct_defs() {
-            if let Some(max_struct_definitions) = config.max_struct_definitions {
-                if defs.len() > max_struct_definitions {
-                    return Err(PartialVMError::new(
-                        StatusCode::MAX_STRUCT_DEFINITIONS_REACHED,
-                    ));
-                }
+
+        let defs = self.module.struct_defs();
+        if let Some(max_struct_definitions) = config.max_struct_definitions {
+            if defs.len() > max_struct_definitions {
+                return Err(PartialVMError::new(
+                    StatusCode::MAX_STRUCT_DEFINITIONS_REACHED,
+                ));
             }
-            if let Some(max_fields_in_struct) = config.max_fields_in_struct {
-                for def in defs {
-                    match &def.field_information {
-                        StructFieldInformation::Native => (),
-                        StructFieldInformation::Declared(fields) => {
-                            if fields.len() > max_fields_in_struct {
-                                return Err(PartialVMError::new(
-                                    StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
-                                ));
-                            }
+        }
+        if let Some(max_fields_in_struct) = config.max_fields_in_struct {
+            for def in defs {
+                match &def.field_information {
+                    StructFieldInformation::Native => (),
+                    StructFieldInformation::Declared(fields) => {
+                        if fields.len() > max_fields_in_struct {
+                            return Err(PartialVMError::new(
+                                StatusCode::MAX_FIELD_DEFINITIONS_REACHED,
+                            ));
                         }
                     }
                 }
@@ -176,7 +149,7 @@ impl<'a> LimitsVerifier<'a> {
     }
 
     fn verify_constants(&self, config: &VerifierConfig) -> PartialVMResult<()> {
-        for (idx, constant) in self.resolver.constant_pool().iter().enumerate() {
+        for (idx, constant) in self.module.constant_pool().iter().enumerate() {
             if let SignatureToken::Vector(_) = constant.type_ {
                 if let MoveValue::Vector(cons) =
                     constant.deserialize_constant().ok_or_else(|| {
@@ -208,7 +181,7 @@ impl<'a> LimitsVerifier<'a> {
     /// Verifies the lengths of all identifers are valid
     fn verify_identifiers(&self, config: &VerifierConfig) -> PartialVMResult<()> {
         if let Some(max_idenfitier_len) = config.max_idenfitier_len {
-            for (idx, identifier) in self.resolver.identifiers().iter().enumerate() {
+            for (idx, identifier) in self.module.identifiers().iter().enumerate() {
                 if identifier.len() > (max_idenfitier_len as usize) {
                     return Err(verification_error(
                         StatusCode::IDENTIFIER_TOO_LONG,

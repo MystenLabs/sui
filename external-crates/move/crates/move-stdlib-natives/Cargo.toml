@@ -1,0 +1,26 @@
+[package]
+name = "move-stdlib-natives"
+version = "0.1.1"
+edition = "2021"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem stdlib"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[dependencies]
+move-vm-types.workspace = true
+move-binary-format.workspace = true
+move-core-types.workspace = true
+# referred to via path for execution versioning
+move-vm-runtime = { path = "../move-vm-runtime" }
+smallvec.workspace = true
+sha2.workspace = true
+sha3.workspace = true
+hex.workspace = true
+
+[features]
+default = []
+testing = []

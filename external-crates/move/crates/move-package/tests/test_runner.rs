@@ -12,6 +12,7 @@ use move_package::{
     },
     package_hooks,
     package_hooks::PackageHooks,
+    package_hooks::PackageIdentifier,
     resolution::resolution_graph::Package,
     source_package::parsed_manifest::{CustomDepInfo, PackageDigest, SourceManifest},
     BuildConfig, ModelConfig,
@@ -220,7 +221,10 @@ impl PackageHooks for TestHooks {
         )
     }
 
-    fn custom_resolve_pkg_name(&self, manifest: &SourceManifest) -> anyhow::Result<Symbol> {
+    fn custom_resolve_pkg_id(
+        &self,
+        manifest: &SourceManifest,
+    ) -> anyhow::Result<PackageIdentifier> {
         let name = manifest.package.name.to_string();
         if name.ends_with("-rename") {
             Ok(Symbol::from(name.replace("-rename", "-resolved")))

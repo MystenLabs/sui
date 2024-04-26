@@ -6,12 +6,13 @@ use crate::{
     cfgir::ast as G,
     diag,
     expansion::ast::{
-        self as E, Address, Attribute, AttributeValue, ModuleAccess_, ModuleIdent, ModuleIdent_,
+        self as E, Address, Attribute, AttributeValue, Attributes, ModuleAccess_, ModuleIdent,
+        ModuleIdent_,
     },
     hlir::translate::display_var,
     parser::ast::ConstantName,
     shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
+        known_attributes::{self, TestingAttribute},
         unique_map::UniqueMap,
         CompilationEnv, Identifier, NumericalAddress,
     },
@@ -25,9 +26,11 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 use std::collections::BTreeMap;
 
+use super::MoveErrorType;
+
 struct Context<'env> {
     env: &'env mut CompilationEnv,
-    constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>)>>,
+    constants: UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>>,
 }
 
 impl<'env> Context<'env> {
@@ -38,7 +41,7 @@ impl<'env> Context<'env> {
                     MoveValue::U64(u) => Some(*u),
                     _ => None,
                 });
-                (constant.loc, v_opt)
+                (constant.loc, v_opt, constant.attributes.clone())
             })
         });
         Self {
@@ -51,7 +54,9 @@ impl<'env> Context<'env> {
         (*addr).into_addr_bytes()
     }
 
-    fn constants(&self) -> &UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>)>> {
+    fn constants(
+        &self,
+    ) -> &UniqueMap<ModuleIdent, UniqueMap<ConstantName, (Loc, Option<u64>, Attributes)>> {
         &self.constants
     }
 }
@@ -116,9 +121,7 @@ fn build_test_info<'func>(
     function: &'func G::Function,
 ) -> Option<TestCase> {
     let get_attrs = |attr: TestingAttribute| -> Option<&'func E::Attribute> {
-        function
-            .attributes
-            .get_(&E::AttributeName_::Known(KnownAttribute::Testing(attr)))
+        function.attributes.get_(&attr.into())
     };
 
     const PREVIOUSLY_ANNOTATED_MSG: &str = "Previously annotated here";
@@ -160,10 +163,11 @@ fn build_test_info<'func>(
 
     let test_annotation_params = parse_test_attribute(context, test_attribute, 0);
     let mut arguments = Vec::new();
-    for (var, _) in &function.signature.parameters {
+    for (_mut, var, _) in &function.signature.parameters {
         let sp!(vloc, var_) = var.0;
         let var_ = match display_var(var_) {
             crate::hlir::translate::DisplayVar::Orig(s) => s.into(),
+            crate::hlir::translate::DisplayVar::MatchTmp(_) => panic!("ICE temp as parameter"),
             crate::hlir::translate::DisplayVar::Tmp => panic!("ICE temp as parameter"),
         };
         match test_annotation_params.get(&var_) {
@@ -302,6 +306,7 @@ fn parse_failure_attribute(
                     Some((k, attr_opt))
                 })
                 .collect::<Vec<_>>();
+            let location_opt = attrs.remove(TestingAttribute::ERROR_LOCATION);
             if expected_failure_kind_vec.len() != 1 {
                 let invalid_attr_msg = format!(
                     "Invalid #[expected_failure(...)] attribute, expected 1 failure kind but found {}. Expected one of: {}",
@@ -315,7 +320,6 @@ fn parse_failure_attribute(
             }
             let (expected_failure_kind, (attr_loc, attr)) =
                 expected_failure_kind_vec.pop().unwrap();
-            let location_opt = attrs.remove(TestingAttribute::ERROR_LOCATION);
             let (status_code, sub_status_code, location) = match expected_failure_kind.as_str() {
                 TestingAttribute::ABORT_CODE_NAME => {
                     let (value_name_loc, attr_value) = get_assigned_attribute(
@@ -421,21 +425,25 @@ fn parse_failure_attribute(
                         attr_loc,
                         attr,
                     )?;
-                    let (major_value_loc, _, major_status_u64) =
+                    let (major_value_loc, _, move_error_type) =
                         convert_constant_value_u64_constant_or_value(
                             context,
                             value_name_loc,
                             &attr_value,
                         )?;
-                    let major_status = if let Ok(c) = StatusCode::try_from(major_status_u64) {
-                        c
-                    } else {
+                    let major_status_u64 = match move_error_type {
+                        MoveErrorType::Code(e) => Some(e),
+                        MoveErrorType::ConstantName(_) => None,
+                    };
+                    let Some(major_status) =
+                        major_status_u64.and_then(|x| StatusCode::try_from(x).ok())
+                    else {
                         let bad_value = format!(
                             "Invalid value for '{}'",
                             TestingAttribute::MAJOR_STATUS_NAME,
                         );
                         let no_code =
-                            format!("No status code associated with value '{major_status_u64}'");
+                            format!("No status code associated with value '{move_error_type}'");
                         context.env.add_diag(diag!(
                             Attributes::InvalidValue,
                             (value_name_loc, bad_value),
@@ -565,7 +573,7 @@ fn convert_constant_value_u64_constant_or_value(
     context: &mut Context,
     loc: Loc,
     value: &AttributeValue,
-) -> Option<(Loc, Option<ModuleId>, u64)> {
+) -> Option<(Loc, Option<ModuleId>, MoveErrorType)> {
     use E::AttributeValue_ as EAV;
     let (vloc, module, member) = match value {
         sp!(
@@ -574,7 +582,7 @@ fn convert_constant_value_u64_constant_or_value(
         ) => (*vloc, m, n),
         _ => {
             let (vloc, u) = convert_attribute_value_u64(context, loc, value)?;
-            return Some((vloc, None, u));
+            return Some((vloc, None, MoveErrorType::Code(u)));
         }
     };
     let module_id = convert_module_id(context, vloc, module)?;
@@ -594,7 +602,11 @@ fn convert_constant_value_u64_constant_or_value(
         Some(c) => c,
     };
     match constant {
-        (cloc, None) => {
+        (_, None, attrs) if attrs.contains_key_(&known_attributes::ErrorAttribute.into()) => {
+            let error_type = MoveErrorType::ConstantName(member.value.to_string());
+            Some((vloc, Some(module_id), error_type))
+        }
+        (cloc, None, _) => {
             let msg = format!(
                 "Constant '{module}::{member}' has a non-u64 value. \
                 Only 'u64' values are permitted"
@@ -606,7 +618,7 @@ fn convert_constant_value_u64_constant_or_value(
             ));
             None
         }
-        (_, Some(u)) => Some((vloc, Some(module_id), *u)),
+        (_, Some(u), _) => Some((vloc, Some(module_id), MoveErrorType::Code(*u))),
     }
 }
 

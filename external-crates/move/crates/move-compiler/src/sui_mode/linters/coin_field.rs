@@ -53,7 +53,7 @@ impl TypingVisitor for CoinFieldVisitor {
 fn struct_def(env: &mut CompilationEnv, sname: Symbol, sdef: &N::StructDefinition, sloc: Loc) {
     env.add_warning_filter_scope(sdef.warning_filter.clone());
 
-    if let N::StructFields::Defined(sfields) = &sdef.fields {
+    if let N::StructFields::Defined(_, sfields) = &sdef.fields {
         for (floc, fname, (_, ftype)) in sfields.iter() {
             if is_field_coin_type(ftype) {
                 let msg = format!("The field '{fname}' of '{sname}' has type 'sui::coin::Coin'");
@@ -75,6 +75,8 @@ fn is_field_coin_type(sp!(_, t): &N::Type) -> bool {
             let sp!(_, tname) = tname;
             tname.is(SUI_PKG_NAME, COIN_MOD_NAME, COIN_STRUCT_NAME)
         }
-        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => false,
+        T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError | T::Fun(_, _) => {
+            false
+        }
     }
 }

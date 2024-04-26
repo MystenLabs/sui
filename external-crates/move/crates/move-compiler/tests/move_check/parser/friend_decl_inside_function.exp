@@ -7,3 +7,9 @@ error[E01002]: unexpected token
   │         Unexpected 'friend'
   │         Expected an expression term
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/friend_decl_inside_function.move:9:1
+  │
+9 │ }
+  │ ^ Invalid code unit. Expected 'address' or 'module'. Got '}'
+

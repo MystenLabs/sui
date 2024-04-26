@@ -6,8 +6,8 @@ use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
-    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
-    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
 use std::env;
@@ -22,6 +22,7 @@ use sui_types::{base_types::*, object::Owner};
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
+use sui_archival::{read_manifest_as_json, write_manifest_from_json};
 use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_config::Config;
 use sui_core::authority_aggregator::AuthorityAggregatorBuilder;
@@ -139,19 +140,6 @@ pub enum ToolCommand {
         cmd: Option<DbToolCommand>,
     },
 
-    /// Tool to sync the node from archive store
-    #[command(name = "sync-from-archive")]
-    SyncFromArchive {
-        #[arg(long = "genesis")]
-        genesis: PathBuf,
-        #[arg(long = "db-path")]
-        db_path: PathBuf,
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(default_value_t = 5)]
-        download_concurrency: usize,
-    },
-
     /// Tool to verify the archive store
     #[command(name = "verify-archive")]
     VerifyArchive {
@@ -163,6 +151,20 @@ pub enum ToolCommand {
         download_concurrency: usize,
     },
 
+    /// Tool to print the archive manifest
+    #[command(name = "print-archive-manifest")]
+    PrintArchiveManifest {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+    },
+    /// Tool to update the archive manifest
+    #[command(name = "update-archive-manifest")]
+    UpdateArchiveManifest {
+        #[command(flatten)]
+        object_store_config: ObjectStoreConfig,
+        #[arg(long = "archive-path")]
+        archive_json_path: PathBuf,
+    },
     /// Tool to verify the archive store by comparing file checksums
     #[command(name = "verify-archive-from-checksums")]
     VerifyArchiveByChecksum {
@@ -259,66 +261,57 @@ pub enum ToolCommand {
         about = "Downloads the legacy database snapshot via cloud object store, outputs to local disk"
     )]
     DownloadDBSnapshot {
-        #[clap(long = "epoch")]
+        #[clap(long = "epoch", conflicts_with = "latest")]
         epoch: Option<u64>,
-        #[clap(long = "genesis")]
-        genesis: Option<PathBuf>,
-        #[clap(long = "path", default_value = "/tmp")]
+        #[clap(
+            long = "path",
+            help = "the path to write the downloaded snapshot files"
+        )]
         path: PathBuf,
-        /// skip downloading indexes dir. Overridden to `true` if `--formal` flag specified,
-        /// as index staging is not yet supported for formal snapshots.
+        /// skip downloading indexes dir
         #[clap(long = "skip-indexes")]
         skip_indexes: bool,
         /// Number of parallel downloads to perform. Defaults to a reasonable
         /// value based on number of available logical cores.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
-        /// DEPRECATED - use download-formal-snapshot instead. If true, restore from formal (slim, DB agnostic) snapshot. Note that this is only supported
-        /// for protocol versions supporting `commit_root_state_digest`. For mainnet, this is
-        /// epoch 20+, and for testnet this is epoch 12+
-        #[clap(
-            long = "formal",
-            help = "Deprecated: use download-formal-snapshot instead"
-        )]
-        formal: bool,
-        /// If true, perform snapshot and checkpoint summary verification. Only
-        /// applicable if `--formal` flag is specified. Defaults to true.
-        #[clap(long = "verify")]
-        verify: Option<bool>,
         /// Network to download snapshot for. Defaults to "mainnet".
         /// If `--snapshot-bucket` or `--archive-bucket` is not specified,
         /// the value of this flag is used to construct default bucket names.
         #[clap(long = "network", default_value = "mainnet")]
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
-        /// based on value of `--network` and `--formal` flags.
-        #[clap(long = "snapshot-bucket")]
+        /// based on value of `--network` flag.
+        #[clap(long = "snapshot-bucket", group = "auth")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
+            group = "auth",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
         /// Path to snapshot directory on local filesystem.
         /// Only applicable if `--snapshot-bucket-type` is "file".
-        #[clap(long = "snapshot-path")]
+        #[clap(
+            long = "snapshot-path",
+            help = "only used for testing, when --snapshot-bucket-type=FILE"
+        )]
         snapshot_path: Option<PathBuf>,
-        /// Archival bucket name. If not specified, defaults are
-        /// based on value of `--network` and `--formal` flags.
-        #[clap(long = "archive-bucket")]
-        archive_bucket: Option<String>,
-        #[clap(long = "archive-bucket-type", default_value = "s3")]
-        archive_bucket_type: ObjectStoreType,
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+            conflicts_with = "auth",
+            help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
         /// Download snapshot of the latest available epoch.
         /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(long = "latest")]
+        #[clap(
+            long = "latest",
+            conflicts_with = "epoch",
+            help = "defaults to latest available snapshot in chosen bucket"
+        )]
         latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -334,18 +327,18 @@ pub enum ToolCommand {
         about = "Downloads formal database snapshot via cloud object store, outputs to local disk"
     )]
     DownloadFormalSnapshot {
-        #[clap(long = "epoch")]
+        #[clap(long = "epoch", conflicts_with = "latest")]
         epoch: Option<u64>,
         #[clap(long = "genesis")]
         genesis: PathBuf,
-        #[clap(long = "path", default_value = "/tmp")]
+        #[clap(long = "path")]
         path: PathBuf,
         /// Number of parallel downloads to perform. Defaults to a reasonable
         /// value based on number of available logical cores.
         #[clap(long = "num-parallel-downloads")]
         num_parallel_downloads: Option<usize>,
-        /// If true, perform snapshot and checkpoint summary verification. Only
-        /// applicable if `--formal` flag is specified. Defaults to true.
+        /// If true, perform snapshot and checkpoint summary verification.
+        /// Defaults to true.
         #[clap(long = "verify")]
         verify: Option<bool>,
         /// Network to download snapshot for. Defaults to "mainnet".
@@ -355,11 +348,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket")]
+        #[clap(long = "snapshot-bucket", group = "auth")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
+            group = "auth",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -368,7 +362,7 @@ pub enum ToolCommand {
         #[clap(long = "snapshot-path")]
         snapshot_path: Option<PathBuf>,
         /// Archival bucket name. If not specified, defaults are
-        /// based on value of `--network` and `--formal` flags.
+        /// based on value of `--network` flag.
         #[clap(long = "archive-bucket")]
         archive_bucket: Option<String>,
         #[clap(long = "archive-bucket-type", default_value = "s3")]
@@ -376,12 +370,17 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+            conflicts_with = "auth",
+            help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
         /// Download snapshot of the latest available epoch.
         /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(long = "latest")]
+        #[clap(
+            long = "latest",
+            conflicts_with = "epoch",
+            help = "defaults to latest available snapshot in chosen bucket"
+        )]
         latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -397,8 +396,20 @@ pub enum ToolCommand {
         safety_checks: bool,
         #[arg(long = "authority")]
         use_authority: bool,
-        #[arg(long = "cfg-path", short)]
+        #[arg(
+            long = "cfg-path",
+            short,
+            help = "Path to the network config file. This should be specified when rpc_url is not present. \
+            If not specified we will use the default network config file at ~/.sui-replay/network-config.yaml"
+        )]
         cfg_path: Option<PathBuf>,
+        #[arg(
+            long,
+            help = "The name of the chain to replay from, could be one of: mainnet, testnet, devnet.\
+            When rpc_url is not specified, this is used to load the corresponding config from the network config file.\
+            If not specified, mainnet will be used by default"
+        )]
+        chain: Option<String>,
         #[command(subcommand)]
         cmd: ReplayToolCommand,
     },
@@ -601,8 +612,8 @@ impl ToolCommand {
                 archive_bucket,
                 archive_bucket_type,
                 no_sign_request,
-                verbose,
                 latest,
+                verbose,
             } => {
                 if !verbose {
                     tracing_handle
@@ -649,7 +660,7 @@ impl ToolCommand {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
-                        .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
+                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
                 };
                 let snapshot_store_config = match snapshot_bucket_type {
                     ObjectStoreType::S3 => ObjectStoreConfig {
@@ -788,18 +799,13 @@ impl ToolCommand {
             }
             ToolCommand::DownloadDBSnapshot {
                 epoch,
-                genesis,
                 path,
                 skip_indexes,
                 num_parallel_downloads,
-                formal,
-                verify,
                 network,
                 snapshot_bucket,
                 snapshot_bucket_type,
                 snapshot_path,
-                archive_bucket,
-                archive_bucket_type,
                 no_sign_request,
                 latest,
                 verbose,
@@ -814,40 +820,19 @@ impl ToolCommand {
                         .checked_sub(1)
                         .expect("Failed to get number of CPUs")
                 });
-                if formal {
-                    println!("Warning: download-db-snapshot --formal is deprecated. Please use download-formal-snapshot.");
-                }
                 let snapshot_bucket =
-                    snapshot_bucket.or_else(|| match (formal, network, no_sign_request) {
-                        (true, Chain::Mainnet, false) => Some(
-                            env::var("MAINNET_FORMAL_SIGNED_BUCKET")
-                                .unwrap_or("mysten-mainnet-formal".to_string()),
-                        ),
-                        (false, Chain::Mainnet, false) => Some(
+                    snapshot_bucket.or_else(|| match (network, no_sign_request) {
+                        (Chain::Mainnet, false) => Some(
                             env::var("MAINNET_DB_SIGNED_BUCKET")
                                 .unwrap_or("mysten-mainnet-snapshots".to_string()),
                         ),
-                        (true, Chain::Mainnet, true) => {
-                            env::var("MAINNET_FORMAL_UNSIGNED_BUCKET").ok()
-                        }
-                        (false, Chain::Mainnet, true) => {
-                            env::var("MAINNET_DB_UNSIGNED_BUCKET").ok()
-                        }
-                        (true, Chain::Testnet, true) => {
-                            env::var("TESTNET_FORMAL_UNSIGNED_BUCKET").ok()
-                        }
-                        (false, Chain::Testnet, true) => {
-                            env::var("TESTNET_DB_UNSIGNED_BUCKET").ok()
-                        }
-                        (true, Chain::Testnet, _) => Some(
-                            env::var("TESTNET_FORMAL_SIGNED_BUCKET")
-                                .unwrap_or("mysten-testnet-formal".to_string()),
-                        ),
-                        (false, Chain::Testnet, _) => Some(
+                        (Chain::Mainnet, true) => env::var("MAINNET_DB_UNSIGNED_BUCKET").ok(),
+                        (Chain::Testnet, true) => env::var("TESTNET_DB_UNSIGNED_BUCKET").ok(),
+                        (Chain::Testnet, _) => Some(
                             env::var("TESTNET_DB_SIGNED_BUCKET")
                                 .unwrap_or("mysten-testnet-snapshots".to_string()),
                         ),
-                        (_, Chain::Unknown, _) => {
+                        (Chain::Unknown, _) => {
                             panic!("Cannot generate default snapshot bucket for unknown network");
                         }
                     });
@@ -857,20 +842,11 @@ impl ToolCommand {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
-                        .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
+                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
                 };
                 let snapshot_store_config = if no_sign_request {
                     let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
-                        // TODO: remove when the --formal flag is fully removed
-                        if formal {
-                            if network == Chain::Mainnet {
-                                Some("https://formal-snapshot.mainnet.sui.io".to_string())
-                            } else if network == Chain::Testnet {
-                                Some("https://formal-snapshot.testnet.sui.io".to_string())
-                            } else {
-                                None
-                            }
-                        } else if network == Chain::Mainnet {
+                        if network == Chain::Mainnet {
                             Some("https://db-snapshot.mainnet.sui.io".to_string())
                         } else if network == Chain::Testnet {
                             Some("https://db-snapshot.testnet.sui.io".to_string())
@@ -917,6 +893,8 @@ impl ToolCommand {
                                 "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
                             )
                             .ok(),
+                            google_project_id: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID")
+                                .ok(),
                             object_store_connection_limit: 200,
                             no_sign_request,
                             ..Default::default()
@@ -947,66 +925,12 @@ impl ToolCommand {
                     }
                 };
 
-                let archive_bucket = archive_bucket.or_else(|| match network {
-                    Chain::Mainnet => Some(
-                        env::var("MAINNET_ARCHIVE_BUCKET")
-                            .unwrap_or("mysten-mainnet-archives".to_string()),
-                    ),
-                    Chain::Testnet => Some(
-                        env::var("TESTNET_ARCHIVE_BUCKET")
-                            .unwrap_or("mysten-testnet-archives".to_string()),
-                    ),
-                    Chain::Unknown => {
-                        panic!("Cannot generate default archive bucket for unknown network");
-                    }
-                });
-                let aws_region =
-                    Some(env::var("AWS_ARCHIVE_REGION").unwrap_or("us-west-2".to_string()));
-                let archive_store_config = match archive_bucket_type {
-                    ObjectStoreType::S3 => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::S3),
-                        bucket: archive_bucket.filter(|s| !s.is_empty()),
-                        aws_access_key_id: env::var("AWS_ARCHIVE_ACCESS_KEY_ID").ok(),
-                        aws_secret_access_key: env::var("AWS_ARCHIVE_SECRET_ACCESS_KEY").ok(),
-                        aws_region: aws_region.filter(|s| !s.is_empty()),
-                        aws_endpoint: env::var("AWS_ARCHIVE_ENDPOINT").ok(),
-                        aws_virtual_hosted_style_request: env::var(
-                            "AWS_ARCHIVE_VIRTUAL_HOSTED_REQUESTS",
-                        )
-                        .ok()
-                        .and_then(|b| b.parse().ok())
-                        .unwrap_or(false),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::GCS => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::GCS),
-                        bucket: archive_bucket,
-                        google_service_account: env::var("GCS_ARCHIVE_SERVICE_ACCOUNT_FILE_PATH")
-                            .ok(),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::Azure => ObjectStoreConfig {
-                        object_store: Some(ObjectStoreType::Azure),
-                        bucket: archive_bucket,
-                        azure_storage_account: env::var("AZURE_ARCHIVE_STORAGE_ACCOUNT").ok(),
-                        azure_storage_access_key: env::var("AZURE_ARCHIVE_STORAGE_ACCESS_KEY").ok(),
-                        object_store_connection_limit: 200,
-                        no_sign_request,
-                        ..Default::default()
-                    },
-                    ObjectStoreType::File => {
-                        panic!("Download from local filesystem is not supported")
-                    }
-                };
                 let latest_available_epoch =
                     latest.then_some(get_latest_available_epoch(&snapshot_store_config).await?);
                 let epoch_to_download = epoch.or(latest_available_epoch).expect(
                     "Either pass epoch with --epoch <epoch_num> or use latest with --latest",
                 );
+
                 if let Err(e) =
                     check_completed_snapshot(&snapshot_store_config, epoch_to_download).await
                 {
@@ -1015,31 +939,14 @@ impl ToolCommand {
                         e
                     );
                 }
-                if formal {
-                    let verify = verify.unwrap_or(true);
-                    let genesis =
-                        genesis.expect("--genesis must be set if using the --formal flag");
-                    download_formal_snapshot(
-                        &path,
-                        epoch_to_download,
-                        &genesis,
-                        snapshot_store_config,
-                        archive_store_config,
-                        num_parallel_downloads,
-                        network,
-                        verify,
-                    )
-                    .await?;
-                } else {
-                    download_db_snapshot(
-                        &path,
-                        epoch_to_download,
-                        snapshot_store_config,
-                        skip_indexes,
-                        num_parallel_downloads,
-                    )
-                    .await?;
-                }
+                download_db_snapshot(
+                    &path,
+                    epoch_to_download,
+                    snapshot_store_config,
+                    skip_indexes,
+                    num_parallel_downloads,
+                )
+                .await?;
             }
             ToolCommand::Replay {
                 rpc_url,
@@ -1047,23 +954,10 @@ impl ToolCommand {
                 cmd,
                 use_authority,
                 cfg_path,
+                chain,
             } => {
-                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
+                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
-            }
-            ToolCommand::SyncFromArchive {
-                genesis,
-                db_path,
-                object_store_config,
-                download_concurrency,
-            } => {
-                state_sync_from_archive(
-                    &db_path,
-                    &genesis,
-                    object_store_config,
-                    download_concurrency,
-                )
-                .await?;
             }
             ToolCommand::VerifyArchive {
                 genesis,
@@ -1071,6 +965,17 @@ impl ToolCommand {
                 download_concurrency,
             } => {
                 verify_archive(&genesis, object_store_config, download_concurrency, true).await?;
+            }
+            ToolCommand::PrintArchiveManifest {
+                object_store_config,
+            } => {
+                println!("{}", read_manifest_as_json(object_store_config).await?);
+            }
+            ToolCommand::UpdateArchiveManifest {
+                object_store_config,
+                archive_json_path,
+            } => {
+                write_manifest_from_json(object_store_config, archive_json_path).await?;
             }
             ToolCommand::VerifyArchiveByChecksum {
                 object_store_config,
@@ -1100,7 +1005,7 @@ impl ToolCommand {
                 let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
                     .build()
                     .unwrap();
-                let result = agg.process_transaction(transaction).await;
+                let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
             }
         };

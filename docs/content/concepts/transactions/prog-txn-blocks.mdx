@@ -70,7 +70,7 @@ For pure inputs, the only data provided is the [BCS](https://github.com/MystenLa
 - A vector, `vector<T>`, where `T` is a valid type for a pure input, checked recursively.
 - An option, `std::option::Option<T>`, where `T` is a valid type for a pure input, checked recursively.
 
-Interestingly, the bytes are not validated until the type is specified in a command, for example in `MoveCall` or `MakeMoveVec`. This means that a given pure input could be used to instantiate Move values of several types. See the the [Arguments section](#arguments) for more details.
+Interestingly, the bytes are not validated until the type is specified in a command, for example in `MoveCall` or `MakeMoveVec`. This means that a given pure input could be used to instantiate Move values of several types. See the [Arguments section](#arguments) for more details.
 
 ### Results
 
@@ -264,7 +264,7 @@ Suppose you want to buy two items from a marketplace costing `100 MIST`. You kee
 
 The inputs include the friend's address, the marketplace object, and the value for the coin split. For the commands, split off the coin, call the market place function, send the gas coin and one object, grab your address (via `sui::tx_context::sender`), and then send the remaining object to yourself. For simplicity, the documentation refers to the package names by name, but note that in practice they are referenced by the package's Object ID.
 
-To walk through this, first look at the the memory locations, for the gas object, inputs, and results
+To walk through this, first look at the memory locations, for the gas object, inputs, and results
 
 ```rust
 Gas Coin: sui::coin::Coin<SUI> { id: gas_coin, balance: sui::balance::Balance<SUI> { value: 1_000_000u64 } }

@@ -103,7 +103,12 @@ impl Fetchers {
 
     pub fn into_remote(self) -> RemoteFetcher {
         match self {
-            Fetchers::Remote(q) => q,
+            Fetchers::Remote(q) => {
+                // Since `into_remote` is called when we use this fetcher to create a new fetcher,
+                // we should clear the cache to avoid using stale data.
+                q.clear_cache_for_new_task();
+                q
+            }
             Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
         }
     }
@@ -315,6 +320,12 @@ impl RemoteFetcher {
         }
 
         (cached, to_fetch)
+    }
+
+    pub fn clear_cache_for_new_task(&self) {
+        // Only the latest object cache cannot be reused across tasks.
+        // All other caches should be valid as long as the network doesn't change.
+        self.latest_object_cache.write().clear();
     }
 }
 
@@ -654,17 +665,17 @@ impl From<NodeStateDump> for NodeStateDumpFetcher {
             .for_each(|current_obj| {
                 // Dense storage
                 object_ref_pool.insert(
-                    (current_obj.id(), current_obj.version()),
-                    current_obj.clone(),
+                    (current_obj.id, current_obj.version),
+                    current_obj.object.clone(),
                 );
 
                 // Only most recent
-                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id()) {
-                    if current_obj.version() <= last_seen_obj.version() {
+                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id) {
+                    if current_obj.version <= last_seen_obj.version() {
                         return;
                     }
                 };
-                latest_object_version_pool.insert(current_obj.id(), current_obj.clone());
+                latest_object_version_pool.insert(current_obj.id, current_obj.object.clone());
             });
         Self {
             node_state_dump,
@@ -757,7 +768,7 @@ impl DataFetcher for NodeStateDumpFetcher {
             .node_state_dump
             .loaded_child_objects
             .iter()
-            .map(|q| q.compute_object_reference())
+            .map(|q| (q.id, q.version, q.digest))
             .map(|w| (w.0, w.1))
             .collect())
     }

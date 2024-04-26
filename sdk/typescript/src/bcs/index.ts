@@ -1,19 +1,20 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 import {
 	bcs,
 	BCS as BcsRegistry,
 	fromB58,
+	fromB64,
 	fromHEX,
 	getSuiMoveConfig,
 	toB58,
+	toB64,
 	toHEX,
 } from '@mysten/bcs';
-import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 
-import type { MoveCallTransaction } from '../builder/Transactions.js';
-import type { SuiObjectRef as SuiObjectRefType } from '../types/objects.js';
+import type { MoveCallTransaction } from '../transactions/Transactions.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 import { TypeTagSerializer } from './type-tag-serializer.js';
 
@@ -33,13 +34,22 @@ export type SharedObjectRef = {
 	mutable: boolean;
 };
 
+export type SuiObjectRef = {
+	/** Base64 string representing the object digest */
+	objectId: string;
+	/** Object version */
+	version: number | string | bigint;
+	/** Hex code as string representing the object id */
+	digest: string;
+};
+
 /**
  * An object argument.
  */
 export type ObjectArg =
-	| { ImmOrOwned: SuiObjectRefType }
+	| { ImmOrOwned: SuiObjectRef }
 	| { Shared: SharedObjectRef }
-	| { Receiving: SuiObjectRefType };
+	| { Receiving: SuiObjectRef };
 
 /**
  * A pure argument.
@@ -107,7 +117,7 @@ export type TypeTag =
  * The GasData to be used in the transaction.
  */
 export type GasData = {
-	payment: SuiObjectRefType[];
+	payment: SuiObjectRef[];
 	owner: string; // Gas Object's owner
 	price: number;
 	budget: number;
@@ -364,11 +374,33 @@ const TransactionData = bcs.enum('TransactionData', {
 	V1: TransactionDataV1,
 });
 
-// Signed transaction data needed to generate transaction digest.
-const SenderSignedData = bcs.struct('SenderSignedData', {
-	data: TransactionData,
-	txSignatures: bcs.vector(bcs.vector(bcs.u8())),
+const IntentScope = bcs.enum('IntentScope', {
+	TransactionData: null,
+	TransactionEffects: null,
+	CheckpointSummary: null,
+	PersonalMessage: null,
 });
+
+const IntentVersion = bcs.enum('IntentVersion', {
+	V0: null,
+});
+
+const AppId = bcs.enum('AppId', {
+	Sui: null,
+});
+
+const Intent = bcs.struct('Intent', {
+	scope: IntentScope,
+	version: IntentVersion,
+	appId: AppId,
+});
+
+const IntentMessage = bcs.generic(['T'], (T) =>
+	bcs.struct('IntentMessage<T>', {
+		intent: Intent,
+		value: T,
+	}),
+);
 
 const CompressedSignature = bcs.enum('CompressedSignature', {
 	ED25519: bcs.fixedArray(64, bcs.u8()),
@@ -400,6 +432,20 @@ const MultiSig = bcs.struct('MultiSig', {
 	multisig_pk: MultiSigPublicKey,
 });
 
+const base64String = bcs.vector(bcs.u8()).transform({
+	input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+	output: (val) => toB64(new Uint8Array(val)),
+});
+
+const SenderSignedTransaction = bcs.struct('SenderSignedTransaction', {
+	intentMessage: IntentMessage(TransactionData),
+	txSignatures: bcs.vector(base64String),
+});
+
+const SenderSignedData = bcs.vector(SenderSignedTransaction, {
+	name: 'SenderSignedData',
+});
+
 const suiBcs = {
 	...bcs,
 	U8: bcs.u8(),
@@ -425,6 +471,7 @@ const suiBcs = {
 	ProgrammableTransaction,
 	PublicKey,
 	SenderSignedData,
+	SenderSignedTransaction,
 	SharedObjectRef,
 	StructTag,
 	SuiObjectRef,

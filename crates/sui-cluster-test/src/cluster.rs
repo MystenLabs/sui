@@ -9,8 +9,7 @@ use sui_config::Config;
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG};
 use sui_graphql_rpc::config::ConnectionConfig;
 use sui_graphql_rpc::test_infra::cluster::start_graphql_server_with_fn_rpc;
-use sui_indexer::test_utils::{start_test_indexer, start_test_indexer_v2, ReaderWriterConfig};
-use sui_indexer::IndexerConfig;
+use sui_indexer::test_utils::{start_test_indexer, ReaderWriterConfig};
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_sdk::sui_client_config::{SuiClientConfig, SuiEnv};
 use sui_sdk::wallet_context::WalletContext;
@@ -21,6 +20,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use tempfile::tempdir;
 use test_cluster::{TestCluster, TestClusterBuilder};
 use tracing::info;
 
@@ -166,6 +166,7 @@ impl LocalNewCluster {
 #[async_trait]
 impl Cluster for LocalNewCluster {
     async fn start(options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+        let data_ingestion_path = tempdir()?.into_path();
         // TODO: options should contain port instead of address
         let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
@@ -178,7 +179,9 @@ impl Cluster for LocalNewCluster {
                 .expect("Unable to parse indexer address")
         });
 
-        let mut cluster_builder = TestClusterBuilder::new().enable_fullnode_events();
+        let mut cluster_builder = TestClusterBuilder::new()
+            .enable_fullnode_events()
+            .with_data_ingestion_dir(data_ingestion_path.clone());
 
         // Check if we already have a config directory that is passed
         if let Some(config_dir) = options.config_dir.clone() {
@@ -223,41 +226,23 @@ impl Cluster for LocalNewCluster {
         if let (Some(pg_address), Some(indexer_address)) =
             (options.pg_address.clone(), indexer_address)
         {
-            if options.use_indexer_v2 {
-                // Start in writer mode
-                start_test_indexer_v2(
-                    Some(pg_address.clone()),
-                    fullnode_url.clone(),
-                    options.use_indexer_experimental_methods,
-                    ReaderWriterConfig::writer_mode(None),
-                )
-                .await;
+            // Start in writer mode
+            start_test_indexer::<diesel::PgConnection>(
+                Some(pg_address.clone()),
+                fullnode_url.clone(),
+                ReaderWriterConfig::writer_mode(None),
+                data_ingestion_path.clone(),
+            )
+            .await;
 
-                // Start in reader mode
-                start_test_indexer_v2(
-                    Some(pg_address),
-                    fullnode_url.clone(),
-                    options.use_indexer_experimental_methods,
-                    ReaderWriterConfig::reader_mode(indexer_address.to_string()),
-                )
-                .await;
-            } else {
-                let migrated_methods = if options.use_indexer_experimental_methods {
-                    IndexerConfig::all_implemented_methods()
-                } else {
-                    vec![]
-                };
-                let config = IndexerConfig {
-                    db_url: Some(pg_address),
-                    rpc_client_url: fullnode_url.clone(),
-                    rpc_server_url: indexer_address.ip().to_string(),
-                    rpc_server_port: indexer_address.port(),
-                    migrated_methods,
-                    reset_db: true,
-                    ..Default::default()
-                };
-                start_test_indexer(config).await?;
-            }
+            // Start in reader mode
+            start_test_indexer::<diesel::PgConnection>(
+                Some(pg_address),
+                fullnode_url.clone(),
+                ReaderWriterConfig::reader_mode(indexer_address.to_string()),
+                data_ingestion_path,
+            )
+            .await;
         }
 
         if let Some(graphql_address) = &options.graphql_address {
@@ -274,6 +259,7 @@ impl Cluster for LocalNewCluster {
             start_graphql_server_with_fn_rpc(
                 graphql_connection_config.clone(),
                 Some(fullnode_url.clone()),
+                /* cancellation_token */ None,
             )
             .await;
         }
@@ -348,7 +334,7 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
     }
 }
 
-pub async fn new_wallet_context_from_cluster(
+pub fn new_wallet_context_from_cluster(
     cluster: &(dyn Cluster + Sync + Send),
     key_pair: AccountKeyPair,
 ) -> WalletContext {
@@ -381,12 +367,10 @@ pub async fn new_wallet_context_from_cluster(
         wallet_config_path
     );
 
-    WalletContext::new(&wallet_config_path, None, None)
-        .await
-        .unwrap_or_else(|e| {
-            panic!(
-                "Failed to init wallet context from path {:?}, error: {e}",
-                wallet_config_path
-            )
-        })
+    WalletContext::new(&wallet_config_path, None, None).unwrap_or_else(|e| {
+        panic!(
+            "Failed to init wallet context from path {:?}, error: {e}",
+            wallet_config_path
+        )
+    })
 }

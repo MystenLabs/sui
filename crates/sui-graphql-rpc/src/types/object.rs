@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::fmt::Write;
 
+use super::available_range::AvailableRange;
 use super::balance::{self, Balance};
 use super::big_int::BigInt;
 use super::coin::Coin;
 use super::coin_metadata::CoinMetadata;
-use super::cursor::{self, Page, Target};
+use super::cursor::{self, Page, Paginated, RawPaginated, Target};
 use super::digest::Digest;
 use super::display::{Display, DisplayEntry};
 use super::dynamic_field::{DynamicField, DynamicFieldName};
@@ -15,31 +17,30 @@ use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
-use super::suins_registration::SuinsRegistration;
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
 use super::type_filter::{ExactTypeFilter, TypeFilter};
 use super::{owner::Owner, sui_address::SuiAddress, transaction_block::TransactionBlock};
-use crate::context_data::package_cache::PackageCache;
+use crate::consistency::{build_objects_query, Checkpointed, View};
+use crate::data::package_resolver::PackageResolver;
 use crate::data::{self, Db, DbConnection, QueryExecutor};
 use crate::error::Error;
+use crate::raw_query::RawQuery;
 use crate::types::base64::Base64;
 use crate::types::intersect;
+use crate::{filter, or_filter};
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::{connection::Connection, *};
-use diesel::{
-    BoolExpressionMethods, CombineDsl, ExpressionMethods, NullableExpressionMethods,
-    OptionalExtension, QueryDsl,
-};
+use diesel::{CombineDsl, ExpressionMethods, OptionalExtension, QueryDsl};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
-use sui_indexer::models_v2::objects::{
-    StoredDeletedHistoryObject, StoredHistoryObject, StoredObject,
-};
-use sui_indexer::schema_v2::{checkpoints, objects, objects_history, objects_snapshot};
-use sui_indexer::types_v2::ObjectStatus as NativeObjectStatus;
-use sui_indexer::types_v2::OwnerType;
-use sui_package_resolver::Resolver;
+use serde::{Deserialize, Serialize};
+use sui_indexer::models::objects::{StoredDeletedHistoryObject, StoredHistoryObject, StoredObject};
+use sui_indexer::schema::{objects, objects_history, objects_snapshot};
+use sui_indexer::types::ObjectStatus as NativeObjectStatus;
+use sui_indexer::types::OwnerType;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::object::{
     MoveObject as NativeMoveObject, Object as NativeObject, Owner as NativeOwner,
 };
@@ -49,19 +50,21 @@ use sui_types::TypeTag;
 pub(crate) struct Object {
     pub address: SuiAddress,
     pub kind: ObjectKind,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Objects.
 pub(crate) struct ObjectImpl<'o>(pub &'o Object);
 
 #[derive(Clone, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ObjectKind {
-    /// An object loaded from serialized data, such as the contents of a transaction.
+    /// An object loaded from serialized data, such as the contents of a transaction that hasn't
+    /// been indexed yet.
     NotIndexed(NativeObject),
-    /// An object fetched from the live objects table.
-    Live(NativeObject, StoredObject),
-    /// An object fetched from the snapshot or historical objects table.
-    Historical(NativeObject, StoredHistoryObject),
+    /// An object fetched from the index.
+    Indexed(NativeObject, StoredHistoryObject),
     /// The object is wrapped or deleted and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted(StoredDeletedHistoryObject),
@@ -70,13 +73,11 @@ pub(crate) enum ObjectKind {
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 #[graphql(name = "ObjectKind")]
 pub enum ObjectStatus {
-    /// The object is loaded from serialized data, such as the contents of a transaction.
+    /// The object is loaded from serialized data, such as the contents of a transaction that hasn't
+    /// been indexed yet.
     NotIndexed,
-    /// The object is currently live and is not deleted or wrapped.
-    Live,
-    /// The object is referenced at some version, and thus is fetched from the snapshot or
-    /// historical objects table.
-    Historical,
+    /// The object is fetched from the index.
+    Indexed,
     /// The object is deleted or wrapped and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted,
@@ -166,15 +167,35 @@ pub struct AddressOwner {
     owner: Option<Owner>,
 }
 
-#[allow(dead_code)]
-pub(crate) enum ObjectVersionKey {
-    Latest,
-    LatestAt(u64),   // checkpoint_sequence_number
-    Historical(u64), // version
+pub(crate) enum ObjectLookupKey {
+    LatestAt(u64),
+    VersionAt {
+        version: u64,
+        /// The checkpoint sequence number at which this was viewed at.
+        checkpoint_viewed_at: u64,
+    },
+    LatestAtParentVersion {
+        /// The parent version to be used as the upper bound for the query. Look for the latest
+        /// version of a child object that is less than or equal to this upper bound.
+        version: u64,
+        /// The checkpoint sequence number at which this was viewed at
+        checkpoint_viewed_at: u64,
+    },
 }
 
-pub(crate) type Cursor = cursor::BcsCursor<Vec<u8>>;
+pub(crate) type Cursor = cursor::BcsCursor<HistoricalObjectCursor>;
 type Query<ST, GB> = data::Query<ST, objects::table, GB>;
+
+/// The inner struct for the `Object`'s cursor. The `object_id` is used as the cursor, while the
+/// `checkpoint_viewed_at` sets the consistent upper bound for the cursor.
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Debug)]
+pub(crate) struct HistoricalObjectCursor {
+    #[serde(rename = "o")]
+    object_id: Vec<u8>,
+    /// The checkpoint sequence number this was viewed at.
+    #[serde(rename = "c")]
+    checkpoint_viewed_at: u64,
+}
 
 /// Interface implemented by on-chain values that are addressable by an ID (also referred to as its
 /// address). This includes Move objects and packages.
@@ -244,7 +265,7 @@ pub(crate) enum IObject {
 #[Object]
 impl Object {
     pub(crate) async fn address(&self) -> SuiAddress {
-        OwnerImpl(self.address).address().await
+        OwnerImpl::from(self).address().await
     }
 
     /// Objects owned by this object, optionally `filter`-ed.
@@ -257,7 +278,7 @@ impl Object {
         before: Option<Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, MoveObject>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .objects(ctx, first, after, last, before, filter)
             .await
     }
@@ -269,7 +290,7 @@ impl Object {
         ctx: &Context<'_>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Option<Balance>> {
-        OwnerImpl(self.address).balance(ctx, type_).await
+        OwnerImpl::from(self).balance(ctx, type_).await
     }
 
     /// The balances of all coin types owned by this object.
@@ -281,7 +302,7 @@ impl Object {
         last: Option<u64>,
         before: Option<balance::Cursor>,
     ) -> Result<Connection<String, Balance>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .balances(ctx, first, after, last, before)
             .await
     }
@@ -298,7 +319,7 @@ impl Object {
         before: Option<Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .coins(ctx, first, after, last, before, type_)
             .await
     }
@@ -312,14 +333,18 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, StakedSui>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .staked_suis(ctx, first, after, last, before)
             .await
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl(self.address).default_suins_name(ctx).await
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
+        OwnerImpl::from(self).default_suins_name(ctx, format).await
     }
 
     /// The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
@@ -332,7 +357,7 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, SuinsRegistration>> {
-        OwnerImpl(self.address)
+        OwnerImpl::from(self)
             .suins_registrations(ctx, first, after, last, before)
             .await
     }
@@ -415,7 +440,9 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address).dynamic_field(ctx, name).await
+        OwnerImpl::from(self)
+            .dynamic_field(ctx, name, Some(self.version_impl()))
+            .await
     }
 
     /// Access a dynamic object field on an object using its name. Names are arbitrary Move values
@@ -430,8 +457,8 @@ impl Object {
         ctx: &Context<'_>,
         name: DynamicFieldName,
     ) -> Result<Option<DynamicField>> {
-        OwnerImpl(self.address)
-            .dynamic_object_field(ctx, name)
+        OwnerImpl::from(self)
+            .dynamic_object_field(ctx, name, Some(self.version_impl()))
             .await
     }
 
@@ -447,8 +474,8 @@ impl Object {
         last: Option<u64>,
         before: Option<Cursor>,
     ) -> Result<Connection<String, DynamicField>> {
-        OwnerImpl(self.address)
-            .dynamic_fields(ctx, first, after, last, before)
+        OwnerImpl::from(self)
+            .dynamic_fields(ctx, first, after, last, before, Some(self.version_impl()))
             .await
     }
 
@@ -489,7 +516,10 @@ impl ObjectImpl<'_> {
             O::AddressOwner(address) => {
                 let address = SuiAddress::from(address);
                 Some(ObjectOwner::Address(AddressOwner {
-                    owner: Some(Owner { address }),
+                    owner: Some(Owner {
+                        address,
+                        checkpoint_viewed_at: self.0.checkpoint_viewed_at,
+                    }),
                 }))
             }
             O::Immutable => Some(ObjectOwner::Immutable(Immutable { dummy: None })),
@@ -497,7 +527,7 @@ impl ObjectImpl<'_> {
                 let parent = Object::query(
                     ctx.data_unchecked(),
                     address.into(),
-                    ObjectVersionKey::Latest,
+                    ObjectLookupKey::LatestAt(self.0.checkpoint_viewed_at),
                 )
                 .await
                 .ok()
@@ -522,9 +552,13 @@ impl ObjectImpl<'_> {
         };
         let digest = native.previous_transaction;
 
-        TransactionBlock::query(ctx.data_unchecked(), digest.into())
-            .await
-            .extend()
+        TransactionBlock::query(
+            ctx.data_unchecked(),
+            digest.into(),
+            self.0.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {
@@ -554,21 +588,24 @@ impl ObjectImpl<'_> {
             return Ok(Connection::new(false, false));
         };
 
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter)
-            .await
-            .extend()
+        TransactionBlock::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter,
+            self.0.checkpoint_viewed_at,
+        )
+        .await
+        .extend()
     }
 
     pub(crate) async fn bcs(&self) -> Result<Option<Base64>> {
         use ObjectKind as K;
         Ok(match &self.0.kind {
             K::WrappedOrDeleted(_) => None,
-            K::Live(_, stored) => Some(Base64::from(&stored.serialized_object)),
-
             // WrappedOrDeleted objects are also read from the historical objects table, and they do
             // not have a serialized object, so the column is also nullable for stored historical
             // objects.
-            K::Historical(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
+            K::Indexed(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
 
             K::NotIndexed(native) => {
                 let bytes = bcs::to_bytes(native)
@@ -614,10 +651,19 @@ impl ObjectImpl<'_> {
 
 impl Object {
     /// Construct a GraphQL object from a native object, without its stored (indexed) counterpart.
-    pub(crate) fn from_native(address: SuiAddress, native: NativeObject) -> Object {
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
+    /// be as if it was read at the same checkpoint.
+    pub(crate) fn from_native(
+        address: SuiAddress,
+        native: NativeObject,
+        checkpoint_viewed_at: u64,
+    ) -> Object {
         Object {
             address,
             kind: ObjectKind::NotIndexed(native),
+            checkpoint_viewed_at,
         }
     }
 
@@ -625,7 +671,7 @@ impl Object {
         use ObjectKind as K;
 
         match &self.kind {
-            K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => Some(native),
+            K::NotIndexed(native) | K::Indexed(native, _) => Some(native),
             K::WrappedOrDeleted(_) => None,
         }
     }
@@ -634,112 +680,105 @@ impl Object {
         use ObjectKind as K;
 
         match &self.kind {
-            K::Live(native, _) | K::NotIndexed(native) | K::Historical(native, _) => {
-                native.version().value()
-            }
+            K::NotIndexed(native) | K::Indexed(native, _) => native.version().value(),
             K::WrappedOrDeleted(stored) => stored.object_version as u64,
         }
     }
 
     /// Query the database for a `page` of objects, optionally `filter`-ed.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for. Each entity returned in the connection will inherit this checkpoint, so that
+    /// when viewing that entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) async fn paginate(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Object>, Error> {
-        Self::paginate_subtype(db, page, filter, Ok).await
+        Self::paginate_subtype(db, page, filter, checkpoint_viewed_at, Ok).await
     }
 
     /// Query the database for a `page` of some sub-type of Object. The page uses the bytes of an
-    /// Object ID as the cursor, and can optionally be further `filter`-ed. The subtype is created
-    /// using the `downcast` function, which is allowed to fail, if the downcast has failed.
+    /// Object ID and the checkpoint when the query was made as the cursor, and can optionally be
+    /// further `filter`-ed. The subtype is created using the `downcast` function, which is allowed
+    /// to fail, if the downcast has failed.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this page was
+    /// queried for. Each entity returned in the connection will inherit this checkpoint, so that
+    /// when viewing that entity's state, it will be as if it was read at the same checkpoint.
+    ///
+    /// If a `Page<Cursor>` is also provided, then this function will defer to the
+    /// `checkpoint_viewed_at` in the cursors. Otherwise, use the value from the parameter, or set
+    /// to None. This is so that paginated queries are consistent with the previous query that
+    /// created the cursor.
     pub(crate) async fn paginate_subtype<T: OutputType>(
         db: &Db,
         page: Page<Cursor>,
         filter: ObjectFilter,
+        checkpoint_viewed_at: u64,
         downcast: impl Fn(Object) -> Result<T, Error>,
     ) -> Result<Connection<String, T>, Error> {
-        let (prev, next, results) = db
-            .execute(move |conn| {
-                page.paginate_query::<StoredObject, _, _, _>(conn, move || {
-                    use objects::dsl;
-                    let mut query = dsl::objects.into_boxed();
+        // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
+        // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
+        // paginated queries are consistent with the previous query that created the cursor.
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-                    // Start by applying the filters on IDs and/or keys because they are combined as
-                    // a disjunction, while the remaining queries are conjunctions.
-                    if let Some(object_ids) = &filter.object_ids {
-                        query = query.or_filter(
-                            dsl::object_id.eq_any(object_ids.iter().map(|a| a.into_vec())),
-                        );
-                    }
+        let Some((prev, next, results)) = db
+            .execute_repeatable(move |conn| {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
-                    for ObjectKey { object_id, version } in filter.object_keys.iter().flatten() {
-                        query = query.or_filter(
-                            dsl::object_id
-                                .eq(object_id.into_vec())
-                                .and(dsl::object_version.eq(*version as i64)),
-                        );
-                    }
-
-                    if let Some(type_) = &filter.type_ {
-                        query = query.filter(dsl::object_type.is_not_null());
-                        query = type_.apply(query, dsl::object_type.assume_not_null());
-                    }
-
-                    if let Some(owner) = &filter.owner {
-                        query = query.filter(dsl::owner_id.eq(owner.into_vec()));
-
-                        // If we are supplying an address as the owner, we know that the object must
-                        // be owned by an address, or by an object.
-                        query = query.filter(dsl::owner_type.eq(OwnerType::Address as i16));
-                    }
-
-                    query
-                })
+                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
+                    conn,
+                    checkpoint_viewed_at,
+                    objects_query(&filter, range, &page),
+                )?))
             })
-            .await?;
+            .await?
+        else {
+            return Err(Error::Client(
+                "Requested data is outside the available range".to_string(),
+            ));
+        };
 
-        let mut conn = Connection::new(prev, next);
-
+        let mut conn: Connection<String, T> = Connection::new(prev, next);
         for stored in results {
-            let cursor = stored.cursor().encode_cursor();
-            let object = Object::try_from(stored)?;
+            // To maintain consistency, the returned cursor should have the same upper-bound as the
+            // checkpoint found on the cursor.
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
             conn.edges.push(Edge::new(cursor, downcast(object)?));
         }
 
         Ok(conn)
     }
 
-    async fn query_live(db: &Db, address: SuiAddress) -> Result<Option<Self>, Error> {
-        use objects::dsl as objects;
-        let vec_address = address.into_vec();
-
-        let stored_obj: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    objects::objects.filter(objects::object_id.eq(vec_address.clone()))
-                })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))?;
-
-        stored_obj.map(Self::try_from).transpose()
-    }
-
+    /// Query for the object at a specific version, at the checkpoint_viewed_at if given, else
+    /// against the latest checkpoint.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// queried in. This is stored on `Object` so that when viewing that entity's state, it will be
+    /// as if it was read at the same checkpoint.
     async fn query_at_version(
         db: &Db,
         address: SuiAddress,
         version: u64,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
-        use checkpoints::dsl as checkpoints;
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
 
         let version = version as i64;
 
-        let results: Option<Vec<StoredHistoryObject>> = db
-            .execute(move |conn| {
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
+
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
@@ -747,139 +786,168 @@ impl Object {
                     // table as well.
                     let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()))
-                        .filter(snapshot::object_version.eq(version))
-                        .into_boxed();
-                    let mut historical_query = history::objects_history
+                        .filter(snapshot::object_version.eq(version));
+
+                    let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
                         .filter(history::object_version.eq(version))
-                        .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
-
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
-                        .limit(1);
-
-                    let right = checkpoints::checkpoints
-                        .select(checkpoints::sequence_number)
-                        .order(checkpoints::sequence_number.desc())
-                        .limit(1);
-
-                    historical_query = historical_query
-                        .filter(
-                            left.single_value()
-                                .is_null()
-                                .or(history::checkpoint_sequence_number
-                                    .nullable()
-                                    .ge(left.single_value())),
-                        )
                         .filter(
                             history::checkpoint_sequence_number
-                                .nullable()
-                                .le(right.single_value()),
-                        );
+                                .between(range.first as i64, range.last as i64),
+                        )
+                        .order_by(history::object_version.desc())
+                        .limit(1);
 
                     snapshot_query.union(historical_query)
                 })
+                // Return optional to match the state when checkpoint_viewed_at is out of range
                 .optional()
             })
             .await?;
 
-        // For the moment, if the object existed at some point, it will have eventually be written
-        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
-        let Some(stored_objs) = results else {
+        let Some(stored_objs) = stored_objs else {
             return Ok(None);
         };
 
-        // Select the max by key after the union query, because Diesel currently does not support order_by on union
+        // Select the max by key after the union query, because Diesel currently does not support
+        // order_by on union
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(Self::try_from)
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
-    async fn query_latest_at_checkpoint(
+    /// Query for the latest version of an object bounded by the provided `parent_version`.
+    ///
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// queried in. This is stored on `Object` so that when viewing that entity's state, it will be
+    /// as if it was read at the same checkpoint.
+    async fn query_latest_at_version(
         db: &Db,
         address: SuiAddress,
-        checkpoint_sequence_number: u64,
+        parent_version: u64,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         use objects_history::dsl as history;
         use objects_snapshot::dsl as snapshot;
 
-        let checkpoint_sequence_number = checkpoint_sequence_number as i64;
+        let version = parent_version as i64;
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
 
-        let results: Option<Vec<StoredHistoryObject>> = db
-            .execute(move |conn| {
                 conn.results(move || {
                     // If an object was created or mutated in a checkpoint outside the current
                     // available range, and never touched again, it will not show up in the
                     // objects_history table. Thus, we always need to check the objects_snapshot
                     // table as well.
-                    let mut snapshot_query = snapshot::objects_snapshot
+                    let snapshot_query = snapshot::objects_snapshot
                         .filter(snapshot::object_id.eq(address.into_vec()))
-                        .into_boxed();
+                        .filter(snapshot::object_version.le(version));
 
-                    let mut historical_query = history::objects_history
+                    let historical_query = history::objects_history
                         .filter(history::object_id.eq(address.into_vec()))
+                        .filter(history::object_version.le(version))
+                        .filter(
+                            history::checkpoint_sequence_number
+                                .between(range.first as i64, range.last as i64),
+                        )
                         .order_by(history::object_version.desc())
-                        .limit(1)
-                        .into_boxed();
-
-                    let left = snapshot::objects_snapshot
-                        .select(snapshot::checkpoint_sequence_number)
-                        .order(snapshot::checkpoint_sequence_number.desc())
                         .limit(1);
-
-                    historical_query = historical_query.filter(
-                        left.single_value()
-                            .is_null()
-                            .or(history::checkpoint_sequence_number
-                                .nullable()
-                                .ge(left.single_value())),
-                    );
-
-                    historical_query = historical_query
-                        .filter(history::checkpoint_sequence_number.le(checkpoint_sequence_number));
-
-                    snapshot_query = snapshot_query.filter(
-                        snapshot::checkpoint_sequence_number.le(checkpoint_sequence_number),
-                    );
 
                     snapshot_query.union(historical_query)
                 })
+                // Return optional to match the state when checkpoint_viewed_at is out of range
                 .optional()
             })
             .await?;
 
-        // For the moment, if the object existed at some point, it will have eventually be written
-        // to objects_snapshot. Therefore, if both results are None, the object has never existed.
-        let Some(stored_objs) = results else {
+        let Some(stored_objs) = stored_objs else {
             return Ok(None);
         };
 
-        // Select the max by key after the union query, because Diesel currently does not support order_by on union
+        // Select the max by key after the union query, because Diesel currently does not support
+        // order_by on union
         stored_objs
             .into_iter()
             .max_by_key(|o| o.object_version)
-            .map(Self::try_from)
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
+            .transpose()
+    }
+
+    /// Query for the object at the latest version at the checkpoint sequence number if given, else
+    /// the latest version of the object against the latest checkpoint.
+    async fn query_latest_at_checkpoint(
+        db: &Db,
+        address: SuiAddress,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<Self>, Error> {
+        use objects_history::dsl as history;
+        use objects_snapshot::dsl as snapshot;
+
+        let stored_objs: Option<Vec<StoredHistoryObject>> = db
+            .execute_repeatable(move |conn| {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
+                    return Ok::<_, diesel::result::Error>(None);
+                };
+
+                conn.results(move || {
+                    // If an object was created or mutated in a checkpoint outside the current
+                    // available range, and never touched again, it will not show up in the
+                    // objects_history table. Thus, we always need to check the objects_snapshot
+                    // table as well.
+                    let snapshot_query = snapshot::objects_snapshot
+                        .filter(snapshot::object_id.eq(address.into_vec()));
+
+                    let historical_query = history::objects_history
+                        .filter(history::object_id.eq(address.into_vec()))
+                        .filter(
+                            history::checkpoint_sequence_number
+                                .between(range.first as i64, range.last as i64),
+                        )
+                        .order_by(history::object_version.desc())
+                        .limit(1);
+
+                    snapshot_query.union(historical_query)
+                })
+                // Return optional to match the state when checkpoint_viewed_at is out of range
+                .optional()
+            })
+            .await?;
+
+        let Some(stored_objs) = stored_objs else {
+            return Ok(None);
+        };
+
+        // Select the max by key after the union query, because Diesel currently does not support
+        // order_by on union
+        stored_objs
+            .into_iter()
+            .max_by_key(|o| o.object_version)
+            .map(|obj| Self::try_from_stored_history_object(obj, checkpoint_viewed_at))
             .transpose()
     }
 
     pub(crate) async fn query(
         db: &Db,
         address: SuiAddress,
-        key: ObjectVersionKey,
+        key: ObjectLookupKey,
     ) -> Result<Option<Self>, Error> {
         match key {
-            ObjectVersionKey::Latest => Self::query_live(db, address).await,
-            ObjectVersionKey::LatestAt(checkpoint_sequence_number) => {
+            ObjectLookupKey::LatestAt(checkpoint_sequence_number) => {
                 Self::query_latest_at_checkpoint(db, address, checkpoint_sequence_number).await
             }
-            ObjectVersionKey::Historical(version) => {
-                Self::query_at_version(db, address, version).await
-            }
+            ObjectLookupKey::VersionAt {
+                version,
+                checkpoint_viewed_at,
+            } => Self::query_at_version(db, address, version, checkpoint_viewed_at).await,
+            ObjectLookupKey::LatestAtParentVersion {
+                version,
+                checkpoint_viewed_at,
+            } => Self::query_latest_at_version(db, address, version, checkpoint_viewed_at).await,
         }
         .map_err(|e| Error::Internal(format!("Failed to fetch object: {e}")))
     }
@@ -887,22 +955,68 @@ impl Object {
     /// Query for a singleton object identified by its type. Note: the object is assumed to be a
     /// singleton (we either find at least one object with this type and then return it, or return
     /// nothing).
-    pub(crate) async fn query_singleton(db: &Db, type_: TypeTag) -> Result<Option<Object>, Error> {
-        use objects::dsl;
+    pub(crate) async fn query_singleton(
+        db: &Db,
+        type_: TypeTag,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<Object>, Error> {
+        let filter = ObjectFilter {
+            type_: Some(TypeFilter::ByType(type_)),
+            ..Default::default()
+        };
 
-        let stored_obj: Option<StoredObject> = db
-            .execute(move |conn| {
-                conn.first(move || {
-                    dsl::objects.filter(
-                        dsl::object_type.eq(type_.to_canonical_string(/* with_prefix */ true)),
-                    )
+        let connection = Self::paginate(db, Page::bounded(1), filter, checkpoint_viewed_at).await?;
+
+        Ok(connection.edges.into_iter().next().map(|edge| edge.node))
+    }
+
+    /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this `Object` was
+    /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
+    /// be as if it was read at the same checkpoint.
+    pub(crate) fn try_from_stored_history_object(
+        history_object: StoredHistoryObject,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Self, Error> {
+        let address = addr(&history_object.object_id)?;
+
+        let object_status =
+            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
+                Error::Internal(format!(
+                    "Unknown object status {} for object {} at version {}",
+                    history_object.object_status, address, history_object.object_version
+                ))
+            })?;
+
+        match object_status {
+            NativeObjectStatus::Active => {
+                let Some(serialized_object) = &history_object.serialized_object else {
+                    return Err(Error::Internal(format!(
+                        "Live object {} at version {} cannot have missing serialized_object field",
+                        address, history_object.object_version
+                    )));
+                };
+
+                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
+                    Error::Internal(format!("Failed to deserialize object {address}"))
+                })?;
+
+                Ok(Self {
+                    address,
+                    kind: ObjectKind::Indexed(native_object, history_object),
+                    checkpoint_viewed_at,
                 })
-                .optional()
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch singleton: {e}")))?;
-
-        stored_obj.map(Self::try_from).transpose()
+            }
+            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
+                address,
+                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
+                    object_id: history_object.object_id,
+                    object_version: history_object.object_version,
+                    object_status: history_object.object_status,
+                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
+                }),
+                checkpoint_viewed_at,
+            }),
+        }
     }
 }
 
@@ -990,17 +1104,103 @@ impl ObjectFilter {
                 .chain(self.object_ids.iter().flatten().map(|id| (*id, None))),
         ))
     }
+
+    /// Applies ObjectFilter to the input `RawQuery` and returns a new `RawQuery`.
+    pub(crate) fn apply(&self, mut query: RawQuery) -> RawQuery {
+        // Start by applying the filters on IDs and/or keys because they are combined as
+        // a disjunction, while the remaining queries are conjunctions.
+        if let Some(object_ids) = &self.object_ids {
+            // Maximally strict - match a vec of 0 elements
+            if object_ids.is_empty() {
+                query = or_filter!(query, "1=0");
+            } else {
+                let mut inner = String::new();
+                let mut prefix = "object_id IN (";
+                for id in object_ids {
+                    // SAFETY: Writing to a `String` cannot fail.
+                    write!(
+                        &mut inner,
+                        "{prefix}'\\x{}'::bytea",
+                        hex::encode(id.into_vec())
+                    )
+                    .unwrap();
+                    prefix = ",";
+                }
+                inner.push(')');
+                query = or_filter!(query, inner);
+            }
+        }
+
+        if let Some(object_keys) = &self.object_keys {
+            // Maximally strict - match a vec of 0 elements
+            if object_keys.is_empty() {
+                query = or_filter!(query, "1=0");
+            } else {
+                let mut inner = String::new();
+                let mut prefix = "(";
+                for ObjectKey { object_id, version } in object_keys {
+                    // SAFETY: Writing to a `String` cannot fail.
+                    write!(
+                        &mut inner,
+                        "{prefix}(object_id = '\\x{}'::bytea AND object_version = {})",
+                        hex::encode(object_id.into_vec()),
+                        version
+                    )
+                    .unwrap();
+                    prefix = " OR ";
+                }
+                inner.push(')');
+                query = or_filter!(query, inner);
+            }
+        }
+
+        if let Some(owner) = self.owner {
+            query = filter!(
+                query,
+                format!(
+                    "owner_id = '\\x{}'::bytea AND owner_type = {}",
+                    hex::encode(owner.into_vec()),
+                    OwnerType::Address as i16
+                )
+            );
+        }
+
+        if let Some(type_) = &self.type_ {
+            return type_.apply_raw(query, "object_type");
+        }
+
+        query
+    }
+
+    pub(crate) fn has_filters(&self) -> bool {
+        self != &Default::default()
+    }
 }
 
-impl Target<Cursor> for StoredObject {
+impl HistoricalObjectCursor {
+    pub(crate) fn new(object_id: Vec<u8>, checkpoint_viewed_at: u64) -> Self {
+        Self {
+            object_id,
+            checkpoint_viewed_at,
+        }
+    }
+}
+
+impl Checkpointed for Cursor {
+    fn checkpoint_viewed_at(&self) -> u64 {
+        self.checkpoint_viewed_at
+    }
+}
+
+impl Paginated<Cursor> for StoredObject {
     type Source = objects::table;
 
     fn filter_ge<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::object_id.ge((**cursor).clone()))
+        query.filter(objects::dsl::object_id.ge(cursor.object_id.clone()))
     }
 
     fn filter_le<ST, GB>(cursor: &Cursor, query: Query<ST, GB>) -> Query<ST, GB> {
-        query.filter(objects::dsl::object_id.le((**cursor).clone()))
+        query.filter(objects::dsl::object_id.le(cursor.object_id.clone()))
     }
 
     fn order<ST, GB>(asc: bool, query: Query<ST, GB>) -> Query<ST, GB> {
@@ -1011,69 +1211,53 @@ impl Target<Cursor> for StoredObject {
             query.order_by(dsl::object_id.desc())
         }
     }
+}
 
-    fn cursor(&self) -> Cursor {
-        Cursor::new(self.object_id.clone())
+impl Target<Cursor> for StoredObject {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(HistoricalObjectCursor::new(
+            self.object_id.clone(),
+            checkpoint_viewed_at,
+        ))
     }
 }
 
-impl TryFrom<StoredObject> for Object {
-    type Error = Error;
-
-    fn try_from(stored_object: StoredObject) -> Result<Self, Error> {
-        let address = addr(&stored_object.object_id)?;
-        let native_object = bcs::from_bytes(&stored_object.serialized_object)
-            .map_err(|_| Error::Internal(format!("Failed to deserialize object {address}")))?;
-
-        Ok(Self {
-            address,
-            kind: ObjectKind::Live(native_object, stored_object),
-        })
+impl RawPaginated<Cursor> for StoredHistoryObject {
+    fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "candidates.object_id >= '\\x{}'::bytea",
+                hex::encode(cursor.object_id.clone())
+            )
+        )
     }
-}
 
-impl TryFrom<StoredHistoryObject> for Object {
-    type Error = Error;
+    fn filter_le(cursor: &Cursor, query: RawQuery) -> RawQuery {
+        filter!(
+            query,
+            format!(
+                "candidates.object_id <= '\\x{}'::bytea",
+                hex::encode(cursor.object_id.clone())
+            )
+        )
+    }
 
-    fn try_from(history_object: StoredHistoryObject) -> Result<Self, Error> {
-        let address = addr(&history_object.object_id)?;
-
-        let object_status =
-            NativeObjectStatus::try_from(history_object.object_status).map_err(|_| {
-                Error::Internal(format!(
-                    "Unknown object status {} for object {} at version {}",
-                    history_object.object_status, address, history_object.object_version
-                ))
-            })?;
-
-        match object_status {
-            NativeObjectStatus::Active => {
-                let Some(serialized_object) = &history_object.serialized_object else {
-                    return Err(Error::Internal(format!(
-                        "Live object {} at version {} cannot have missing serialized_object field",
-                        address, history_object.object_version
-                    )));
-                };
-
-                let native_object = bcs::from_bytes(serialized_object).map_err(|_| {
-                    Error::Internal(format!("Failed to deserialize object {address}"))
-                })?;
-
-                Ok(Self {
-                    address,
-                    kind: ObjectKind::Historical(native_object, history_object),
-                })
-            }
-            NativeObjectStatus::WrappedOrDeleted => Ok(Self {
-                address,
-                kind: ObjectKind::WrappedOrDeleted(StoredDeletedHistoryObject {
-                    object_id: history_object.object_id,
-                    object_version: history_object.object_version,
-                    object_status: history_object.object_status,
-                    checkpoint_sequence_number: history_object.checkpoint_sequence_number,
-                }),
-            }),
+    fn order(asc: bool, query: RawQuery) -> RawQuery {
+        if asc {
+            query.order_by("candidates.object_id ASC")
+        } else {
+            query.order_by("candidates.object_id DESC")
         }
+    }
+}
+
+impl Target<Cursor> for StoredHistoryObject {
+    fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
+        Cursor::new(HistoricalObjectCursor::new(
+            self.object_id.clone(),
+            checkpoint_viewed_at,
+        ))
     }
 }
 
@@ -1081,9 +1265,17 @@ impl From<&ObjectKind> for ObjectStatus {
     fn from(kind: &ObjectKind) -> Self {
         match kind {
             ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
-            ObjectKind::Live(_, _) => ObjectStatus::Live,
-            ObjectKind::Historical(_, _) => ObjectStatus::Historical,
+            ObjectKind::Indexed(_, _) => ObjectStatus::Indexed,
             ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
+        }
+    }
+}
+
+impl From<&Object> for OwnerImpl {
+    fn from(object: &Object) -> Self {
+        OwnerImpl {
+            address: object.address,
+            checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
 }
@@ -1099,7 +1291,7 @@ fn addr(bytes: impl AsRef<[u8]>) -> Result<SuiAddress, Error> {
 
 pub(crate) async fn deserialize_move_struct(
     move_object: &NativeMoveObject,
-    resolver: &Resolver<PackageCache>,
+    resolver: &PackageResolver,
 ) -> Result<(StructTag, MoveStruct), Error> {
     let struct_tag = StructTag::from(move_object.type_().clone());
     let contents = move_object.contents();
@@ -1117,7 +1309,9 @@ pub(crate) async fn deserialize_move_struct(
         return Err(Error::Internal("Object is not a move struct".to_string()));
     };
 
-    let move_struct = MoveStruct::simple_deserialize(contents, &layout).map_err(|e| {
+    // TODO (annotated-visitor): Use custom visitors for extracting a dynamic field, and for
+    // creating a GraphQL MoveValue directly (not via an annotated visitor).
+    let move_struct = BoundedVisitor::deserialize_struct(contents, &layout).map_err(|e| {
         Error::Internal(format!(
             "Error deserializing move struct for type {}: {e}",
             struct_tag.to_canonical_string(/* with_prefix */ true)
@@ -1125,6 +1319,27 @@ pub(crate) async fn deserialize_move_struct(
     })?;
 
     Ok((struct_tag, move_struct))
+}
+
+/// Constructs a raw query to fetch objects from the database. Objects are filtered out if they
+/// satisfy the criteria but have a later version in the same checkpoint. If object keys are
+/// provided, or no filters are specified at all, then this final condition is not applied.
+fn objects_query(filter: &ObjectFilter, range: AvailableRange, page: &Page<Cursor>) -> RawQuery
+where
+{
+    let view = if filter.object_keys.is_some() || !filter.has_filters() {
+        View::Historical
+    } else {
+        View::Consistent
+    };
+
+    build_objects_query(
+        view,
+        range,
+        page,
+        move |query| filter.apply(query),
+        move |newer| newer,
+    )
 }
 
 #[cfg(test)]

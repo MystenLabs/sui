@@ -9,12 +9,12 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       with:
         ref: ${{ inputs.ref }}
     # Disabled for now as it makes test runs take longer
     # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-    - uses: pnpm/action-setup@v2.4.0
+    - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
       with:
         version: 8
 
@@ -44,42 +44,25 @@ runs:
       shell: bash
 
     # checkout current branch
-    - uses: actions/checkout@7dd9e2a3dc350cf687eb1b2a4fadfee8c8e49675 # pin@v3
+    - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
       with:
         clean: false
 
     - name: Install Nodejs
-      uses: actions/setup-node@8c91899e586c5b171469028077307d293428b516 # pin@v3
+      uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
       with:
         node-version: '18'
         cache: 'pnpm'
     - name: Install dependencies
       run: pnpm install --frozen-lockfile
       shell: bash
-    - name: Build explorer
-      run: pnpm turbo --filter=sui-explorer build
-      shell: bash
-    - name: Install Playwright Browsers
-      run: pnpm --filter sui-explorer playwright install --with-deps chromium
-      shell: bash
 
     - name: Set env
       run: |
-        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator) --with-indexer --use-indexer-v2 --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
+        echo "E2E_RUN_LOCAL_NET_CMD=(RUST_LOG=\"consensus=off\" $(echo $PWD/target/debug/sui-test-validator) --with-indexer --pg-port 5432 --pg-db-name sui_indexer_v2 --graphql-host 127.0.0.1 --graphql-port 9125)" >> $GITHUB_ENV
         echo "VITE_SUI_BIN=$PWD/target/debug/sui" >> $GITHUB_ENV
       shell: bash
 
     - name: Run TS SDK e2e tests
-      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js test:e2e'
+      run: pnpm dlx concurrently --kill-others --success command-1 "$E2E_RUN_LOCAL_NET_CMD" 'pnpm --filter @mysten/sui.js --filter @mysten/graphql-transport test:e2e'
       shell: bash
-
-    - name: Run Explorer e2e tests
-      run: pnpm --filter sui-explorer playwright test
-      shell: bash
-
-    - uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: playwright-report-explorer
-        path: apps/explorer/playwright-report/
-        retention-days: 30

@@ -1,5 +1,5 @@
-module M {
-    public fun missing_quote(): vector<u8> {
+module 0x42::M {
+    public fun missing_quote() {
         x"abcd
     }
 }

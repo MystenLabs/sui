@@ -1,13 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::diag;
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
 use crate::parser::ast::{FunctionName, Visibility};
 use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
+use crate::{diag, ice};
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 //**************************************************************************************************
 // Entry
@@ -48,6 +49,7 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
             let N::UseFuns {
                 resolved,
                 implicit_candidates,
+                color: _,
             } = &mdef.use_funs;
             assert!(implicit_candidates.is_empty());
             (mident, resolved.clone())
@@ -102,6 +104,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     let N::UseFuns {
         resolved,
         implicit_candidates,
+        color: _,
     } = uf;
     // remove any incorrect resolved functions
     for (tn, methods) in &mut *resolved {
@@ -124,7 +127,13 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             if is_valid {
                 if let Some(public_loc) = nuf.is_public {
                     let defining_module = match &tn.value {
-                        N::TypeName_::Multiple(_) => panic!("ICE unexpected tuple type"),
+                        N::TypeName_::Multiple(_) => {
+                            context.env.add_diag(ice!((
+                                tn.loc,
+                                "ICE tuple type should not be reachable from use fun"
+                            )));
+                            return None;
+                        }
                         N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
                         N::TypeName_::ModuleType(m, _) => Some(m),
                     };
@@ -210,6 +219,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             loc,
             attributes,
             is_public,
+            tname: tn.clone(),
             target_function: (target_m, target_f),
             kind,
             used,
@@ -299,6 +309,7 @@ fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
@@ -306,27 +317,47 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
-        | N::Exp_::Give(_, e)
+        | N::Exp_::Give(_, _, e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
         | N::Exp_::Loop(_, e)
-        | N::Exp_::Annotate(e, _) => exp(context, e),
+        | N::Exp_::Annotate(e, _)
+        | N::Exp_::Lambda(N::Lambda {
+            parameters: _,
+            return_type: _,
+            return_label: _,
+            use_fun_color: _,
+            body: e,
+        }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {
             exp(context, econd);
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(econd, _, ebody) => {
+        N::Exp_::Match(esubject, arms) => {
+            exp(context, esubject);
+            for arm in &mut arms.value {
+                if let Some(guard) = arm.value.guard.as_mut() {
+                    exp(context, guard)
+                }
+                exp(context, &mut arm.value.rhs);
+            }
+        }
+        N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }
-        N::Exp_::NamedBlock(_, s) => sequence(context, s),
-        N::Exp_::Block(s) => sequence(context, s),
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_macro_argument: _,
+            seq,
+        }) => sequence(context, seq),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)
@@ -340,15 +371,21 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 exp(context, e)
             }
         }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
-        | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
+        | N::Exp_::VarCall(_, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)
@@ -359,9 +396,16 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     }
 }
 
+#[growing_stack]
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => exp_dotted(context, ed),
+        N::ExpDotted_::Index(ed, sp!(_, es)) => {
+            exp_dotted(context, ed);
+            for e in es {
+                exp(context, e)
+            }
+        }
     }
 }

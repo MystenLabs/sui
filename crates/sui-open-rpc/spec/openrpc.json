@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.18.0"
+    "version": "1.25.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "35",
+              "maxSupportedProtocolVersion": "44",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1374,6 +1374,8 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "enable_coin_deny_list": false,
                 "enable_effects_v2": false,
+                "enable_group_ops_native_function_msm": false,
+                "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
                 "end_of_epoch_transaction_supported": false,
@@ -1384,7 +1386,6 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "narwhal_certificate_v2": false,
-                "narwhal_header_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
                 "no_extraneous_module_bytes": false,
@@ -1393,6 +1394,7 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "reject_mutable_random_on_entry_functions": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
@@ -1419,6 +1421,20 @@
                 "base_tx_cost_per_byte": {
                   "u64": "0"
                 },
+                "binary_address_identifiers": null,
+                "binary_constant_pool": null,
+                "binary_field_handles": null,
+                "binary_field_instantiations": null,
+                "binary_friend_decls": null,
+                "binary_function_defs": null,
+                "binary_function_handles": null,
+                "binary_function_instantiations": null,
+                "binary_identifiers": null,
+                "binary_module_handles": null,
+                "binary_signatures": null,
+                "binary_struct_def_instantiations": null,
+                "binary_struct_defs": null,
+                "binary_struct_handles": null,
                 "bls12381_bls12381_min_pk_verify_cost_base": {
                   "u64": "52"
                 },
@@ -1443,6 +1459,8 @@
                 "check_zklogin_id_cost_base": null,
                 "check_zklogin_issuer_cost_base": null,
                 "consensus_bad_nodes_stake_threshold": null,
+                "consensus_max_transaction_size_bytes": null,
+                "consensus_max_transactions_in_block_bytes": null,
                 "crypto_invalid_arguments_cost": {
                   "u64": "100"
                 },
@@ -1631,6 +1649,36 @@
                 "groth16_verify_groth16_proof_internal_public_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "group_ops_bls12381_decode_g1_cost": null,
+                "group_ops_bls12381_decode_g2_cost": null,
+                "group_ops_bls12381_decode_gt_cost": null,
+                "group_ops_bls12381_decode_scalar_cost": null,
+                "group_ops_bls12381_g1_add_cost": null,
+                "group_ops_bls12381_g1_div_cost": null,
+                "group_ops_bls12381_g1_hash_to_base_cost": null,
+                "group_ops_bls12381_g1_hash_to_cost_per_byte": null,
+                "group_ops_bls12381_g1_msm_base_cost": null,
+                "group_ops_bls12381_g1_msm_base_cost_per_input": null,
+                "group_ops_bls12381_g1_mul_cost": null,
+                "group_ops_bls12381_g1_sub_cost": null,
+                "group_ops_bls12381_g2_add_cost": null,
+                "group_ops_bls12381_g2_div_cost": null,
+                "group_ops_bls12381_g2_hash_to_base_cost": null,
+                "group_ops_bls12381_g2_hash_to_cost_per_byte": null,
+                "group_ops_bls12381_g2_msm_base_cost": null,
+                "group_ops_bls12381_g2_msm_base_cost_per_input": null,
+                "group_ops_bls12381_g2_mul_cost": null,
+                "group_ops_bls12381_g2_sub_cost": null,
+                "group_ops_bls12381_gt_add_cost": null,
+                "group_ops_bls12381_gt_div_cost": null,
+                "group_ops_bls12381_gt_mul_cost": null,
+                "group_ops_bls12381_gt_sub_cost": null,
+                "group_ops_bls12381_msm_max_len": null,
+                "group_ops_bls12381_pairing_cost": null,
+                "group_ops_bls12381_scalar_add_cost": null,
+                "group_ops_bls12381_scalar_div_cost": null,
+                "group_ops_bls12381_scalar_mul_cost": null,
+                "group_ops_bls12381_scalar_sub_cost": null,
                 "hash_blake2b256_cost_base": {
                   "u64": "52"
                 },
@@ -1658,6 +1706,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_accumulated_txn_cost_per_object_in_checkpoint": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -1712,6 +1761,7 @@
                 "max_meter_ticks_per_module": {
                   "u64": "6000000"
                 },
+                "max_meter_ticks_per_package": null,
                 "max_modules_in_publish": {
                   "u32": "128"
                 },
@@ -1747,6 +1797,7 @@
                 "max_num_transferred_move_object_ids_system_tx": {
                   "u64": "32768"
                 },
+                "max_package_dependencies": null,
                 "max_programmable_tx_commands": {
                   "u32": "1024"
                 },
@@ -1846,7 +1897,9 @@
                 },
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
+                "random_beacon_dkg_timeout_round": null,
                 "random_beacon_reduction_allowed_delta": null,
+                "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
                   "u64": "10000"
                 },
@@ -5264,6 +5317,14 @@
         "type": "string"
       },
       "BigInt_for_uint64": {
+        "type": "string"
+      },
+      "Bn254FqElement": {
+        "description": "A struct that stores a Bn254 Fq field element as 32 bytes.",
+        "type": "string"
+      },
+      "Bn254FrElement": {
+        "description": "A struct that stores a Bn254 Fr field element as 32 bytes.",
         "type": "string"
       },
       "Checkpoint": {
@@ -10872,7 +10933,7 @@
         ],
         "properties": {
           "addressSeed": {
-            "type": "string"
+            "$ref": "#/components/schemas/Bn254FrElement"
           },
           "headerBase64": {
             "type": "string"
@@ -10897,7 +10958,7 @@
           "a": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           },
           "b": {
@@ -10905,14 +10966,14 @@
             "items": {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/components/schemas/Bn254FqElement"
               }
             }
           },
           "c": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           }
         }

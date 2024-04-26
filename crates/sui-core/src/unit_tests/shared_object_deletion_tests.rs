@@ -112,8 +112,7 @@ impl TestRunner {
 
     pub fn get_object_latest_version(&mut self, obj_id: ObjectID) -> SequenceNumber {
         self.authority_state
-            .database
-            .perpetual_tables
+            .get_cache_reader()
             .get_latest_object_ref_or_tombstone(obj_id)
             .unwrap()
             .unwrap()
@@ -561,7 +560,7 @@ impl TestRunner {
     ) -> Option<TransactionDigest> {
         self.authority_state
             .get_cache_reader()
-            .get_deleted_shared_object_previous_tx_digest(object_id, version, epoch)
+            .get_deleted_shared_object_previous_tx_digest(object_id, *version, epoch)
             .unwrap()
     }
 }

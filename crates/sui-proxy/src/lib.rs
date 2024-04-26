@@ -5,6 +5,7 @@ pub mod config;
 pub mod consumer;
 pub mod handlers;
 pub mod histogram_relay;
+mod ip;
 pub mod metrics;
 pub mod middleware;
 pub mod peers;
@@ -89,7 +90,7 @@ mod tests {
             tokio::spawn(async move { run_dummy_remote_write(dummy_remote_write_listener).await });
 
         // init the tls config and allower
-        let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30));
+        let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![]);
         let tls_config = CertVerifier::new(allower.clone())
             .rustls_server_config(
                 vec![server_priv_cert.rustls_certificate()],

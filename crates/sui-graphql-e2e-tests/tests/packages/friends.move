@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 P1=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses P0=0x0 P1=0x0 --accounts A --simulator
 
 //# publish --upgradeable --sender A
 
@@ -10,15 +10,12 @@ module P0::m1 { public fun f(): u64 { P0::n::f() } }
 module P0::m2 { public fun f(): u64 { P0::n::f() } }
 
 module P0::n {
-    friend P0::m0;
-    friend P0::m1;
-    friend P0::m2;
-    public fun f(): u64 { 42 }
+    public(package) fun f(): u64 { 42 }
 }
 
 //# create-checkpoint
 
-//# run-graphql --cursors 0 2
+//# run-graphql --cursors {"i":0,"c":1} {"i":2,"c":1}
 
 fragment ModuleFriends on Object {
     asMovePackage {
@@ -110,7 +107,7 @@ fragment ModuleFriends on Object {
     }
 }
 
-//# run-graphql --cursors 0 2
+//# run-graphql --cursors {"i":0,"c":1} {"i":2,"c":1}
 
 fragment ModuleFriends on Object {
     asMovePackage {
@@ -182,12 +179,7 @@ module P0::m2 { public fun f(): u64 { P0::n::f() } }
 module P0::m3 { public fun f(): u64 { P0::n::f() } }
 
 module P0::n {
-    friend P0::m0;
-    friend P0::m1;
-    friend P0::m2;
-    friend P0::m3;
-
-    public fun f(): u64 { 42 }
+    public(package) fun f(): u64 { 42 }
 }
 
 //# create-checkpoint

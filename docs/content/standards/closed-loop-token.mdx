@@ -2,25 +2,51 @@
 title: Closed-Loop Token
 ---
 
-import BalanceTokenCoin from '@site/static/img/balance-token-coin.png';
+Using the Closed-Loop Token standard, you can limit the applications that can use the token and set up custom policies for transfers, spends, and conversions. The [`sui::token` module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/docs/sui-framework/token.md) in the Sui framework defines the standard.
 
-Closed-Loop Token allows its creator to limit applications where the token is used, set up custom policies for transfers, spending and conversions. It is defined in the `sui::token` module and is a part of the Sui Framework.
+## Background and use cases
 
-## Background & Use Cases
+The [Coin standard](./coin.mdx) on Sui is an example of an open-loop system - coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped.mdx), [freely transferable](/concepts/transfers/custom-rules.mdx#the-store-ability-and-transfer-rules) and you can store them in any application. The best real world analogy would be cash - hardly regulated and can be freely used and passed.
 
-The standard Coin implementation on Sui is an example of an open-loop system - Coins are free-flowing, [wrappable](/concepts/object-ownership/wrapped), [freely transferable](/concepts/dynamic-fields/transfers/custom-rules#the-store-ability-and-transfer-rules) and can be stored in any application. The best real world analogy would be "cash" - hardly regulated and can be freely used and passed.
-
-However, some applications require constraining the scope of the token to a specific purpose. For example, a token that can only be used for a specific service, or that can be used only by an authorized account, or one whose accounts can be blocked. A real-world analogy would be a "bank account" - regulated, controlled by the bank and compliant with certain rules and policies.
-
-Specific domains that can benefit from a closed-loop token include:
-
-- **Loyalty Points** - A token that can only be used for a specific service, e.g. for an airline - granted to frequent flyers and used to purchase tickets or upgrades.
-- **Regulatory-Compliant Tokens** - some jurisdictions require certain checks or restrictions on tokens. For example, a token that can only be used by a verified user, or a single operation with a token can have a limit.
-- **In-Game Currency** - similar to "gems" and "diamonds" in mobile games: a token that can only be used in a game and granted to players for their actions or purchased. Tokens of this kind are often not transferrable and minted in predefined amounts to maintain scarcity and game balance.
+Some applications, however, require constraining the scope of the token to a specific purpose. For example, some applications might need a token that you can only use for a specific service, or that an authorized account can only use, or a token that you can block certain accounts from using. A real-world analogy would be a bank account - regulated, bank-controlled, and compliant with certain rules and policies.
 
 ## Difference with Coin
 
-<img className="balance-coin-token" src={BalanceTokenCoin} />
+```mermaid
+flowchart RL
+    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
+        A["Balance&lt;T>
+        Supply&lt;T>"];
+    end
+    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
+        B["Coin&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
+        C["Token&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+    B-- to_balance -->A;
+    C-- to_coin -->B;
+```
+```mermaid
+flowchart LR
+    subgraph "&nbsp;&nbsp;Balance has store { u64 }&nbsp;&nbsp;"
+        A["Balance&lt;T>
+        Supply&lt;T>"];
+    end
+    subgraph "&nbsp;&nbsp;Coin has key, store { Balance }&nbsp;&nbsp;"
+        B["Coin&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+        subgraph "&nbsp;&nbsp;Token has key { Balance }&nbsp;&nbsp;"
+        C["Token&lt;T>
+        TreasuryCap&lt;T>"];
+    end
+    A-- from_balance -->B;
+    B-- from_coin -->C;
+```
+
 
 Unlike Coin, which has `key + store` abilities and thus supports wrapping and public transfers, Token has only the `key` ability and cannot be wrapped, stored as a dynamic field, or freely transferred (unless there's a custom policy for that). Due to this restriction, Token **can only be owned by an account** and can't be stored in an application (however, it can be "spent" - see [Spending section](./closed-loop-token/spending.mdx) section).
 
@@ -32,10 +58,37 @@ struct Coin<phantom T> has key, store { id: UID, balance: Balance<T> }
 struct Token<phantom T> has key { id: UID, balance: Balance<T> }
 ```
 
-## Compliance and Rules
+## Compliance and rules
 
-Closed-Loop Token allows its creator to set up any rules for transfers, spending and conversions. These rules are specified per action in the [TokenPolicy](./closed-loop-token/token-policy.mdx). [Rules](./closed-loop-token/rules.mdx) are custom programmable restrictions which can be used to implement any request authorization / validation logic.
+You can set up any rules for transfers, spends, and conversions for the tokens you create. You specify these rules per action in the [TokenPolicy](./closed-loop-token/token-policy.mdx). [Rules](./closed-loop-token/rules.mdx) are custom programmable restrictions that you can use to implement any request authorization or validation logic.
 
-For example, a policy can set a limit on a transfer - X tokens per operation; or require a user to be verified before spending tokens; or allow spending tokens only on a specific service.
+For example, a policy can set a limit on a transfer - `X` tokens per operation; or require user verification before spending tokens; or allow spending tokens only on a specific service.
 
-Rules can be reused across different policies and applications; and can be freely combined to create complex policies.
+You can reuse rules across different policies and applications; and you can freely combine rules to create complex policies.
+
+## Public actions
+
+Tokens have a set of public and protected actions that you can use to manage the token. Public actions are available to everyone and don't require any authorization. They have similar APIs to coins, but operate on the `Token` type:
+
+- `token::keep` - send a token to the transaction sender
+- `token::join` - join two tokens
+- `token::split` - split a token into two, specify the amount to split
+- `token::zero` - create an empty (zero balance) token
+- `token::destroy_zero` - destroy a token with zero balance
+
+See [Coin Token Comparison](./closed-loop-token/coin-token-comparison.mdx) for coin and token methods comparison.
+
+## Protected actions
+
+Protected actions are ones that issue an [`ActionRequest`](./closed-loop-token/action-request.mdx) - a hot-potato struct that must be resolved for the transaction to succeed. There are three main ways to resolve an `ActionRequest`, most common of which is via the [`TokenPolicy`](./closed-loop-token/token-policy.mdx).
+
+- `token::transfer` - transfer a token to a specified address
+- `token::to_coin` - convert a token to a coin
+- `token::from_coin` - convert a coin to a token
+- `token::spend` - spend a token on a specified address
+
+The previous methods are included in the base implementation, however it is possible to create `ActionRequest`s for custom actions.
+
+## Token policy and rules
+
+Protected actions are disabled by default but you can enable them in a [`TokenPolicy`](./closed-loop-token/token-policy.mdx). Additionally, you can set custom restrictions called [rules](./closed-loop-token/rules.mdx) that a specific action must satisfy for it to succeed.

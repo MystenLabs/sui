@@ -1,14 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses Test=0x0 --accounts A --simulator
+//# init --protocol-version 39 --addresses Test=0x0 --accounts A --simulator
 
 //# publish --sender A
 module Test::boars {
-    use sui::object::{Self, UID};
-    use std::option::{Self, Option};
-    use sui::tx_context::{TxContext, sender};
-    use sui::transfer;
     use sui::package;
     use sui::url::{Self, Url};
     use sui::display;
@@ -18,9 +14,9 @@ module Test::boars {
     const ENotOneTimeWitness: u64 = 0;
 
     /// An OTW to use when creating a Publisher
-    struct BOARS has drop {}
+    public struct BOARS has drop {}
 
-    struct Boar has key, store {
+    public struct Boar has key, store {
         id: UID,
         img_url: String,
         name: String,
@@ -35,11 +31,11 @@ module Test::boars {
         vec: vector<u64>,
     }
 
-    struct Metadata has store {
+    public struct Metadata has store {
         age: u64,
     }
 
-    struct NestedMetadata has store {
+    public struct NestedMetadata has store {
         nested: Metadata
     }
 
@@ -47,8 +43,8 @@ module Test::boars {
         let pub = package::claim(otw, ctx);
         let display = display::new<Boar>(&pub, ctx);
 
-        transfer::public_transfer(display, sender(ctx));
-        transfer::public_transfer(pub, sender(ctx));
+        transfer::public_transfer(display, ctx.sender());
+        transfer::public_transfer(pub, ctx.sender());
     }
 
 
@@ -126,10 +122,10 @@ module Test::boars {
             full_url: url::new_unsafe_from_bytes(b"https://get-a-boar.fullurl.com/"),
             nums: 420,
             bools: true,
-            buyer: sender(ctx),
+            buyer: ctx.sender(),
             vec: vector[1, 2, 3],
         };
-        transfer::transfer(boar, sender(ctx))
+        transfer::transfer(boar, ctx.sender())
     }
 }
 

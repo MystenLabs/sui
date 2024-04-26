@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --addresses P0=0x0 --simulator
+//# init --protocol-version 39 --addresses P0=0x0 --simulator
 
 //# run-graphql
 # Happy path -- valid type, get everything
@@ -122,7 +122,7 @@
 
 //# publish
 module P0::m {
-    struct S0<T> {
+    public struct S0<T> {
         xs: vector<vector<vector<vector<
             vector<vector<vector<vector<
                 T
@@ -130,7 +130,7 @@ module P0::m {
             >>>>
     }
 
-    struct S1<T> {
+    public struct S1<T> {
         xss: S0<S0<S0<S0<S0<S0<S0<S0<
              S0<S0<S0<S0<S0<S0<S0<S0<
                  T

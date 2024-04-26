@@ -1,6 +1,7 @@
 [package]
 name = "dep_on_upgrading_package_transitive"
 version = "0.0.1"
+edition = "2024.beta"
 
 [dependencies]
 package_upgrade_base = { local = "../base_as_dep" }

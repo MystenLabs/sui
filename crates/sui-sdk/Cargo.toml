@@ -33,7 +33,6 @@ shared-crypto.workspace = true
 tracing.workspace = true
 move-core-types.workspace = true
 fastcrypto.workspace = true
-workspace-hack.workspace = true
 
 # NOTE: It's important to keep the above dependency list short.
 # This and the sui-json-rpc-api crate are widely used to develop on Sui and it's valuable

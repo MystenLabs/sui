@@ -25,6 +25,7 @@ use crate::gas_coin::GAS;
 use crate::governance::StakedSui;
 use crate::governance::STAKED_SUI_STRUCT_NAME;
 use crate::governance::STAKING_POOL_MODULE_NAME;
+use crate::id::RESOLVED_SUI_ID;
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::multisig::MultiSigPublicKey;
 use crate::object::{Object, Owner};
@@ -44,10 +45,9 @@ use fastcrypto::encoding::decode_bytes_hex;
 use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
-use fastcrypto_zkp::bn254::utils::big_int_str_to_bytes;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -405,6 +405,34 @@ impl From<MoveObjectType> for TypeTag {
     }
 }
 
+/// Whether this type is valid as a primitive (pure) transaction input.
+pub fn is_primitive_type_tag(t: &TypeTag) -> bool {
+    use TypeTag as T;
+
+    match t {
+        T::Bool | T::U8 | T::U16 | T::U32 | T::U64 | T::U128 | T::U256 | T::Address => true,
+        T::Vector(inner) => is_primitive_type_tag(inner),
+        T::Struct(st) => {
+            let StructTag {
+                address,
+                module,
+                name,
+                type_params: type_args,
+            } = &**st;
+            let resolved_struct = (address, module.as_ident_str(), name.as_ident_str());
+            // is id or..
+            if resolved_struct == RESOLVED_SUI_ID {
+                return true;
+            }
+            // is option of a primitive
+            resolved_struct == RESOLVED_STD_OPTION
+                && type_args.len() == 1
+                && is_primitive_type_tag(&type_args[0])
+        }
+        T::Signer => false,
+    }
+}
+
 /// Type of a Sui object
 #[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub enum ObjectType {
@@ -583,11 +611,7 @@ impl SuiAddress {
         let iss_bytes = inputs.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
-        // this converts an address seed from bigint to bytes, length can be shorter than 32 bytes and left unpadded.
-        hasher.update(
-            big_int_str_to_bytes(inputs.get_address_seed())
-                .map_err(|_| SuiError::InvalidAddress)?,
-        );
+        hasher.update(inputs.get_address_seed().unpadded());
         Ok(SuiAddress(hasher.finalize().digest))
     }
 }
@@ -703,7 +727,10 @@ impl TryFrom<&GenericSignature> for SuiAddress {
             }
             GenericSignature::MultiSig(ms) => Ok(ms.get_pk().into()),
             GenericSignature::MultiSigLegacy(ms) => {
-                Ok(crate::multisig::MultiSig::try_from(ms.clone())?
+                Ok(crate::multisig::MultiSig::try_from(ms.clone())
+                    .map_err(|_| SuiError::InvalidSignature {
+                        error: "Invalid legacy multisig".to_string(),
+                    })?
                     .get_pk()
                     .into())
             }
@@ -888,7 +915,7 @@ impl TxContext {
     }
 
     /// Returns whether the type signature is &mut TxContext, &TxContext, or none of the above.
-    pub fn kind(view: &BinaryIndexedView<'_>, s: &SignatureToken) -> TxContextKind {
+    pub fn kind(view: &CompiledModule, s: &SignatureToken) -> TxContextKind {
         use SignatureToken as S;
         let (kind, s) = match s {
             S::MutableReference(s) => (TxContextKind::Mutable, s),

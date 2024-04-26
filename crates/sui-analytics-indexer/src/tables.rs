@@ -6,7 +6,7 @@ use crate::{ParquetSchema, ParquetValue};
 use serde::Serialize;
 use strum_macros::Display;
 use sui_analytics_indexer_derive::SerializeParquet;
-// use std::collections::BTreeSet;
+use sui_types::dynamic_field::DynamicFieldType;
 
 //
 // Table entries for the analytics database.
@@ -163,19 +163,19 @@ pub(crate) struct ObjectEntry {
     pub(crate) epoch: u64,
     pub(crate) timestamp_ms: u64,
     // owner info
-    pub(crate) owner_type: OwnerType,
+    pub(crate) owner_type: Option<OwnerType>,
     pub(crate) owner_address: Option<String>,
     // object info
     pub(crate) object_status: ObjectStatus,
     pub(crate) initial_shared_version: Option<u64>,
     pub(crate) previous_transaction: String,
     pub(crate) has_public_transfer: bool,
-    pub(crate) storage_rebate: u64,
+    pub(crate) storage_rebate: Option<u64>,
     // raw object bytes
     // pub(crate) bcs: Vec<u8>,
     // We represent them in base64 encoding so they work with the csv.
     // TODO: review and possibly move back to Vec<u8>
-    pub(crate) bcs: String,
+    pub(crate) bcs: Option<String>,
 
     pub(crate) coin_type: Option<String>,
     pub(crate) coin_balance: Option<u64>,
@@ -232,4 +232,40 @@ pub(crate) struct MovePackageEntry {
     pub(crate) bcs: String,
     // txn publishing the package
     pub(crate) transaction_digest: String,
+    pub(crate) package_version: Option<u64>,
+    pub(crate) original_package_id: Option<String>,
+}
+
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct DynamicFieldEntry {
+    // indexes
+    pub(crate) parent_object_id: String,
+    pub(crate) transaction_digest: String,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // df information
+    pub(crate) name: String,
+    pub(crate) bcs_name: String,
+    pub(crate) type_: DynamicFieldType,
+    pub(crate) object_id: String,
+    pub(crate) version: u64,
+    pub(crate) digest: String,
+    pub(crate) object_type: String,
+}
+
+// Object information.
+// A row in the live object table.
+#[derive(Serialize, Clone, SerializeParquet)]
+pub(crate) struct WrappedObjectEntry {
+    // indexes
+    pub(crate) object_id: Option<String>,
+    pub(crate) root_object_id: String,
+    pub(crate) root_object_version: u64,
+    pub(crate) checkpoint: u64,
+    pub(crate) epoch: u64,
+    pub(crate) timestamp_ms: u64,
+    // wrapped info
+    pub(crate) json_path: String,
+    pub(crate) struct_tag: Option<String>,
 }

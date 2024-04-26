@@ -6,7 +6,6 @@ module games::drand_based_scratch_card_tests {
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};
-    use sui::transfer;
 
     use games::drand_based_scratch_card;
 
@@ -20,7 +19,7 @@ module games::drand_based_scratch_card_tests {
         let user1 = @0x0;
         let user2 = @0x1;
 
-        let scenario_val = test_scenario::begin(user1);
+        let mut scenario_val = test_scenario::begin(user1);
         let scenario = &mut scenario_val;
 
         // Create the game and get back the output objects.
@@ -29,12 +28,12 @@ module games::drand_based_scratch_card_tests {
         drand_based_scratch_card::create(coin1, 10, 10, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user1);
         let game = test_scenario::take_immutable<drand_based_scratch_card::Game>(scenario);
-        let reward_val = test_scenario::take_shared<drand_based_scratch_card::Reward>(scenario);
+        let mut reward_val = test_scenario::take_shared<drand_based_scratch_card::Reward>(scenario);
         let drand_final_round = drand_based_scratch_card::end_of_game_round(drand_based_scratch_card::get_game_base_drand_round(&game));
         assert!(drand_final_round == 58810, 1);
 
         // Since everything here is deterministic, we know that the 49th ticket will be a winner.
-        let i = 0;
+        let mut i = 0;
         loop {
             // User2 buys a ticket.
             test_scenario::next_tx(scenario, user2);
@@ -83,7 +82,7 @@ module games::drand_based_scratch_card_tests {
     fun test_play_drand_scratch_card_without_winner() {
         let user1 = @0x0;
 
-        let scenario_val = test_scenario::begin(user1);
+        let mut scenario_val = test_scenario::begin(user1);
         let scenario = &mut scenario_val;
 
         // Create the game and get back the output objects.
@@ -92,7 +91,7 @@ module games::drand_based_scratch_card_tests {
         drand_based_scratch_card::create(coin1, 10, 10, test_scenario::ctx(scenario));
         test_scenario::next_tx(scenario, user1);
         let game = test_scenario::take_immutable<drand_based_scratch_card::Game>(scenario);
-        let reward_val = test_scenario::take_shared<drand_based_scratch_card::Reward>(scenario);
+        let mut reward_val = test_scenario::take_shared<drand_based_scratch_card::Reward>(scenario);
 
         // More 4 epochs forward.
         test_scenario::next_epoch(scenario, user1);

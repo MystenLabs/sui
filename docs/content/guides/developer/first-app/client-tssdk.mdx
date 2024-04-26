@@ -2,12 +2,18 @@
 title: Client App with Sui TypeScript SDK
 ---
 
-This exercise walks you through setting up dApp Kit in a React App, allowing you to connect to wallets, and query data from Sui RPC nodes to display in your app. If you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
+This exercise diverges from the example built in the previous topics in this section. Rather than adding a frontend to the running example, the instruction walks you through setting up dApp Kit in a React App, allowing you to connect to wallets, and query data from Sui RPC nodes to display in your app. You can use it to create your own frontend for the example used previously, but if you want to get a fully functional app up and running quickly, run the following command in a terminal or console to scaffold a new app with all steps in this exercise already implemented:
 
 {@include: ../../../snippets/info-pnpm-required.mdx}
 
 ```bash
 pnpm create @mysten/dapp --template react-client-dapp
+```
+
+or 
+
+```bash
+yarn create @mysten/dapp --template react-client-dapp
 ```
 
 ## What is the Sui TypeScript SDK?
@@ -194,7 +200,7 @@ function OwnedObjects({ address }: { address: string }) {
 		<ul>
 			{data.data.map((object) => (
 				<li key={object.data?.objectId}>
-					<a href={`https://suiexplorer.com/object/${object.data?.objectId}`}>
+					<a href={`https://example-explorer.com/object/${object.data?.objectId}`}>
 						{object.data?.objectId}
 					</a>
 				</li>
@@ -208,7 +214,7 @@ You now have a dApp connected to wallets and can query data from RPC nodes.
 
 ## Related links
 
-The next step from here is to start interacting with Move modules, constructing transaction blocks, and making Move calls. This exercise continues in the end to end example.
+The next step from here is to start interacting with Move modules, constructing transaction blocks, and making Move calls. This exercise continues in the Counter end-to-end example.
 
 - [End-to-End Example](../app-examples/e2e-counter.mdx): Continue this exercise by creating an app.
 - [Sui 101](../sui-101.mdx): Learn the basics of the Sui network and how to interact with on-chain objects using Move.

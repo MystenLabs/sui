@@ -5,7 +5,6 @@
 use crate::module_cache::GetModule;
 use anyhow::{anyhow, bail, Result};
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{SignatureToken, StructDefinition, StructFieldInformation, StructHandleIndex},
     normalized::{Struct, Type},
     CompiledModule,
@@ -376,7 +375,8 @@ impl TypeLayoutBuilder {
                 resolver,
                 depth + 1,
             )?),
-            StructInstantiation(shi, type_actuals) => {
+            StructInstantiation(struct_inst) => {
+                let (shi, type_actuals) = &**struct_inst;
                 let actual_layouts = type_actuals
                     .iter()
                     .map(|t| {

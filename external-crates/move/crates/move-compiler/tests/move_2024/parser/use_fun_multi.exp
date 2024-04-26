@@ -5,5 +5,5 @@ error[E01002]: unexpected token
   │                    ^
   │                    │
   │                    Unexpected '('
-  │                    Expected a type name
+  │                    Expected a type name with no type arguments
 

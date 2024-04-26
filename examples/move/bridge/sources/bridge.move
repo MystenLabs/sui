@@ -2,32 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::bridge {
-    use std::option;
-    use std::option::{none, Option, some};
-    use sui::object::{Self, UID};
+    use std::option::{none, some};
     use sui::address;
     use sui::balance;
     use sui::coin::{Self, Coin};
     use sui::coin::TreasuryCap;
     use sui::event::emit;
     use sui::linked_table::{Self, LinkedTable};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use sui::vec_map::{Self, VecMap};
     use sui::versioned::{Self, Versioned};
 
-    use bridge::chain_ids::{Self, sui_testnet};
+    use bridge::chain_ids::{Self, sui_local_test};
     use bridge::committee::{Self, BridgeCommittee};
     use bridge::message::{Self, BridgeMessage, BridgeMessageKey};
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
 
-    struct Bridge has key {
+    public struct Bridge has key {
         id: UID,
         inner: Versioned
     }
 
-    struct BridgeInner has store {
+    public struct BridgeInner has store {
         bridge_version: u64,
         chain_id: u8,
         // nonce for replay protection
@@ -44,7 +40,7 @@ module bridge::bridge {
     const FREEZE: u8 = 0;
     const UNFREEZE: u8 = 1;
 
-    struct TokenBridgeEvent has copy, drop {
+    public struct TokenBridgeEvent has copy, drop {
         message_type: u8,
         seq_num: u64,
         source_chain: u8,
@@ -55,7 +51,7 @@ module bridge::bridge {
         amount: u64
     }
 
-    struct BridgeRecord has store, drop {
+    public struct BridgeRecord has store, drop {
         message: BridgeMessage,
         verified_signatures: Option<vector<vector<u8>>>,
         claimed: bool
@@ -78,19 +74,19 @@ module bridge::bridge {
 
     const CURRENT_VERSION: u64 = 1;
 
-    struct TokenTransferApproved has copy, drop {
+    public struct TokenTransferApproved has copy, drop {
         message_key: BridgeMessageKey,
     }
 
-    struct TokenTransferClaimed has copy, drop {
+    public struct TokenTransferClaimed has copy, drop {
         message_key: BridgeMessageKey,
     }
 
-    struct TokenTransferAlreadyApproved has copy, drop {
+    public struct TokenTransferAlreadyApproved has copy, drop {
         message_key: BridgeMessageKey,
     }
 
-    struct TokenTransferAlreadyClaimed has copy, drop {
+    public struct TokenTransferAlreadyClaimed has copy, drop {
         message_key: BridgeMessageKey,
     }
 
@@ -101,7 +97,7 @@ module bridge::bridge {
         let bridge_inner = BridgeInner {
             bridge_version: CURRENT_VERSION,
             // TODO: how do we make this configurable?
-            chain_id: sui_testnet(),
+            chain_id: sui_local_test(),
             sequence_nums: vec_map::empty<u8, u64>(),
             committee: committee::create(ctx),
             treasury: treasury,

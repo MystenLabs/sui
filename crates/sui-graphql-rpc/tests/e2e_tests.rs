@@ -3,7 +3,7 @@
 
 #[cfg(feature = "pg_integration")]
 mod tests {
-    use fastcrypto::encoding::Base64;
+    use fastcrypto::encoding::{Base64, Encoding};
     use rand::rngs::StdRng;
     use rand::SeedableRng;
     use serde_json::json;
@@ -16,8 +16,14 @@ mod tests {
     use sui_graphql_rpc::config::ConnectionConfig;
     use sui_graphql_rpc::test_infra::cluster::DEFAULT_INTERNAL_DATA_SOURCE_PORT;
     use sui_types::digests::ChainIdentifier;
+    use sui_types::gas_coin::GAS;
+    use sui_types::transaction::CallArg;
+    use sui_types::transaction::ObjectArg;
+    use sui_types::transaction::TransactionDataAPI;
     use sui_types::DEEPBOOK_ADDRESS;
     use sui_types::SUI_FRAMEWORK_ADDRESS;
+    use sui_types::SUI_FRAMEWORK_PACKAGE_ID;
+    use tempfile::tempdir;
     use tokio::time::sleep;
 
     #[tokio::test]
@@ -31,6 +37,10 @@ mod tests {
 
         let cluster =
             sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -63,6 +73,8 @@ mod tests {
     async fn test_simple_client_simulator_cluster() {
         let rng = StdRng::from_seed([12; 32]);
         let mut sim = Simulacrum::new_with_rng(rng);
+        let data_ingestion_path = tempdir().unwrap().into_path();
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -84,8 +96,12 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            data_ingestion_path,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -105,7 +121,9 @@ mod tests {
     #[serial]
     async fn test_graphql_client_response() {
         let rng = StdRng::from_seed([12; 32]);
+        let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -116,8 +134,12 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            data_ingestion_path,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
+            .await;
 
         let query = r#"
             {
@@ -147,7 +169,9 @@ mod tests {
     #[serial]
     async fn test_graphql_client_variables() {
         let rng = StdRng::from_seed([12; 32]);
+        let data_ingestion_path = tempdir().unwrap().into_path();
         let mut sim = Simulacrum::new_with_rng(rng);
+        sim.set_data_ingestion_path(data_ingestion_path.clone());
 
         sim.create_checkpoint();
         sim.create_checkpoint();
@@ -158,8 +182,12 @@ mod tests {
             DEFAULT_INTERNAL_DATA_SOURCE_PORT,
             Arc::new(sim),
             None,
+            data_ingestion_path,
         )
         .await;
+        cluster
+            .wait_for_checkpoint_catchup(1, Duration::from_secs(10))
+            .await;
 
         let query = r#"{obj1: object(address: $framework_addr) {address}
             obj2: object(address: $deepbook_addr) {address}}"#;
@@ -398,6 +426,127 @@ mod tests {
         assert_eq!(sender_read, sender.to_string());
     }
 
+    #[tokio::test]
+    #[serial]
+    async fn test_zklogin_sig_verify() {
+        use shared_crypto::intent::Intent;
+        use shared_crypto::intent::IntentMessage;
+        use sui_test_transaction_builder::TestTransactionBuilder;
+        use sui_types::base_types::SuiAddress;
+        use sui_types::crypto::Signature;
+        use sui_types::signature::GenericSignature;
+        use sui_types::utils::load_test_vectors;
+        use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
+
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let test_cluster = cluster.validator_fullnode_handle;
+        test_cluster.wait_for_epoch_all_nodes(1).await;
+        test_cluster.wait_for_authenticator_state_update().await;
+
+        // Construct a valid zkLogin transaction data, signature.
+        let (kp, pk_zklogin, inputs) =
+            &load_test_vectors("../sui-types/src/unit_tests/zklogin_test_vectors.json")[1];
+
+        let zklogin_addr = (pk_zklogin).into();
+        let rgp = test_cluster.get_reference_gas_price().await;
+        let gas = test_cluster
+            .fund_address_and_return_gas(rgp, Some(20000000000), zklogin_addr)
+            .await;
+        let tx_data = TestTransactionBuilder::new(zklogin_addr, gas, rgp)
+            .transfer_sui(None, SuiAddress::ZERO)
+            .build();
+        let msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
+        let eph_sig = Signature::new_secure(&msg, kp);
+        let generic_sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
+            inputs.clone(),
+            2,
+            eph_sig.clone(),
+        ));
+
+        // construct all parameters for the query
+        let bytes = Base64::encode(bcs::to_bytes(&tx_data).unwrap());
+        let signature = Base64::encode(generic_sig.as_ref());
+        let intent_scope = "TRANSACTION_DATA";
+        let author = zklogin_addr.to_string();
+
+        // now query the endpoint with a valid tx data bytes and a valid signature with the correct proof for dev env.
+        let query = r#"{ verifyZkloginSignature(bytes: $bytes, signature: $signature, intentScope: $intent_scope, author: $author ) { success, errors}}"#;
+        let variables = vec![
+            GraphqlQueryVariable {
+                name: "bytes".to_string(),
+                ty: "String!".to_string(),
+                value: json!(bytes),
+            },
+            GraphqlQueryVariable {
+                name: "signature".to_string(),
+                ty: "String!".to_string(),
+                value: json!(signature),
+            },
+            GraphqlQueryVariable {
+                name: "intent_scope".to_string(),
+                ty: "ZkLoginIntentScope!".to_string(),
+                value: json!(intent_scope),
+            },
+            GraphqlQueryVariable {
+                name: "author".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!(author),
+            },
+        ];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+
+        // a valid signature with tx bytes returns success as true.
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        tracing::info!("tktkbinding: {:?}", binding);
+        let res = binding.get("verifyZkloginSignature").unwrap();
+        assert_eq!(res.get("success").unwrap(), true);
+
+        // set up an invalid intent scope.
+        let incorrect_intent_scope = "PERSONAL_MESSAGE";
+        let incorrect_variables = vec![
+            GraphqlQueryVariable {
+                name: "bytes".to_string(),
+                ty: "String!".to_string(),
+                value: json!(bytes),
+            },
+            GraphqlQueryVariable {
+                name: "signature".to_string(),
+                ty: "String!".to_string(),
+                value: json!(signature),
+            },
+            GraphqlQueryVariable {
+                name: "intent_scope".to_string(),
+                ty: "ZkLoginIntentScope!".to_string(),
+                value: json!(incorrect_intent_scope),
+            },
+            GraphqlQueryVariable {
+                name: "author".to_string(),
+                ty: "SuiAddress!".to_string(),
+                value: json!(author),
+            },
+        ];
+        //  returns a non-empty errors list in response
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, incorrect_variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("verifyZkloginSignature").unwrap();
+        assert_eq!(res.get("success").unwrap(), false);
+    }
+
     // TODO: add more test cases for transaction execution/dry run in transactional test runner.
     #[tokio::test]
     #[serial]
@@ -421,8 +570,7 @@ mod tests {
             .await
             .transfer_sui(Some(1_000), recipient)
             .build();
-        let tx_bytes = Base64::from_bytes(&bcs::to_bytes(&tx).unwrap());
-        let tx_bytes = tx_bytes.encoded();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
 
         let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
                 transaction {
@@ -491,6 +639,212 @@ mod tests {
             .unwrap();
         assert_eq!(sender_read, sender.to_string());
         assert!(res.get("results").unwrap().is_array());
+    }
+
+    // Test dry run where the transaction kind is provided instead of the full transaction.
+    #[tokio::test]
+    #[serial]
+    async fn test_transaction_dry_run_with_kind() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let recipient = addresses[1];
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            .transfer_sui(Some(1_000), recipient)
+            .build();
+        let tx_kind_bytes = Base64::encode(bcs::to_bytes(&tx.into_kind()).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx, txMeta: {}) {
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                        }
+                    }
+                }
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_kind_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("dryRunTransactionBlock").unwrap();
+
+        let digest = res.get("transaction").unwrap().get("digest").unwrap();
+        // Dry run txn does not have digest
+        assert!(digest.is_null());
+        assert!(res.get("error").unwrap().is_null());
+        let sender_read = res.get("transaction").unwrap().get("sender").unwrap();
+        // Since no transaction metadata is provided, we use 0x0 as the sender while dry running the trasanction
+        // in which case the sender is null.
+        assert!(sender_read.is_null());
+        assert!(res.get("results").unwrap().is_array());
+    }
+
+    // Test that we can handle dry run with failures at execution stage too.
+    #[tokio::test]
+    #[serial]
+    async fn test_dry_run_failed_execution() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        let addresses = cluster.validator_fullnode_handle.wallet.get_addresses();
+
+        let sender = addresses[0];
+        let coin = *cluster
+            .validator_fullnode_handle
+            .wallet
+            .get_gas_objects_owned_by_address(sender, None)
+            .await
+            .unwrap()
+            .get(1)
+            .unwrap();
+        let tx = cluster
+            .validator_fullnode_handle
+            .test_transaction_builder()
+            .await
+            // A split coin that goes nowhere -> execution failure
+            .move_call(
+                SUI_FRAMEWORK_PACKAGE_ID,
+                "coin",
+                "split",
+                vec![
+                    CallArg::Object(ObjectArg::ImmOrOwnedObject(coin)),
+                    CallArg::Pure(bcs::to_bytes(&1000u64).unwrap()),
+                ],
+            )
+            .with_type_args(vec![GAS::type_tag()])
+            .build();
+        let tx_bytes = Base64::encode(bcs::to_bytes(&tx).unwrap());
+
+        let query = r#"{ dryRunTransactionBlock(txBytes: $tx) {
+                results {
+                    mutatedReferences {
+                        input {
+                            __typename
+                        }
+                    }
+                }
+                transaction {
+                    digest
+                    sender {
+                        address
+                    }
+                    gasInput {
+                        gasSponsor {
+                            address
+                        }
+                        gasPrice
+                    }
+                }
+                error
+            }
+        }"#;
+        let variables = vec![GraphqlQueryVariable {
+            name: "tx".to_string(),
+            ty: "String!".to_string(),
+            value: json!(tx_bytes),
+        }];
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, variables, vec![])
+            .await
+            .unwrap();
+        let binding = res.response_body().data.clone().into_json().unwrap();
+        let res = binding.get("dryRunTransactionBlock").unwrap();
+
+        // Execution failed so the results are null.
+        assert!(res.get("results").unwrap().is_null());
+        // Check that the error is not null and contains the error message.
+        assert!(res
+            .get("error")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("UnusedValueWithoutDrop"));
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn test_epoch_data() {
+        let _guard = telemetry_subscribers::TelemetryConfig::new()
+            .with_env()
+            .init();
+
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+
+        let cluster =
+            sui_graphql_rpc::test_infra::cluster::start_cluster(connection_config, None).await;
+
+        cluster
+            .validator_fullnode_handle
+            .trigger_reconfiguration()
+            .await;
+
+        // Wait for the epoch to be indexed
+        sleep(Duration::from_secs(10)).await;
+
+        // Query the epoch
+        let query = "
+            {
+                epoch(id: 0){
+                    liveObjectSetDigest
+                }
+            }
+        ";
+
+        let res = cluster
+            .graphql_client
+            .execute_to_graphql(query.to_string(), true, vec![], vec![])
+            .await
+            .unwrap();
+
+        let binding = res.response_body().data.clone().into_json().unwrap();
+
+        // Check that liveObjectSetDigest is not null
+        assert!(!binding
+            .get("epoch")
+            .unwrap()
+            .get("liveObjectSetDigest")
+            .unwrap()
+            .is_null());
     }
 
     use sui_graphql_rpc::server::builder::tests::*;

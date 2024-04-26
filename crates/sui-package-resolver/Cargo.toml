@@ -20,10 +20,8 @@ tokio.workspace = true
 eyre.workspace = true
 serde.workspace = true
 lru.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
-expect-test.workspace = true
 hyper.workspace = true
 insta.workspace = true
 move-compiler.workspace = true

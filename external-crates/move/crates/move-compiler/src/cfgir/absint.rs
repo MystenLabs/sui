@@ -80,7 +80,7 @@ pub trait TransferFunctions {
 }
 
 pub trait AbstractInterpreter: TransferFunctions {
-    /// Analyze procedure local@function_view starting from pre-state local@initial_state.
+    /// Analyze procedure local@function_context starting from pre-state local@initial_state.
     fn analyze_function(
         &mut self,
         cfg: &dyn CFG,

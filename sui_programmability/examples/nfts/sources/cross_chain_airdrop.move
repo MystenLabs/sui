@@ -6,27 +6,22 @@
 /// support a single chain(Ethereum) right now, but this can be extended to other
 /// chains by adding a chain_id field.
 module nfts::cross_chain_airdrop {
-    use std::vector;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     use nfts::erc721_metadata::{Self, ERC721Metadata, TokenID};
 
     /// The oracle manages one `PerContractAirdropInfo` for each Ethereum contract
-    struct CrossChainAirdropOracle has key {
+    public struct CrossChainAirdropOracle has key {
         id: UID,
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
         managed_contracts: vector<PerContractAirdropInfo>,
     }
 
     /// The address of the source contract
-    struct SourceContractAddress has store, copy {
+    public struct SourceContractAddress has store, copy {
         address: vector<u8>,
     }
 
     /// Contains the Airdrop info for one contract address on Ethereum
-    struct PerContractAirdropInfo has store {
+    public struct PerContractAirdropInfo has store {
         /// A single contract address on Ethereum
         source_contract_address: SourceContractAddress,
 
@@ -39,7 +34,7 @@ module nfts::cross_chain_airdrop {
     }
 
     /// The Sui representation of the original ERC721 NFT on Eth
-    struct ERC721 has key, store {
+    public struct ERC721 has key, store {
         id: UID,
         /// The address of the source contract, e.g, the Ethereum contract address
         source_contract_address: SourceContractAddress,
@@ -90,7 +85,7 @@ module nfts::cross_chain_airdrop {
     }
 
     fun get_or_create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {
-        let index = 0;
+        let mut index = 0;
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
         while (index < vector::length(&oracle.managed_contracts)) {
             let id = vector::borrow_mut(&mut oracle.managed_contracts, index);
@@ -115,7 +110,7 @@ module nfts::cross_chain_airdrop {
 
     fun is_token_claimed(contract: &PerContractAirdropInfo, source_token_id: &TokenID): bool {
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
-        let index = 0;
+        let mut index = 0;
         while (index < vector::length(&contract.claimed_source_token_ids)) {
             let claimed_id = vector::borrow(&contract.claimed_source_token_ids, index);
             if (claimed_id == source_token_id) {
@@ -140,7 +135,7 @@ module nfts::erc721_metadata {
 
     // TODO: add symbol()?
     /// A wrapper type for the ERC721 metadata standard https://eips.ethereum.org/EIPS/eip-721
-    struct ERC721Metadata has store {
+    public struct ERC721Metadata has store {
         /// The token id associated with the source contract on Ethereum
         token_id: TokenID,
         /// A descriptive name for a collection of NFTs in this contract.
@@ -156,7 +151,7 @@ module nfts::erc721_metadata {
     // TODO: replace u64 with u256 once the latter is supported
     // <https://github.com/MystenLabs/fastnft/issues/618>
     /// An ERC721 token ID
-    struct TokenID has store, copy {
+    public struct TokenID has store, copy {
         id: u64,
     }
 

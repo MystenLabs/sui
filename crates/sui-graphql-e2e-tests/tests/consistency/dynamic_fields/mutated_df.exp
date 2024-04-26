@@ -1,0 +1,254 @@
+processed 17 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 14-45:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7828000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 47-47:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'view-object'. lines 49-49:
+Owner: Account Address ( A )
+Version: 2
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+}
+
+task 4 'run'. lines 51-51:
+created: object(4,0), object(4,1), object(4,2)
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 8664000,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5 'view-object'. lines 53-53:
+Owner: Account Address ( A )
+Version: 3
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 0u64,
+}
+
+task 6 'run'. lines 55-55:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7 'view-object'. lines 57-57:
+Owner: Account Address ( A )
+Version: 4
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 42u64,
+}
+
+task 8 'create-checkpoint'. lines 59-59:
+Checkpoint created: 1
+
+task 9 'run-graphql'. lines 61-109:
+Response: {
+  "data": {
+    "latest": {
+      "version": 4,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IGVOdZmlUVN4SIyHw4LwNDtoRQlo4Oieb6gfDzJ7Ex4KAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMw=="
+              },
+              "value": {
+                "json": "df3"
+              }
+            }
+          },
+          {
+            "cursor": "IJklOB3BCBq6pc0A0+IKg+Lhl091XLl2bQK9YbQuhaG6AQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMQ=="
+              },
+              "value": {
+                "json": "df1"
+              }
+            }
+          },
+          {
+            "cursor": "IOyigJ/dZQ+wkkXJQZRB4IoYDc/Zf5s8xYhFoFjKiuMZAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMg=="
+              },
+              "value": {
+                "json": "df2"
+              }
+            }
+          }
+        ]
+      },
+      "dynamicField": {
+        "name": {
+          "bcs": "A2RmMQ=="
+        },
+        "value": {
+          "json": "df1"
+        }
+      }
+    },
+    "df_added": {
+      "version": 3,
+      "dynamicField": {
+        "name": {
+          "bcs": "A2RmMQ=="
+        },
+        "value": {
+          "json": "df1"
+        }
+      }
+    },
+    "before_df_added": {
+      "version": 2,
+      "dynamicField": null
+    }
+  }
+}
+
+task 10 'view-object'. lines 111-111:
+Owner: Account Address ( A )
+Version: 4
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 42u64,
+}
+
+task 11 'run'. lines 113-113:
+mutated: object(0,0), object(2,0), object(4,1)
+gas summary: computation_cost: 1000000, storage_cost: 4484000,  storage_rebate: 4378968, non_refundable_storage_fee: 44232
+
+task 12 'view-object'. lines 115-115:
+Owner: Account Address ( A )
+Version: 5
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 42u64,
+}
+
+task 13 'run'. lines 117-117:
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 14 'view-object'. lines 119-119:
+Owner: Account Address ( A )
+Version: 6
+Contents: Test::M1::Parent {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    count: 84u64,
+}
+
+task 15 'create-checkpoint'. lines 121-121:
+Checkpoint created: 2
+
+task 16 'run-graphql'. lines 123-171:
+Response: {
+  "data": {
+    "latest": {
+      "version": 6,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IGVOdZmlUVN4SIyHw4LwNDtoRQlo4Oieb6gfDzJ7Ex4KAgAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMw=="
+              },
+              "value": {
+                "json": "df3"
+              }
+            }
+          },
+          {
+            "cursor": "IJklOB3BCBq6pc0A0+IKg+Lhl091XLl2bQK9YbQuhaG6AgAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMQ=="
+              },
+              "value": {
+                "json": "df1_mutated"
+              }
+            }
+          },
+          {
+            "cursor": "IOyigJ/dZQ+wkkXJQZRB4IoYDc/Zf5s8xYhFoFjKiuMZAgAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "A2RmMg=="
+              },
+              "value": {
+                "json": "df2"
+              }
+            }
+          }
+        ]
+      },
+      "dynamicField": {
+        "name": {
+          "bcs": "A2RmMQ=="
+        },
+        "value": {
+          "json": "df1_mutated"
+        }
+      }
+    },
+    "df1_mutated": {
+      "version": 5,
+      "dynamicField": {
+        "name": {
+          "bcs": "A2RmMQ=="
+        },
+        "value": {
+          "json": "df1_mutated"
+        }
+      }
+    },
+    "before_df1_mutated": {
+      "version": 4,
+      "dynamicField": {
+        "name": {
+          "bcs": "A2RmMQ=="
+        },
+        "value": {
+          "json": "df1"
+        }
+      }
+    }
+  }
+}

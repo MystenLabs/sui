@@ -27,8 +27,8 @@ mod test {
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
-        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_points,
-        sim_test,
+        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_point_if,
+        register_fail_points, sim_test,
     };
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::tempfile::TempDir;
@@ -38,7 +38,7 @@ mod test {
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_cluster::{TestCluster, TestClusterBuilder};
-    use tracing::{error, info};
+    use tracing::{error, info, trace};
     use typed_store::traits::Map;
 
     struct DeadValidator {
@@ -76,6 +76,18 @@ mod test {
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_with_reconfig_and_correlated_crashes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_if("correlated-crash-after-consensus-commit-boundary", || true);
+        // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
+        //register_fail_point_if("correlated-crash-process-certificate", || true);
+
+        let test_cluster = build_test_cluster(4, 10000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
     }
 
@@ -136,9 +148,11 @@ mod test {
     fn handle_failpoint(
         dead_validator: Arc<Mutex<Option<DeadValidator>>>,
         keep_alive_nodes: HashSet<sui_simulator::task::NodeId>,
+        grace_period: Arc<Mutex<Option<Instant>>>,
         probability: f64,
     ) {
         let mut dead_validator = dead_validator.lock().unwrap();
+        let mut grace_period = grace_period.lock().unwrap();
         let cur_node = sui_simulator::current_simnode_id();
 
         if keep_alive_nodes.contains(&cur_node) {
@@ -155,16 +169,36 @@ mod test {
         // otherwise, possibly fail the current node
         let mut rng = thread_rng();
         if rng.gen_range(0.0..1.0) < probability {
-            error!("Matched probability threshold for failpoint. Failing...");
+            // clear grace period if expired
+            if let Some(t) = *grace_period {
+                if t < Instant::now() {
+                    *grace_period = None;
+                }
+            }
+
+            // check if any node is in grace period
+            if grace_period.is_some() {
+                trace!(?cur_node, "grace period in effect, not failing node");
+                return;
+            }
+
             let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+            let dead_until = Instant::now() + restart_after;
+
+            // Prevent the same node from being restarted again rapidly.
+            let alive_until = dead_until + Duration::from_millis(rng.gen_range(5000..30000));
+            *grace_period = Some(alive_until);
+
+            error!(?cur_node, ?dead_until, ?alive_until, "killing node");
 
             *dead_validator = Some(DeadValidator {
                 node_id: cur_node,
-                dead_until: Instant::now() + restart_after,
+                dead_until,
             });
 
             // must manually release lock before calling kill_current_node, which panics
             // and would poison the lock.
+            drop(grace_period);
             drop(dead_validator);
 
             sui_simulator::task::kill_current_node(Some(restart_after));
@@ -219,13 +253,19 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+
+        let test_cluster = init_test_cluster_builder(4, 1000)
+            .with_num_unpruned_validators(4)
+            .build()
+            .await;
 
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
                 "batch-write-before",
@@ -238,38 +278,75 @@ mod test {
                 "highest-executed-checkpoint",
             ],
             move || {
-                handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.02);
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
+                    0.02,
+                );
             },
         );
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_point_async("crash", move || {
             let dead_validator = dead_validator.clone();
             let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
+            let grace_period_clone = grace_period_clone.clone();
             async move {
-                handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.01);
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
+                    0.01,
+                );
             }
         });
 
-        // Narwhal fail points.
+        // Narwhal & Consensus 2.0 fail points.
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
                 "narwhal-rpc-response",
                 "narwhal-store-before-write",
                 "narwhal-store-after-write",
+                "consensus-store-before-write",
+                "consensus-store-after-write",
+                "consensus-after-propose",
             ],
             move || {
                 handle_failpoint(
                     dead_validator.clone(),
                     keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
                     0.001,
                 );
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+
+        let dead_validator = dead_validator_orig.clone();
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
+        register_fail_point_async("consensus-rpc-response", move || {
+            let dead_validator = dead_validator.clone();
+            let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
+            let grace_period_clone = grace_period_clone.clone();
+            async move {
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
+                    0.001,
+                );
+            }
+        });
+        register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+
+        register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
@@ -281,8 +358,14 @@ mod test {
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
         register_fail_points(&["before-open-new-epoch-store"], move || {
-            handle_failpoint(dead_validator.clone(), keep_alive_nodes.clone(), 1.0);
+            handle_failpoint(
+                dead_validator.clone(),
+                keep_alive_nodes.clone(),
+                grace_period.clone(),
+                1.0,
+            );
         });
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
@@ -390,7 +473,7 @@ mod test {
 
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
-        let mut test_cluster = init_test_cluster_builder(7, 5000)
+        let mut test_cluster = init_test_cluster_builder(4, 15000)
             .with_protocol_version(ProtocolVersion::new(starting_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 starting_version,
@@ -416,34 +499,33 @@ mod test {
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
                 info!("All nodes are at protocol version: {version}");
                 // Let all nodes run for a few epochs at this version.
-                tokio::time::sleep(Duration::from_secs(50)).await;
+                tokio::time::sleep(Duration::from_secs(30)).await;
                 if version == max_ver {
-                    let stake_subsidy_start_epoch = test_cluster
-                        .sui_client()
-                        .governance_api()
-                        .get_latest_sui_system_state()
-                        .await
-                        .unwrap()
-                        .stake_subsidy_start_epoch;
-                    assert_eq!(stake_subsidy_start_epoch, 20);
                     break;
                 }
                 let next_version = version + 1;
                 let new_framework = sui_framework_snapshot::load_bytecode_snapshot(next_version);
-                let new_framework_ref: Vec<_> = match &new_framework {
-                    Ok(f) => f.iter().collect(),
+                let new_framework_ref = match &new_framework {
+                    Ok(f) => Some(f.iter().collect::<Vec<_>>()),
                     Err(_) => {
-                        // The only time where we could not load an existing snapshot is when
-                        // it's the next version to be pushed out, and hence we don't have a
-                        // snapshot yet. This must be the current max version.
-                        assert_eq!(next_version, max_ver);
-                        BuiltInFramework::iter_system_packages().collect()
+                        if next_version == max_ver {
+                            Some(BuiltInFramework::iter_system_packages().collect::<Vec<_>>())
+                        } else {
+                            // Often we want to be able to create multiple protocol config versions
+                            // on main that none have shipped to any production network. In this case,
+                            // some of the protocol versions may not have a framework snapshot.
+                            None
+                        }
                     }
                 };
-                for package in new_framework_ref {
-                    framework_injection::set_override(*package.id(), package.modules().clone());
+                if let Some(new_framework_ref) = new_framework_ref {
+                    for package in new_framework_ref {
+                        framework_injection::set_override(*package.id(), package.modules().clone());
+                    }
+                    info!("Framework injected for next_version {next_version}");
+                } else {
+                    info!("No framework snapshot to inject for next_version {next_version}");
                 }
-                info!("Framework injected for next_version {next_version}");
                 test_cluster
                     .update_validator_supported_versions(
                         SupportedProtocolVersions::new_for_testing(starting_version, next_version),
@@ -454,8 +536,8 @@ mod test {
             finished_clone.store(true, Ordering::SeqCst);
         });
 
-        test_simulated_load(test_init_data_clone, 120).await;
-        for _ in 0..120 {
+        test_simulated_load(test_init_data_clone, 150).await;
+        for _ in 0..150 {
             if finished.load(Ordering::Relaxed) {
                 break;
             }
@@ -463,6 +545,64 @@ mod test {
         }
 
         assert!(finished.load(Ordering::SeqCst));
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_partial_sig_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as f+1 nodes (in this case 3/6) are sending partial signatures.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(3)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-send-partial-signatures", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_dkg_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as nodes are participating in DKG representing
+        // stake equal to 2f+1 PLUS proprotion of stake represented by the
+        // `random_beacon_reduction_allowed_delta` ProtocolConfig option.
+        // In this case we make sure it still works with 5/6 validators.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(1)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-dkg", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await
+    }
+
+    fn handle_bool_failpoint(
+        eligible_nodes: &HashSet<sui_simulator::task::NodeId>, // only given eligible nodes may fail
+        probability: f64,
+    ) -> bool {
+        if !eligible_nodes.contains(&sui_simulator::current_simnode_id()) {
+            return false; // don't fail ineligible nodes
+        }
+        let mut rng = thread_rng();
+        if rng.gen_range(0.0..1.0) < probability {
+            true
+        } else {
+            false
+        }
     }
 
     async fn build_test_cluster(

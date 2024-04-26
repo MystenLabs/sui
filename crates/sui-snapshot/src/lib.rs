@@ -231,11 +231,10 @@ pub async fn setup_db_state(
         new_epoch_start_state,
         *last_checkpoint.digest(),
         &perpetual_db,
+        None,
     )
     .unwrap();
-    perpetual_db
-        .set_epoch_start_configuration(&epoch_start_configuration)
-        .await?;
+    perpetual_db.set_epoch_start_configuration(&epoch_start_configuration)?;
     perpetual_db.insert_root_state_hash(epoch, last_checkpoint.sequence_number, accumulator)?;
     perpetual_db.set_highest_pruned_checkpoint_without_wb(last_checkpoint.sequence_number)?;
     committee_store.insert_new_committee(&next_epoch_committee)?;

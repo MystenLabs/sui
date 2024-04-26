@@ -10,17 +10,15 @@ module a::m {
 
 use sui::dynamic_field;
 use sui::dynamic_object_field;
-use sui::object;
-use sui::tx_context::{sender, TxContext};
 
-struct Obj has key, store {
+public struct Obj has key, store {
     id: object::UID,
 }
 
 entry fun mint(ctx: &mut TxContext) {
-    let parent = object::new(ctx);
+    let mut parent = object::new(ctx);
     dynamic_object_field::add(&mut parent, 0, Obj { id: object::new(ctx) });
-    sui::transfer::public_transfer(Obj { id: parent }, sender(ctx))
+    sui::transfer::public_transfer(Obj { id: parent }, ctx.sender())
 }
 
 entry fun take_and_wrap(obj: &mut Obj) {
@@ -35,7 +33,7 @@ entry fun take_and_destroy(obj: &mut Obj) {
 
 entry fun take_and_take(obj: &mut Obj, ctx: &mut TxContext) {
     let v = dynamic_object_field::remove<u64, Obj>(&mut obj.id, 0);
-    sui::transfer::public_transfer(v, sender(ctx))
+    sui::transfer::public_transfer(v, ctx.sender())
 }
 
 }
