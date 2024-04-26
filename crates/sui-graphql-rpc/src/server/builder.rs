@@ -32,13 +32,14 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
+use axum::extract::{FromRef, FromRequestParts};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
-use axum::{headers::Header, Router};
+use axum::{async_trait, headers::Header, Router};
+use http::request::Parts;
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
@@ -159,6 +160,27 @@ impl FromRef<AppState> for Metrics {
     }
 }
 
+pub struct PathVersion(pub String);
+
+#[async_trait]
+impl<S> FromRequestParts<S> for PathVersion
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let uri = parts.uri.to_string();
+        let version = uri.split("/").last();
+
+        if let Some(version) = version {
+            Ok(PathVersion(version.to_string()))
+        } else {
+            Err((StatusCode::BAD_REQUEST, "Bad route request"))
+        }
+    }
+}
+
 impl ServerBuilder {
     pub fn new(state: AppState) -> Self {
         Self {
@@ -223,6 +245,7 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
+                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))

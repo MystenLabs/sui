@@ -12,11 +12,13 @@ use axum::{
 use crate::{
     config::Version,
     error::{code, graphql_error_response},
+    server::builder::PathVersion,
 };
 
 pub(crate) static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
 
 pub(crate) struct SuiRpcVersion(Vec<u8>, Vec<Vec<u8>>);
+const NAMED_VERSIONS: [&str; 3] = ["beta", "legacy", "stable"];
 
 impl headers::Header for SuiRpcVersion {
     fn name() -> &'static HeaderName {
@@ -49,51 +51,38 @@ impl headers::Header for SuiRpcVersion {
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
 pub(crate) async fn check_version_middleware<B>(
+    PathVersion(req_version): PathVersion,
     State(version): State<Version>,
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    let route = request.uri().path();
-    let parts = route.split_once("/graphql");
-    if let Some((_, rest)) = parts {
-        if let Some(query_version) = rest.strip_prefix('/') {
-            let Ok(req_version) = std::str::from_utf8(query_version.as_bytes()) else {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    graphql_error_response(
-                        code::BAD_REQUEST,
-                        format!("Failed to parse path {route}: Not a UTF8 string."),
-                    ),
-                )
-                    .into_response();
-            };
-
-            let Some((year, month)) = parse_version(req_version) else {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    graphql_error_response(
-                        code::BAD_REQUEST,
-                        format!(
-                            "Failed to parse path {route}: '{req_version}' not a valid \
-                         <YEAR>.<MONTH> version.",
-                        ),
-                    ),
-                )
-                    .into_response();
-            };
-
-            if year != version.year || month != version.month {
-                return (
-                    StatusCode::MISDIRECTED_REQUEST,
-                    graphql_error_response(
-                        code::INTERNAL_SERVER_ERROR,
-                        format!("Version '{req_version}' not supported."),
-                    ),
-                )
-                    .into_response();
-            }
-        }
+    if NAMED_VERSIONS.contains(&req_version.as_str()) || req_version.is_empty() {
+        return next.run(request).await;
+    }
+    let Some((year, month)) = parse_version(&req_version) else {
+        return (
+            StatusCode::BAD_REQUEST,
+            graphql_error_response(
+                code::BAD_REQUEST,
+                format!(
+                    "Failed to parse path version. Expected either a `beta | legacy | stable` \
+                    version or <YEAR>.<MONTH> version.",
+                ),
+            ),
+        )
+            .into_response();
     };
+
+    if year != version.year || month != version.month {
+        return (
+            StatusCode::MISDIRECTED_REQUEST,
+            graphql_error_response(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Version '{req_version}' not supported."),
+            ),
+        )
+            .into_response();
+    }
 
     next.run(request).await
 }
@@ -166,6 +155,8 @@ mod tests {
 
         Router::new()
             .route("/", get(|| async { "Hello, Versioning!" }))
+            .route("/:version", get(|| async { "Hello, Versioning!" }))
+            .route("/graphql", get(|| async { "Hello, Versioning!" }))
             .route("/graphql/:version", get(|| async { "Hello, Versioning!" }))
             .layer(middleware::from_fn_with_state(
                 state.version,
@@ -182,19 +173,13 @@ mod tests {
     }
 
     fn version_request(version: &str) -> Request<Body> {
+        if version.is_empty() {
+            return plain_request();
+        }
         Request::builder()
             .uri(format!("/graphql/{}", version))
             .body(Body::empty())
             .unwrap()
-    }
-
-    fn header_request(kvps: &[(&HeaderName, &[u8])]) -> Request<Body> {
-        let mut request = plain_request();
-        let headers = request.headers_mut();
-        for (name, value) in kvps {
-            headers.append(*name, HeaderValue::from_bytes(value).unwrap());
-        }
-        request
     }
 
     async fn response_body(response: Response) -> String {
@@ -209,10 +194,7 @@ mod tests {
         let major_version = format!("{}.{}", version.year, version.month);
         let service = service();
         let response = service
-            .oneshot(header_request(&[(
-                &VERSION_HEADER,
-                major_version.as_bytes(),
-            )]))
+            .oneshot(version_request(&major_version))
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -223,11 +205,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn named_version() {
+        let version = Version::for_testing();
+        let service = service();
+        for named_version in NAMED_VERSIONS {
+            let response = service
+                .clone()
+                .oneshot(version_request(named_version))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers().get(&VERSION_HEADER),
+                Some(&HeaderValue::from_static(version.full))
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn default_version() {
         let version = Version::for_testing();
         let service = service();
         let response = service.oneshot(plain_request()).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(&VERSION_HEADER),
+            Some(&HeaderValue::from_static(version.full))
+        );
+    }
 
+    #[tokio::test]
+    async fn wrong_path() {
+        let version = Version::for_testing();
+        let service = service();
+        let response = service.oneshot(version_request("")).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
@@ -281,7 +292,7 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Failed to parse path /graphql/not-a-version: 'not-a-version' not a valid <YEAR>.<MONTH> version.",
+                  "message": "Failed to parse path version. Expected either a `beta | legacy | stable` version or <YEAR>.<MONTH> version.",
                   "extensions": {
                     "code": "BAD_REQUEST"
                   }
