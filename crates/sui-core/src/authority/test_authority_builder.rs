@@ -18,7 +18,7 @@ use std::sync::Arc;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
-use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
+use sui_config::node::AuthorityOverloadConfig;
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
@@ -35,7 +35,6 @@ use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::object::Object;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::transaction::VerifiedTransaction;
-use tempfile::tempdir;
 
 #[derive(Default, Clone)]
 pub struct TestAuthorityBuilder<'a> {
@@ -185,9 +184,13 @@ impl<'a> TestAuthorityBuilder<'a> {
                 .unwrap()
             }
         };
-        let keypair = self
-            .node_keypair
-            .unwrap_or_else(|| local_network_config.validator_configs()[0].protocol_key_pair());
+        let mut config = local_network_config.validator_configs()[0].clone();
+        let keypair = if let Some(keypair) = self.node_keypair {
+            keypair
+        } else {
+            config.protocol_key_pair()
+        };
+
         let secret = Arc::pin(keypair.copy());
         let name: AuthorityName = secret.public().into();
         let registry = Registry::new();
@@ -270,6 +273,12 @@ impl<'a> TestAuthorityBuilder<'a> {
             // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
             pruning_config.set_killswitch_tombstone_pruning(true);
         }
+
+        config.transaction_deny_config = transaction_deny_config;
+        config.certificate_deny_config = certificate_deny_config;
+        config.authority_overload_config = authority_overload_config;
+        config.authority_store_pruning_config = pruning_config;
+
         let state = AuthorityState::new(
             name,
             secret,
@@ -281,17 +290,10 @@ impl<'a> TestAuthorityBuilder<'a> {
             index_store,
             checkpoint_store,
             &registry,
-            pruning_config,
             genesis.objects(),
             &DBCheckpointConfig::default(),
-            ExpensiveSafetyCheckConfig::new_enable_all(),
-            transaction_deny_config,
-            certificate_deny_config,
+            config,
             usize::MAX,
-            StateDebugDumpConfig {
-                dump_file_directory: Some(tempdir().unwrap().into_path()),
-            },
-            authority_overload_config,
             ArchiveReaderBalancer::default(),
         )
         .await;
