@@ -575,8 +575,7 @@ impl RandomnessManager {
             .expect("typed_store should not fail");
         if let Some(last_round_timestamp) = last_round_timestamp {
             if commit_timestamp - last_round_timestamp
-                < self
-                    .epoch_store()?
+                < epoch_store
                     .protocol_config()
                     .random_beacon_min_round_interval_ms()
             {
