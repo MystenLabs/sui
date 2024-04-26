@@ -8,9 +8,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, VerifiedBlock},
-    commit::{
-        load_committed_subdag_from_store, CommitAPI, CommitIndex, CommittedSubDag,
-    },
+    commit::{load_committed_subdag_from_store, CommitAPI, CommitIndex, CommittedSubDag},
     context::Context,
     dag_state::DagState,
     error::{ConsensusError, ConsensusResult},
