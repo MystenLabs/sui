@@ -2090,13 +2090,65 @@ impl TransactionDataV1 {}
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData(Vec<SenderSignedTransaction>);
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SenderSignedTransaction {
     pub intent_message: IntentMessage<TransactionData>,
     /// A list of signatures signed by all transaction participants.
     /// 1. non participant signature must not be present.
     /// 2. signature order does not matter.
     pub tx_signatures: Vec<GenericSignature>,
+}
+
+impl Serialize for SenderSignedTransaction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(Serialize)]
+        #[serde(rename = "SenderSignedTransaction")]
+        struct SignedTxn<'a> {
+            intent_message: &'a IntentMessage<TransactionData>,
+            tx_signatures: &'a Vec<GenericSignature>,
+        }
+
+        if self.intent_message().intent != Intent::sui_transaction() {
+            return Err(serde::ser::Error::custom("invalid Intent for Transaction"));
+        }
+
+        let txn = SignedTxn {
+            intent_message: self.intent_message(),
+            tx_signatures: &self.tx_signatures,
+        };
+        txn.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SenderSignedTransaction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename = "SenderSignedTransaction")]
+        struct SignedTxn {
+            intent_message: IntentMessage<TransactionData>,
+            tx_signatures: Vec<GenericSignature>,
+        }
+
+        let SignedTxn {
+            intent_message,
+            tx_signatures,
+        } = Deserialize::deserialize(deserializer)?;
+
+        if intent_message.intent != Intent::sui_transaction() {
+            return Err(serde::de::Error::custom("invalid Intent for Transaction"));
+        }
+
+        Ok(Self {
+            intent_message,
+            tx_signatures,
+        })
+    }
 }
 
 impl SenderSignedTransaction {
@@ -2117,16 +2169,16 @@ impl SenderSignedTransaction {
         }
         Ok(mapping)
     }
+
+    pub fn intent_message(&self) -> &IntentMessage<TransactionData> {
+        &self.intent_message
+    }
 }
 
 impl SenderSignedData {
-    pub fn new(
-        tx_data: TransactionData,
-        intent: Intent,
-        tx_signatures: Vec<GenericSignature>,
-    ) -> Self {
+    pub fn new(tx_data: TransactionData, tx_signatures: Vec<GenericSignature>) -> Self {
         Self(vec![SenderSignedTransaction {
-            intent_message: IntentMessage::new(intent, tx_data),
+            intent_message: IntentMessage::new(Intent::sui_transaction(), tx_data),
             tx_signatures,
         }])
     }
@@ -2135,13 +2187,9 @@ impl SenderSignedData {
         &self.0
     }
 
-    pub fn new_from_sender_signature(
-        tx_data: TransactionData,
-        intent: Intent,
-        tx_signature: Signature,
-    ) -> Self {
+    pub fn new_from_sender_signature(tx_data: TransactionData, tx_signature: Signature) -> Self {
         Self(vec![SenderSignedTransaction {
-            intent_message: IntentMessage::new(intent, tx_data),
+            intent_message: IntentMessage::new(Intent::sui_transaction(), tx_data),
             tx_signatures: vec![tx_signature.into()],
         }])
     }
@@ -2185,7 +2233,7 @@ impl SenderSignedData {
     }
 
     pub fn intent_message(&self) -> &IntentMessage<TransactionData> {
-        &self.inner().intent_message
+        self.inner().intent_message()
     }
 
     pub fn tx_signatures(&self) -> &[GenericSignature] {
@@ -2407,11 +2455,7 @@ impl Transaction {
     }
 
     pub fn from_generic_sig_data(data: TransactionData, signatures: Vec<GenericSignature>) -> Self {
-        Self::new(SenderSignedData::new(
-            data,
-            Intent::sui_transaction(),
-            signatures,
-        ))
+        Self::new(SenderSignedData::new(data, signatures))
     }
 
     /// Returns the Base64 encoded tx_bytes
@@ -2532,7 +2576,6 @@ impl VerifiedTransaction {
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(
                     data,
-                    Intent::sui_transaction(),
                     Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                         .unwrap()
                         .into(),

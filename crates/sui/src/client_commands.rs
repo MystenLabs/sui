@@ -110,7 +110,6 @@ macro_rules! serialize_or_execute {
             )?;
             let sender_signed_data = SenderSignedData::new_from_sender_signature(
                 $tx_data,
-                Intent::sui_transaction(),
                 signature,
             );
             if $serialize_signed {
