@@ -68,6 +68,9 @@ module deepbook::clob_test {
     #[test] fun test_swap_exact_base_for_quote_min_size(
     ) { let _ = test_swap_exact_base_for_quote_min_size_(scenario()); }
 
+    #[test, expected_failure(abort_code = clob::EInvalidQuantity)] fun test_place_order_less_than_min_size_error(
+    ) { let _ = test_place_order_less_than_min_size_error_(scenario()); }
+
     #[test] fun test_inject_and_match_taker_bid() { let _ = test_inject_and_match_taker_bid_(scenario()); }
 
     #[test] fun test_inject_and_match_taker_bid_with_skip_self_matching() { let _ = test_inject_and_match_taker_bid_with_skipping_self_matching_(scenario()); }
@@ -3099,6 +3102,58 @@ module deepbook::clob_test {
         end(test)
     }
 
+    // This scenario tests a user trying to place an order that's greater than lot_size but less than min_size.
+    fun test_place_order_less_than_min_size_error_(mut test: Scenario): TransactionEffects {
+        let (alice, _) = people();
+        let owner: address = @0xF;
+        let min_size = 100000000; // 0.1 SUI
+        // setup pool and custodian
+        next_tx(&mut test, owner);
+        {
+            clob::setup_test_with_tick_min(0, 0, 1 * FLOAT_SCALING, min_size, &mut test, owner);
+        };
+        next_tx(&mut test, alice);
+        {
+            mint_account_cap_transfer(alice, test::ctx(&mut test));
+        };
+        next_tx(&mut test, alice);
+        {
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_sender<AccountCap>(&test);
+            let account_cap_user = account_owner(&account_cap);
+            let (base_custodian, quote_custodian) = clob::borrow_mut_custodian(&mut pool);
+            custodian::deposit(base_custodian, mint_for_testing<SUI>(10000000, ctx(&mut test)), account_cap_user);
+            custodian::deposit(quote_custodian, mint_for_testing<USD>(10000000, ctx(&mut test)), account_cap_user);
+            test::return_shared(pool);
+            test::return_to_sender<AccountCap>(&test, account_cap);
+        };
+
+        // alice places limit orders
+        next_tx(&mut test, alice);
+        {
+            let mut pool = test::take_shared<Pool<SUI, USD>>(&test);
+            let account_cap = test::take_from_address<AccountCap>(&test, alice);
+            let clock = test::take_shared<Clock>(&test);
+            clob::place_limit_order<SUI, USD>(
+                &mut pool,
+                CLIENT_ID_ALICE,
+                5 * FLOAT_SCALING,
+                10000000,
+                CANCEL_OLDEST,
+                true,
+                TIMESTAMP_INF,
+                0,
+                &clock,
+                &account_cap,
+                ctx(&mut test)
+            );
+            test::return_shared(pool);
+            test::return_shared(clock);
+            test::return_to_address<AccountCap>(alice, account_cap);
+        };
+        end(test)
+    }
+
     fun test_swap_exact_base_for_quote_min_size_(mut test: Scenario): TransactionEffects {
         let (alice, bob) = people();
         let owner = @0xF;
@@ -3164,8 +3219,8 @@ module deepbook::clob_test {
                 MAX_PRICE,
                 0,
             );
-            // bob's 0.5 USDC fills the minimum of 0.1 SUI and an additional 2 lots, 0.0002 at $5  1 lot of SUI at $5.
-            assert!(base_quantity_filled == 1 * min_size + (lot_size * 2), 0);
+            // bob's 0.5 USDC fills the minimum of 0.1 SUI and an additional 20 lots, 0.0002 at $5.
+            assert!(base_quantity_filled == 1 * min_size + (20 * lot_size), 0);
             // all of bob's quote asset was filled.
             assert!(quote_quantity_filled == 500_100_000, 0);
             test::return_shared(pool);

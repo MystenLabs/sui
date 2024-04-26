@@ -58,7 +58,7 @@ module deepbook::clob_v2 {
     const MIN_ASK_ORDER_ID: u64 = 1 << 63;
     const MIN_PRICE: u64 = 0;
     const MAX_PRICE: u64 = (1u128 << 64 - 1) as u64;
-    // Trade quantities must be in multiples of 1000. The lot_size in pool is used as min_size.
+    // Trade quantities must be in multiples of 1000. The lot_size in the pool structs is used as min_size.
     const LOT_SIZE: u64 = 1000;
     #[test_only]
     const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
