@@ -752,8 +752,8 @@ mod test {
         storage::{mem_store::MemStore, WriteBatch},
     };
 
-    #[test]
-    fn test_get_blocks() {
+    #[tokio::test]
+    async fn test_get_blocks() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -858,8 +858,8 @@ mod test {
             .is_empty());
     }
 
-    #[test]
-    fn test_ancestors_at_uncommitted_round() {
+    #[tokio::test]
+    async fn test_ancestors_at_uncommitted_round() {
         // Initialize DagState.
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1015,8 +1015,8 @@ mod test {
         );
     }
 
-    #[test]
-    fn test_contains_blocks_in_cache_or_store() {
+    #[tokio::test]
+    async fn test_contains_blocks_in_cache_or_store() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
@@ -1074,8 +1074,8 @@ mod test {
         assert_eq!(result, expected.clone());
     }
 
-    #[test]
-    fn test_contains_cached_block_at_slot() {
+    #[tokio::test]
+    async fn test_contains_cached_block_at_slot() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
@@ -1138,9 +1138,9 @@ mod test {
         }
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "Attempted to check for slot A8 that is <= the last evicted round 8")]
-    fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
+    async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
@@ -1179,8 +1179,8 @@ mod test {
             dag_state.contains_cached_block_at_slot(Slot::new(8, AuthorityIndex::new_for_test(0)));
     }
 
-    #[test]
-    fn test_get_blocks_in_cache_or_store() {
+    #[tokio::test]
+    async fn test_get_blocks_in_cache_or_store() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -1237,8 +1237,8 @@ mod test {
         assert_eq!(result, expected);
     }
 
-    #[test]
-    fn test_flush_and_recovery() {
+    #[tokio::test]
+    async fn test_flush_and_recovery() {
         let num_authorities: u32 = 4;
         let (context, _) = Context::new_for_test(num_authorities as usize);
         let context = Arc::new(context);
@@ -1335,8 +1335,8 @@ mod test {
         assert_eq!(dag_state.last_commit_index(), 5);
     }
 
-    #[test]
-    fn test_get_cached_blocks() {
+    #[tokio::test]
+    async fn test_get_cached_blocks() {
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = 5;
 
@@ -1390,8 +1390,8 @@ mod test {
         assert_eq!(cached_blocks[0].round(), 12);
     }
 
-    #[test]
-    fn test_get_cached_last_block_per_authority() {
+    #[tokio::test]
+    async fn test_get_cached_last_block_per_authority() {
         // GIVEN
         const CACHED_ROUNDS: Round = 2;
         let (mut context, _) = Context::new_for_test(4);
@@ -1439,11 +1439,11 @@ mod test {
         assert_eq!(last_blocks[3].round(), 2);
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(
         expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
     )]
-    fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
+    async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
         // GIVEN
         const CACHED_ROUNDS: Round = 1;
         let (mut context, _) = Context::new_for_test(4);
@@ -1486,8 +1486,8 @@ mod test {
         dag_state.get_last_cached_block_per_authority(end_round);
     }
 
-    #[test]
-    fn test_last_quorum() {
+    #[tokio::test]
+    async fn test_last_quorum() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1538,8 +1538,8 @@ mod test {
         }
     }
 
-    #[test]
-    fn test_last_block_for_authority() {
+    #[tokio::test]
+    async fn test_last_block_for_authority() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);

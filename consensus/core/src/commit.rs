@@ -559,8 +559,8 @@ mod tests {
         storage::{mem_store::MemStore, WriteBatch},
     };
 
-    #[test]
-    fn test_new_subdag_from_commit() {
+    #[tokio::test]
+    async fn test_new_subdag_from_commit() {
         let store = Arc::new(MemStore::new());
         let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
@@ -632,7 +632,7 @@ mod tests {
         assert_eq!(subdag.commit_index, commit_index);
     }
 
-    #[test]
+    #[tokio::test]
     fn test_commit_range() {
         let range1 = CommitRange::new(1..6);
         let range2 = CommitRange::new(2..6);

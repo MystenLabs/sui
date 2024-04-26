@@ -385,8 +385,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_reputation_scores_update_metrics() {
+    #[tokio::test]
+    async fn test_reputation_scores_update_metrics() {
         let context = Arc::new(Context::new_for_test(4).0);
         let scores = ReputationScores::new(CommitRange::new(1..300), vec![1, 2, 4, 3]);
         scores.update_metrics(context.clone());
