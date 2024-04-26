@@ -8,7 +8,7 @@ use tempfile::tempdir;
 
 use std::{sync::Arc, time::Duration};
 
-use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use broadcast::{Receiver, Sender};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
@@ -229,7 +229,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
                 system_state,
                 Default::default(),
                 authority_state.get_object_store(),
-                None,
+                EpochFlag::default_flags_for_new_epoch(&authority_state.config),
             )
             .unwrap(),
             &executor,

@@ -22,6 +22,7 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
@@ -444,19 +445,9 @@ impl SuiNode {
         let is_genesis = perpetual_tables
             .database_is_empty()
             .expect("Database read should not fail at init.");
-        let store = AuthorityStore::open(
-            perpetual_tables,
-            genesis,
-            config.indirect_objects_threshold,
-            config
-                .expensive_safety_check_config
-                .enable_epoch_sui_conservation_check(),
-            &prometheus_registry,
-        )
-        .await?;
 
-        let cache_traits =
-            build_execution_cache(&config.execution_cache, &prometheus_registry, &store);
+        let store =
+            AuthorityStore::open(perpetual_tables, genesis, &config, &prometheus_registry).await?;
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -467,6 +458,9 @@ impl SuiNode {
             .expect("EpochStartConfiguration of the current epoch must exist");
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
+
+        let cache_traits =
+            build_execution_cache(&epoch_start_configuration, &prometheus_registry, &store);
 
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
@@ -1681,7 +1675,7 @@ impl SuiNode {
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             state.get_object_store().as_ref(),
-            None,
+            EpochFlag::default_flags_for_new_epoch(&state.config),
         )
         .expect("EpochStartConfiguration construction cannot fail");
 

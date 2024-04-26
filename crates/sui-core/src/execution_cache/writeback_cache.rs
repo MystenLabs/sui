@@ -638,6 +638,11 @@ impl WritebackCache {
                 .get(tx)
                 .map(|o| o.clone())
             else {
+                // this case can only happen when a node is running with PassthroughCache, and
+                // then restarts with WritebackCache.
+                if self.is_tx_already_executed(tx).unwrap() {
+                    continue;
+                }
                 panic!("Attempt to commit unknown transaction {:?}", tx);
             };
             all_outputs.push(outputs);
@@ -650,13 +655,14 @@ impl WritebackCache {
             .write_transaction_outputs(epoch, &all_outputs)
             .await?;
 
-        for (tx_digest, outputs) in digests.iter().zip(all_outputs.into_iter()) {
+        for outputs in all_outputs.iter() {
+            let tx_digest = outputs.transaction.digest();
             assert!(self
                 .dirty
                 .pending_transaction_writes
                 .remove(tx_digest)
                 .is_some());
-            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, &outputs);
+            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
         }
 
         Ok(())
