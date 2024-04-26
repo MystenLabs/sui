@@ -20,7 +20,7 @@ use typed_store::{
 use super::{CommitInfo, Store, WriteBatch};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, Slot, VerifiedBlock},
-    commit::{CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
     error::{ConsensusError, ConsensusResult},
 };
 
@@ -31,14 +31,12 @@ pub(crate) struct RocksDBStore {
     /// A secondary index that orders refs first by authors.
     digests_by_authorities: DBMap<(AuthorityIndex, Round, BlockDigest), ()>,
     /// Maps commit index to Commit.
-    commits: DBMap<CommitRef, Bytes>,
+    commits: DBMap<(CommitIndex, CommitDigest), Bytes>,
     /// Collects votes on commits.
     /// TODO: batch multiple votes into a single row.
     commit_votes: DBMap<(CommitIndex, CommitDigest, BlockRef), ()>,
-    /// Stores the latest values of a few properties. CommitInfo contains aggregated
-    /// CommitInfo across all previous commits. This info is keyed off the last commit
-    /// that is included in the range of these commits.
-    commit_info: DBMap<CommitRef, CommitInfo>,
+    /// Stores info related to Commit that helps recovery.
+    commit_info: DBMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
 impl RocksDBStore {
@@ -82,9 +80,9 @@ impl RocksDBStore {
         let (blocks, digests_by_authorities, commits, commit_votes, commit_info) = reopen!(&rocksdb,
             Self::BLOCKS_CF;<(Round, AuthorityIndex, BlockDigest), bytes::Bytes>,
             Self::DIGESTS_BY_AUTHORITIES_CF;<(AuthorityIndex, Round, BlockDigest), ()>,
-            Self::COMMITS_CF;<CommitRef, Bytes>,
+            Self::COMMITS_CF;<(CommitIndex, CommitDigest), Bytes>,
             Self::COMMIT_VOTES_CF;<(CommitIndex, CommitDigest, BlockRef), ()>,
-            Self::COMMIT_INFO_CF;<CommitRef, CommitInfo>
+            Self::COMMIT_INFO_CF;<(CommitIndex, CommitDigest), CommitInfo>
         );
 
         Self {
@@ -131,14 +129,20 @@ impl Store for RocksDBStore {
 
         for commit in write_batch.commits {
             batch
-                .insert_batch(&self.commits, [(commit.reference(), commit.serialized())])
+                .insert_batch(
+                    &self.commits,
+                    [((commit.index(), commit.digest()), commit.serialized())],
+                )
                 .map_err(ConsensusError::RocksDBFailure)?;
         }
 
         // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
         if let Some((commit_ref, last_commit_info)) = write_batch.last_commit_info {
             batch
-                .insert_batch(&self.commit_info, [(commit_ref, last_commit_info)])
+                .insert_batch(
+                    &self.commit_info,
+                    [((commit_ref.index, commit_ref.digest), last_commit_info)],
+                )
                 .map_err(ConsensusError::RocksDBFailure)?;
         }
 
@@ -252,27 +256,27 @@ impl Store for RocksDBStore {
         let Some(result) = self.commits.safe_iter().skip_to_last().next() else {
             return Ok(None);
         };
-        let (commit_ref, serialized) = result?;
+        let ((_index, digest), serialized) = result?;
         let commit = TrustedCommit::new_trusted(
             bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedCommit)?,
             serialized,
         );
-        assert_eq!(commit.digest(), commit_ref.digest);
+        assert_eq!(commit.digest(), digest);
         Ok(Some(commit))
     }
 
     fn scan_commits(&self, range: CommitRange) -> ConsensusResult<Vec<TrustedCommit>> {
         let mut commits = vec![];
         for result in self.commits.safe_range_iter((
-            Included(CommitRef::new(range.start(), CommitDigest::MIN)),
-            Excluded(CommitRef::new(range.end(), CommitDigest::MIN)),
+            Included((range.start(), CommitDigest::MIN)),
+            Excluded((range.end(), CommitDigest::MIN)),
         )) {
-            let (commit_ref, serialized) = result?;
+            let ((_index, digest), serialized) = result?;
             let commit = TrustedCommit::new_trusted(
                 bcs::from_bytes(&serialized).map_err(ConsensusError::MalformedCommit)?,
                 serialized,
             );
-            assert_eq!(commit.digest(), commit_ref.digest);
+            assert_eq!(commit.digest(), digest);
             commits.push(commit);
         }
         Ok(commits)
@@ -294,7 +298,7 @@ impl Store for RocksDBStore {
         let Some(result) = self.commit_info.safe_iter().skip_to_last().next() else {
             return Ok(None);
         };
-        let (commit_ref, commit_info) = result.map_err(ConsensusError::RocksDBFailure)?;
-        Ok(Some((commit_ref, commit_info)))
+        let (key, commit_info) = result.map_err(ConsensusError::RocksDBFailure)?;
+        Ok(Some((CommitRef::new(key.0, key.1), commit_info)))
     }
 }

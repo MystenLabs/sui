@@ -12,7 +12,7 @@ use parking_lot::RwLock;
 use super::{CommitInfo, Store, WriteBatch};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
 };
 
@@ -24,9 +24,9 @@ pub(crate) struct MemStore {
 struct Inner {
     blocks: BTreeMap<(Round, AuthorityIndex, BlockDigest), VerifiedBlock>,
     digests_by_authorities: BTreeSet<(AuthorityIndex, Round, BlockDigest)>,
-    commits: BTreeMap<CommitRef, TrustedCommit>,
+    commits: BTreeMap<(CommitIndex, CommitDigest), TrustedCommit>,
     commit_votes: BTreeSet<(CommitIndex, CommitDigest, BlockRef)>,
-    commit_info: BTreeMap<CommitRef, CommitInfo>,
+    commit_info: BTreeMap<(CommitIndex, CommitDigest), CommitInfo>,
 }
 
 impl MemStore {
@@ -67,12 +67,16 @@ impl Store for MemStore {
         }
 
         for commit in write_batch.commits {
-            inner.commits.insert(commit.reference(), commit);
+            inner
+                .commits
+                .insert((commit.index(), commit.digest()), commit);
         }
 
         // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
         if let Some((commit_ref, last_commit_info)) = write_batch.last_commit_info {
-            inner.commit_info.insert(commit_ref, last_commit_info);
+            inner
+                .commit_info
+                .insert((commit_ref.index, commit_ref.digest), last_commit_info);
         }
 
         Ok(())
@@ -177,8 +181,8 @@ impl Store for MemStore {
         let inner = self.inner.read();
         let mut commits = vec![];
         for (_, commit) in inner.commits.range((
-            Included(CommitRef::new(range.start(), CommitDigest::MIN)),
-            Excluded(CommitRef::new(range.end(), CommitDigest::MIN)),
+            Included((range.start(), CommitDigest::MIN)),
+            Excluded((range.end(), CommitDigest::MIN)),
         )) {
             commits.push(commit.clone());
         }
@@ -203,6 +207,6 @@ impl Store for MemStore {
         Ok(inner
             .commit_info
             .last_key_value()
-            .map(|(k, v)| (*k, v.clone())))
+            .map(|(k, v)| (CommitRef::new(k.0, k.1), v.clone())))
     }
 }

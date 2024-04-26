@@ -636,12 +636,8 @@ impl DagState {
         let last_commit_info = if commits.is_empty() {
             None
         } else {
-            let last_commit_ref = self
-                .last_commit
-                .as_ref()
-                .expect("Last commit should be set if we have commits to write to store.")
-                .reference();
-            // TODO: Replace this with calculated repuation scores
+            let last_commit_ref = commits.last().as_ref().unwrap().reference();
+            // TODO: Replace this with calculated reputation scores
             let commit_info = CommitInfo::new(
                 self.last_committed_rounds.clone(),
                 ReputationScores::default(),
