@@ -39,18 +39,17 @@ export function CreateCounter({
     signAndExecute(
       {
         transactionBlock: txb,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
       },
       {
-        onSuccess: (tx) => {
+        onSuccess: ({ digest }) => {
           client
             .waitForTransactionBlock({
-              digest: tx.digest,
+              digest: digest,
+              options: {
+                showEffects: true,
+              },
             })
-            .then(() => {
+            .then((tx) => {
               const objectId = tx.effects?.created?.[0]?.reference?.objectId;
 
               if (objectId) {

@@ -4,7 +4,7 @@
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { TransactionBlock } from '@mysten/sui/transactions';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { Mock } from 'vitest';
+import { expect, type Mock } from 'vitest';
 
 import {
 	WalletFeatureNotSupportedError,
@@ -61,9 +61,11 @@ describe('useSignAndExecuteTransactionBlock', () => {
 		});
 
 		const suiClient = new SuiClient({ url: getFullnodeUrl('localnet') });
-		const executeTransactionBlock = vi.spyOn(suiClient, 'executeTransactionBlock');
+		const mockSignMessageFeature = mockWallet.features['sui:signAndExecuteTransactionBlock:v2'];
+		const signAndExecuteTransactionBlock = mockSignMessageFeature!
+			.signAndExecuteTransactionBlock as Mock;
 
-		executeTransactionBlock.mockReturnValueOnce(Promise.resolve({ digest: '123' }));
+		signAndExecuteTransactionBlock.mockReturnValueOnce({ digest: '123' });
 
 		const wrapper = createWalletProviderContextWrapper({}, suiClient);
 		const { result } = renderHook(
@@ -97,9 +99,10 @@ describe('useSignAndExecuteTransactionBlock', () => {
 		expect(result.current.useSignAndExecuteTransactionBlock.data).toStrictEqual({
 			digest: '123',
 		});
-		expect(suiClient.executeTransactionBlock).toHaveBeenCalledWith({
-			transactionBlock: 'abc',
-			signature: '123',
+		expect(signAndExecuteTransactionBlock).toHaveBeenCalledWith({
+			account: mockWallet.accounts[0],
+			chain: 'sui:testnet',
+			transactionBlock: await new TransactionBlock().toJSON(),
 		});
 
 		act(() => unregister());

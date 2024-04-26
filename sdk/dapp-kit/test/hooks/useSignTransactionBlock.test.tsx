@@ -72,11 +72,11 @@ describe('useSignTransactionBlock', () => {
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 
-		const signTransactionBlockFeature = mockWallet.features['sui:signTransactionBlock'];
+		const signTransactionBlockFeature = mockWallet.features['sui:signTransactionBlock:v2'];
 		const signTransactionBlockMock = signTransactionBlockFeature!.signTransactionBlock as Mock;
 
 		signTransactionBlockMock.mockReturnValueOnce({
-			transactionBlockBytes: 'abc',
+			bytes: 'abc',
 			signature: '123',
 		});
 
@@ -87,7 +87,7 @@ describe('useSignTransactionBlock', () => {
 
 		await waitFor(() => expect(result.current.signTransactionBlock.isSuccess).toBe(true));
 		expect(result.current.signTransactionBlock.data).toStrictEqual({
-			transactionBlockBytes: 'abc',
+			bytes: 'abc',
 			signature: '123',
 		});
 

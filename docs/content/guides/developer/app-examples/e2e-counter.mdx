@@ -12,7 +12,7 @@ If haven't followed Client App with Sui TypeScript SDK, run the following comman
 pnpm create @mysten/dapp --template react-client-dapp
 ```
 
-or 
+or
 
 ```bash
 yarn create @mysten/dapp --template react-client-dapp
@@ -223,18 +223,22 @@ function create() {
     signAndExecute(
       {
         transactionBlock: txb,
-        options: {
-          // We need the effects to get the objectId of the created counter object
-          showEffects: true,
-        },
       },
       {
-        onSuccess: (tx) => {
-          // The first created object in this TransactionBlock should be the new Counter
-          const objectId = tx.effects?.created?.[0]?.reference?.objectId;
-          if (objectId) {
-            props.onCreated(objectId);
-          }
+        onSuccess: ({ digest }) => {
+			suiClient.waitForTransactionBlock({
+				digest,
+				options: {
+					showEffects: true,
+				}
+			})
+			.then((ex) => {
+				// The first created object in this TransactionBlock should be the new Counter
+				const objectId = tx.effects?.created?.[0]?.reference?.objectId;
+				if (objectId) {
+					props.onCreated(objectId);
+				}
+			});
         },
       },
     );
@@ -269,17 +273,17 @@ function create() {
 	signAndExecute(
 		{
 			transactionBlock: txb,
-			options: {
-				showEffects: true,
-			},
 		},
 		{
-			onSuccess: (tx) => {
+			onSuccess: ({ digest }) => {
 				suiClient
 					.waitForTransactionBlock({
-						digest: tx.digest,
+						digest,
+						options: {
+							showEffects: true,
+						},
 					})
-					.then(() => {
+					.then((tx) => {
 						const objectId = tx.effects?.created?.[0]?.reference?.objectId;
 						if (objectId) {
 							props.onCreated(objectId);

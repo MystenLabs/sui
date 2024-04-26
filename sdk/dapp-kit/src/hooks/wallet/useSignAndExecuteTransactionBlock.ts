@@ -128,6 +128,12 @@ export function useSignAndExecuteTransactionBlock({
 				},
 			});
 
+			console.log({
+				rawEffects,
+				balanceChanges,
+				digest,
+			});
+
 			return {
 				digest,
 				bytes,
