@@ -658,7 +658,9 @@ impl ValidatorService {
         proxy_ip: Option<SocketAddr>,
     ) -> Result<(), tonic::Status> {
         if let Some(traffic_controller) = &self.traffic_controller {
-            if !traffic_controller.check(connection_ip, proxy_ip).await {
+            let connection = connection_ip.map(|ip| ip.ip());
+            let proxy = proxy_ip.map(|ip| ip.ip());
+            if !traffic_controller.check(connection, proxy).await {
                 // Entity in blocklist
                 if traffic_controller.dry_run_mode() {
                     debug!(
