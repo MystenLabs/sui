@@ -8,7 +8,9 @@ module std::ascii {
     public use fun std::string::from_ascii as String.to_string;
 
     /// An invalid ASCII character was encountered when creating an ASCII string.
-    const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
+    const EInvalidASCIICharacter: u64 = 0x10000;
+    /// An invalid index was encountered when creating a substring.
+    const EInvalidIndex: u64 = 0x10001;
 
     /// The `String` struct holds a vector of bytes that all represent
     /// valid ASCII characters. Note that these ASCII characters may not all
@@ -26,7 +28,7 @@ module std::ascii {
 
     /// Convert a `byte` into a `Char` that is checked to make sure it is valid ASCII.
     public fun char(byte: u8): Char {
-        assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
+        assert!(is_valid_char(byte), EInvalidASCIICharacter);
         Char { byte }
     }
 
@@ -34,7 +36,7 @@ module std::ascii {
     /// `bytes` contains non-ASCII characters.
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
-       assert!(x.is_some(), EINVALID_ASCII_CHARACTER);
+       assert!(x.is_some(), EInvalidASCIICharacter);
        x.destroy_some()
     }
 
@@ -85,6 +87,17 @@ module std::ascii {
         string.bytes.append(other.bytes)
     }
 
+    /// Copy the slice of the `string` from `i` to `j` into a new `String`.
+    public fun sub_string(string: &String, mut i: u64, j: u64): String {
+        assert!(i <= string.length() && j <= string.length() && i <= j, EInvalidIndex);
+        let mut bytes = vector[];
+        while (i < j) {
+            bytes.push_back(string.bytes[i]);
+            i = i + 1;
+        };
+        String { bytes }
+    }
+
     /// Get the inner bytes of the `string` as a reference
     public fun as_bytes(string: &String): &vector<u8> {
        &string.bytes
@@ -113,6 +126,11 @@ module std::ascii {
     public fun is_printable_char(byte: u8): bool {
        byte >= 0x20 && // Disallow metacharacters
        byte <= 0x7E // Don't allow DEL metacharacter
+    }
+
+    /// Returns `true` if `string` is empty.
+    public fun is_empty(string: &String): bool {
+        string.bytes.is_empty()
     }
 
     /// Returns `true` if `string` is an alphanumeric ASCII string.

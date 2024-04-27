@@ -4,7 +4,7 @@
 #[allow(implicit_const_copy)]
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
-    use std::ascii::{Self, String};
+    use std::ascii::String;
     use std::address;
 
     /// ASCII Character code for the `:` (colon) symbol.
@@ -94,7 +94,7 @@ module std::type_name {
             i = i + 1;
         };
 
-        ascii::string(addr_bytes)
+        addr_bytes.to_ascii_string()
     }
 
     /// Get name of the module.
@@ -117,7 +117,7 @@ module std::type_name {
             }
         };
 
-        ascii::string(module_name)
+        module_name.to_ascii_string()
     }
 
     /// Convert `self` into its inner String
