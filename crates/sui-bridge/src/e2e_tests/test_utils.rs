@@ -39,6 +39,7 @@ use sui_types::digests::TransactionDigest;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
+use sui_types::SUI_BRIDGE_OBJECT_ID;
 use tokio::join;
 use tokio::task::JoinHandle;
 
@@ -309,7 +310,7 @@ impl BridgeTestCluster {
             .read_api()
             .query_transaction_blocks(
                 SuiTransactionBlockResponseQuery {
-                    filter: Some(TransactionFilter::InputObject(BRIDGE_PACKAGE_ID)),
+                    filter: Some(TransactionFilter::InputObject(SUI_BRIDGE_OBJECT_ID)),
                     options: Some(SuiTransactionBlockResponseOptions::full_content()),
                 },
                 self.bridge_tx_cursor,
