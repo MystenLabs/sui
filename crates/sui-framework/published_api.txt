@@ -3718,6 +3718,9 @@ pop_char
 length
 	public fun
 	0x1::ascii
+append
+	public fun
+	0x1::ascii
 as_bytes
 	public fun
 	0x1::ascii
@@ -3731,6 +3734,9 @@ is_valid_char
 	public fun
 	0x1::ascii
 is_printable_char
+	public fun
+	0x1::ascii
+is_alphanumeric
 	public fun
 	0x1::ascii
 BitVector

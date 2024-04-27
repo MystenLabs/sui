@@ -120,4 +120,21 @@ module std::ascii_tests {
             i = i + 1;
         };
     }
+
+    #[test]
+    fun test_append() {
+        let mut str = b"hello".to_ascii_string();
+        str.append(b" world".to_ascii_string());
+
+        assert!(str == b"hello world".to_ascii_string(), 0);
+    }
+
+    #[test]
+    fun test_is_alphanumeric() {
+        assert!(b"ahelloz".to_ascii_string().is_alphanumeric(), 0);
+        assert!(b"AHELLOZ".to_ascii_string().is_alphanumeric(), 3);
+        assert!(b"0123".to_ascii_string().is_alphanumeric(), 4);
+        assert!(!b"!".to_ascii_string().is_alphanumeric(), 2);
+        assert!(!b" ".to_ascii_string().is_alphanumeric(), 1);
+    }
 }
