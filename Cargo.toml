@@ -75,6 +75,7 @@ members = [
   "consensus/core",
   "crates/anemo-benchmark",
   "crates/data-transform",
+  "crates/move-package-analyzer",
   "crates/mysten-common",
   "crates/mysten-metrics",
   "crates/mysten-network",
