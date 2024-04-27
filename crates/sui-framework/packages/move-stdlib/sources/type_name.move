@@ -84,17 +84,7 @@ module std::type_name {
 
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
-        let str_bytes = self.name.as_bytes();
-        let mut addr_bytes = vector[];
-        let mut i = 0;
-
-        // Read `len` bytes from the type name and push them to addr_bytes.
-        while (i < len) {
-            addr_bytes.push_back(str_bytes[i]);
-            i = i + 1;
-        };
-
-        addr_bytes.to_ascii_string()
+        self.name.sub_string(0, len)
     }
 
     /// Get name of the module.
