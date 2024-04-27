@@ -24,7 +24,7 @@ const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
 /// by calling the `acknowledge` method. If the guard is dropped without getting acknowledged then
 /// that means the transaction has not been included to a block and the consensus is shutting down.
 pub(crate) struct TransactionGuard {
-    transaction: Transaction,
+    transactions: Vec<Transaction>,
     included_in_block_ack: oneshot::Sender<()>,
 }
 
@@ -62,26 +62,55 @@ impl TransactionConsumer {
         let mut acks = Vec::new();
         let mut total_size: usize = 0;
 
-        if let Some(t) = self.pending_transaction.take() {
+        // Handle one batch of incoming transactions from TransactionGuard.
+        // Returns the remaining txs as a new TransactionGuard, if the batch breaks any limit.
+        let mut handle_txs = |t: TransactionGuard| -> Option<TransactionGuard> {
             // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
-            total_size += t.transaction.data().len();
-            transactions.push(t.transaction);
-            acks.push(t.included_in_block_ack);
+            let remaining_txs: Vec<_> = t
+                .transactions
+                .into_iter()
+                .filter_map(|tx| {
+                    if (total_size + tx.data().len()) as u64 > self.max_consumed_bytes_per_request {
+                        // Adding this tx would exceed the size limit, cache it for the next pull.
+                        Some(tx)
+                    } else if transactions.len() as u64
+                        >= self.max_consumed_transactions_per_request
+                    {
+                        // Adding this tx would exceed the number of transactions limit, cache it for the next pull.
+                        Some(tx)
+                    } else {
+                        total_size += tx.data().len();
+                        transactions.push(tx);
+                        None
+                    }
+                })
+                .collect();
+
+            if remaining_txs.is_empty() {
+                // The batch has been fully consumed, register its ack.
+                // In case a batch gets splitted, ack shall only be sent when the last transaction is included in the block.
+                acks.push(t.included_in_block_ack);
+                None
+            } else {
+                // If we went over the any limit while processing the batch, return the remainings.
+                // It is the caller's responsibility to cache it for the next pull.
+                Some(TransactionGuard {
+                    transactions: remaining_txs,
+                    included_in_block_ack: t.included_in_block_ack,
+                })
+            }
+        };
+
+        if let Some(t) = self.pending_transaction.take() {
+            self.pending_transaction = handle_txs(t);
         }
 
-        while let Ok(t) = self.tx_receiver.try_recv() {
-            total_size += t.transaction.data().len();
-
-            // If we went over the max size with this transaction, just cache it for the next pull.
-            if total_size as u64 > self.max_consumed_bytes_per_request {
-                self.pending_transaction = Some(t);
-                break;
-            }
-
-            transactions.push(t.transaction);
-            acks.push(t.included_in_block_ack);
-
-            if transactions.len() as u64 >= self.max_consumed_transactions_per_request {
+        // Until we have reached the limit for the pull.
+        // We may have already reached limit in the first iteration above, in which case we stop immediately.
+        while self.pending_transaction.is_none() {
+            if let Ok(t) = self.tx_receiver.try_recv() {
+                self.pending_transaction = handle_txs(t);
+            } else {
                 break;
             }
         }
@@ -147,8 +176,8 @@ impl TransactionClient {
 
     /// Submits a transaction to be sequenced. The method returns when the transaction has been successfully
     /// included to the next proposed block.
-    pub async fn submit(&self, transaction: Vec<u8>) -> Result<(), ClientError> {
-        let included_in_block = self.submit_no_wait(transaction).await?;
+    pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<(), ClientError> {
+        let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
             .await
             .tap_err(|e| warn!("Transaction acknowledge failed with {:?}", e))
@@ -162,24 +191,29 @@ impl TransactionClient {
     /// has not been included to any block.
     pub(crate) async fn submit_no_wait(
         &self,
-        transaction: Vec<u8>,
+        transactions: Vec<Vec<u8>>,
     ) -> Result<oneshot::Receiver<()>, ClientError> {
         let (included_in_block_ack_send, included_in_block_ack_receive) = oneshot::channel();
-        if transaction.len() as u64 > self.max_transaction_size {
-            return Err(ClientError::OversizedTransaction(
-                transaction.len() as u64,
-                self.max_transaction_size,
-            ));
+        for transaction in &transactions {
+            if transaction.len() as u64 > self.max_transaction_size {
+                return Err(ClientError::OversizedTransaction(
+                    transaction.len() as u64,
+                    self.max_transaction_size,
+                ));
+            }
         }
 
         let t = TransactionGuard {
-            transaction: Transaction::new(transaction),
+            transactions: transactions
+                .into_iter()
+                .map(|x| Transaction::new(x))
+                .collect(),
             included_in_block_ack: included_in_block_ack_send,
         };
         self.sender
             .send(t)
             .await
-            .tap_err(|e| error!("Submit transaction failed with {:?}", e))
+            .tap_err(|e| error!("Submit transactions failed with {:?}", e))
             .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))?;
         Ok(included_in_block_ack_receive)
     }
@@ -244,7 +278,7 @@ mod tests {
             let transaction =
                 bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
             let w = client
-                .submit_no_wait(transaction)
+                .submit_no_wait(vec![transaction])
                 .await
                 .expect("Shouldn't submit successfully transaction");
             included_in_block_waiters.push(w);
@@ -295,7 +329,7 @@ mod tests {
             let transaction =
                 bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
             let _w = client
-                .submit_no_wait(transaction)
+                .submit_no_wait(vec![transaction])
                 .await
                 .expect("Shouldn't submit successfully transaction");
         }
@@ -343,6 +377,97 @@ mod tests {
         for (i, t) in all_transactions.iter().enumerate() {
             let t: String = bcs::from_bytes(t.data()).unwrap();
             assert_eq!(format!("transaction {i}").to_string(), t);
+        }
+    }
+
+    #[tokio::test]
+    async fn submit_large_batch_and_ack() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_consensus_max_transaction_size_bytes(100);
+            config.set_consensus_max_transactions_in_block_bytes(100);
+            config
+        });
+
+        let context = Arc::new(Context::new_for_test(4).0);
+        let (client, tx_receiver) = TransactionClient::new(context.clone());
+        let mut consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
+        let mut all_receivers = Vec::new();
+        // submit a few transactions individually.
+        for i in 0..10 {
+            let transaction =
+                bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
+            let w = client
+                .submit_no_wait(vec![transaction])
+                .await
+                .expect("Shouldn't submit successfully transaction");
+            all_receivers.push(w);
+        }
+
+        // construct a over-size-limit batch and submit, which should get broken into smaller ones.
+        {
+            let transactions: Vec<_> = (10..32)
+                .map(|i| {
+                    bcs::to_bytes(&format!("transaction {i}"))
+                        .expect("Serialization should not fail.")
+                })
+                .collect();
+            let w = client
+                .submit_no_wait(transactions)
+                .await
+                .expect("Shouldn't submit successfully transaction");
+            all_receivers.push(w);
+        }
+
+        // submit another individual transaction.
+        {
+            let i = 32;
+            let transaction =
+                bcs::to_bytes(&format!("transaction {i}")).expect("Serialization should not fail.");
+            let w = client
+                .submit_no_wait(vec![transaction])
+                .await
+                .expect("Shouldn't submit successfully transaction");
+            all_receivers.push(w);
+        }
+
+        // now pull the transactions from the consumer.
+        // we expect all transactions are fetched in order, not missing any, and not exceeding the size limit.
+        let mut all_transactions = Vec::new();
+        let mut all_acks: Vec<Box<dyn FnOnce()>> = Vec::new();
+        while !consumer.is_empty() {
+            let (transactions, ack_transactions) = consumer.next();
+
+            let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
+            assert!(
+                total_size
+                    <= context
+                        .protocol_config
+                        .consensus_max_transactions_in_block_bytes(),
+                "Should have fetched transactions up to {}",
+                context
+                    .protocol_config
+                    .consensus_max_transactions_in_block_bytes()
+            );
+
+            all_transactions.extend(transactions);
+            all_acks.push(ack_transactions);
+        }
+
+        // verify the number of transactions as well as the content.
+        assert_eq!(all_transactions.len(), 33);
+        for (i, t) in all_transactions.iter().enumerate() {
+            let t: String = bcs::from_bytes(t.data()).unwrap();
+            assert_eq!(format!("transaction {i}").to_string(), t);
+        }
+
+        // now acknowledge the inclusion of all transactions.
+        for ack in all_acks {
+            ack();
+        }
+
+        // expect all receivers to be resolved.
+        for w in all_receivers {
+            assert!(w.await.is_ok());
         }
     }
 }

@@ -74,22 +74,25 @@ impl LazyMysticetiClient {
 impl SubmitToConsensus for LazyMysticetiClient {
     async fn submit_to_consensus(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &Vec<ConsensusTransaction>,
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         // TODO(mysticeti): confirm comment is still true
         // The retrieved TransactionClient can be from the past epoch. Submit would fail after
         // Mysticeti shuts down, so there should be no correctness issue.
         let client = self.get().await;
-        let tx_bytes = bcs::to_bytes(&transaction).expect("Serialization should not fail.");
+        let transactions_bytes = transactions
+            .iter()
+            .map(|t| bcs::to_bytes(t).expect("Serializing consensus transaction cannot fail"))
+            .collect::<Vec<_>>();
         client
             .as_ref()
             .expect("Client should always be returned")
-            .submit(tx_bytes)
+            .submit(transactions_bytes)
             .await
             .tap_err(|r| {
                 // Will be logged by caller as well.
-                warn!("Submit transaction failed with: {:?}", r);
+                warn!("Submit transactions failed with: {:?}", r);
             })
             .map_err(|err| SuiError::FailedToSubmitToConsensus(err.to_string()))?;
         Ok(())

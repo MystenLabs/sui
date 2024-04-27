@@ -752,10 +752,12 @@ mod tests {
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
                 .expect_submit_to_consensus()
-                .withf(move |transaction: &ConsensusTransaction, _epoch_store| {
-                    tx_consensus.try_send(transaction.clone()).unwrap();
-                    true
-                })
+                .withf(
+                    move |transactions: &Vec<ConsensusTransaction>, _epoch_store| {
+                        tx_consensus.try_send(transactions.clone()).unwrap();
+                        true
+                    },
+                )
                 .returning(|_, _| Ok(()));
 
             let state = TestAuthorityBuilder::new()
@@ -792,8 +794,9 @@ mod tests {
         for randomness_manager in randomness_managers.iter_mut() {
             randomness_manager.start_dkg().unwrap();
 
-            let dkg_message = rx_consensus.recv().await.unwrap();
-            match dkg_message.kind {
+            let mut dkg_message = rx_consensus.recv().await.unwrap();
+            assert!(dkg_message.len() == 1);
+            match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG message deserialization should not fail");
@@ -823,8 +826,9 @@ mod tests {
         // Generate and distribute Confirmations.
         let mut dkg_confirmations = Vec::new();
         for _ in 0..randomness_managers.len() {
-            let dkg_confirmation = rx_consensus.recv().await.unwrap();
-            match dkg_confirmation.kind {
+            let mut dkg_confirmation = rx_consensus.recv().await.unwrap();
+            assert!(dkg_confirmation.len() == 1);
+            match dkg_confirmation.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgConfirmation(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Confirmation<EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG confirmation deserialization should not fail");
@@ -873,10 +877,12 @@ mod tests {
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
                 .expect_submit_to_consensus()
-                .withf(move |transaction: &ConsensusTransaction, _epoch_store| {
-                    tx_consensus.try_send(transaction.clone()).unwrap();
-                    true
-                })
+                .withf(
+                    move |transactions: &Vec<ConsensusTransaction>, _epoch_store| {
+                        tx_consensus.try_send(transactions.clone()).unwrap();
+                        true
+                    },
+                )
                 .returning(|_, _| Ok(()));
 
             let state = TestAuthorityBuilder::new()
@@ -913,8 +919,9 @@ mod tests {
         for randomness_manager in randomness_managers.iter_mut() {
             randomness_manager.start_dkg().unwrap();
 
-            let dkg_message = rx_consensus.recv().await.unwrap();
-            match dkg_message.kind {
+            let mut dkg_message = rx_consensus.recv().await.unwrap();
+            assert!(dkg_message.len() == 1);
+            match dkg_message.remove(0).kind {
                 ConsensusTransactionKind::RandomnessDkgMessage(_, bytes) => {
                     let msg: fastcrypto_tbls::dkg::Message<PkG, EncG> = bcs::from_bytes(&bytes)
                         .expect("DKG message deserialization should not fail");
