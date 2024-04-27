@@ -4,8 +4,6 @@
 /// The `ASCII` module defines basic string and char newtypes in Move that verify
 /// that characters are valid ASCII, and that strings consist of only valid ASCII characters.
 module std::ascii {
-    use std::option::{Self, Option};
-
     // Allows calling `.to_string()` to convert an `ascii::String` into as `string::String`
     public use fun std::string::from_ascii as String.to_string;
 
@@ -67,16 +65,24 @@ module std::ascii {
         true
     }
 
+    /// Push a `Char` to the end of the `string`.
     public fun push_char(string: &mut String, char: Char) {
         string.bytes.push_back(char.byte);
     }
 
+    /// Pop a `Char` from the end of the `string`.
     public fun pop_char(string: &mut String): Char {
         Char { byte: string.bytes.pop_back() }
     }
 
+    /// Returns the length of the `string` in bytes.
     public fun length(string: &String): u64 {
         string.as_bytes().length()
+    }
+
+    /// Append the `other` string to the end of `string`.
+    public fun append(string: &mut String, other: String) {
+        string.bytes.append(other.bytes)
     }
 
     /// Get the inner bytes of the `string` as a reference
@@ -96,14 +102,33 @@ module std::ascii {
        byte
     }
 
-    /// Returns `true` if `b` is a valid ASCII character. Returns `false` otherwise.
+    /// Returns `true` if `b` is a valid ASCII character.
+    /// Returns `false` otherwise.
     public fun is_valid_char(b: u8): bool {
        b <= 0x7F
     }
 
-    /// Returns `true` if `byte` is an printable ASCII character. Returns `false` otherwise.
+    /// Returns `true` if `byte` is an printable ASCII character.
+    /// Returns `false` otherwise.
     public fun is_printable_char(byte: u8): bool {
        byte >= 0x20 && // Disallow metacharacters
        byte <= 0x7E // Don't allow DEL metacharacter
+    }
+
+    /// Returns `true` if `string` is an alphanumeric ASCII string.
+    /// Returns `false` otherwise.
+    public fun is_alphanumeric(string: &String): bool {
+        let (mut i, len) = (0, string.length());
+        while (i < len) {
+            let byte = string.bytes[i];
+            let is_alphanumeric =
+                (byte >= 0x41 && byte <= 0x5A) || // A-Z
+                (byte >= 0x61 && byte <= 0x7A) || // a-z
+                (byte >= 0x30 && byte <= 0x39); // 0-9
+            if (!is_alphanumeric) return false;
+            i = i + 1;
+        };
+
+        true
     }
 }

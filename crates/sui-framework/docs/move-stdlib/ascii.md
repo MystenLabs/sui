@@ -16,14 +16,17 @@ that characters are valid ASCII, and that strings consist of only valid ASCII ch
 -  [Function `push_char`](#0x1_ascii_push_char)
 -  [Function `pop_char`](#0x1_ascii_pop_char)
 -  [Function `length`](#0x1_ascii_length)
+-  [Function `append`](#0x1_ascii_append)
 -  [Function `as_bytes`](#0x1_ascii_as_bytes)
 -  [Function `into_bytes`](#0x1_ascii_into_bytes)
 -  [Function `byte`](#0x1_ascii_byte)
 -  [Function `is_valid_char`](#0x1_ascii_is_valid_char)
 -  [Function `is_printable_char`](#0x1_ascii_is_printable_char)
+-  [Function `is_alphanumeric`](#0x1_ascii_is_alphanumeric)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
+<b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
 </code></pre>
 
 
@@ -228,6 +231,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 ## Function `push_char`
 
+Push a <code><a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a></code> to the end of the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_push_char">push_char</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, char: <a href="../move-stdlib/ascii.md#0x1_ascii_Char">ascii::Char</a>)
@@ -252,6 +256,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 ## Function `pop_char`
 
+Pop a <code><a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a></code> from the end of the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_pop_char">pop_char</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_Char">ascii::Char</a>
@@ -276,6 +281,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 ## Function `length`
 
+Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> in bytes.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): u64
@@ -289,6 +295,31 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): u64 {
     <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>().<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>()
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_ascii_append"></a>
+
+## Function `append`
+
+Append the <code>other</code> string to the end of <code><a href="../move-stdlib/string.md#0x1_string">string</a></code>.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, other: <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, other: <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>) {
+    <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(other.bytes)
 }
 </code></pre>
 
@@ -377,7 +408,8 @@ Unpack the <code>char</code> into its underlying byte.
 
 ## Function `is_valid_char`
 
-Returns <code><b>true</b></code> if <code>b</code> is a valid ASCII character. Returns <code><b>false</b></code> otherwise.
+Returns <code><b>true</b></code> if <code>b</code> is a valid ASCII character.
+Returns <code><b>false</b></code> otherwise.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(b: u8): bool
@@ -402,7 +434,8 @@ Returns <code><b>true</b></code> if <code>b</code> is a valid ASCII character. R
 
 ## Function `is_printable_char`
 
-Returns <code><b>true</b></code> if <code>byte</code> is an printable ASCII character. Returns <code><b>false</b></code> otherwise.
+Returns <code><b>true</b></code> if <code>byte</code> is an printable ASCII character.
+Returns <code><b>false</b></code> otherwise.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte: u8): bool
@@ -417,6 +450,43 @@ Returns <code><b>true</b></code> if <code>byte</code> is an printable ASCII char
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte: u8): bool {
    byte &gt;= 0x20 && // Disallow metacharacters
    <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x7E // Don't allow DEL metacharacter
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x1_ascii_is_alphanumeric"></a>
+
+## Function `is_alphanumeric`
+
+Returns <code><b>true</b></code> if <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> is an alphanumeric ASCII string.
+Returns <code><b>false</b></code> otherwise.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_alphanumeric">is_alphanumeric</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_is_alphanumeric">is_alphanumeric</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): bool {
+    <b>let</b> (<b>mut</b> i, len) = (0, <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>());
+    <b>while</b> (i &lt; len) {
+        <b>let</b> byte = <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i];
+        <b>let</b> is_alphanumeric =
+            (byte &gt;= 0x41 && <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x5A) || // A-Z
+            (byte &gt;= 0x61 && <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x7A) || // a-z
+            (byte &gt;= 0x30 && <a href="../move-stdlib/ascii.md#0x1_ascii_byte">byte</a> &lt;= 0x39); // 0-9
+        <b>if</b> (!is_alphanumeric) <b>return</b> <b>false</b>;
+        i = i + 1;
+    };
+
+    <b>true</b>
 }
 </code></pre>
 
