@@ -137,4 +137,42 @@ module std::ascii_tests {
         assert!(!b"!".to_ascii_string().is_alphanumeric(), 2);
         assert!(!b" ".to_ascii_string().is_alphanumeric(), 1);
     }
+
+    #[test]
+    fun test_sub_string() {
+        let str = b"hello world".to_ascii_string();
+        assert!(str.sub_string(0, 5) == b"hello".to_ascii_string(), 0);
+        assert!(str.sub_string(6, 11) == b"world".to_ascii_string(), 1);
+    }
+
+    #[test]
+    fun test_sub_string_len_one() {
+        let str = b"hello world".to_ascii_string();
+        assert!(str.sub_string(0, 1) == b"h".to_ascii_string(), 0);
+        assert!(str.sub_string(6, 7) == b"w".to_ascii_string(), 1);
+    }
+
+    #[test]
+    fun test_sub_string_len_zero() {
+        let str = b"hello world".to_ascii_string();
+        assert!(str.sub_string(0, 0).is_empty(), 0);
+    }
+
+    #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
+    fun test_sub_string_i_out_of_bounds_fail() {
+        let str = b"hello world".to_ascii_string();
+        str.sub_string(12, 13);
+    }
+
+    #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
+    fun test_sub_string_j_lt_i_fail() {
+        let str = b"hello world".to_ascii_string();
+        str.sub_string(9, 8);
+    }
+
+    #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
+    fun test_sub_string_j_out_of_bounds_fail() {
+        let str = b"hello world".to_ascii_string();
+        str.sub_string(9, 13);
+    }
 }

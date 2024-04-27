@@ -6,10 +6,10 @@ module std::string {
     use std::ascii;
 
     /// An invalid UTF8 encoding.
-    const EINVALID_UTF8: u64 = 1;
+    const EInvalidUTF8: u64 = 1;
 
     /// Index out of range.
-    const EINVALID_INDEX: u64 = 2;
+    const EInvalidIndex: u64 = 2;
 
     /// A `String` holds a sequence of bytes which is guaranteed to be in utf8 format.
     public struct String has copy, drop, store {
@@ -18,7 +18,7 @@ module std::string {
 
     /// Creates a new string from a sequence of bytes. Aborts if the bytes do not represent valid utf8.
     public fun utf8(bytes: vector<u8>): String {
-        assert!(internal_check_utf8(&bytes), EINVALID_UTF8);
+        assert!(internal_check_utf8(&bytes), EInvalidUTF8);
         String { bytes }
     }
 
@@ -72,7 +72,7 @@ module std::string {
     /// boundary.
     public fun insert(s: &mut String, at: u64, o: String) {
         let bytes = &s.bytes;
-        assert!(at <= bytes.length() && internal_is_char_boundary(bytes, at), EINVALID_INDEX);
+        assert!(at <= bytes.length() && internal_is_char_boundary(bytes, at), EInvalidIndex);
         let l = s.length();
         let mut front = s.sub_string(0, at);
         let end = s.sub_string(at, l);
@@ -89,7 +89,7 @@ module std::string {
         let l = bytes.length();
         assert!(
             j <= l && i <= j && internal_is_char_boundary(bytes, i) && internal_is_char_boundary(bytes, j),
-            EINVALID_INDEX
+            EInvalidIndex
         );
         String{bytes: internal_sub_string(bytes, i, j)}
     }
