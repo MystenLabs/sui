@@ -744,7 +744,9 @@ macro_rules! handle_with_decoration {
         // is hitting this case, we should reject such requests that
         // hit this case.
         if connection_ip.is_none() {
-            if cfg!(all(test, not(msim))) {
+            if cfg!(msim) {
+                // Ignore the error from simtests.
+            } else if cfg!(test) {
                 panic!("Failed to get remote address from request");
             } else {
                 $self.metrics.connection_ip_not_found.inc();
