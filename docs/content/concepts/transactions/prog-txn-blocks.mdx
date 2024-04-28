@@ -178,7 +178,7 @@ The command has the form `MakeMoveVec(VecTypeOption, Args)` where `VecTypeOption
 
 - When the transaction is signed, the network verifies that if that the type must be specified for an empty vector of `Args`.
 - The type `VecTypeOption: Option<TypeTag>` is an optional argument specifying the type of the elements in the vector being constructed. The `TypeTag` is a Move type for the elements in the vector, i.e. the `T` in the produced `vector<T>`.
-  - The type does not not have to be specified for an object vector--when `T: key`.
+  - The type does not have to be specified for an object vector--when `T: key`.
   - The type _must_ be specified if the type is not an object type or when the vector is empty.
 - The arguments `Args: [Argument]` are the elements of the vector. The arguments can be any type, including objects, pure values, or results from previous commands.
 - The arguments `Args` are taken by value. Copied if `T: copy` and moved otherwise.
