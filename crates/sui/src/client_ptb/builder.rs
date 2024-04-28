@@ -393,7 +393,7 @@ impl<'a> PTBBuilder<'a> {
             );
         };
 
-        Ok(MovePackage::new(
+        MovePackage::new(
             package.id,
             package.version,
             package.module_map,
@@ -403,7 +403,7 @@ impl<'a> PTBBuilder<'a> {
             package.type_origin_table,
             package.linkage_table,
         )
-        .map_err(|e| err!(loc, "{e}"))?)
+        .map_err(|e| err!(loc, "{e}"))
     }
 
     /// Resolves the argument to the move call based on the type information of the function being
