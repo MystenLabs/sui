@@ -1535,7 +1535,6 @@ checksum = "3b829e4e32b91e643de6eafe82b1d90675f5874230191a4ffbc1b336dec4d6bf"
 dependencies = [
  "async-trait",
  "axum-core",
- "axum-macros",
  "base64 0.21.2",
  "bitflags 1.3.2",
  "bytes",
@@ -1598,18 +1597,6 @@ dependencies = [
  "tower-http",
  "tower-layer",
  "tower-service",
-]
-
-[[package]]
-name = "axum-macros"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdca6a10ecad987bda04e95606ef85a5417dcaac1a78455242d72e031e2b6b62"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
 ]
 
 [[package]]
@@ -2635,6 +2622,7 @@ dependencies = [
  "rstest",
  "serde",
  "shared-crypto",
+ "sui-macros",
  "sui-protocol-config",
  "tap",
  "telemetry-subscribers",
@@ -2800,6 +2788,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "count-min-sketch"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca319fe30d7b68949da20d78b612215708af87157d49665a4545dadcc20fecc7"
+dependencies = [
+ "rand 0.8.5",
+ "siphasher",
 ]
 
 [[package]]
@@ -3484,9 +3482,12 @@ dependencies = [
  "chrono",
  "diesel_derives",
  "itoa",
+ "mysqlclient-sys",
+ "percent-encoding",
  "pq-sys",
  "r2d2",
  "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -7460,6 +7461,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
+name = "mysqlclient-sys"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f61b381528ba293005c42a409dd73d034508e273bf90481f17ec2e964a6e969b"
+dependencies = [
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "mysten-common"
 version = "0.1.0"
 dependencies = [
@@ -7523,19 +7534,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tower",
- "tracing",
-]
-
-[[package]]
-name = "mysten-service-boilerplate"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "axum",
- "mysten-service",
- "prometheus",
- "serde",
- "tokio",
  "tracing",
 ]
 
@@ -10873,6 +10871,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
 name = "security-framework"
 version = "2.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -11700,7 +11707,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11901,7 +11908,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11954,7 +11961,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -12143,6 +12150,7 @@ dependencies = [
  "async-trait",
  "clap",
  "derivative",
+ "diesel",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -12228,6 +12236,7 @@ dependencies = [
  "clap",
  "consensus-config",
  "consensus-core",
+ "count-min-sketch",
  "criterion",
  "dashmap",
  "diffy",
@@ -12381,6 +12390,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
+ "bcs",
  "futures",
  "mysten-metrics",
  "notify",
@@ -12509,7 +12519,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12653,6 +12663,7 @@ dependencies = [
  "clap",
  "const-str",
  "diesel",
+ "downcast",
  "either",
  "expect-test",
  "fastcrypto",
@@ -12701,6 +12712,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
+ "tempfile",
  "test-cluster",
  "thiserror",
  "tokio",
@@ -12734,7 +12746,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12748,6 +12760,7 @@ dependencies = [
  "diesel",
  "diesel-derive-enum",
  "diesel_migrations",
+ "downcast",
  "fastcrypto",
  "futures",
  "itertools 0.10.5",
@@ -12760,10 +12773,12 @@ dependencies = [
  "prometheus",
  "rayon",
  "regex",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_with",
  "simulacrum",
+ "sui-data-ingestion-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-api",
@@ -12780,6 +12795,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
+ "tempfile",
  "test-cluster",
  "thiserror",
  "tokio",
@@ -12888,6 +12904,7 @@ dependencies = [
  "bcs",
  "hyper",
  "jsonrpsee",
+ "move-core-types",
  "move-package",
  "prometheus",
  "rand 0.8.5",
@@ -13020,7 +13037,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -13063,7 +13080,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -13205,7 +13222,7 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anemo",
  "anemo-tower",
@@ -13255,7 +13272,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13291,7 +13308,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13321,7 +13338,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "move-package",
@@ -13540,7 +13557,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13569,7 +13586,7 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -13604,7 +13621,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -13713,7 +13730,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13839,7 +13856,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13980,7 +13997,7 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.24.0"
+version = "1.25.0"
 dependencies = [
  "anemo",
  "anemo-cli",

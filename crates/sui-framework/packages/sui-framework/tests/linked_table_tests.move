@@ -258,7 +258,7 @@ module sui::linked_table_tests {
         let n = all_bools.length();
         // all_bools indicate possible orderings of accessing the front vs the back of the
         // table
-        // test all orderings of building up and tearing down the table, while mimicing
+        // test all orderings of building up and tearing down the table, while mimicking
         // the ordering in a vector, and checking the keys have the same order in the table
         while (i < n) {
             let pushes = &all_bools[i];

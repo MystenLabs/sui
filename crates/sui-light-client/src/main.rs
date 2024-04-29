@@ -57,7 +57,7 @@ impl PackageStore for RemotePackageStore {
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> ResolverResult<Arc<Package>> {
         let object = get_verified_object(&self.config, id.into()).await.unwrap();
-        let package = Package::read(&object).unwrap();
+        let package = Package::read_from_object(&object).unwrap();
         Ok(Arc::new(package))
     }
 }
@@ -285,7 +285,7 @@ async fn check_and_sync_checkpoints(config: &Config) -> anyhow::Result<()> {
         } else {
             // Download the checkpoint from the server
             let summary = download_checkpoint_summary(config, *ckp_id).await?;
-            summary.clone().verify(&prev_committee)?;
+            summary.clone().try_into_verified(&prev_committee)?;
             // Write the checkpoint summary to a file
             write_checkpoint(config, &summary)?;
             summary

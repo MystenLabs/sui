@@ -113,6 +113,12 @@ pub enum ReplayToolCommand {
             help = "Number of tasks to run in parallel"
         )]
         num_tasks: u64,
+        #[arg(
+            long,
+            help = "If provided, dump the state of the execution to a file in the given directory. \
+            This will allow faster replay next time."
+        )]
+        persist_path: Option<PathBuf>,
     },
 
     /// Replay a transaction from a node state dump
@@ -184,7 +190,6 @@ pub async fn execute_replay_command(
             info!("Executing tx: {}", sandbox_state.transaction_info.tx_digest);
             let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
                 &sandbox_state,
-                None,
                 &sandbox_state.pre_exec_diag,
             )
             .await?;
@@ -264,6 +269,7 @@ pub async fn execute_replay_command(
             path,
             terminate_early,
             num_tasks,
+            persist_path,
         } => {
             let file = std::fs::File::open(path).unwrap();
             let buf_reader = std::io::BufReader::new(file);
@@ -280,6 +286,7 @@ pub async fn execute_replay_command(
                 safety,
                 use_authority,
                 terminate_early,
+                persist_path,
             )
             .await;
 

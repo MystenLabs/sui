@@ -104,6 +104,14 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
+    #[cfg(msim)]
+    {
+        use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
+        init_checkpoint_timeout_config(CheckpointTimeoutConfig {
+            timeout: Duration::from_secs(2),
+            panic_on_timeout: false,
+        });
+    }
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(600000)

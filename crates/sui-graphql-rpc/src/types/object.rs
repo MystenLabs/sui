@@ -60,10 +60,11 @@ pub(crate) struct ObjectImpl<'o>(pub &'o Object);
 #[derive(Clone, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub(crate) enum ObjectKind {
-    /// An object loaded from serialized data, such as the contents of a transaction.
+    /// An object loaded from serialized data, such as the contents of a transaction that hasn't
+    /// been indexed yet.
     NotIndexed(NativeObject),
-    /// An object fetched from the snapshot or historical objects table.
-    Historical(NativeObject, StoredHistoryObject),
+    /// An object fetched from the index.
+    Indexed(NativeObject, StoredHistoryObject),
     /// The object is wrapped or deleted and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted(StoredDeletedHistoryObject),
@@ -72,13 +73,11 @@ pub(crate) enum ObjectKind {
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 #[graphql(name = "ObjectKind")]
 pub enum ObjectStatus {
-    /// The object is loaded from serialized data, such as the contents of a transaction.
+    /// The object is loaded from serialized data, such as the contents of a transaction that hasn't
+    /// been indexed yet.
     NotIndexed,
-    /// The object is currently live and is not deleted or wrapped.
-    Live,
-    /// The object is referenced at some version, and thus is fetched from the snapshot or
-    /// historical objects table.
-    Historical,
+    /// The object is fetched from the index.
+    Indexed,
     /// The object is deleted or wrapped and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted,
@@ -606,7 +605,7 @@ impl ObjectImpl<'_> {
             // WrappedOrDeleted objects are also read from the historical objects table, and they do
             // not have a serialized object, so the column is also nullable for stored historical
             // objects.
-            K::Historical(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
+            K::Indexed(_, stored) => stored.serialized_object.as_ref().map(Base64::from),
 
             K::NotIndexed(native) => {
                 let bytes = bcs::to_bytes(native)
@@ -672,7 +671,7 @@ impl Object {
         use ObjectKind as K;
 
         match &self.kind {
-            K::NotIndexed(native) | K::Historical(native, _) => Some(native),
+            K::NotIndexed(native) | K::Indexed(native, _) => Some(native),
             K::WrappedOrDeleted(_) => None,
         }
     }
@@ -681,7 +680,7 @@ impl Object {
         use ObjectKind as K;
 
         match &self.kind {
-            K::NotIndexed(native) | K::Historical(native, _) => native.version().value(),
+            K::NotIndexed(native) | K::Indexed(native, _) => native.version().value(),
             K::WrappedOrDeleted(stored) => stored.object_version as u64,
         }
     }
@@ -1003,7 +1002,7 @@ impl Object {
 
                 Ok(Self {
                     address,
-                    kind: ObjectKind::Historical(native_object, history_object),
+                    kind: ObjectKind::Indexed(native_object, history_object),
                     checkpoint_viewed_at,
                 })
             }
@@ -1266,7 +1265,7 @@ impl From<&ObjectKind> for ObjectStatus {
     fn from(kind: &ObjectKind) -> Self {
         match kind {
             ObjectKind::NotIndexed(_) => ObjectStatus::NotIndexed,
-            ObjectKind::Historical(_, _) => ObjectStatus::Historical,
+            ObjectKind::Indexed(_, _) => ObjectStatus::Indexed,
             ObjectKind::WrappedOrDeleted(_) => ObjectStatus::WrappedOrDeleted,
         }
     }

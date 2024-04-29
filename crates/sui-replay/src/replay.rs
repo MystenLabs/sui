@@ -62,9 +62,8 @@ use sui_types::{
     storage::{BackingPackageStore, ChildObjectResolver, ObjectStore, ParentSync},
     sui_system_state::epoch_start_sui_system_state::EpochStartSystemState,
     transaction::{
-        CertifiedTransaction, CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult,
-        ObjectReadResultKind, SenderSignedData, Transaction, TransactionData, TransactionDataAPI,
-        TransactionKind, VerifiedCertificate, VerifiedTransaction,
+        CheckedInputObjects, InputObjectKind, InputObjects, ObjectReadResult, ObjectReadResultKind,
+        SenderSignedData, Transaction, TransactionDataAPI, TransactionKind, VerifiedTransaction,
     },
     DEEPBOOK_PACKAGE_ID,
 };
@@ -76,7 +75,7 @@ use tracing::{error, info, trace, warn};
 pub struct ExecutionSandboxState {
     /// Information describing the transaction
     pub transaction_info: OnChainTransactionInfo,
-    /// All the obejcts that are required for the execution of the transaction
+    /// All the objects that are required for the execution of the transaction
     pub required_objects: Vec<Object>,
     /// Temporary store from executing this locally in `execute_transaction_to_effects`
     #[serde(skip)]
@@ -788,19 +787,11 @@ impl LocalExec {
 
     /// Executes a transaction with the state specified in `pre_run_sandbox`
     /// This is useful for executing a transaction with a specific state
-    /// However if the state in invalid, the behavior is undefined. Use wisely
-    /// If no transaction is provided, the transaction in the sandbox state is used
-    /// Currently if the transaction is provided, the signing will fail, so this feature is TBD
+    /// However if the state in invalid, the behavior is undefined.
     pub async fn certificate_execute_with_sandbox_state(
         pre_run_sandbox: &ExecutionSandboxState,
-        override_transaction_data: Option<TransactionData>,
         pre_exec_diag: &DiagInfo,
     ) -> Result<ExecutionSandboxState, ReplayEngineError> {
-        assert!(
-            override_transaction_data.is_none(),
-            "Custom transaction data is not supported yet"
-        );
-
         // These cannot be changed and are inherited from the sandbox state
         let executed_epoch = pre_run_sandbox.transaction_info.executed_epoch;
         let reference_gas_price = pre_run_sandbox.transaction_info.reference_gas_price;
@@ -820,20 +811,6 @@ impl LocalExec {
                 .intent,
             Intent::sui_transaction()
         );
-        let transaction_signatures = pre_run_sandbox
-            .transaction_info
-            .sender_signed_data
-            .tx_signatures()
-            .to_vec();
-
-        // This must be provided
-        let transaction_data = override_transaction_data.unwrap_or(
-            pre_run_sandbox
-                .transaction_info
-                .sender_signed_data
-                .transaction_data()
-                .clone(),
-        );
 
         // Begin state prep
         let (authority_state, epoch_store) = prep_network(
@@ -845,31 +822,11 @@ impl LocalExec {
         )
         .await;
 
-        let sender_signed_tx =
-            Transaction::from_generic_sig_data(transaction_data, transaction_signatures);
-        let sender_signed_tx = VerifiedTransaction::new_unchecked(
-            VerifiedTransaction::new_unchecked(sender_signed_tx).into(),
-        );
-
-        let response = authority_state
-            .handle_transaction(&epoch_store, sender_signed_tx.clone())
-            .await?;
-
-        let auth_vote = response.status.into_signed_for_testing();
-
-        let mut committee = authority_state.clone_committee_for_testing();
-        committee.epoch = executed_epoch;
-        let certificate = CertifiedTransaction::new(
-            sender_signed_tx.clone().into_message(),
-            vec![auth_vote.clone()],
-            &committee,
-        )
-        .unwrap();
-
-        certificate.verify_committee_sigs_only(&committee).unwrap();
-
-        let certificate = &VerifiedExecutableTransaction::new_from_certificate(
-            VerifiedCertificate::new_unchecked(certificate.clone()),
+        let certificate = VerifiedExecutableTransaction::new_from_quorum_execution(
+            VerifiedTransaction::new_unchecked(Transaction::new(
+                pre_run_sandbox.transaction_info.sender_signed_data.clone(),
+            )),
+            executed_epoch,
         );
 
         let new_tx_digest = certificate.digest();
@@ -892,7 +849,7 @@ impl LocalExec {
         }
 
         let res = authority_state
-            .try_execute_immediately(certificate, None, &epoch_store)
+            .try_execute_immediately(&certificate, None, &epoch_store)
             .await
             .map_err(ReplayEngineError::from)?;
 
@@ -924,7 +881,7 @@ impl LocalExec {
         let pre_run_sandbox = self
             .execution_engine_execute_impl(tx_digest, expensive_safety_check_config)
             .await?;
-        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, None, &self.diag).await
+        Self::certificate_execute_with_sandbox_state(&pre_run_sandbox, &self.diag).await
     }
 
     /// Must be called after `init_for_execution`

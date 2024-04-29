@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Instant};
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tracing::info;
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitVoteMonitor},
-    context::Context,
+    context::{Clock, Context},
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
@@ -42,16 +42,9 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
-// Type of network used by the authority node.
-#[derive(Clone, Copy)]
-pub enum NetworkType {
-    Anemo,
-    Tonic,
-}
-
 impl ConsensusAuthority {
     pub async fn start(
-        network_type: NetworkType,
+        network_type: ConsensusNetwork,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -63,7 +56,7 @@ impl ConsensusAuthority {
         registry: Registry,
     ) -> Self {
         match network_type {
-            NetworkType::Anemo => {
+            ConsensusNetwork::Anemo => {
                 let authority = AuthorityNode::start(
                     own_index,
                     committee,
@@ -78,7 +71,7 @@ impl ConsensusAuthority {
                 .await;
                 Self::WithAnemo(authority)
             }
-            NetworkType::Tonic => {
+            ConsensusNetwork::Tonic => {
                 let authority = AuthorityNode::start(
                     own_index,
                     committee,
@@ -165,6 +158,7 @@ where
             parameters,
             protocol_config,
             initialise_metrics(registry),
+            Arc::new(Clock::new()),
         ));
         let start_time = Instant::now();
 
@@ -354,7 +348,7 @@ mod tests {
     use super::*;
     use crate::{
         authority_node::AuthorityService,
-        block::{timestamp_utc_ms, BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -391,12 +385,12 @@ mod tests {
             Ok(block_refs)
         }
 
-        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
-            unimplemented!()
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+            Ok(())
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            unimplemented!()
+            Ok(Default::default())
         }
     }
 
@@ -449,7 +443,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_authority_start_and_stop(
-        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
@@ -518,7 +512,7 @@ mod tests {
         ));
 
         // Test delaying blocks with time drift.
-        let now = timestamp_utc_ms();
+        let now = context.clock.timestamp_utc_ms();
         let max_drift = context.parameters.max_forward_time_drift;
         let input_block = VerifiedBlock::new_for_test(
             TestBlock::new(9, 0)
@@ -548,7 +542,7 @@ mod tests {
     #[rstest]
     #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_authority_committee(
-        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();

@@ -25,7 +25,6 @@ const guides = [
 					id: 'guides/developer/getting-started',
 				},
 				items: [
-					'guides/developer/getting-started/sui-environment',
 					'guides/developer/getting-started/sui-install',
 					'guides/developer/getting-started/connect',
 					'guides/developer/getting-started/local-network',

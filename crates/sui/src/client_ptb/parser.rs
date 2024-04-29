@@ -40,6 +40,7 @@ struct ProgramParsingState {
     serialize_unsigned_set: bool,
     serialize_signed_set: bool,
     json_set: bool,
+    dry_run_set: bool,
     gas_object_id: Option<Spanned<ObjectID>>,
     gas_budget: Option<Spanned<u64>>,
 }
@@ -61,6 +62,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 serialize_unsigned_set: false,
                 serialize_signed_set: false,
                 json_set: false,
+                dry_run_set: false,
                 gas_object_id: None,
                 gas_budget: None,
             },
@@ -107,6 +109,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                 L(T::Command, A::SERIALIZE_SIGNED) => flag!(serialize_signed_set),
                 L(T::Command, A::SUMMARY) => flag!(summary_set),
                 L(T::Command, A::JSON) => flag!(json_set),
+                L(T::Command, A::DRY_RUN) => flag!(dry_run_set),
                 L(T::Command, A::PREVIEW) => flag!(preview_set),
                 L(T::Command, A::WARN_SHADOWS) => flag!(warn_shadows_set),
                 L(T::Command, A::GAS_COIN) => {
@@ -211,6 +214,7 @@ impl<'a, I: Iterator<Item = &'a str>> ProgramParser<'a, I> {
                     serialize_signed_set: self.state.serialize_signed_set,
                     gas_object_id: self.state.gas_object_id,
                     json_set: self.state.json_set,
+                    dry_run_set: self.state.dry_run_set,
                     gas_budget,
                 },
             ))

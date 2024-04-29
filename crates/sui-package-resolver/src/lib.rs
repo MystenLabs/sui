@@ -29,7 +29,7 @@ use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     language_storage::{StructTag, TypeTag},
 };
-use sui_types::move_package::TypeOrigin;
+use sui_types::move_package::{MovePackage, TypeOrigin};
 use sui_types::object::Object;
 use sui_types::{base_types::SequenceNumber, Identifier};
 
@@ -496,12 +496,17 @@ impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
 }
 
 impl Package {
-    pub fn read(object: &Object) -> Result<Self> {
+    pub fn read_from_object(object: &Object) -> Result<Self> {
         let storage_id = AccountAddress::from(object.id());
         let Some(package) = object.data.try_as_package() else {
             return Err(Error::NotAPackage(storage_id));
         };
 
+        Self::read_from_package(package)
+    }
+
+    pub fn read_from_package(package: &MovePackage) -> Result<Self> {
+        let storage_id = AccountAddress::from(package.id());
         let mut type_origins: BTreeMap<String, BTreeMap<String, AccountAddress>> = BTreeMap::new();
         for TypeOrigin {
             module_name,
@@ -1286,7 +1291,7 @@ impl<'l> ResolutionContext<'l> {
                 )
                 // This error is unexpected because the only reason it would fail is because of a
                 // type parameter arity mismatch, which we check for above.
-                .map_err(|e| Error::UnexpectedError(Box::new(e)))?
+                .map_err(|e| Error::UnexpectedError(Arc::new(e)))?
             }
         })
     }

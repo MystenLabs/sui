@@ -16,9 +16,9 @@ use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot;
 use tokio::task::JoinSet;
 use tokio::time::{sleep, sleep_until, timeout, Instant};
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 
-use crate::block::{timestamp_utc_ms, BlockRef, SignedBlock, VerifiedBlock};
+use crate::block::{BlockRef, SignedBlock, VerifiedBlock};
 use crate::block_verifier::BlockVerifier;
 use crate::context::Context;
 use crate::core_thread::CoreThreadDispatcher;
@@ -27,6 +27,7 @@ use crate::error::{ConsensusError, ConsensusResult};
 use crate::network::NetworkClient;
 use crate::{BlockAPI, Round};
 use consensus_config::AuthorityIndex;
+use sui_macros::fail_point_async;
 
 /// The number of concurrent fetch blocks requests per authority
 const FETCH_BLOCKS_CONCURRENCY: usize = 5;
@@ -284,7 +285,10 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 Some(command) = self.commands_receiver.recv() => {
                     match command {
                         Command::FetchBlocks{ missing_block_refs, peer_index, result } => {
-                            assert_ne!(peer_index, self.context.own_index, "We should never attempt to fetch blocks from our own node");
+                            if peer_index == self.context.own_index {
+                                error!("We should never attempt to fetch blocks from our own node");
+                                continue;
+                            }
 
                             // Keep only the max allowed blocks to request. It is ok to reduce here as the scheduler
                             // task will take care syncing whatever is leftover.
@@ -549,7 +553,7 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
 
             // Dropping is ok because the block will be refetched.
             // TODO: improve efficiency, maybe suspend and continue processing the block asynchronously.
-            let now = timestamp_utc_ms();
+            let now = context.clock.timestamp_utc_ms();
             if now < verified_block.timestamp_ms() {
                 warn!(
                     "Fetched block {} timestamp {} is in the future (now={}). Ignoring.",
@@ -596,6 +600,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
         )
         .await;
 
+        fail_point_async!("consensus-delay");
+
         let resp = match resp {
             Ok(Err(err)) => {
                 // Add a delay before retrying - if that is needed. If request has timed out then eventually
@@ -638,6 +644,8 @@ impl<C: NetworkClient, V: BlockVerifier, D: CoreThreadDispatcher> Synchronizer<C
                 let _scope = monitored_scope("FetchMissingBlocksScheduler");
                 context.metrics.node_metrics.fetch_blocks_scheduler_inflight.inc();
                 let total_requested = missing_blocks.len();
+
+                fail_point_async!("consensus-delay");
 
                 // Fetch blocks from peers
                 let results = Self::fetch_blocks_from_authorities(context.clone(), blocks_to_fetch.clone(), network_client, missing_blocks, core_dispatcher.clone(), dag_state).await;
@@ -824,7 +832,7 @@ mod tests {
             Ok(BTreeSet::new())
         }
 
-        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
             todo!()
         }
 

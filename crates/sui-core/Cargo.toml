@@ -16,6 +16,7 @@ bytes.workspace = true
 chrono.workspace = true
 consensus-core.workspace = true
 consensus-config.workspace = true
+count-min-sketch.workspace = true
 dashmap.workspace = true
 diffy = { version = "0.3", default-features = false }
 either.workspace = true

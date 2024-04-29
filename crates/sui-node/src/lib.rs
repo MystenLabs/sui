@@ -611,15 +611,10 @@ impl SuiNode {
             index_store.clone(),
             checkpoint_store.clone(),
             &prometheus_registry,
-            pruning_config,
             genesis.objects(),
             &db_checkpoint_config,
-            config.expensive_safety_check_config.clone(),
-            config.transaction_deny_config.clone(),
-            config.certificate_deny_config.clone(),
+            config.clone(),
             config.indirect_objects_threshold,
-            config.state_debug_dump_config.clone(),
-            config.authority_overload_config.clone(),
             archive_readers,
         )
         .await;
@@ -640,6 +635,10 @@ impl SuiNode {
                 .await
                 .unwrap();
         }
+
+        checkpoint_store
+            .reexecute_local_checkpoints(&state, &epoch_store)
+            .await;
 
         // Start the loop that receives new randomness and generates transactions for it.
         RandomnessRoundReceiver::spawn(state.clone(), randomness_rx);

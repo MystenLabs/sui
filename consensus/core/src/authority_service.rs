@@ -8,12 +8,13 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
+use sui_macros::fail_point_async;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
+    block::{BlockAPI as _, BlockRef, SignedBlock, VerifiedBlock, GENESIS_ROUND},
     block_verifier::BlockVerifier,
     commit::{CommitAPI as _, TrustedCommit},
     commit_syncer::CommitVoteMonitor,
@@ -71,6 +72,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         serialized_block: Bytes,
     ) -> ConsensusResult<()> {
+        fail_point_async!("consensus-rpc-response");
+
         let peer_hostname = &self.context.committee.authority(peer).hostname;
 
         // TODO: dedup block verifications, here and with fetched blocks.
@@ -105,7 +108,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
 
         // Reject block with timestamp too far in the future.
-        let now = timestamp_utc_ms();
+        let now = self.context.clock.timestamp_utc_ms();
         let forward_time_drift =
             Duration::from_millis(verified_block.timestamp_ms().saturating_sub(now));
         if forward_time_drift > self.context.parameters.max_forward_time_drift {
@@ -221,6 +224,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         peer: AuthorityIndex,
         last_received: Round,
     ) -> ConsensusResult<BlockStream> {
+        fail_point_async!("consensus-rpc-response");
+
         let dag_state = self.dag_state.read();
         // Find recent own blocks that have not been received by the peer.
         // If last_received is a valid and more blocks have been proposed since then, this call is
@@ -233,6 +238,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         );
         let broadcasted_blocks =
             BroadcastedBlockStream::new(peer, self.rx_block_broadcaster.resubscribe());
+
         // Return a stream of blocks that first yields missed blocks as requested, then new blocks.
         Ok(Box::pin(missed_blocks.chain(
             broadcasted_blocks.map(|block| block.serialized().clone()),
@@ -245,6 +251,8 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         block_refs: Vec<BlockRef>,
         highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>> {
+        fail_point_async!("consensus-rpc-response");
+
         const MAX_ADDITIONAL_BLOCKS: usize = 10;
         if block_refs.len() > self.context.parameters.max_blocks_per_fetch {
             return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
@@ -309,10 +317,12 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         start: CommitIndex,
         end: CommitIndex,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)> {
+        fail_point_async!("consensus-rpc-response");
+
         // Compute an exclusive end index and bound the maximum number of commits scanned.
         let exclusive_end =
             (end + 1).min(start + self.context.parameters.commit_sync_batch_size as CommitIndex);
-        let mut commits = self.store.scan_commits(start..exclusive_end)?;
+        let mut commits = self.store.scan_commits((start..exclusive_end).into())?;
         let mut certifier_block_refs = vec![];
         'commit: while let Some(c) = commits.last() {
             let index = c.index();
@@ -376,6 +386,7 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
         let maybe_item = loop {
             let (result, rx) = ready!(self.inner.poll(cx));
             self.inner.set(make_recv_future(rx));
+
             match result {
                 Ok(item) => break Some(item),
                 Err(broadcast::error::RecvError::Closed) => {

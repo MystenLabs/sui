@@ -4,6 +4,7 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use diesel::r2d2::R2D2Connection;
 use diesel::ExpressionMethods;
 use diesel::OptionalExtension;
 use diesel::{QueryDsl, RunQueryDsl};
@@ -13,41 +14,47 @@ use sui_package_resolver::{error::Error as PackageResolverError, Package, Packag
 use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 
-use crate::db::PgConnectionPool;
+use crate::db::ConnectionPool;
 use crate::errors::IndexerError;
 use crate::handlers::tx_processor::IndexingPackageBuffer;
 use crate::metrics::IndexerMetrics;
 use crate::schema::objects;
-use crate::store::diesel_macro::read_only_blocking;
-use crate::types::IndexedPackage;
+use crate::store::diesel_macro::*;
 
 /// A package resolver that reads packages from the database.
-#[derive(Clone)]
-pub struct IndexerStorePackageResolver {
-    cp: PgConnectionPool,
+pub struct IndexerStorePackageResolver<T: R2D2Connection + 'static> {
+    cp: ConnectionPool<T>,
 }
 
-impl IndexerStorePackageResolver {
-    pub fn new(cp: PgConnectionPool) -> Self {
+impl<T: R2D2Connection> Clone for IndexerStorePackageResolver<T> {
+    fn clone(&self) -> IndexerStorePackageResolver<T> {
+        Self {
+            cp: self.cp.clone(),
+        }
+    }
+}
+
+impl<T: R2D2Connection> IndexerStorePackageResolver<T> {
+    pub fn new(cp: ConnectionPool<T>) -> Self {
         Self { cp }
     }
 }
 
 #[async_trait]
-impl PackageStore for IndexerStorePackageResolver {
+impl<T: R2D2Connection> PackageStore for IndexerStorePackageResolver<T> {
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
         let pkg = self
             .get_package_from_db_in_blocking_task(id)
             .await
             .map_err(|e| PackageResolverError::Store {
                 store: "PostgresDB",
-                source: Box::new(e),
+                source: Arc::new(e),
             })?;
         Ok(Arc::new(pkg))
     }
 }
 
-impl IndexerStorePackageResolver {
+impl<T: R2D2Connection> IndexerStorePackageResolver<T> {
     fn get_package_from_db(&self, id: AccountAddress) -> Result<Package, IndexerError> {
         let Some(bcs) = read_only_blocking!(&self.cp, |conn| {
             let query = objects::dsl::objects
@@ -62,7 +69,7 @@ impl IndexerStorePackageResolver {
             )));
         };
         let object = bcs::from_bytes::<Object>(&bcs)?;
-        Package::read(&object).map_err(|e| {
+        Package::read_from_object(&object).map_err(|e| {
             IndexerError::PostgresReadError(format!("Failed parsing object to package: {:?}", e))
         })
     }
@@ -76,23 +83,18 @@ impl IndexerStorePackageResolver {
     }
 }
 
-pub struct InterimPackageResolver {
-    package_db_resolver: IndexerStorePackageResolver,
+pub struct InterimPackageResolver<T: R2D2Connection + 'static> {
+    package_db_resolver: IndexerStorePackageResolver<T>,
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
     metrics: IndexerMetrics,
 }
 
-impl InterimPackageResolver {
+impl<T: R2D2Connection> InterimPackageResolver<T> {
     pub fn new(
-        package_db_resolver: IndexerStorePackageResolver,
+        package_db_resolver: IndexerStorePackageResolver<T>,
         package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
-        new_package_objects: &[(IndexedPackage, Object)],
         metrics: IndexerMetrics,
     ) -> Self {
-        package_buffer
-            .lock()
-            .unwrap()
-            .insert_packages(new_package_objects);
         Self {
             package_db_resolver,
             package_buffer,
@@ -102,7 +104,7 @@ impl InterimPackageResolver {
 }
 
 #[async_trait]
-impl PackageStore for InterimPackageResolver {
+impl<T: R2D2Connection> PackageStore for InterimPackageResolver<T> {
     async fn fetch(&self, addr: AccountAddress) -> Result<Arc<Package>, PackageResolverError> {
         let package_id = ObjectID::from(addr);
         let maybe_obj = {
@@ -111,9 +113,9 @@ impl PackageStore for InterimPackageResolver {
         };
         if let Some(obj) = maybe_obj {
             self.metrics.indexing_package_resolver_in_mem_hit.inc();
-            let pkg = Package::read(&obj).map_err(|e| PackageResolverError::Store {
+            let pkg = Package::read_from_object(&obj).map_err(|e| PackageResolverError::Store {
                 store: "InMemoryPackageBuffer",
-                source: Box::new(e),
+                source: Arc::new(e),
             })?;
             Ok(Arc::new(pkg))
         } else {

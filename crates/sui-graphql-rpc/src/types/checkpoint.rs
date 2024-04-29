@@ -14,12 +14,12 @@ use super::{
 };
 use crate::consistency::Checkpointed;
 use crate::{
-    data::{self, Conn, Db, DbConnection, QueryExecutor},
+    data::{self, Conn, DataLoader, Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    dataloader::{DataLoader, Loader},
+    dataloader::Loader,
     *,
 };
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
@@ -212,7 +212,7 @@ impl Checkpoint {
                 sequence_number: Some(sequence_number),
                 digest,
             } => {
-                let dl: &DataLoader<Db> = ctx.data_unchecked();
+                let DataLoader(dl) = ctx.data_unchecked();
                 dl.load_one(SeqNumKey {
                     sequence_number,
                     digest,
@@ -225,7 +225,7 @@ impl Checkpoint {
                 sequence_number: None,
                 digest: Some(digest),
             } => {
-                let dl: &DataLoader<Db> = ctx.data_unchecked();
+                let DataLoader(dl) = ctx.data_unchecked();
                 dl.load_one(DigestKey {
                     digest,
                     checkpoint_viewed_at,

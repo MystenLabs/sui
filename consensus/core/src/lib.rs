@@ -37,7 +37,7 @@ mod test_dag_builder;
 #[cfg(test)]
 mod test_dag_parser;
 
-pub use authority_node::{ConsensusAuthority, NetworkType};
+pub use authority_node::ConsensusAuthority;
 pub use block::{BlockAPI, Round};
 pub use commit::{CommitConsumer, CommitIndex, CommittedSubDag};
 pub use transaction::{TransactionClient, TransactionVerifier, ValidationError};

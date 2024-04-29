@@ -31,6 +31,7 @@ pub const GAS_BUDGET: &str = "gas-budget";
 pub const SUMMARY: &str = "summary";
 pub const GAS_COIN: &str = "gas-coin";
 pub const JSON: &str = "json";
+pub const DRY_RUN: &str = "dry-run";
 pub const SERIALIZE_UNSIGNED: &str = "serialize-unsigned-transaction";
 pub const SERIALIZE_SIGNED: &str = "serialize-signed-transaction";
 
@@ -69,6 +70,7 @@ pub const COMMANDS: &[&str] = &[
     SUMMARY,
     GAS_COIN,
     JSON,
+    DRY_RUN,
     SERIALIZE_UNSIGNED,
     SERIALIZE_SIGNED,
 ];
@@ -105,6 +107,7 @@ pub struct ProgramMetadata {
     pub serialize_signed_set: bool,
     pub gas_object_id: Option<Spanned<ObjectID>>,
     pub json_set: bool,
+    pub dry_run_set: bool,
     pub gas_budget: Spanned<u64>,
 }
 

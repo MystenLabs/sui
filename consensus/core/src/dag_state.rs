@@ -15,11 +15,12 @@ use tracing::{debug, error};
 
 use crate::{
     block::{
-        genesis_blocks, timestamp_utc_ms, BlockAPI, BlockDigest, BlockRef, Round, Slot,
+        genesis_blocks, BlockAPI, BlockDigest, BlockRef, BlockTimestampMs, Round, Slot,
         VerifiedBlock, GENESIS_ROUND,
     },
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitVote, TrustedCommit},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitVote, TrustedCommit},
     context::Context,
+    leader_scoring::ReputationScores,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     storage::{Store, WriteBatch},
 };
@@ -86,15 +87,15 @@ impl DagState {
         let last_commit = store
             .read_last_commit()
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-        let last_committed_rounds = {
-            let commit_info = store
+        let last_committed_rounds = if let Some(commit) = last_commit.as_ref() {
+            let (commit_ref, commit_info) = store
                 .read_last_commit_info()
-                .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-            if let Some(commit_info) = commit_info {
-                commit_info.last_committed_rounds
-            } else {
-                vec![0; num_authorities]
-            }
+                .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
+                .unwrap_or_else(|| panic!("Last commit info should be available."));
+            assert_eq!(commit_ref, commit.reference());
+            commit_info.committed_rounds
+        } else {
+            vec![0; num_authorities]
         };
 
         let mut state = Self {
@@ -143,7 +144,7 @@ impl DagState {
             return;
         }
 
-        let now = timestamp_utc_ms();
+        let now = self.context.clock.timestamp_utc_ms();
         if block.timestamp_ms() > now {
             panic!(
                 "Block {:?} cannot be accepted! Block timestamp {} is greater than local timestamp {}.",
@@ -511,6 +512,10 @@ impl DagState {
                 return;
             }
             assert_eq!(commit.index(), last_commit.index() + 1);
+
+            if commit.timestamp_ms() < last_commit.timestamp_ms() {
+                panic!("Commit timestamps do not monotonically increment, prev commit {:?}, new commit {:?}", last_commit, commit);
+            }
         } else {
             assert_eq!(commit.index(), 1);
         }
@@ -570,6 +575,14 @@ impl DagState {
         }
     }
 
+    /// Timestamp of the last commit.
+    pub(crate) fn last_commit_timestamp_ms(&self) -> BlockTimestampMs {
+        match &self.last_commit {
+            Some(commit) => commit.timestamp_ms(),
+            None => 0,
+        }
+    }
+
     /// Leader slot of the last commit.
     pub(crate) fn last_commit_leader(&self) -> Slot {
         match &self.last_commit {
@@ -620,12 +633,23 @@ impl DagState {
             commits.len(),
             commits.iter().map(|c| c.reference().to_string()).join(","),
         );
+        let last_commit_info = if commits.is_empty() {
+            None
+        } else {
+            let last_commit_ref = commits.last().as_ref().unwrap().reference();
+            // TODO: Replace this with calculated reputation scores
+            let commit_info = CommitInfo::new(
+                self.last_committed_rounds.clone(),
+                ReputationScores::default(),
+            );
+            Some((last_commit_ref, commit_info))
+        };
         self.store
             .write(WriteBatch::new(
                 blocks,
                 commits,
                 // TODO: limit to write at most once per commit round with multi-leader.
-                self.last_committed_rounds.clone(),
+                last_commit_info,
             ))
             .unwrap_or_else(|e| panic!("Failed to write to storage: {:?}", e));
         self.context
@@ -1129,6 +1153,7 @@ mod test {
         dag_state.add_commit(TrustedCommit::new_for_test(
             1 as CommitIndex,
             CommitDigest::MIN,
+            0,
             blocks.last().unwrap().reference(),
             blocks
                 .into_iter()
@@ -1222,13 +1247,14 @@ mod test {
             commits.push(TrustedCommit::new_for_test(
                 round as CommitIndex,
                 CommitDigest::MIN,
+                0,
                 blocks.last().unwrap().reference(),
                 vec![],
             ));
         }
 
         // Add the blocks from first 5 rounds and first 5 commits to the dag state
-        let i = blocks.iter().position(|b| b.round() == 5).unwrap();
+        let i = blocks.iter().position(|b| b.round() == 6).unwrap();
         let temp_blocks = blocks.split_off(i);
         dag_state.accept_blocks(blocks.clone());
         let temp_commits = commits.split_off(5);
@@ -1433,6 +1459,7 @@ mod test {
         dag_state.add_commit(TrustedCommit::new_for_test(
             1 as CommitIndex,
             CommitDigest::MIN,
+            0,
             all_blocks.last().unwrap().reference(),
             all_blocks
                 .into_iter()

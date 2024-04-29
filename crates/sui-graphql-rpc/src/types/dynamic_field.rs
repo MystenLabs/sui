@@ -251,7 +251,7 @@ impl TryFrom<MoveObject> for DynamicField {
         let super_ = &stored.super_;
 
         let (df_object_id, df_kind) = match &super_.kind {
-            ObjectKind::Historical(_, stored) => stored
+            ObjectKind::Indexed(_, stored) => stored
                 .df_object_id
                 .as_ref()
                 .map(|id| (id, stored.df_kind))

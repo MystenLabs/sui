@@ -11,7 +11,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
-    shared::*,
+    shared::{string_utils::*, *},
     MatchedFileCommentMap,
 };
 
@@ -3283,7 +3283,7 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
 //          "{" (<VariantDecl>,)+ "}" ("has" <Ability> (, <Ability>)+;)
 //      EnumDefName =
 //          <Identifier> <OptionalTypeParameters>
-// Where the the two "has" statements are mutually exclusive -- an enum cannot be declared with
+// Where the two "has" statements are mutually exclusive -- an enum cannot be declared with
 // both infix and postfix ability declarations.
 fn parse_enum_decl(
     attributes: Vec<Attributes>,
@@ -3475,7 +3475,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
 //          (("{" Comma<FieldAnnot> "}" | "(" Comma<PosField> ")") ("has" <Ability> (, <Ability>)+;)? | ";")
 //      StructDefName =
 //          <Identifier> <OptionalTypeParameters>
-// Where the the two "has" statements are mutually exclusive -- a struct cannot be declared with
+// Where the two "has" statements are mutually exclusive -- a struct cannot be declared with
 // both infix and postfix ability declarations.
 fn parse_struct_decl(
     attributes: Vec<Attributes>,

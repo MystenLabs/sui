@@ -4,6 +4,7 @@
 use anyhow::Result;
 use sui_rest_api::{CheckpointData, Client};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
 use crate::metrics::IndexerMetrics;
@@ -19,6 +20,7 @@ pub struct CheckpointFetcher {
     highest_known_checkpoint: CheckpointSequenceNumber,
     sender: mysten_metrics::metered_channel::Sender<CheckpointDownloadData>,
     metrics: IndexerMetrics,
+    cancel: CancellationToken,
 }
 
 impl CheckpointFetcher {
@@ -30,6 +32,7 @@ impl CheckpointFetcher {
         last_downloaded_checkpoint: Option<CheckpointSequenceNumber>,
         sender: mysten_metrics::metered_channel::Sender<CheckpointDownloadData>,
         metrics: IndexerMetrics,
+        cancel: CancellationToken,
     ) -> Self {
         Self {
             client,
@@ -37,6 +40,7 @@ impl CheckpointFetcher {
             highest_known_checkpoint: 0,
             sender,
             metrics,
+            cancel,
         }
     }
 
@@ -52,6 +56,10 @@ impl CheckpointFetcher {
         info!("CheckpointFetcher started");
 
         loop {
+            if self.cancel.is_cancelled() {
+                info!("Cancelling CheckpointFetcher.run");
+                break;
+            }
             interval.tick().await;
 
             if let Err(e) = self.update_highest_known_checkpoint().await {
@@ -97,6 +105,10 @@ impl CheckpointFetcher {
             .buffered(Self::CHECKPOINT_DOWNLOAD_CONCURRENCY);
 
         while let Some(maybe_checkpoint) = checkpoint_stream.next().await {
+            if self.cancel.is_cancelled() {
+                info!("Cancelling CheckpointFetcher.download_checkpoints task");
+                break;
+            }
             let checkpoint = maybe_checkpoint?;
             self.last_downloaded_checkpoint =
                 Some(*checkpoint.checkpoint_summary.sequence_number());

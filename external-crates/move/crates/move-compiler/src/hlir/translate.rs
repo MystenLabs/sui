@@ -15,7 +15,7 @@ use crate::{
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
     },
-    shared::{process_binops, unique_map::UniqueMap, *},
+    shared::{process_binops, string_utils::debug_print, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
@@ -131,6 +131,7 @@ pub(super) struct HLIRDebugFlags {
     pub(super) match_specialization: bool,
     pub(super) match_counterexample: bool,
     pub(super) match_work_queue: bool,
+    pub(super) match_constant_conversion: bool,
 }
 
 pub(super) struct Context<'env> {
@@ -325,6 +326,7 @@ impl<'env> Context<'env> {
             match_specialization: false,
             match_counterexample: false,
             match_work_queue: false,
+            match_constant_conversion: false,
         };
         Context {
             env,
@@ -1096,7 +1098,7 @@ fn tail(
             debug_print!(context.debug.match_translation, ("compiled" => compiled));
             let result = tail(context, block, expected_type, compiled);
             debug_print!(context.debug.match_variant_translation,
-                         (lines "block" => block),
+                         (lines "block" => block; verbose),
                          (opt "result" => &result));
             result
         }

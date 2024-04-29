@@ -8,7 +8,7 @@ use crate::config::{
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
 use crate::data::package_resolver::{DbPackageStore, PackageResolver};
-use crate::data::Db;
+use crate::data::{DataLoader, Db};
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
 use crate::types::move_object::IMoveObject;
@@ -27,7 +27,6 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
-use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
@@ -386,8 +385,9 @@ impl ServerBuilder {
 
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
+        let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore::new(db.clone());
+        let package_store = DbPackageStore::new(loader.clone());
         let resolver = Arc::new(Resolver::new_with_limits(
             PackageStoreWithLruCache::new(package_store),
             config.service.limits.package_resolver_limits(),
@@ -414,7 +414,7 @@ impl ServerBuilder {
 
         builder = builder
             .context_data(config.service.clone())
-            .context_data(DataLoader::new(db.clone(), tokio::spawn))
+            .context_data(loader)
             .context_data(db)
             .context_data(pg_conn_pool)
             .context_data(resolver)

@@ -20,7 +20,7 @@ task 4 'run-graphql'. lines 62-75:
 Response: {
   "data": {
     "object": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -45,7 +45,7 @@ task 7 'run-graphql'. lines 81-107:
 Response: {
   "data": {
     "latest_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 4,
       "asMoveObject": {
         "contents": {
@@ -57,7 +57,7 @@ Response: {
       }
     },
     "previous_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -89,7 +89,7 @@ Response: {
       "asMoveObject": null
     },
     "previous_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 4,
       "asMoveObject": {
         "contents": {
@@ -116,7 +116,7 @@ task 13 'run-graphql'. lines 145-183:
 Response: {
   "data": {
     "latest_unwrapped": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 6,
       "asMoveObject": {
         "contents": {
@@ -133,7 +133,7 @@ Response: {
       "asMoveObject": null
     },
     "first_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -181,7 +181,7 @@ task 19 'run-graphql'. lines 221-259:
 Response: {
   "data": {
     "object_within_available_range": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 6,
       "asMoveObject": {
         "contents": {

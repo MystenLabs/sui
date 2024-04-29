@@ -388,15 +388,7 @@ impl MovePackage {
 
 impl MovePackage {
     fn parsed_package(&self) -> Result<ParsedMovePackage, Error> {
-        // TODO: Leverage the package cache (attempt to read from it, and if that doesn't succeed,
-        // write back the parsed Package to the cache as well.)
-        let Some(native) = self.super_.native_impl() else {
-            return Err(Error::Internal(
-                "No native representation of package to parse.".to_string(),
-            ));
-        };
-
-        ParsedMovePackage::read(native)
+        ParsedMovePackage::read_from_package(&self.native)
             .map_err(|e| Error::Internal(format!("Error reading package: {e}")))
     }
 
