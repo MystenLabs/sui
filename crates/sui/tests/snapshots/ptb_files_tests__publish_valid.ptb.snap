@@ -9,6 +9,6 @@ expression: "results.join(\"\\n\")"
 │ command │ values                           │
 ├─────────┼──────────────────────────────────┤
 │ publish │ tests/ptb_files/publish/test_pkg │
-├─────────┼──────────────────────────────────┤
+╰─────────┴──────────────────────────────────╯
  === BUILT PTB === 
 Command 0: Publish(_,)

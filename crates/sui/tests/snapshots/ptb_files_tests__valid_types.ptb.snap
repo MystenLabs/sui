@@ -32,7 +32,7 @@ expression: "results.join(\"\\n\")"
 │ assign        │ f 0u256                                                       │
 │ make-move-vec │ <std::option::Option<std::option::Option<vector<u8>>>> [none] │
 │ make-move-vec │ <std::option::Option<vector<u256>>> [vector[]]                │
-├───────────────┼───────────────────────────────────────────────────────────────┤
+╰───────────────┴───────────────────────────────────────────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
 Input 1: Pure([1])

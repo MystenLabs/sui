@@ -18,7 +18,7 @@ expression: "results.join(\"\\n\")"
 │ move-call │ std::option::is_none<u64> a b          │
 │ move-call │ sui::coin::destroy_zero @0x1           │
 │ move-call │ std::option::is_none<u64, bool> a      │
-├───────────┼────────────────────────────────────────┤
+╰───────────┴────────────────────────────────────────╯
  === BUILDING PTB ERRORS === 
   × Error when processing PTB
    ╭─[1:13]

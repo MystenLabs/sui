@@ -20,7 +20,7 @@ expression: "results.join(\"\\n\")"
 │ assign        │ c                │
 │ assign        │ c0 c.0           │
 │ assign        │ c1 c.1           │
-├───────────────┼──────────────────┤
+╰───────────────┴──────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
 Command 0: MakeMoveVec(Someaddress,[Input(0),Input(0)])

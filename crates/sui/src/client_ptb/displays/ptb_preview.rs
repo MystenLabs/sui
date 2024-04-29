@@ -47,10 +47,10 @@ impl<'a> Display for PTBPreview<'a> {
         }
         let mut table = builder.build();
         table.with(TablePanel::header("PTB Preview"));
-        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
-            1,
-            TableStyle::modern().get_horizontal(),
-        )]));
+        table.with(TableStyle::rounded().horizontals([
+            HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
+            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
+        ]));
         table.with(tabled::settings::style::BorderSpanCorrection);
 
         write!(f, "{}", table)

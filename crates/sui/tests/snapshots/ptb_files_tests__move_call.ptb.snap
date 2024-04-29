@@ -15,7 +15,7 @@ expression: "results.join(\"\\n\")"
 │ move-call     │ 0x1::option::is_none<u64> none │
 │ assign        │ a none                         │
 │ move-call     │ 0x1::option::is_none<u64> a    │
-├───────────────┼────────────────────────────────┤
+╰───────────────┴────────────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([0])
 Command 0: MakeMoveVec(Some0x1::option::Option<u64>,[Input(0)])

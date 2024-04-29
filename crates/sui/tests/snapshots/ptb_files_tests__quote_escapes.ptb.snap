@@ -16,5 +16,5 @@ expression: "results.join(\"\\n\")"
 │ assign  │ bar "[" │
 │ assign  │ bar "]" │
 │ assign  │ bar "]" │
-├─────────┼─────────┤
+╰─────────┴─────────╯
  === BUILT PTB === 

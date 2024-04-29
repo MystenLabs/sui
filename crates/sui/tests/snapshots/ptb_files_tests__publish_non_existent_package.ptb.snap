@@ -9,7 +9,7 @@ expression: "results.join(\"\\n\")"
 │ command │ values          │
 ├─────────┼─────────────────┤
 │ publish │ not_a_valid_pkg │
-├─────────┼─────────────────┤
+╰─────────┴─────────────────╯
  === BUILDING PTB ERRORS === 
   × Error when processing PTB
    ╭────
