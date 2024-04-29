@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::{
-    extract::State,
+    extract::{Path, State},
     headers,
     http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
@@ -12,7 +12,6 @@ use axum::{
 use crate::{
     config::Version,
     error::{code, graphql_error_response},
-    server::builder::PathVersion,
 };
 
 pub(crate) static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
@@ -51,40 +50,44 @@ impl headers::Header for SuiRpcVersion {
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
 pub(crate) async fn check_version_middleware<B>(
-    PathVersion(req_version): PathVersion,
-    State(version): State<Version>,
+    version: Option<Path<String>>,
+    State(service_version): State<Version>,
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if NAMED_VERSIONS.contains(&req_version.as_str()) || req_version.is_empty() {
-        return next.run(request).await;
-    }
-    let Some((year, month)) = parse_version(&req_version) else {
-        return (
-            StatusCode::BAD_REQUEST,
-            graphql_error_response(
-                code::BAD_REQUEST,
-                format!(
-                    "Failed to parse path version. Expected either a `beta | legacy | stable` \
+    if let Some(version) = version {
+        let version = version.0;
+        if NAMED_VERSIONS.contains(&version.as_str()) || version.is_empty() {
+            return next.run(request).await;
+        }
+        let Some((year, month)) = parse_version(&version) else {
+            return (
+                StatusCode::BAD_REQUEST,
+                graphql_error_response(
+                    code::BAD_REQUEST,
+                    format!(
+                        "Failed to parse version path: {version}. Expected either a `beta | legacy | stable` \
                     version or <YEAR>.<MONTH> version.",
+                    ),
                 ),
-            ),
-        )
-            .into_response();
-    };
+            )
+                .into_response();
+        };
 
-    if year != version.year || month != version.month {
-        return (
-            StatusCode::MISDIRECTED_REQUEST,
-            graphql_error_response(
-                code::INTERNAL_SERVER_ERROR,
-                format!("Version '{req_version}' not supported."),
-            ),
-        )
-            .into_response();
+        if year != service_version.year || month != service_version.month {
+            return (
+                StatusCode::MISDIRECTED_REQUEST,
+                graphql_error_response(
+                    code::INTERNAL_SERVER_ERROR,
+                    format!("Version '{version}' not supported."),
+                ),
+            )
+                .into_response();
+        }
+        next.run(request).await
+    } else {
+        next.run(request).await
     }
-
-    next.run(request).await
 }
 
 /// Mark every outgoing response with a header indicating the precise version of the RPC that was
@@ -277,10 +280,8 @@ mod tests {
     async fn not_a_version() {
         let version = Version::for_testing();
         let service = service();
-        let response = service
-            .oneshot(version_request("not-a-version"))
-            .await
-            .unwrap();
+        let req_version = "not-a-version";
+        let response = service.oneshot(version_request(req_version)).await.unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
@@ -292,7 +293,7 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Failed to parse path version. Expected either a `beta | legacy | stable` version or <YEAR>.<MONTH> version.",
+                  "message": "Failed to parse version path: not-a-version. Expected either a `beta | legacy | stable` version or <YEAR>.<MONTH> version.",
                   "extensions": {
                     "code": "BAD_REQUEST"
                   }

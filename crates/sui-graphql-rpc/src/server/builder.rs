@@ -32,20 +32,20 @@ use async_graphql::extensions::Tracing;
 use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
-use axum::extract::{FromRef, FromRequestParts};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
-use axum::{async_trait, headers::Header, Router};
-use http::request::Parts;
+use axum::{headers::Header, Router};
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
 use hyper::Body;
 use hyper::Server as HyperServer;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
+use serde::Deserialize;
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::sync::Arc;
@@ -157,27 +157,6 @@ impl FromRef<AppState> for ConnectionConfig {
 impl FromRef<AppState> for Metrics {
     fn from_ref(app_state: &AppState) -> Metrics {
         app_state.metrics.clone()
-    }
-}
-
-pub struct PathVersion(pub String);
-
-#[async_trait]
-impl<S> FromRequestParts<S> for PathVersion
-where
-    S: Send + Sync,
-{
-    type Rejection = (StatusCode, &'static str);
-
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let uri = parts.uri.to_string();
-        let version = uri.split("/").last();
-
-        if let Some(version) = version {
-            Ok(PathVersion(version.to_string()))
-        } else {
-            Err((StatusCode::BAD_REQUEST, "Bad route request"))
-        }
     }
 }
 
