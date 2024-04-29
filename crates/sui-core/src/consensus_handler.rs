@@ -17,6 +17,7 @@ use narwhal_executor::{ExecutionIndices, ExecutionState};
 use narwhal_types::ConsensusOutput;
 use serde::{Deserialize, Serialize};
 use sui_macros::{fail_point_async, fail_point_if};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::{AuthorityName, EpochId, TransactionDigest},
@@ -230,7 +231,8 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        let round = consensus_output.leader_round();
+        let consensus_commit_info = ConsensusCommitInfo::new(&consensus_output, &self.committee);
+        let round = consensus_commit_info.round;
 
         assert!(round >= last_committed_round);
         if last_committed_round == round {
@@ -246,23 +248,24 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
-        let timestamp = consensus_output.commit_timestamp_ms();
-        let leader_author = consensus_output.leader_author_index();
-        let commit_sub_dag_index = consensus_output.commit_sub_dag_index();
 
         let epoch_start = self
             .epoch_store
             .epoch_start_config()
             .epoch_start_timestamp_ms();
-        let timestamp = if timestamp < epoch_start {
+        let timestamp = if consensus_commit_info.timestamp < epoch_start {
             error!(
-                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
+                "Unexpected commit timestamp {} less then epoch start time {epoch_start}, author {}, round {}",
+                consensus_commit_info.timestamp,
+                consensus_commit_info.leader_author_index,
+                consensus_commit_info.round,
             );
             epoch_start
         } else {
-            timestamp
+            consensus_commit_info.timestamp
         };
 
+        /*
         let prologue_transaction = match self
             .epoch_store
             .protocol_config()
@@ -274,21 +277,21 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 consensus_output.consensus_digest(),
             ),
             false => self.consensus_commit_prologue_transaction(round, timestamp),
-        };
+        };*/
 
         info!(
             %consensus_output,
             epoch = ?self.epoch_store.epoch(),
-            prologue_transaction_digest = ?prologue_transaction.digest(),
             "Received consensus output"
         );
 
         let empty_bytes = vec![];
+        /*
         transactions.push((
             empty_bytes.as_slice(),
             SequencedConsensusTransactionKind::System(prologue_transaction),
             consensus_output.leader_author_index(),
-        ));
+        ));*/
 
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
@@ -314,7 +317,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions.push((
                 empty_bytes.as_slice(),
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
-                consensus_output.leader_author_index(),
+                consensus_commit_info.leader_author_index,
             ));
         }
 
@@ -330,7 +333,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&leader_author.to_string()])
+            .with_label_values(&[&consensus_commit_info.leader_author_index.to_string()])
             .inc();
 
         {
@@ -398,7 +401,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             {
                 let current_tx_index = ExecutionIndices {
                     last_committed_round: round,
-                    sub_dag_index: commit_sub_dag_index,
+                    sub_dag_index: consensus_commit_info.sub_dag_index,
                     transaction_index: seq as u64,
                 };
 
@@ -439,8 +442,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
-                round,
-                timestamp,
+                &consensus_commit_info,
                 &self.metrics,
             )
             .await
@@ -537,34 +539,6 @@ impl Drop for MysticetiConsensusHandler {
 }
 
 impl<C> ConsensusHandler<C> {
-    fn consensus_commit_prologue_transaction(
-        &self,
-        round: u64,
-        commit_timestamp_ms: u64,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue(
-            self.epoch(),
-            round,
-            commit_timestamp_ms,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
-    }
-
-    fn consensus_commit_prologue_v2_transaction(
-        &self,
-        round: u64,
-        commit_timestamp_ms: u64,
-        consensus_digest: ConsensusCommitDigest,
-    ) -> VerifiedExecutableTransaction {
-        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
-            self.epoch(),
-            round,
-            commit_timestamp_ms,
-            consensus_digest,
-        );
-        VerifiedExecutableTransaction::new_system(transaction, self.epoch())
-    }
-
     fn authenticator_state_update_transaction(
         &self,
         round: u64,
@@ -800,6 +774,72 @@ impl SequencedConsensusTransaction {
             certificate_author: AuthorityName::ZERO,
             consensus_index: Default::default(),
             transaction: SequencedConsensusTransactionKind::External(transaction),
+        }
+    }
+}
+
+pub struct ConsensusCommitInfo {
+    pub round: u64,
+    pub sub_dag_index: u64,
+    pub timestamp: u64,
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    pub leader_author_index: AuthorityIndex,
+    pub leader_author_name: AuthorityName,
+}
+
+impl ConsensusCommitInfo {
+    fn new(consensus_output: &impl ConsensusOutputAPI, committee: &Committee) -> Self {
+        Self {
+            round: consensus_output.leader_round(),
+            sub_dag_index: consensus_output.commit_sub_dag_index(),
+            timestamp: consensus_output.commit_timestamp_ms(),
+            consensus_commit_digest: consensus_output.consensus_digest(),
+            leader_author_index: consensus_output.leader_author_index(),
+            leader_author_name: committee
+                .authority_pubkey_by_index(consensus_output.leader_author_index())
+                .unwrap(),
+        }
+    }
+
+    pub fn new_for_test(commit_round: u64, commit_timestamp: u64) -> Self {
+        Self {
+            round: commit_round,
+            sub_dag_index: 0,
+            timestamp: commit_timestamp,
+            consensus_commit_digest: ConsensusCommitDigest::default(),
+            leader_author_index: 0,
+            leader_author_name: AuthorityName::ZERO,
+        }
+    }
+
+    fn consensus_commit_prologue_transaction(&self, epoch: u64) -> VerifiedExecutableTransaction {
+        let transaction =
+            VerifiedTransaction::new_consensus_commit_prologue(epoch, self.round, self.timestamp);
+        VerifiedExecutableTransaction::new_system(transaction, epoch)
+    }
+
+    fn consensus_commit_prologue_v2_transaction(
+        &self,
+        epoch: u64,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+            epoch,
+            self.round,
+            self.timestamp,
+            self.consensus_commit_digest,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, epoch)
+    }
+
+    pub fn create_consensus_commit_prologue_transaction(
+        &self,
+        epoch: u64,
+        protocol_config: &ProtocolConfig,
+    ) -> VerifiedExecutableTransaction {
+        if protocol_config.include_consensus_digest_in_prologue() {
+            self.consensus_commit_prologue_v2_transaction(epoch)
+        } else {
+            self.consensus_commit_prologue_transaction(epoch)
         }
     }
 }
