@@ -683,14 +683,7 @@ mod test {
         let surfer_task = tokio::spawn(async move {
             // now do a sui-surfer test
             let mut test_packages_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-            test_packages_dir.extend([
-                "..",
-                "..",
-                "crates",
-                "sui-surfer",
-                "tests",
-                // "move_building_blocks",
-            ]);
+            test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
             let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
                 .unwrap()
                 .flat_map(|entry| {
@@ -706,6 +699,7 @@ mod test {
                 test_cluster,
             )
             .await;
+            info!("sui_surfer test complete with results: {results:?}");
             assert!(results.num_successful_transactions > 0);
             assert!(!results.unique_move_functions_called.is_empty());
         });
