@@ -59,7 +59,7 @@ pub struct Diagnostic {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
-pub struct Diagnostics(Option<Diagnostics_>);
+pub struct Diagnostics(Option<Diagnostics_>, DiagnosticsFormat);
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 struct Diagnostics_ {
@@ -67,6 +67,13 @@ struct Diagnostics_ {
     // diagnostics filtered in source code
     filtered_source_diagnostics: Vec<Diagnostic>,
     severity_count: BTreeMap<Severity, usize>,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
+pub enum DiagnosticsFormat {
+    #[default]
+    Text,
+    JSON
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -130,7 +137,7 @@ pub struct LineColLocation {
     pub byte: usize,
 }
 
-/// A file, and the line:column start, and line:column end that corresponds to a `Loc`
+/// A file, and the usize start and usize end that corresponds to a `Loc`
 pub struct FileByteSpan {
     file_id: FileId,
     byte_span: ByteSpan,
@@ -224,7 +231,7 @@ pub fn report_warnings(files: &FilesSourceText, warnings: Diagnostics) {
 }
 
 fn report_diagnostics_impl(files: &FilesSourceText, diags: Diagnostics, should_exit: bool) {
-    let color_choice = env_color();
+    let color_choice = diags.env_color();
     let mut writer = StandardStream::stderr(color_choice);
     output_diagnostics(&mut writer, files, diags);
     if should_exit {
@@ -299,7 +306,7 @@ fn output_diagnostics<W: WriteColor>(
 }
 
 fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
-    let Diagnostics(Some(mut diags)) = diags else {
+    let Diagnostics(Some(mut diags), format) = diags else {
         return;
     };
 
@@ -311,14 +318,9 @@ fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: 
         let loc2: &Loc = &e2.primary_label.0;
         loc1.cmp(loc2)
     });
-    let mut seen: HashSet<Diagnostic> = HashSet::new();
-    for diag in diags.diagnostics {
-        if seen.contains(&diag) {
-            continue;
-        }
-        seen.insert(diag.clone());
-        let rendered = render_diagnostic(&mapping, diag);
-        emit(writer, &Config::default(), &mapping.files, &rendered).unwrap()
+    match format {
+        DiagnosticsFormat::Text => emit_diagnostics_text(writer, &mapping, diags),
+        DiagnosticsFormat::JSON => emit_diagnostics_json(writer, &mapping, diags),
     }
 }
 
@@ -331,7 +333,23 @@ fn convert_loc(mapped_files: &MappedFiles, loc: Loc) -> (FileId, Range<usize>) {
     (id, range)
 }
 
-fn render_diagnostic(
+fn emit_diagnostics_text(
+    writer: &mut dyn WriteColor,
+    mapped_files: &MappedFiles,
+    diags: Diagnostics_,
+) {
+    let mut seen: HashSet<Diagnostic> = HashSet::new();
+    for diag in diags.diagnostics {
+        if seen.contains(&diag) {
+            continue;
+        }
+        seen.insert(diag.clone());
+        let rendered = render_diagnostic_text(&mapped_files, diag);
+        emit(writer, &Config::default(), &mapped_files.files, &rendered).unwrap()
+    }
+}
+
+fn render_diagnostic_text(
     mapped_files: &MappedFiles,
     diag: Diagnostic,
 ) -> csr::diagnostic::Diagnostic<FileId> {
@@ -361,6 +379,57 @@ fn render_diagnostic(
     diag
 }
 
+fn emit_diagnostics_json(
+    writer: &mut dyn WriteColor,
+    mapped_files: &MappedFiles,
+    diags: Diagnostics_,
+) {
+    write!(writer, "[\n").expect("ICE reporting error");
+    let mut seen: HashSet<Diagnostic> = HashSet::new();
+    let mut diags = diags.diagnostics.into_iter();
+    if let Some(diag) = diags.next() {
+        seen.insert(diag.clone());
+        let rendered = render_diagnostic_json(&mapped_files, diag);
+        write!(writer, "{}", rendered).expect("ICE reporting error");
+    }
+    for diag in diags {
+        if seen.contains(&diag) {
+            continue;
+        }
+        write!(writer, ",\n").expect("ICE reporting error");
+        seen.insert(diag.clone());
+        let rendered = render_diagnostic_json(&mapped_files, diag);
+        write!(writer, "{}", rendered).expect("ICE reporting error");
+    }
+    write!(writer, "\n]\n").expect("ICE reporting error");
+}
+
+fn render_diagnostic_json(
+    mapped_files: &MappedFiles,
+    diag: Diagnostic,
+) -> String {
+    use std::fmt::Write;
+    let mut output = String::new();
+    let Diagnostic {
+        info,
+        primary_label: (ploc, _pmsg),
+        secondary_labels: _,
+        notes: _,
+    } = diag;
+
+    write!(&mut output, "    {{\n").expect("ICE reporting error");
+    let bloc = mapped_files.location(ploc);
+    write!(&mut output, "        \"file\": \"{}\",\n", mapped_files.files.get(bloc.file_id).unwrap().name()).expect("ICE reporting error");
+    write!(&mut output, "        \"line\": {},\n", bloc.start.line).expect("ICE reporting error");
+    write!(&mut output, "        \"column\": {},\n", bloc.start.column).expect("ICE reporting error");
+    write!(&mut output, "        \"level\": \"{:?}\",\n", info.severity()).expect("ICE reporting error");
+    write!(&mut output, "        \"category\": {},\n", info.category()).expect("ICE reporting error");
+    write!(&mut output, "        \"code\": {},\n", info.code()).expect("ICE reporting error");
+    write!(&mut output, "        \"msg\": {:?}\n", info.message()).expect("ICE reporting error");
+    write!(&mut output, "    }}").expect("ICE reporting error");
+    output
+}
+
 //**************************************************************************************************
 // Migration Diff Reporting
 //**************************************************************************************************
@@ -370,7 +439,8 @@ pub fn generate_migration_diff(
     diags: &Diagnostics,
 ) -> Option<(Migration, /* Migration errors */ Diagnostics)> {
     match diags {
-        Diagnostics(Some(inner)) => {
+        Diagnostics(Some(inner), format) => {
+            assert!(matches!(format, DiagnosticsFormat::Text), "Cannot migrate with json mode set");
             let migration_diags = inner
                 .diagnostics
                 .iter()
@@ -405,11 +475,15 @@ pub fn report_migration_to_buffer(files: &FilesSourceText, diags: Diagnostics) -
 
 impl Diagnostics {
     pub fn new() -> Self {
-        Self(None)
+        Self(None, DiagnosticsFormat::default())
+    }
+
+    pub fn set_format(&mut self, format: DiagnosticsFormat) {
+        self.1 = format;
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
-        let Self(Some(inner)) = self else { return None };
+        let Self(Some(inner), _) = self else { return None };
         // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
@@ -420,7 +494,7 @@ impl Diagnostics {
     }
 
     pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
-        let Self(Some(inner)) = self else { return 0 };
+        let Self(Some(inner), _) = self else { return 0 };
         // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
@@ -432,12 +506,12 @@ impl Diagnostics {
     }
 
     pub fn is_empty(&self) -> bool {
-        let Self(Some(inner)) = self else { return true };
+        let Self(Some(inner), _) = self else { return true };
         inner.diagnostics.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        let Self(Some(inner)) = self else { return 0 };
+        let Self(Some(inner), _) = self else { return 0 };
         inner.diagnostics.len()
     }
 
@@ -472,7 +546,7 @@ impl Diagnostics {
             diagnostics,
             filtered_source_diagnostics: _,
             severity_count,
-        })) = other
+        }), _format) = other
         else {
             return;
         };
@@ -528,7 +602,7 @@ impl Diagnostics {
     }
 
     pub fn any_with_prefix(&self, prefix: &str) -> bool {
-        let Self(Some(inner)) = self else {
+        let Self(Some(inner), _) = self else {
             return false;
         };
         inner
@@ -539,7 +613,7 @@ impl Diagnostics {
 
     /// Returns true if any diagnostic in the Syntax category have already been recorded.
     pub fn any_syntax_error_with_primary_loc(&self, loc: Loc) -> bool {
-        let Self(Some(inner)) = self else {
+        let Self(Some(inner), _) = self else {
             return false;
         };
         inner
@@ -552,7 +626,7 @@ impl Diagnostics {
     /// have a given prefix (first value returned) and how many different categories of diags were
     /// filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
-        let Self(Some(inner)) = self else {
+        let Self(Some(inner), _) = self else {
             return (0, 0);
         };
         let mut filtered_diags_num = 0;
@@ -564,6 +638,21 @@ impl Diagnostics {
             }
         });
         (filtered_diags_num, filtered_categories.len())
+    }
+
+    fn env_color(&self) -> ColorChoice {
+        match self.1 {
+            DiagnosticsFormat::Text =>(),
+            DiagnosticsFormat::JSON => {
+                return ColorChoice::Never;
+            }
+        };
+        match read_env_var(COLOR_MODE_ENV_VAR).as_str() {
+            "NONE" => ColorChoice::Never,
+            "ANSI" => ColorChoice::AlwaysAnsi,
+            "ALWAYS" => ColorChoice::Always,
+            _ => ColorChoice::Auto,
+        }
     }
 }
 
@@ -1088,7 +1177,7 @@ impl FromIterator<Diagnostic> for Diagnostics {
 impl From<Vec<Diagnostic>> for Diagnostics {
     fn from(diagnostics: Vec<Diagnostic>) -> Self {
         if diagnostics.is_empty() {
-            return Self(None);
+            return Self(None, DiagnosticsFormat::default());
         }
 
         let mut severity_count = BTreeMap::new();
@@ -1099,7 +1188,7 @@ impl From<Vec<Diagnostic>> for Diagnostics {
             diagnostics,
             filtered_source_diagnostics: vec![],
             severity_count,
-        }))
+        }), DiagnosticsFormat::default())
     }
 }
 
