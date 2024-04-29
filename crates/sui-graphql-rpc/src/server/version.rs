@@ -55,12 +55,15 @@ pub(crate) async fn check_version_middleware<B>(
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if let Some(Path(version)) = version {
-        if NAMED_VERSIONS.contains(&version.as_str()) || version.is_empty() {
-            return next.run(request).await;
-        }
-        let Some((year, month)) = parse_version(&version) else {
-            return (
+    let Some(Path(version)) = version else {
+        return next.run(request).await;
+    };
+
+    if NAMED_VERSIONS.contains(&version.as_str()) || version.is_empty() {
+        return next.run(request).await;
+    }
+    let Some((year, month)) = parse_version(&version) else {
+        return (
                 StatusCode::BAD_REQUEST,
                 graphql_error_response(
                     code::BAD_REQUEST,
@@ -71,18 +74,17 @@ pub(crate) async fn check_version_middleware<B>(
                 ),
             )
                 .into_response();
-        };
+    };
 
-        if year != service_version.year || month != service_version.month {
-            return (
-                StatusCode::MISDIRECTED_REQUEST,
-                graphql_error_response(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Version '{version}' not supported."),
-                ),
-            )
-                .into_response();
-        }
+    if year != service_version.year || month != service_version.month {
+        return (
+            StatusCode::MISDIRECTED_REQUEST,
+            graphql_error_response(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Version '{version}' not supported."),
+            ),
+        )
+            .into_response();
     }
     next.run(request).await
 }
@@ -300,8 +302,10 @@ mod tests {
     async fn not_a_version() {
         let version = Version::for_testing();
         let service = service();
-        let req_version = "not-a-version";
-        let response = service.oneshot(version_request(req_version)).await.unwrap();
+        let response = service
+            .oneshot(version_request("not-a-version"))
+            .await
+            .unwrap();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
