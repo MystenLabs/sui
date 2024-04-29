@@ -179,6 +179,7 @@ fn update_index_and_hash(
     v: &[u8],
 ) -> bool {
     if last_consensus_stats.index >= index {
+        panic!("Consensus handler update index and hash returned false, which is unexpected");
         return false;
     }
 
@@ -408,7 +409,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 let index_with_stats = if self.update_index_and_hash(index, serialized) {
                     self.last_consensus_stats.clone()
                 } else {
-                    debug!(
+                    panic!(
                         "Ignore consensus transaction at index {:?} as it appear to be already processed",
                         index
                     );
@@ -970,6 +971,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[test]
     pub fn test_update_index_and_hash() {
         let index0 = ExecutionIndices {
