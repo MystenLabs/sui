@@ -145,7 +145,6 @@ jobs:
           [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
           [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
           [ -f ./target/release/sui-faucet${{ env.extention }} ] && mv ./target/release/sui-faucet${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-faucet${{ env.extention }}
-          [ -f ./target/release/sui-test-validator${{ env.extention }} ] && mv ./target/release/sui-test-validator${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-test-validator${{ env.extention }}
           [ -f ./target/release/sui-data-ingestion${{ env.extention }} ] && mv ./target/release/sui-data-ingestion${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-data-ingestion${{ env.extention }}
           [ -f ./target/release/sui-bridge${{ env.extention }} ] && mv ./target/release/sui-bridge${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-bridge${{ env.extention }}
           [ -f ./target/release/sui-graphql-rpc${{ env.extention }} ] && mv ./target/release/sui-graphql-rpc${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-graphql-rpc${{ env.extention }}
