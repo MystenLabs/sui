@@ -97,7 +97,7 @@ task 15 'run-graphql'. lines 63-68:
 Headers: {
     "content-type": "application/json",
     "content-length": "157",
-    "x-sui-rpc-version": "2024.2.0-testing-no-sha",
+    "x-sui-rpc-version": "2024.8.0-testing-no-sha",
     "access-control-allow-origin": "*",
     "vary": "origin",
     "vary": "access-control-request-method",
