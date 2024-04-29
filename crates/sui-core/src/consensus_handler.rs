@@ -231,8 +231,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         let last_committed_round = self.last_consensus_stats.index.last_committed_round;
 
-        let consensus_commit_info = ConsensusCommitInfo::new(&consensus_output, &self.committee);
-        let round = consensus_commit_info.round;
+        let round = consensus_output.leader_round();
 
         assert!(round >= last_committed_round);
         if last_committed_round == round {
@@ -248,50 +247,28 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
+        let timestamp = consensus_output.commit_timestamp_ms();
+        let leader_author = consensus_output.leader_author_index();
+        let commit_sub_dag_index = consensus_output.commit_sub_dag_index();
 
         let epoch_start = self
             .epoch_store
             .epoch_start_config()
             .epoch_start_timestamp_ms();
-        let timestamp = if consensus_commit_info.timestamp < epoch_start {
+        let timestamp = if timestamp < epoch_start {
             error!(
-                "Unexpected commit timestamp {} less then epoch start time {epoch_start}, author {}, round {}",
-                consensus_commit_info.timestamp,
-                consensus_commit_info.leader_author_index,
-                consensus_commit_info.round,
+                "Unexpected commit timestamp {timestamp} less then epoch start time {epoch_start}, author {leader_author}, round {round}",
             );
             epoch_start
         } else {
-            consensus_commit_info.timestamp
+            timestamp
         };
-
-        /*
-        let prologue_transaction = match self
-            .epoch_store
-            .protocol_config()
-            .include_consensus_digest_in_prologue()
-        {
-            true => self.consensus_commit_prologue_v2_transaction(
-                round,
-                timestamp,
-                consensus_output.consensus_digest(),
-            ),
-            false => self.consensus_commit_prologue_transaction(round, timestamp),
-        };*/
 
         info!(
             %consensus_output,
             epoch = ?self.epoch_store.epoch(),
             "Received consensus output"
         );
-
-        let empty_bytes = vec![];
-        /*
-        transactions.push((
-            empty_bytes.as_slice(),
-            SequencedConsensusTransactionKind::System(prologue_transaction),
-            consensus_output.leader_author_index(),
-        ));*/
 
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
@@ -305,6 +282,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .get_new_jwks(last_committed_round)
             .expect("Unrecoverable error in consensus handler");
 
+        let empty_bytes = vec![];
         if !new_jwks.is_empty() {
             let authenticator_state_update_transaction =
                 self.authenticator_state_update_transaction(round, new_jwks);
@@ -317,7 +295,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             transactions.push((
                 empty_bytes.as_slice(),
                 SequencedConsensusTransactionKind::System(authenticator_state_update_transaction),
-                consensus_commit_info.leader_author_index,
+                leader_author,
             ));
         }
 
@@ -333,7 +311,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         self.metrics
             .consensus_committed_subdags
-            .with_label_values(&[&consensus_commit_info.leader_author_index.to_string()])
+            .with_label_values(&[&leader_author.to_string()])
             .inc();
 
         {
@@ -401,7 +379,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             {
                 let current_tx_index = ExecutionIndices {
                     last_committed_round: round,
-                    sub_dag_index: consensus_commit_info.sub_dag_index,
+                    sub_dag_index: commit_sub_dag_index,
                     transaction_index: seq as u64,
                 };
 
@@ -442,7 +420,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
-                &consensus_commit_info,
+                &ConsensusCommitInfo::new(&consensus_output),
                 &self.metrics,
             )
             .await
@@ -780,36 +758,34 @@ impl SequencedConsensusTransaction {
 
 pub struct ConsensusCommitInfo {
     pub round: u64,
-    pub sub_dag_index: u64,
     pub timestamp: u64,
     pub consensus_commit_digest: ConsensusCommitDigest,
-    pub leader_author_index: AuthorityIndex,
-    pub leader_author_name: AuthorityName,
+
+    skip_consensus_commit_prologue_in_test: bool,
 }
 
 impl ConsensusCommitInfo {
-    fn new(consensus_output: &impl ConsensusOutputAPI, committee: &Committee) -> Self {
+    fn new(consensus_output: &impl ConsensusOutputAPI) -> Self {
         Self {
             round: consensus_output.leader_round(),
-            sub_dag_index: consensus_output.commit_sub_dag_index(),
             timestamp: consensus_output.commit_timestamp_ms(),
             consensus_commit_digest: consensus_output.consensus_digest(),
-            leader_author_index: consensus_output.leader_author_index(),
-            leader_author_name: committee
-                .authority_pubkey_by_index(consensus_output.leader_author_index())
-                .unwrap(),
+            skip_consensus_commit_prologue_in_test: false,
         }
     }
 
     pub fn new_for_test(commit_round: u64, commit_timestamp: u64) -> Self {
         Self {
             round: commit_round,
-            sub_dag_index: 0,
             timestamp: commit_timestamp,
             consensus_commit_digest: ConsensusCommitDigest::default(),
-            leader_author_index: 0,
-            leader_author_name: AuthorityName::ZERO,
+            skip_consensus_commit_prologue_in_test: true,
         }
+    }
+
+    #[cfg(any(test, feature = "test-utils"))]
+    pub fn skip_consensus_commit_prologue_in_test(&self) -> bool {
+        self.skip_consensus_commit_prologue_in_test
     }
 
     fn consensus_commit_prologue_transaction(&self, epoch: u64) -> VerifiedExecutableTransaction {

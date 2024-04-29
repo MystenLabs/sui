@@ -67,7 +67,7 @@ use crate::consensus_handler::{
     SequencedConsensusTransactionKind, VerifiedSequencedConsensusTransaction,
 };
 use crate::epoch::epoch_metrics::EpochMetrics;
-use crate::epoch::randomness::{self, DkgStatus, RandomnessManager, RandomnessReporter};
+use crate::epoch::randomness::{DkgStatus, RandomnessManager, RandomnessReporter};
 use crate::epoch::reconfiguration::ReconfigState;
 use crate::execution_cache::{ExecutionCache, ExecutionCacheRead};
 use crate::module_cache_metrics::ResolverMetrics;
@@ -2649,6 +2649,13 @@ impl AuthorityPerEpochStore {
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
     ) -> SuiResult {
+        #[cfg(any(test, feature = "test-utils"))]
+        {
+            if consensus_commit_info.skip_consensus_commit_prologue_in_test() {
+                return Ok(());
+            }
+        }
+
         let transaction = consensus_commit_info
             .create_consensus_commit_prologue_transaction(self.epoch(), self.protocol_config());
         match self.process_consensus_system_transaction(&transaction) {
