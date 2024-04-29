@@ -108,6 +108,8 @@ impl DynamicField {
                 ctx,
                 self.df_object_id,
                 Object::under_parent(
+                    // TODO (RPC-131): The dynamic object field value's version should be bounded by
+                    // the field's parent version, not the version of the field object itself.
                     self.super_.super_.version_impl(),
                     self.super_.super_.checkpoint_viewed_at,
                 ),

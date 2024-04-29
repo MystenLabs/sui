@@ -1337,6 +1337,7 @@ fn objects_query(filter: &ObjectFilter, range: AvailableRange, page: &Page<Curso
 where
 {
     let view = if filter.object_keys.is_some() || !filter.has_filters() {
+        // TODO (RPC-142): Fix handling of filters that contain both object keys and object ids.
         View::Historical
     } else {
         View::Consistent
