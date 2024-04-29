@@ -2128,6 +2128,7 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
+                    // Also bumps framework snapshot to fix binop issue.
                 }
                 // Use this template when making changes:
                 //
