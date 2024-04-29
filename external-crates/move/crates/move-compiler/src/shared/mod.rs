@@ -7,7 +7,7 @@ use crate::{
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters, DiagnosticsFormat,
+        Diagnostic, Diagnostics, DiagnosticsFormat, FileName, MappedFiles, WarningFilters,
     },
     editions::{
         check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,

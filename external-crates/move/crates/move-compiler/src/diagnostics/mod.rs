@@ -73,7 +73,7 @@ struct Diagnostics_ {
 pub enum DiagnosticsFormat {
     #[default]
     Text,
-    JSON
+    JSON,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -344,7 +344,7 @@ fn emit_diagnostics_text(
             continue;
         }
         seen.insert(diag.clone());
-        let rendered = render_diagnostic_text(&mapped_files, diag);
+        let rendered = render_diagnostic_text(mapped_files, diag);
         emit(writer, &Config::default(), &mapped_files.files, &rendered).unwrap()
     }
 }
@@ -384,30 +384,27 @@ fn emit_diagnostics_json(
     mapped_files: &MappedFiles,
     diags: Diagnostics_,
 ) {
-    write!(writer, "[\n").expect("ICE reporting error");
+    writeln!(writer, "[").expect("ICE reporting error");
     let mut seen: HashSet<Diagnostic> = HashSet::new();
     let mut diags = diags.diagnostics.into_iter();
     if let Some(diag) = diags.next() {
         seen.insert(diag.clone());
-        let rendered = render_diagnostic_json(&mapped_files, diag);
+        let rendered = render_diagnostic_json(mapped_files, diag);
         write!(writer, "{}", rendered).expect("ICE reporting error");
     }
     for diag in diags {
         if seen.contains(&diag) {
             continue;
         }
-        write!(writer, ",\n").expect("ICE reporting error");
+        writeln!(writer, ",").expect("ICE reporting error");
         seen.insert(diag.clone());
-        let rendered = render_diagnostic_json(&mapped_files, diag);
+        let rendered = render_diagnostic_json(mapped_files, diag);
         write!(writer, "{}", rendered).expect("ICE reporting error");
     }
-    write!(writer, "\n]\n").expect("ICE reporting error");
+    writeln!(writer, "\n]").expect("ICE reporting error");
 }
 
-fn render_diagnostic_json(
-    mapped_files: &MappedFiles,
-    diag: Diagnostic,
-) -> String {
+fn render_diagnostic_json(mapped_files: &MappedFiles, diag: Diagnostic) -> String {
     use std::fmt::Write;
     let mut output = String::new();
     let Diagnostic {
@@ -417,15 +414,23 @@ fn render_diagnostic_json(
         notes: _,
     } = diag;
 
-    write!(&mut output, "    {{\n").expect("ICE reporting error");
+    writeln!(&mut output, "    {{").expect("ICE reporting error");
     let bloc = mapped_files.location(ploc);
-    write!(&mut output, "        \"file\": \"{}\",\n", mapped_files.files.get(bloc.file_id).unwrap().name()).expect("ICE reporting error");
-    write!(&mut output, "        \"line\": {},\n", bloc.start.line).expect("ICE reporting error");
-    write!(&mut output, "        \"column\": {},\n", bloc.start.column).expect("ICE reporting error");
-    write!(&mut output, "        \"level\": \"{:?}\",\n", info.severity()).expect("ICE reporting error");
-    write!(&mut output, "        \"category\": {},\n", info.category()).expect("ICE reporting error");
-    write!(&mut output, "        \"code\": {},\n", info.code()).expect("ICE reporting error");
-    write!(&mut output, "        \"msg\": {:?}\n", info.message()).expect("ICE reporting error");
+    writeln!(
+        &mut output,
+        "        \"file\": \"{}\",",
+        mapped_files.files.get(bloc.file_id).unwrap().name()
+    )
+    .expect("ICE reporting error");
+    writeln!(&mut output, "        \"line\": {},", bloc.start.line).expect("ICE reporting error");
+    writeln!(&mut output, "        \"column\": {},", bloc.start.column)
+        .expect("ICE reporting error");
+    writeln!(&mut output, "        \"level\": \"{:?}\",", info.severity())
+        .expect("ICE reporting error");
+    writeln!(&mut output, "        \"category\": {},", info.category())
+        .expect("ICE reporting error");
+    writeln!(&mut output, "        \"code\": {},", info.code()).expect("ICE reporting error");
+    writeln!(&mut output, "        \"msg\": {:?}", info.message()).expect("ICE reporting error");
     write!(&mut output, "    }}").expect("ICE reporting error");
     output
 }
@@ -440,7 +445,10 @@ pub fn generate_migration_diff(
 ) -> Option<(Migration, /* Migration errors */ Diagnostics)> {
     match diags {
         Diagnostics(Some(inner), format) => {
-            assert!(matches!(format, DiagnosticsFormat::Text), "Cannot migrate with json mode set");
+            assert!(
+                matches!(format, DiagnosticsFormat::Text),
+                "Cannot migrate with json mode set"
+            );
             let migration_diags = inner
                 .diagnostics
                 .iter()
@@ -483,7 +491,9 @@ impl Diagnostics {
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
-        let Self(Some(inner), _) = self else { return None };
+        let Self(Some(inner), _) = self else {
+            return None;
+        };
         // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
@@ -506,7 +516,9 @@ impl Diagnostics {
     }
 
     pub fn is_empty(&self) -> bool {
-        let Self(Some(inner), _) = self else { return true };
+        let Self(Some(inner), _) = self else {
+            return true;
+        };
         inner.diagnostics.is_empty()
     }
 
@@ -542,11 +554,14 @@ impl Diagnostics {
     }
 
     pub fn extend(&mut self, other: Self) {
-        let Self(Some(Diagnostics_ {
-            diagnostics,
-            filtered_source_diagnostics: _,
-            severity_count,
-        }), _format) = other
+        let Self(
+            Some(Diagnostics_ {
+                diagnostics,
+                filtered_source_diagnostics: _,
+                severity_count,
+            }),
+            _format,
+        ) = other
         else {
             return;
         };
@@ -642,7 +657,7 @@ impl Diagnostics {
 
     fn env_color(&self) -> ColorChoice {
         match self.1 {
-            DiagnosticsFormat::Text =>(),
+            DiagnosticsFormat::Text => (),
             DiagnosticsFormat::JSON => {
                 return ColorChoice::Never;
             }
@@ -1184,11 +1199,14 @@ impl From<Vec<Diagnostic>> for Diagnostics {
         for diag in &diagnostics {
             *severity_count.entry(diag.info.severity()).or_insert(0) += 1;
         }
-        Self(Some(Diagnostics_ {
-            diagnostics,
-            filtered_source_diagnostics: vec![],
-            severity_count,
-        }), DiagnosticsFormat::default())
+        Self(
+            Some(Diagnostics_ {
+                diagnostics,
+                filtered_source_diagnostics: vec![],
+                severity_count,
+            }),
+            DiagnosticsFormat::default(),
+        )
     }
 }
 
