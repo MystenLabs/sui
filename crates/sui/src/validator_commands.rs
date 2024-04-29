@@ -37,6 +37,7 @@ use move_core_types::identifier::Identifier;
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_bridge::config::BridgeNodeConfig;
+use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
 use sui_config::Config;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -169,11 +170,17 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Sui native bridge committee member registration
     BridgeCommitteeRegistration {
-        #[clap(long = "bridge-node-config-path")]
+        /// Path to bridge node config
+        #[clap(long)]
         bridge_node_config_path: PathBuf,
-        #[clap(long = "bridge-authority-url")]
+        /// Bridge authority URL
+        #[clap(long)]
         bridge_authority_url: String,
+        /// Gas budget for this transaction.
+        #[clap(long)]
+        gas_budget: Option<u64>,
     },
 }
 
@@ -470,23 +477,25 @@ impl SuiValidatorCommand {
             SuiValidatorCommand::BridgeCommitteeRegistration {
                 bridge_node_config_path,
                 bridge_authority_url,
+                gas_budget,
             } => {
-                let bridge_config = BridgeNodeConfig::load(bridge_node_config_path)
-                    .expect("Couldn't load BridgeNodeConfig");
-
+                let bridge_config = match BridgeNodeConfig::load(bridge_node_config_path) {
+                    Ok(config) => config,
+                    Err(e) => panic!("Couldn't load BridgeNodeConfig, caused by: {e}"),
+                };
                 // Read bridge keypair
                 let key_str =
                     fs::read_to_string(bridge_config.bridge_authority_key_path_base64_raw)?;
-                let bytes = Base64::decode(key_str.trim()).unwrap();
-                let key = Secp256k1PrivateKey::from_bytes(&bytes).unwrap();
+                let bytes = Base64::decode(key_str.trim())
+                    .expect("Decode authority key from file should not fail.");
+                let key = Secp256k1PrivateKey::from_bytes(&bytes)
+                    .expect("Decode authority key from bytes should not fail.");
                 let ecdsa_keypair = Secp256k1KeyPair::from(key);
 
-                // Read sui node account key pair
                 let address = context.active_address()?;
                 println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {}", ecdsa_keypair.public);
 
-                let bridge_client =
-                    sui_bridge::sui_client::SuiClient::new(&bridge_config.sui.sui_rpc_url).await?;
+                let bridge_client = SuiBridgeClient::new(&bridge_config.sui.sui_rpc_url).await?;
                 let bridge = bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
@@ -494,8 +503,9 @@ impl SuiValidatorCommand {
                 let gas = context
                     .get_one_gas_object_owned_by_address(address)
                     .await?
-                    .unwrap();
-                let ref_gas_price = context.get_reference_gas_price().await?;
+                    .expect(&format!("Cannot find gas object from address : {address}"));
+
+                let gas_price = context.get_reference_gas_price().await?;
 
                 let mut ptb = ProgrammableTransactionBuilder::default();
 
@@ -506,23 +516,24 @@ impl SuiValidatorCommand {
                 ptb.programmable_move_call(
                     BRIDGE_PACKAGE_ID,
                     BRIDGE_MODULE_NAME.into(),
+                    // New identifier should not fail, safe to unwrap.
                     Identifier::new("committee_registration").unwrap(),
                     vec![],
                     vec![bridge_arg, system_arg, pub_key_arg, url_arg],
                 );
-
+                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
                 let tx_data = TransactionData::new_programmable(
                     address,
                     vec![gas],
                     ptb.finish(),
-                    10000000,
-                    ref_gas_price,
+                    gas_budget,
+                    gas_price,
                 );
 
                 let tx = context.sign_transaction(&tx_data);
                 let response = context.execute_transaction_must_succeed(tx).await;
                 println!(
-                    "Committee registration successful. txn digest: {}",
+                    "Committee registration successful. Transaction digest: {}",
                     response.digest
                 );
                 SuiValidatorCommandResponse::BridgeCommitteeRegistration(response)
@@ -763,7 +774,7 @@ impl Display for SuiValidatorCommandResponse {
                 )?;
             }
             SuiValidatorCommandResponse::BridgeCommitteeRegistration(response) => {
-                write!(writer, "{}", write_transaction_response(response)?)?;
+                write!(writer, "{}", response)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))
