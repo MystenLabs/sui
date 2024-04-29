@@ -125,6 +125,17 @@ pub struct TrafficTally {
     pub timestamp: SystemTime,
 }
 
+impl TrafficTally {
+    pub fn new(connection_ip: Option<IpAddr>, proxy_ip: Option<IpAddr>, weight: Weight) -> Self {
+        Self {
+            connection_ip,
+            proxy_ip,
+            weight,
+            timestamp: SystemTime::now(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct PolicyResponse {
     pub block_connection_ip: Option<IpAddr>,
