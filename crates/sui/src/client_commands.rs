@@ -3195,24 +3195,18 @@ pub async fn estimate_gas_budget(
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
     let client = context.get_client().await?;
-    let dry_run =
-        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await;
-    if let Ok(SuiClientCommandResult::DryRun(dry_run)) = dry_run {
-        let safe_overhead = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
-        let computation_cost_with_overhead =
-            (dry_run.effects.gas_cost_summary().computation_cost + safe_overhead) as i64;
-        let gas_budget = dry_run.effects.gas_cost_summary().net_gas_usage() + safe_overhead as i64;
-        let gas_estimate = std::cmp::max(computation_cost_with_overhead, gas_budget);
-        let gas_estimate: u64 = gas_estimate.try_into().map_err(|e| {
-            anyhow!(
-                "Could not convert gas estimate to u64: {e}.\n Please use the --gas-budget flag to\
-                provide a gas budget."
-            )
-        })?;
-        Ok(gas_estimate)
-    } else {
-        bail!("Dry run failed, could not automatically determine the gas budget. Please use the --gas-budget flag to provide a gas budget.")
-    }
+    let Ok(SuiClientCommandResult::DryRun(dry_run)) =
+        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await
+    else {
+        bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
+    };
+
+    let safe_overhead = GAS_SAFE_OVERHEAD * client.read_api().get_reference_gas_price().await?;
+    let computation_cost_with_overhead =
+        dry_run.effects.gas_cost_summary().computation_cost + safe_overhead;
+
+    let gas_usage = dry_run.effects.gas_cost_summary().net_gas_usage() + safe_overhead as i64;
+    Ok(computation_cost_with_overhead.max(if gas_usage < 0 { 0 } else { gas_usage as u64 }))
 }
 
 /// Queries the protocol config for the maximum gas allowed in a transaction.
