@@ -503,7 +503,7 @@ impl SuiValidatorCommand {
                 let gas = context
                     .get_one_gas_object_owned_by_address(address)
                     .await?
-                    .expect(&format!("Cannot find gas object from address : {address}"));
+                    .unwrap_or_else(|| panic!("Cannot find gas object from address : {address}"));
 
                 let gas_price = context.get_reference_gas_price().await?;
 
