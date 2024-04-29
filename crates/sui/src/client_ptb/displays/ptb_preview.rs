@@ -24,8 +24,6 @@ impl<'a> Display for PTBPreview<'a> {
                 builder.push_record([command, vals]);
             }
         }
-        // index of horizontal line to draw after commands
-        let line_index = builder.count_rows();
         if let Some(gas_budget) = self.program_metadata.gas_budget {
             builder.push_record([GAS_BUDGET, gas_budget.value.to_string().as_str()]);
         }
@@ -49,12 +47,10 @@ impl<'a> Display for PTBPreview<'a> {
         }
         let mut table = builder.build();
         table.with(TablePanel::header("PTB Preview"));
-        table.with(TableStyle::rounded().horizontals([
-            HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(line_index + 2, TableStyle::modern().get_horizontal()),
-        ]));
+        table.with(TableStyle::rounded().horizontals([HorizontalLine::new(
+            1,
+            TableStyle::modern().get_horizontal(),
+        )]));
         table.with(tabled::settings::style::BorderSpanCorrection);
 
         write!(f, "{}", table)
