@@ -45,7 +45,6 @@ use hyper::Body;
 use hyper::Server as HyperServer;
 use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
-use serde::Deserialize;
 use std::convert::Infallible;
 use std::net::TcpStream;
 use std::sync::Arc;
