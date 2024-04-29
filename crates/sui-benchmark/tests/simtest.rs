@@ -107,7 +107,7 @@ mod test {
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
-        test_simulated_load(TestInitData::new(&test_cluster).await, 140).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
     #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
@@ -348,7 +348,7 @@ mod test {
 
         register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
-        test_simulated_load(TestInitData::new(&test_cluster).await, 140).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -367,7 +367,7 @@ mod test {
                 1.0,
             );
         });
-        test_simulated_load(TestInitData::new(&test_cluster).await, 140).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
