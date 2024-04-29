@@ -314,9 +314,9 @@ impl CheckpointExecutor {
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },
                     Ok(Ok(checkpoint)) => {
-                        debug!(
+                        info!(
                             sequence_number = ?checkpoint.sequence_number,
-                            "received checkpoint summary from state sync"
+                            "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
                     },

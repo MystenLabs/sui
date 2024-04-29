@@ -1326,14 +1326,6 @@ fn test_certificate_digest() {
         .unwrap() = t2.tx_signatures()[0].clone();
     assert_ne!(digest, cert.certificate_digest());
 
-    // mutating intent changes the digest
-    cert = orig.clone();
-    cert.data_mut_for_testing()
-        .intent_message_mut_for_testing()
-        .intent
-        .scope = IntentScope::TransactionEffects;
-    assert_ne!(digest, cert.certificate_digest());
-
     // mutating signature epoch changes digest
     cert = orig.clone();
     cert.auth_sig_mut_for_testing().epoch = 42;

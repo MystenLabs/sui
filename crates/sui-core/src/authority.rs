@@ -60,12 +60,8 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
-use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
-use sui_config::node::{
-    AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
-};
-use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent, SuiMoveValue,
@@ -791,18 +787,7 @@ pub struct AuthorityState {
     /// Take db checkpoints of different dbs
     db_checkpoint_config: DBCheckpointConfig,
 
-    /// Config controlling what kind of expensive safety checks to perform.
-    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-
-    transaction_deny_config: TransactionDenyConfig,
-
-    certificate_deny_config: CertificateDenyConfig,
-
-    /// Config for state dumping on forks
-    debug_dump_config: StateDebugDumpConfig,
-
-    /// Config for when we consider the node overloaded.
-    authority_overload_config: AuthorityOverloadConfig,
+    config: NodeConfig,
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
@@ -832,7 +817,7 @@ impl AuthorityState {
     }
 
     pub fn overload_config(&self) -> &AuthorityOverloadConfig {
-        &self.authority_overload_config
+        &self.config.authority_overload_config
     }
 
     pub fn get_epoch_state_commitments(
@@ -868,7 +853,7 @@ impl AuthorityState {
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
-            &self.transaction_deny_config,
+            &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
@@ -979,12 +964,14 @@ impl AuthorityState {
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
-        self.authority_overload_config
+        self.config
+            .authority_overload_config
             .check_system_overload_at_signing
     }
 
     pub fn check_system_overload_at_execution(&self) -> bool {
-        self.authority_overload_config
+        self.config
+            .authority_overload_config
             .check_system_overload_at_execution
     }
 
@@ -1342,7 +1329,7 @@ impl AuthorityState {
                     expected_effects_digest,
                     &inner_temporary_store,
                     certificate,
-                    &self.debug_dump_config,
+                    &self.config.state_debug_dump_config,
                 ) {
                     Ok(out_path) => {
                         info!(
@@ -1602,9 +1589,10 @@ impl AuthorityState {
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
-                self.expensive_safety_check_config
+                self.config
+                    .expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
-                self.certificate_deny_config.certificate_deny_set(),
+                self.config.certificate_deny_config.certificate_deny_set(),
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
@@ -1714,7 +1702,7 @@ impl AuthorityState {
             &[],
             &input_object_kinds,
             &receiving_object_refs,
-            &self.transaction_deny_config,
+            &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
@@ -1784,7 +1772,7 @@ impl AuthorityState {
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
-                self.certificate_deny_config.certificate_deny_set(),
+                self.config.certificate_deny_config.certificate_deny_set(),
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
@@ -1933,7 +1921,7 @@ impl AuthorityState {
             &[],
             &input_object_kinds,
             &receiving_object_refs,
-            &self.transaction_deny_config,
+            &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
@@ -2024,7 +2012,7 @@ impl AuthorityState {
             protocol_config,
             self.metrics.limits_metrics.clone(),
             /* expensive checks */ false,
-            self.certificate_deny_config.certificate_deny_set(),
+            self.config.certificate_deny_config.certificate_deny_set(),
             &epoch_store.epoch_start_config().epoch_data().epoch_id(),
             epoch_store
                 .epoch_start_config()
@@ -2626,15 +2614,10 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
-        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-        transaction_deny_config: TransactionDenyConfig,
-        certificate_deny_config: CertificateDenyConfig,
+        config: NodeConfig,
         indirect_objects_threshold: usize,
-        debug_dump_config: StateDebugDumpConfig,
-        authority_overload_config: AuthorityOverloadConfig,
         archive_readers: ArchiveReaderBalancer,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
@@ -2649,13 +2632,15 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
-        let _authority_per_epoch_pruner =
-            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), &pruning_config);
+        let _authority_per_epoch_pruner = AuthorityPerEpochStorePruner::new(
+            epoch_store.get_parent_path(),
+            &config.authority_store_pruning_config,
+        );
         let _pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             store.objects_lock_table.clone(),
-            pruning_config,
+            config.authority_store_pruning_config,
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
@@ -2683,11 +2668,7 @@ impl AuthorityState {
             _pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
-            expensive_safety_check_config,
-            transaction_deny_config,
-            certificate_deny_config,
-            debug_dump_config,
-            authority_overload_config: authority_overload_config.clone(),
+            config,
             overload_info: AuthorityOverloadInfo::default(),
         });
 

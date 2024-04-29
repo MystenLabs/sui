@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::ops::Range;
+use std::ops::RangeInclusive;
 use std::{collections::BTreeMap, ops::Bound::Included, sync::Arc};
 
 use consensus_config::AuthorityIndex;
@@ -126,9 +126,9 @@ impl DagBuilder {
         LayerBuilder::new(self, round)
     }
 
-    pub(crate) fn layers(&mut self, rounds: Range<Round>) -> LayerBuilder {
-        let mut builder = LayerBuilder::new(self, rounds.start);
-        builder.end_round = Some(rounds.end);
+    pub(crate) fn layers(&mut self, rounds: RangeInclusive<Round>) -> LayerBuilder {
+        let mut builder = LayerBuilder::new(self, *rounds.start());
+        builder.end_round = Some(*rounds.end());
         builder
     }
 
