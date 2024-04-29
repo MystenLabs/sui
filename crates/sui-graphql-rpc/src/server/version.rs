@@ -55,8 +55,7 @@ pub(crate) async fn check_version_middleware<B>(
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if let Some(version) = version {
-        let version = version.0;
+    if let Some(Path(version)) = version {
         if NAMED_VERSIONS.contains(&version.as_str()) || version.is_empty() {
             return next.run(request).await;
         }
@@ -84,10 +83,8 @@ pub(crate) async fn check_version_middleware<B>(
             )
                 .into_response();
         }
-        next.run(request).await
-    } else {
-        next.run(request).await
     }
+    next.run(request).await
 }
 
 /// Mark every outgoing response with a header indicating the precise version of the RPC that was
@@ -114,6 +111,10 @@ fn parse_version(version: &str) -> Option<(&str, &str)> {
     let mut parts = version.split('.');
     let year = parts.next()?;
     let month = parts.next()?;
+
+    if year.is_empty() || month.is_empty() {
+        return None;
+    }
 
     (parts.next().is_none()
         && year.chars().all(|c| c.is_ascii_digit())
