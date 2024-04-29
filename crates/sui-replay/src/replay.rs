@@ -37,8 +37,7 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
-use sui_types::storage::{get_module, InMemorySharedLocks, PackageObject};
-use sui_types::transaction::TransactionKey;
+use sui_types::storage::{get_module, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber},
@@ -793,20 +792,9 @@ impl LocalExec {
         );
         let required_objects = pre_run_sandbox.required_objects.clone();
         let store = InMemoryStorage::new(required_objects.clone());
-        let shared_object_refs = pre_run_sandbox.transaction_info.shared_object_refs.clone();
 
         let transaction =
             Transaction::new(pre_run_sandbox.transaction_info.sender_signed_data.clone());
-
-        let new_tx_digest = transaction.digest();
-        let mut shared_locks = InMemorySharedLocks::new();
-        shared_locks.add_shared_locks(
-            TransactionKey::Digest(*new_tx_digest),
-            shared_object_refs
-                .iter()
-                .map(|(id, version, _)| (*id, *version))
-                .collect(),
-        );
 
         // TODO: This will not work for deleted shared objects. We need to persist that information in the sandbox.
         // TODO: A lot of the following code is replicated in several places. We should introduce a few
