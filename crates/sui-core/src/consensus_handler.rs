@@ -960,6 +960,31 @@ mod tests {
     }
 
     #[test]
+    pub fn test_update_index_and_hash() {
+        let index0 = ExecutionIndices {
+            sub_dag_index: 0,
+            transaction_index: 5,
+            last_committed_round: 0,
+        };
+        let index1 = ExecutionIndices {
+            sub_dag_index: 1,
+            transaction_index: 2,
+            last_committed_round: 3,
+        };
+
+        let mut last_seen = ExecutionIndicesWithStats {
+            index: index0,
+            hash: 1000,
+            stats: ConsensusStats::default(),
+        };
+
+        let tx = &[0];
+        update_index_and_hash(&mut last_seen, index1, tx);
+        assert_eq!(last_seen.index, index1);
+        assert_ne!(last_seen.hash, 1000);
+    }
+
+    #[test]
     fn test_order_by_gas_price() {
         let mut v = vec![cap_txn(10), user_txn(42), user_txn(100), cap_txn(1)];
         PostConsensusTxReorder::reorder(&mut v, ConsensusTransactionOrdering::ByGasPrice);
