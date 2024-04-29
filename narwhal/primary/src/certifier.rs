@@ -162,7 +162,7 @@ impl Certifier {
                 header: header.clone(),
                 parents,
             })
-            .with_timeout(Duration::from_secs(30));
+            .with_timeout(Duration::from_secs(5));
             match client.request_vote(request).await {
                 Ok(response) => {
                     let response = response.into_body();
