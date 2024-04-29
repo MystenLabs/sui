@@ -25,11 +25,9 @@ use move_package::BuildConfig;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_json::{is_receiving_argument, primitive_type};
 use sui_json_rpc_types::{SuiObjectData, SuiObjectDataOptions, SuiRawData};
-use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::apis::ReadApi;
 use sui_types::{
     base_types::{is_primitive_type_tag, ObjectID, TxContext, TxContextKind},
-    digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier},
     move_package::MovePackage,
     object::Owner,
     programmable_transaction_builder::ProgrammableTransactionBuilder,
@@ -374,26 +372,6 @@ impl<'a> PTBBuilder<'a> {
         }
     }
 
-    async fn get_protocol_config(&self, loc: Span) -> PTBResult<ProtocolConfig> {
-        let config = self
-            .reader
-            .get_protocol_config(None)
-            .await
-            .map_err(|e| err!(loc, "{e}"))?;
-        let chain_id = self
-            .reader
-            .get_chain_identifier()
-            .await
-            .map_err(|e| err!(loc, "{e}"))?;
-        Ok(if chain_id == get_mainnet_chain_identifier().to_string() {
-            ProtocolConfig::get_for_version(config.protocol_version, Chain::Mainnet)
-        } else if chain_id == get_testnet_chain_identifier().to_string() {
-            ProtocolConfig::get_for_version(config.protocol_version, Chain::Testnet)
-        } else {
-            ProtocolConfig::get_for_version(config.protocol_version, Chain::Unknown)
-        })
-    }
-
     /// Resolve an object ID to a Move package.
     async fn resolve_to_package(
         &mut self,
@@ -407,23 +385,25 @@ impl<'a> PTBBuilder<'a> {
             .map_err(|e| err!(loc, "{e}"))?
             .into_object()
             .map_err(|e| err!(loc, "{e}"))?;
+
         let Some(SuiRawData::Package(package)) = object.bcs else {
             error!(
                 loc,
                 "BCS field in object '{}' is missing or not a package.", package_id
             );
         };
-        let protocol_config = self.get_protocol_config(loc).await?;
-        let package: MovePackage = MovePackage::new(
+
+        MovePackage::new(
             package.id,
-            object.version,
+            package.version,
             package.module_map,
-            protocol_config.max_move_package_size(),
+            // This package came from on-chain and the tool runs locally, so don't worry about
+            // trying to enforce the package size limit.
+            u64::MAX,
             package.type_origin_table,
             package.linkage_table,
         )
-        .map_err(|e| err!(loc, "{e}"))?;
-        Ok(package)
+        .map_err(|e| err!(loc, "{e}"))
     }
 
     /// Resolves the argument to the move call based on the type information of the function being
