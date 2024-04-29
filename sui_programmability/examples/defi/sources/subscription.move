@@ -61,7 +61,7 @@ module defi::dev_pass {
     /// when subscription is no longer needed.
     entry public fun destroy<T>(s: Subscription<T>) {
         let Subscription { id, uses: _ } = s;
-        object::delete(id);
+        id.delete();
     }
 
     // ======== Implementable Functions ========
@@ -128,7 +128,7 @@ module defi::some_amm {
         dev_pass::transfer(
             DEVPASS {},
             dev_pass::issue_subscription(DEVPASS {}, 100, ctx),
-            tx_context::sender(ctx)
+            ctx.sender()
         )
     }
 
