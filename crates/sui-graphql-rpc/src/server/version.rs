@@ -172,6 +172,13 @@ mod tests {
             ))
     }
 
+    fn graphql_request() -> Request<Body> {
+        Request::builder()
+            .uri("/graphql")
+            .body(Body::empty())
+            .unwrap()
+    }
+
     fn plain_request() -> Request<Body> {
         Request::builder().uri("/").body(Body::empty()).unwrap()
     }
@@ -201,6 +208,18 @@ mod tests {
             .oneshot(version_request(&major_version))
             .await
             .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(&VERSION_HEADER),
+            Some(&HeaderValue::from_static(version.full))
+        );
+    }
+
+    #[tokio::test]
+    async fn default_graphql_route() {
+        let version = Version::for_testing();
+        let service = service();
+        let response = service.oneshot(graphql_request()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
