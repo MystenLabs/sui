@@ -31,7 +31,7 @@ pub struct EntryFunction {
     pub parameters: Vec<Type>,
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SurfStatistics {
     pub num_successful_transactions: u64,
     pub num_failed_transactions: u64,
