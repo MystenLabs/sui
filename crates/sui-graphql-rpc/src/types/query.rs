@@ -26,7 +26,7 @@ use super::{
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
-    object::{self, Object, ObjectFilter, ObjectLookupKey},
+    object::{self, Object, ObjectFilter},
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
@@ -194,23 +194,12 @@ impl Query {
         let Watermark { checkpoint, .. } = *ctx.data()?;
 
         match version {
-            Some(version) => Object::query(
-                ctx.data_unchecked(),
-                address,
-                ObjectLookupKey::VersionAt {
-                    version,
-                    checkpoint_viewed_at: checkpoint,
-                },
-            )
-            .await
-            .extend(),
-            None => Object::query(
-                ctx.data_unchecked(),
-                address,
-                ObjectLookupKey::LatestAt(checkpoint),
-            )
-            .await
-            .extend(),
+            Some(version) => Object::query(ctx, address, Object::at_version(version, checkpoint))
+                .await
+                .extend(),
+            None => Object::query(ctx, address, Object::latest_at(checkpoint))
+                .await
+                .extend(),
         }
     }
 

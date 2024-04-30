@@ -99,7 +99,7 @@ impl Event {
     /// the sending module would be A::m1.
     async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
         MoveModule::query(
-            ctx.data_unchecked(),
+            ctx,
             self.native.package_id.into(),
             &self.native.transaction_module.to_string(),
             self.checkpoint_viewed_at,

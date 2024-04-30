@@ -16,8 +16,7 @@ use sui_types::base_types::SuiAddress as NativeSuiAddress;
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
-use super::object::ObjectLookupKey;
-use super::owner::Owner;
+use super::object::Object;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -193,9 +192,9 @@ impl Validator {
     /// can then update the reference gas price and tallying rule on behalf of the validator.
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             self.operation_cap_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()
