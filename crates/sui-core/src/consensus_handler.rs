@@ -270,6 +270,19 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             "Received consensus output"
         );
 
+        // TODO: testing empty commit explicitly.
+        // Note that consensus commit batch may contain no transactions, but we still need to record the current
+        // round and subdag index in the last_consensus_stats, so that it won't be re-executed in the future.
+        let empty_bytes = vec![];
+        self.update_index_and_hash(
+            ExecutionIndices {
+                last_committed_round: round,
+                sub_dag_index: commit_sub_dag_index,
+                transaction_index: 0 as u64,
+            },
+            &empty_bytes,
+        );
+
         // Load all jwks that became active in the previous round, and commit them in this round.
         // We want to delay one round because none of the transactions in the previous round could
         // have been authenticated with the jwks that became active in that round.
@@ -282,7 +295,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .get_new_jwks(last_committed_round)
             .expect("Unrecoverable error in consensus handler");
 
-        let empty_bytes = vec![];
         if !new_jwks.is_empty() {
             let authenticator_state_update_transaction =
                 self.authenticator_state_update_transaction(round, new_jwks);
