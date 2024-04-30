@@ -43,7 +43,7 @@ impl MoveStruct {
     /// The module this struct was originally defined in.
     async fn module(&self, ctx: &Context<'_>) -> Result<MoveModule> {
         let Some(module) = MoveModule::query(
-            ctx.data_unchecked(),
+            ctx,
             self.defining_id,
             &self.module,
             self.checkpoint_viewed_at,

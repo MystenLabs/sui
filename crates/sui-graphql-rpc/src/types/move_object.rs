@@ -11,7 +11,7 @@ use super::display::DisplayEntry;
 use super::dynamic_field::{DynamicField, DynamicFieldName};
 use super::move_type::MoveType;
 use super::move_value::MoveValue;
-use super::object::{self, ObjectFilter, ObjectImpl, ObjectLookupKey, ObjectOwner, ObjectStatus};
+use super::object::{self, ObjectFilter, ObjectImpl, ObjectLookup, ObjectOwner, ObjectStatus};
 use super::owner::OwnerImpl;
 use super::stake::StakedSuiDowncastError;
 use super::sui_address::SuiAddress;
@@ -423,11 +423,11 @@ impl MoveObjectImpl<'_> {
 
 impl MoveObject {
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         address: SuiAddress,
-        key: ObjectLookupKey,
+        key: ObjectLookup,
     ) -> Result<Option<Self>, Error> {
-        let Some(object) = Object::query(db, address, key).await? else {
+        let Some(object) = Object::query(ctx, address, key).await? else {
             return Ok(None);
         };
 
