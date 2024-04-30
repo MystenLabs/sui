@@ -6,5 +6,5 @@ Error: Function execution failed with VMError: {
     sub_status: Some(0),
     location: 0x2a::m,
     indices: [],
-    offsets: [(FunctionDefinitionIndex(0), 22)],
+    offsets: [(FunctionDefinitionIndex(0), 24)],
 }
