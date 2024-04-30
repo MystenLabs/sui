@@ -12,10 +12,11 @@ use std::{fmt::Debug, path::PathBuf};
 pub const DEFAULT_SKETCH_CAPACITY: usize = 50_000;
 pub const DEFAULT_SKETCH_PROBABILITY: f64 = 0.999;
 pub const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
+use rand::distributions::Distribution;
 
 const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Weight(f32);
 
 impl Weight {
@@ -37,6 +38,12 @@ impl Weight {
 
     pub fn value(&self) -> f32 {
         self.0
+    }
+
+    pub async fn is_sampled(&self) -> bool {
+        let mut rng = rand::thread_rng();
+        let sample = rand::distributions::Uniform::new(0.0, 1.0).sample(&mut rng);
+        sample <= self.value()
     }
 }
 
@@ -169,6 +176,8 @@ pub struct PolicyConfig {
     pub error_policy_type: PolicyType,
     #[serde(default = "default_channel_capacity")]
     pub channel_capacity: usize,
+    #[serde(default = "default_spam_sample_rate")]
+    pub spam_sample_rate: Weight,
     #[serde(default = "default_dry_run")]
     pub dry_run: bool,
 }
@@ -181,6 +190,7 @@ impl Default for PolicyConfig {
             spam_policy_type: PolicyType::NoOp,
             error_policy_type: PolicyType::NoOp,
             channel_capacity: 100,
+            spam_sample_rate: default_spam_sample_rate(),
             dry_run: default_dry_run(),
         }
     }
@@ -195,4 +205,8 @@ pub fn default_channel_capacity() -> usize {
 
 pub fn default_dry_run() -> bool {
     true
+}
+
+pub fn default_spam_sample_rate() -> Weight {
+    Weight::new(0.2).unwrap()
 }
