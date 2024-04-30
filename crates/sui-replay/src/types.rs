@@ -130,8 +130,15 @@ pub enum ReplayEngineError {
         local: Box<SuiTransactionBlockEffects>,
     },
 
-    #[error("Genesis replay not supported digest {:#?}", digest)]
-    GenesisReplayNotSupported { digest: TransactionDigest },
+    #[error(
+        "Transaction {:#?} not supported by replay. Reason: {:?}",
+        digest,
+        reason
+    )]
+    TransactionNotSupported {
+        digest: TransactionDigest,
+        reason: String,
+    },
 
     #[error(
         "Fatal! No framework versions for protocol version {protocol_version}. Make sure version tables are populated"
@@ -167,9 +174,6 @@ pub enum ReplayEngineError {
 
     #[error("Error getting dynamic fields loaded objects: {}", rpc_err)]
     UnableToGetDynamicFieldLoadedObjects { rpc_err: String },
-
-    #[error("Unsupported epoch in replay engine: {epoch}")]
-    EpochNotSupported { epoch: u64 },
 
     #[error("Unable to open yaml cfg file at {}: {}", path, err)]
     UnableToOpenYamlFile { path: String, err: String },

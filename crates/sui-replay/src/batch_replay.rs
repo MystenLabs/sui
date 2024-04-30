@@ -143,8 +143,8 @@ async fn run_task(
         };
         match result {
             Err(err) => {
+                error!("Replaying transaction {:?} failed: {:?}", digest, err);
                 failed_transactions.push(err.clone());
-                error!("Replaying transaction {:?} forked: {:?}", digest, err);
                 if terminate_early {
                     cancel.cancel();
                     break;
@@ -190,6 +190,9 @@ async fn execute_transaction(
             .await;
         match result {
             Ok(sandbox_state) => break sandbox_state,
+            err @ Err(ReplayEngineError::TransactionNotSupported { .. }) => {
+                return err;
+            }
             Err(err) => {
                 error!("Failed to execute transaction: {:?}. Retrying in 3s", err);
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;
