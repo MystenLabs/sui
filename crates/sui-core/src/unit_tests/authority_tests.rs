@@ -4716,15 +4716,16 @@ async fn test_shared_object_transaction_ok() {
     assert_eq!(shared_object_version, SequenceNumber::from(2));
 }
 
+// Tests that process_consensus_transactions_and_commit_boundary() will add the consensus commit prologue transaction
+// to the transactions in the current consensus commit. It will be the first transaction in the batch and
+// the first one that updates the system clock object.
 #[tokio::test]
 async fn test_consensus_commit_prologue_generation() {
     telemetry_subscribers::init_for_testing();
 
-    // User transactions can take an immutable reference of the singleton Clock.
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
     let gas_objects = create_gas_objects(2, sender);
-
     let shared_object_id = ObjectID::random();
     let shared_object = {
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
@@ -4740,26 +4741,7 @@ async fn test_consensus_commit_prologue_generation() {
     .await;
     let rgp = authority_state.reference_gas_price_for_testing().unwrap();
 
-    let tx_data = TransactionData::new_move_call(
-        sender,
-        package_object_ref.0,
-        ident_str!("object_basics").to_owned(),
-        ident_str!("use_clock").to_owned(),
-        /* type_args */ vec![],
-        gas_objects[0].compute_object_reference(),
-        vec![CallArg::CLOCK_IMM],
-        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
-        rgp,
-    )
-    .unwrap();
-
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
     let mut certificates = vec![];
-    certificates.push(
-        certify_transaction(&authority_state, transaction)
-            .await
-            .unwrap(),
-    );
     certificates.push(
         make_test_transaction(
             &sender,
@@ -4775,8 +4757,36 @@ async fn test_consensus_commit_prologue_generation() {
         .await,
     );
 
+    let tx_data = TransactionData::new_move_call(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_objects[0].compute_object_reference(),
+        vec![CallArg::CLOCK_IMM],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp * 2, // User transaction that uses the clock has the highest gas price.
+    )
+    .unwrap();
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    certificates.push(
+        certify_transaction(&authority_state, transaction)
+            .await
+            .unwrap(),
+    );
+
     let processed_consensus_transactions =
         send_batch_consensus_no_execution(&authority_state, &certificates, false).await;
+
+    // Consensus commit prologue V2 should be turned on everywhere.
+    assert!(authority_state
+        .epoch_store_for_testing()
+        .protocol_config()
+        .include_consensus_digest_in_prologue());
+
+    // Tests that new consensus commit prologue transaction is added to the batch, and it is the first transaction.
     assert_eq!(processed_consensus_transactions.len(), 3);
     assert!(matches!(
         processed_consensus_transactions[0]
@@ -4785,6 +4795,8 @@ async fn test_consensus_commit_prologue_generation() {
             .kind(),
         TransactionKind::ConsensusCommitPrologueV2(..)
     ));
+
+    // Tests that the system clock object is updated by the new consensus commit prologue transaction.
     let get_assigned_version = |txn_key: &TransactionKey| -> SequenceNumber {
         authority_state
             .epoch_store_for_testing()

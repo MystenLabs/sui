@@ -377,10 +377,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             for (seq, (serialized, transaction, cert_origin)) in
                 transactions.into_iter().enumerate()
             {
+                // In process_consensus_transactions_and_commit_boundary(), we will add a system consensus commit
+                // prologue transaction, which will be the first transaction in this consensus commit batch.
+                // Therefore, the transaction sequence number starts from 1 here.
                 let current_tx_index = ExecutionIndices {
                     last_committed_round: round,
                     sub_dag_index: commit_sub_dag_index,
-                    transaction_index: seq as u64,
+                    transaction_index: (seq + 1) as u64,
                 };
 
                 self.update_index_and_hash(current_tx_index, serialized);
@@ -756,6 +759,7 @@ impl SequencedConsensusTransaction {
     }
 }
 
+/// Represents the information from the current consensus commit.
 pub struct ConsensusCommitInfo {
     pub round: u64,
     pub timestamp: u64,
@@ -954,7 +958,7 @@ mod tests {
         let num_transactions = transactions.len();
         let last_consensus_stats_1 = consensus_handler.last_consensus_stats.clone();
         assert_eq!(
-            last_consensus_stats_1.index.transaction_index + 1,
+            last_consensus_stats_1.index.transaction_index,
             num_transactions as u64
         );
         assert_eq!(last_consensus_stats_1.index.sub_dag_index, 10_u64);

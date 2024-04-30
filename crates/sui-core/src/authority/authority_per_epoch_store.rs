@@ -2642,6 +2642,8 @@ impl AuthorityPerEpochStore {
         Ok(transactions_to_schedule)
     }
 
+    // Adds the consensus commit prologue transaction to the beginning of input `transactions` to update
+    // the system clock used in all transactions in the current consensus commit.
     fn add_consensus_commit_prologue_transaction(
         &self,
         batch: &mut DBBatch,
@@ -2869,6 +2871,7 @@ impl AuthorityPerEpochStore {
                             .executable_transaction_digest()
                             .map(TransactionKey::Digest)
                     {
+                        // Filter out roots of any deferred tx.
                         roots.remove(&txn_key);
                         randomness_roots.remove(&txn_key);
 
@@ -2914,6 +2917,9 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        // TODO: once transaction cancellation is implemented, we need to add cancelled transaction info to
+        //       the created consensus commit prologue transactions.
+        // Add the consensus commit prologue transaction to the beginning of `verified_certificates`.
         self.add_consensus_commit_prologue_transaction(
             batch,
             &mut verified_certificates,
