@@ -3,12 +3,16 @@ title: Reviews Rating
 ---
 
 The following documentation goes through an example implementation of a review rating platform for the food service industry on Sui.
-Unlike traditional review rating platforms, that often do not disclose the algorithm used to rate reviews, the on-chain platform uses an algorithm that is published on-chain for everyone to see and verify.
-Furthermore, all submitted reviews are scored and ordered on-chain which is feasible due to the low gas cost of computation on Sui.
+Unlike traditional review rating platforms, that often do not disclose the algorithm used to rate reviews, the on-chain platform uses an algorithm that is published on-chain for everyone to see and verify. All submitted reviews are scored and ordered on-chain, which the low gas cost of computation on Sui makes financially feasible.
 
 ## Personas
 
-There are four actors in the typical workflow of the reviews rating example.  
+There are four actors in the typical workflow of the Reviews Rating example.  
+
+- Service: Review requestor.
+- Dashboard: Review hub.
+- Reviewer: Review creator.
+- Moderator: Review list editor.
 
 ```mermaid
 sequenceDiagram
@@ -24,7 +28,7 @@ sequenceDiagram
 
 Service owners are entities like restaurants that list their services on the platform. They want to attract more customers by receiving high-rated reviews for their services.
 
-Service owners allocate a specific amount of SUI as a reward pool. Assets from the pool are used to provide rewards for high-rated reviews. A Proof of Experience (PoE) NFT confirms a reviewer used the service, which the reviewer can burn later to provide a verified review. Service owners provide their customers with unique identifiers, perhaps using QR codes, to identify individual reviewers.
+Service owners allocate a specific amount of SUI as a reward pool. Assets from the pool are used to provide rewards for high-rated reviews. A proof of experience (PoE) NFT confirms a reviewer used the service, which the reviewer can burn later to provide a verified review. Service owners provide their customers with unique identifiers (perhaps using QR codes) to identify individual reviewers.
 
 ### Reviewers
 
@@ -32,23 +36,20 @@ Reviewers are consumers of services that use the review system. Reviewers provid
 
 ### Review readers
 
-Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting rewarded. Although it is not implemented as part of this guide, a proportion of the review rewards may be awarded to review readers who have participated in rating reviews by casting their votes.
+Review readers access reviews to make informed decisions on selecting services. Readers rate reviews by casting votes. The review readers' ratings are factored into the algorithm that rates the reviews, with the authors of the highest-rated reviews getting rewarded. Although it is not implemented as part of this guide, this example could be extended to award review readers a portion of the rewards for casting votes for reviews.
 
 ### Moderators
 
 Moderators monitor content of the reviews and can delete any reviews that contain inappropriate content.
 
-The incentive mechanism for moderators is not implemented for this guide, but service owners can all pay into a pool that goes to moderators, on a rolling basis. People can stake moderators to influence what proportion of the reward each moderator gets, up to a limit (imagine how validators are staked on-chain), and moderator decisions are decided by quorum of stake weight. This is a way to ensure that moderators have incentives to do their job well.
+The incentive mechanism for moderators is not implemented for this guide, but service owners can all pay into a pool that goes to moderators on a rolling basis. People can stake moderators to influence what portion of the reward each moderator gets, up to a limit (similar to how validators are staked on chain), and moderator decisions are decided by quorum of stake weight. This process installs incentives for moderators to perform their job well.
 
-## How reviews are rated
+## How reviews are scored
 
-The reviews are rated (scored) on-chain using following criteria
-- Intrinsic score (IS)
-  - Length of a review content
-- Extrinsic score (ES)
-  - Number of votes a review received
-- Verification multiplier (VM)
-  - Reviews with Proof of Experience (PoE) get a multiplier to improve rating
+The reviews are scored on chain using the following criteria:
+- Intrinsic score (IS): Length of review content.
+- Extrinsic score (ES): Number of votes a review receives.
+- Verification multiplier (VM): Reviews with PoE receive a multiplier to improve rating.
 
 ```
 Total Score = (IS + ES) * VM
@@ -60,7 +61,7 @@ There are several modules that create the backend logic for the example.
 
 ### dashboard.move
 
-The `dashboard.move` module defines the `Dashboard` struct that is used to group services.
+The `dashboard.move` module defines the `Dashboard` struct that groups services.
 
 ```move
 /// Dashboard is a collection of services
@@ -70,7 +71,7 @@ public struct Dashboard has key, store {
 }
 ```
 
-The services are grouped by attributes, which can be cuisine type, geographical location, operating hours, google maps ID, and so on. To keep it basic, the example stores only `service_type` (for example, fast food, Chinese, Italian).
+The services are grouped by attributes, which can be cuisine type, geographical location, operating hours, Google Maps ID, and so on. To keep it basic, the example stores only `service_type` (for example, fast food, Chinese, Italian).
 
 ```move
 /// Creates a new dashboard
@@ -91,8 +92,9 @@ public fun register_service(db: &mut Dashboard, service_id: ID) {
 }
 ```
 
-A `Dashboard` is a [shared object](../../../concepts/object-ownership/shared.mdx), so any service owner can register his/her service to a dashboard.
-And a [dynamic field](../../../concepts/dynamic-fields.mdx) is used to store the list of services that are registered to a dashboard.
+A `Dashboard` is a [shared object](../../../concepts/object-ownership/shared.mdx), so any service owner can register their service to a dashboard.
+A [dynamic field](../../../concepts/dynamic-fields.mdx) stores the list of services that are registered to a dashboard.
+
 :::info
 
 See [Shared versus Owned Objects](../sui-101/shared-owned.mdx) for more information on the differences between object types.
@@ -144,7 +146,7 @@ After `total_score` is updated, the [`update_top_reviews`](#casting-votes) funct
 
 ### service.move
 
-This module defines the `Service` struct, which service owners manage.
+This module defines the `Service` struct that service owners manage.
 
 ```move
 const MAX_REVIEWERS_TO_REWARD: u64 = 10;
@@ -162,27 +164,27 @@ public struct Service has key, store {
 ```
 
 #### Reward distribution
+
 The same amount is rewarded to top reviewers, and the reward is distributed to 10 participants at most.
-The pool of `SUI` tokens that will be distributed to reviewers is stored in `reward_pool` field, and the amount of `SUI` tokens that will be awarded to each participant is configured in `reward` field.
+The pool of `SUI` tokens to be distributed to reviewers is stored in the `reward_pool` field, and the amount of `SUI` tokens awarded to each participant is configured in `reward` field.
 
 #### Storage for reviews
-Since anyone can submit a review for a service, a `Service` should be defined as a shared object.
-All the reviews are stored in `reviews` field, which has [ObjectTable](../../../concepts/sui-move-concepts/collections.mdx#object_table)`<ID, Review>` type.
-Note that `reviews` are stored as children of the shared object, but they are still accessible by their `ID`.
-In other words, one can still go to the explorer and find a review object by its `object_id` but won't be able to use a review as an input to a transaction by its `object_id`.
+
+Because anyone can submit a review for a service, `Service` is defined as a shared object. All the reviews are stored in the `reviews` field, which has [ObjectTable](../../../concepts/sui-move-concepts/collections.mdx#object_table)`<ID, Review>` type. The `reviews` are stored as children of the shared object, but they are still accessible by their `ID`.
+In other words, anyone can go to a transaction explorer and find a review object by its `object_id` but they won't be able to use a review as an input to a transaction by its `object_id`.
+
 :::info
 
 See [Table and Bag](../../../concepts/dynamic-fields/tables-bags.mdx) for more information on the differences between `Table` and `ObjectTable`.
 
 :::
 
-The top rated reviews are stored in `top_reviews` field, which has `vector<ID>` type.
-A simple vector can be used to store the top rated reviews because the maximum number of reviews that can be rewarded is 10.
-The elements of `top_reviews` are sorted by the `total_score` of the reviews, with the highest rated reviews coming first, and contain
-the `ID` of the reviews (whose content and vote count can be looked up from the `reviews`).
+The top rated reviews are stored in `top_reviews` field, which has `vector<ID>` type. A simple vector can store the top rated reviews because the maximum number of reviews that can be rewarded is 10.
+The elements of `top_reviews` are sorted by the `total_score` of the reviews, with the highest rated reviews coming first. The vector contains the `ID` of the reviews, which can be used to retrieve content and vote count from the relevant `reviews`.
 
 #### Casting votes
-A vote can be casted on a review by a reader to rate the review as follows:
+
+A reader can cast a vote on a review to rate it as follows:
 
 ```move
 /// Upvotes a review and reorders top_reviews
@@ -247,10 +249,11 @@ fun prune_top_reviews(
 }
 ```
 
-Whenever someone casts a vote on a review, the `total_score` of the review is updated, and the `top_reviews` field can be updated by calling the `update_top_reviews` function.
-Note that casting a vote also triggers a reordering of the `top_reviews` field to ensure that the top rated reviews are always at the top.
+Whenever someone casts a vote on a review, the `total_score` of the review is updated and the `update_top_reviews` function updates the `top_reviews` field, as needed.
+Casting a vote also triggers a reordering of the `top_reviews` field to ensure that the top rated reviews are always at the top.
 
 #### Authorization
+
 ```move
 /// A capability that can be used to perform admin operations on a service
 struct AdminCap has key, store {
@@ -267,20 +270,19 @@ struct Moderator has key {
 This example follows a [capabilities pattern](../../../concepts/sui-move-concepts/patterns/capabilities.mdx) to manage authorizations.
 For example, `SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` such that only they are allowed to perform privileged operations.
 
-
 ## Deployment
 
 Navigate to the [setup folder](https://github.com/MystenLabs/reviews-ratings-poc/tree/main/setup) of the repository and execute the `publish.sh` script. Refer to the [README instructions](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/README.md) for deploying the smart contracts.
 
 ## Frontend
-The frontend module is written in React, and is structured to provide a responsive user experience for interacting with a review rating platform.
-On the [`page` component](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/page.tsx), a user can be logged in as a `SERVICE OWNER`, a `MODERATOR`, or a `REVIEWER`.
-A `REVIEW READER` role is not implemented for this example, but a `REVIEWER` can also read reviews and cast votes.
+
+The frontend module is written in React, and is structured to provide a responsive user experience for interacting with a review rating platform. The [`page` component](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/page.tsx) supports user log in as a `SERVICE OWNER`, a `MODERATOR`, or a `REVIEWER`. A `REVIEW READER` role is not implemented for this example, but a `REVIEWER` can also read reviews and cast votes.
 
 ### Directories structure
 
 The frontend is a NextJS project, that follows the NextJS App Router [project structure](https://nextjs.org/docs/app/building-your-application/routing).
-The main code of the frontend lies under the [app/src/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/) directory.
+The main code of the frontend is located in the [app/src/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/) directory.
+
 The main sub-directories are:
   - [app/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/): The main code of the pages and the global styles.
   - [components/](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/components): The reusable components of the app, organized in sub-directories.
@@ -292,9 +294,9 @@ The main sub-directories are:
 
 ### Connect button
 
-The Wallet Kit comes with a pre-built React.js component called `ConnectButton` displaying a button to connect and disconnect a wallet. The connecting and disconnecting wallet logic is handled seamlessly so you don't need to worry about repeating yourself doing the same logic all over again.
+The Wallet Kit comes with a pre-built React.js component called `ConnectButton` that displays a button to connect and disconnect a wallet. The component handles connecting and disconnecting wallet logic.
 
-Place the `ConnectButton` in the Navigation bar to allow users to connect their wallets:
+Place the `ConnectButton` in the navigation bar for users to connect their wallets:
 
 ```ts title='src/app/components/navbar/Navbar.tsx'
 import { ConnectButton } from "@mysten/wallet-kit";
@@ -341,9 +343,10 @@ export const Navbar = () => {
     </div>
   );
 };
-
 ```
+
 ### Type definitions
+
 All the type definitions are in `src/app/types/`.
 
 `Review` and `Service` represent the review and service objects.
@@ -374,6 +377,7 @@ export interface Service {
 ### Execute transaction hook
 
 In the frontend, you might need to execute a transaction block in multiple places, hence it's better to extract the transaction execution logic and reuse it everywhere. Let's examine the execute transaction hook.
+
 ```ts title='src/app/hooks/useSignAndExecuteTransaction.ts'
 import { useWalletKit } from "@mysten/wallet-kit"
 import { toast } from "react-hot-toast";
@@ -427,22 +431,21 @@ export const useSignAndExecuteTransaction = () => {
 ```
 A `TransactionBlock` is the input, sign it with the current connected wallet account, execute the transaction block, return the execution result, and finally display a basic toast message to indicate whether the transaction is successful or not.
 
-Use the `useWalletKit()` hook from `wallet Kit` to retrieve the Sui client instance configured in `WalletKitProvider`. The `signTransactionBlock()` function is another hook that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeSignedTransactionBlock()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
+Use the `useWalletKit()` hook from the Wallet Kit to retrieve the Sui client instance configured in `WalletKitProvider`. The `signTransactionBlock()` function is another hook that helps to sign the transaction block using the currently connected wallet. It displays the UI for users to review and sign their transactions with their selected wallet. To execute a transaction block, the `executeSignedTransactionBlock()` on the Sui client instance of the Sui TypeScript SDK. Use `react-hot-toast` as another dependency to toast transaction status to users.
 
 ### Components and custom hooks for state management
 
-- **Custom Hooks:** To keep the code as structured as possible, multiple custom hooks are utilized to manage the list of reviews associated with a service. The [useGetReviews](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useGetReviews.ts)
+- Custom hooks: To keep the code as structured as possible, multiple custom hooks are utilized to manage the list of reviews associated with a service. The [useGetReviews](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useGetReviews.ts)
 custom hook encapsulates the service, exposing all the required information (with fields such as `nameOfService`, `listOfReviews`, `listOfStars`) to display the reviews in a table.
 Multiple additional custom hooks, such as [useDashboardCreation](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useDashboardCreation.ts), and [useServiceReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServiceReview.ts) are encapsulating their own piece of state and logic to make the code readable and maintainable.
 
-- **Component for Adding a New Review:** The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransactionBlock` function of the [useWalletKit] hook to execute the transaction.
+- Component for adding a new review: The [AddReview](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/components/review/AddReview.tsx) component is implemented to facilitate the creation of a new review. It is rendered by the [servicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/service/[id]/page.tsx) to collect a review entry from a `USER` and uses the `signAndExecuteTransactionBlock` function of the [useWalletKit] hook to execute the transaction.
 
-- **Proof of Experience Generation:** Proof of Experience(PoE) is an NFT that is minted by `SERVICE OWNER` for customers after they dine at the restaurant; customers can, then, burn the PoE to write a high-rated review later. Minting an NFT is facilitated by the [ownedServicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/serviceOwner/ownedServices/page.tsx) component. This component is using the [useServicePoEGeneration](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServicePoeGeneration.ts) custom hook.
+- Proof of experience generation: PoE is an NFT that is minted by `SERVICE OWNER` for customers after they dine at the restaurant; customers can then burn the PoE to write a high-rated review later. Minting an NFT is facilitated by the [ownedServicePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/serviceOwner/ownedServices/page.tsx) component. This component is using the [useServicePoEGeneration](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/hooks/useServicePoeGeneration.ts) custom hook.
 
-- **Delete a Review:** The moderator can delete a review that contain inappropriate content. [moderatorRemovePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/moderator/remove/[id]/[nft]/page.tsx) component is used to delete a review.
+- Delete a review: The moderator can delete a review that contains inappropriate content. [moderatorRemovePage](https://github.com/MystenLabs/reviews-ratings-poc/blob/main/app/src/app/moderator/remove/[id]/[nft]/page.tsx) component is used to delete a review.
 
-:::info
+## Related links
 
-The complete app example can be found in [the reviews-rating example](https://github.com/MystenLabs/sui/tree/main/examples/move/reviews_rating).
+[Reviews Rating repository](https://github.com/MystenLabs/sui/tree/main/examples/move/reviews_rating).
 
-:::
