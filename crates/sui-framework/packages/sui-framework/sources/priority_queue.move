@@ -10,7 +10,7 @@ module sui::priority_queue {
     /// Struct representing a priority queue. The `entries` vector represents a max
     /// heap structure, where entries[0] is the root, entries[1] and entries[2] are the
     /// left child and right child of the root, etc. More generally, the children of
-    /// entries[i] are at at i * 2 + 1 and i * 2 + 2. The max heap should have the invariant
+    /// entries[i] are at i * 2 + 1 and i * 2 + 2. The max heap should have the invariant
     /// that the parent node's priority is always higher than its child nodes' priorities.
     public struct PriorityQueue<T: drop> has store, drop {
         entries: vector<Entry<T>>,

@@ -1060,7 +1060,7 @@ pub(crate) fn display_did_you_mean<S: AsRef<str> + std::fmt::Display>(
     Some(format!("{preposition}{}?", strs.join(", ")))
 }
 
-// This lint is is disabled because it's not good and doesn't look at what you're actually
+// This lint is disabled because it's not good and doesn't look at what you're actually
 // iterating over. This seems to be a common problem with this lint.
 // See e.g., https://github.com/rust-lang/rust-clippy/issues/6075
 #[allow(clippy::needless_range_loop)]
