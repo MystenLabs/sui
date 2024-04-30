@@ -140,7 +140,7 @@ Other limited resources per transaction are:
 
 ## Accessing `Random` from TypeScript
 
-If one wants to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, the following code snippet can be used:
+If you want to call `roll_dice(r: &Random, ctx: &mut TxContext)` in module `example`, use the following code snippet:
 ```typescript
 const txb = new TransactionBlock();
 txb.moveCall({
