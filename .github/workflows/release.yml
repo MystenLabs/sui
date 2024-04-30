@@ -129,11 +129,11 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}
 
-      - name: Cargo build (release) for ${{ matrix.os }} platform
+      - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
           cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
@@ -141,6 +141,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
+          [ -f ./target/debug/sui${{ env.extention }} ] && mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           [ -f ./target/release/sui${{ env.extention }} ] && mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui${{ env.extention }}
           [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
           [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
