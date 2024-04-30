@@ -103,7 +103,7 @@ Headers: {
     "vary": "access-control-request-method",
     "vary": "access-control-request-headers",
 }
-Service version: 2024.2.0-testing-no-sha
+Service version: 2024.4.0-testing-no-sha
 Response: {
   "data": {
     "checkpoint": {
