@@ -182,6 +182,11 @@ pub struct StateSyncConfig {
     /// If unspecified, this will default to no limit.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub get_checkpoint_contents_per_checkpoint_limit: Option<usize>,
+
+    /// The amount of time to wait before retry if there are no peers to sync content from.
+    /// If unspecified, this will set to default value
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wait_interval_when_no_peer_to_sync_content_ms: Option<u64>,
 }
 
 impl StateSyncConfig {
@@ -239,6 +244,20 @@ impl StateSyncConfig {
         self.checkpoint_content_timeout_ms
             .map(Duration::from_millis)
             .unwrap_or(DEFAULT_TIMEOUT)
+    }
+
+    pub fn wait_interval_when_no_peer_to_sync_content(&self) -> Duration {
+        self.wait_interval_when_no_peer_to_sync_content_ms
+            .map(Duration::from_millis)
+            .unwrap_or(self.default_wait_interval_when_no_peer_to_sync_content())
+    }
+
+    fn default_wait_interval_when_no_peer_to_sync_content(&self) -> Duration {
+        if cfg!(msim) {
+            Duration::from_secs(5)
+        } else {
+            Duration::from_secs(10)
+        }
     }
 }
 
