@@ -107,6 +107,32 @@ impl DagBuilder {
         }
     }
 
+    pub(crate) fn blocks(&self, rounds: RangeInclusive<Round>) -> Vec<VerifiedBlock> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        self.blocks
+            .iter()
+            .filter_map(|(block_ref, block)| rounds.contains(&block_ref.round).then_some(block))
+            .cloned()
+            .collect::<Vec<VerifiedBlock>>()
+    }
+
+    pub(crate) fn leader_block(&self, round: Round) -> Option<VerifiedBlock> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        self.blocks
+            .iter()
+            .find(|(block_ref, block)| {
+                block_ref.round == round
+                    && block_ref.author == self.leader_schedule.elect_leader(round, 0)
+            })
+            .map(|(_block_ref, block)| block.clone())
+    }
+
     pub(crate) fn with_wave_length(mut self, wave_length: Round) -> Self {
         self.wave_length = wave_length;
         self

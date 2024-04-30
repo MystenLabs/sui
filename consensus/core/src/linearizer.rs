@@ -147,15 +147,14 @@ impl Linearizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
         commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
         context::Context,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
-        test_dag::{get_all_uncommitted_leader_blocks},
+        test_dag::get_all_uncommitted_leader_blocks,
     };
-    use crate::block::BlockRef;
-    use crate::test_dag_builder::DagBuilder;
 
     #[test]
     fn test_handle_commit() {
@@ -172,7 +171,10 @@ mod tests {
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
         let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=num_rounds).persist_layers(dag_state.clone());
+        dag_builder
+            .layers(1..=num_rounds)
+            .build()
+            .persist_layers(dag_state.clone());
 
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
@@ -228,22 +230,18 @@ mod tests {
 
         // Build a Dag from round 1..=6
         let mut dag_builder = DagBuilder::new(context.clone());
-        dag_builder.layers(1..=leader_round_wave_2).build().persist_layers(dag_state.clone());
+        dag_builder.layers(1..=leader_round_wave_2).build();
 
         // Now retrieve all the blocks up to round leader_round_wave_1 - 1
         // And then only the leader of round leader_round_wave_1
         // Also store those to DagState
-        let blocks = dag_builder
-            .blocks
-            .iter()
-            .flat_map(|(block_ref ,block)|{
-            if block_ref.round < leader_round_wave_1 || (block_ref.round == leader_round_wave_1 && block_ref.author == leader_schedule.elect_leader(leader_round_wave_1, 0)) {
-                Some(block.reference())
-            } else {
-                None
-            }
-        }).collect::<Vec<BlockRef>>();
-
+        let mut blocks = dag_builder.blocks(0..=leader_round_wave_1 - 1);
+        blocks.push(
+            dag_builder
+                .leader_block(leader_round_wave_1)
+                .expect("Leader block should have been found"),
+        );
+        dag_state.write().accept_blocks(blocks.clone());
 
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
@@ -261,25 +259,27 @@ mod tests {
             CommitDigest::MIN,
             0,
             first_leader.reference(),
-            blocks.clone(),
+            blocks.into_iter().map(|block| block.reference()).collect(),
         );
         dag_state.write().add_commit(first_commit_data);
 
-        let mut blocks = dag_builder
-            .blocks
-            .iter()
-            .flat_map(|(block_ref ,block)|{
-                // Add all nonleader blocks from round 3
-                if (block_ref.round == leader_round_wave_1 && block_ref.author != leader_schedule.elect_leader(leader_round_wave_1, 0)) ||
-                    (block_ref.round > leader_round_wave_1 && block_ref.round < leader_round_wave_2) ||
-                    // Add leader block which is the leader round of wave 2 (round == 6)
-                    (block_ref.round == leader_round_wave_2 && block_ref.author == leader_schedule.elect_leader(leader_round_wave_2, 0)) {
-                    Some(block.reference())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<BlockRef>>();
+        // Now take all the blocks from round `leader_round_wave_1` up to round `leader_round_wave_2-1`
+        let mut blocks = dag_builder.blocks(leader_round_wave_1..=leader_round_wave_2 - 1);
+        // Filter out leader block or round `leader_round_wave_1`
+        blocks.retain(|block| {
+            !(block.round() == leader_round_wave_1
+                && block.author() == leader_schedule.elect_leader(leader_round_wave_1, 0))
+        });
+        // Add the leader block of round `leader_round_wave_2`
+        blocks.push(
+            dag_builder
+                .leader_block(leader_round_wave_2)
+                .expect("Leader block should have been found"),
+        );
+        // Write them in dag state
+        dag_state.write().accept_blocks(blocks.clone());
+
+        let mut blocks: Vec<_> = blocks.into_iter().map(|block| block.reference()).collect();
 
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
