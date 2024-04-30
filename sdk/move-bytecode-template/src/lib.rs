@@ -19,6 +19,7 @@ pub fn version() -> String {
 
 #[wasm_bindgen]
 /// Deserialize the `Uint8Array`` bytecode into a JSON object.
+/// The JSON object contains the ABI (Application Binary Interface) of the module.
 ///
 /// ```javascript
 /// import * as template from '@mysten/move-binary-template';
