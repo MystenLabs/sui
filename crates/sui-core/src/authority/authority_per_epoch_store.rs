@@ -501,7 +501,7 @@ pub enum DeferralKey {
     // For transactions deferred until new randomness is available (whether delayd due to
     // DKG, or skipped commits).
     Randomness {
-        deferred_from_round: Round,
+        deferred_from_round: Round, // commit round, not randomness round
     },
     // ConsensusRound deferral key requires both the round to which the tx should be deferred (so that
     // we can efficiently load all txns that are now ready), and the round from which it has been
@@ -2549,20 +2549,6 @@ impl AuthorityPerEpochStore {
                 current_commit_sequenced_randomness_transactions.len()
                     + previously_deferred_tx_digests.len(),
             );
-        for tx in deferred_txs
-            .into_iter()
-            .flat_map(|(_, txs)| txs.into_iter())
-        {
-            if tx
-                .0
-                .is_user_tx_with_randomness(self.randomness_state_enabled())
-            {
-                sequenced_randomness_transactions.push(tx);
-            } else {
-                sequenced_transactions.push(tx);
-            }
-        }
-        sequenced_transactions.extend(current_commit_sequenced_consensus_transactions);
 
         let mut randomness_manager = match self.randomness_manager.get() {
             Some(rm) => Some(rm.lock().await),
@@ -2609,6 +2595,22 @@ impl AuthorityPerEpochStore {
                 &mut sequenced_randomness_transactions,
             )?;
         }
+
+        // Add ConsensusRound deferred tx back into the sequence.
+        for tx in deferred_txs
+            .into_iter()
+            .flat_map(|(_, txs)| txs.into_iter())
+        {
+            if tx
+                .0
+                .is_user_tx_with_randomness(self.randomness_state_enabled())
+            {
+                sequenced_randomness_transactions.push(tx);
+            } else {
+                sequenced_transactions.push(tx);
+            }
+        }
+        sequenced_transactions.extend(current_commit_sequenced_consensus_transactions);
         sequenced_randomness_transactions.extend(current_commit_sequenced_randomness_transactions);
 
         // Save roots for checkpoint generation. One set for most tx, one for randomness tx.
