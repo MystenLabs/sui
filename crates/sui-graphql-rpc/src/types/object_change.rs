@@ -4,10 +4,7 @@
 use async_graphql::*;
 use sui_types::effects::{IDOperation, ObjectChange as NativeObjectChange};
 
-use super::{
-    object::{Object, ObjectLookupKey},
-    sui_address::SuiAddress,
-};
+use super::{object::Object, sui_address::SuiAddress};
 
 pub(crate) struct ObjectChange {
     pub native: NativeObjectChange,
@@ -30,12 +27,9 @@ impl ObjectChange {
         };
 
         Object::query(
-            ctx.data_unchecked(),
+            ctx,
             self.native.id.into(),
-            ObjectLookupKey::VersionAt {
-                version: version.value(),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
-            },
+            Object::at_version(version.value(), self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -48,12 +42,9 @@ impl ObjectChange {
         };
 
         Object::query(
-            ctx.data_unchecked(),
+            ctx,
             self.native.id.into(),
-            ObjectLookupKey::VersionAt {
-                version: version.value(),
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
-            },
+            Object::at_version(version.value(), self.checkpoint_viewed_at),
         )
         .await
         .extend()
