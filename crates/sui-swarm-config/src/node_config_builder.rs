@@ -38,6 +38,8 @@ pub struct ValidatorConfigBuilder {
     data_ingestion_dir: Option<PathBuf>,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
+    max_submit_position: Option<usize>,
+    submit_delay_step_override_millis: Option<u64>,
 }
 
 impl ValidatorConfigBuilder {
@@ -90,6 +92,19 @@ impl ValidatorConfigBuilder {
         self
     }
 
+    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
+        self.max_submit_position = Some(max_submit_position);
+        self
+    }
+
+    pub fn with_submit_delay_step_override_millis(
+        mut self,
+        submit_delay_step_override_millis: u64,
+    ) -> Self {
+        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
     pub fn build(
         self,
         validator: ValidatorGenesisConfig,
@@ -113,8 +128,8 @@ impl ValidatorConfigBuilder {
             db_path: consensus_db_path,
             internal_worker_address,
             max_pending_transactions: None,
-            max_submit_position: None,
-            submit_delay_step_override_millis: None,
+            max_submit_position: self.max_submit_position,
+            submit_delay_step_override_millis: self.submit_delay_step_override_millis,
             protocol: ConsensusProtocol::Narwhal,
             narwhal_config: narwhal_config::Parameters {
                 network_admin_server: NetworkAdminServerParameters {

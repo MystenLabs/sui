@@ -20,6 +20,7 @@ mod test {
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
     use sui_config::genesis::Genesis;
+    use sui_config::node::AuthorityOverloadConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
@@ -610,6 +611,12 @@ mod test {
         default_epoch_duration_ms: u64,
     ) -> TestCluster {
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
             .build()
             .await
     }
