@@ -3721,6 +3721,12 @@ length
 append
 	public fun
 	0x1::ascii
+insert
+	public fun
+	0x1::ascii
+sub_string
+	public fun
+	0x1::ascii
 as_bytes
 	public fun
 	0x1::ascii
@@ -3734,6 +3740,9 @@ is_valid_char
 	public fun
 	0x1::ascii
 is_printable_char
+	public fun
+	0x1::ascii
+is_empty
 	public fun
 	0x1::ascii
 is_alphanumeric
@@ -3779,6 +3788,9 @@ try_utf8
 	public fun
 	0x1::string
 bytes
+	public fun
+	0x1::string
+into_bytes
 	public fun
 	0x1::string
 is_empty

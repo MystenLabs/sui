@@ -175,4 +175,27 @@ module std::ascii_tests {
         let str = b"hello world".to_ascii_string();
         str.sub_string(9, 13);
     }
+
+    #[test]
+    fun test_insert() {
+        let mut str = b"hello".to_ascii_string();
+        str.insert(5, b" world".to_ascii_string());
+        assert!(str == b"hello world".to_ascii_string(), 0);
+
+        str.insert(5, b" cruel".to_ascii_string());
+        assert!(str == b"hello cruel world".to_ascii_string(), 1);
+    }
+
+    #[test]
+    fun test_insert_empty() {
+        let mut str = b"hello".to_ascii_string();
+        str.insert(5, b"".to_ascii_string());
+        assert!(str == b"hello".to_ascii_string(), 0);
+    }
+
+    #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
+    fun test_insert_out_of_bounds_fail() {
+        let mut str = b"hello".to_ascii_string();
+        str.insert(6, b" world".to_ascii_string());
+    }
 }

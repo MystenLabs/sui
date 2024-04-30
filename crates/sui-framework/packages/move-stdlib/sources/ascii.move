@@ -87,6 +87,17 @@ module std::ascii {
         string.bytes.append(other.bytes)
     }
 
+    /// Insert the `other` string at the `at` index of `string`.
+    public fun insert(s: &mut String, at: u64, o: String) {
+        assert!(at <= s.length(), EInvalidIndex);
+        let l = s.length();
+        let mut front = s.sub_string(0, at);
+        let end = s.sub_string(at, l);
+        front.append(o);
+        front.append(end);
+        *s = front;
+    }
+
     /// Copy the slice of the `string` from `i` to `j` into a new `String`.
     public fun sub_string(string: &String, mut i: u64, j: u64): String {
         assert!(i <= j && j <= string.length(), EInvalidIndex);
@@ -109,7 +120,7 @@ module std::ascii {
        bytes
     }
 
-    /// Unpack the `char` into its underlying byte.
+    /// Unpack the `char` into its underlying bytes.
     public fun byte(char: Char): u8 {
        let Char { byte } = char;
        byte
