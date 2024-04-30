@@ -2663,13 +2663,13 @@ impl AuthorityPerEpochStore {
                 roots.insert(processed_tx.key());
                 self.record_consensus_message_processed(
                     batch,
-                    SequencedConsensusTransactionKey::System(processed_tx.digest().clone()),
+                    SequencedConsensusTransactionKey::System(*processed_tx.digest()),
                 )?;
                 transactions.push_front(processed_tx);
                 Ok(())
             }
             ConsensusCertificateResult::IgnoredSystem => Ok(()),
-            _ => panic!(),
+            _ => unreachable!("process_consensus_system_transaction returned unexpected ConsensusCertificateResult."),
         }
     }
 
@@ -2738,13 +2738,18 @@ impl AuthorityPerEpochStore {
         checkpoint_service: &Arc<C>,
         cache_reader: &dyn ExecutionCacheRead,
         authority_metrics: &Arc<AuthorityMetrics>,
+        skip_consensus_commit_prologue_in_test: bool,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
         self.process_consensus_transactions_and_commit_boundary(
             transactions,
             &ExecutionIndicesWithStats::default(),
             checkpoint_service,
             cache_reader,
-            &ConsensusCommitInfo::new_for_test(self.get_highest_pending_checkpoint_height() + 1, 0),
+            &ConsensusCommitInfo::new_for_test(
+                self.get_highest_pending_checkpoint_height() + 1,
+                0,
+                skip_consensus_commit_prologue_in_test,
+            ),
             authority_metrics,
         )
         .await

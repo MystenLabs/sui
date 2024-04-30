@@ -4717,6 +4717,96 @@ async fn test_shared_object_transaction_ok() {
 }
 
 #[tokio::test]
+async fn test_consensus_commit_prologue_generation() {
+    telemetry_subscribers::init_for_testing();
+
+    // User transactions can take an immutable reference of the singleton Clock.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+
+    let gas_objects = create_gas_objects(2, sender);
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+        let owner = Owner::Shared {
+            initial_shared_version: obj.version(),
+        };
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
+    };
+    let initial_shared_version = shared_object.version();
+    let (authority_state, package_object_ref) = init_state_with_objects_and_object_basics(
+        [&[shared_object], gas_objects.as_slice()].concat(),
+    )
+    .await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    let tx_data = TransactionData::new_move_call(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_objects[0].compute_object_reference(),
+        vec![CallArg::CLOCK_IMM],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp,
+    )
+    .unwrap();
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    let mut certificates = vec![];
+    certificates.push(
+        certify_transaction(&authority_state, transaction)
+            .await
+            .unwrap(),
+    );
+    certificates.push(
+        make_test_transaction(
+            &sender,
+            &sender_key,
+            shared_object_id,
+            initial_shared_version,
+            &gas_objects[1].compute_object_reference(),
+            &[&authority_state],
+            0,
+            None,
+            None,
+        )
+        .await,
+    );
+
+    let processed_consensus_transactions =
+        send_batch_consensus_no_execution(&authority_state, &certificates, false).await;
+    assert_eq!(processed_consensus_transactions.len(), 3);
+    assert!(matches!(
+        processed_consensus_transactions[0]
+            .data()
+            .transaction_data()
+            .kind(),
+        TransactionKind::ConsensusCommitPrologueV2(..)
+    ));
+    let get_assigned_version = |txn_key: &TransactionKey| -> SequenceNumber {
+        authority_state
+            .epoch_store_for_testing()
+            .get_shared_locks(txn_key)
+            .unwrap()
+            .iter()
+            .filter_map(|(id, seq)| {
+                if id == &SUI_CLOCK_OBJECT_ID {
+                    Some(*seq)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap()
+    };
+    let clock_v1 = get_assigned_version(&processed_consensus_transactions[0].key());
+    let clock_v2 = get_assigned_version(&processed_consensus_transactions[1].key());
+    assert!(clock_v1 < clock_v2);
+}
+
+#[tokio::test]
 async fn test_consensus_message_processed() {
     telemetry_subscribers::init_for_testing();
 
@@ -5728,7 +5818,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
     // should go through, and all transactions oeprate on the cheaper object should go through.
     // We also check that the scheduled transactions on the expensive object have the highest gas price.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
         assert!(
@@ -5792,7 +5882,8 @@ async fn test_consensus_handler_per_object_congestion_control() {
     // Sends the second batch of transactions. We should expect that another 2 transactions operate on the expensive object,
     // which are deferred from the previous round, should go through, and all the new transactions oeprate on the cheaper
     // object should go through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &new_certificates).await;
+    let scheduled_txns =
+        send_batch_consensus_no_execution(&authority, &new_certificates, true).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
         assert!(
@@ -5832,7 +5923,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
     }
 
     // Sends the last batch with no new transaction. The last deferred transactions should go through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
     assert_eq!(scheduled_txns.len(), 1);
     assert!(authority
         .epoch_store_for_testing()

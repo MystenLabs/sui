@@ -774,12 +774,16 @@ impl ConsensusCommitInfo {
         }
     }
 
-    pub fn new_for_test(commit_round: u64, commit_timestamp: u64) -> Self {
+    pub fn new_for_test(
+        commit_round: u64,
+        commit_timestamp: u64,
+        skip_consensus_commit_prologue_in_test: bool,
+    ) -> Self {
         Self {
             round: commit_round,
             timestamp: commit_timestamp,
             consensus_commit_digest: ConsensusCommitDigest::default(),
-            skip_consensus_commit_prologue_in_test: true,
+            skip_consensus_commit_prologue_in_test,
         }
     }
 
@@ -950,7 +954,7 @@ mod tests {
         let num_transactions = transactions.len();
         let last_consensus_stats_1 = consensus_handler.last_consensus_stats.clone();
         assert_eq!(
-            last_consensus_stats_1.index.transaction_index,
+            last_consensus_stats_1.index.transaction_index + 1,
             num_transactions as u64
         );
         assert_eq!(last_consensus_stats_1.index.sub_dag_index, 10_u64);

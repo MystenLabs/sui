@@ -137,6 +137,7 @@ async fn submit_transaction_to_consensus_adapter() {
                     &Arc::new(CheckpointServiceNoop {}),
                     self.0.get_cache_reader().as_ref(),
                     &self.0.metrics,
+                    true,
                 )
                 .await?;
             Ok(())

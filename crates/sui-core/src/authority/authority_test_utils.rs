@@ -375,6 +375,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
             &authority.metrics,
+            true,
         )
         .await
         .unwrap();
@@ -398,6 +399,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
             &authority.metrics,
+            true,
         )
         .await
         .unwrap();
@@ -406,6 +408,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
 pub async fn send_batch_consensus_no_execution(
     authority: &AuthorityState,
     certificates: &[VerifiedCertificate],
+    skip_consensus_commit_prologue_in_test: bool,
 ) -> Vec<VerifiedExecutableTransaction> {
     let transactions = certificates
         .iter()
@@ -426,6 +429,7 @@ pub async fn send_batch_consensus_no_execution(
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
             &authority.metrics,
+            skip_consensus_commit_prologue_in_test,
         )
         .await
         .unwrap()
