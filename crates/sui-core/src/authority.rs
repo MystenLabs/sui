@@ -1129,7 +1129,9 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
-        let input_objects = self.read_objects(certificate, epoch_store).await?;
+        let input_objects = self
+            .read_objects_for_execution(certificate, epoch_store)
+            .await?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -1148,7 +1150,7 @@ impl AuthorityState {
         .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
 
-    async fn read_objects(
+    pub async fn read_objects_for_execution(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -1159,28 +1161,14 @@ impl AuthorityState {
             .execution_load_input_objects_latency
             .start_timer();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
-        if certificate.data().transaction_data().is_end_of_epoch_tx() {
-            self.input_loader
-                .read_objects_for_synchronous_execution(input_objects)
-                .await
-        } else {
-            self.input_loader
-                .read_objects_for_execution(
-                    epoch_store.as_ref(),
-                    &certificate.key(),
-                    input_objects,
-                    epoch_store.epoch(),
-                )
-                .await
-        }
-    }
-
-    pub async fn read_objects_for_benchmarking(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<InputObjects> {
-        self.read_objects(certificate, epoch_store).await
+        self.input_loader
+            .read_objects_for_execution(
+                epoch_store.as_ref(),
+                &certificate.key(),
+                input_objects,
+                epoch_store.epoch(),
+            )
+            .await
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -4530,15 +4518,17 @@ impl AuthorityState {
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
 
-        let input_objects = self
-            .input_loader
-            .read_objects_for_synchronous_execution(
-                &executable_tx
-                    .data()
-                    .intent_message()
-                    .value
-                    .input_objects()?,
+        // We must manually assign the shared object versions to the transaction before executing it.
+        // This is because we do not sequence end-of-epoch transactions through consensus.
+        epoch_store
+            .assign_shared_object_versions_idempotent(
+                self.get_cache_reader().as_ref(),
+                &[executable_tx.clone()],
             )
+            .await?;
+
+        let input_objects = self
+            .read_objects_for_execution(&executable_tx, epoch_store)
             .await?;
 
         let (temporary_store, effects, _execution_error_opt) =

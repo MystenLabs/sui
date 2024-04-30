@@ -964,7 +964,7 @@ impl AuthorityPerEpochStore {
     }
 
     // Ideally the epoch tables handle should have the same lifetime as the outer AuthorityPerEpochStore,
-    // and this function should be unnecesary. But unfortunately, Arc<AuthorityPerEpochStore> outlives the
+    // and this function should be unnecessary. But unfortunately, Arc<AuthorityPerEpochStore> outlives the
     // epoch significantly right now, so we need to manually release the tables to release its memory usage.
     pub fn release_db_handles(&self) {
         // When the logic to release DB handles becomes obsolete, it may still be useful
@@ -1566,7 +1566,7 @@ impl AuthorityPerEpochStore {
         Ok(ret)
     }
 
-    async fn set_assigned_shared_object_versions(
+    async fn set_assigned_shared_object_versions_with_db_batch(
         &self,
         versions: AssignedTxAndVersions,
         db_batch: &mut DBBatch,
@@ -1586,19 +1586,30 @@ impl AuthorityPerEpochStore {
         Ok(())
     }
 
-    pub async fn set_assigned_shared_object_versions_for_benchmark(
+    /// Given list of certificates, assign versions for all shared objects used in them.
+    /// We start with the current next_shared_object_versions table for each object, and build
+    /// up the versions based on the dependencies of each certificate.
+    /// However, in the end we do not update the next_shared_object_versions table, which keeps
+    /// this function idempotent. We should call this function when we are assigning shared object
+    /// versions outside of consensus and do not want to taint the next_shared_object_versions table.
+    pub async fn assign_shared_object_versions_idempotent(
         &self,
-        versions: AssignedTxAndVersions,
-    ) {
-        let mut db_batch = self
-            .tables()
-            .unwrap()
-            .assigned_shared_object_versions
-            .batch();
-        self.set_assigned_shared_object_versions(versions, &mut db_batch)
-            .await
-            .expect("set_assigned_shared_object_versions cannot fail");
-        db_batch.write().expect("write cannot fail");
+        cache_reader: &dyn ExecutionCacheRead,
+        certificates: &[VerifiedExecutableTransaction],
+    ) -> SuiResult {
+        let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
+        let assigned_versions = SharedObjVerManager::assign_versions_from_consensus(
+            self,
+            cache_reader,
+            certificates,
+            None,
+        )
+        .await?
+        .assigned_versions;
+        self.set_assigned_shared_object_versions_with_db_batch(assigned_versions, &mut db_batch)
+            .await?;
+        db_batch.write()?;
+        Ok(())
     }
 
     fn defer_transactions(
@@ -1663,8 +1674,8 @@ impl AuthorityPerEpochStore {
         #[cfg(debug_assertions)]
         {
             let mut seen = HashSet::new();
-            for defered_txn_batch in &txns {
-                for txn in &defered_txn_batch.1 {
+            for deferred_txn_batch in &txns {
+                for txn in &deferred_txn_batch.1 {
                     assert!(seen.insert(txn.0.key()));
                 }
             }
@@ -1764,7 +1775,7 @@ impl AuthorityPerEpochStore {
         )
         .await?;
         let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
-        self.set_assigned_shared_object_versions(versions, &mut db_batch)
+        self.set_assigned_shared_object_versions_with_db_batch(versions, &mut db_batch)
             .await?;
         db_batch.write()?;
         Ok(())
@@ -2755,7 +2766,7 @@ impl AuthorityPerEpochStore {
             randomness_round,
         )
         .await?;
-        self.set_assigned_shared_object_versions(assigned_versions, db_batch)
+        self.set_assigned_shared_object_versions_with_db_batch(assigned_versions, db_batch)
             .await?;
         db_batch.insert_batch(
             &self.tables()?.next_shared_object_versions,
