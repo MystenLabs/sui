@@ -89,7 +89,7 @@ module std::ascii {
 
     /// Copy the slice of the `string` from `i` to `j` into a new `String`.
     public fun sub_string(string: &String, mut i: u64, j: u64): String {
-        assert!(i <= string.length() && j <= string.length() && i <= j, EInvalidIndex);
+        assert!(i <= j && j <= string.length(), EInvalidIndex);
         let mut bytes = vector[];
         while (i < j) {
             bytes.push_back(string.bytes[i]);
