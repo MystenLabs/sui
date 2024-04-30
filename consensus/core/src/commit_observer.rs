@@ -169,6 +169,7 @@ mod tests {
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver};
 
     use super::*;
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{BlockRef, Round},
         commit::DEFAULT_WAVE_LENGTH,
@@ -176,7 +177,7 @@ mod tests {
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
-        test_dag::{build_dag, get_all_uncommitted_leader_blocks},
+        test_dag::get_all_uncommitted_leader_blocks,
     };
 
     #[test]
@@ -207,7 +208,12 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
-        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let mut builder = DagBuilder::new(context.clone());
+        builder
+            .layers(1..=num_rounds)
+            .build()
+            .persist_layers(dag_state.clone());
+
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule,
@@ -306,7 +312,11 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
-        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let mut builder = DagBuilder::new(context.clone());
+        builder
+            .layers(1..=num_rounds)
+            .build()
+            .persist_layers(dag_state.clone());
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule,
@@ -443,7 +453,11 @@ mod tests {
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds = 10;
-        build_dag(context.clone(), dag_state.clone(), None, num_rounds);
+        let mut builder = DagBuilder::new(context.clone());
+        builder
+            .layers(1..=num_rounds)
+            .build()
+            .persist_layers(dag_state.clone());
         let leaders = get_all_uncommitted_leader_blocks(
             dag_state.clone(),
             leader_schedule,

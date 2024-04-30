@@ -119,6 +119,20 @@ impl DagBuilder {
             .collect::<Vec<VerifiedBlock>>()
     }
 
+    pub(crate) fn leader_blocks(
+        &self,
+        rounds: RangeInclusive<Round>,
+    ) -> Vec<Option<VerifiedBlock>> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        rounds
+            .into_iter()
+            .map(|round| self.leader_block(round))
+            .collect()
+    }
+
     pub(crate) fn leader_block(&self, round: Round) -> Option<VerifiedBlock> {
         assert!(
             !self.blocks.is_empty(),
