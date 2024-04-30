@@ -29,6 +29,7 @@ use csr::files::Files;
 use move_command_line_common::{env::read_env_var, files::FileHash};
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::Write,
@@ -59,7 +60,10 @@ pub struct Diagnostic {
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
-pub struct Diagnostics(Option<Diagnostics_>, DiagnosticsFormat);
+pub struct Diagnostics {
+    diags: Option<Diagnostics_>,
+    format: DiagnosticsFormat,
+}
 
 #[derive(PartialEq, Eq, Hash, Clone, Debug, Default)]
 struct Diagnostics_ {
@@ -74,6 +78,17 @@ pub enum DiagnosticsFormat {
     #[default]
     Text,
     JSON,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct JsonDiagnostic {
+    file: String,
+    line: usize,
+    column: usize,
+    level: String,
+    category: u8,
+    code: u8,
+    msg: String,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -306,7 +321,11 @@ fn output_diagnostics<W: WriteColor>(
 }
 
 fn render_diagnostics(writer: &mut dyn WriteColor, mapping: MappedFiles, diags: Diagnostics) {
-    let Diagnostics(Some(mut diags), format) = diags else {
+    let Diagnostics {
+        diags: Some(mut diags),
+        format,
+    } = diags
+    else {
         return;
     };
 
@@ -384,55 +403,22 @@ fn emit_diagnostics_json(
     mapped_files: &MappedFiles,
     diags: Diagnostics_,
 ) {
-    writeln!(writer, "[").expect("ICE reporting error");
     let mut seen: HashSet<Diagnostic> = HashSet::new();
-    let mut diags = diags.diagnostics.into_iter();
-    if let Some(diag) = diags.next() {
-        seen.insert(diag.clone());
-        let rendered = render_diagnostic_json(mapped_files, diag);
-        write!(writer, "{}", rendered).expect("ICE reporting error");
-    }
-    for diag in diags {
+    let mut output_diagnostics = vec![];
+    for diag in diags.diagnostics {
         if seen.contains(&diag) {
             continue;
         }
-        writeln!(writer, ",").expect("ICE reporting error");
         seen.insert(diag.clone());
-        let rendered = render_diagnostic_json(mapped_files, diag);
-        write!(writer, "{}", rendered).expect("ICE reporting error");
+        let json_diag = diag.to_json(mapped_files);
+        output_diagnostics.push(json_diag);
     }
-    writeln!(writer, "\n]").expect("ICE reporting error");
-}
-
-fn render_diagnostic_json(mapped_files: &MappedFiles, diag: Diagnostic) -> String {
-    use std::fmt::Write;
-    let mut output = String::new();
-    let Diagnostic {
-        info,
-        primary_label: (ploc, _pmsg),
-        secondary_labels: _,
-        notes: _,
-    } = diag;
-
-    writeln!(&mut output, "    {{").expect("ICE reporting error");
-    let bloc = mapped_files.location(ploc);
     writeln!(
-        &mut output,
-        "        \"file\": \"{}\",",
-        mapped_files.files.get(bloc.file_id).unwrap().name()
+        writer,
+        "{}",
+        serde_json::to_string_pretty(&output_diagnostics).unwrap()
     )
     .expect("ICE reporting error");
-    writeln!(&mut output, "        \"line\": {},", bloc.start.line).expect("ICE reporting error");
-    writeln!(&mut output, "        \"column\": {},", bloc.start.column)
-        .expect("ICE reporting error");
-    writeln!(&mut output, "        \"level\": \"{:?}\",", info.severity())
-        .expect("ICE reporting error");
-    writeln!(&mut output, "        \"category\": {},", info.category())
-        .expect("ICE reporting error");
-    writeln!(&mut output, "        \"code\": {},", info.code()).expect("ICE reporting error");
-    writeln!(&mut output, "        \"msg\": {:?}", info.message()).expect("ICE reporting error");
-    write!(&mut output, "    }}").expect("ICE reporting error");
-    output
 }
 
 //**************************************************************************************************
@@ -444,7 +430,10 @@ pub fn generate_migration_diff(
     diags: &Diagnostics,
 ) -> Option<(Migration, /* Migration errors */ Diagnostics)> {
     match diags {
-        Diagnostics(Some(inner), format) => {
+        Diagnostics {
+            diags: Some(inner),
+            format,
+        } => {
             assert!(
                 matches!(format, DiagnosticsFormat::Text),
                 "Cannot migrate with json mode set"
@@ -483,15 +472,22 @@ pub fn report_migration_to_buffer(files: &FilesSourceText, diags: Diagnostics) -
 
 impl Diagnostics {
     pub fn new() -> Self {
-        Self(None, DiagnosticsFormat::default())
+        Self {
+            diags: None,
+            format: DiagnosticsFormat::default(),
+        }
     }
 
     pub fn set_format(&mut self, format: DiagnosticsFormat) {
-        self.1 = format;
+        self.format = format;
     }
 
     pub fn max_severity(&self) -> Option<Severity> {
-        let Self(Some(inner), _) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return None;
         };
         // map would be empty at the severity, so it should never be zero
@@ -504,7 +500,13 @@ impl Diagnostics {
     }
 
     pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
-        let Self(Some(inner), _) = self else { return 0 };
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return 0;
+        };
         // map would be empty at the severity, so it should never be zero
         debug_assert!(inner.severity_count.values().all(|count| *count > 0));
         inner
@@ -516,22 +518,32 @@ impl Diagnostics {
     }
 
     pub fn is_empty(&self) -> bool {
-        let Self(Some(inner), _) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return true;
         };
         inner.diagnostics.is_empty()
     }
 
     pub fn len(&self) -> usize {
-        let Self(Some(inner), _) = self else { return 0 };
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
+            return 0;
+        };
         inner.diagnostics.len()
     }
 
     pub fn add(&mut self, diag: Diagnostic) {
-        if self.0.is_none() {
-            self.0 = Some(Diagnostics_::default())
+        if self.diags.is_none() {
+            self.diags = Some(Diagnostics_::default())
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         *inner
             .severity_count
             .entry(diag.info.severity())
@@ -546,29 +558,30 @@ impl Diagnostics {
     }
 
     pub fn add_source_filtered(&mut self, diag: Diagnostic) {
-        if self.0.is_none() {
-            self.0 = Some(Diagnostics_::default())
+        if self.diags.is_none() {
+            self.diags = Some(Diagnostics_::default())
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         inner.filtered_source_diagnostics.push(diag)
     }
 
     pub fn extend(&mut self, other: Self) {
-        let Self(
-            Some(Diagnostics_ {
-                diagnostics,
-                filtered_source_diagnostics: _,
-                severity_count,
-            }),
-            _format,
-        ) = other
+        let Self {
+            diags:
+                Some(Diagnostics_ {
+                    diagnostics,
+                    filtered_source_diagnostics: _,
+                    severity_count,
+                }),
+            format: _format,
+        } = other
         else {
             return;
         };
-        if self.0.is_none() {
-            self.0 = Some(Diagnostics_::default())
+        if self.diags.is_none() {
+            self.diags = Some(Diagnostics_::default())
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         for (sev, count) in severity_count {
             *inner.severity_count.entry(sev).or_insert(0) += count;
         }
@@ -576,7 +589,9 @@ impl Diagnostics {
     }
 
     pub fn into_vec(self) -> Vec<Diagnostic> {
-        self.0.map(|inner| inner.diagnostics).unwrap_or_default()
+        self.diags
+            .map(|inner| inner.diagnostics)
+            .unwrap_or_default()
     }
 
     pub fn into_codespan_format(
@@ -609,15 +624,19 @@ impl Diagnostics {
     }
 
     pub fn retain(&mut self, f: impl FnMut(&Diagnostic) -> bool) {
-        if self.0.is_none() {
+        if self.diags.is_none() {
             return;
         }
-        let inner = self.0.as_mut().unwrap();
+        let inner = self.diags.as_mut().unwrap();
         inner.diagnostics.retain(f);
     }
 
     pub fn any_with_prefix(&self, prefix: &str) -> bool {
-        let Self(Some(inner), _) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return false;
         };
         inner
@@ -628,7 +647,11 @@ impl Diagnostics {
 
     /// Returns true if any diagnostic in the Syntax category have already been recorded.
     pub fn any_syntax_error_with_primary_loc(&self, loc: Loc) -> bool {
-        let Self(Some(inner), _) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return false;
         };
         inner
@@ -641,7 +664,11 @@ impl Diagnostics {
     /// have a given prefix (first value returned) and how many different categories of diags were
     /// filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
-        let Self(Some(inner), _) = self else {
+        let Self {
+            diags: Some(inner),
+            format: _,
+        } = self
+        else {
             return (0, 0);
         };
         let mut filtered_diags_num = 0;
@@ -656,7 +683,7 @@ impl Diagnostics {
     }
 
     fn env_color(&self) -> ColorChoice {
-        match self.1 {
+        match self.format {
             DiagnosticsFormat::Text => (),
             DiagnosticsFormat::JSON => {
                 return ColorChoice::Never;
@@ -744,6 +771,31 @@ impl Diagnostic {
     pub fn is_migration(&self) -> bool {
         const MIGRATION_CATEGORY: u8 = codes::Category::Migration as u8;
         self.info.category() == MIGRATION_CATEGORY
+    }
+
+    fn to_json(&self, mapped_files: &MappedFiles) -> JsonDiagnostic {
+        let Diagnostic {
+            info,
+            primary_label: (ploc, _pmsg),
+            secondary_labels: _,
+            notes: _,
+        } = self;
+
+        let bloc = mapped_files.location(*ploc);
+        JsonDiagnostic {
+            file: mapped_files
+                .files
+                .get(bloc.file_id)
+                .unwrap()
+                .name()
+                .to_string(),
+            line: bloc.start.line,
+            column: bloc.start.column,
+            level: format!("{:?}", info.severity()),
+            category: info.category(),
+            code: info.code(),
+            msg: info.message().to_string(),
+        }
     }
 }
 
@@ -1192,21 +1244,24 @@ impl FromIterator<Diagnostic> for Diagnostics {
 impl From<Vec<Diagnostic>> for Diagnostics {
     fn from(diagnostics: Vec<Diagnostic>) -> Self {
         if diagnostics.is_empty() {
-            return Self(None, DiagnosticsFormat::default());
+            return Self {
+                diags: None,
+                format: DiagnosticsFormat::default(),
+            };
         }
 
         let mut severity_count = BTreeMap::new();
         for diag in &diagnostics {
             *severity_count.entry(diag.info.severity()).or_insert(0) += 1;
         }
-        Self(
-            Some(Diagnostics_ {
+        Self {
+            diags: Some(Diagnostics_ {
                 diagnostics,
                 filtered_source_diagnostics: vec![],
                 severity_count,
             }),
-            DiagnosticsFormat::default(),
-        )
+            format: DiagnosticsFormat::default(),
+        }
     }
 }
 
