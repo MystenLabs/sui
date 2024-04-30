@@ -141,7 +141,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
-          [ -f ./target/debug/sui${{ env.extention }} ] && mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-dev${{ env.extention }}
+          [ -f ./target/debug/sui${{ env.extention }} ] && mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
           [ -f ./target/release/sui${{ env.extention }} ] && mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui${{ env.extention }}
           [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
           [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
