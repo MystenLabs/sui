@@ -13591,6 +13591,7 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
+ "base64 0.21.2",
  "bcs",
  "clap",
  "colored",
