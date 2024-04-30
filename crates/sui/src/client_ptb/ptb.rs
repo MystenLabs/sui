@@ -2,37 +2,33 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{estimate_gas_budget, execute_dry_run, SuiClientCommandResult},
+    client_commands::{
+        estimate_gas_budget, execute_dry_run, Opts, OptsWithGas, SuiClientCommandResult,
+    },
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
-        displays::Pretty,
         error::{build_error_reports, PTBError},
         token::{Lexeme, Token},
     },
-    sp,
+    displays::Pretty,
+    dry_run_or_execute_or_serialize, sp,
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
-use crate::serialize_or_execute;
 use anyhow::{anyhow, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
 use shared_crypto::intent::Intent;
-use std::collections::BTreeSet;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{wallet_context::WalletContext, SuiClient};
 use sui_types::{
     digests::TransactionDigest,
     gas::GasCostSummary,
-    quorum_driver_types::ExecuteTransactionRequestType,
     transaction::{
-        ProgrammableTransaction, SenderSignedData, Transaction, TransactionData,
-        TransactionDataAPI, TransactionKind,
+        ProgrammableTransaction, SenderSignedData, Transaction, TransactionDataAPI, TransactionKind,
     },
 };
 
@@ -134,7 +130,6 @@ impl PTB {
         };
 
         // get all the metadata needed for executing the PTB: sender, gas, signing tx
-
         let gas = program_metadata.gas_object_id.map(|x| x.value);
 
         // the sender is the gas object if gas is provided, otherwise the active address
@@ -149,26 +144,20 @@ impl PTB {
                 .ok_or_else(|| anyhow!("No active address, cannot execute PTB"))?,
         };
 
-        // get the gas price
-        let gas_price = context
-            .get_client()
-            .await?
-            .read_api()
-            .get_reference_gas_price()
-            .await?;
-
         // build the tx kind
         let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
             inputs: ptb.inputs,
             commands: ptb.commands,
         });
 
-        // estimate the gas budget if none is provided, otherwise use the provided one
-        let gas_budget = match program_metadata.gas_budget {
-            Some(gas_budget) => gas_budget.value,
-            None => {
-                estimate_gas_budget(context, sender, tx_kind.clone(), gas_price, None, None).await?
-            }
+        let opts = OptsWithGas {
+            gas: program_metadata.gas_object_id.map(|x| x.value),
+            rest: Opts {
+                dry_run: program_metadata.dry_run_set,
+                gas_budget: program_metadata.gas_budget.map(|x| x.value),
+                serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
+                serialize_signed_transaction: program_metadata.serialize_signed_set,
+            },
         };
 
         // find the gas coins if we have no gas coin given
@@ -182,52 +171,17 @@ impl PTB {
                 .object_ref()
         };
 
-        if program_metadata.dry_run_set {
-            let response = execute_dry_run(
-                context,
-                sender,
-                tx_kind,
-                Some(gas_budget),
-                gas_price,
-                Some(vec![coins.0]),
-                None,
-            )
-            .await?;
-            println!("{}", response);
+        if let SuiClientCommandResult::DryRun(response) = transaction_response {
+            println!("{}", Pretty(&response));
             return Ok(());
         }
 
-        // create the transaction data that will be sent to the network
-        let tx_data = TransactionData::new(tx_kind.clone(), sender, coins, gas_budget, gas_price);
-
-        if program_metadata.serialize_unsigned_set {
-            serialize_or_execute!(tx_data, true, false, context, PTB).print(true);
-            return Ok(());
-        }
-
-        if program_metadata.serialize_signed_set {
-            serialize_or_execute!(tx_data, false, true, context, PTB).print(true);
-            return Ok(());
-        }
-
-        // sign the tx
-        let signature =
-            context
-                .config
-                .keystore
-                .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
-
-        // execute the transaction
-        let transaction_response = context
-            .get_client()
-            .await?
-            .quorum_driver_api()
-            .execute_transaction_block(
-                Transaction::from_data(tx_data, vec![signature]),
-                SuiTransactionBlockResponseOptions::full_content(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?;
+        let transaction_response =
+            if let SuiClientCommandResult::PTB(response) = transaction_response {
+                response
+            } else {
+                anyhow::bail!("Internal error. Cannot run the PTB")
+            };
 
         if let Some(effects) = transaction_response.effects.as_ref() {
             if effects.status().is_err() {
