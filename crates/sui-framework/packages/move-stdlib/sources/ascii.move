@@ -140,9 +140,9 @@ module std::ascii {
         while (i < len) {
             let byte = string.bytes[i];
             let is_alphanumeric =
-                (byte >= 0x41 && byte <= 0x5A) || // A-Z
-                (byte >= 0x61 && byte <= 0x7A) || // a-z
-                (byte >= 0x30 && byte <= 0x39); // 0-9
+                (0x41 <= byte && byte <= 0x5A) || // A-Z
+                (0x61 <= byte && byte <= 0x7A) || // a-z
+                (0x30 <= byte && byte <= 0x39); // 0-9
             if (!is_alphanumeric) return false;
             i = i + 1;
         };
