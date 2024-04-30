@@ -77,7 +77,7 @@ pub(crate) async fn verify_zklogin_signature(
 
     // fetch on-chain JWKs from dynamic field of system object.
     let df = DynamicField::query(
-        ctx.data_unchecked(),
+        ctx,
         SUI_AUTHENTICATOR_STATE_ADDRESS.into(),
         None,
         DynamicFieldName {
