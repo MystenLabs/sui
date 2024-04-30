@@ -66,7 +66,7 @@ module defi::flash_lender {
     /// current transaction.
     public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
         let id = object::new(ctx);
-        let flash_lender_id = id.uid_to_inner();
+        let flash_lender_id = id.to_inner();
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         transfer::share_object(flash_lender);
