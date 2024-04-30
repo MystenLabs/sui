@@ -16,7 +16,7 @@ entry fun roll_dice(r: &Random, ctx: &mut TxContext): Dice {
 
 :::note
 
-Although `Random` is a shared object, it is inaccessible for mutable operations, and any transaction attempting to modify it will be unsuccessful.
+Although `Random` is a shared object, it is inaccessible for mutable operations, and any transaction attempting to modify it fails.
 
 :::
 
