@@ -57,20 +57,6 @@ const guides = [
 				},
 				items: [
 					'guides/developer/sui-101/shared-owned',
-					{
-						type: 'category',
-						label: 'Create Coins and Tokens',
-						link: {
-							type: 'doc',
-							id: 'guides/developer/sui-101/create-coin',
-						},
-						items: [
-							'guides/developer/sui-101/create-coin/regulated',
-							'guides/developer/sui-101/create-coin/in-game-token',
-							'guides/developer/sui-101/create-coin/loyalty',
-						],
-					},
-					'guides/developer/sui-101/create-nft',
 					'guides/developer/sui-101/using-events',
 					'guides/developer/sui-101/access-time',
 					'guides/developer/sui-101/sign-and-send-txn',
@@ -84,6 +70,28 @@ const guides = [
 							'guides/developer/sui-101/simulating-refs',
 						],
 					},
+				],
+			},
+			{
+				type: 'category',
+				label: 'Create NFTs',
+				link: {
+					label: 'Create NFT',
+					id: 'guides/developer/nft/create-nft',
+				},
+				items: ['guides/developer/nft/nft-rental'],
+			},
+			{
+				type: 'category',
+				label: 'Create Coins and Tokens',
+				link: {
+					type: 'doc',
+					id: 'guides/developer/coin/create-coin',
+				},
+				items: [
+					'guides/developer/coin/create-coin/regulated',
+					'guides/developer/coin/create-coin/in-game-token',
+					'guides/developer/coin/create-coin/loyalty',
 				],
 			},
 			{

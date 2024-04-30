@@ -4,29 +4,9 @@ title: Create Coins and Tokens
 
 Coins and tokens on Sui are similar. In practice, the terms are used interchangeably, but there are some differences in their implementation. You can learn about these differences in the respective standard documentation, [Closed-Loop Token](../../../standards/closed-loop-token.mdx) and [Coin](../../../standards/coin.mdx).
 
-Publishing a coin on Sui is nearly as straightforward as publishing a new type. The main difference is the requirement of a [one-time witness](/concepts/sui-move-concepts/one-time-witness.mdx) when creating a coin.
+Publishing a coin on Sui is similar to publishing a new type. The main difference is the requirement of a one time witness when creating a coin.
 
-```move
-module examples::mycoin {
-    use std::option;
-    use sui::coin::{Self, Coin, TreasuryCap};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
-    /// The type identifier of coin. The coin will have a type
-    /// tag of kind: `Coin<package_object::mycoin::MYCOIN>`
-    /// Make sure that the name of the type matches the module's name.
-    struct MYCOIN has drop {}
-
-    /// Module initializer is called once on module publish. A treasury
-    /// cap is sent to the publisher, who then controls minting and burning
-    fun init(witness: MYCOIN, ctx: &mut TxContext) {
-        let (treasury, metadata) = coin::create_currency(witness, 6, b"MYCOIN", b"", b"", option::none(), ctx);
-        transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, tx_context::sender(ctx))
-    }
-}
-```
+{@inject: examples/move/coin/sources/my_coin.move noComments}
 
 The `Coin<T>` is a generic implementation of a coin on Sui. Access to the `TreasuryCap` provides control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
 
@@ -91,10 +71,9 @@ Coin-like functions perform the minting and burning of tokens. Both require the 
 
 See [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard for complete details of working with tokens.
 
-## Examples
-
-See the following topics for examples of some common use cases for coin and token creation.
+## Related links
 
 - [Regulated Coin and Deny List](./create-coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
 - [Loyalty Token](./create-coin/loyalty.mdx): Create a token to reward user loyalty.
 - [In-Game Token](./create-coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.
+- [One Time Witness](https://move-book.com/programmability/one-time-witness.html): The Move Book documentation of the one time witness pattern. 

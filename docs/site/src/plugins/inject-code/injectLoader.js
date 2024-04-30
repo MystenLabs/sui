@@ -125,8 +125,8 @@ const addCodeInject = function (source) {
               const structName = getName(marker, structKey);
               const moduleName = getName(marker, moduleKey);
               if (funName) {
-                const funStr = `^(\\s*)*(public )?fun ${funName}\\b(?=[^\\w]).*?}\\n(?=\\n)`;
-                const funRE = new RegExp(funStr, "ms");
+                const funStr = `^(\\s*)*(public )?fun ${funName}\\b(?=[^\\w]).*?}\\n(?=\\n)?`;
+                const funRE = new RegExp(funStr, "msi");
                 const funMatch = funRE.exec(injectFileContent);
                 if (funMatch) {
                   let preFun = capturePrepend(funMatch);
@@ -139,22 +139,26 @@ const addCodeInject = function (source) {
                 }
               } else if (structName) {
                 const structStr = `^(\\s*)*(public )?struct \\b${structName}(?=[^\\w]).*?}\\n(?=\\n)`;
-                const structRE = new RegExp(structStr, "ms");
+                const structRE = new RegExp(structStr, "msi");
                 const structMatch = structRE.exec(injectFileContent);
                 if (structMatch) {
+                  let preStruct = capturePrepend(structMatch);
                   if (!checkBracesBalance(structMatch[0])) {
                     injectFileContent =
                       "Could not find valid struct definition. If code is formatted correctly, consider using code comments instead.";
                   } else {
-                    injectFileContent = removeLeadingSpaces(structMatch);
+                    injectFileContent = removeLeadingSpaces(
+                      structMatch,
+                      preStruct,
+                    );
                   }
                 } else {
                   injectFileContent =
                     "Struct not found. If code is formatted correctly, consider using code comments instead.";
                 }
               } else if (moduleName) {
-                const modStr = `^(\\s*)*module \\b${moduleName}\\b(?=[^\\w]).*?}\\n(?=\\n)`;
-                const modRE = new RegExp(modStr, "ms");
+                const modStr = `^(\\s*)*module \\b${moduleName}\\b(?=[^\\w]).*?}\\n(?=\\n)?`;
+                const modRE = new RegExp(modStr, "msi");
                 const modMatch = modRE.exec(injectFileContent);
                 if (modMatch) {
                   const abridged = injectFileContent.substring(modMatch.index);
