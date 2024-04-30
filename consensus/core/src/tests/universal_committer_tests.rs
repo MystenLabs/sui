@@ -31,7 +31,7 @@ fn direct_commit() {
     let voting_round_wave_2 = test_setup.committer.committers[0].leader_round(2) + 1;
     test_setup
         .dag_builder
-        .layers(1..voting_round_wave_2)
+        .layers(1..=voting_round_wave_2)
         .build()
         .persist_layers(test_setup.dag_state);
 
@@ -233,7 +233,7 @@ fn direct_skip_no_leader_votes() {
     let leader_round_wave_1 = test_setup.committer.committers[0].leader_round(1);
     test_setup
         .dag_builder
-        .layers(1..leader_round_wave_1)
+        .layers(1..=leader_round_wave_1)
         .build()
         .persist_layers(test_setup.dag_state.clone());
 
@@ -281,7 +281,7 @@ fn direct_skip_missing_leader_block() {
     let decision_round_wave_0 = test_setup.committer.committers[0].decision_round(0);
     test_setup
         .dag_builder
-        .layers(1..decision_round_wave_0)
+        .layers(1..=decision_round_wave_0)
         .build();
 
     // Create a leader round in the dag without the leader block.
@@ -297,7 +297,7 @@ fn direct_skip_missing_leader_block() {
     let decision_round_wave_1 = test_setup.committer.committers[0].decision_round(1);
     test_setup
         .dag_builder
-        .layers(voting_round_wave_1..decision_round_wave_1)
+        .layers(voting_round_wave_1..=decision_round_wave_1)
         .build();
 
     test_setup.dag_builder.print();

@@ -89,11 +89,9 @@
       { "source": "/standards/closed-loop-token/overview", "destination": "/standards/closed-loop-token", "permanent": true},
       { "source": "/concepts/dynamic-fields/transfers/custom-rules", "destination": "/concepts/transfers/custom-rules", "permanent": true},
       { "source": "/concepts/dynamic-fields/transfers/transfer-to-object", "destination": "/concepts/transfers/transfer-to-object", "permanent": true},
-      { "source": "/references/sui-graphql/:path*", "destination": "/references/sui-api/sui-graphql/:path*", "permanent": true},
       { "source": "/references/research-papers", "destination": "/concepts/research-papers", "permanent": true},
       { "source": "/guides/developer/app-examples/trading/:path*", "destination": "/guides/developer/app-examples/trustless-swap/:path*", "permanent": true},
       { "source": "/guides/developer/app-examples/trustless-token-swap/:path*", "destination": "/guides/developer/app-examples/trustless-swap/:path*", "permanent": true},
-      { "source": "/concepts/graphql-rpc/:path*", "destination": "/concepts/graphql-rpc", "permanent": true},
       { "source": "/concepts/cryptography/zklogin/zklogin-example", "destination": "/guides/developer/cryptography/zklogin-integration/zklogin-example", "permanent": true},
       { "source": "/guides/developer/getting-started/sui-environment", "destination": "/references/contribute/sui-environment", "permanent": true}
     ]

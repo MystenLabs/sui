@@ -4,7 +4,6 @@
 use std::time::SystemTime;
 use std::{net::SocketAddr, sync::Arc};
 use sui_types::traffic_control::RemoteFirewallConfig;
-use sui_types::traffic_control::ServiceResponse;
 
 use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
@@ -23,7 +22,7 @@ use sui_core::traffic_controller::{
     metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
 };
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::traffic_control::PolicyConfig;
+use sui_types::traffic_control::{PolicyConfig, Weight};
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
@@ -173,7 +172,7 @@ async fn handle_traffic_req(
     traffic_controller: Arc<TrafficController>,
     client_ip: SocketAddr,
 ) -> Result<(), MethodResponse> {
-    if !traffic_controller.check(Some(client_ip), None).await {
+    if !traffic_controller.check(Some(client_ip.ip()), None).await {
         // Entity in blocklist
         let err_obj =
             ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), &TOO_MANY_REQUESTS_MSG, None);
@@ -188,12 +187,21 @@ fn handle_traffic_resp(
     client_ip: SocketAddr,
     response: &MethodResponse,
 ) {
+    let error = response.error_code.map(ErrorCode::from);
     traffic_controller.tally(TrafficTally {
         connection_ip: Some(client_ip.ip()),
         proxy_ip: None,
-        result: ServiceResponse::Fullnode(response.clone()),
+        weight: error.map(normalize).unwrap_or(Weight::zero()),
         timestamp: SystemTime::now(),
     });
+}
+
+// TODO: refine error matching here
+fn normalize(err: ErrorCode) -> Weight {
+    match err {
+        ErrorCode::InvalidRequest | ErrorCode::InvalidParams => Weight::one(),
+        _ => Weight::zero(),
+    }
 }
 
 async fn process_request<L: Logger>(

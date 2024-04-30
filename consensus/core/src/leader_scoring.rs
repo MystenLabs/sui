@@ -4,10 +4,11 @@
 use std::{cmp::Ordering, fmt::Debug, sync::Arc};
 
 use consensus_config::AuthorityIndex;
+use serde::{Deserialize, Serialize};
 
 use crate::{commit::CommitRange, context::Context};
 
-#[derive(Clone, Default, Debug, PartialEq, Eq)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct ReputationScores {
     /// Score per authority. Vec index is the `AuthorityIndex`.
     pub(crate) scores_per_authority: Vec<u64>,

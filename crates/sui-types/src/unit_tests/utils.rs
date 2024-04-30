@@ -265,7 +265,6 @@ mod zk_login {
 
         let tx = Transaction::new(SenderSignedData::new(
             tx.transaction_data().clone(),
-            Intent::sui_transaction(),
             vec![authenticator.clone()],
         ));
         (data.execution_parts().1, tx, authenticator)
@@ -310,7 +309,6 @@ mod zk_login {
         let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
         Transaction::new(SenderSignedData::new(
             tx.transaction_data().clone(),
-            Intent::sui_transaction(),
             vec![GenericSignature::MultiSig(multi_sig1)],
         ))
     }

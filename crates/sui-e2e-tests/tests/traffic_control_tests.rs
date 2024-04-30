@@ -1,24 +1,27 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! NB: Tests in this module expect real network connections and interactions, thus they
-//! should all be tokio::test rather than simtest. Any deviation from this should be well
-//! understood and justified.
+//! NB: Most tests in this module expect real network connections and interactions, thus
+//! they should nearly all be tokio::test rather than simtest.
 
 use jsonrpsee::{
     core::{client::ClientT, RpcResult},
     rpc_params,
 };
 use std::fs::File;
-use sui_core::traffic_controller::{nodefw_test_server::NodeFwTestServer, TrafficController};
+use std::time::Duration;
+use sui_core::traffic_controller::{
+    nodefw_test_server::NodeFwTestServer, TrafficController, TrafficSim,
+};
 use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_macros::sim_test;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::{
     quorum_driver_types::ExecuteTransactionRequestType,
-    traffic_control::{PolicyConfig, PolicyType, RemoteFirewallConfig},
+    traffic_control::{FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig},
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -271,6 +274,80 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
 
     std::fs::remove_file(&drain_path).unwrap();
     Ok(())
+}
+
+#[sim_test]
+async fn test_traffic_sketch_no_blocks() {
+    let no_blocks_config = FreqThresholdConfig {
+        threshold: 10_100,
+        window_size_secs: 4,
+        update_interval_secs: 1,
+        ..Default::default()
+    };
+    let policy = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        spam_policy_type: PolicyType::FreqThreshold(no_blocks_config),
+        error_policy_type: PolicyType::NoOp,
+        channel_capacity: 100,
+        dry_run: false,
+    };
+    let metrics = TrafficSim::run(
+        policy,
+        10,     // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(20),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 20;
+    assert!(metrics.num_blocked < 10_010);
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+    assert!(metrics.num_blocklist_adds <= 1);
+    if let Some(first_block) = metrics.abs_time_to_first_block {
+        assert!(first_block > Duration::from_secs(2));
+    }
+    assert!(metrics.num_blocklist_adds < 10);
+    assert!(metrics.total_time_blocked < Duration::from_secs(10));
+}
+
+#[sim_test]
+async fn test_traffic_sketch_with_slow_blocks() {
+    let no_blocks_config = FreqThresholdConfig {
+        threshold: 9_900,
+        window_size_secs: 4,
+        update_interval_secs: 1,
+        ..Default::default()
+    };
+    let policy = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        spam_policy_type: PolicyType::FreqThreshold(no_blocks_config),
+        error_policy_type: PolicyType::NoOp,
+        channel_capacity: 100,
+        dry_run: false,
+    };
+    let metrics = TrafficSim::run(
+        policy,
+        10,     // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(20),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 20;
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+    // due to averaging, we will take 4 seconds to start blocking, then
+    // will be in blocklist for 1 second (roughly)
+    assert!(metrics.num_blocked > (expected_requests / 4) - 1_000);
+    // 10 clients, blocked at least every 5 sceonds, over 20 seconds
+    assert!(metrics.num_blocklist_adds >= 40);
+    assert!(metrics.abs_time_to_first_block.unwrap() < Duration::from_secs(5));
+    assert!(metrics.total_time_blocked > Duration::from_millis(3500));
 }
 
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {

@@ -18,6 +18,7 @@ use tokio::sync::mpsc::UnboundedSender;
 
 use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
+    leader_scoring::ReputationScores,
     storage::Store,
 };
 
@@ -476,6 +477,27 @@ impl Display for LeaderStatus {
     }
 }
 
+/// Per-commit properties that can be regenerated from past values, and do not need to be part of
+/// the Commit struct.
+/// Only the latest version is needed for recovery, but more versions are stored for debugging,
+/// and potentially restoring from an earlier state.
+// TODO: version this struct.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct CommitInfo {
+    pub(crate) committed_rounds: Vec<Round>,
+    pub(crate) reputation_scores: ReputationScores,
+}
+
+impl CommitInfo {
+    // Returns a new CommitInfo.
+    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
+        CommitInfo {
+            committed_rounds,
+            reputation_scores,
+        }
+    }
+}
+
 /// CommitRange stores a range of CommitIndex. The range contains the start and
 /// end commit indices and can be ordered for use as the key of a table.
 /// Note: If used as a key for a table it is useful to ensure the key ranges don't
@@ -521,6 +543,12 @@ impl Ord for CommitRange {
 impl PartialOrd for CommitRange {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl From<Range<CommitIndex>> for CommitRange {
+    fn from(range: Range<CommitIndex>) -> Self {
+        Self(range)
     }
 }
 

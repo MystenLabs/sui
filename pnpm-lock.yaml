@@ -1333,6 +1333,8 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(jsdom@23.0.0)
 
+  sdk/move-binary-format-wasm/pkg: {}
+
   sdk/move-bytecode-template:
     devDependencies:
       '@mysten/bcs':

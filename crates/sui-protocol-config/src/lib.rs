@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 44;
+const MAX_PROTOCOL_VERSION: u64 = 45;
 
 // Record history of protocol version allocations here:
 //
@@ -120,6 +120,8 @@ const MAX_PROTOCOL_VERSION: u64 = 44;
 //             Introduce an explicit parameter for the tick limit per package (previously this was
 //             represented by the parameter for the tick limit per module).
 // Version 44: Enable consensus fork detection on mainnet.
+//             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
+// Version 45: Use tonic networking for Mysticeti consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2125,6 +2127,12 @@ impl ProtocolConfig {
                     // Switch between Narwhal and Mysticeti per epoch in tests, devnet and testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_choice = ConsensusChoice::SwapEachEpoch;
+                    }
+                }
+                45 => {
+                    // Use tonic networking for consensus, in tests and devnet.
+                    if chain != Chain::Testnet && chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
                 }
                 // Use this template when making changes:

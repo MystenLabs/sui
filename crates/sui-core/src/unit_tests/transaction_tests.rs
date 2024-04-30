@@ -8,6 +8,7 @@ use rand::{rngs::StdRng, SeedableRng};
 use shared_crypto::intent::{Intent, IntentMessage};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::ops::Deref;
+use sui_types::base_types::random_object_ref;
 use sui_types::{
     authenticator_state::ActiveJwk,
     base_types::dbg_addr,
@@ -1285,4 +1286,32 @@ async fn test_handle_certificate_errors() {
         .unwrap_err();
 
     assert_matches!(err, SuiError::SignerSignatureAbsent { .. });
+}
+
+#[test]
+fn sender_signed_data_serialized_intent() {
+    let mut txn = SenderSignedData::new(
+        TransactionData::new_transfer(
+            SuiAddress::default(),
+            random_object_ref(),
+            SuiAddress::default(),
+            random_object_ref(),
+            0,
+            0,
+        ),
+        vec![],
+    );
+
+    assert_eq!(txn.intent_message().intent, Intent::sui_transaction());
+
+    // deser fails when intent is wrong
+    let mut bytes = bcs::to_bytes(txn.inner()).unwrap();
+    bytes[0] = 1; // set invalid intent
+    let e = bcs::from_bytes::<SenderSignedTransaction>(&bytes).unwrap_err();
+    assert!(e.to_string().contains("invalid Intent for Transaction"));
+
+    // ser fails when intent is wrong
+    txn.inner_mut().intent_message.intent.scope = IntentScope::TransactionEffects;
+    let e = bcs::to_bytes(txn.inner()).unwrap_err();
+    assert!(e.to_string().contains("invalid Intent for Transaction"));
 }

@@ -223,6 +223,7 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
+                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))

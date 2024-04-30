@@ -770,6 +770,9 @@ pub struct TestClusterBuilder {
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
+
+    max_submit_position: Option<usize>,
+    submit_delay_step_override_millis: Option<u64>,
 }
 
 impl TestClusterBuilder {
@@ -794,6 +797,8 @@ impl TestClusterBuilder {
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
+            max_submit_position: None,
+            submit_delay_step_override_millis: None,
         }
     }
 
@@ -960,6 +965,19 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
+        self.max_submit_position = Some(max_submit_position);
+        self
+    }
+
+    pub fn with_submit_delay_step_override_millis(
+        mut self,
+        submit_delay_step_override_millis: u64,
+    ) -> Self {
+        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
+        self
+    }
+
     pub async fn build(mut self) -> TestCluster {
         // All test clusters receive a continuous stream of random JWKs.
         // If we later use zklogin authenticated transactions in tests we will need to supply
@@ -1074,6 +1092,15 @@ impl TestClusterBuilder {
 
         if let Some(data_ingestion_dir) = self.data_ingestion_dir.take() {
             builder = builder.with_data_ingestion_dir(data_ingestion_dir);
+        }
+
+        if let Some(max_submit_position) = self.max_submit_position {
+            builder = builder.with_max_submit_position(max_submit_position);
+        }
+
+        if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
+            builder =
+                builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
         }
 
         let mut swarm = builder.build();

@@ -8,7 +8,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
-use sui_macros::{fail_point, fail_point_async};
+use sui_macros::fail_point_async;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
@@ -322,7 +322,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         // Compute an exclusive end index and bound the maximum number of commits scanned.
         let exclusive_end =
             (end + 1).min(start + self.context.parameters.commit_sync_batch_size as CommitIndex);
-        let mut commits = self.store.scan_commits(start..exclusive_end)?;
+        let mut commits = self.store.scan_commits((start..exclusive_end).into())?;
         let mut certifier_block_refs = vec![];
         'commit: while let Some(c) = commits.last() {
             let index = c.index();
@@ -386,8 +386,6 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
         let maybe_item = loop {
             let (result, rx) = ready!(self.inner.poll(cx));
             self.inner.set(make_recv_future(rx));
-
-            fail_point!("consensus-rpc-response");
 
             match result {
                 Ok(item) => break Some(item),

@@ -8,10 +8,14 @@ use clap::*;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::encoding::{Base64, Encoding, Hex};
 use fastcrypto::hash::HashFunction;
+use fastcrypto::jwt_utils::parse_and_validate_jwt;
 use fastcrypto::secp256k1::recoverable::Secp256k1Sig;
 use fastcrypto::traits::{KeyPair, ToFromBytes};
-use fastcrypto_zkp::bn254::utils::{get_oidc_url, get_token_exchange_url};
-use fastcrypto_zkp::bn254::zk_login::{fetch_jwks, OIDCProvider};
+use fastcrypto_zkp::bn254::utils::{
+    gen_address_seed, get_nonce, get_oidc_url, get_proof, get_test_issuer_jwt_token,
+    get_token_exchange_url,
+};
+use fastcrypto_zkp::bn254::zk_login::{fetch_jwks, OIDCProvider, ZkLoginInputs};
 use fastcrypto_zkp::bn254::zk_login::{JwkId, JWK};
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use im::hashmap::HashMap as ImHashMap;
@@ -38,6 +42,7 @@ use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
     get_authority_key_pair, EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair,
+    ZkLoginPublicIdentifier,
 };
 use sui_types::crypto::{DefaultHash, PublicKey};
 use sui_types::error::SuiResult;
@@ -46,7 +51,6 @@ use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
 use sui_types::signature::{GenericSignature, VerifyParams};
 use sui_types::transaction::{TransactionData, TransactionDataAPI};
 use sui_types::zk_login_authenticator::ZkLoginAuthenticator;
-use sui_types::zk_login_util::get_zklogin_inputs;
 use tabled::builder::Builder;
 use tabled::settings::Rotate;
 use tabled::settings::{object::Rows, Modify, Width};
@@ -275,12 +279,15 @@ pub enum KeyToolCommand {
         network: String,
     },
 
-    /// TESTING ONLY: Given a string of data, sign with the fixed dev-only ephemeral key
-    /// and output a zkLogin signature with a fixed dev-only proof with fixed max epoch 10.
+    /// TESTING ONLY: Generate a fixed ephemeral key and its JWT token with test issuer. Produce a zklogin signature for the given data and max epoch.
+    /// e.g. sui keytool zk-login-insecure-sign-personal-message --data "hello" --max-epoch 5
     ZkLoginInsecureSignPersonalMessage {
-        /// The string of data to sign.
+        /// The base64 encoded string of the message to sign, without the intent message wrapping.
         #[clap(long)]
         data: String,
+        /// The max epoch used for the zklogin signature validity.
+        #[clap(long)]
+        max_epoch: EpochId,
     },
 }
 
@@ -436,6 +443,7 @@ pub struct ZkLoginSigVerifyResponse {
 pub struct ZkLoginInsecureSignPersonalMessage {
     sig: String,
     bytes: String,
+    address: String,
 }
 
 #[derive(Serialize)]
@@ -894,25 +902,70 @@ impl KeyToolCommand {
                 CommandOutput::Show(key)
             }
 
-            KeyToolCommand::ZkLoginInsecureSignPersonalMessage { data } => {
+            KeyToolCommand::ZkLoginInsecureSignPersonalMessage { data, max_epoch } => {
                 let msg = PersonalMessage {
                     message: data.as_bytes().to_vec(),
                 };
+                let sub = "1";
+                let user_salt = "1";
                 let intent_msg = IntentMessage::new(Intent::personal_message(), msg.clone());
 
+                // set up keypair, nonce with max_epoch
                 let skp =
                     SuiKeyPair::Ed25519(Ed25519KeyPair::generate(&mut StdRng::from_seed([0; 32])));
-                let s = Signature::new_secure(&intent_msg, &skp);
+                let jwt_randomness = BigUint::from_bytes_be(&[0; 32]).to_string();
+                let mut eph_pk_bytes = vec![0x00];
+                eph_pk_bytes.extend(skp.public().as_ref());
+                let kp_bigint = BigUint::from_bytes_be(&eph_pk_bytes).to_string();
+                let nonce = get_nonce(&eph_pk_bytes, max_epoch, &jwt_randomness).unwrap();
 
+                // call test issuer to get jwt token.
+                let client = reqwest::Client::new();
+                let parsed_token = get_test_issuer_jwt_token(
+                    &client,
+                    &nonce,
+                    &OIDCProvider::TestIssuer.get_config().iss,
+                    sub,
+                )
+                .await
+                .unwrap()
+                .jwt;
+
+                // call prover-dev for zklogin inputs
+                let reader = get_proof(
+                    &parsed_token,
+                    max_epoch,
+                    &jwt_randomness,
+                    &kp_bigint,
+                    user_salt,
+                    "https://prover-dev.mystenlabs.com/v1",
+                )
+                .await
+                .unwrap();
+                let (_, aud) = parse_and_validate_jwt(&parsed_token).unwrap();
+                let address_seed = gen_address_seed(user_salt, "sub", sub, &aud).unwrap();
+                let zk_login_inputs =
+                    ZkLoginInputs::from_reader(reader, &address_seed.to_string()).unwrap();
+                let pk = PublicKey::ZkLogin(
+                    ZkLoginPublicIdentifier::new(
+                        zk_login_inputs.get_iss(),
+                        zk_login_inputs.get_address_seed(),
+                    )
+                    .unwrap(),
+                );
+                let address = SuiAddress::from(&pk);
+                // sign with ephemeral key and combine with zklogin inputs to generic signature
+                let s = Signature::new_secure(&intent_msg, &skp);
                 let sig = GenericSignature::ZkLoginAuthenticator(ZkLoginAuthenticator::new(
-                    get_zklogin_inputs(), // this is for the fixed keypair
-                    10,
+                    zk_login_inputs,
+                    max_epoch,
                     s,
                 ));
                 CommandOutput::ZkLoginInsecureSignPersonalMessage(
                     ZkLoginInsecureSignPersonalMessage {
                         sig: Base64::encode(sig.as_bytes()),
-                        bytes: Base64::encode(bcs::to_bytes(&msg).unwrap()),
+                        bytes: Base64::encode(data.as_bytes()),
+                        address: address.to_string(),
                     },
                 )
             }
@@ -1112,11 +1165,11 @@ impl KeyToolCommand {
                                 (serde_json::to_string(&tx_data)?, res)
                             }
                             IntentScope::PersonalMessage => {
-                                let data: PersonalMessage = bcs::from_bytes(
-                                    &Base64::decode(&bytes.unwrap()).map_err(|e| {
+                                let data = PersonalMessage {
+                                    message: Base64::decode(&bytes.unwrap()).map_err(|e| {
                                         anyhow!("Invalid base64 personal message data: {:?}", e)
                                     })?,
-                                )?;
+                                };
 
                                 let sig = GenericSignature::ZkLoginAuthenticator(zk.clone());
                                 let res = sig.verify_authenticator(

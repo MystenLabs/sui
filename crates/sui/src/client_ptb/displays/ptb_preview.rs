@@ -24,12 +24,9 @@ impl<'a> Display for PTBPreview<'a> {
                 builder.push_record([command, vals]);
             }
         }
-        // index of horizontal line to draw after commands
-        let line_index = builder.count_rows();
-        builder.push_record([
-            GAS_BUDGET,
-            self.program_metadata.gas_budget.value.to_string().as_str(),
-        ]);
+        if let Some(gas_budget) = self.program_metadata.gas_budget {
+            builder.push_record([GAS_BUDGET, gas_budget.value.to_string().as_str()]);
+        }
         if let Some(gas_coin_id) = self.program_metadata.gas_object_id {
             builder.push_record([GAS_COIN, gas_coin_id.value.to_string().as_str()]);
         }
@@ -53,8 +50,6 @@ impl<'a> Display for PTBPreview<'a> {
         table.with(TableStyle::rounded().horizontals([
             HorizontalLine::new(1, TableStyle::modern().get_horizontal()),
             HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(2, TableStyle::modern().get_horizontal()),
-            HorizontalLine::new(line_index + 2, TableStyle::modern().get_horizontal()),
         ]));
         table.with(tabled::settings::style::BorderSpanCorrection);
 

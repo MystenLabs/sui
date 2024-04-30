@@ -210,7 +210,6 @@ mod tests {
         ConsensusSharedObjVerAssignment, SharedObjVerManager,
     };
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
-    use shared_crypto::intent::Intent;
     use std::collections::{BTreeMap, HashMap};
     use sui_test_transaction_builder::TestTransactionBuilder;
     use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress};
@@ -441,7 +440,7 @@ mod tests {
         )
         .programmable(builder.finish())
         .build();
-        let tx = SenderSignedData::new(tx_data, Intent::sui_transaction(), vec![]);
+        let tx = SenderSignedData::new(tx_data, vec![]);
         VerifiedExecutableTransaction::new_unchecked(ExecutableTransaction::new_from_data_and_sig(
             tx,
             CertificateProof::new_system(0),

@@ -108,7 +108,7 @@ pub struct ProgramMetadata {
     pub gas_object_id: Option<Spanned<ObjectID>>,
     pub json_set: bool,
     pub dry_run_set: bool,
-    pub gas_budget: Spanned<u64>,
+    pub gas_budget: Option<Spanned<u64>>,
 }
 
 /// A parsed module access consisting of the address, module name, and function name.

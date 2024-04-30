@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use nonempty::NonEmpty;
+use shared_crypto::intent::Intent;
 
 use crate::committee::EpochId;
 use crate::error::{SuiError, SuiResult};
@@ -14,7 +15,8 @@ pub fn verify_sender_signed_data_message_signatures(
     current_epoch: EpochId,
     verify_params: &VerifyParams,
 ) -> SuiResult {
-    let intent_message = &txn.inner().intent_message;
+    let intent_message = txn.intent_message();
+    assert_eq!(intent_message.intent, Intent::sui_transaction());
 
     // 1. System transactions do not require signatures. User-submitted transactions are verified not to
     // be system transactions before this point
