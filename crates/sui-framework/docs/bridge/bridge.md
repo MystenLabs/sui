@@ -7,7 +7,7 @@ title: Module `0xb::bridge`
 
 -  [Resource `Bridge`](#0xb_bridge_Bridge)
 -  [Struct `BridgeInner`](#0xb_bridge_BridgeInner)
--  [Struct `TokenBridgeEvent`](#0xb_bridge_TokenBridgeEvent)
+-  [Struct `TokenDepositedEvent`](#0xb_bridge_TokenDepositedEvent)
 -  [Struct `EmergencyOpEvent`](#0xb_bridge_EmergencyOpEvent)
 -  [Struct `BridgeRecord`](#0xb_bridge_BridgeRecord)
 -  [Struct `TokenTransferApproved`](#0xb_bridge_TokenTransferApproved)
@@ -170,13 +170,13 @@ title: Module `0xb::bridge`
 
 </details>
 
-<a name="0xb_bridge_TokenBridgeEvent"></a>
+<a name="0xb_bridge_TokenDepositedEvent"></a>
 
-## Struct `TokenBridgeEvent`
+## Struct `TokenDepositedEvent`
 
 
 
-<pre><code><b>struct</b> <a href="bridge.md#0xb_bridge_TokenBridgeEvent">TokenBridgeEvent</a> <b>has</b> <b>copy</b>, drop
+<pre><code><b>struct</b> <a href="bridge.md#0xb_bridge_TokenDepositedEvent">TokenDepositedEvent</a> <b>has</b> <b>copy</b>, drop
 </code></pre>
 
 
@@ -186,12 +186,6 @@ title: Module `0xb::bridge`
 
 
 <dl>
-<dt>
-<code>message_type: u8</code>
-</dt>
-<dd>
-
-</dd>
 <dt>
 <code>seq_num: u64</code>
 </dt>
@@ -858,8 +852,7 @@ title: Module `0xb::bridge`
 
     // emit <a href="../sui-framework/event.md#0x2_event">event</a>
     emit(
-        <a href="bridge.md#0xb_bridge_TokenBridgeEvent">TokenBridgeEvent</a> {
-            message_type: <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
+        <a href="bridge.md#0xb_bridge_TokenDepositedEvent">TokenDepositedEvent</a> {
             seq_num: bridge_seq_num,
             source_chain: inner.chain_id,
             sender_address: address::to_bytes(ctx.sender()),
