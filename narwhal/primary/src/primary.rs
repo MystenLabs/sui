@@ -115,6 +115,7 @@ impl Primary {
         // Some info statements
         let own_peer_id = PeerId(network_signer.public().0.to_bytes());
         info!(
+            epoch = ?committee.epoch(),
             "Boot primary node with peer id {} and public key {}",
             own_peer_id,
             authority.protocol_key().encode_base64(),

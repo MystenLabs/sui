@@ -176,6 +176,7 @@ impl Proposer {
         }
 
         let num_of_included_digests = header.payload().len();
+        debug!(?header, "Proposer created a new header");
 
         // Send the new header to the `Certifier` that will broadcast and certify it.
         self.tx_headers

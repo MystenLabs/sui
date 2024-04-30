@@ -107,7 +107,7 @@ fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
 
         CheckpointTimeoutConfig {
             timeout,
-            panic_on_timeout,
+            panic_on_timeout: false,
         }
     }
 
