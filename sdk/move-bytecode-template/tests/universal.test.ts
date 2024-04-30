@@ -73,8 +73,8 @@ describe('move-binary-template', () => {
 			let bytesAfter = template.update_constants(
 				bytesBefore,
 				bcs.u8().serialize(8).toBytes(), // new value
-				bcs.u8().serialize(0).toBytes(), // inccorent current value (its 6)
-				'U8',
+				bcs.u8().serialize(0).toBytes(), // incorrect expected current value (it should be 6)
+				'U8', // expected type
 			);
 
 			// If they are equal the produced bytecode should be the same
@@ -88,8 +88,8 @@ describe('move-binary-template', () => {
 			let bytesAfter = template.update_constants(
 				bytesBefore,
 				bcs.u8().serialize(8).toBytes(), // new value
-				bcs.u8().serialize(6).toBytes(), // current value
-				'Vector(U8)',
+				bcs.u8().serialize(6).toBytes(), // expected current value
+				'Vector(U8)', // incorrect expected type (it should be U8)
 			);
 
 			// If they are equal the produced bytecode should be the same
