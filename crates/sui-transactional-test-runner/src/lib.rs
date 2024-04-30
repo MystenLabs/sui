@@ -141,7 +141,7 @@ impl TransactionalAdapter for ValidatorWithFullnode {
 
         let epoch_store = self.validator.load_epoch_store_one_call_per_task().clone();
         self.validator
-            .read_objects_for_benchmarking(&tx, &epoch_store)
+            .read_objects_for_execution(&tx, &epoch_store)
             .await
     }
 

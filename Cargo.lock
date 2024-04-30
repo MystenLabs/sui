@@ -3287,26 +3287,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "data-transform"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.21.2",
- "diesel",
- "dotenvy",
- "fastcrypto",
- "move-bytecode-utils",
- "move-core-types",
- "once_cell",
- "serde",
- "serde_json",
- "sui-indexer",
- "sui-json-rpc-types",
- "sui-types",
- "tracing",
-]
-
-[[package]]
 name = "datatest-stable"
 version = "0.1.3"
 source = "git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f#72db7f6d1bbe36a5407e96b9488a581f763e106f"
@@ -13592,6 +13572,7 @@ dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
+ "base64 0.21.2",
  "bcs",
  "clap",
  "colored",
