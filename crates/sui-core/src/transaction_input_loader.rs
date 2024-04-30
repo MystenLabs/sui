@@ -107,36 +107,6 @@ impl TransactionInputLoader {
         ))
     }
 
-    // TODO: We should find a way to merge this with the above function.
-    /// Reads input objects assuming a synchronous context such as the end of epoch transaction.
-    /// By "synchronous" we mean that it is safe to read the latest version of all shared objects,
-    /// as opposed to relying on the shared input version assignment.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn read_objects_for_synchronous_execution(
-        &self,
-        input_object_kinds: &[InputObjectKind],
-    ) -> SuiResult<InputObjects> {
-        let mut results = Vec::with_capacity(input_object_kinds.len());
-        // Length of input_object_kinds have been checked via validity_check() for ProgrammableTransaction.
-        for kind in input_object_kinds {
-            let obj = match kind {
-                InputObjectKind::MovePackage(id) => self
-                    .cache
-                    .get_package_object(id)?
-                    .map(|o| o.object().clone()),
-
-                InputObjectKind::SharedMoveObject { id, .. } => self.cache.get_object(id)?,
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.cache.get_object_by_key(&objref.0, objref.1)?
-                }
-            }
-            .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-            results.push(ObjectReadResult::new(*kind, obj.into()));
-        }
-
-        Ok(results.into())
-    }
-
     /// Read the inputs for a transaction that is ready to be executed.
     ///
     /// shared_lock_store is used to resolve the versions of any shared input objects.
