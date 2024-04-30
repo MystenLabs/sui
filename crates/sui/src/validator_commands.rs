@@ -20,7 +20,7 @@ use sui_types::{
         sui_system_state_inner_v1::{UnverifiedValidatorOperationCapV1, ValidatorV1},
         sui_system_state_summary::{SuiSystemStateSummary, SuiValidatorSummary},
     },
-    BRIDGE_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+    SUI_SYSTEM_PACKAGE_ID,
 };
 use tap::tap::TapOptional;
 
@@ -33,11 +33,11 @@ use fastcrypto::{
     encoding::{Base64, Encoding},
     traits::KeyPair,
 };
-use move_core_types::identifier::Identifier;
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_bridge::config::BridgeNodeConfig;
 use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
+use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::Config;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
@@ -52,12 +52,10 @@ use sui_keys::{
 };
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
-use sui_types::bridge::BRIDGE_MODULE_NAME;
 use sui_types::crypto::{
     generate_proof_of_possession, get_authority_key_pair, AuthorityPublicKeyBytes,
 };
 use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair, SignatureScheme, SuiKeyPair};
-use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{CallArg, ObjectArg, Transaction, TransactionData};
 
 #[path = "unit_tests/validator_tests.rs"]
@@ -175,12 +173,9 @@ pub enum SuiValidatorCommand {
         /// Path to bridge node config
         #[clap(long)]
         bridge_node_config_path: PathBuf,
-        /// Bridge authority URL
+        /// Bridge authority URL which clients collects action signatures from
         #[clap(long)]
         bridge_authority_url: String,
-        /// Gas budget for this transaction.
-        #[clap(long)]
-        gas_budget: Option<u64>,
     },
 }
 
@@ -477,7 +472,6 @@ impl SuiValidatorCommand {
             SuiValidatorCommand::BridgeCommitteeRegistration {
                 bridge_node_config_path,
                 bridge_authority_url,
-                gas_budget,
             } => {
                 let bridge_config = match BridgeNodeConfig::load(bridge_node_config_path) {
                     Ok(config) => config,
@@ -506,29 +500,15 @@ impl SuiValidatorCommand {
                     .unwrap_or_else(|| panic!("Cannot find gas object from address : {address}"));
 
                 let gas_price = context.get_reference_gas_price().await?;
-
-                let mut ptb = ProgrammableTransactionBuilder::default();
-
-                let bridge_arg = ptb.obj(bridge)?;
-                let system_arg = ptb.obj(ObjectArg::SUI_SYSTEM_MUT)?;
-                let pub_key_arg = ptb.pure(ecdsa_keypair.public().as_bytes())?;
-                let url_arg = ptb.pure(bridge_authority_url)?;
-                ptb.programmable_move_call(
-                    BRIDGE_PACKAGE_ID,
-                    BRIDGE_MODULE_NAME.into(),
-                    // New identifier should not fail, safe to unwrap.
-                    Identifier::new("committee_registration").unwrap(),
-                    vec![],
-                    vec![bridge_arg, system_arg, pub_key_arg, url_arg],
-                );
-                let gas_budget = gas_budget.unwrap_or(DEFAULT_GAS_BUDGET);
-                let tx_data = TransactionData::new_programmable(
+                let tx_data = build_committee_register_transaction(
                     address,
-                    vec![gas],
-                    ptb.finish(),
-                    gas_budget,
+                    &gas,
+                    bridge,
+                    ecdsa_keypair,
+                    &bridge_authority_url,
                     gas_price,
-                );
+                )
+                .map_err(|e| anyhow!("{e:?}"))?;
 
                 let tx = context.sign_transaction(&tx_data);
                 let response = context.execute_transaction_must_succeed(tx).await;
