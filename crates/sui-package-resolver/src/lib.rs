@@ -96,29 +96,57 @@ pub struct Package {
 
 type Linkage = BTreeMap<AccountAddress, AccountAddress>;
 
+/// A `CleverError` is a special kind of abort code that is used to encode more information than a
+/// normal abort code. These clever errors are used to encode the line number, error constant name,
+/// and error constant value as pool indicies packed into a format satisfying the `ErrorBitset`
+/// format. This struct is the "inflated" view of that data, providing the module ID, line number,
+/// and error constant name and value (if available).
 #[derive(Clone, Debug)]
-pub enum CleverError {
-    CompleteError {
-        /// The (storage) module ID of the module that the assertion failed in.
-        module_id: ModuleId,
+pub struct CleverError {
+    /// The (storage) module ID of the module that the assertion failed in.
+    pub module_id: ModuleId,
+    /// Inner error information. This is either a complete error, just a line number, or bytes that
+    /// should be treated opaquely.
+    pub error_info: ConstantErrorInfo,
+    /// The line number in the source file where the error occured.
+    pub source_line_number: u16,
+}
+
+/// The `ConstantErrorInfo` enum is used to represent the different kinds of error information that
+/// can be returned from a clever error when looking at the constant values for the clever error.
+/// These values are either:
+/// * `None` - No constant information is available, only a line number.
+/// * `Rendered` - The error is a complete error, with an error identifier and constant that can be
+///    rendered in a human-readable format (see in-line doc comments for exact types of values
+///    supported).
+/// * `Unrendered` - If there is an error constant value, but it is not a renderable type (e.g., a
+///   `vector<address>`), then it is treated as opaque and the bytes are returned.
+#[derive(Clone, Debug)]
+pub enum ConstantErrorInfo {
+    /// No constant information is available, only a line number.
+    None,
+    /// The error is a complete error, with an error identifier and constant that can be rendered.
+    /// The the rendered string representation of the constant is returned only when the contant
+    /// value is one of the following types:
+    /// * A vector of bytes convertible to a valid UTF-8 string; or
+    /// * A numeric value (u8, u16, u32, u64, u128, u256); or
+    /// * A boolean value; or
+    /// * An address value
+    /// Otherwise, the `Unrendered` raw bytes of the error constant are returned.
+    Rendered {
         /// The name of the error constant.
         error_identifier: String,
-        /// The value of the error constant. In the case where the error constant is either a
-        /// * A vector of bytes convertible to a valid UTF-8 string; or
-        /// * A numeric value (u8, u16, u32, u64, u128, u256); or
-        /// * A boolean value; of
-        /// * An address value
-        /// Then `Ok(<string_rep_of_constant>)` is returned. Otherwise, `Err(<bytes>)` is returned, and
-        /// the caller is responsible for determining how best to display the error constant.
-        error_constant: std::result::Result<String, Vec<u8>>,
-        /// The line number in the source file where the error occured.
-        source_line_number: u16,
+        /// The value of the error constant.
+        error_constant: String,
     },
-    LineNumberOnly {
-        /// The (storage) module ID of the module that the assertion failed in.
-        module_id: ModuleId,
-        /// The line number in the source file where the error occured.
-        source_line_number: u16,
+    /// If there is an error constant value, but ii is not one of the above types, then it is
+    /// treated as opaque and the bytes are returned. The caller is responsible for determining how
+    /// best to display the error constant in this case.
+    Unrendered {
+        /// The name of the error constant.
+        error_identifier: String,
+        /// The raw (BCS) bytes of the error constant.
+        error_bytes: Vec<u8>,
     },
 }
 
@@ -507,21 +535,20 @@ impl<S: PackageStore> Resolver<S> {
         module_id: ModuleId,
         abort_code: u64,
     ) -> Option<CleverError> {
-        let Some(bitset) = ErrorBitset::from_u64(abort_code) else {
-            return None;
-        };
-
+        let bitset = ErrorBitset::from_u64(abort_code)?;
         let package = self.package_store.fetch(*module_id.address()).await.ok()?;
         let module = package.module(module_id.name().as_str()).ok()?.bytecode();
-
         let source_line_number = bitset.line_number()?;
 
         // We only have a line number in our clever error, so return early.
         if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
-            return Some(CleverError::LineNumberOnly {
+            return Some(CleverError {
                 module_id,
+                error_info: ConstantErrorInfo::None,
                 source_line_number,
             });
+        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
+            return None;
         }
 
         let error_identifier_constant = module
@@ -541,50 +568,46 @@ impl<S: PackageStore> Resolver<S> {
             .and_then(|x| String::from_utf8(x).ok())?;
         let bytes = error_value_constant.data.clone();
 
-        let error_constant = match &error_value_constant.type_ {
+        let rendered = match &error_value_constant.type_ {
             SignatureToken::Vector(inner_ty) if inner_ty.as_ref() == &SignatureToken::U8 => {
                 bcs::from_bytes::<Vec<u8>>(&bytes)
                     .ok()
                     .and_then(|x| String::from_utf8(x).ok())
-                    .ok_or_else(|| bytes)
             }
-            SignatureToken::U8 => bcs::from_bytes::<u8>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
-            SignatureToken::U16 => bcs::from_bytes::<u16>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
-            SignatureToken::U32 => bcs::from_bytes::<u32>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
-            SignatureToken::U64 => bcs::from_bytes::<u64>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
-            SignatureToken::U128 => bcs::from_bytes::<u128>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
-            SignatureToken::U256 => bcs::from_bytes::<U256>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
+            SignatureToken::U8 => bcs::from_bytes::<u8>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U16 => bcs::from_bytes::<u16>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U32 => bcs::from_bytes::<u32>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U64 => bcs::from_bytes::<u64>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U128 => bcs::from_bytes::<u128>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U256 => bcs::from_bytes::<U256>(&bytes).ok().map(|x| x.to_string()),
             SignatureToken::Address => bcs::from_bytes::<AccountAddress>(&bytes)
-                .map(|x| x.to_canonical_string(true))
-                .map_err(|_| bytes),
-            SignatureToken::Bool => bcs::from_bytes::<bool>(&bytes)
-                .map(|x| x.to_string())
-                .map_err(|_| bytes),
+                .ok()
+                .map(|x| x.to_canonical_string(true)),
+            SignatureToken::Bool => bcs::from_bytes::<bool>(&bytes).ok().map(|x| x.to_string()),
+
             SignatureToken::Signer
             | SignatureToken::Vector(_)
             | SignatureToken::Struct(_)
             | SignatureToken::StructInstantiation(_)
             | SignatureToken::Reference(_)
             | SignatureToken::MutableReference(_)
-            | SignatureToken::TypeParameter(_) => Err(bytes),
+            | SignatureToken::TypeParameter(_) => None,
         };
 
-        Some(CleverError::CompleteError {
+        let error_info = match rendered {
+            None => ConstantErrorInfo::Unrendered {
+                error_identifier,
+                error_bytes: bytes,
+            },
+            Some(error_constant) => ConstantErrorInfo::Rendered {
+                error_identifier,
+                error_constant,
+            },
+        };
+
+        Some(CleverError {
             module_id,
-            error_identifier,
-            error_constant,
+            error_info,
             source_line_number,
         })
     }

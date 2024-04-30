@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 6-81:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 9477200,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9484800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 83-83:
 Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU8 (function index 0) at offset 1, Abort Code: 9223372161408827393
@@ -63,67 +63,67 @@ Response: {
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU8' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callU8' at source line 29\n0"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU8' (line 29), 'ImAU8': 0"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU16' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callU16' at source line 32\n0"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU16' (line 32), 'ImAU16': 1"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU32' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callU32' at source line 35\n0"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU32' (line 35), 'ImAU32': 2"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU64' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callU64' at source line 38\n0"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU64' (line 38), 'ImAU64': 3"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU128' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callU128' at source line 41\n0"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU128' (line 41), 'ImAU128': 4"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU256' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callU256' at source line 44\n0"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU256' (line 44), 'ImAU256': 5"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAAddress' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callAddress' at source line 47\n0x0000000000000000000000000000000000000000000000000000000000000000"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callAddress' (line 47), 'ImAnAddress': 0x0000000000000000000000000000000000000000000000000000000000000006"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAString' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callString' at source line 50\nThis is a string"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callString' (line 50), 'ImAString': This is a string"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImNotAString' from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'callBytevec' at source line 53\n\u0001\u0002\u0003\u0004\u0005"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callBytevec' (line 53), 'ImNotAString': \u0001\u0002\u0003\u0004\u0005"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\nMove Runtime Abort. Location: b9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m::normalAbort (function index 9) at offset 1, Abort Code: 0"
+            "errors": "Error in 1st command, Move Runtime Abort. Location: 549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::normalAbort (function index 9) at offset 1, Abort Code: 0"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\nError from module '0xb9092b0c2580b96bded4464f1668697ff34aa53a3b62aef7be0a03d1fc9ea1e7::m' in function 'assertLineNo' at source line 59"
+            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::assertLineNo' (line 59)"
           }
         }
       ]
@@ -134,7 +134,7 @@ Response: {
 task 15 'upgrade'. lines 119-197:
 created: object(15,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 9530400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 9538000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 16 'run'. lines 199-199:
 Error: Transaction Effects Status: Move Runtime Abort. Location: fake(1,0)::m::callU8 (function index 0) at offset 1, Abort Code: 9223372659625033729
@@ -191,55 +191,55 @@ Response: {
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU32' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callU32' at source line 151\n1"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU32' (line 151), 'ImAU32': 9"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU64' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callU64' at source line 154\n1"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU64' (line 154), 'ImAU64': 10"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU128' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callU128' at source line 157\n1"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU128' (line 157), 'ImAU128': 11"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAU256' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callU256' at source line 160\n1"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU256' (line 160), 'ImAU256': 12"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAAddress' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callAddress' at source line 163\n0x0000000000000000000000000000000000000000000000000000000000000001"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callAddress' (line 163), 'ImAnAddress': 0x000000000000000000000000000000000000000000000000000000000000000d"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImAString' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callString' at source line 166\nThis is a string in v2"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callString' (line 166), 'ImAString': This is a string in v2"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\n'ImNotAString' from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'callBytevec' at source line 169\n\u0001\u0002\u0003\u0004\u0005\u0006"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callBytevec' (line 169), 'ImNotAString': \u0001\u0002\u0003\u0004\u0005\u0006"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\nMove Runtime Abort. Location: 37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m::normalAbort (function index 9) at offset 1, Abort Code: 0"
+            "errors": "Error in 1st command, Move Runtime Abort. Location: c1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::normalAbort (function index 9) at offset 1, Abort Code: 0"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command\nError from module '0x37bf9a78d7cedde7ae91de9f1a76a663146693a152b93e24aa7b96c3dc86b012::m' in function 'assertLineNo' at source line 175"
+            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::assertLineNo' (line 175)"
           }
         }
       ]

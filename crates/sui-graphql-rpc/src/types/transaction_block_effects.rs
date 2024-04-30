@@ -10,7 +10,7 @@ use async_graphql::{
 };
 use fastcrypto::encoding::{Base64 as FBase64, Encoding};
 use sui_indexer::models::transactions::StoredTransaction;
-use sui_package_resolver::CleverError;
+use sui_package_resolver::{CleverError, ConstantErrorInfo};
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     event::Event as NativeEvent,
@@ -115,37 +115,14 @@ impl TransactionBlockEffects {
     }
 
     /// The reason for a transaction failure, if it did fail.
-    /// If the error is a MoveAbort, the error message will be resolved to a human-readable form if
-    /// possible, otherwise it will fall back to simply displaying the Move abort code and location.
+    /// If the error is a Move abort, the error message will be resolved to a human-readable form if
+    /// possible, otherwise it will fall back to displaying the abort code and location.
     async fn errors(&self, ctx: &Context<'_>) -> Result<Option<String>> {
         let mut status = self.native().status().clone();
         let resolver: &PackageResolver = ctx.data_unchecked();
 
-        if let NativeExecutionStatus::Failure {
-            error:
-                ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _)
-                | ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation {
-                    module,
-                    ..
-                }))),
-            command: Some(command_idx),
-        } = &mut status
-        {
-            // Get the Move call that this error is associated with.
-            if let Some(Command::MoveCall(ptb_call)) = self
-                .programmable_transaction()?
-                .and_then(|ptb| ptb.commands.into_iter().nth(*command_idx))
-            {
-                let module_new = module.clone();
-                // Resolve the runtime module ID in the Move abort to the storage ID of the package
-                // that the abort occured in. This is important to make sure that we look at the
-                // correct version of the module when resolving the error.
-                *module = resolver
-                    .resolve_module_id(module_new, ptb_call.package.into())
-                    .await
-                    .map_err(|e| Error::Internal(format!("Error resolving Move location: {e}")))?;
-            }
-        }
+        self.resolve_native_status_impl(resolver, &mut status)
+            .await?;
 
         match status {
             NativeExecutionStatus::Success => Ok(None),
@@ -164,36 +141,48 @@ impl TransactionBlockEffects {
                         break 'error error.to_string();
                     };
                     let fname_string = if let Some(fname) = &loc.function_name {
-                        format!(" in function '{}' ", fname)
+                        format!("::{}'", fname)
                     } else {
-                        " ".to_string()
+                        "'".to_string()
                     };
-                    match resolver
+
+                    let Some(CleverError {
+                        module_id,
+                        source_line_number,
+                        error_info,
+                    }) = resolver
                         .resolve_clever_error(loc.module.clone(), *code)
                         .await
-                    {
-                        Some(CleverError::CompleteError {
-                            module_id,
-                            error_constant,
-                            source_line_number,
+                    else {
+                        break 'error error.to_string();
+                    };
+
+                    match error_info {
+                        ConstantErrorInfo::Rendered {
                             error_identifier,
-                        }) => {
-                            let const_str = error_constant.unwrap_or_else(FBase64::encode);
+                            error_constant,
+                        } => {
                             format!(
-                                "'{error_identifier}' from module '{}'{fname_string}at source line {source_line_number}\n{const_str}",
+                                "from '{}{fname_string} (line {source_line_number}), '{error_identifier}': {error_constant}",
                                 module_id.to_canonical_display(true)
                             )
                         }
-                        Some(CleverError::LineNumberOnly {
-                            module_id,
-                            source_line_number,
-                        }) => {
+                        ConstantErrorInfo::Unrendered {
+                            error_identifier,
+                            error_bytes,
+                        } => {
+                            let const_str = FBase64::encode(error_bytes);
                             format!(
-                                "Error from module '{}'{fname_string}at source line {source_line_number}",
+                                "from '{}{fname_string} (line {source_line_number}), '{error_identifier}': {const_str}",
                                 module_id.to_canonical_display(true)
                             )
                         }
-                        None => error.to_string(),
+                        ConstantErrorInfo::None => {
+                            format!(
+                                "from '{}{fname_string} (line {source_line_number})",
+                                module_id.to_canonical_display(true)
+                            )
+                        }
                     }
                 };
                 // Convert the command index into an ordinal.
@@ -204,7 +193,7 @@ impl TransactionBlockEffects {
                     3 => "rd",
                     _ => "th",
                 };
-                Ok(Some(format!("Error in {command}{suffix} command\n{error}")))
+                Ok(Some(format!("Error in {command}{suffix} command, {error}")))
             }
         }
     }
@@ -525,6 +514,45 @@ impl TransactionBlockEffects {
             NativeTransactionKind::ProgrammableTransaction(tx) => Ok(Some(tx)),
             _ => Ok(None),
         }
+    }
+
+    /// Resolves the module ID within a Move abort to the storage ID of the package that the
+    /// abort occured in.
+    /// * If the error is not a Move abort, or the Move call in the programmable transaction cannot
+    ///   be found, this function will do nothing.
+    /// * If the error is a Move abort and the storage ID is unable to be resolved an error is
+    ///   returned.
+    async fn resolve_native_status_impl(
+        &self,
+        resolver: &PackageResolver,
+        status: &mut NativeExecutionStatus,
+    ) -> Result<()> {
+        if let NativeExecutionStatus::Failure {
+            error:
+                ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _)
+                | ExecutionFailureStatus::MovePrimitiveRuntimeError(MoveLocationOpt(Some(MoveLocation {
+                    module,
+                    ..
+                }))),
+            command: Some(command_idx),
+        } = status
+        {
+            // Get the Move call that this error is associated with.
+            if let Some(Command::MoveCall(ptb_call)) = self
+                .programmable_transaction()?
+                .and_then(|ptb| ptb.commands.into_iter().nth(*command_idx))
+            {
+                let module_new = module.clone();
+                // Resolve the runtime module ID in the Move abort to the storage ID of the package
+                // that the abort occured in. This is important to make sure that we look at the
+                // correct version of the module when resolving the error.
+                *module = resolver
+                    .resolve_module_id(module_new, ptb_call.package.into())
+                    .await
+                    .map_err(|e| Error::Internal(format!("Error resolving Move location: {e}")))?;
+            }
+        }
+        Ok(())
     }
 }
 

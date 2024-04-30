@@ -9,25 +9,25 @@ module P0::m {
     const ImAU8: u8 = 0;
 
     #[error]
-    const ImAU16: u16 = 0;
+    const ImAU16: u16 = 1;
 
     #[error]
-    const ImAU32: u32 = 0;
+    const ImAU32: u32 = 2;
 
     #[error]
-    const ImAU64: u64 = 0;
+    const ImAU64: u64 = 3;
 
     #[error]
-    const ImAU128: u128 = 0;
+    const ImAU128: u128 = 4;
 
     #[error]
-    const ImAU256: u256 = 0;
+    const ImAU256: u256 = 5;
 
     #[error]
     const ImABool: bool = true;
 
     #[error]
-    const ImAAddress: address = @0;
+    const ImAnAddress: address = @6;
 
     #[error]
     const ImAString: vector<u8> = b"This is a string";
@@ -60,7 +60,7 @@ module P0::m {
     }
 
     public fun callAddress() {
-        abort ImAAddress
+        abort ImAnAddress
     }
 
     public fun callString() {
@@ -122,34 +122,34 @@ module P0::m {
 // errors.
 module P0::m {
     #[error]
-    const ImAU8: u8 = 1;
+    const ImAU8: u8 = 7;
 
     #[error]
-    const ImAU16: u16 = 1;
+    const ImAU16: u16 = 8;
 
     #[error]
-    const ImAU32: u32 = 1;
+    const ImAU32: u32 = 9;
 
     #[error]
-    const ImAU64: u64 = 1;
+    const ImAU64: u64 = 10;
 
     #[error]
-    const ImAU128: u128 = 1;
+    const ImAU128: u128 = 11;
 
     #[error]
-    const ImAU256: u256 = 1;
+    const ImAU256: u256 = 12;
 
     #[error]
     const ImABool: bool = false;
 
     #[error]
-    const ImAAddress: address = @1;
+    const ImAnAddress: address = @13;
 
     #[error]
     const ImAString: vector<u8> = b"This is a string in v2";
 
     #[error]
-    const ImNotAString: vector<u8> = vector[1,2,3,4,5, 6];
+    const ImNotAString: vector<u8> = vector[1,2,3,4,5,6];
 
     public fun callU8() {
         abort ImAU8
@@ -176,7 +176,7 @@ module P0::m {
     }
 
     public fun callAddress() {
-        abort ImAAddress
+        abort ImAnAddress
     }
 
     public fun callString() {
