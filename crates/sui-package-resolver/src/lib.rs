@@ -7,6 +7,9 @@ use move_binary_format::file_format::{
     AbilitySet, FunctionDefinitionIndex, Signature as MoveSignature, SignatureIndex,
     StructTypeParameter, Visibility,
 };
+use move_command_line_common::error_bitset::ErrorBitset;
+use move_core_types::language_storage::ModuleId;
+use move_core_types::u256::U256;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
@@ -92,6 +95,60 @@ pub struct Package {
 }
 
 type Linkage = BTreeMap<AccountAddress, AccountAddress>;
+
+/// A `CleverError` is a special kind of abort code that is used to encode more information than a
+/// normal abort code. These clever errors are used to encode the line number, error constant name,
+/// and error constant value as pool indicies packed into a format satisfying the `ErrorBitset`
+/// format. This struct is the "inflated" view of that data, providing the module ID, line number,
+/// and error constant name and value (if available).
+#[derive(Clone, Debug)]
+pub struct CleverError {
+    /// The (storage) module ID of the module that the assertion failed in.
+    pub module_id: ModuleId,
+    /// Inner error information. This is either a complete error, just a line number, or bytes that
+    /// should be treated opaquely.
+    pub error_info: ErrorConstants,
+    /// The line number in the source file where the error occured.
+    pub source_line_number: u16,
+}
+
+/// The `ErrorConstants` enum is used to represent the different kinds of error information that
+/// can be returned from a clever error when looking at the constant values for the clever error.
+/// These values are either:
+/// * `None` - No constant information is available, only a line number.
+/// * `Rendered` - The error is a complete error, with an error identifier and constant that can be
+///    rendered in a human-readable format (see in-line doc comments for exact types of values
+///    supported).
+/// * `Raw` - If there is an error constant value, but it is not a renderable type (e.g., a
+///   `vector<address>`), then it is treated as opaque and the bytes are returned.
+#[derive(Clone, Debug)]
+pub enum ErrorConstants {
+    /// No constant information is available, only a line number.
+    None,
+    /// The error is a complete error, with an error identifier and constant that can be rendered.
+    /// The the rendered string representation of the constant is returned only when the contant
+    /// value is one of the following types:
+    /// * A vector of bytes convertible to a valid UTF-8 string; or
+    /// * A numeric value (u8, u16, u32, u64, u128, u256); or
+    /// * A boolean value; or
+    /// * An address value
+    /// Otherwise, the `Raw` bytes of the error constant are returned.
+    Rendered {
+        /// The name of the error constant.
+        identifier: String,
+        /// The value of the error constant.
+        constant: String,
+    },
+    /// If there is an error constant value, but ii is not one of the above types, then it is
+    /// treated as opaque and the bytes are returned. The caller is responsible for determining how
+    /// best to display the error constant in this case.
+    Raw {
+        /// The name of the error constant.
+        identifier: String,
+        /// The raw (BCS) bytes of the error constant.
+        bytes: Vec<u8>,
+    },
+}
 
 #[derive(Clone, Debug)]
 pub struct Module {
@@ -442,6 +499,117 @@ impl<S: PackageStore> Resolver<S> {
             .iter()
             .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
             .collect())
+    }
+
+    /// Resolves a runtime address in a `ModuleId` to a storage `ModuleId` according to the linkage
+    /// table in the `context` which must refer to a package.
+    /// * Will fail if the wrong context is provided, i.e., is not a package, or
+    ///   does not exist.
+    /// * Will fail if an invalid `context` is provided for the `location`, i.e., the package at
+    ///   `context` does not contain the module that `location` refers to.
+    pub async fn resolve_module_id(
+        &self,
+        module_id: ModuleId,
+        context: AccountAddress,
+    ) -> Result<ModuleId> {
+        let package = self.package_store.fetch(context).await?;
+        let storage_id = package.relocate(*module_id.address())?;
+        Ok(ModuleId::new(storage_id, module_id.name().to_owned()))
+    }
+
+    /// Resolves an abort code following the clever error format to a `CleverError` enum.
+    /// The `module_id` must be the storage ID of the module (which can e.g., be gotten from the
+    /// `resolve_module_id` function) and not the runtime ID.
+    ///
+    /// If the `abort_code` is not a clever error (i.e., does not follow the tagging and layout as
+    /// defined in `ErrorBitset`), this function will return `None`.
+    ///
+    /// In the case where it is a clever error but only a line number is present (i.e., the error
+    /// is the result of an `assert!(<cond>)` source expression) a `CleverError::LineNumberOnly` is
+    /// returned. Otherwise a `CleverError::CompleteError` is returned.
+    ///
+    /// If for any reason we are unable to resolve the abort code to a `CleverError`, this function
+    /// will return `None`.
+    pub async fn resolve_clever_error(
+        &self,
+        module_id: ModuleId,
+        abort_code: u64,
+    ) -> Option<CleverError> {
+        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let package = self.package_store.fetch(*module_id.address()).await.ok()?;
+        let module = package.module(module_id.name().as_str()).ok()?.bytecode();
+        let source_line_number = bitset.line_number()?;
+
+        // We only have a line number in our clever error, so return early.
+        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
+            return Some(CleverError {
+                module_id,
+                error_info: ErrorConstants::None,
+                source_line_number,
+            });
+        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
+            return None;
+        }
+
+        let error_identifier_constant = module
+            .constant_pool()
+            .get(bitset.identifier_index()? as usize)?;
+        let error_value_constant = module
+            .constant_pool()
+            .get(bitset.constant_index()? as usize)?;
+
+        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
+        {
+            return None;
+        };
+
+        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
+            .ok()
+            .and_then(|x| String::from_utf8(x).ok())?;
+        let bytes = error_value_constant.data.clone();
+
+        let rendered = match &error_value_constant.type_ {
+            SignatureToken::Vector(inner_ty) if inner_ty.as_ref() == &SignatureToken::U8 => {
+                bcs::from_bytes::<Vec<u8>>(&bytes)
+                    .ok()
+                    .and_then(|x| String::from_utf8(x).ok())
+            }
+            SignatureToken::U8 => bcs::from_bytes::<u8>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U16 => bcs::from_bytes::<u16>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U32 => bcs::from_bytes::<u32>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U64 => bcs::from_bytes::<u64>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U128 => bcs::from_bytes::<u128>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U256 => bcs::from_bytes::<U256>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::Address => bcs::from_bytes::<AccountAddress>(&bytes)
+                .ok()
+                .map(|x| x.to_canonical_string(true)),
+            SignatureToken::Bool => bcs::from_bytes::<bool>(&bytes).ok().map(|x| x.to_string()),
+
+            SignatureToken::Signer
+            | SignatureToken::Vector(_)
+            | SignatureToken::Struct(_)
+            | SignatureToken::StructInstantiation(_)
+            | SignatureToken::Reference(_)
+            | SignatureToken::MutableReference(_)
+            | SignatureToken::TypeParameter(_) => None,
+        };
+
+        let error_info = match rendered {
+            None => ErrorConstants::Raw {
+                identifier: error_identifier,
+                bytes,
+            },
+            Some(error_constant) => ErrorConstants::Rendered {
+                identifier: error_identifier,
+                constant: error_constant,
+            },
+        };
+
+        Some(CleverError {
+            module_id,
+            error_info,
+            source_line_number,
+        })
     }
 }
 
