@@ -27,7 +27,6 @@ use tap::tap::TapOptional;
 use crate::fire_drill::get_gas_obj_ref;
 use clap::*;
 use colored::Colorize;
-use fastcrypto::secp256k1::{Secp256k1KeyPair, Secp256k1PrivateKey};
 use fastcrypto::traits::ToFromBytes;
 use fastcrypto::{
     encoding::{Base64, Encoding},
@@ -35,7 +34,7 @@ use fastcrypto::{
 };
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use sui_bridge::config::BridgeNodeConfig;
+use sui_bridge::config::{read_bridge_authority_key, BridgeNodeConfig};
 use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::Config;
@@ -478,13 +477,8 @@ impl SuiValidatorCommand {
                     Err(e) => panic!("Couldn't load BridgeNodeConfig, caused by: {e}"),
                 };
                 // Read bridge keypair
-                let key_str =
-                    fs::read_to_string(bridge_config.bridge_authority_key_path_base64_raw)?;
-                let bytes = Base64::decode(key_str.trim())
-                    .expect("Decode authority key from file should not fail.");
-                let key = Secp256k1PrivateKey::from_bytes(&bytes)
-                    .expect("Decode authority key from bytes should not fail.");
-                let ecdsa_keypair = Secp256k1KeyPair::from(key);
+                let ecdsa_keypair =
+                    read_bridge_authority_key(&bridge_config.bridge_authority_key_path_base64_raw)?;
 
                 let address = context.active_address()?;
                 println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {}", ecdsa_keypair.public);
