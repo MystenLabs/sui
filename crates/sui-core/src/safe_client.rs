@@ -7,6 +7,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -372,6 +373,76 @@ where
         }: HandleCertificateResponseV3,
     ) -> SuiResult<HandleCertificateResponseV3> {
         let effects = self.check_signed_effects_plain(digest, effects, None)?;
+
+        // Check Events
+        match (&events, effects.events_digest()) {
+            (None, None) | (None, Some(_)) => {}
+            (Some(events), None) => {
+                if !events.data.is_empty() {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events but no event digest present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+            (Some(events), Some(events_digest)) => {
+                fp_ensure!(
+                    &events.digest() == events_digest,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events don't match events digest in the signed effects"
+                            .to_string()
+                    }
+                );
+            }
+        }
+
+        // Check Input Objects
+        if let Some(input_objects) = &input_objects {
+            let expected: HashMap<_, _> = effects
+                .old_object_metadata()
+                .into_iter()
+                .map(|(object_ref, _owner)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in input_objects {
+                let object_ref = object.compute_object_reference();
+                if !expected
+                    .get(&object_ref.0)
+                    .is_some_and(|expect| &object_ref == expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned input object that wasn't present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // Check Output Objects
+        if let Some(output_objects) = &output_objects {
+            let expected: HashMap<_, _> = effects
+                .all_changed_objects()
+                .into_iter()
+                .map(|(object_ref, _, _)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in output_objects {
+                let object_ref = object.compute_object_reference();
+                if !expected
+                    .get(&object_ref.0)
+                    .is_some_and(|expect| &object_ref == expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned output object that wasn't present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+        }
 
         Ok(HandleCertificateResponseV3 {
             effects,
