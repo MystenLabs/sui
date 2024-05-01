@@ -613,7 +613,7 @@ mod test {
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
             .with_authority_overload_config(AuthorityOverloadConfig {
                 // Disable system overload checks for the test - during tests with crashes,
-                // it is is possible for overload protection to trigger due to validators
+                // it is possible for overload protection to trigger due to validators
                 // having queued certs which are missing dependencies.
                 check_system_overload_at_execution: false,
                 check_system_overload_at_signing: false,
