@@ -79,8 +79,8 @@ impl ReputationScores {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_reputation_scores_authorities_by_score_desc() {
+    #[tokio::test]
+    async fn test_reputation_scores_authorities_by_score_desc() {
         let context = Arc::new(Context::new_for_test(4).0);
         let scores = ReputationScores::new(CommitRange::new(1..300), vec![4, 1, 1, 3]);
         let authorities = scores.authorities_by_score_desc(context);
@@ -95,8 +95,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_reputation_scores_update_metrics() {
+    #[tokio::test]
+    async fn test_reputation_scores_update_metrics() {
         let context = Arc::new(Context::new_for_test(4).0);
         let scores = ReputationScores::new(CommitRange::new(1..300), vec![1, 2, 4, 3]);
         scores.update_metrics(context.clone());

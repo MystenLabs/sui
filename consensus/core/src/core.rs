@@ -1082,6 +1082,25 @@ mod test {
     async fn test_core_try_new_block_leader_timeout() {
         telemetry_subscribers::init_for_testing();
 
+        // Since we run the test with started_paused = true, any time-dependent operations using Tokio's time
+        // facilities, such as tokio::time::sleep or tokio::time::Instant, will not advance. So practically each
+        // Core's clock will have initialised potentially with different values but it never advances.
+        // To ensure that blocks won't get rejected by cores we'll need to manually wait for the time
+        // diff before processing them. By calling the `tokio::time::sleep` we implicitly also advance the
+        // tokio clock.
+        async fn wait_blocks(blocks: &[VerifiedBlock], context: &Context) {
+            // Simulate the time wait before processing a block to ensure that block.timestamp <= now
+            let now = context.clock.timestamp_utc_ms();
+            let max_timestamp = blocks
+                .iter()
+                .max_by_key(|block| block.timestamp_ms() as BlockTimestampMs)
+                .map(|block| block.timestamp_ms())
+                .unwrap_or(0);
+
+            let wait_time = Duration::from_millis(max_timestamp.saturating_sub(now));
+            sleep(wait_time).await;
+        }
+
         // Create the cores for all authorities
         let mut all_cores = create_cores(vec![1, 1, 1, 1]);
 
@@ -1097,6 +1116,8 @@ mod test {
             let mut this_round_blocks = Vec::new();
 
             for (core, _signal_receivers, _, _, _) in cores.iter_mut() {
+                wait_blocks(&last_round_blocks, &core.context).await;
+
                 core.add_blocks(last_round_blocks.clone()).unwrap();
 
                 // Only when round > 1 and using non-genesis parents.
@@ -1121,6 +1142,8 @@ mod test {
         // Try to create the blocks for round 4 by calling the try_propose() method. No block should be created as the
         // leader - authority 3 - hasn't proposed any block.
         for (core, _, _, _, _) in cores.iter_mut() {
+            wait_blocks(&last_round_blocks, &core.context).await;
+
             core.add_blocks(last_round_blocks.clone()).unwrap();
             assert!(core.try_propose(false).unwrap().is_none());
         }
