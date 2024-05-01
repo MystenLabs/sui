@@ -156,6 +156,42 @@ const { links, hasNextPage, cursor } = await listCreatedLinks({
 const { nfts, balances } = await links[0].assets;
 ```
 
+## Listing transactions with created links
+
+To list the links created by a specific address, you can use the `listCreatedLinks` function:
+
+```ts
+import { getSentTransactionBlocksWithLinks } from '@mysten/zksend';
+
+const { data, hasNextPage, nextCursor } = await getSentTransactionBlocksWithLinks({
+	address: addressOfCreator,
+});
+
+for (const { transactionBlock, links } of data) {
+	// get the claimable assets for this link (will be empty if the link has been claimed)
+	const firstLink = links[0];
+
+	// link is claimed
+	firstLink.claimed;
+	const { nfts, balances } = firstLink.assets;
+
+	// claim link
+	await firstLink.link.claimAssets(addressOfClaimer);
+}
+```
+
+By default `getSentTransactionBlocksWithLinks` will not load the assets for claimed links. This can
+be changed by passing `loadClaimedAssets: true` to the function.
+
+```ts
+import { getSentTransactionBlocksWithLinks } from '@mysten/zksend';
+
+const { data, hasNextPage, nextCursor } = await getSentTransactionBlocksWithLinks({
+	address: addressOfCreator,
+	loadClaimedAssets: true,
+});
+```
+
 ## Regenerating links
 
 If you lose a link you've created, you can re-generate the link (this can only done from the address
