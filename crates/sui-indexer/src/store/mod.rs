@@ -153,16 +153,22 @@ pub mod diesel_macro {
     macro_rules! spawn_read_only_blocking {
         ($pool:expr, $query:expr, $repeatable_read:expr) => {{
             use downcast::Any;
+            use std::time::Instant;
             use $crate::db::get_pool_connection;
             use $crate::db::PoolConnection;
             use $crate::errors::IndexerError;
             use $crate::store::diesel_macro::CALLED_FROM_BLOCKING_POOL;
             let current_span = tracing::Span::current();
+
             tokio::task::spawn_blocking(move || {
+                let mut start = Instant::now();
                 CALLED_FROM_BLOCKING_POOL
                     .with(|in_blocking_pool| *in_blocking_pool.borrow_mut() = true);
+                println!("called from blocking pool check: {:?}", start.elapsed());
                 let _guard = current_span.enter();
+                println!("entered span: {:?}", start.elapsed());
                 let mut pool_conn = get_pool_connection($pool).unwrap();
+                println!("got pool connection: {:?}", start.elapsed());
                 #[cfg(feature = "postgres-feature")]
                 {
                     if $repeatable_read {
@@ -176,14 +182,18 @@ pub mod diesel_macro {
                             .run($query)
                             .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
                     } else {
-                        pool_conn
+                        let mut txn = pool_conn
                             .as_any_mut()
                             .downcast_mut::<PoolConnection<diesel::PgConnection>>()
                             .unwrap()
                             .build_transaction()
-                            .read_only()
+                            .read_only();
+                        println!("built transaction: {:?}", start.elapsed());
+                        let result = txn
                             .run($query)
-                            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+                            .map_err(|e| IndexerError::PostgresReadError(e.to_string()));
+                        println!("ran query: {:?}", start.elapsed());
+                        result
                     }
                 }
                 #[cfg(feature = "mysql-feature")]

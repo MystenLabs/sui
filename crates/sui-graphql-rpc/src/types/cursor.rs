@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{fmt, ops::Deref, vec};
+use std::{fmt, ops::Deref, time::Instant, vec};
 
 use async_graphql::{
     connection::{CursorType, OpaqueCursor},
@@ -338,6 +338,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         ST: Send + 'static,
         GB: Send + 'static,
     {
+        let start = Instant::now();
         let query = move || query();
 
         let results: Vec<T> = if self.limit() == 0 {
@@ -351,11 +352,15 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
             results
         };
 
-        Ok(self.paginate_results(
+        let processed = self.paginate_results(
             results.first().map(|f| f.cursor(checkpoint_viewed_at)),
             results.last().map(|l| l.cursor(checkpoint_viewed_at)),
             results,
-        ))
+        );
+
+        println!("paginate_query_simple took: {:?}", start.elapsed());
+
+        Ok(processed)
     }
 
     /// This function is similar to `paginate_query`, but is specifically designed for handling
@@ -403,7 +408,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
     /// Returns two booleans indicating whether there is a previous or next page in the range,
     /// followed by an iterator of values in the page, fetched from the database. The values
     /// returned implement `Target<C>`, so are able to compute their own cursors.
-    fn paginate_results<T>(
+    pub(crate) fn paginate_results<T>(
         &self,
         f_cursor: Option<C>,
         l_cursor: Option<C>,
@@ -419,20 +424,20 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // cursors, so the bounds must have been invalid, no matter which end the page was
                 // drawn from.
                 (_, None, _, _, _) | (_, _, None, _, _) => {
-                    println!("a");
+                    // println!("a");
                     return (false, false, vec![].into_iter());
                 }
 
                 // Page drawn from the front, and the cursor for the first element does not match
                 // `after`. This implies the bound was invalid, so we return an empty result.
                 (Some(a), Some(f), _, _, End::Front) if f != *a => {
-                    println!("b");
+                    // println!("b");
                     return (false, false, vec![].into_iter());
                 }
 
                 // Similar to above case, but for back of results.
                 (_, _, Some(l), Some(b), End::Back) if l != *b => {
-                    println!("c");
+                    // println!("c");
                     return (false, false, vec![].into_iter());
                 }
 
@@ -440,7 +445,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                 // supplied on the end the page is being drawn from, it was found in the results
                 // (implying a page follows in that direction).
                 (after, _, Some(l), before, End::Front) => {
-                    println!("d");
+                    // println!("d");
                     let has_previous_page = after.is_some();
                     let prefix = has_previous_page as usize;
 
@@ -448,7 +453,16 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
                     // from the suffix and we trim more off the end if there is more after applying the
                     // limit.
                     let mut suffix = before.is_some_and(|b| *b == l) as usize;
+                    // println!(
+                    // "limit, prefix, suffix, len: {}, {}, {}, {}",
+                    // self.limit(),
+                    // prefix,
+                    // suffix,
+                    // results.len()
+                    // );
                     suffix += results.len().saturating_sub(self.limit() + prefix + suffix);
+                    // println!("suffix post: {}", suffix);
+
                     let has_next_page = suffix > 0;
 
                     (has_previous_page, has_next_page, prefix, suffix)
@@ -456,7 +470,7 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
 
                 // Symmetric to the previous case, but drawing from the back.
                 (after, Some(f), _, before, End::Back) => {
-                    println!("e");
+                    // println!("e");
                     let has_next_page = before.is_some();
                     let suffix = has_next_page as usize;
 
@@ -472,18 +486,18 @@ impl<C: CursorType + Eq + Clone + Send + Sync + 'static> Page<C> {
         // previous or next page, because there will be no start or end cursor for this page to
         // anchor on.
         if results.len() == prefix + suffix {
-            println!("f");
+            // println!("f");
             return (false, false, vec![].into_iter());
         }
 
         // We finally made it -- trim the prefix and suffix rows from the result and send it!
         let mut results = results.into_iter();
         if prefix > 0 {
-            println!("g");
+            // println!("g");
             results.nth(prefix - 1);
         }
         if suffix > 0 {
-            println!("h");
+            // println!("h");
             results.nth_back(suffix - 1);
         }
 

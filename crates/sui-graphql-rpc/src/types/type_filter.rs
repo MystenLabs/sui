@@ -11,8 +11,9 @@ use async_graphql::*;
 use diesel::{
     expression::{is_aggregate::No, ValidGrouping},
     query_builder::QueryFragment,
-    sql_types::{Binary, Text},
-    AppearsOnTable, Expression, ExpressionMethods, QueryDsl, QuerySource,
+    sql_types::{Binary, Bytea, Text},
+    AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods, QueryDsl, QuerySource,
+    TextExpressionMethods,
 };
 use move_core_types::language_storage::StructTag;
 use std::{fmt, result::Result, str::FromStr};

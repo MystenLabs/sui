@@ -118,11 +118,16 @@ impl<'c> super::DbConnection for PgConnection<'c> {
         Q: LoadQuery<'static, Self::Connection, U>,
         Q: QueryId + QueryFragment<Self::Backend>,
     {
+        let mut start = Instant::now();
         query_cost::log(self.conn, self.max_cost, query());
+        println!("Query cost took {:?}", start.elapsed());
         let binding = query();
         let debugged = debug_query(&binding);
         println!("Query: {}", debugged);
-        query().get_results(self.conn)
+        start = Instant::now();
+        let results = query().get_results(self.conn);
+        println!("Query took {:?}", start.elapsed());
+        results
     }
 }
 
