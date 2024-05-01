@@ -14,6 +14,7 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   docker-images:
     runs-on: ubuntu-latest
+    if: (!contains(fromJSON('["graphql-rpc"]'), github.ref))
     steps:
       - name: Dispatch Docker Builds in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@26b39ed245ab8f31526069329e112ab2fb224588 # pin@v2
@@ -25,6 +26,7 @@ jobs:
 
   release-binaries:
     runs-on: ubuntu-latest
+    if: (!contains(fromJSON('["graphql-rpc"]'), github.ref))
     steps:
       - name: Dispatch Release binaries builds in MystenLabs/sui-operations
         uses: peter-evans/repository-dispatch@26b39ed245ab8f31526069329e112ab2fb224588 # pin@v2
@@ -33,3 +35,15 @@ jobs:
           token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
           event-type: build-release-binaries
           client-payload: '{"sui_commit": "${{ github.sha }}"}'
+
+  graphql-artifacts:
+    runs-on: ubuntu-latest
+    if: (contains(fromJSON('["graphql-rpc"]'), github.ref))
+    steps:
+      - name: Dispatch GraphQl artifact builds in MystenLabs/sui-operations
+        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+          event-type: build-graphql-artifacts
+          client-payload: '{"sui_commit": "${{ github.sha }}", "docker_hub_tag": "${{ github.ref }}"}'
