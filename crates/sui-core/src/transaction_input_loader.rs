@@ -167,7 +167,7 @@ impl TransactionInputLoader {
                     let version = shared_locks.get(id).unwrap_or_else(|| {
                         panic!("Shared object locks should have been set. key: {tx_key:?}, obj id: {id:?}")
                     });
-                    if version > &SequenceNumber::MAX {
+                    if version.is_cancelled() {
                         // Do not need to fetch shared object for cancelled transaction.
                         results[i] = Some(ObjectReadResult {
                             input_object_kind: *input,
@@ -198,7 +198,7 @@ impl TransactionInputLoader {
                     object: obj.into(),
                 },
                 (None, InputObjectKind::SharedMoveObject { id, .. }) => {
-                    assert!(key.1 < SequenceNumber::MAX);
+                    assert!(key.1.is_valid());
                     // Check if the object was deleted by a concurrently certified tx
                     let version = key.1;
                     if let Some(dependency) = self.cache.get_deleted_shared_object_previous_tx_digest(id, version, epoch_id)? {

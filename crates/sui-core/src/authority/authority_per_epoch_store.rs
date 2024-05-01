@@ -3069,40 +3069,45 @@ impl AuthorityPerEpochStore {
                 );
 
                 if let Some((deferral_key, deferral_reason)) = deferral_info {
-                    if transaction_deferral_within_limit(
-                        &deferral_key,
-                        self.protocol_config()
-                            .max_deferral_rounds_for_congestion_control(),
-                    ) {
-                        debug!(
-                            "Deferring consensus certificate for transaction {:?} until {:?}",
-                            certificate.digest(),
-                            deferral_key
-                        );
-                        if let DeferralReason::SharedObjectCongestion(_) = deferral_reason {
+                    debug!(
+                        "Deferring consensus certificate for transaction {:?} until {:?}",
+                        certificate.digest(),
+                        deferral_key
+                    );
+
+                    let deferral_result = match deferral_reason {
+                        DeferralReason::RandomnessNotReady => {
+                            // Always defer transaction due to randomness not ready.
+                            ConsensusCertificateResult::Deferred(deferral_key)
+                        }
+                        DeferralReason::SharedObjectCongestion(congested_objects) => {
                             authority_metrics
                                 .consensus_handler_congested_transactions
                                 .inc();
+                            if transaction_deferral_within_limit(
+                                &deferral_key,
+                                self.protocol_config()
+                                    .max_deferral_rounds_for_congestion_control(),
+                            ) {
+                                ConsensusCertificateResult::Deferred(deferral_key)
+                            } else {
+                                // Cancel the transaction that has been deferred for too long.
+                                debug!(
+                                    "Cancelling consensus certificate for transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
+                                    certificate.digest(),
+                                    deferral_key,
+                                    congested_objects
+                                );
+                                ConsensusCertificateResult::Cancelled((
+                                    certificate,
+                                    CancelConsensusCertificateReason::CongestionOnObjects(
+                                        congested_objects,
+                                    ),
+                                ))
+                            }
                         }
-                        return Ok(ConsensusCertificateResult::Deferred(deferral_key));
-                    } else if let DeferralReason::SharedObjectCongestion(congested_objects) =
-                        deferral_reason
-                    {
-                        debug!(
-                                "Cancelling consensus certificate for transaction {:?} with deferral key {:?} due to congestion on objects {:?}",
-                                certificate.digest(),
-                                deferral_key,
-                                congested_objects
-                            );
-                        return Ok(ConsensusCertificateResult::Cancelled((
-                            certificate,
-                            CancelConsensusCertificateReason::CongestionOnObjects(
-                                congested_objects,
-                            ),
-                        )));
-                    } else {
-                        panic!("Only shared object congestion can cause transaction cancellation in consensus handler. Deferral reason: {:?}", deferral_reason);
-                    }
+                    };
+                    return Ok(deferral_result);
                 }
 
                 if dkg_failed && self.randomness_state_enabled() && certificate.uses_randomness() {

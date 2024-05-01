@@ -212,39 +212,39 @@ fn assign_versions_for_certificate(
 
     let next_version = SequenceNumber::lamport_increment(input_object_keys.iter().map(|obj| obj.1));
     assert!(
-        next_version < SequenceNumber::MAX,
-        "next_version must be less than MAX"
+        next_version.is_valid(),
+        "Assigned version must be valid. Got {:?}",
+        next_version
     );
 
-    // Update the next version for the shared objects.
-    assigned_versions
-        .iter()
-        .zip(is_mutable_input)
-        .filter_map(|((id, _), mutable)| {
-            if mutable {
-                Some((*id, next_version))
-            } else {
-                None
-            }
-        })
-        .for_each(|(id, version)| {
-            assert!(
-                !txn_cancelled,
-                "Cancelled transactions should not update shared objects"
-            );
-            assert!(
-                version < SequenceNumber::MAX,
-                "Assigned version must be less than MAX"
-            );
-            shared_input_next_versions
-                .insert(id, version)
-                .expect("Object must exist in shared_input_next_versions.");
-        });
+    if !txn_cancelled {
+        // Update the next version for the shared objects.
+        assigned_versions
+            .iter()
+            .zip(is_mutable_input)
+            .filter_map(|((id, _), mutable)| {
+                if mutable {
+                    Some((*id, next_version))
+                } else {
+                    None
+                }
+            })
+            .for_each(|(id, version)| {
+                assert!(
+                    version.is_valid(),
+                    "Assigned version must be a valid version."
+                );
+                shared_input_next_versions
+                    .insert(id, version)
+                    .expect("Object must exist in shared_input_next_versions.");
+            });
+    }
 
     trace!(
         ?tx_digest,
         ?assigned_versions,
         ?next_version,
+        ?txn_cancelled,
         "locking shared objects"
     );
 

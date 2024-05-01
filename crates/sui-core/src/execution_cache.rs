@@ -196,7 +196,7 @@ pub trait ExecutionCacheRead: Send + Sync {
             .into_iter(),
         ) {
             assert!(
-                input_key.version().is_none() || input_key.version().unwrap() < SequenceNumber::MAX,
+                input_key.version().is_none() || input_key.version().unwrap().is_valid(),
                 "Shared objects in cancelled transaction should always be available immediately, 
                  but it appears that transaction manager is waiting for {:?} to become available",
                 input_key

@@ -58,6 +58,13 @@ impl InputKey {
             InputKey::Package { .. } => None,
         }
     }
+
+    pub fn is_cancelled(&self) -> bool {
+        match self {
+            InputKey::VersionedObject { version, .. } => version.is_cancelled(),
+            InputKey::Package { .. } => false,
+        }
+    }
 }
 
 impl From<&Object> for InputKey {

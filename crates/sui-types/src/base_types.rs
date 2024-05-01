@@ -1052,6 +1052,14 @@ impl SequenceNumber {
 
         SequenceNumber(max_input.0 + 1)
     }
+
+    pub fn is_cancelled(&self) -> bool {
+        self == &SequenceNumber::CANCELLED_READ || self == &SequenceNumber::CONGESTED
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self < &SequenceNumber::MAX
+    }
 }
 
 impl From<SequenceNumber> for u64 {
