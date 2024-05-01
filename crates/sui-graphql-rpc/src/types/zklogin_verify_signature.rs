@@ -3,6 +3,7 @@
 
 use crate::config::ZkLoginConfig;
 use crate::error::Error;
+use crate::server::watermark_task::Watermark;
 use crate::types::base64::Base64;
 use crate::types::dynamic_field::{DynamicField, DynamicFieldName};
 use crate::types::epoch::Epoch;
@@ -17,7 +18,7 @@ use sui_types::authenticator_state::{ActiveJwk, AuthenticatorStateInner};
 use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::{DynamicFieldType, Field};
 use sui_types::signature::GenericSignature;
-use sui_types::signature::{AuthenticatorTrait, VerifyParams};
+use sui_types::signature::VerifyParams;
 use sui_types::transaction::TransactionData;
 use sui_types::{TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS};
 use tracing::warn;
@@ -36,7 +37,7 @@ pub(crate) enum ZkLoginIntentScope {
 #[derive(SimpleObject, Clone, Debug)]
 pub(crate) struct ZkLoginVerifyResult {
     /// The boolean result of the verification. If true, errors should be empty.
-    success: bool,
+    pub success: bool,
     /// The errors field captures any verification error
     pub errors: Vec<String>,
 }
@@ -50,8 +51,10 @@ pub(crate) async fn verify_zklogin_signature(
     intent_scope: ZkLoginIntentScope,
     author: SuiAddress,
 ) -> Result<ZkLoginVerifyResult, Error> {
+    let Watermark { checkpoint, .. } = *ctx.data_unchecked();
+
     // get current epoch from db.
-    let Some(curr_epoch) = Epoch::query(ctx, None, None).await? else {
+    let Some(curr_epoch) = Epoch::query(ctx, None, checkpoint).await? else {
         return Err(Error::Internal(
             "Cannot get current epoch from db".to_string(),
         ));
@@ -82,7 +85,7 @@ pub(crate) async fn verify_zklogin_signature(
             bcs: Base64(bcs::to_bytes(&1u64).unwrap()),
         },
         DynamicFieldType::DynamicField,
-        None,
+        checkpoint,
     )
     .await
     .map_err(|e| as_jwks_read_error(e.to_string()))?;
@@ -126,12 +129,8 @@ pub(crate) async fn verify_zklogin_signature(
             if tx_sender != author.into() {
                 return Err(Error::Client("Tx sender mismatch author".to_string()));
             }
-            match zklogin_sig.verify_authenticator(
-                &intent_msg,
-                tx_sender,
-                Some(curr_epoch),
-                &verify_params,
-            ) {
+            let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+            match sig.verify_authenticator(&intent_msg, tx_sender, curr_epoch, &verify_params) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],
@@ -153,12 +152,8 @@ pub(crate) async fn verify_zklogin_signature(
                 data,
             );
 
-            match zklogin_sig.verify_authenticator(
-                &intent_msg,
-                author.into(),
-                Some(curr_epoch),
-                &verify_params,
-            ) {
+            let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+            match sig.verify_authenticator(&intent_msg, author.into(), curr_epoch, &verify_params) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],

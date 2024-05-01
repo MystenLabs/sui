@@ -174,7 +174,7 @@ pub struct StructDefinition {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum StructFields {
-    Defined(Fields<Type>),
+    Defined(/* positional */ bool, Fields<Type>),
     Native(Loc),
 }
 
@@ -356,6 +356,7 @@ pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Field),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
+    DotUnresolved(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -488,13 +489,20 @@ pub type MatchArm = Spanned<MatchArm_>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchPattern_ {
-    Constructor(
+    Variant(
         ModuleIdent,
         DatatypeName,
         VariantName,
         Option<Vec<Type>>,
         Fields<MatchPattern>,
     ),
+    Struct(
+        ModuleIdent,
+        DatatypeName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Constant(ModuleIdent, ConstantName),
     Binder(Mutability, Var, /* unused binding */ bool),
     Literal(Value),
     Wildcard,
@@ -927,6 +935,20 @@ impl Type_ {
             | Type_::UnresolvedError => None,
         }
     }
+
+    // Unwraps refs
+    pub fn base_type_(&self) -> Self {
+        match self {
+            Type_::Ref(_, inner) => inner.value.clone(),
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => self.clone(),
+        }
+    }
 }
 
 impl Var_ {
@@ -1236,7 +1258,10 @@ impl AstDebug for (DatatypeName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
+        if let StructFields::Defined(is_positional, fields) = fields {
+            if *is_positional {
+                w.write("#positional");
+            }
             w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;
@@ -1859,6 +1884,10 @@ impl AstDebug for ExpDotted_ {
                 w.comma(args, |w, e| e.ast_debug(w));
                 w.write(")");
             }
+            D::DotUnresolved(_, e) => {
+                e.ast_debug(w);
+                w.write(".")
+            }
         }
     }
 }
@@ -1887,7 +1916,7 @@ impl AstDebug for MatchPattern_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use MatchPattern_::*;
         match self {
-            Constructor(mident, enum_, variant, tys_opt, fields) => {
+            Variant(mident, enum_, variant, tys_opt, fields) => {
                 w.write(format!("{}::{}::{}", mident, enum_, variant));
                 if let Some(ss) = tys_opt {
                     w.write("<");
@@ -1899,6 +1928,22 @@ impl AstDebug for MatchPattern_ {
                     pat.ast_debug(w);
                 });
                 w.write("} ");
+            }
+            Struct(mident, struct_, tys_opt, fields) => {
+                w.write(format!("{}::{}", mident, struct_,));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Constant(mident, const_) => {
+                w.write(format!("const#{}::{}", mident, const_));
             }
             Binder(mut_, name, unused_binding) => {
                 mut_.ast_debug(w);

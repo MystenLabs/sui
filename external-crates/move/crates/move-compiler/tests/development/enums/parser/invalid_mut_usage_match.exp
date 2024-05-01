@@ -60,7 +60,7 @@ error[E02010]: invalid name
    ┌─ tests/development/enums/parser/invalid_mut_usage_match.move:14:10
    │
 14 │          mut Option::None => false,
-   │          ^^^ ------------ This refers to a variant, not a variable binding
+   │          ^^^ ------------ Expected a valid 'enum' variant, 'struct', or 'const', not a variable
    │          │    
    │          'mut' can only be used with variable bindings in patterns
 

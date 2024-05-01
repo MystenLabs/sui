@@ -14,6 +14,7 @@ use sui_types::base_types::{AuthorityName, SuiAddress};
 use sui_types::committee::{Committee, ProtocolVersion};
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, KeypairTraits, PublicKey};
 use sui_types::object::Object;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use crate::genesis_config::{AccountConfig, ValidatorGenesisConfigBuilder, DEFAULT_GAS_AMOUNT};
 use crate::genesis_config::{GenesisConfig, ValidatorGenesisConfig};
@@ -62,6 +63,8 @@ pub struct ConfigBuilder<R = OsRng> {
     num_unpruned_validators: Option<usize>,
     authority_overload_config: Option<AuthorityOverloadConfig>,
     data_ingestion_dir: Option<PathBuf>,
+    policy_config: Option<PolicyConfig>,
+    firewall_config: Option<RemoteFirewallConfig>,
 }
 
 impl ConfigBuilder {
@@ -78,6 +81,8 @@ impl ConfigBuilder {
             num_unpruned_validators: None,
             authority_overload_config: None,
             data_ingestion_dir: None,
+            policy_config: None,
+            firewall_config: None,
         }
     }
 
@@ -200,6 +205,16 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_policy_config(mut self, config: Option<PolicyConfig>) -> Self {
+        self.policy_config = config;
+        self
+    }
+
+    pub fn with_firewall_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
+        self.firewall_config = config;
+        self
+    }
+
     pub fn rng<N: rand::RngCore + rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
             rng: Some(rng),
@@ -213,6 +228,8 @@ impl<R> ConfigBuilder<R> {
             jwk_fetch_interval: self.jwk_fetch_interval,
             authority_overload_config: self.authority_overload_config,
             data_ingestion_dir: self.data_ingestion_dir,
+            policy_config: self.policy_config,
+            firewall_config: self.firewall_config,
         }
     }
 
@@ -353,7 +370,9 @@ impl<R: rand::RngCore + rand::CryptoRng> ConfigBuilder<R> {
             .enumerate()
             .map(|(idx, validator)| {
                 let mut builder = ValidatorConfigBuilder::new()
-                    .with_config_directory(self.config_directory.clone());
+                    .with_config_directory(self.config_directory.clone())
+                    .with_policy_config(self.policy_config.clone())
+                    .with_firewall_config(self.firewall_config.clone());
 
                 if let Some(jwk_fetch_interval) = self.jwk_fetch_interval {
                     builder = builder.with_jwk_fetch_interval(jwk_fetch_interval);

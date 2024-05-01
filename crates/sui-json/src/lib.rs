@@ -8,9 +8,7 @@ use std::str::FromStr;
 use anyhow::{anyhow, bail};
 use fastcrypto::encoding::{Encoding, Hex};
 use move_binary_format::CompiledModule;
-use move_binary_format::{
-    access::ModuleAccess, binary_config::BinaryConfig, file_format::SignatureToken,
-};
+use move_binary_format::{binary_config::BinaryConfig, file_format::SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveFieldLayout;

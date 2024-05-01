@@ -18,7 +18,6 @@ use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction
 use crate::error::Error;
 use move_binary_format::errors::Location;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
         TableIndex,
@@ -30,9 +29,9 @@ use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     language_storage::{StructTag, TypeTag},
 };
-use sui_types::move_package::TypeOrigin;
+use sui_types::move_package::{MovePackage, TypeOrigin};
 use sui_types::object::Object;
-use sui_types::{base_types::SequenceNumber, is_system_package, Identifier};
+use sui_types::{base_types::SequenceNumber, Identifier};
 
 pub mod error;
 
@@ -85,8 +84,8 @@ pub struct Package {
     /// is referred to by in other packages) to its storage ID (the ID it is loaded from on chain).
     linkage: Linkage,
 
-    /// The version this package was loaded at -- necessary for cache invalidation of system
-    /// packages.
+    /// The version this package was loaded at -- necessary for handling race conditions when
+    /// loading system packages.
     version: SequenceNumber,
 
     modules: BTreeMap<String, Module>,
@@ -206,8 +205,6 @@ struct ResolutionContext<'l> {
 /// store during testing.
 #[async_trait]
 pub trait PackageStore: Send + Sync + 'static {
-    /// Latest version of the object at `id`.
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber>;
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
@@ -217,9 +214,6 @@ macro_rules! as_ref_impl {
     ($type:ty) => {
         #[async_trait]
         impl PackageStore for $type {
-            async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-                self.as_ref().version(id).await
-            }
             async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
                 self.as_ref().fetch(id).await
             }
@@ -456,29 +450,30 @@ impl<T> PackageStoreWithLruCache<T> {
         let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
         Self { packages, inner }
     }
+
+    /// Removes all packages with ids in `ids` from the cache, if they exist. Does nothing for ids
+    /// that are not in the cache. Accepts `self` immutably as it operates under the lock.
+    pub fn evict(&self, ids: impl IntoIterator<Item = AccountAddress>) {
+        let mut packages = self.packages.lock().unwrap();
+        for id in ids {
+            packages.pop(&id);
+        }
+    }
 }
 
 #[async_trait]
 impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        self.inner.version(id).await
-    }
-
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        let candidate = {
+        if let Some(package) = {
             // Release the lock after getting the package
             let mut packages = self.packages.lock().unwrap();
             packages.get(&id).map(Arc::clone)
+        } {
+            return Ok(package);
         };
 
-        // System packages can be invalidated in the cache if a newer version exists.
-        match candidate {
-            Some(package) if !is_system_package(id) => return Ok(package),
-            Some(package) if self.version(id).await? <= package.version => return Ok(package),
-            Some(_) | None => { /* nop */ }
-        }
-
         let package = self.inner.fetch(id).await?;
+
         // Try and insert the package into the cache, accounting for races.  In most cases the
         // racing fetches will produce the same package, but for system packages, they may not, so
         // favour the package that has the newer version, or if they are the same, the package that
@@ -501,12 +496,17 @@ impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
 }
 
 impl Package {
-    pub fn read(object: &Object) -> Result<Self> {
+    pub fn read_from_object(object: &Object) -> Result<Self> {
         let storage_id = AccountAddress::from(object.id());
         let Some(package) = object.data.try_as_package() else {
             return Err(Error::NotAPackage(storage_id));
         };
 
+        Self::read_from_package(package)
+    }
+
+    pub fn read_from_package(package: &MovePackage) -> Result<Self> {
+        let storage_id = AccountAddress::from(package.id());
         let mut type_origins: BTreeMap<String, BTreeMap<String, AccountAddress>> = BTreeMap::new();
         for TypeOrigin {
             module_name,
@@ -1291,7 +1291,7 @@ impl<'l> ResolutionContext<'l> {
                 )
                 // This error is unexpected because the only reason it would fail is because of a
                 // type parameter arity mismatch, which we check for above.
-                .map_err(|e| Error::UnexpectedError(Box::new(e)))?
+                .map_err(|e| Error::UnexpectedError(Arc::new(e)))?
             }
         })
     }
@@ -1611,6 +1611,9 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
+        // Evict the package from the cache
+        resolver.package_store().evict([addr("0x1")]);
+
         let layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
         insta::assert_snapshot!(format!("{layout:#}"));
     }
@@ -1623,37 +1626,30 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let stats = |inner: &Arc<RwLock<InnerStore>>| {
-            let i = inner.read().unwrap();
-            (i.fetches, i.version_checks)
-        };
-
-        assert_eq!(stats(&inner), (0, 0));
+        assert_eq!(inner.read().unwrap().fetches, 0);
         let l0 = resolver.type_layout(type_("0xa0::m::T0")).await.unwrap();
 
         // Load A0.
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
-        // Layouts are the same, no need to reload the package.  Not a system package, so no version
-        // check needed.
+        // Layouts are the same, no need to reload the package.
         let l1 = resolver.type_layout(type_("0xa0::m::T0")).await.unwrap();
         assert_eq!(format!("{l0}"), format!("{l1}"));
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
         // Different type, but same package, so no extra fetch.
         let l2 = resolver.type_layout(type_("0xa0::m::T2")).await.unwrap();
         assert_ne!(format!("{l0}"), format!("{l2}"));
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
-        // New package to load.  It's a system package, which would need a version check if it
-        // already existed in the cache, but it doesn't yet, so we only see a fetch.
+        // New package to load.
         let l3 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
-        assert_eq!(stats(&inner), (2, 0));
+        assert_eq!(inner.read().unwrap().fetches, 2);
 
-        // Reload the same system package type, which will cause a version check.
+        // Reload the same system package type, it gets fetched from cache
         let l4 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l3}"), format!("{l4}"));
-        assert_eq!(stats(&inner), (2, 1));
+        assert_eq!(inner.read().unwrap().fetches, 2);
 
         // Upgrade the system package
         inner.write().unwrap().replace(
@@ -1661,12 +1657,15 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
-        // Reload the same system type again.  The version check fails and the system package is
-        // refetched (even though the type is the same as before).  This usage pattern (layouts for
-        // system types) is why a layout cache would be particularly helpful (future optimisation).
+        // Evict the package from the cache
+        resolver.package_store().evict([addr("0x1")]);
+
+        // Reload the system system type again. It will be refetched (even though the type is the
+        // same as before). This usage pattern (layouts for system types) is why a layout cache
+        // would be particularly helpful (future optimisation).
         let l5 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l4}"), format!("{l5}"));
-        assert_eq!(stats(&inner), (3, 2));
+        assert_eq!(inner.read().unwrap().fetches, 3);
     }
 
     #[tokio::test]
@@ -2324,7 +2323,10 @@ mod tests {
     /// have a 'published-at' address), and their transitive dependencies are also in `packages`.
     fn package_cache(
         packages: impl IntoIterator<Item = (u64, CompiledPackage, TypeOriginTable)>,
-    ) -> (Arc<RwLock<InnerStore>>, Box<dyn PackageStore>) {
+    ) -> (
+        Arc<RwLock<InnerStore>>,
+        PackageStoreWithLruCache<InMemoryPackageStore>,
+    ) {
         let packages_by_storage_id: BTreeMap<AccountAddress, _> = packages
             .into_iter()
             .map(|(version, package, origins)| {
@@ -2360,16 +2362,13 @@ mod tests {
         let inner = Arc::new(RwLock::new(InnerStore {
             packages,
             fetches: 0,
-            version_checks: 0,
         }));
 
         let store = InMemoryPackageStore {
             inner: inner.clone(),
         };
 
-        let store_with_cache = PackageStoreWithLruCache::new(store);
-
-        (inner, Box::new(store_with_cache))
+        (inner, PackageStoreWithLruCache::new(store))
     }
 
     fn cached_package(
@@ -2463,21 +2462,10 @@ mod tests {
     struct InnerStore {
         packages: BTreeMap<AccountAddress, Package>,
         fetches: usize,
-        version_checks: usize,
     }
 
     #[async_trait]
     impl PackageStore for InMemoryPackageStore {
-        async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-            let mut inner = self.inner.as_ref().write().unwrap();
-            inner.version_checks += 1;
-            inner
-                .packages
-                .get(&id)
-                .ok_or_else(|| Error::PackageNotFound(id))
-                .map(|p| p.version)
-        }
-
         async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
             let mut inner = self.inner.as_ref().write().unwrap();
             inner.fetches += 1;

@@ -6,12 +6,10 @@
 //! The overall verification is split between stack_usage_verifier.rs and
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
-    acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety, reference_safety,
-    stack_usage_verifier::StackUsageVerifier, type_safety,
+    absint::FunctionContext, acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety,
+    reference_safety, stack_usage_verifier::StackUsageVerifier, type_safety,
 };
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::FunctionView,
     control_flow_graph::ControlFlowGraph,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -25,8 +23,8 @@ use move_vm_config::verifier::VerifierConfig;
 use std::collections::HashMap;
 
 pub struct CodeUnitVerifier<'a> {
-    resolver: &'a CompiledModule,
-    function_view: FunctionView<'a>,
+    module: &'a CompiledModule,
+    function_context: FunctionContext<'a>,
     name_def_map: &'a HashMap<IdentifierIndex, FunctionDefinitionIndex>,
 }
 
@@ -92,8 +90,8 @@ impl<'a> CodeUnitVerifier<'a> {
             None => return Ok(0),
         };
 
-        // create `FunctionView` and `BinaryIndexedView`
-        let function_view = control_flow::verify_function(
+        // create `FunctionContext` and `BinaryIndexedView`
+        let function_context = control_flow::verify_function(
             verifier_config,
             module,
             index,
@@ -103,14 +101,14 @@ impl<'a> CodeUnitVerifier<'a> {
         )?;
 
         if let Some(limit) = verifier_config.max_basic_blocks {
-            if function_view.cfg().blocks().len() > limit {
+            if function_context.cfg().blocks().len() > limit {
                 return Err(
                     PartialVMError::new(StatusCode::TOO_MANY_BASIC_BLOCKS).at_code_offset(index, 0)
                 );
             }
         }
 
-        let num_back_edges = function_view.cfg().num_back_edges();
+        let num_back_edges = function_context.cfg().num_back_edges();
         if let Some(limit) = verifier_config.max_back_edges_per_function {
             if num_back_edges > limit {
                 return Err(
@@ -119,11 +117,10 @@ impl<'a> CodeUnitVerifier<'a> {
             }
         }
 
-        let resolver = module;
         // verify
         let code_unit_verifier = CodeUnitVerifier {
-            resolver,
-            function_view,
+            module,
+            function_context,
             name_def_map,
         };
         code_unit_verifier.verify_common(verifier_config, meter)?;
@@ -139,9 +136,14 @@ impl<'a> CodeUnitVerifier<'a> {
         verifier_config: &VerifierConfig,
         meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<()> {
-        StackUsageVerifier::verify(verifier_config, self.resolver, &self.function_view, meter)?;
-        type_safety::verify(self.resolver, &self.function_view, meter)?;
-        locals_safety::verify(self.resolver, &self.function_view, meter)?;
-        reference_safety::verify(self.resolver, &self.function_view, self.name_def_map, meter)
+        StackUsageVerifier::verify(verifier_config, self.module, &self.function_context, meter)?;
+        type_safety::verify(self.module, &self.function_context, meter)?;
+        locals_safety::verify(self.module, &self.function_context, meter)?;
+        reference_safety::verify(
+            self.module,
+            &self.function_context,
+            self.name_def_map,
+            meter,
+        )
     }
 }

@@ -79,6 +79,10 @@ impl EpochStartConfiguration {
     pub fn epoch_start_timestamp_ms(&self) -> CheckpointTimestamp {
         self.epoch_start_state().epoch_start_timestamp_ms()
     }
+
+    pub fn object_lock_split_tables_enabled(&self) -> bool {
+        self.flags().contains(&EpochFlag::ObjectLockSplitTables)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Eq, PartialEq)]

@@ -7,7 +7,6 @@
 //! non-generic flavors. It also checks constraints on instructions like VecPack/VecUnpack.
 
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         Bytecode, CodeOffset, CodeUnit, CompiledModule, FieldHandleIndex, FunctionDefinitionIndex,

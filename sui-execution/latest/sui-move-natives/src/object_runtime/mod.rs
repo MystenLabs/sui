@@ -61,6 +61,8 @@ pub(crate) struct TestInventories {
     pub(crate) taken_immutable_values: BTreeMap<Type, BTreeMap<ObjectID, Value>>,
     // object has been taken from the inventory
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
+    // allocated receiving tickets
+    pub(crate) allocated_tickets: BTreeMap<ObjectID, (DynamicallyLoadedObjectMetadata, Value)>,
 }
 
 pub struct LoadedRuntimeObject {

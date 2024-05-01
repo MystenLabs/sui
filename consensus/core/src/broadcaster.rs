@@ -77,7 +77,7 @@ impl Broadcaster {
         mut rx_block_broadcast: broadcast::Receiver<VerifiedBlock>,
         peer: AuthorityIndex,
     ) {
-        let peer_hostname = context.committee.authority(peer).hostname.clone();
+        let peer_hostname = &context.committee.authority(peer).hostname;
 
         // Record the last block to be broadcasted, to retry in case no new block is produced for awhile.
         // Even if the peer has acknowledged the last block, the block might have been dropped afterwards
@@ -179,7 +179,7 @@ impl Broadcaster {
                 .metrics
                 .node_metrics
                 .broadcaster_rtt_estimate_ms
-                .with_label_values(&[&peer_hostname])
+                .with_label_values(&[peer_hostname])
                 .set(rtt_estimate.as_millis() as i64);
         }
     }
@@ -250,8 +250,19 @@ mod test {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
             _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: AuthorityIndex,
+            _start: Round,
+            _end: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
     }

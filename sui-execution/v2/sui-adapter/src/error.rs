@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{Location, VMError},
     file_format::FunctionDefinitionIndex,
 };
@@ -28,12 +27,6 @@ pub(crate) fn convert_vm_error<S: MoveResolver<Err = SuiError>>(
         (StatusCode::ABORTED, None, _) => {
             debug_assert!(false, "No abort code");
             // this is a Move VM invariant violation, the code should always be there
-            ExecutionFailureStatus::VMInvariantViolation
-        }
-        (StatusCode::ABORTED, _, Location::Script) => {
-            debug_assert!(false, "Scripts are not used in Sui");
-            // this is a Move VM invariant violation, in the sense that the location
-            // is malformed
             ExecutionFailureStatus::VMInvariantViolation
         }
         (StatusCode::ABORTED, Some(code), Location::Module(id)) => {

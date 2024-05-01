@@ -374,7 +374,7 @@ impl TransactionBlockEffects {
         Epoch::query(
             ctx,
             Some(self.native().executed_epoch()),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()
@@ -390,7 +390,7 @@ impl TransactionBlockEffects {
         Checkpoint::query(
             ctx,
             CheckpointId::by_seq_num(stored_tx.checkpoint_sequence_number as u64),
-            Some(self.checkpoint_viewed_at),
+            self.checkpoint_viewed_at,
         )
         .await
         .extend()

@@ -16,7 +16,7 @@ module sui::group_ops {
     /////////////////////////////////////////////////////
     ////// Generic functions for group operations. //////
 
-    // The caller provides a type identifer that should match the types of enum [Groups] in group_ops.rs.
+    // The caller provides a type identifier that should match the types of enum [Groups] in group_ops.rs.
 
     // General wrapper for all group elements.
     public struct Element<phantom T> has store, copy, drop {

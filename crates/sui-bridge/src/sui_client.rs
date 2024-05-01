@@ -50,7 +50,7 @@ use crate::retry_with_max_elapsed_time;
 use crate::sui_transaction_builder::get_bridge_package_id;
 use crate::types::BridgeActionStatus;
 use crate::types::BridgeInnerDynamicField;
-use crate::types::BridgeRecordDyanmicField;
+use crate::types::BridgeRecordDynamicField;
 use crate::types::MoveTypeBridgeMessageKey;
 use crate::types::MoveTypeBridgeRecord;
 use crate::types::{
@@ -350,12 +350,12 @@ impl SuiClientInner for SuiSdkClient {
             }
         };
 
-        // get_dynamic_field_object does not return bcs, so we have to issue anothe query
+        // get_dynamic_field_object does not return bcs, so we have to issue another query
         let bcs_bytes = self
             .read_api()
             .get_move_object_bcs(status_object_id)
             .await?;
-        let status_object: BridgeRecordDyanmicField = bcs::from_bytes(&bcs_bytes)?;
+        let status_object: BridgeRecordDynamicField = bcs::from_bytes(&bcs_bytes)?;
 
         if status_object.value.value.claimed {
             return Ok(BridgeActionStatus::Claimed);

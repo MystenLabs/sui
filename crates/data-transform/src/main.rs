@@ -16,7 +16,7 @@ use sui_types::object::MoveObject;
 
 use self::models::*;
 use std::env;
-use sui_indexer::db::new_pg_connection_pool;
+use sui_indexer::db::new_connection_pool;
 use sui_indexer::errors::IndexerError;
 use sui_indexer::store::package_resolver::IndexerStorePackageResolver;
 
@@ -35,7 +35,7 @@ use move_core_types::account_address::AccountAddress;
 struct GrootModuleResolver {
     module_map: HashMap<String, Vec<u8>>,
     #[allow(dead_code)]
-    original: IndexerStorePackageResolver,
+    original: IndexerStorePackageResolver<PgConnection>,
 }
 
 impl GrootModuleResolver {
@@ -157,7 +157,7 @@ fn main() {
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let connection = &mut establish_connection();
 
-    let blocking_cp = new_pg_connection_pool(&database_url, None)
+    let blocking_cp = new_connection_pool(&database_url, None)
         .map_err(|e| anyhow!("Unable to connect to Postgres, is it running? {e}"));
     //let module_cache = Arc::new(SyncModuleCache::new(IndexerModuleResolver::new(blocking_cp.expect("REASON").clone())));
     //

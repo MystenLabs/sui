@@ -8,7 +8,6 @@ use anyhow::{bail, format_err, Result};
 use clap::Parser;
 use colored::*;
 use move_binary_format::{
-    access::ModuleAccess,
     control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
         Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,
@@ -97,11 +96,11 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    pub fn from_view(view: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
+    pub fn from_module(module: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
         let mut options = DisassemblerOptions::new();
         options.print_code = true;
         Ok(Self::new(
-            SourceMapping::new_from_view(view, default_loc)?,
+            SourceMapping::new_without_source_map(module, default_loc)?,
             options,
         ))
     }

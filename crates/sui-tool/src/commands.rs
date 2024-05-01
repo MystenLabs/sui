@@ -396,8 +396,20 @@ pub enum ToolCommand {
         safety_checks: bool,
         #[arg(long = "authority")]
         use_authority: bool,
-        #[arg(long = "cfg-path", short)]
+        #[arg(
+            long = "cfg-path",
+            short,
+            help = "Path to the network config file. This should be specified when rpc_url is not present. \
+            If not specified we will use the default network config file at ~/.sui-replay/network-config.yaml"
+        )]
         cfg_path: Option<PathBuf>,
+        #[arg(
+            long,
+            help = "The name of the chain to replay from, could be one of: mainnet, testnet, devnet.\
+            When rpc_url is not specified, this is used to load the corresponding config from the network config file.\
+            If not specified, mainnet will be used by default"
+        )]
+        chain: Option<String>,
         #[command(subcommand)]
         cmd: ReplayToolCommand,
     },
@@ -942,8 +954,9 @@ impl ToolCommand {
                 cmd,
                 use_authority,
                 cfg_path,
+                chain,
             } => {
-                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
+                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
             }
             ToolCommand::VerifyArchive {
@@ -992,7 +1005,7 @@ impl ToolCommand {
                 let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
                     .build()
                     .unwrap();
-                let result = agg.process_transaction(transaction).await;
+                let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
             }
         };

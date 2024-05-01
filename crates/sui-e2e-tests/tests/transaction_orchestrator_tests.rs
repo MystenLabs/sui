@@ -22,6 +22,10 @@ use test_cluster::TestClusterBuilder;
 use tokio::time::timeout;
 use tracing::info;
 
+fn make_socket_addr() -> std::net::SocketAddr {
+    std::net::SocketAddr::new([127, 0, 0, 1].into(), 0)
+}
+
 #[sim_test]
 async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let mut test_cluster = TestClusterBuilder::new().build().await;
@@ -55,7 +59,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     let digest = *txn.digest();
     orchestrator
         .quorum_driver()
-        .submit_transaction_no_ticket(txn)
+        .submit_transaction_no_ticket(txn, Some(make_socket_addr()))
         .await?;
 
     // Wait for data sync to catch up
@@ -100,6 +104,14 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
 
 #[sim_test]
 async fn test_fullnode_wal_log() -> Result<(), anyhow::Error> {
+    #[cfg(msim)]
+    {
+        use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
+        init_checkpoint_timeout_config(CheckpointTimeoutConfig {
+            timeout: Duration::from_secs(2),
+            panic_on_timeout: false,
+        });
+    }
     telemetry_subscribers::init_for_testing();
     let mut test_cluster = TestClusterBuilder::new()
         .with_epoch_duration_ms(600000)
@@ -262,10 +274,13 @@ async fn test_tx_across_epoch_boundaries() {
     info!(?tx_digest, "Submitting tx");
     tokio::task::spawn(async move {
         match to
-            .execute_transaction_block(ExecuteTransactionRequest {
-                transaction: tx.clone(),
-                request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-            })
+            .execute_transaction_block(
+                ExecuteTransactionRequest {
+                    transaction: tx.clone(),
+                    request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+                },
+                Some(make_socket_addr()),
+            )
             .await
         {
             Ok(ExecuteTransactionResponse::EffectsCert(res)) => {
@@ -306,9 +321,12 @@ async fn execute_with_orchestrator(
     request_type: ExecuteTransactionRequestType,
 ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
     orchestrator
-        .execute_transaction_block(ExecuteTransactionRequest {
-            transaction: txn,
-            request_type,
-        })
+        .execute_transaction_block(
+            ExecuteTransactionRequest {
+                transaction: txn,
+                request_type,
+            },
+            Some(make_socket_addr()),
+        )
         .await
 }

@@ -1087,7 +1087,7 @@ pub async fn batch_transfer_gases(
 #[cfg(test)]
 mod tests {
     use sui::{
-        client_commands::{SuiClientCommandResult, SuiClientCommands},
+        client_commands::{Opts, OptsWithGas, SuiClientCommandResult, SuiClientCommands},
         key_identity::KeyIdentity,
     };
     use sui_json_rpc_types::SuiExecutionStatus;
@@ -1111,11 +1111,8 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: None,
-            gas_budget: 50000000,
-            gas: None,
             count: Some(10),
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: OptsWithGas::for_testing(None, 50_000_000),
         }
         .execute(&mut context)
         .await
@@ -1242,11 +1239,8 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: None,
-            gas_budget: 50000000,
-            gas: None,
             count: Some(10),
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: OptsWithGas::for_testing(None, 50_000_000),
         }
         .execute(&mut context)
         .await
@@ -1401,9 +1395,7 @@ mod tests {
         let res = SuiClientCommands::PayAllSui {
             input_coins: vec![*bad_gas.id()],
             recipient: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
-            gas_budget: 2_000_000,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: Opts::for_testing(2_000_000),
         }
         .execute(faucet.wallet_mut())
         .await
@@ -1524,11 +1516,8 @@ mod tests {
         let res = SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![tiny_value]),
-            gas_budget: 50000000,
-            gas: None,
             count: None,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: OptsWithGas::for_testing(None, 50_000_000),
         }
         .execute(&mut context)
         .await;
@@ -1609,11 +1598,8 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![reasonable_value]),
-            gas_budget: 50000000,
-            gas: None,
             count: None,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: OptsWithGas::for_testing(None, 50_000_000),
         }
         .execute(&mut context)
         .await
@@ -1625,10 +1611,8 @@ mod tests {
             SuiClientCommands::TransferSui {
                 to: KeyIdentity::Address(destination_address),
                 sui_coin_object_id: *gas.id(),
-                gas_budget: 50000000,
                 amount: None,
-                serialize_unsigned_transaction: false,
-                serialize_signed_transaction: false,
+                opts: Opts::for_testing(50_000_000),
             }
             .execute(&mut context)
             .await
@@ -1682,11 +1666,8 @@ mod tests {
         let _res = SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: Some(vec![tiny_value]),
-            gas_budget: 50000000,
-            gas: None,
             count: None,
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: OptsWithGas::for_testing(None, 50_000_000),
         }
         .execute(&mut context)
         .await;
@@ -1698,10 +1679,8 @@ mod tests {
             SuiClientCommands::TransferSui {
                 to: KeyIdentity::Address(destination_address),
                 sui_coin_object_id: *gas.id(),
-                gas_budget: 50000000,
                 amount: None,
-                serialize_unsigned_transaction: false,
-                serialize_signed_transaction: false,
+                opts: Opts::for_testing(50_000_000),
             }
             .execute(&mut context)
             .await
@@ -1816,11 +1795,8 @@ mod tests {
         SuiClientCommands::SplitCoin {
             coin_id: *gases[0].id(),
             amounts: None,
-            gas_budget: 50000000,
-            gas: None,
             count: Some(10),
-            serialize_unsigned_transaction: false,
-            serialize_signed_transaction: false,
+            opts: OptsWithGas::for_testing(None, 50_000_000),
         }
         .execute(&mut context)
         .await

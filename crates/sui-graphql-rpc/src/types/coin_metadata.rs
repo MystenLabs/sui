@@ -309,9 +309,13 @@ impl CoinMetadata {
             return Ok(None);
         };
 
-        let supply = CoinMetadata::query_total_supply(ctx.data_unchecked(), coin_type)
-            .await
-            .extend()?;
+        let supply = CoinMetadata::query_total_supply(
+            ctx.data_unchecked(),
+            coin_type,
+            self.super_.super_.checkpoint_viewed_at,
+        )
+        .await
+        .extend()?;
 
         Ok(supply.map(BigInt::from))
     }
@@ -319,7 +323,11 @@ impl CoinMetadata {
 
 impl CoinMetadata {
     /// Read a `CoinMetadata` from the `db` for the coin whose inner type is `coin_type`.
-    pub(crate) async fn query(db: &Db, coin_type: TypeTag) -> Result<Option<CoinMetadata>, Error> {
+    pub(crate) async fn query(
+        db: &Db,
+        coin_type: TypeTag,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Option<CoinMetadata>, Error> {
         let TypeTag::Struct(coin_struct) = coin_type else {
             // If the type supplied is not metadata, we know it's not a valid coin type, so there
             // won't be CoinMetadata for it.
@@ -327,7 +335,8 @@ impl CoinMetadata {
         };
 
         let metadata_type = NativeCoinMetadata::type_(*coin_struct).into();
-        let Some(object) = Object::query_singleton(db, metadata_type).await? else {
+        let Some(object) = Object::query_singleton(db, metadata_type, checkpoint_viewed_at).await?
+        else {
             return Ok(None);
         };
 
@@ -351,6 +360,7 @@ impl CoinMetadata {
     pub(crate) async fn query_total_supply(
         db: &Db,
         coin_type: TypeTag,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<u64>, Error> {
         let TypeTag::Struct(coin_struct) = coin_type else {
             // If the type supplied is not metadata, we know it's not a valid coin type, so there
@@ -362,7 +372,8 @@ impl CoinMetadata {
             TOTAL_SUPPLY_SUI
         } else {
             let cap_type = TreasuryCap::type_(*coin_struct).into();
-            let Some(object) = Object::query_singleton(db, cap_type).await? else {
+            let Some(object) = Object::query_singleton(db, cap_type, checkpoint_viewed_at).await?
+            else {
                 return Ok(None);
             };
 

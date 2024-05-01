@@ -31,7 +31,7 @@ use std::{
 };
 
 //**************************************************************************************************
-// Context
+// Resolver Types
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
@@ -41,29 +41,6 @@ pub(super) enum ResolvedType {
     BuiltinType(N::BuiltinTypeName_),
     Hole, // '_' type
     Unbound,
-}
-
-impl ResolvedType {
-    fn is_struct(&self) -> bool {
-        match self {
-            ResolvedType::ModuleType(rt) => match rt.module_type {
-                ModuleType::Struct(..) => true,
-                ModuleType::Enum(..) => false,
-            },
-            _ => false,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn is_enum(&self) -> bool {
-        match self {
-            ResolvedType::ModuleType(rt) => match rt.module_type {
-                ModuleType::Struct(..) => false,
-                ModuleType::Enum(..) => true,
-            },
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -78,34 +55,6 @@ pub(super) struct ResolvedModuleType {
 pub(super) enum ModuleType {
     Struct(Box<StructType>),
     Enum(Box<EnumType>),
-}
-
-impl ModuleType {
-    fn decl_loc(&self) -> Loc {
-        match self {
-            ModuleType::Struct(stype) => stype.decl_loc,
-            ModuleType::Enum(etype) => etype.decl_loc,
-        }
-    }
-
-    fn with_original_mident(self, mident: ModuleIdent) -> ModuleType {
-        match self {
-            ModuleType::Struct(stype) => {
-                let st = StructType {
-                    original_mident: mident,
-                    ..*stype
-                };
-                ModuleType::Struct(Box::new(st))
-            }
-            ModuleType::Enum(etype) => {
-                let et = EnumType {
-                    original_mident: mident,
-                    ..*etype
-                };
-                ModuleType::Enum(Box::new(et))
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -125,6 +74,7 @@ pub(super) struct EnumType {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub(super) struct VariantConstructor {
     original_variant_name: Name,
     decl_loc: Loc,
@@ -138,22 +88,15 @@ pub(super) enum FieldInfo {
     Empty,
 }
 
-impl FieldInfo {
-    pub fn is_empty(&self) -> bool {
-        matches!(self, FieldInfo::Empty)
-    }
-
-    pub fn is_positional(&self) -> bool {
-        matches!(self, FieldInfo::Positional(_))
-    }
-
-    pub fn field_count(&self) -> usize {
-        match self {
-            FieldInfo::Positional(n) => *n,
-            FieldInfo::Named(fields) => fields.len(),
-            FieldInfo::Empty => 0,
-        }
-    }
+#[derive(Debug, Clone)]
+pub(super) enum ResolvedConstructor {
+    Struct(DatatypeName, Box<StructType>),
+    Variant(
+        Box<EnumType>,
+        VariantName,
+        /* variant decl loc */ Loc,
+        Box<FieldInfo>,
+    ),
 }
 
 enum ResolvedFunction {
@@ -174,6 +117,18 @@ struct ResolvedModuleFunction {
 enum ResolveFunctionCase {
     UseFun,
     Call,
+}
+
+enum ResolvedModuleAccess {
+    Function(FunctionName),
+    Constant(ConstantName),
+    Datatype(ModuleType),
+}
+
+enum ModuleAccessKind {
+    Function,
+    Datatype,
+    Constant,
 }
 
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
@@ -200,6 +155,140 @@ enum TypeAnnotation {
     Expression,
 }
 
+impl ResolvedType {
+    fn is_struct(&self) -> bool {
+        match self {
+            ResolvedType::ModuleType(rt) => match rt.module_type {
+                ModuleType::Struct(..) => true,
+                ModuleType::Enum(..) => false,
+            },
+            _ => false,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn is_enum(&self) -> bool {
+        match self {
+            ResolvedType::ModuleType(rt) => match rt.module_type {
+                ModuleType::Struct(..) => false,
+                ModuleType::Enum(..) => true,
+            },
+            _ => false,
+        }
+    }
+}
+
+//************************************************
+// impls
+//************************************************
+
+impl ModuleType {
+    fn decl_loc(&self) -> Loc {
+        match self {
+            ModuleType::Struct(stype) => stype.decl_loc,
+            ModuleType::Enum(etype) => etype.decl_loc,
+        }
+    }
+
+    fn original_mident(&self) -> ModuleIdent {
+        match self {
+            ModuleType::Struct(stype) => stype.original_mident,
+            ModuleType::Enum(etype) => etype.original_mident,
+        }
+    }
+
+    fn with_original_mident(self, mident: ModuleIdent) -> ModuleType {
+        match self {
+            ModuleType::Struct(stype) => {
+                let st = StructType {
+                    original_mident: mident,
+                    ..*stype
+                };
+                ModuleType::Struct(Box::new(st))
+            }
+            ModuleType::Enum(etype) => {
+                let et = EnumType {
+                    original_mident: mident,
+                    ..*etype
+                };
+                ModuleType::Enum(Box::new(et))
+            }
+        }
+    }
+
+    fn datatype_kind_str(&self) -> String {
+        match self {
+            ModuleType::Struct(_) => "struct".to_string(),
+            ModuleType::Enum(_) => "enum".to_string(),
+        }
+    }
+}
+
+impl FieldInfo {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, FieldInfo::Empty)
+    }
+
+    pub fn is_positional(&self) -> bool {
+        matches!(self, FieldInfo::Positional(_))
+    }
+
+    pub fn field_count(&self) -> usize {
+        match self {
+            FieldInfo::Positional(n) => *n,
+            FieldInfo::Named(fields) => fields.len(),
+            FieldInfo::Empty => 0,
+        }
+    }
+}
+
+impl ResolvedConstructor {
+    fn type_arity(&self) -> usize {
+        match self {
+            ResolvedConstructor::Struct(_, stype) => stype.arity,
+            ResolvedConstructor::Variant(etype, _, _, _) => etype.arity,
+        }
+    }
+
+    fn field_info(&self) -> &FieldInfo {
+        match self {
+            ResolvedConstructor::Struct(_, stype) => &stype.field_info,
+            ResolvedConstructor::Variant(_, _, _, field_info) => field_info,
+        }
+    }
+
+    fn name(&self) -> String {
+        match self {
+            ResolvedConstructor::Struct(name, _) => name.to_string(),
+            ResolvedConstructor::Variant(_, vname, _, _) => vname.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for ResolvedModuleAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedModuleAccess::Function(_) => write!(f, "function"),
+            ResolvedModuleAccess::Constant(_) => write!(f, "constant"),
+            ResolvedModuleAccess::Datatype(ty) => write!(f, "{}", ty.datatype_kind_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for ModuleAccessKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleAccessKind::Function => write!(f, "function"),
+            ModuleAccessKind::Constant => write!(f, "constant"),
+            ModuleAccessKind::Datatype => write!(f, "type"),
+        }
+    }
+}
+
+//**************************************************************************************************
+// Context
+//**************************************************************************************************
+
 pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
@@ -207,6 +296,7 @@ pub(super) struct Context<'env> {
     unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
+    modules: BTreeSet<ModuleIdent>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
@@ -218,6 +308,42 @@ pub(super) struct Context<'env> {
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
     pub current_package: Option<Symbol>,
+}
+
+macro_rules! resolve_from_module_access {
+    ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
+        if !$context.modules.contains($mident) {
+            $context.env.add_diag(diag!(
+                NameResolution::UnboundModule,
+                ($mident.loc, format!("Unbound module '{}'", $mident)),
+            ));
+            return None;
+        }
+        match $context.resolve_module_access($mident, $name, $expected_kind) {
+            Some($expected_pat) => $rhs,
+            Some(other) => {
+                let msg = format!(
+                    "Invalid module access. \
+                        Expected a {}, but found {} '{}' in module '{}'",
+                    $expected_kind, other, $name, $mident
+                );
+                $context
+                    .env
+                    .add_diag(diag!(NameResolution::UnboundModuleMember, ($loc, msg)));
+                None
+            }
+            None => {
+                let msg = format!(
+                    "Invalid module access. Unbound {} '{}' in module '{}'",
+                    $expected_kind, $name, $mident
+                );
+                $context
+                    .env
+                    .add_diag(diag!(NameResolution::UnboundModuleMember, ($loc, msg)));
+                None
+            }
+        }
+    }};
 }
 
 impl<'env> Context<'env> {
@@ -238,6 +364,7 @@ impl<'env> Context<'env> {
                         .filter(|(mident, _m)| !prog.modules.contains_key(mident))
                 }))
         };
+        let modules = all_modules().map(|(mident, _)| mident).collect();
         let scoped_types = all_modules()
             .map(|(mident, mdef)| {
                 let mems = {
@@ -335,6 +462,7 @@ impl<'env> Context<'env> {
         Self {
             env: compilation_env,
             current_module: None,
+            modules,
             scoped_types,
             scoped_functions,
             scoped_constants,
@@ -364,29 +492,58 @@ impl<'env> Context<'env> {
         resolved
     }
 
-    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
-        let types = match self.scoped_types.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match types.get(&n.value) {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound struct '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(module_type) => Some(module_type.clone()),
+    fn resolve_module_type_opt(&self, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
+        if let Some(types) = self.scoped_types.get(m) {
+            types.get(&n.value).cloned()
+        } else {
+            None
         }
+    }
+
+    fn resolve_function_opt(&self, m: &ModuleIdent, n: &Name) -> Option<FunctionName> {
+        self.scoped_functions
+            .get(m)
+            .and_then(|functions| functions.get(&n.value).map(|_| FunctionName(*n)))
+    }
+
+    fn resolve_constant_opt(&self, m: &ModuleIdent, n: &Name) -> Option<ConstantName> {
+        self.scoped_constants
+            .get(m)
+            .and_then(|constants| constants.get(&n.value).map(|_| ConstantName(*n)))
+    }
+
+    fn resolve_module_access(
+        &mut self,
+        m: &ModuleIdent,
+        n: &Name,
+        expected_access_type: ModuleAccessKind,
+    ) -> Option<ResolvedModuleAccess> {
+        let function_opt = self
+            .resolve_function_opt(m, n)
+            .map(ResolvedModuleAccess::Function);
+        let constant_opt = self
+            .resolve_constant_opt(m, n)
+            .map(ResolvedModuleAccess::Constant);
+        let datatype_opt = self
+            .resolve_module_type_opt(m, n)
+            .map(ResolvedModuleAccess::Datatype);
+        match expected_access_type {
+            ModuleAccessKind::Function => function_opt.or(datatype_opt).or(constant_opt),
+            ModuleAccessKind::Constant => constant_opt.or(datatype_opt).or(function_opt),
+            ModuleAccessKind::Datatype => datatype_opt.or(constant_opt).or(function_opt),
+        }
+    }
+
+    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
+        resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleAccess::Datatype(module_type),
+            Some(module_type),
+            ModuleAccessKind::Datatype
+        )
     }
 
     fn resolve_module_function(
@@ -395,58 +552,15 @@ impl<'env> Context<'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<FunctionName> {
-        let functions = match self.scoped_functions.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match functions.get(&n.value).cloned() {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound function '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(_) => Some(FunctionName(*n)),
-        }
-    }
-
-    fn resolve_module_constant(
-        &mut self,
-        loc: Loc,
-        m: &ModuleIdent,
-        n: Name,
-    ) -> Option<ConstantName> {
-        let constants = match self.scoped_constants.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match constants.get(&n.value).cloned() {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound constant '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(_) => Some(ConstantName(n)),
-        }
+        resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleAccess::Function(name),
+            Some(name),
+            ModuleAccessKind::Function
+        )
     }
 
     pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
@@ -491,7 +605,115 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolves_to_struct(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+    fn resolve_datatype_constructor(
+        &mut self,
+        ma: E::ModuleAccess,
+        verb: &str,
+    ) -> Option<(ModuleIdent, DatatypeName, ResolvedConstructor)> {
+        use E::ModuleAccess_ as EN;
+        match self.resolve_type(ma) {
+            ResolvedType::Unbound => {
+                assert!(self.env.has_errors());
+                None
+            }
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
+                let (rtloc, rtmsg) = match rt {
+                    ResolvedType::TParam(loc, tp) => (
+                        loc,
+                        format!(
+                            "But '{}' was declared as a type parameter here",
+                            tp.user_specified_name
+                        ),
+                    ),
+                    ResolvedType::BuiltinType(n) => {
+                        (ma.loc, format!("But '{n}' is a builtin type"))
+                    }
+                    ResolvedType::Hole => (
+                        ma.loc,
+                        "The '_' is a placeholder for type inference".to_owned(),
+                    ),
+                    _ => unreachable!(),
+                };
+                let msg = if self
+                    .env
+                    .supports_feature(self.current_package, FeatureGate::Enums)
+                {
+                    format!("Invalid {}. Expected a datatype name", verb)
+                } else {
+                    format!("Invalid {}. Expected a struct name", verb)
+                };
+                self.env.add_diag(diag!(
+                    NameResolution::NamePositionMismatch,
+                    (ma.loc, msg),
+                    (rtloc, rtmsg)
+                ));
+                None
+            }
+            ResolvedType::ModuleType(mt) => {
+                let ResolvedModuleType {
+                    module_type,
+                    original_type_name: name,
+                    ..
+                } = *mt;
+                let mident_name = module_type.original_mident();
+                match (&ma.value, module_type) {
+                    (EN::Name(_) | EN::ModuleAccess(_, _), ModuleType::Struct(struct_type)) => {
+                        let dname = DatatypeName(name);
+                        Some((
+                            mident_name,
+                            dname,
+                            ResolvedConstructor::Struct(dname, struct_type),
+                        ))
+                    }
+                    (EN::Variant(_, variant_name), ModuleType::Enum(enum_type)) => {
+                        let vname = VariantName(*variant_name);
+                        let Some(variant_info) = enum_type.variants.get(&vname).cloned() else {
+                            let primary_msg = format!(
+                                "Invalid {verb}. Variant '{variant_name}' is not part of this enum",
+                            );
+                            let decl_msg = format!("Enum '{name}' is defined here");
+                            self.env.add_diag(diag!(
+                                NameResolution::UnboundVariant,
+                                (ma.loc, primary_msg),
+                                (name.loc, decl_msg),
+                            ));
+                            return None;
+                        };
+                        Some((
+                            mident_name,
+                            DatatypeName(name),
+                            ResolvedConstructor::Variant(
+                                enum_type,
+                                vname,
+                                variant_info.decl_loc,
+                                Box::new(variant_info.field_info.clone()),
+                            ),
+                        ))
+                    }
+                    (EN::Name(_) | EN::ModuleAccess(_, _), ModuleType::Enum(_)) => {
+                        self.env.add_diag(diag!(
+                            NameResolution::NamePositionMismatch,
+                            (ma.loc, format!("Invalid {verb}. Expected a struct")),
+                            (name.loc, format!("But '{name}' is an enum"))
+                        ));
+                        None
+                    }
+                    (EN::Variant(sp!(sloc, _), _), ModuleType::Struct(_)) => {
+                        self.env.add_diag(diag!(
+                            NameResolution::NamePositionMismatch,
+                            (*sloc, format!("Invalid {verb}. Expected an enum")),
+                            (name.loc, format!("But '{name}' is a struct"))
+                        ));
+                        None
+                    }
+                }
+            }
+        }
+    }
+
+    fn resolves_to_datatype(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
         use E::ModuleAccess_ as EA;
         match ma_ {
             EA::Name(n) => self
@@ -505,7 +727,11 @@ impl<'env> Context<'env> {
                 .get(m)
                 .and_then(|types| types.get(&n.value))
                 .is_some(),
-            EA::Variant(_, _) => false,
+            EA::Variant(sp!(_, (m, n)), _) => self
+                .scoped_types
+                .get(m)
+                .and_then(|types| types.get(&n.value))
+                .is_some(),
         }
     }
 
@@ -577,132 +803,16 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolve_enum_name_with_variants(
-        &mut self,
-        loc: Loc,
-        verb: &str,
-        ma: E::ModuleAccess,
-        etys_opt: Option<Vec<E::Type>>,
-    ) -> Option<(
-        ModuleIdent,
-        DatatypeName,
-        Option<Vec<N::Type>>,
-        UniqueMap<VariantName, VariantConstructor>,
-    )> {
-        match self.resolve_type(ma) {
-            ResolvedType::Unbound => {
-                assert!(self.env.has_errors());
-                None
-            }
-            rt @ (ResolvedType::BuiltinType(_)
-            | ResolvedType::TParam(_, _)
-            | ResolvedType::Hole) => {
-                let (rtloc, msg) = match rt {
-                    ResolvedType::TParam(loc, tp) => (
-                        loc,
-                        format!(
-                            "But '{}' was declared as a type parameter here",
-                            tp.user_specified_name
-                        ),
-                    ),
-                    ResolvedType::BuiltinType(n) => {
-                        (ma.loc, format!("But '{n}' is a builtin type"))
-                    }
-                    ResolvedType::Hole => (
-                        ma.loc,
-                        "The '_' is a placeholder for type inference".to_owned(),
-                    ),
-                    _ => unreachable!(),
-                };
-                self.env.add_diag(diag!(
-                    NameResolution::NamePositionMismatch,
-                    (ma.loc, format!("Invalid {}. Expected an enum name", verb)),
-                    (rtloc, msg)
-                ));
-                None
-            }
-            ResolvedType::ModuleType(mt) => {
-                let ResolvedModuleType {
-                    module_type,
-                    original_type_name: n,
-                    ..
-                } = *mt;
-                match module_type {
-                    ModuleType::Enum(enum_type) => {
-                        let m = enum_type.original_mident;
-                        let tys_opt = etys_opt.map(|etys| {
-                            let tys = types(self, TypeAnnotation::Expression, etys);
-                            let name_f = || format!("{}::{}", &m, &n);
-                            check_type_argument_arity(self, loc, name_f, tys, enum_type.arity)
-                        });
-                        Some((m, DatatypeName(n), tys_opt, enum_type.variants))
-                    }
-                    ModuleType::Struct(..) => {
-                        self.env.add_diag(diag!(
-                            NameResolution::NamePositionMismatch,
-                            (ma.loc, format!("Invalid {}. Expected an enum", verb)),
-                            (n.loc, format!("But '{}' is an struct", n))
-                        ));
-                        None
-                    }
-                }
-            }
-        }
-    }
-
-    fn resolve_variant_name(
-        &mut self,
-        loc: Loc,
-        verb: &str,
-        ma: E::ModuleAccess,
-        etys_opt: Option<Vec<E::Type>>,
-    ) -> Option<(
-        ModuleIdent,
-        DatatypeName,
-        VariantName,
-        Option<Vec<N::Type>>,
-        Loc,
-        FieldInfo,
-    )> {
-        match &ma {
-            sp!(_, E::ModuleAccess_::Variant(sp!(_, _), variant_name)) => {
-                if let Some((mident, enum_name, ty_opts, variants)) =
-                    self.resolve_enum_name_with_variants(loc, verb, ma, etys_opt)
-                {
-                    if let Some(vdef) = variants.get(&VariantName(*variant_name)) {
-                        Some((
-                            mident,
-                            enum_name,
-                            VariantName(vdef.original_variant_name),
-                            ty_opts,
-                            vdef.decl_loc,
-                            vdef.field_info.clone(),
-                        ))
-                    } else {
-                        let primary_msg = format!(
-                            "Invalid {}. Variant '{}' is not part of this enum",
-                            verb, variant_name
-                        );
-                        let decl_msg = format!("Enum '{}' is defined here", enum_name);
-                        self.env.add_diag(diag!(
-                            NameResolution::UnboundVariant,
-                            (loc, primary_msg),
-                            (enum_name.loc(), decl_msg),
-                        ));
-                        None
-                    }
-                } else {
-                    assert!(self.env.has_errors());
-                    None
-                }
-            }
-            _ => {
-                self.env.add_diag(diag!(
-                    NameResolution::NamePositionMismatch,
-                    (loc, format!("Invalid {}. Expected a variant name", verb)),
-                ));
-                None
-            }
+    fn resolves_to_constant(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+        use E::ModuleAccess_ as EA;
+        match ma_ {
+            EA::Name(_) => false, // constants are expanded during naming
+            EA::ModuleAccess(m, n) => self
+                .scoped_constants
+                .get(m)
+                .and_then(|constants| constants.get(&n.value))
+                .is_some(),
+            EA::Variant(_, _) => false,
         }
     }
 
@@ -719,18 +829,92 @@ impl<'env> Context<'env> {
                 ));
                 None
             }
-            EA::ModuleAccess(m, n) => match self.resolve_module_constant(loc, &m, n) {
-                None => {
-                    assert!(self.env.has_errors());
-                    None
+            EA::ModuleAccess(m, n) => {
+                if !self.modules.contains(&m) {
+                    self.env.add_diag(diag!(
+                        NameResolution::UnboundModule,
+                        (m.loc, format!("Unbound module '{m}'")),
+                    ));
+                    return None;
                 }
-                Some(cname) => Some((m, cname)),
-            },
+                match self.resolve_module_access(&m, &n, ModuleAccessKind::Constant) {
+                    Some(ResolvedModuleAccess::Constant(cname)) => Some((m, cname)),
+                    Some(ResolvedModuleAccess::Datatype(module_type)) => {
+                        match module_type {
+                            ModuleType::Struct(stype) => {
+                                let tyargs = arity_string(stype.arity);
+                                let msg = format!(
+                                    "Expected local or constant, \
+                                     found struct '{n}' in module '{m}' instead."
+                                );
+                                let mut diag = diag!(NameResolution::InvalidPosition, (loc, msg));
+                                if stype.field_info.is_positional() {
+                                    diag.add_note(format!(
+                                        "Structs with positional arguments must be written as \
+                                        '{n}{tyargs}( ... )'"
+                                    ));
+                                } else {
+                                    diag.add_note(format!(
+                                        "Struct with named arguments must be written as \
+                                        '{n}{tyargs} {{ ... }}'"
+                                    ));
+                                }
+                                self.env.add_diag(diag);
+                            }
+                            ModuleType::Enum(etype) => {
+                                let tyargs = arity_string(etype.arity);
+                                let msg = format!(
+                                    "Expected local or constant, \
+                                     found enum '{n}' in module '{m}' instead."
+                                );
+                                let mut diag =
+                                    diag!(NameResolution::UnboundModuleMember, (loc, msg));
+                                if let Some((_, vname, ctor)) = etype.variants.iter().next() {
+                                    if ctor.field_info.is_empty() {
+                                        diag.add_note(format!(
+                                            "Enum variants with no arguments must be \
+                                            written as '{n}::{vname}{tyargs}'"
+                                        ));
+                                    } else if ctor.field_info.is_positional() {
+                                        diag.add_note(format!(
+                                            "Enum variants with positional arguments must be \
+                                            written as '{n}::{vname}( ... ){tyargs}'"
+                                        ));
+                                    } else {
+                                        diag.add_note(format!(
+                                            "Enum variants with named arguments must be \
+                                            written as '{n}::{vname}{tyargs} {{ ... }}'"
+                                        ));
+                                    }
+                                    self.env.add_diag(diag);
+                                }
+                            }
+                        }
+                        None
+                    }
+                    Some(ResolvedModuleAccess::Function(_)) => {
+                        let msg = format!(
+                            "Expected local or constant, \
+                             found function '{n}' in module '{m}' instead."
+                        );
+                        let mut diag = diag!(NameResolution::UnboundModuleMember, (loc, msg));
+                        diag.add_note("Functions should be called as '{n}( ... )'");
+                        self.env.add_diag(diag);
+                        None
+                    }
+                    None => {
+                        let msg = format!(
+                            "Invalid module access. Unbound constant '{n}' in module '{m}'"
+                        );
+                        self.env
+                            .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
+                        None
+                    }
+                }
+            }
             EA::Variant(_, _) => {
-                self.env.add_diag(diag!(
-                    NameResolution::NamePositionMismatch,
-                    (loc, "Invalid variant. Expected a constant name".to_string()),
-                ));
+                self.env
+                    .add_diag(ice!((loc, "Treated variant as a constant during naming")));
                 None
             }
         }
@@ -1008,6 +1192,14 @@ impl std::fmt::Display for NominalBlockType {
                 NominalBlockType::LambdaReturn | NominalBlockType::LambdaLoopCapture => "lambda",
             }
         )
+    }
+}
+
+fn arity_string(arity: usize) -> &'static str {
+    match arity {
+        0 => "",
+        1 => "<T>",
+        _ => "<T0,...>",
     }
 }
 
@@ -1549,6 +1741,7 @@ fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFi
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
         E::StructFields::Named(em) => N::StructFields::Defined(
+            false,
             em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))),
         ),
         E::StructFields::Positional(tys) => {
@@ -1560,7 +1753,7 @@ fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFi
                     let field_name = positional_field_name(ty.loc, idx);
                     (field_name, (idx, ty))
                 });
-            N::StructFields::Defined(UniqueMap::maybe_from_iter(fields).unwrap())
+            N::StructFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
         }
     }
 }
@@ -1727,6 +1920,20 @@ fn type_parameter(
         ))
     }
     tp
+}
+
+fn opt_types_with_arity_check<F: FnOnce() -> String>(
+    context: &mut Context,
+    case: TypeAnnotation,
+    loc: Loc,
+    name_f: F,
+    ty_args: Option<Vec<E::Type>>,
+    arity: usize,
+) -> Option<Vec<N::Type>> {
+    ty_args.map(|etys| {
+        let tys = types(context, case, etys);
+        check_type_argument_arity(context, loc, name_f, tys, arity)
+    })
 }
 
 fn types(context: &mut Context, case: TypeAnnotation, tys: Vec<E::Type>) -> Vec<N::Type> {
@@ -1940,53 +2147,44 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
     let ne_ = match e_ {
         EE::Unit { trailing } => NE::Unit { trailing },
         EE::Value(val) => NE::Value(val),
-        EE::Name(sp!(aloc, E::ModuleAccess_::Name(v)), None) => {
-            if is_constant_name(&v.value) {
-                access_constant(context, sp(aloc, E::ModuleAccess_::Name(v)))
-            } else {
-                match context.resolve_local(
-                    eloc,
-                    NameResolution::UnboundVariable,
-                    |name| format!("Unbound variable '{name}'"),
-                    v,
-                ) {
-                    None => {
-                        debug_assert!(context.env.has_errors());
-                        NE::UnresolvedError
-                    }
-                    Some(nv) => NE::Var(nv),
+        EE::Name(sp!(_, E::ModuleAccess_::Name(v)), None) if !is_constant_name(&v.value) => {
+            match context.resolve_local(
+                eloc,
+                NameResolution::UnboundVariable,
+                |name| format!("Unbound variable '{name}'"),
+                v,
+            ) {
+                None => {
+                    debug_assert!(context.env.has_errors());
+                    NE::UnresolvedError
                 }
+                Some(nv) => NE::Var(nv),
             }
         }
         EE::Name(ma @ sp!(_, E::ModuleAccess_::Variant(_, _)), etys_opt) => {
             context
                 .env
                 .check_feature(context.current_package, FeatureGate::Enums, eloc);
-            match context.resolve_variant_name(eloc, "construction", ma, etys_opt) {
-                None => {
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(ma, "construction") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(eloc, NE::UnresolvedError));
+            };
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                eloc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+            check_constructor_form(context, eloc, ConstructorForm::None, "instantiation", &ty);
+            match ty {
+                ResolvedConstructor::Struct(_, _stype) => {
                     assert!(context.env.has_errors());
                     NE::UnresolvedError
                 }
-                Some((m, en, vn, tys_opt, dloc, field_info)) => {
-                    if !field_info.is_empty() {
-                        let msg =
-                            "Invalid variant instantiation. Non-empty variant instantiations \
-                                   require arguments";
-                        let defn_msg = "Variant is defined here.";
-                        let mut diag = diag!(
-                            NameResolution::PositionalCallMismatch,
-                            (eloc, msg),
-                            (dloc, defn_msg)
-                        );
-                        if field_info.is_positional() {
-                            diag.add_note("Pass arguments to positional variants using '()'");
-                        } else {
-                            diag.add_note("Pass arguments to named variant fields using '{ .. }'");
-                        }
-                        context.env.add_diag(diag);
-                    }
-
-                    NE::PackVariant(m, en, vn, tys_opt, UniqueMap::new())
+                ResolvedConstructor::Variant(_etype, variant, _, _) => {
+                    NE::PackVariant(m, n, variant, tys_opt, UniqueMap::new())
                 }
             }
         }
@@ -2162,61 +2360,26 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             .value
         }
 
-        EE::Pack(ma @ sp!(_, E::ModuleAccess_::Variant(_, _)), etys_opt, efields) => {
-            context
-                .env
-                .check_feature(context.current_package, FeatureGate::Enums, eloc);
+        EE::Pack(ma, etys_opt, efields) => {
             // Process fields for errors either way.
             let fields = efields.map(|_, (idx, e)| (idx, *exp(context, Box::new(e))));
-            match context.resolve_variant_name(eloc, "construction", ma, etys_opt) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some((m, en, vn, tys_opt, dloc, field_info)) => {
-                    if field_info.is_empty() {
-                        let msg = "Invalid variant instantiation. Empty variant instantiations \
-                                   do not use field syntax";
-                        let defn_msg = "Variant is defined here.";
-                        let mut diag = diag!(
-                            NameResolution::PositionalCallMismatch,
-                            (eloc, msg),
-                            (dloc, defn_msg)
-                        );
-                        diag.add_note("Remove '{ }' after the variant name");
-                        context.env.add_diag(diag);
-                    } else if field_info.is_positional() {
-                        let msg = "Invalid variant instantiation. Positional variant fields \
-                                   require positional instantiations.";
-                        let defn_msg = "Variant is defined here.";
-                        context.env.add_diag(diag!(
-                            NameResolution::PositionalCallMismatch,
-                            (eloc, msg),
-                            (dloc, defn_msg)
-                        ));
-                    }
-
-                    NE::PackVariant(m, en, vn, tys_opt, fields)
-                }
-            }
-        }
-        EE::Pack(tn, etys_opt, efields) => {
-            // Process fields for errors either way.
-            let fields = efields.map(|_, (idx, e)| (idx, *exp(context, Box::new(e))));
-            match context.resolve_struct_name(eloc, "construction", tn, etys_opt) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some((m, sn, tys_opt, field_info)) => {
-                    if field_info.is_positional() {
-                        let msg = "Invalid struct instantiation. Positional struct declarations \
-                             require positional instantiations.";
-                        context
-                            .env
-                            .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
-                    }
-                    NE::Pack(m, sn, tys_opt, fields)
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(ma, "construction") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(eloc, NE::UnresolvedError));
+            };
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                eloc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+            check_constructor_form(context, eloc, ConstructorForm::Braces, "instantiation", &ty);
+            match ty {
+                ResolvedConstructor::Struct(_, _stype) => NE::Pack(m, n, tys_opt, fields),
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NE::PackVariant(m, n, variant, tys_opt, fields)
                 }
             }
         }
@@ -2242,89 +2405,32 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             type_(context, TypeAnnotation::Expression, t),
         ),
 
-        EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
+        EE::Call(ma, is_macro, etys_opt, rhs) if context.resolves_to_datatype(&ma) => {
             context
                 .env
                 .check_feature(context.current_package, FeatureGate::PositionalFields, eloc);
-            report_invalid_macro(context, is_macro, "Structs");
+            report_invalid_macro(context, is_macro, "Datatypes");
             let nes = call_args(context, rhs);
-            match context.resolve_struct_name(eloc, "construction", ma, tys_opt) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some((m, sn, tys_opt, field_info)) => {
-                    if !field_info.is_positional() {
-                        let msg = "Invalid struct instantiation. Named struct declarations \
-                                   require named instantiations.";
-                        context
-                            .env
-                            .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
-                    }
-                    NE::Pack(
-                        m,
-                        sn,
-                        tys_opt,
-                        UniqueMap::maybe_from_iter(nes.value.into_iter().enumerate().map(
-                            |(idx, e)| {
-                                let field = Field::add_loc(e.loc, format!("{idx}").into());
-                                (field, (idx, e))
-                            },
-                        ))
-                        .unwrap(),
-                    )
-                }
-            }
-        }
-        EE::Call(ma @ sp!(_, E::ModuleAccess_::Variant(_, _)), is_macro, tys_opt, rhs) => {
-            report_invalid_macro(context, is_macro, "Enum variants");
-            context
-                .env
-                .check_feature(context.current_package, FeatureGate::Enums, eloc);
-            let nes = call_args(context, rhs);
-            match context.resolve_variant_name(eloc, "construction", ma, tys_opt) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some((m, en, vn, tys_opt, dloc, field_info)) => {
-                    if field_info.is_empty() {
-                        let msg = "Invalid variant instantiation. Empty variant instantiations \
-                                   do not use call syntax";
-                        let defn_msg = "Variant is defined here.";
-                        let mut diag = diag!(
-                            NameResolution::PositionalCallMismatch,
-                            (eloc, msg),
-                            (dloc, defn_msg)
-                        );
-                        diag.add_note("Remove '()' after the variant name");
-                        context.env.add_diag(diag);
-                    } else if !field_info.is_positional() {
-                        let msg = "Invalid variant instantiation. Named variant fields \
-                                   require named instantiations.";
-                        let defn_msg = "Variant is defined here.";
-                        let mut diag = diag!(
-                            NameResolution::PositionalCallMismatch,
-                            (eloc, msg),
-                            (dloc, defn_msg)
-                        );
-                        diag.add_note("Pass arguments to named variant fields using '{ .. }'");
-                        context.env.add_diag(diag);
-                    }
-
-                    NE::PackVariant(
-                        m,
-                        en,
-                        vn,
-                        tys_opt,
-                        UniqueMap::maybe_from_iter(nes.value.into_iter().enumerate().map(
-                            |(idx, e)| {
-                                let field = Field::add_loc(e.loc, format!("{idx}").into());
-                                (field, (idx, e))
-                            },
-                        ))
-                        .unwrap(),
-                    )
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(ma, "construction") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(eloc, NE::UnresolvedError));
+            };
+            let tys_opt = etys_opt.map(|etys| {
+                let tys = types(context, TypeAnnotation::Expression, etys);
+                let name_f = || format!("{}::{}", &m, &n);
+                check_type_argument_arity(context, eloc, name_f, tys, ty.type_arity())
+            });
+            check_constructor_form(context, eloc, ConstructorForm::Parens, "instantiation", &ty);
+            let fields =
+                UniqueMap::maybe_from_iter(nes.value.into_iter().enumerate().map(|(idx, e)| {
+                    let field = Field::add_loc(e.loc, format!("{idx}").into());
+                    (field, (idx, e))
+                }))
+                .unwrap();
+            match ty {
+                ResolvedConstructor::Struct(_, _stype) => NE::Pack(m, n, tys_opt, fields),
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NE::PackVariant(m, n, variant, tys_opt, fields)
                 }
             }
         }
@@ -2502,6 +2608,9 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             }
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::DotUnresolved(loc, d) => {
+            N::ExpDotted_::DotUnresolved(loc, Box::new(dotted(context, *d)?))
+        }
         E::ExpDotted_::Index(inner, args) => {
             let args = call_args(context, args);
             let inner = Box::new(dotted(context, *inner)?);
@@ -2509,6 +2618,164 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
         }
     };
     Some(sp(loc, nedot_))
+}
+
+enum ConstructorForm {
+    None,
+    Parens,
+    Braces,
+}
+
+fn check_constructor_form(
+    context: &mut Context,
+    loc: Loc,
+    form: ConstructorForm,
+    position: &str,
+    ty: &ResolvedConstructor,
+) {
+    use ConstructorForm as CF;
+    use ResolvedConstructor as RC;
+    const NAMED_UPCASE: &str = "Named";
+    const NAMED: &str = "named";
+    const EMPTY_UPCASE: &str = "Empty";
+    const EMPTY: &str = "empty";
+    const POSNL_UPCASE: &str = "Positional";
+    const POSNL: &str = "positional";
+
+    fn defn_loc_error(name: &str) -> String {
+        format!("'{name}' is declared here")
+    }
+
+    macro_rules! invalid_inst_msg {
+        ($ty:expr, $upcase:ident, $kind:ident) => {{
+            let ty = $ty;
+            let upcase = $upcase;
+            let kind = $kind;
+            format!(
+                "Invalid {ty} {position}. \
+                {upcase} {ty} declarations require {kind} {position}s"
+            )
+        }};
+    }
+    macro_rules! posnl_note {
+        () => {
+            format!("{POSNL_UPCASE} {position}s take arguments using '()'")
+        };
+    }
+    macro_rules! named_note {
+        () => {
+            format!("{NAMED_UPCASE} {position}s take arguments using '{{ }}'")
+        };
+    }
+
+    let name = ty.name();
+    match ty {
+        RC::Struct(_, stype) => match form {
+            CF::None => {
+                let (form_upcase, form) = if stype.field_info.is_positional() {
+                    (POSNL_UPCASE, POSNL)
+                } else {
+                    (NAMED_UPCASE, NAMED)
+                };
+                let msg = invalid_inst_msg!("struct", form_upcase, form);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, msg),
+                    (stype.decl_loc, defn_loc_error(&name)),
+                );
+                if stype.field_info.is_positional() {
+                    diag.add_note(posnl_note!());
+                } else {
+                    diag.add_note(named_note!());
+                }
+                context.env.add_diag(diag);
+            }
+            CF::Parens if stype.field_info.is_positional() => (),
+            CF::Parens => {
+                let msg = invalid_inst_msg!("struct", NAMED_UPCASE, NAMED);
+                let diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (stype.decl_loc, defn_loc_error(&name)),
+                );
+                context.env.add_diag(diag);
+            }
+            CF::Braces if stype.field_info.is_positional() => {
+                let msg = invalid_inst_msg!("struct", POSNL_UPCASE, POSNL);
+                let diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (stype.decl_loc, defn_loc_error(&name)),
+                );
+                context.env.add_diag(diag);
+            }
+            CF::Braces => (),
+        },
+        RC::Variant(_, _, vloc, vfields) => match form {
+            CF::None if vfields.is_empty() => (),
+            CF::None => {
+                let (form_upcase, form) = if vfields.is_positional() {
+                    (POSNL_UPCASE, POSNL)
+                } else {
+                    (NAMED_UPCASE, NAMED)
+                };
+                let msg = invalid_inst_msg!("variant", form_upcase, form);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                if vfields.is_positional() {
+                    diag.add_note(posnl_note!());
+                } else {
+                    diag.add_note(named_note!());
+                }
+                context.env.add_diag(diag);
+            }
+            CF::Parens if vfields.is_empty() => {
+                let msg = invalid_inst_msg!("variant", EMPTY_UPCASE, EMPTY);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(format!("Remove '()' arguments from this {position}"));
+                context.env.add_diag(diag);
+            }
+            CF::Parens if vfields.is_positional() => (),
+            CF::Parens => {
+                let msg = invalid_inst_msg!("variant", NAMED_UPCASE, NAMED);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(named_note!());
+                context.env.add_diag(diag);
+            }
+            CF::Braces if vfields.is_empty() => {
+                let msg = invalid_inst_msg!("variant", EMPTY_UPCASE, EMPTY);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(format!("Remove '{{ }}' arguments from this {position}"));
+                context.env.add_diag(diag);
+            }
+            CF::Braces if vfields.is_positional() => {
+                let msg = invalid_inst_msg!("variant", POSNL_UPCASE, POSNL);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(posnl_note!());
+                context.env.add_diag(diag);
+            }
+            CF::Braces => (),
+        },
+    }
 }
 
 fn report_invalid_macro(context: &mut Context, is_macro: Option<Loc>, kind: &str) {
@@ -2810,7 +3077,7 @@ fn unique_pattern_binders(
                 }
                 left_bindings
             }
-            EP::HeadConstructor(_, _) | EP::Literal(_) | EP::ErrorPat => BTreeMap::new(),
+            EP::ModuleAccessName(_, _) | EP::Literal(_) | EP::ErrorPat => BTreeMap::new(),
         }
     }
 
@@ -2877,91 +3144,124 @@ fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::
 
     let pat_: N::MatchPattern_ = match pat_ {
         EP::PositionalConstructor(name, etys_opt, args) => {
-            if let Some((mident, enum_, variant, tys_opt, _, field_info)) =
-                context.resolve_variant_name(ploc, "pattern", name, etys_opt)
-            {
-                if field_info.is_empty() {
-                    let msg = "Invalid variant pattern. Empty variants \
-                               are not matched with positional variant syntax";
-                    let mut diag = diag!(NameResolution::PositionalCallMismatch, (ploc, msg));
-                    diag.add_note("Remove '()' after the variant name");
-                    context.env.add_diag(diag);
-                } else if !field_info.is_positional() {
-                    let msg = "Invalid variant pattern. Named variant declarations \
-                                   require named patterns.";
-                    context
-                        .env
-                        .add_diag(diag!(NameResolution::PositionalCallMismatch, (ploc, msg)));
-                }
-
-                let fields = field_info.field_count();
-
-                let n_pats = args
-                    .value
-                    .into_iter()
-                    .map(|ellipsis| match ellipsis {
-                        Ellipsis::Binder(pat) => {
-                            Ellipsis::Binder(*match_pattern(context, Box::new(pat)))
-                        }
-                        Ellipsis::Ellipsis(loc) => Ellipsis::Ellipsis(loc),
-                    })
-                    .collect::<Vec<_>>();
-                // NB: We may have more args than fields! Since we allow `..` to be zero-or-more
-                // wildcards.
-                let missing = (fields as isize) - n_pats.len() as isize;
-                let args =
-                    expand_positional_ellipsis(missing, n_pats, |eloc| sp(eloc, NP::Wildcard));
-                let result_args =
-                    UniqueMap::maybe_from_iter(args.into_iter()).expect("ICE naming failed");
-
-                NP::Constructor(mident, enum_, variant, tys_opt, result_args)
-            } else {
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
                 assert!(context.env.has_errors());
-                NP::ErrorPat
+                return Box::new(sp(ploc, NP::ErrorPat));
+            };
+
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                ploc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+
+            check_constructor_form(context, ploc, ConstructorForm::Parens, "pattern", &ty);
+
+            let field_info = ty.field_info();
+            let n_pats = args
+                .value
+                .into_iter()
+                .map(|ellipsis| match ellipsis {
+                    Ellipsis::Binder(pat) => {
+                        Ellipsis::Binder(*match_pattern(context, Box::new(pat)))
+                    }
+                    Ellipsis::Ellipsis(loc) => Ellipsis::Ellipsis(loc),
+                })
+                .collect::<Vec<_>>();
+            // NB: We may have more args than fields! Since we allow `..` to be zero-or-more
+            // wildcards.
+            let missing = (field_info.field_count() as isize) - n_pats.len() as isize;
+            let args = expand_positional_ellipsis(missing, n_pats, |eloc| sp(eloc, NP::Wildcard));
+            let result_args =
+                UniqueMap::maybe_from_iter(args.into_iter()).expect("ICE naming failed");
+
+            match ty {
+                ResolvedConstructor::Struct(_name, _stype) => {
+                    NP::Struct(m, n, tys_opt, result_args)
+                }
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NP::Variant(m, n, variant, tys_opt, result_args)
+                }
             }
         }
         EP::NamedConstructor(name, etys_opt, args, ellipsis) => {
-            if let Some((mident, enum_, variant, tys_opt, _, field_info)) =
-                context.resolve_variant_name(ploc, "pattern", name, etys_opt)
-            {
-                if field_info.is_empty() {
-                    let msg = "Invalid variant pattern. Empty variants \
-                               are not matched with variant field syntax";
-                    let mut diag = diag!(NameResolution::PositionalCallMismatch, (ploc, msg));
-                    diag.add_note("Remove '{ }' after the variant name");
-                    context.env.add_diag(diag);
-                } else if field_info.is_positional() {
-                    let msg = "Invalid variant pattern. Positional variant declarations \
-                                   require positional patterns.";
-                    context
-                        .env
-                        .add_diag(diag!(NameResolution::PositionalCallMismatch, (ploc, msg)));
-                }
-
-                let mut args = args.map(|_, (idx, p)| (idx, *match_pattern(context, Box::new(p))));
-
-                // If we have an ellipsis fill in any missing patterns
-                if let Some(ellipsis_loc) = ellipsis {
-                    expand_named_ellipsis(&field_info, ploc, ellipsis_loc, &mut args, |eloc| {
-                        sp(eloc, NP::Wildcard)
-                    });
-                }
-
-                NP::Constructor(mident, enum_, variant, tys_opt, args)
-            } else {
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
                 assert!(context.env.has_errors());
-                NP::ErrorPat
+                return Box::new(sp(ploc, NP::ErrorPat));
+            };
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                ploc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+
+            check_constructor_form(context, ploc, ConstructorForm::Braces, "pattern", &ty);
+
+            let field_info = ty.field_info();
+            let mut args = args.map(|_, (idx, p)| (idx, *match_pattern(context, Box::new(p))));
+            // If we have an ellipsis fill in any missing patterns
+            if let Some(ellipsis_loc) = ellipsis {
+                expand_named_ellipsis(field_info, ploc, ellipsis_loc, &mut args, |eloc| {
+                    sp(eloc, NP::Wildcard)
+                });
+            }
+
+            match ty {
+                ResolvedConstructor::Struct(_name, _stype) => NP::Struct(m, n, tys_opt, args),
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NP::Variant(m, n, variant, tys_opt, args)
+                }
             }
         }
-        EP::HeadConstructor(name, etys_opt) => {
-            if let Some((mident, enum_, variant, tys_opt, _, _field_info)) =
-                context.resolve_variant_name(ploc, "pattern", name, etys_opt)
-            {
-                // No need to chck is_empty / is_positional because typing will report the errors.
-                NP::Constructor(mident, enum_, variant, tys_opt, UniqueMap::new())
-            } else {
+        EP::ModuleAccessName(name, etys_opt) => {
+            let resolves_to_constant = context.resolves_to_constant(&name);
+            let resolves_to_datatype = context.resolves_to_datatype(&name);
+            if resolves_to_constant && resolves_to_datatype {
+                // If this happened, we should have already thrown an error about it in
+                // expansion alias map construction.
                 assert!(context.env.has_errors());
-                NP::ErrorPat
+                return Box::new(sp(ploc, NP::ErrorPat));
+            } else if resolves_to_constant {
+                let Some((m, n)) = context.resolve_constant(name) else {
+                    unreachable!()
+                };
+                if etys_opt.is_some() {
+                    context.env.add_diag(diag!(
+                        NameResolution::TooManyTypeArguments,
+                        (ploc, "Constants in patterns do not take type arguments")
+                    ));
+                }
+                NP::Constant(m, n)
+            } else {
+                let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
+                    assert!(context.env.has_errors());
+                    return Box::new(sp(ploc, NP::ErrorPat));
+                };
+                let tys_opt = opt_types_with_arity_check(
+                    context,
+                    TypeAnnotation::Expression,
+                    ploc,
+                    || format!("{}::{}", &m, &n),
+                    etys_opt,
+                    ty.type_arity(),
+                );
+
+                match ty {
+                    ResolvedConstructor::Struct(_name, _stype) => {
+                        // No need to chck is_empty / is_positional because typing will report the errors.
+                        NP::Struct(m, n, tys_opt, UniqueMap::new())
+                    }
+                    ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                        // No need to chck is_empty / is_positional because typing will report the errors.
+                        NP::Variant(m, n, variant, tys_opt, UniqueMap::new())
+                    }
+                }
             }
         }
         EP::Binder(_, binder) if binder.is_underscore() => NP::Wildcard,
@@ -3538,7 +3838,9 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) => remove_unused_bindings_exp_dotted(context, used, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+            remove_unused_bindings_exp_dotted(context, used, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             for e in es {
                 remove_unused_bindings_exp(context, used, e);
@@ -3555,8 +3857,13 @@ fn remove_unused_bindings_pattern(
 ) {
     use N::MatchPattern_ as NP;
     match pat_ {
-        NP::Literal(_) | NP::Wildcard | NP::ErrorPat => (),
-        NP::Constructor(_, _, _, _, fields) => {
+        NP::Constant(_, _) | NP::Literal(_) | NP::Wildcard | NP::ErrorPat => (),
+        NP::Variant(_, _, _, _, fields) => {
+            for (_, _, (_, pat)) in fields {
+                remove_unused_bindings_pattern(context, used, pat)
+            }
+        }
+        NP::Struct(_, _, _, fields) => {
             for (_, _, (_, pat)) in fields {
                 remove_unused_bindings_pattern(context, used, pat)
             }

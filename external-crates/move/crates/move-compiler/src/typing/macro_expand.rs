@@ -630,7 +630,9 @@ fn recolor_exp(ctx: &mut Recolor, sp!(_, e_): &mut N::Exp) {
 fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => recolor_exp(ctx, e),
-        N::ExpDotted_::Dot(ed, _) => recolor_exp_dotted(ctx, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => {
+            recolor_exp_dotted(ctx, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             recolor_exp_dotted(ctx, ed);
             for e in es {
@@ -641,19 +643,25 @@ fn recolor_exp_dotted(ctx: &mut Recolor, sp!(_, ed_): &mut N::ExpDotted) {
 }
 
 fn recolor_pat(ctx: &mut Recolor, sp!(_, p_): &mut N::MatchPattern) {
+    use N::MatchPattern_ as MP;
     match p_ {
-        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
-        N::MatchPattern_::Constructor(_, _, _, _, fields) => {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Variant(_, _, _, _, fields) => {
             for (_, _, (_, p)) in fields {
                 recolor_pat(ctx, p)
             }
         }
-        N::MatchPattern_::Binder(_mut, var, _) => recolor_var(ctx, var),
-        N::MatchPattern_::Or(lhs, rhs) => {
+        MP::Struct(_, _, _, fields) => {
+            for (_, _, (_, p)) in fields {
+                recolor_pat(ctx, p)
+            }
+        }
+        MP::Binder(_mut, var, _) => recolor_var(ctx, var),
+        MP::Or(lhs, rhs) => {
             recolor_pat(ctx, lhs);
             recolor_pat(ctx, rhs);
         }
-        N::MatchPattern_::At(var, _unused_var, inner) => {
+        MP::At(var, _unused_var, inner) => {
             recolor_var(ctx, var);
             recolor_pat(ctx, inner);
         }
@@ -1088,7 +1096,7 @@ fn builtin_function(context: &mut Context, sp!(_, bf_): &mut N::BuiltinFunction)
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => exp_dotted(context, ed),
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
@@ -1105,9 +1113,10 @@ fn exps(context: &mut Context, es: &mut [N::Exp]) {
 }
 
 fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
+    use N::MatchPattern_ as MP;
     match p_ {
-        N::MatchPattern_::Literal(_) | N::MatchPattern_::Wildcard | N::MatchPattern_::ErrorPat => {}
-        N::MatchPattern_::Constructor(_, _, _, tys_opt, fields) => {
+        MP::Constant(_, _) | MP::Literal(_) | MP::Wildcard | MP::ErrorPat => {}
+        MP::Variant(_, _, _, tys_opt, fields) => {
             if let Some(tys) = tys_opt {
                 types(context, tys)
             }
@@ -1115,20 +1124,28 @@ fn pat(context: &mut Context, sp!(_, p_): &mut N::MatchPattern) {
                 pat(context, p)
             }
         }
-        N::MatchPattern_::Binder(_mut, var, _) => {
+        MP::Struct(_, _, tys_opt, fields) => {
+            if let Some(tys) = tys_opt {
+                types(context, tys)
+            }
+            for (_, _, (_, p)) in fields {
+                pat(context, p)
+            }
+        }
+        MP::Binder(_mut, var, _) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
                     context.core.env.has_errors(),
                     "ICE cannot use macro parameter in pattern"
                 );
-                *p_ = N::MatchPattern_::ErrorPat;
+                *p_ = MP::ErrorPat;
             }
         }
-        N::MatchPattern_::Or(lhs, rhs) => {
+        MP::Or(lhs, rhs) => {
             pat(context, lhs);
             pat(context, rhs);
         }
-        N::MatchPattern_::At(var, _unused_var, inner) => {
+        MP::At(var, _unused_var, inner) => {
             if context.all_params.contains_key(&var.value) {
                 assert!(
                     context.core.env.has_errors(),

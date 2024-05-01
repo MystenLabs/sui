@@ -56,6 +56,15 @@ fn build_tonic_services(out_dir: &Path) {
                 .server_streaming()
                 .build(),
         )
+        .method(
+            tonic_build::manual::Method::builder()
+                .name("fetch_commits")
+                .route_name("FetchCommits")
+                .input_type("crate::network::tonic_network::FetchCommitsRequest")
+                .output_type("crate::network::tonic_network::FetchCommitsResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     tonic_build::manual::Builder::new()
@@ -88,6 +97,15 @@ fn build_anemo_services(out_dir: &Path) {
                 .route_name("FetchBlocks")
                 .request_type("crate::network::anemo_network::FetchBlocksRequest")
                 .response_type("crate::network::anemo_network::FetchBlocksResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("fetch_commits")
+                .route_name("FetchCommits")
+                .request_type("crate::network::anemo_network::FetchCommitsRequest")
+                .response_type("crate::network::anemo_network::FetchCommitsResponse")
                 .codec_path(codec_path)
                 .build(),
         )

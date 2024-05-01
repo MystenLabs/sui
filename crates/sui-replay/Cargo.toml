@@ -34,6 +34,7 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tabled.workspace = true
 
 shared-crypto.workspace = true

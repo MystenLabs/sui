@@ -24,6 +24,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -156,6 +157,7 @@ where
     pub async fn execute_transaction_block(
         &self,
         request: ExecuteTransactionRequest,
+        client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
         // TODO check if tx is already executed on this node.
         // Note: since EffectsCert is not stored today, we need to gather that from validators
@@ -192,10 +194,13 @@ where
             in_flight.dec();
         });
 
-        let ticket = self.submit(transaction.clone()).await.map_err(|e| {
-            warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-            QuorumDriverError::QuorumDriverInternalError(e)
-        })?;
+        let ticket = self
+            .submit(transaction.clone(), client_addr)
+            .await
+            .map_err(|e| {
+                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+                QuorumDriverError::QuorumDriverInternalError(e)
+            })?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
@@ -263,9 +268,12 @@ where
     async fn submit(
         &self,
         transaction: VerifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
         let tx_digest = *transaction.digest();
         let ticket = self.notifier.register_one(&tx_digest);
+        // TODO(william) need to also write client adr to pending tx log below
+        // so that we can re-execute with this client addr if we restart
         if self
             .pending_tx_log
             .write_pending_transaction_maybe(&transaction)
@@ -273,7 +281,7 @@ where
         {
             debug!(?tx_digest, "no pending request in flight, submitting.");
             self.quorum_driver()
-                .submit_transaction_no_ticket(transaction.clone().into())
+                .submit_transaction_no_ticket(transaction.clone().into(), client_addr)
                 .await?;
         }
         // It's possible that the transaction effects is already stored in DB at this point.
@@ -294,7 +302,8 @@ where
                         ?tx_digest,
                         "Effects are available in DB, use quorum driver to get a certificate"
                     );
-                    qd.submit_transaction_no_ticket(transaction.into()).await?;
+                    qd.submit_transaction_no_ticket(transaction.into(), client_addr)
+                        .await?;
                     Ok(unfinished_quorum_driver_task.await)
                 }
             };
@@ -509,7 +518,8 @@ where
                 let tx = tx.into_inner();
                 let tx_digest = *tx.digest();
                 // It's not impossible we fail to enqueue a task but that's not the end of world.
-                if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+                // TODO(william) correctly extract client_addr from logs
+                if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx, None).await {
                     warn!(
                         ?tx_digest,
                         "Failed to enqueue transaction from pending_tx_log, err: {err:?}"

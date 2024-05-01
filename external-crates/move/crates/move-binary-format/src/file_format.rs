@@ -28,7 +28,6 @@
 //! those structs translate to tables and table specifications.
 
 use crate::{
-    access::ModuleAccess,
     errors::{PartialVMError, PartialVMResult},
     file_format_common,
     internals::ModuleIndex,
@@ -403,6 +402,13 @@ impl StructDefinition {
         match &self.field_information {
             StructFieldInformation::Native => None,
             StructFieldInformation::Declared(fields) => fields.get(offset),
+        }
+    }
+
+    pub fn fields(&self) -> Option<&[FieldDefinition]> {
+        match &self.field_information {
+            StructFieldInformation::Native => None,
+            StructFieldInformation::Declared(fields) => Some(fields),
         }
     }
 }
@@ -1241,7 +1247,7 @@ pub enum Bytecode {
     /// ```..., integer_value -> ..., u128_value```
     CastU128,
     /// Push a `Constant` onto the stack. The value is loaded and deserialized (according to its
-    /// type) from the the `ConstantPool` via `ConstantPoolIndex`
+    /// type) from the `ConstantPool` via `ConstantPoolIndex`
     ///
     /// Stack transition:
     ///
@@ -1920,6 +1926,237 @@ impl CompiledModule {
             | other @ IndexKind::FieldDefinition
             | other @ IndexKind::TypeParameter
             | other @ IndexKind::MemberCount => unreachable!("invalid kind for count: {:?}", other),
+        }
+    }
+
+    pub fn self_handle_idx(&self) -> ModuleHandleIndex {
+        self.self_module_handle_idx
+    }
+
+    /// Returns the `ModuleHandle` for `self`.
+    pub fn self_handle(&self) -> &ModuleHandle {
+        let handle = self.module_handle_at(self.self_handle_idx());
+        debug_assert!(handle.address.into_index() < self.address_identifiers.len()); // invariant
+        debug_assert!(handle.name.into_index() < self.identifiers.len()); // invariant
+        handle
+    }
+
+    /// Returns the name of the module.
+    pub fn name(&self) -> &IdentStr {
+        self.identifier_at(self.self_handle().name)
+    }
+
+    /// Returns the address of the module.
+    pub fn address(&self) -> &AccountAddress {
+        self.address_identifier_at(self.self_handle().address)
+    }
+
+    pub fn struct_name(&self, idx: StructDefinitionIndex) -> &IdentStr {
+        let struct_def = self.struct_def_at(idx);
+        let handle = self.struct_handle_at(struct_def.struct_handle);
+        self.identifier_at(handle.name)
+    }
+
+    pub fn module_handle_at(&self, idx: ModuleHandleIndex) -> &ModuleHandle {
+        let handle = &self.module_handles[idx.into_index()];
+        debug_assert!(handle.address.into_index() < self.address_identifiers.len()); // invariant
+        debug_assert!(handle.name.into_index() < self.identifiers.len()); // invariant
+        handle
+    }
+
+    pub fn struct_handle_at(&self, idx: StructHandleIndex) -> &StructHandle {
+        let handle = &self.struct_handles[idx.into_index()];
+        debug_assert!(handle.module.into_index() < self.module_handles.len()); // invariant
+        handle
+    }
+
+    pub fn function_handle_at(&self, idx: FunctionHandleIndex) -> &FunctionHandle {
+        let handle = &self.function_handles[idx.into_index()];
+        debug_assert!(handle.parameters.into_index() < self.signatures.len()); // invariant
+        debug_assert!(handle.return_.into_index() < self.signatures.len()); // invariant
+        handle
+    }
+
+    pub fn field_handle_at(&self, idx: FieldHandleIndex) -> &FieldHandle {
+        let handle = &self.field_handles[idx.into_index()];
+        debug_assert!(handle.owner.into_index() < self.struct_defs.len()); // invariant
+        handle
+    }
+
+    pub fn struct_instantiation_at(
+        &self,
+        idx: StructDefInstantiationIndex,
+    ) -> &StructDefInstantiation {
+        &self.struct_def_instantiations[idx.into_index()]
+    }
+
+    pub fn function_instantiation_at(
+        &self,
+        idx: FunctionInstantiationIndex,
+    ) -> &FunctionInstantiation {
+        &self.function_instantiations[idx.into_index()]
+    }
+
+    pub fn field_instantiation_at(&self, idx: FieldInstantiationIndex) -> &FieldInstantiation {
+        &self.field_instantiations[idx.into_index()]
+    }
+
+    pub fn signature_at(&self, idx: SignatureIndex) -> &Signature {
+        &self.signatures[idx.into_index()]
+    }
+
+    pub fn identifier_at(&self, idx: IdentifierIndex) -> &IdentStr {
+        &self.identifiers[idx.into_index()]
+    }
+
+    pub fn address_identifier_at(&self, idx: AddressIdentifierIndex) -> &AccountAddress {
+        &self.address_identifiers[idx.into_index()]
+    }
+
+    pub fn constant_at(&self, idx: ConstantPoolIndex) -> &Constant {
+        &self.constant_pool[idx.into_index()]
+    }
+
+    pub fn struct_def_at(&self, idx: StructDefinitionIndex) -> &StructDefinition {
+        &self.struct_defs[idx.into_index()]
+    }
+
+    pub fn function_def_at(&self, idx: FunctionDefinitionIndex) -> &FunctionDefinition {
+        let result = &self.function_defs[idx.into_index()];
+        debug_assert!(result.function.into_index() < self.function_handles().len()); // invariant
+        debug_assert!(match &result.code {
+            Some(code) => code.locals.into_index() < self.signatures().len(),
+            None => true,
+        }); // invariant
+        result
+    }
+
+    pub fn module_handles(&self) -> &[ModuleHandle] {
+        &self.module_handles
+    }
+
+    pub fn struct_handles(&self) -> &[StructHandle] {
+        &self.struct_handles
+    }
+
+    pub fn function_handles(&self) -> &[FunctionHandle] {
+        &self.function_handles
+    }
+
+    pub fn field_handles(&self) -> &[FieldHandle] {
+        &self.field_handles
+    }
+
+    pub fn struct_instantiations(&self) -> &[StructDefInstantiation] {
+        &self.struct_def_instantiations
+    }
+
+    pub fn function_instantiations(&self) -> &[FunctionInstantiation] {
+        &self.function_instantiations
+    }
+
+    pub fn field_instantiations(&self) -> &[FieldInstantiation] {
+        &self.field_instantiations
+    }
+
+    pub fn signatures(&self) -> &[Signature] {
+        &self.signatures
+    }
+
+    pub fn constant_pool(&self) -> &[Constant] {
+        &self.constant_pool
+    }
+
+    pub fn identifiers(&self) -> &[Identifier] {
+        &self.identifiers
+    }
+
+    pub fn address_identifiers(&self) -> &[AccountAddress] {
+        &self.address_identifiers
+    }
+
+    pub fn struct_defs(&self) -> &[StructDefinition] {
+        &self.struct_defs
+    }
+
+    pub fn function_defs(&self) -> &[FunctionDefinition] {
+        &self.function_defs
+    }
+
+    pub fn friend_decls(&self) -> &[ModuleHandle] {
+        &self.friend_decls
+    }
+
+    pub fn version(&self) -> u32 {
+        self.version
+    }
+
+    pub fn immediate_dependencies(&self) -> Vec<ModuleId> {
+        let self_handle = self.self_handle();
+        self.module_handles()
+            .iter()
+            .filter(|&handle| handle != self_handle)
+            .map(|handle| self.module_id_for_handle(handle))
+            .collect()
+    }
+
+    pub fn immediate_friends(&self) -> Vec<ModuleId> {
+        self.friend_decls()
+            .iter()
+            .map(|handle| self.module_id_for_handle(handle))
+            .collect()
+    }
+
+    pub fn find_struct_def(&self, idx: StructHandleIndex) -> Option<&StructDefinition> {
+        self.struct_defs().iter().find(|d| d.struct_handle == idx)
+    }
+
+    pub fn find_struct_def_by_name(&self, name: &IdentStr) -> Option<&StructDefinition> {
+        self.struct_defs().iter().find(|def| {
+            let handle = self.struct_handle_at(def.struct_handle);
+            name == self.identifier_at(handle.name)
+        })
+    }
+
+    // Return the `AbilitySet` of a `SignatureToken` given a context.
+    // A `TypeParameter` has the abilities of its `constraints`.
+    // `StructInstantiation` abilities are predicated on the particular instantiation
+    pub fn abilities(
+        &self,
+        ty: &SignatureToken,
+        constraints: &[AbilitySet],
+    ) -> PartialVMResult<AbilitySet> {
+        use SignatureToken::*;
+
+        match ty {
+            Bool | U8 | U16 | U32 | U64 | U128 | U256 | Address => Ok(AbilitySet::PRIMITIVES),
+
+            Reference(_) | MutableReference(_) => Ok(AbilitySet::REFERENCES),
+            Signer => Ok(AbilitySet::SIGNER),
+            TypeParameter(idx) => Ok(constraints[*idx as usize]),
+            Vector(ty) => AbilitySet::polymorphic_abilities(
+                AbilitySet::VECTOR,
+                vec![false],
+                vec![self.abilities(ty, constraints)?],
+            ),
+            Struct(idx) => {
+                let sh = self.struct_handle_at(*idx);
+                Ok(sh.abilities)
+            }
+            StructInstantiation(struct_inst) => {
+                let (idx, type_args) = &**struct_inst;
+                let sh = self.struct_handle_at(*idx);
+                let declared_abilities = sh.abilities;
+                let type_arguments = type_args
+                    .iter()
+                    .map(|arg| self.abilities(arg, constraints))
+                    .collect::<PartialVMResult<Vec<_>>>()?;
+                AbilitySet::polymorphic_abilities(
+                    declared_abilities,
+                    sh.type_parameters.iter().map(|param| param.is_phantom),
+                    type_arguments,
+                )
+            }
         }
     }
 

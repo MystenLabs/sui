@@ -15,7 +15,7 @@ use crate::{
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
     },
-    shared::{process_binops, unique_map::UniqueMap, *},
+    shared::{process_binops, string_utils::debug_print, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
@@ -122,10 +122,24 @@ type VariantFieldIndicies = UniqueMap<
 
 type VariantPositionalMap =
     UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<VariantName, bool>>>;
-pub struct Context<'env> {
+
+type StructPositionalMap = UniqueMap<ModuleIdent, UniqueMap<DatatypeName, bool>>;
+
+pub(super) struct HLIRDebugFlags {
+    pub(super) match_translation: bool,
+    pub(super) match_variant_translation: bool,
+    pub(super) match_specialization: bool,
+    pub(super) match_counterexample: bool,
+    pub(super) match_work_queue: bool,
+    pub(super) match_constant_conversion: bool,
+}
+
+pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
+    pub debug: HLIRDebugFlags,
     current_package: Option<Symbol>,
     structs: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
+    struct_positional_info: StructPositionalMap,
     enum_variants: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
     variant_fields: VariantFieldIndicies,
     variant_positional_info: VariantPositionalMap,
@@ -147,15 +161,22 @@ impl<'env> Context<'env> {
         fn add_struct_fields(
             env: &mut CompilationEnv,
             structs: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
+            struct_positional_info: &mut StructPositionalMap,
             mident: ModuleIdent,
             struct_defs: &UniqueMap<DatatypeName, N::StructDefinition>,
         ) {
             let mut cur_structs = UniqueMap::new();
+            let mut cur_structs_positional_info = UniqueMap::new();
             for (sname, sdef) in struct_defs.key_cloned_iter() {
                 let mut fields = UniqueMap::new();
                 let field_map = match &sdef.fields {
                     N::StructFields::Native(_) => continue,
-                    N::StructFields::Defined(m) => m,
+                    N::StructFields::Defined(fields_are_positional, m) => {
+                        cur_structs_positional_info
+                            .add(sname, *fields_are_positional)
+                            .unwrap();
+                        m
+                    }
                 };
                 for (field, (idx, _)) in field_map.key_cloned_iter() {
                     fields.add(field, *idx).unwrap();
@@ -166,6 +187,16 @@ impl<'env> Context<'env> {
                 let mut diag = ice!((
                     mident.loc,
                     format!("Structs for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
+            if let Err((_, prev_loc)) =
+                struct_positional_info.add(mident, cur_structs_positional_info)
+            {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Struct for module {} redefined here", mident)
                 ));
                 diag.add_secondary_label((prev_loc, "Previously defined here"));
                 env.add_diag(diag);
@@ -184,40 +215,40 @@ impl<'env> Context<'env> {
             let mut cur_enums_variant_fields = UniqueMap::new();
             let mut cur_enums_variant_positional_info = UniqueMap::new();
             for (ename, edef) in enum_defs.key_cloned_iter() {
-                let mut variant_fields = UniqueMap::new();
-                let mut variant_positional_info = UniqueMap::new();
-                let mut is_positional = false;
-                let mut indexed_variants = vec![];
+                let mut enum_variant_fields = UniqueMap::new();
+                let mut enum_variant_positional_info = UniqueMap::new();
+                let mut enum_indexed_variants = vec![];
                 for (variant_name, vdef) in edef.variants.key_cloned_iter() {
-                    let mut fields = UniqueMap::new();
-                    match &vdef.fields {
-                        N::VariantFields::Empty => (),
+                    let fields = match &vdef.fields {
+                        N::VariantFields::Empty => UniqueMap::new(),
                         N::VariantFields::Defined(fields_are_positional, m) => {
-                            is_positional = *fields_are_positional;
-                            for (field, (idx, _)) in m.key_cloned_iter() {
-                                fields.add(field, *idx).unwrap();
-                            }
+                            enum_variant_positional_info
+                                .add(variant_name, *fields_are_positional)
+                                .unwrap();
+                            UniqueMap::maybe_from_iter(
+                                m.key_cloned_iter().map(|(field, (idx, _))| (field, *idx)),
+                            )
+                            .unwrap()
                         }
-                    }
-                    indexed_variants.push((variant_name, vdef.index));
-                    variant_fields.add(variant_name, fields).unwrap();
-                    variant_positional_info
-                        .add(variant_name, is_positional)
-                        .unwrap();
+                    };
+                    enum_indexed_variants.push((variant_name, vdef.index));
+                    enum_variant_fields.add(variant_name, fields).unwrap();
                 }
-                indexed_variants.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
+                enum_indexed_variants.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
                 cur_enums_variants
                     .add(
                         ename,
-                        indexed_variants
+                        enum_indexed_variants
                             .into_iter()
                             .map(|(key, _ndx)| key)
                             .collect::<Vec<_>>(),
                     )
                     .unwrap();
-                cur_enums_variant_fields.add(ename, variant_fields).unwrap();
+                cur_enums_variant_fields
+                    .add(ename, enum_variant_fields)
+                    .unwrap();
                 cur_enums_variant_positional_info
-                    .add(ename, variant_positional_info)
+                    .add(ename, enum_variant_positional_info)
                     .unwrap();
             }
             if let Err((_, prev_loc)) = enum_variants.add(mident, cur_enums_variants) {
@@ -249,13 +280,19 @@ impl<'env> Context<'env> {
         }
 
         let mut structs = UniqueMap::new();
+        let mut struct_positional_info = UniqueMap::new();
         let mut enum_variants = UniqueMap::new();
         let mut variant_fields = UniqueMap::new();
         let mut variant_positional_info = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
             for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
-                add_struct_fields(env, &mut structs, mident, &mdef.structs);
-                // add_enums(&mut enums, &mut variant_fields, mident, &mdef.enums);
+                add_struct_fields(
+                    env,
+                    &mut structs,
+                    &mut struct_positional_info,
+                    mident,
+                    &mdef.structs,
+                );
                 add_enums(
                     env,
                     &mut enum_variants,
@@ -267,7 +304,13 @@ impl<'env> Context<'env> {
             }
         }
         for (mident, mdef) in prog.modules.key_cloned_iter() {
-            add_struct_fields(env, &mut structs, mident, &mdef.structs);
+            add_struct_fields(
+                env,
+                &mut structs,
+                &mut struct_positional_info,
+                mident,
+                &mdef.structs,
+            );
             add_enums(
                 env,
                 &mut enum_variants,
@@ -277,10 +320,20 @@ impl<'env> Context<'env> {
                 &mdef.enums,
             );
         }
+        let debug = HLIRDebugFlags {
+            match_translation: false,
+            match_variant_translation: false,
+            match_specialization: false,
+            match_counterexample: false,
+            match_work_queue: false,
+            match_constant_conversion: false,
+        };
         Context {
             env,
+            debug,
             current_package: None,
             structs,
+            struct_positional_info,
             enum_variants,
             variant_fields,
             variant_positional_info,
@@ -395,6 +448,15 @@ impl<'env> Context<'env> {
         // in that case, there should be errors
         assert!(fields.is_some() || self.env.has_errors());
         fields
+    }
+
+    /// Indicates if the struct is positional. Returns false on empty or missing.
+    pub fn struct_is_positional(&self, module: &ModuleIdent, struct_name: &DatatypeName) -> bool {
+        self.struct_positional_info
+            .get(module)
+            .and_then(|structs| structs.get(struct_name))
+            .cloned()
+            .unwrap_or(false)
     }
 
     /// Returns the enum variant names in sorted order.
@@ -752,7 +814,7 @@ fn struct_def(
 fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFields {
     let tfields_map = match tfields {
         N::StructFields::Native(loc) => return H::StructFields::Native(loc),
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
     let mut indexed_fields = tfields_map
         .into_iter()
@@ -1027,28 +1089,18 @@ fn tail(
             }
         }
 
-        // FIXME: print is left intentionally for development.
-        // Remove before merging into main.
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
-            // let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            // println!("-----\ncompiled:");
-            // compiled.print();
-            // let result = tail(context, block, expected_type, compiled);
-            // println!("-----\nblock:");
-            // block.print();
-            // print!("result: ");
-            // result.clone().unwrap().print_verbose();
-            // result
-
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            tail(context, block, expected_type, compiled)
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = tail(context, block, expected_type, compiled);
+            debug_print!(context.debug.match_variant_translation,
+                         (lines "block" => block; verbose),
+                         (opt "result" => &result));
+            result
         }
 
         E::VariantMatch(subject, enum_name, arms) => {
@@ -1377,19 +1429,16 @@ fn value(
             }
         }
 
-        // FIXME: print is left intentionally for development.
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
             let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
-            // println!("-----\ncompiled:");
-            // compiled.print_verbose();
-            value(context, block, None, compiled)
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = value(context, block, None, compiled);
+            debug_print!(context.debug.match_variant_translation, ("result" => &result));
+            result
         }
 
         E::VariantMatch(subject, enum_name, arms) => {
@@ -1803,7 +1852,7 @@ fn value(
             context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
             error_exp(eloc)
         }
-        E::UnresolvedError => {
+        E::UnresolvedError | E::InvalidAccess(_) => {
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
         }
@@ -2012,20 +2061,16 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
                 },
             ));
         }
-        // FIXME: print is left intentionally for development.
         E::Match(subject, arms) => {
-            // println!("compiling match!");
-            // print!("subject:");
-            // subject.print_verbose();
-            // println!("\narms:");
-            // for arm in &arms.value {
-            //     arm.value.print_verbose();
-            // }
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
             let subject_type = subject.ty.clone();
             let compiled = match_compilation::compile_match(context, &subject_type, *subject, arms);
-            // println!("-----\ncompiled:");
-            // compiled.print_verbose();
-            statement(context, block, compiled)
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            statement(context, block, compiled);
+            debug_print!(context.debug.match_variant_translation, (lines "block" => block));
         }
         E::VariantMatch(subject, enum_name, arms) => {
             let subject = Box::new(value(context, block, None, *subject));
@@ -2160,6 +2205,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
+        | E::InvalidAccess(_)
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),
@@ -2463,6 +2509,8 @@ fn assign(
                 .or_default()
                 .extend(tfields.iter().map(|(_, s, _)| *s));
 
+            let unused_assignment = tfields.is_empty();
+
             let tmp = context.new_temp(loc, rvalue_ty.clone());
             let copy_tmp = || {
                 let copy_tmp_ = E::Copy {
@@ -2486,17 +2534,17 @@ fn assign(
             L::Var {
                 var: tmp,
                 ty: Box::new(rvalue_ty.clone()),
-                unused_assignment: false,
+                unused_assignment,
             }
         }
         A::UnpackVariant(m, e, v, tbs, tfields) => {
             let bs = base_types(context, tbs);
 
             let mut fields = vec![];
-            for (decl_idx, f, st, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
+            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 assert!(fields.len() == decl_idx);
-                assert!(!matches!(&st, sp!(_, H::SingleType_::Ref(_, _))));
-                let (fa, mut fafter) = assign(context, case, tfa, &st);
+                let st = &H::SingleType_::base(bt);
+                let (fa, mut fafter) = assign(context, case, tfa, st);
                 after.append(&mut fafter);
                 fields.push((f, fa))
             }
@@ -2512,10 +2560,10 @@ fn assign(
             };
 
             let mut fields = vec![];
-            for (decl_idx, f, st, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
+            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
                 assert!(fields.len() == decl_idx);
-                assert!(matches!(&st, sp!(_, H::SingleType_::Ref(st_mut, _)) if st_mut == &mut_));
-                let (fa, mut fafter) = assign(context, case, tfa, &st);
+                let borrow_ty = sp(tfa.loc, H::SingleType_::Ref(mut_, bt));
+                let (fa, mut fafter) = assign(context, case, tfa, &borrow_ty);
                 after.append(&mut fafter);
                 fields.push((f, fa))
             }
@@ -2554,32 +2602,29 @@ fn assign_struct_fields(
     tfields_vec
 }
 
-// Unlike struct unpacking, we don't have the luxury of doing direct field accesses as borrows, so
-// we return SingleTypes that account for the borrowing in UnpackVariants that happen to return
-// borrowed values.
 fn assign_variant_fields(
     context: &mut Context,
     m: &ModuleIdent,
     e: &DatatypeName,
     v: &VariantName,
     tfields: Fields<(N::Type, T::LValue)>,
-) -> Vec<(usize, Field, H::SingleType, T::LValue)> {
+) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
     let decl_fields = context.enum_variant_fields(m, e, v).cloned();
     let mut tfields_vec: Vec<_> = match decl_fields {
         Some(m) => tfields
             .into_iter()
             .map(|(f, (_idx, (tbt, tfa)))| {
                 let field = *m.get(&f).unwrap();
-                let single_ty = single_type(context, tbt);
-                (field, f, single_ty, tfa)
+                let base_ty = base_type(context, tbt);
+                (field, f, base_ty, tfa)
             })
             .collect(),
         None => tfields
             .into_iter()
             .enumerate()
             .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
-                let single_ty = single_type(context, tbt);
-                (ndx, f, single_ty, tfa)
+                let base_ty = base_type(context, tbt);
+                (ndx, f, base_ty, tfa)
             })
             .collect(),
     };

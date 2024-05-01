@@ -15,7 +15,6 @@ use tabled::{
 };
 
 use fastcrypto::encoding::Base64;
-use move_binary_format::access::ModuleAccess;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::annotated_value::MoveTypeLayout;
@@ -1242,6 +1241,15 @@ pub enum SuiExecutionStatus {
     Success,
     // Gas used in the failed case, and the error.
     Failure { error: String },
+}
+
+impl Display for SuiExecutionStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Success => write!(f, "success"),
+            Self::Failure { error } => write!(f, "failure due to {error}"),
+        }
+    }
 }
 
 impl SuiExecutionStatus {

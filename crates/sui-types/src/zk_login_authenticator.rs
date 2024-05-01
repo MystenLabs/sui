@@ -121,9 +121,8 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         Ok(())
     }
 
-    /// This verifies the addresss derivation and ephemeral signature.
-    /// It does not verify the zkLogin inputs (that includes the expensive zk proof verify).
-    fn verify_uncached_checks<T>(
+    /// Verify an intent message of a transaction with an zk login authenticator.
+    fn verify_claims<T>(
         &self,
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
@@ -159,21 +158,11 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
-        self.user_signature
-            .verify_secure(intent_msg, author, SignatureScheme::ZkLoginAuthenticator)
-    }
-
-    /// Verify an intent message of a transaction with an zk login authenticator.
-    fn verify_claims<T>(
-        &self,
-        intent_msg: &IntentMessage<T>,
-        author: SuiAddress,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
-        self.verify_uncached_checks(intent_msg, author, aux_verify_data)?;
+        self.user_signature.verify_secure(
+            intent_msg,
+            author,
+            SignatureScheme::ZkLoginAuthenticator,
+        )?;
 
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];

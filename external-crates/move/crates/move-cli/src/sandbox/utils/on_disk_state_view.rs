@@ -4,10 +4,7 @@
 
 use crate::{DEFAULT_BUILD_DIR, DEFAULT_STORAGE_DIR};
 use anyhow::{anyhow, bail, Result};
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CompiledModule, FunctionDefinitionIndex},
-};
+use move_binary_format::file_format::{CompiledModule, FunctionDefinitionIndex};
 use move_bytecode_utils::module_cache::GetModule;
 use move_command_line_common::files::MOVE_COMPILED_EXTENSION;
 use move_core_types::{
@@ -154,7 +151,7 @@ impl OnDiskStateView {
                     .map_err(|e| anyhow!("Failure deserializing module: {:?}", e))?;
                 // TODO: find or create source map and pass it to disassembler
                 let d: Disassembler =
-                    Disassembler::from_view(&module, Spanned::unsafe_no_loc(()).loc)?;
+                    Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
                 Some(d.disassemble()?)
             }
             None => None,

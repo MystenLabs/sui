@@ -742,7 +742,7 @@ title: Module `0xdee9::critbit`
 
         <b>if</b> (removed_leaf_grand_parent_index == <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>) {
             // Parent of the removed leaf is the tree root
-            // Update the parent of the sibling node and and set sibling <b>as</b> the tree root
+            // Update the parent of the sibling node and set sibling <b>as</b> the tree root
             <b>if</b> (sibling_index &lt; <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>) {
                 // sibling is an <b>internal</b> node
                 <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> tree.internal_nodes, sibling_index).parent = <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>;

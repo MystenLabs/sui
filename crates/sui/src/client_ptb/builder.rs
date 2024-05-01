@@ -14,7 +14,7 @@ use async_recursion::async_recursion;
 use async_trait::async_trait;
 use miette::Severity;
 use move_binary_format::{
-    access::ModuleAccess, binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
+    binary_config::BinaryConfig, file_format::SignatureToken, CompiledModule,
 };
 use move_command_line_common::{
     address::{NumericalAddress, ParsedAddress},

@@ -16,8 +16,6 @@ pub mod scheduler;
 )]
 pub struct SecurityWatchdogConfig {
     #[clap(long)]
-    pub pd_api_key: String,
-    #[clap(long)]
     pub pd_wallet_monitoring_service_id: String,
     #[clap(long)]
     pub config: PathBuf,
@@ -33,8 +31,6 @@ pub struct SecurityWatchdogConfig {
     pub sf_username: Option<String>,
     #[clap(long, default_value = None, global = true)]
     pub sf_role: Option<String>,
-    #[clap(long, default_value = None, global = true)]
-    pub sf_password: Option<String>,
     /// The url of the metrics client to connect to.
     #[clap(long, default_value = "127.0.0.1", global = true)]
     pub client_metric_host: String,

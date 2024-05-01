@@ -52,6 +52,9 @@ fn main() {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
+    let pkg_deps = Arc::new(Mutex::new(
+        BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
+    ));
     let ide_files_root: VfsPath = MemoryFS::new().into();
     let context = Context {
         connection,
@@ -97,7 +100,7 @@ fn main() {
             // characters, such as `::`. So when the language server encounters a completion
             // request, it checks whether completions are being requested for `foo:`, and returns no
             // completions in that case.)
-            trigger_characters: Some(vec![":".to_string(), ".".to_string()]),
+            trigger_characters: Some(vec![":".to_string(), ".".to_string(), "{".to_string()]),
             all_commit_characters: None,
             work_done_progress_options: WorkDoneProgressOptions {
                 work_done_progress: None,
@@ -141,6 +144,7 @@ fn main() {
         symbolicator_runner = symbols::SymbolicatorRunner::new(
             ide_files_root.clone(),
             symbols.clone(),
+            pkg_deps.clone(),
             diag_sender,
             lint,
         );
@@ -153,7 +157,7 @@ fn main() {
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
                 if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                    &mut BTreeMap::new(),
+                    Arc::new(Mutex::new(BTreeMap::new())),
                     ide_files_root.clone(),
                     p.as_path(),
                     lint,
@@ -223,7 +227,7 @@ fn main() {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), shutdown_req_received);
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -256,6 +260,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecompiledPkgDeps>>>,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {
@@ -274,12 +279,9 @@ fn on_request(
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => on_completion_request(
-            context,
-            request,
-            ide_files_root.clone(),
-            &context.symbols.lock().unwrap(),
-        ),
+        lsp_types::request::Completion::METHOD => {
+            on_completion_request(context, request, ide_files_root.clone(), pkg_dependencies)
+        }
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request, &context.symbols.lock().unwrap());
         }

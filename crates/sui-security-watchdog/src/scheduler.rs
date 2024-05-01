@@ -61,14 +61,19 @@ pub struct SchedulerService {
 }
 
 impl SchedulerService {
-    pub async fn new(config: &SecurityWatchdogConfig, registry: &Registry) -> anyhow::Result<Self> {
+    pub async fn new(
+        config: &SecurityWatchdogConfig,
+        registry: &Registry,
+        pd_api_key: String,
+        sf_password: String,
+    ) -> anyhow::Result<Self> {
         let scheduler = JobScheduler::new().await?;
         Ok(Self {
             scheduler,
-            query_runner: Arc::new(SnowflakeQueryRunner::from_config(config)?),
+            query_runner: Arc::new(SnowflakeQueryRunner::from_config(config, sf_password)?),
             metrics: Arc::new(WatchdogMetrics::new(registry)),
             entries: Self::from_config(config)?,
-            pagerduty: Pagerduty::new(config.pd_api_key.clone()),
+            pagerduty: Pagerduty::new(pd_api_key.clone()),
             pd_wallet_monitoring_service_id: config.pd_wallet_monitoring_service_id.clone(),
         })
     }

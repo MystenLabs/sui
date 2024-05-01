@@ -4,20 +4,16 @@
 module move_benchmark::benchmark {
     use std::ascii;
     use std::ascii::String;
-    use std::vector;
     use sui::coin::Coin;
     use sui::dynamic_field;
-    use sui::object;
-    use sui::object::UID;
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context;
-    use sui::tx_context::TxContext;
 
     #[allow(lint(self_transfer))]
     public fun transfer_coin(coin: Coin<SUI>, ctx: &TxContext) {
         transfer::public_transfer(coin, tx_context::sender(ctx));
     }
+
+    // === compute-heavy workload ===
 
     public fun run_computation(mut num: u64) {
         // Store all numbers in an array to exercise memory consumption.
@@ -36,6 +32,8 @@ module move_benchmark::benchmark {
             num = num - 1;
         }
     }
+
+    // === dynamic field workload ===
 
     public struct RootObject has key {
         id: UID,
@@ -73,6 +71,8 @@ module move_benchmark::benchmark {
         }
     }
 
+    // === shared object workload ===
+
     public struct SharedCounter has key {
         id: UID,
         count: u64,
@@ -88,5 +88,30 @@ module move_benchmark::benchmark {
 
     public fun increment_shared_counter(counter: &mut SharedCounter) {
         counter.count = counter.count + 1;
+    }
+
+    // === mint workload ===
+
+    public struct NFT has key {
+        id: UID,
+        // mimic NFT's of arbitrary size
+        contents: vector<u8>,
+    }
+
+    /// Create one NFT, send it to `recipient`
+    public fun mint_one(recipient: address, contents: vector<u8>, ctx: &mut TxContext) {
+        let nft = NFT { id: object::new(ctx), contents };
+        transfer::transfer(nft, recipient)
+    }
+
+    /// Create one NFT, send it to each of the `recipients`
+    public fun batch_mint(recipients: vector<address>, contents: vector<u8>, ctx: &mut TxContext) {
+        let mut i = 0;
+        let len = recipients.length();
+        while (i < len) {
+            let nft = NFT { id: object::new(ctx), contents };
+            transfer::transfer(nft, recipients[i]);
+            i = i + 1
+        }
     }
 }

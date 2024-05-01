@@ -65,7 +65,7 @@ impl Disassemble {
         if self.debug {
             println!("{module:#?}");
         } else {
-            let d = Disassembler::from_view(&module, Spanned::unsafe_no_loc(()).loc)?;
+            let d = Disassembler::from_module(&module, Spanned::unsafe_no_loc(()).loc)?;
             println!("{}", d.disassemble()?);
         }
 

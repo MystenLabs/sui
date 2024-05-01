@@ -34,8 +34,8 @@ error[E03006]: unexpected name in this position
    ┌─ tests/development/enums/expansion/use_nested_self_as_invalid.move:11:9
    │
 11 │         X::foo();
-   │         ^^^^^^
+   │         ^
    │         │
    │         Invalid construction. Expected an enum
-   │         But 'X' is an struct
+   │         But 'X' is a struct
 

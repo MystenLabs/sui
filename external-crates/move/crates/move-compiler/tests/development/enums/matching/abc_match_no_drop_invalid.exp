@@ -13,7 +13,7 @@ error[E06001]: unused value without 'drop'
 13 │ │ │             _ => 1,
 14 │ │ │         }
    │ ╰─│─────────^ Invalid return
-   │   ╰─────────' The match value is created but not used. The value does not have the 'drop' ability and must be consumed before the function returns
+   │   ╰─────────' The match expression takes ownership of this value but does not use it. The value does not have the 'drop' ability and must be consumed before the function returns
 
 error[E05001]: ability constraint not satisfied
    ┌─ tests/development/enums/matching/abc_match_no_drop_invalid.move:13:13

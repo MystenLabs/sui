@@ -6,6 +6,7 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use mysten_network::config::Config;
 use std::collections::BTreeMap;
+use std::net::SocketAddr;
 use std::time::Duration;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::base_types::AuthorityName;
@@ -17,6 +18,8 @@ use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, transaction::*};
 
+use crate::authority_client::tonic::IntoRequest;
+use sui_network::tonic::metadata::KeyAndValueRef;
 use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
@@ -29,12 +32,14 @@ pub trait AuthorityAPI {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError>;
 
     /// Execute a certificate.
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError>;
 
     /// Handle Object information requests for this account.
@@ -103,9 +108,13 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleTransactionResponse, SuiError> {
+        let mut request = transaction.into_request();
+        insert_metadata(&mut request, client_addr);
+
         self.client()
-            .transaction(transaction)
+            .transaction(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
@@ -115,10 +124,14 @@ impl AuthorityAPI for NetworkAuthorityClient {
     async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
+        let mut request = certificate.into_request();
+        insert_metadata(&mut request, client_addr);
+
         let response = self
             .client()
-            .handle_certificate_v2(certificate.clone())
+            .handle_certificate_v2(request)
             .await
             .map(tonic::Response::into_inner);
 
@@ -215,4 +228,21 @@ pub fn make_authority_clients_with_timeout_config(
     network_config.connect_timeout = Some(connect_timeout);
     network_config.request_timeout = Some(request_timeout);
     make_network_authority_clients_with_network_config(committee, &network_config)
+}
+
+fn insert_metadata<T>(request: &mut tonic::Request<T>, client_addr: Option<SocketAddr>) {
+    if let Some(client_addr) = client_addr {
+        let mut metadata = tonic::metadata::MetadataMap::new();
+        metadata.insert("x-forwarded-for", client_addr.to_string().parse().unwrap());
+        metadata
+            .iter()
+            .for_each(|key_and_value| match key_and_value {
+                KeyAndValueRef::Ascii(key, value) => {
+                    request.metadata_mut().insert(key, value.clone());
+                }
+                KeyAndValueRef::Binary(key, value) => {
+                    request.metadata_mut().insert_bin(key, value.clone());
+                }
+            });
+    }
 }

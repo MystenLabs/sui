@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 43;
+const MAX_PROTOCOL_VERSION: u64 = 44;
 
 // Record history of protocol version allocations here:
 //
@@ -119,6 +119,7 @@ const MAX_PROTOCOL_VERSION: u64 = 43;
 // Version 43: Introduce the upper bound delta config for a zklogin signature's max epoch.
 //             Introduce an explicit parameter for the tick limit per package (previously this was
 //             represented by the parameter for the tick limit per module).
+// Version 44: Enable consensus fork detection on mainnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -402,6 +403,15 @@ struct FeatureFlags {
     // Controls the behavior of per object congestion control in consensus handler.
     #[serde(skip_serializing_if = "PerObjectCongestionControlMode::is_none")]
     per_object_congestion_control_mode: PerObjectCongestionControlMode,
+
+    // The consensus protocol to be used for the epoch.
+    #[serde(skip_serializing_if = "ConsensusChoice::is_narwhal")]
+    consensus_choice: ConsensusChoice,
+
+    // Consensus network to use.
+    #[serde(skip_serializing_if = "ConsensusNetwork::is_anemo")]
+    consensus_network: ConsensusNetwork,
+
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     zklogin_max_epoch_upper_bound_delta: Option<u64>,
@@ -442,6 +452,35 @@ pub enum PerObjectCongestionControlMode {
 impl PerObjectCongestionControlMode {
     pub fn is_none(&self) -> bool {
         matches!(self, PerObjectCongestionControlMode::None)
+    }
+}
+
+// Configuration options for consensus algorithm.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+pub enum ConsensusChoice {
+    #[default]
+    Narwhal,
+    SwapEachEpoch,
+    Mysticeti,
+}
+
+impl ConsensusChoice {
+    pub fn is_narwhal(&self) -> bool {
+        matches!(self, ConsensusChoice::Narwhal)
+    }
+}
+
+// Configuration options for consensus network.
+#[derive(Default, Copy, Clone, PartialEq, Eq, Serialize, Debug)]
+pub enum ConsensusNetwork {
+    #[default]
+    Anemo,
+    Tonic,
+}
+
+impl ConsensusNetwork {
+    pub fn is_anemo(&self) -> bool {
+        matches!(self, ConsensusNetwork::Anemo)
     }
 }
 
@@ -1226,6 +1265,14 @@ impl ProtocolConfig {
 
     pub fn per_object_congestion_control_mode(&self) -> PerObjectCongestionControlMode {
         self.feature_flags.per_object_congestion_control_mode
+    }
+
+    pub fn consensus_choice(&self) -> ConsensusChoice {
+        self.feature_flags.consensus_choice
+    }
+
+    pub fn consensus_network(&self) -> ConsensusNetwork {
+        self.feature_flags.consensus_network
     }
 }
 
@@ -2066,6 +2113,14 @@ impl ProtocolConfig {
                     cfg.feature_flags.zklogin_max_epoch_upper_bound_delta = Some(30);
                     cfg.max_meter_ticks_per_package = Some(16_000_000);
                 }
+                44 => {
+                    // Enable consensus digest in consensus commit prologue on all networks..
+                    cfg.feature_flags.include_consensus_digest_in_prologue = true;
+                    // Switch between Narwhal and Mysticeti per epoch in tests, devnet and testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.consensus_choice = ConsensusChoice::SwapEachEpoch;
+                    }
+                }
                 // Use this template when making changes:
                 //
                 //     // modify an existing constant.
@@ -2172,14 +2227,7 @@ impl ProtocolConfig {
     pub fn set_accept_zklogin_in_multisig_for_testing(&mut self, val: bool) {
         self.feature_flags.accept_zklogin_in_multisig = val
     }
-    #[cfg(msim)]
-    pub fn set_simplified_unwrap_then_delete(&mut self, val: bool) {
-        self.feature_flags.simplified_unwrap_then_delete = val;
-        if val == false {
-            // Given that we will never enable effect V2 before turning on simplified_unwrap_then_delete, we also need to disable effect V2 here.
-            self.set_enable_effects_v2(false);
-        }
-    }
+
     pub fn set_shared_object_deletion(&mut self, val: bool) {
         self.feature_flags.shared_object_deletion = val;
     }
@@ -2212,6 +2260,14 @@ impl ProtocolConfig {
 
     pub fn set_per_object_congestion_control_mode(&mut self, val: PerObjectCongestionControlMode) {
         self.feature_flags.per_object_congestion_control_mode = val;
+    }
+
+    pub fn set_consensus_choice(&mut self, val: ConsensusChoice) {
+        self.feature_flags.consensus_choice = val;
+    }
+
+    pub fn set_consensus_network(&mut self, val: ConsensusNetwork) {
+        self.feature_flags.consensus_network = val;
     }
 
     pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {

@@ -13,6 +13,7 @@ use sui_types::message_envelope::Message;
 use tracing::warn;
 use transaction_provider::{FuzzStartPoint, TransactionSource};
 
+use crate::config::get_rpc_url;
 use crate::replay::ExecutionSandboxState;
 use crate::replay::LocalExec;
 use crate::replay::ProtocolVersionSummary;
@@ -25,20 +26,21 @@ use sui_config::node::ExpensiveSafetyCheckConfig;
 use sui_protocol_config::Chain;
 use sui_types::digests::TransactionDigest;
 use tracing::{error, info};
+
+pub mod batch_replay;
 pub mod config;
 mod data_fetcher;
 mod displays;
 pub mod fuzz;
 pub mod fuzz_mutations;
 mod replay;
+#[cfg(test)]
+mod tests;
 pub mod transaction_provider;
 pub mod types;
 
 static DEFAULT_SANDBOX_BASE_PATH: &str =
     concat!(env!("CARGO_MANIFEST_DIR"), "/tests/sandbox_snapshots");
-
-#[cfg(test)]
-mod tests;
 
 #[derive(Parser, Clone)]
 #[command(rename_all = "kebab-case")]
@@ -104,8 +106,19 @@ pub enum ReplayToolCommand {
         path: PathBuf,
         #[arg(long, short)]
         terminate_early: bool,
-        #[arg(long, short, default_value = "16")]
-        batch_size: u64,
+        #[arg(
+            long,
+            short,
+            default_value = "16",
+            help = "Number of tasks to run in parallel"
+        )]
+        num_tasks: u64,
+        #[arg(
+            long,
+            help = "If provided, dump the state of the execution to a file in the given directory. \
+            This will allow faster replay next time."
+        )]
+        persist_path: Option<PathBuf>,
     },
 
     /// Replay a transaction from a node state dump
@@ -162,6 +175,7 @@ pub async fn execute_replay_command(
     safety_checks: bool,
     use_authority: bool,
     cfg_path: Option<PathBuf>,
+    chain: Option<String>,
     cmd: ReplayToolCommand,
 ) -> anyhow::Result<Option<(u64, u64)>> {
     let safety = if safety_checks {
@@ -176,7 +190,6 @@ pub async fn execute_replay_command(
             info!("Executing tx: {}", sandbox_state.transaction_info.tx_digest);
             let sandbox_state = LocalExec::certificate_execute_with_sandbox_state(
                 &sandbox_state,
-                None,
                 &sandbox_state.pre_exec_diag,
             )
             .await?;
@@ -191,8 +204,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
-                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                get_rpc_url(rpc_url, cfg_path, chain)?,
                 tx_digest,
                 safety,
                 use_authority,
@@ -226,7 +238,7 @@ pub async fn execute_replay_command(
                 fail_over_on_err: false,
                 expensive_safety_check_config: Default::default(),
             };
-            let fuzzer = ReplayFuzzer::new(rpc_url.expect("Url must be provided"), config)
+            let fuzzer = ReplayFuzzer::new(get_rpc_url(rpc_url, cfg_path, chain)?, config)
                 .await
                 .unwrap();
             fuzzer.run(num_base_transactions).await.unwrap();
@@ -256,111 +268,27 @@ pub async fn execute_replay_command(
         ReplayToolCommand::ReplayBatch {
             path,
             terminate_early,
-            batch_size,
+            num_tasks,
+            persist_path,
         } => {
-            async fn exec_batch(
-                rpc_url: Option<String>,
-                safety: ExpensiveSafetyCheckConfig,
-                use_authority: bool,
-                cfg_path: Option<PathBuf>,
-                tx_digests: &[TransactionDigest],
-            ) -> anyhow::Result<()> {
-                let mut handles = vec![];
-                for tx_digest in tx_digests {
-                    let tx_digest = *tx_digest;
-                    let rpc_url = rpc_url.clone();
-                    let cfg_path = cfg_path.clone();
-                    let safety = safety.clone();
-                    handles.push(tokio::spawn(async move {
-                        info!("Executing tx: {}", tx_digest);
-                        let sandbox_state = LocalExec::replay_with_network_config(
-                            rpc_url,
-                            cfg_path.map(|p| p.to_str().unwrap().to_string()),
-                            tx_digest,
-                            safety,
-                            use_authority,
-                            None,
-                            None,
-                            None,
-                        )
-                        .await?;
-
-                        sandbox_state.check_effects()?;
-
-                        info!("Execution finished successfully: {}. Local and on-chain effects match.", tx_digest);
-                        Ok::<_, anyhow::Error>(())
-                    }));
-                }
-                futures::future::join_all(handles)
-                    .await
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()
-                    .expect("Join all failed")
-                    .into_iter()
-                    .collect::<Result<Vec<_>, _>>()?;
-                Ok(())
-            }
-
-            // While file end not reached, read up to max_tasks lines from path
             let file = std::fs::File::open(path).unwrap();
-            let reader = std::io::BufReader::new(file);
-
-            let mut chunk = Vec::new();
-            for tx_digest in reader.lines() {
-                chunk.push(
-                    match TransactionDigest::from_str(&tx_digest.expect("Unable to readline")) {
-                        Ok(digest) => digest,
-                        Err(e) => {
-                            panic!("Error parsing tx digest: {:?}", e);
-                        }
-                    },
-                );
-                if chunk.len() == batch_size as usize {
-                    println!("Executing batch: {:?}", chunk);
-                    // execute all in chunk
-                    match exec_batch(
-                        rpc_url.clone(),
-                        safety.clone(),
-                        use_authority,
-                        cfg_path.clone(),
-                        &chunk,
-                    )
-                    .await
-                    {
-                        Ok(_) => info!("Batch executed successfully: {:?}", chunk),
-                        Err(e) => {
-                            error!("Error executing batch: {:?}", e);
-                            if terminate_early {
-                                return Err(e);
-                            }
-                        }
-                    }
-                    println!("Finished batch execution");
-
-                    chunk.clear();
-                }
-            }
-            if !chunk.is_empty() {
-                println!("Executing batch: {:?}", chunk);
-                match exec_batch(
-                    rpc_url.clone(),
-                    safety,
-                    use_authority,
-                    cfg_path.clone(),
-                    &chunk,
-                )
-                .await
-                {
-                    Ok(_) => info!("Batch executed successfully: {:?}", chunk),
-                    Err(e) => {
-                        error!("Error executing batch: {:?}", e);
-                        if terminate_early {
-                            return Err(e);
-                        }
-                    }
-                }
-                println!("Finished batch execution");
-            }
+            let buf_reader = std::io::BufReader::new(file);
+            let digests = buf_reader.lines().map(|line| {
+                let line = line.unwrap();
+                TransactionDigest::from_str(&line).unwrap_or_else(|err| {
+                    panic!("Error parsing tx digest {:?}: {:?}", line, err);
+                })
+            });
+            batch_replay::batch_replay(
+                digests,
+                num_tasks,
+                get_rpc_url(rpc_url, cfg_path, chain)?,
+                safety,
+                use_authority,
+                terminate_early,
+                persist_path,
+            )
+            .await;
 
             // TODO: clean this up
             Some((0u64, 0u64))
@@ -376,8 +304,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let _sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
-                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                get_rpc_url(rpc_url, cfg_path, chain)?,
                 tx_digest,
                 safety,
                 use_authority,
@@ -401,8 +328,7 @@ pub async fn execute_replay_command(
             let tx_digest = TransactionDigest::from_str(&tx_digest)?;
             info!("Executing tx: {}", tx_digest);
             let sandbox_state = LocalExec::replay_with_network_config(
-                rpc_url,
-                cfg_path.map(|p| p.to_str().unwrap().to_string()),
+                get_rpc_url(rpc_url, cfg_path, chain)?,
                 tx_digest,
                 safety,
                 use_authority,
@@ -517,10 +443,10 @@ pub async fn execute_replay_command(
                 .await
                 .into_iter()
                 .for_each(|x| match x {
-                    Ok((suceeded, total, time)) => {
+                    Ok((succeeded, total, time)) => {
                         total_tx += total;
                         total_time_ms += time.as_millis() as u64;
-                        total_succeeded += suceeded;
+                        total_succeeded += succeeded;
                     }
                     Err(e) => {
                         error!("Task failed: {:?}", e);
@@ -555,6 +481,7 @@ pub async fn execute_replay_command(
                 safety_checks,
                 use_authority,
                 cfg_path,
+                chain,
                 ReplayToolCommand::ReplayCheckpoints {
                     start,
                     end,

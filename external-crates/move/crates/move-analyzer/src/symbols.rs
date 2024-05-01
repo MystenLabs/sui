@@ -91,7 +91,8 @@ use move_compiler::{
     command_line::compiler::{construct_pre_compiled_lib, FullyCompiledProgram},
     editions::{Edition, FeatureGate, Flavor},
     expansion::ast::{
-        self as E, Fields, ModuleIdent, ModuleIdent_, Mutability, Value, Value_, Visibility,
+        self as E, AbilitySet, Fields, ModuleIdent, ModuleIdent_, Mutability, Value, Value_,
+        Visibility,
     },
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
@@ -115,13 +116,33 @@ use move_symbol_pool::Symbol;
 /// go-to-references to the IDE.
 pub const DEFS_AND_REFS_SUPPORT: bool = true;
 
+const MANIFEST_FILE_NAME: &str = "Move.toml";
+
+#[derive(Clone)]
+pub struct PrecompiledPkgDeps {
+    /// Hash of the manifest file for a given package
+    manifest_hash: Option<FileHash>,
+    /// Precompiled deps
+    deps: Arc<FullyCompiledProgram>,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd, Copy)]
 /// Location of a definition's identifier
-struct DefLoc {
+pub struct DefLoc {
     /// File where the definition of the identifier starts
     fhash: FileHash,
     /// Location where the definition of the identifier starts
     start: Position,
+}
+
+impl DefLoc {
+    pub fn fhash(&self) -> FileHash {
+        self.fhash
+    }
+
+    pub fn start(&self) -> Position {
+        self.start
+    }
 }
 
 /// Location of a use's identifier
@@ -166,6 +187,8 @@ pub enum DefInfo {
         Visibility,
         /// Type args
         Vec<(Type, bool /* phantom */)>,
+        /// Abilities
+        AbilitySet,
         /// Field names
         Vec<Symbol>,
         /// Field types
@@ -226,14 +249,14 @@ pub struct UseDef {
 
 /// Definition of a struct field
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct FieldDef {
+pub struct FieldDef {
     name: Symbol,
     start: Position,
 }
 
 /// Definition of a struct
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct StructDef {
+pub struct StructDef {
     name_start: Position,
     field_defs: Vec<FieldDef>,
     /// Does this struct have positional fields?
@@ -340,6 +363,7 @@ pub struct TypingSymbolicator<'a> {
 struct UseDefMap(BTreeMap<u32, BTreeSet<UseDef>>);
 
 /// Result of the symbolication process
+#[derive(Clone)]
 pub struct Symbols {
     /// A map from def locations to all the references (uses)
     references: BTreeMap<DefLoc, BTreeSet<UseLoc>>,
@@ -368,6 +392,14 @@ pub struct SymbolicatorRunner {
 impl ModuleDefs {
     pub fn functions(&self) -> &BTreeMap<Symbol, FunctionDef> {
         &self.functions
+    }
+
+    pub fn structs(&self) -> &BTreeMap<Symbol, StructDef> {
+        &self.structs
+    }
+
+    pub fn fhash(&self) -> FileHash {
+        self.fhash
     }
 }
 
@@ -403,27 +435,49 @@ impl fmt::Display for DefInfo {
                     ret_str,
                 )
             }
-            Self::Struct(mod_ident, name, visibility, type_args, field_names, field_types) => {
+            Self::Struct(
+                mod_ident,
+                name,
+                visibility,
+                type_args,
+                abilities,
+                field_names,
+                field_types,
+            ) => {
                 let type_args_str = struct_type_args_to_ide_string(type_args);
+                let abilities_str = if abilities.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(
+                        " has {}",
+                        abilities
+                            .iter()
+                            .map(|a| format!("{a}"))
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    )
+                };
                 // the mod_ident conversions below will ensure that only pkg name (without numerical
                 // address) is displayed which is the same as in source
                 if field_names.is_empty() {
                     write!(
                         f,
-                        "{}struct {}::{}{} {{}}",
-                        visibility_to_ide_string(visibility),
-                        expansion_mod_ident_to_map_key(mod_ident),
-                        name,
-                        type_args_str
-                    )
-                } else {
-                    write!(
-                        f,
-                        "{}struct {}::{}{} {{\n{}\n}}",
+                        "{}struct {}::{}{}{} {{}}",
                         visibility_to_ide_string(visibility),
                         expansion_mod_ident_to_map_key(mod_ident),
                         name,
                         type_args_str,
+                        abilities_str,
+                    )
+                } else {
+                    write!(
+                        f,
+                        "{}struct {}::{}{}{} {{\n{}\n}}",
+                        visibility_to_ide_string(visibility),
+                        expansion_mod_ident_to_map_key(mod_ident),
+                        name,
+                        type_args_str,
+                        abilities_str,
                         typed_id_list_to_ide_string(field_names, field_types, true),
                     )
                 }
@@ -687,6 +741,7 @@ impl SymbolicatorRunner {
     pub fn new(
         ide_files_root: VfsPath,
         symbols: Arc<Mutex<Symbols>>,
+        pkg_deps: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
         sender: Sender<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>,
         lint: LintLevel,
     ) -> Self {
@@ -701,9 +756,6 @@ impl SymbolicatorRunner {
                 let mut missing_manifests = BTreeSet::new();
                 // infinite loop to wait for symbolication requests
                 eprintln!("starting symbolicator runner loop");
-                // keep pre-compiles package dependencies around, populating this map
-                // as packages get compiled
-                let mut pkg_dependencies = BTreeMap::new();
                 loop {
                     let starting_path_opt = {
                         // hold the lock only as long as it takes to get the data, rather than through
@@ -749,7 +801,7 @@ impl SymbolicatorRunner {
                         }
                         eprintln!("symbolication started");
                         match get_symbols(
-                            &mut pkg_dependencies,
+                            pkg_deps.clone(),
                             ide_files_root.clone(),
                             root_dir.unwrap().as_path(),
                             lint,
@@ -809,7 +861,7 @@ impl SymbolicatorRunner {
         let mut current_path_opt = Some(starting_path);
         while current_path_opt.is_some() {
             let current_path = current_path_opt.unwrap();
-            let manifest_path = current_path.join("Move.toml");
+            let manifest_path = current_path.join(MANIFEST_FILE_NAME);
             if manifest_path.is_file() {
                 return Some(current_path.to_path_buf());
             }
@@ -919,6 +971,10 @@ impl UseDef {
     pub fn col_end(&self) -> u32 {
         self.col_end
     }
+
+    pub fn def_loc(&self) -> DefLoc {
+        self.def_loc
+    }
 }
 
 impl Ord for UseDef {
@@ -978,11 +1034,25 @@ impl Symbols {
         &self.file_mods
     }
 
-    pub fn line_uses(&self, use_fpath: &PathBuf, use_line: u32) -> BTreeSet<UseDef> {
+    pub fn line_uses(&self, use_fpath: &Path, use_line: u32) -> BTreeSet<UseDef> {
         let Some(file_symbols) = self.file_use_defs.get(use_fpath) else {
             return BTreeSet::new();
         };
         file_symbols.get(use_line).unwrap_or_else(BTreeSet::new)
+    }
+
+    pub fn def_info(&self, def_loc: &DefLoc) -> Option<&DefInfo> {
+        self.def_info.get(def_loc)
+    }
+
+    pub fn mod_defs(&self, fhash: &FileHash, mod_ident: ModuleIdent_) -> Option<&ModuleDefs> {
+        let Some(fpath) = self.file_name_mapping.get(fhash) else {
+            return None;
+        };
+        let Some(mod_defs) = self.file_mods.get(fpath) else {
+            return None;
+        };
+        mod_defs.iter().find(|d| d.ident == mod_ident)
     }
 }
 
@@ -991,7 +1061,7 @@ impl Symbols {
 /// actually (re)computed and the diagnostics are returned, the old symbolic information should
 /// be retained even if it's getting out-of-date.
 pub fn get_symbols(
-    pkg_deps: &mut BTreeMap<PathBuf, Arc<FullyCompiledProgram>>,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, PrecompiledPkgDeps>>>,
     ide_files_root: VfsPath,
     pkg_path: &Path,
     lint: LintLevel,
@@ -1016,6 +1086,19 @@ pub fn get_symbols(
         ide_files_root.clone(),
         VfsPath::new(PhysicalFS::new("/")),
     ]));
+
+    let manifest_file = overlay_fs_root
+        .join(pkg_path.to_string_lossy())
+        .and_then(|p| p.join(MANIFEST_FILE_NAME))
+        .and_then(|p| p.open_file());
+
+    let manifest_hash = if let Ok(mut f) = manifest_file {
+        let mut contents = String::new();
+        let _ = f.read_to_string(&mut contents);
+        Some(FileHash::new(&contents))
+    } else {
+        None
+    };
 
     // get source files to be able to correlate positions (in terms of byte offsets) with actual
     // file locations (in terms of line/column numbers)
@@ -1058,19 +1141,26 @@ pub fn get_symbols(
             .filter_map(|p| p.name.as_ref().map(|(n, _)| *n))
             .collect::<BTreeSet<_>>();
 
+        let mut pkg_deps = pkg_dependencies.lock().unwrap();
         let compiled_deps = match pkg_deps.get(pkg_path) {
-            Some(d) => {
+            Some(d) if manifest_hash.is_some() && manifest_hash == d.manifest_hash => {
                 eprintln!("found pre-compiled libs for {:?}", pkg_path);
-                Some(d.clone())
+                Some(d.deps.clone())
             }
-            None => construct_pre_compiled_lib(src_deps, None, compiler_flags)
+            _ => construct_pre_compiled_lib(src_deps, None, compiler_flags)
                 .ok()
                 .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
-                .map(|lib| {
+                .map(|libs| {
                     eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                    let res = Arc::new(lib);
-                    pkg_deps.insert(pkg_path.to_path_buf(), res.clone());
-                    res
+                    let deps = Arc::new(libs);
+                    pkg_deps.insert(
+                        pkg_path.to_path_buf(),
+                        PrecompiledPkgDeps {
+                            manifest_hash,
+                            deps: deps.clone(),
+                        },
+                    );
+                    deps
                 }),
         };
         if compiled_deps.is_some() {
@@ -1494,7 +1584,7 @@ fn get_mod_outer_defs(
         // process field structs first
         let mut field_defs = vec![];
         let mut field_types = vec![];
-        if let StructFields::Defined(fields) = &def.fields {
+        if let StructFields::Defined(_positional, fields) = &def.fields {
             for (fpos, fname, (_, t)) in fields {
                 let start = match get_start_loc(&fpos, files, file_id_mapping) {
                     Some(s) => s,
@@ -1563,6 +1653,7 @@ fn get_mod_outer_defs(
                         )
                     })
                     .collect(),
+                def.abilities.clone(),
                 field_names,
                 field_types,
             ),
@@ -2182,7 +2273,7 @@ impl<'a> ParsingSymbolicator<'a> {
 
 impl<'a> TypingSymbolicator<'a> {
     /// Get symbols for the whole module
-    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &String) {
+    fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &str) {
         for (pos, name, fun) in &mod_def.functions {
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
@@ -2293,8 +2384,8 @@ impl<'a> TypingSymbolicator<'a> {
     fn struct_symbols(
         &mut self,
         struct_def: &StructDefinition,
-        struct_name: &Symbol,
-        mod_ident_str: &String,
+        _struct_name: &Symbol,
+        _mod_ident_str: &str,
     ) {
         // create scope designated to contain type parameters (if any)
         let mut tp_scope = BTreeMap::new();
@@ -2302,18 +2393,8 @@ impl<'a> TypingSymbolicator<'a> {
             self.add_type_param(&stp.param, &mut tp_scope);
         }
 
-        let positional = self
-            .mod_outer_defs
-            .get(mod_ident_str)
-            .map_or(false, |mod_defs| {
-                mod_defs
-                    .structs
-                    .get(struct_name)
-                    .map_or(false, |sdef| sdef.positional)
-            });
-
         self.type_params = tp_scope;
-        if let StructFields::Defined(fields) = &struct_def.fields {
+        if let StructFields::Defined(positional, fields) = &struct_def.fields {
             for (fpos, fname, (_, t)) in fields {
                 self.add_type_id_use_def(t);
                 if !positional {
@@ -2610,7 +2691,9 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
             }
-
+            E::InvalidAccess(e) => {
+                self.exp_symbols(e, scope);
+            }
             _ => (),
         }
     }
@@ -3225,7 +3308,7 @@ fn def_info_to_type_def_loc(
     match def_info {
         DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
         DefInfo::Function(_, _, _, _, _, _, ret) => type_def_loc(mod_outer_defs, ret),
-        DefInfo::Struct(mod_ident, name, _, _, _, _) => {
+        DefInfo::Struct(mod_ident, name, _, _, _, _, _) => {
             find_struct(mod_outer_defs, mod_ident, name)
         }
         DefInfo::Field(_, _, _, t) => type_def_loc(mod_outer_defs, t),
@@ -3745,11 +3828,10 @@ fn assert_use_def_with_doc_string(
         "for use in column {use_col} of line {use_line} in file {use_file}"
     );
     let info = def_info.get(&use_def.def_loc).unwrap();
+    let info_str = info.to_string();
     assert!(
-        type_str == format!("{}", info),
-        "'{}' != '{}' for use in column {use_col} of line {use_line} in file {use_file}",
-        type_str,
-        format!("{}", info)
+        type_str == info_str,
+        "'{type_str}' != '{info}' for use in column {use_col} of line {use_line} in file {use_file}",
     );
 
     if doc_string.is_some() {
@@ -3833,7 +3915,7 @@ fn docstring_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -3858,7 +3940,7 @@ fn docstring_test() {
         4,
         11,
         "M6.move",
-        "struct Symbols::M6::DocumentedStruct {\n\tdocumented_field: u64\n}",
+        "struct Symbols::M6::DocumentedStruct has drop, store, key {\n\tdocumented_field: u64\n}",
         Some((4, 11, "M6.move")),
         Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
@@ -3920,7 +4002,7 @@ fn docstring_test() {
         4,
         11,
         "M6.move",
-        "struct Symbols::M6::DocumentedStruct {\n\tdocumented_field: u64\n}",
+        "struct Symbols::M6::DocumentedStruct has drop, store, key {\n\tdocumented_field: u64\n}",
         Some((4, 11, "M6.move")),
         Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
@@ -3935,7 +4017,7 @@ fn docstring_test() {
         4,
         11,
         "M6.move",
-        "struct Symbols::M6::DocumentedStruct {\n\tdocumented_field: u64\n}",
+        "struct Symbols::M6::DocumentedStruct has drop, store, key {\n\tdocumented_field: u64\n}",
         Some((4, 11, "M6.move")),
         Some("This is a documented struct\nWith a multi-line docstring\n"),
     );
@@ -4015,7 +4097,7 @@ fn docstring_test() {
         3,
         11,
         "M7.move",
-        "struct Symbols::M7::OtherDocStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M7::OtherDocStruct has drop {\n\tsome_field: u64\n}",
         Some((3, 11, "M7.move")),
         Some("Documented struct in another module\n"),
     );
@@ -4063,7 +4145,7 @@ fn docstring_test() {
         3,
         11,
         "M7.move",
-        "struct Symbols::M7::OtherDocStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M7::OtherDocStruct has drop {\n\tsome_field: u64\n}",
         Some((3, 11, "M7.move")),
         Some("Documented struct in another module\n"),
     );
@@ -4110,7 +4192,7 @@ fn symbols_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -4135,7 +4217,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // const def name
@@ -4191,7 +4273,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // struct name in unpack (unpack function)
@@ -4205,7 +4287,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // field name in unpack (unpack function)
@@ -4275,7 +4357,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // struct name in pack (pack function)
@@ -4289,7 +4371,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // field name in pack (pack function)
@@ -4331,7 +4413,7 @@ fn symbols_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct has drop {\n\tsome_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // function name in a call (other_mod_struct function)
@@ -4373,7 +4455,7 @@ fn symbols_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct has drop {\n\tsome_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // function name (acq function)
@@ -4443,7 +4525,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // vector constructor first element struct type (vec function)
@@ -4457,7 +4539,7 @@ fn symbols_test() {
         2,
         11,
         "M1.move",
-        "struct Symbols::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "struct Symbols::M1::SomeStruct has drop, store, key {\n\tsome_field: u64\n}",
         Some((2, 11, "M1.move")),
     );
     // vector constructor first element struct field (vec function)
@@ -5157,7 +5239,7 @@ fn const_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -5403,7 +5485,7 @@ fn imports_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -5541,7 +5623,7 @@ fn imports_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct {\n	some_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct has drop {\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // aliased mod use (alias name)
@@ -5555,7 +5637,7 @@ fn imports_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct {\n	some_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct has drop {\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
     // locally aliased mod use (actual mod name)
@@ -5597,7 +5679,7 @@ fn imports_test() {
         2,
         11,
         "M2.move",
-        "struct Symbols::M2::SomeOtherStruct {\n	some_field: u64\n}",
+        "struct Symbols::M2::SomeOtherStruct has drop {\n	some_field: u64\n}",
         Some((2, 11, "M2.move")),
     );
 }
@@ -5611,7 +5693,7 @@ fn module_access_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -5772,7 +5854,7 @@ fn parse_error_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -5863,7 +5945,7 @@ fn parse_error_with_deps_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -5918,7 +6000,7 @@ fn pretype_error_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -5959,7 +6041,7 @@ fn pretype_error_with_deps_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -6063,7 +6145,7 @@ fn dot_call_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -6116,7 +6198,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct has drop {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in public module use fun decl
@@ -6172,7 +6254,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct has drop {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in public module use fun decl
@@ -6243,7 +6325,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct has drop {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in module use fun decl
@@ -6299,7 +6381,7 @@ fn dot_call_test() {
         5,
         18,
         "dot_call.move",
-        "public struct Move2024::M1::SomeStruct {\n\tsome_field: u64\n}",
+        "public struct Move2024::M1::SomeStruct has drop {\n\tsome_field: u64\n}",
         Some((5, 18, "dot_call.move")),
     );
     // method in block use fun decl
@@ -6399,7 +6481,7 @@ fn mod_ident_uniform_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -6424,7 +6506,7 @@ fn move2024_struct_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -6449,7 +6531,7 @@ fn move2024_struct_test() {
         2,
         18,
         "structs.move",
-        "public struct Move2024::structs::SomeStruct {}",
+        "public struct Move2024::structs::SomeStruct has copy, drop {}",
         Some((2, 18, "structs.move")),
     );
     // struct def with positional fields
@@ -6463,7 +6545,7 @@ fn move2024_struct_test() {
         4,
         18,
         "structs.move",
-        "public struct Move2024::structs::Positional {\n\t0: u64,\n\t1: Move2024::structs::SomeStruct\n}",
+        "public struct Move2024::structs::Positional has copy, drop {\n\t0: u64,\n\t1: Move2024::structs::SomeStruct\n}",
         Some((4, 18, "structs.move")),
     );
     // positional field type (in def)
@@ -6477,7 +6559,7 @@ fn move2024_struct_test() {
         2,
         18,
         "structs.move",
-        "public struct Move2024::structs::SomeStruct {}",
+        "public struct Move2024::structs::SomeStruct has copy, drop {}",
         Some((2, 18, "structs.move")),
     );
     // fun param of a positional struct type
@@ -6505,7 +6587,7 @@ fn move2024_struct_test() {
         4,
         18,
         "structs.move",
-        "public struct Move2024::structs::Positional {\n\t0: u64,\n\t1: Move2024::structs::SomeStruct\n}",
+        "public struct Move2024::structs::Positional has copy, drop {\n\t0: u64,\n\t1: Move2024::structs::SomeStruct\n}",
         Some((4, 18, "structs.move")),
     );
     // first positional field access (u64 type)
@@ -6547,7 +6629,7 @@ fn implicit_uses_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -6567,27 +6649,13 @@ fn implicit_uses_test() {
         &symbols,
         1,
         3,
-        12,
+        13,
         "implicit_uses.move",
-        64,
-        18,
-        "object.move",
-        "public struct sui::object::UID {\n\tid: sui::object::ID\n}",
-        Some((64, 18, "object.move")),
-    );
-    // implicit struct as parameter type
-    assert_use_def(
-        mod_symbols,
-        &symbols,
-        2,
         6,
-        29,
-        "implicit_uses.move",
-        20,
-        18,
-        "tx_context.move",
-        "public struct sui::tx_context::TxContext {\n\tepoch: u64,\n\tepoch_timestamp_ms: u64,\n\tids_created: u64,\n\tsender: address,\n\ttx_hash: vector<u8>\n}",
-        Some((20, 18, "tx_context.move")),
+        11,
+        "option.move",
+        "public struct std::option::Option<Element> has copy, drop, store {\n\tvec: vector<Element>\n}",
+        Some((6, 11, "option.move")),
     );
     // implicit module name in function call
     assert_use_def(
@@ -6595,12 +6663,12 @@ fn implicit_uses_test() {
         &symbols,
         2,
         7,
-        18,
+        26,
         "implicit_uses.move",
-        4,
+        1,
         12,
-        "object.move",
-        "module sui::object",
+        "option.move",
+        "module std::option",
         None,
     );
 }
@@ -6614,7 +6682,7 @@ fn let_mut_test() {
 
     let ide_files_layer: VfsPath = MemoryFS::new().into();
     let (symbols_opt, _) = get_symbols(
-        &mut BTreeMap::new(),
+        Arc::new(Mutex::new(BTreeMap::new())),
         ide_files_layer,
         path.as_path(),
         LintLevel::None,
@@ -6683,5 +6751,157 @@ fn let_mut_test() {
         "let_mut.move",
         "let mut v: u64",
         None,
+    );
+}
+
+#[test]
+/// Tests symbolication of partially defined function
+fn partial_function_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/partial-function");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        2,
+        8,
+        "M1.move",
+        2,
+        8,
+        "M1.move",
+        "fun PartialFunction::M1::just_name()",
+        None,
+    );
+}
+
+#[test]
+/// Tests if partial dot chains are symbolicated correctly.
+fn partial_dot_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/partial-dot");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // struct-typed first part of incomplete dot chain `s.;`
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        10,
+        20,
+        "M1.move",
+        9,
+        12,
+        "M1.move",
+        "s: PartialDot::M1::AnotherStruct",
+        Some((5, 18, "M1.move")),
+    );
+    // struct-typed first part of incomplete dot chain `s.another_field.;`
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        11,
+        20,
+        "M1.move",
+        9,
+        12,
+        "M1.move",
+        "s: PartialDot::M1::AnotherStruct",
+        Some((5, 18, "M1.move")),
+    );
+    // struct-typed second part of incomplete dot chain `s.another_field.;`
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        11,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
+    // struct-typed second part of incomplete dot chain `s.another_field.` (no `;` but followed by
+    // `let` on the next line)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        12,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
+    // struct-typed second part of incomplete dot chain `s.another_field.` (followed by a list of
+    // parameters and a semi-colon: `s.another_field.(7, 42);`)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        14,
+        22,
+        "M1.move",
+        6,
+        8,
+        "M1.move",
+        "PartialDot::M1::AnotherStruct\nanother_field: PartialDot::M1::SomeStruct",
+        Some((1, 18, "M1.move")),
+    );
+    // struct-typed first part of incomplete dot chain `s.` (no `;` but followed by `}` on the next
+    // line)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        15,
+        20,
+        "M1.move",
+        9,
+        12,
+        "M1.move",
+        "s: PartialDot::M1::AnotherStruct",
+        Some((5, 18, "M1.move")),
     );
 }

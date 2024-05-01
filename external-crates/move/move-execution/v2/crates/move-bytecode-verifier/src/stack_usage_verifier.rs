@@ -9,9 +9,8 @@
 //! the stack height by the number of values returned by the function as indicated in its
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
+use crate::absint::FunctionContext;
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::FunctionView,
     control_flow_graph::{BlockId, ControlFlowGraph},
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
@@ -32,18 +31,18 @@ impl<'a> StackUsageVerifier<'a> {
     pub(crate) fn verify(
         config: &VerifierConfig,
         resolver: &'a CompiledModule,
-        function_view: &'a FunctionView,
+        function_context: &'a FunctionContext,
         _meter: &mut (impl Meter + ?Sized), // TODO: metering
     ) -> PartialVMResult<()> {
         let verifier = Self {
             resolver,
-            current_function: function_view.index(),
-            code: function_view.code(),
-            return_: function_view.return_(),
+            current_function: function_context.index(),
+            code: function_context.code(),
+            return_: function_context.return_(),
         };
 
-        for block_id in function_view.cfg().blocks() {
-            verifier.verify_block(config, block_id, function_view.cfg())?
+        for block_id in function_context.cfg().blocks() {
+            verifier.verify_block(config, block_id, function_context.cfg())?
         }
         Ok(())
     }

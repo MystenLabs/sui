@@ -67,6 +67,42 @@ Sui node uses the following ports by default:
 
 To run a validator successfully, it is critical that ports 8080-8084 are open as outlined, including the specific protocol (TCP/UDP).
 
+## Network Buffer
+From load testing Sui validator networks, it has been determined that the default Linux network buffer sizes are too small.
+We recommend increasing them using one of the following two methods:
+
+### Option 1: With /etc/sysctl.d/
+These settings can be added to a new sysctl file specifically for the sui-node, or appended to an existing file.
+Modifications made in this way will persist across system restarts.
+```shell
+# Create a new sysctl file for the sui-node
+sudo nano /etc/sysctl.d/100-sui-node.conf
+
+# Add these lines to the file, overwriting existing settings if necessary.
+net.core.rmem_max = 104857600
+net.core.wmem_max = 104857600
+net.ipv4.tcp_rmem = 8192 262144 104857600
+net.ipv4.tcp_wmem = 8192 262144 104857600
+
+# Apply the settings immediately, before the next restart
+sudo sysctl --system
+```
+
+### Option 2: With sysctl command
+These modifications do not persist across system restarts. Therefore, the commands should be run each time the host restarts.
+```shell
+sudo sysctl -w net.core.wmem_max=104857600
+sudo sysctl -w net.core.rmem_max=104857600
+sudo sysctl -w net.ipv4.tcp_rmem="8192 262144 104857600"
+sudo sysctl -w net.ipv4.tcp_wmem="8192 262144 104857600"
+```
+
+### Verification
+To verify that the system settings have indeed been updated, check the output of the following command:
+```shell
+sudo sysctl -a | egrep [rw]mem
+```
+
 ## Storage
 
 All Sui node related data is stored by default under `/opt/sui/db/`. This is controlled in the Sui node configuration file.

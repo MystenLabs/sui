@@ -8,7 +8,6 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
-    access::ModuleAccess,
     binary_config::BinaryConfig,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
@@ -1578,7 +1577,7 @@ impl LoadedModule {
                         | Bytecode::VecUnpack(si, _)
                         | Bytecode::VecSwap(si) => {
                             if !single_signature_token_map.contains_key(si) {
-                                let ty = match module.signature_at(*si).0.get(0) {
+                                let ty = match module.signature_at(*si).0.first() {
                                     None => {
                                         return Err(PartialVMError::new(
                                             StatusCode::VERIFIER_INVARIANT_VIOLATION,
@@ -1682,12 +1681,6 @@ impl LoadedModule {
     }
 }
 
-// A simple wrapper for the "owner" of the function (Module or Script)
-#[derive(Debug)]
-enum Scope {
-    Module(ModuleId),
-}
-
 // A runtime function
 // #[derive(Debug)]
 // https://github.com/rust-lang/rust/issues/70263
@@ -1702,7 +1695,7 @@ pub(crate) struct Function {
     type_parameters: Vec<AbilitySet>,
     native: Option<NativeFunction>,
     def_is_native: bool,
-    scope: Scope,
+    module: ModuleId,
     name: Identifier,
     return_types: Vec<Type>,
     local_types: Vec<Type>,
@@ -1731,7 +1724,6 @@ impl Function {
         } else {
             (None, false)
         };
-        let scope = Scope::Module(module_id);
         let parameters = module.signature_at(handle.parameters).clone();
         // Native functions do not have a code unit
         let (code, locals) = match &def.code {
@@ -1760,7 +1752,7 @@ impl Function {
             type_parameters,
             native,
             def_is_native,
-            scope,
+            module: module_id,
             name,
             local_types: vec![],
             return_types: vec![],
@@ -1773,10 +1765,8 @@ impl Function {
         self.file_format_version
     }
 
-    pub(crate) fn module_id(&self) -> Option<&ModuleId> {
-        match &self.scope {
-            Scope::Module(module_id) => Some(module_id),
-        }
+    pub(crate) fn module_id(&self) -> &ModuleId {
+        &self.module
     }
 
     pub(crate) fn index(&self) -> FunctionDefinitionIndex {
@@ -1788,12 +1778,9 @@ impl Function {
         link_context: AccountAddress,
         loader: &'a Loader,
     ) -> Resolver<'a> {
-        match &self.scope {
-            Scope::Module(module_id) => {
-                let (compiled, loaded) = loader.get_module(link_context, module_id);
-                Resolver::for_module(loader, compiled, loaded)
-            }
-        }
+        let module_id = &self.module;
+        let (compiled, loaded) = loader.get_module(link_context, module_id);
+        Resolver::for_module(loader, compiled, loaded)
     }
 
     pub(crate) fn local_count(&self) -> usize {
@@ -1840,14 +1827,13 @@ impl Function {
     }
 
     pub(crate) fn pretty_string(&self) -> String {
-        match &self.scope {
-            Scope::Module(id) => format!(
-                "0x{}::{}::{}",
-                id.address(),
-                id.name().as_str(),
-                self.name.as_str()
-            ),
-        }
+        let id = &self.module;
+        format!(
+            "0x{}::{}::{}",
+            id.address(),
+            id.name().as_str(),
+            self.name.as_str()
+        )
     }
 
     pub(crate) fn is_native(&self) -> bool {
@@ -1969,7 +1955,7 @@ impl TypeCache {
 /// Maximal depth of a value in terms of type depth.
 pub const VALUE_DEPTH_MAX: u64 = 128;
 
-/// Maximal nodes which are allowed when converting to layout. This includes the the types of
+/// Maximal nodes which are allowed when converting to layout. This includes the types of
 /// fields for struct types.
 const MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 

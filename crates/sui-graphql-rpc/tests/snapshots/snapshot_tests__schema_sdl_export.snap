@@ -2494,18 +2494,14 @@ input ObjectKey {
 
 enum ObjectKind {
 	"""
-	The object is loaded from serialized data, such as the contents of a transaction.
+	The object is loaded from serialized data, such as the contents of a transaction that hasn't
+	been indexed yet.
 	"""
 	NOT_INDEXED
 	"""
-	The object is currently live and is not deleted or wrapped.
+	The object is fetched from the index.
 	"""
-	LIVE
-	"""
-	The object is referenced at some version, and thus is fetched from the snapshot or
-	historical objects table.
-	"""
-	HISTORICAL
+	INDEXED
 	"""
 	The object is deleted or wrapped and only partial information can be loaded from the
 	indexer.
@@ -4179,3 +4175,4 @@ schema {
 	query: Query
 	mutation: Mutation
 }
+

@@ -32,11 +32,13 @@ warning[W09002]: unused variable
   │
   = This warning can be suppressed with '#[allow(unused_variable)]' applied to the 'module' or module member ('const', 'fun', or 'struct')
 
-error[E03003]: unbound module member
+error[E03022]: invalid usage position
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:9:9
   │
 9 │         S f = S { f: 0 };
-  │         ^ Invalid module access. Unbound constant 'S' in module '0x42::M'
+  │         ^ Expected local or constant, found struct 'S' in module '0x42::M' instead.
+  │
+  = Struct with named arguments must be written as 'S { ... }'
 
 error[E01002]: unexpected token
   ┌─ tests/move_check/expansion/unpack_assign_other_expr.move:9:11

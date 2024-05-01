@@ -12,11 +12,13 @@ use fastcrypto_tbls::{dkg, nodes};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use narwhal_types::Round;
+use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Weak};
 use std::time::Instant;
+use sui_macros::fail_point_if;
 use sui_network::randomness;
 use sui_types::base_types::AuthorityName;
 use sui_types::committee::{Committee, EpochId, StakeUnit};
@@ -60,6 +62,7 @@ const SINGLETON_KEY: u64 = 0;
 //    partial signatures for it.
 pub struct RandomnessManager {
     epoch_store: Weak<AuthorityPerEpochStore>,
+    epoch: EpochId,
     consensus_adapter: Arc<ConsensusAdapter>,
     network_handle: randomness::Handle,
     authority_info: HashMap<AuthorityName, (PeerId, PartyId)>,
@@ -75,6 +78,7 @@ pub struct RandomnessManager {
 
     // State for randomness generation.
     next_randomness_round: RandomnessRound,
+    highest_completed_round: Arc<Mutex<RandomnessRound>>,
 }
 
 impl RandomnessManager {
@@ -136,14 +140,8 @@ impl RandomnessManager {
                 weight: (*stake).try_into().expect("stake should fit in u16"),
             })
             .collect();
-        let nodes = match nodes::Nodes::new(nodes) {
-            Ok(nodes) => nodes,
-            Err(err) => {
-                error!("random beacon: error while initializing Nodes: {err:?}");
-                return None;
-            }
-        };
-        let (nodes, t) = nodes.reduce(
+        let (nodes, t) = match nodes::Nodes::new_reduced(
+            nodes,
             committee
                 .validity_threshold()
                 .try_into()
@@ -153,7 +151,13 @@ impl RandomnessManager {
                 .random_beacon_reduction_lower_bound()
                 .try_into()
                 .expect("should fit u16"),
-        );
+        ) {
+            Ok((nodes, t)) => (nodes, t),
+            Err(err) => {
+                error!("random beacon: error while initializing Nodes: {err:?}");
+                return None;
+            }
+        };
         let total_weight = nodes.total_weight();
         let num_nodes = nodes.num_nodes();
         let prefix_str = format!(
@@ -188,8 +192,14 @@ impl RandomnessManager {
         );
 
         // Load existing data from store.
+        let highest_completed_round = tables
+            .randomness_highest_completed_round
+            .get(&SINGLETON_KEY)
+            .expect("typed_store should not fail")
+            .unwrap_or(RandomnessRound(0));
         let mut rm = RandomnessManager {
             epoch_store: epoch_store_weak,
+            epoch: committee.epoch(),
             consensus_adapter,
             network_handle: network_handle.clone(),
             authority_info,
@@ -201,6 +211,7 @@ impl RandomnessManager {
             confirmations: BTreeMap::new(),
             dkg_output: OnceCell::new(),
             next_randomness_round: RandomnessRound(0),
+            highest_completed_round: Arc::new(Mutex::new(highest_completed_round)),
         };
         let dkg_output = tables
             .dkg_output
@@ -223,6 +234,7 @@ impl RandomnessManager {
                 rm.authority_info.clone(),
                 dkg_output,
                 rm.party.t(),
+                Some(highest_completed_round),
             );
         } else {
             info!(
@@ -310,8 +322,17 @@ impl RandomnessManager {
 
         let epoch_store = self.epoch_store()?;
         let transaction = ConsensusTransaction::new_randomness_dkg_message(epoch_store.name, &msg);
-        self.consensus_adapter
-            .submit(transaction, None, &epoch_store)?;
+
+        #[allow(unused_mut)]
+        let mut fail_point_skip_sending = false;
+        fail_point_if!("rb-dkg", || {
+            // maybe skip sending in simtests
+            fail_point_skip_sending = true;
+        });
+        if !fail_point_skip_sending {
+            self.consensus_adapter
+                .submit(transaction, None, &epoch_store)?;
+        }
 
         epoch_store
             .metrics
@@ -373,8 +394,17 @@ impl RandomnessManager {
                         epoch_store.name,
                         &conf,
                     );
-                    self.consensus_adapter
-                        .submit(transaction, None, &epoch_store)?;
+
+                    #[allow(unused_mut)]
+                    let mut fail_point_skip_sending = false;
+                    fail_point_if!("rb-dkg", || {
+                        // maybe skip sending in simtests
+                        fail_point_skip_sending = true;
+                    });
+                    if !fail_point_skip_sending {
+                        self.consensus_adapter
+                            .submit(transaction, None, &epoch_store)?;
+                    }
 
                     let elapsed = self.dkg_start_time.get().map(|t| t.elapsed().as_millis());
                     if let Some(elapsed) = elapsed {
@@ -426,6 +456,7 @@ impl RandomnessManager {
                         self.authority_info.clone(),
                         output.clone(),
                         self.party.t(),
+                        None,
                     );
                     batch.insert_batch(
                         &epoch_store.tables()?.dkg_output,
@@ -570,12 +601,16 @@ impl RandomnessManager {
     pub fn reporter(&self) -> RandomnessReporter {
         RandomnessReporter {
             epoch_store: self.epoch_store.clone(),
+            epoch: self.epoch,
             network_handle: self.network_handle.clone(),
+            highest_completed_round: self.highest_completed_round.clone(),
         }
     }
 
     fn epoch_store(&self) -> SuiResult<Arc<AuthorityPerEpochStore>> {
-        self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)
+        self.epoch_store
+            .upgrade()
+            .ok_or(SuiError::EpochEnded(self.epoch))
     }
 
     fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
@@ -622,7 +657,9 @@ impl RandomnessManager {
 #[derive(Clone)]
 pub struct RandomnessReporter {
     epoch_store: Weak<AuthorityPerEpochStore>,
+    epoch: EpochId,
     network_handle: randomness::Handle,
+    highest_completed_round: Arc<Mutex<RandomnessRound>>,
 }
 
 impl RandomnessReporter {
@@ -630,11 +667,22 @@ impl RandomnessReporter {
     /// durably committed in a checkpoint. This completes the process of generating randomness for
     /// the round.
     pub fn notify_randomness_in_checkpoint(&self, round: RandomnessRound) -> SuiResult {
-        let epoch_store = self.epoch_store.upgrade().ok_or(SuiError::EpochEnded)?;
+        let epoch_store = self
+            .epoch_store
+            .upgrade()
+            .ok_or(SuiError::EpochEnded(self.epoch))?;
         epoch_store
             .tables()?
             .randomness_rounds_pending
             .remove(&round)?;
+        let mut highest_completed_round = self.highest_completed_round.lock();
+        if round > *highest_completed_round {
+            *highest_completed_round = round;
+            epoch_store
+                .tables()?
+                .randomness_highest_completed_round
+                .insert(&SINGLETON_KEY, &highest_completed_round)?;
+        }
         self.network_handle
             .complete_round(epoch_store.committee().epoch(), round);
         Ok(())

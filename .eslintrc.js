@@ -34,6 +34,7 @@ module.exports = {
 		'external-crates',
 		'storybook-static',
 		'.next',
+		'sdk/docs/public/typedoc',
 	],
 	rules: {
 		'no-case-declarations': 'off',

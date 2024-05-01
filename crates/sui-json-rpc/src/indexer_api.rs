@@ -413,7 +413,7 @@ impl<R: ReadApiServer> IndexerApiServer for IndexerApi<R> {
             let name_record = NameRecord::try_from(object)?;
 
             // Handling SLD names & node subdomains is the same (we handle them as `node` records)
-            // We check their expiration, and and if not expired, return the target address.
+            // We check their expiration, and if not expired, return the target address.
             if !name_record.is_leaf_record() {
                 return if !name_record.is_node_expired(current_timestamp_ms) {
                     Ok(name_record.target_address)

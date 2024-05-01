@@ -114,7 +114,10 @@ impl BenchmarkContext {
             self.validator()
                 .get_validator()
                 .get_cache_commit()
-                .commit_transaction_outputs(effects.executed_epoch(), effects.transaction_digest())
+                .commit_transaction_outputs(
+                    effects.executed_epoch(),
+                    &[*effects.transaction_digest()],
+                )
                 .await
                 .unwrap();
             let (owner, root_object) = effects
@@ -185,7 +188,7 @@ impl BenchmarkContext {
             // For checkpoint executor, in order to commit a checkpoint it is required previous versions
             // of objects are already committed.
             cache_commit
-                .commit_transaction_outputs(epoch_id, effects.transaction_digest())
+                .commit_transaction_outputs(epoch_id, &[*effects.transaction_digest()])
                 .await
                 .unwrap();
         }
@@ -255,13 +258,13 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_transaction_execution(
         &self,
-        mut transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<CertifiedTransaction>,
         print_sample_tx: bool,
     ) {
         if print_sample_tx {
             // We must use remove(0) in case there are shared objects and the transactions
             // must be executed in order.
-            self.execute_sample_transaction(transactions.remove(0))
+            self.execute_sample_transaction(transactions[0].clone())
                 .await;
         }
 
@@ -305,11 +308,11 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_transaction_execution_in_memory(
         &self,
-        mut transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<CertifiedTransaction>,
         print_sample_tx: bool,
     ) {
         if print_sample_tx {
-            self.execute_sample_transaction(transactions.remove(0))
+            self.execute_sample_transaction(transactions[0].clone())
                 .await;
         }
 
@@ -343,7 +346,7 @@ impl BenchmarkContext {
         );
         let effects = self
             .validator()
-            .execute_raw_transaction(sample_transaction.into_unsigned())
+            .execute_dry_run(sample_transaction.into_unsigned())
             .await;
         info!("Sample effects: {:?}\n\n", effects);
         assert!(effects.status().is_ok());
@@ -373,10 +376,10 @@ impl BenchmarkContext {
 
     pub(crate) async fn benchmark_checkpoint_executor(
         &self,
-        mut transactions: Vec<CertifiedTransaction>,
+        transactions: Vec<CertifiedTransaction>,
         checkpoint_size: usize,
     ) {
-        self.execute_sample_transaction(transactions.remove(0))
+        self.execute_sample_transaction(transactions[0].clone())
             .await;
 
         info!("Executing all transactions to generate effects");

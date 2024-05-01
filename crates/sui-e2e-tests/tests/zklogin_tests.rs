@@ -4,6 +4,7 @@
 
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
+use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
@@ -34,7 +35,7 @@ async fn do_zklogin_test(address: SuiAddress, legacy: bool) -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx)
+        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
         .await
         .map(|_| ())
 }

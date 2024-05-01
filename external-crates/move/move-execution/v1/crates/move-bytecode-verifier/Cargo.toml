@@ -21,7 +21,6 @@ move-abstract-stack.workspace = true
 
 [dev-dependencies]
 hex-literal.workspace = true
-invalid-mutations.workspace = true
 
 [features]
 default = []

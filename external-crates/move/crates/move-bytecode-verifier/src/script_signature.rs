@@ -13,7 +13,6 @@
 //! rules for entrypoints
 
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, FunctionDefinitionIndex, SignatureIndex, SignatureToken, TableIndex,
@@ -85,12 +84,11 @@ fn verify_module_function_signature(
 ) -> VMResult<()> {
     let fdef = module.function_def_at(idx);
 
-    let resolver = module;
     let fhandle = module.function_handle_at(fdef.function);
     let parameters = fhandle.parameters;
     let return_ = fhandle.return_;
     verify_main_signature_impl(
-        resolver,
+        module,
         fdef.is_entry,
         parameters,
         Some(return_),
@@ -103,18 +101,18 @@ fn verify_module_function_signature(
 }
 
 fn verify_main_signature_impl(
-    resolver: &CompiledModule,
+    module: &CompiledModule,
     is_entry: bool,
     parameters_idx: SignatureIndex,
     return_idx: Option<SignatureIndex>,
     check_signature: FnCheckScriptSignature,
 ) -> PartialVMResult<()> {
-    let deprecated_logic = resolver.version() < VERSION_5 && is_entry;
+    let deprecated_logic = module.version() < VERSION_5 && is_entry;
 
     if deprecated_logic {
-        legacy_script_signature_checks(resolver, is_entry, parameters_idx, return_idx)?;
+        legacy_script_signature_checks(module, is_entry, parameters_idx, return_idx)?;
     }
-    check_signature(resolver, is_entry, parameters_idx, return_idx)
+    check_signature(module, is_entry, parameters_idx, return_idx)
 }
 
 pub fn no_additional_script_signature_checks(
@@ -127,21 +125,21 @@ pub fn no_additional_script_signature_checks(
 }
 
 pub fn legacy_script_signature_checks(
-    resolver: &CompiledModule,
+    module: &CompiledModule,
     _is_entry: bool,
     parameters_idx: SignatureIndex,
     return_idx: Option<SignatureIndex>,
 ) -> PartialVMResult<()> {
     use SignatureToken as S;
     let empty_vec = &vec![];
-    let parameters = &resolver.signature_at(parameters_idx).0;
+    let parameters = &module.signature_at(parameters_idx).0;
     let return_types = return_idx
-        .map(|idx| &resolver.signature_at(idx).0)
+        .map(|idx| &module.signature_at(idx).0)
         .unwrap_or(empty_vec);
     // Check that all `signer` arguments occur before non-`signer` arguments
     // signer is a type that can only be populated by the Move VM. And its value is filled
     // based on the sender of the transaction
-    let all_args_have_valid_type = if resolver.version() <= VERSION_1 {
+    let all_args_have_valid_type = if module.version() <= VERSION_1 {
         parameters
             .iter()
             .skip_while(|typ| matches!(typ, S::Reference(inner) if matches!(&**inner, S::Signer)))

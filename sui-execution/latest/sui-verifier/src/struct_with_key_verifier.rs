@@ -7,10 +7,7 @@
 //! - The first field has type `sui::object::UID`
 
 use crate::verification_failure;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CompiledModule, SignatureToken},
-};
+use move_binary_format::file_format::{CompiledModule, SignatureToken};
 use sui_types::{
     error::ExecutionError,
     fp_ensure,

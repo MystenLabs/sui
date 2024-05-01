@@ -6,8 +6,9 @@
 module sui::bls12381_tests {
     use sui::bls12381;
     use sui::group_ops;
-    use std::hash::sha2_256;
+    use sui::random;
     use sui::test_utils::assert_eq;
+    use std::hash::sha2_256;
 
     const ORDER_BYTES: vector<u8> = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
     const ORDER_MINUS_ONE_BYTES: vector<u8> = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000";
@@ -160,6 +161,22 @@ module sui::bls12381_tests {
         let order_minus_one = bls12381::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
         let _ = bls12381::scalar_add(&order_minus_one, &order_minus_one);
         let _ = bls12381::scalar_mul(&order_minus_one, &order_minus_one);
+    }
+
+
+    // TODO: This is a very basic test, extend it to cover more cases.
+    #[test]
+    fun test_scalar_random_add() {
+        let mut gen = random::new_generator_for_testing();
+        let x = gen.generate_u32() as u64;
+        let y = gen.generate_u32() as u64;
+        let sum = x + y;
+
+        let x_scalar = bls12381::scalar_from_u64(x);
+        let y_scalar = bls12381::scalar_from_u64(y);
+        let sum_scalar = bls12381::scalar_add(&x_scalar, &y_scalar);
+
+        assert!(group_ops::equal(&sum_scalar, &bls12381::scalar_from_u64(sum)), 0);
     }
 
     #[test]

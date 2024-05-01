@@ -314,7 +314,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bytecode-verifier-tests"
+name = "bytecode-verifier-prop-tests"
 version = "0.1.0"
 dependencies = [
  "fail",
@@ -327,6 +327,62 @@ dependencies = [
  "move-vm-config",
  "petgraph",
  "proptest",
+]
+
+[[package]]
+name = "bytecode-verifier-tests"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v0"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v1"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v1",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v2"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v2",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
 ]
 
 [[package]]
@@ -1318,6 +1374,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -1576,7 +1633,6 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1600,7 +1656,6 @@ name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1615,7 +1670,6 @@ name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1630,7 +1684,6 @@ name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1681,6 +1734,7 @@ dependencies = [
  "move-prover",
  "move-read-write-set-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2098,6 +2152,7 @@ dependencies = [
  "move-errmapgen",
  "move-package",
  "move-prover",
+ "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
  "move-vm-types",
@@ -2109,83 +2164,61 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stdlib-v0"
+name = "move-stdlib-natives"
 version = "0.1.1"
 dependencies = [
- "anyhow",
- "dir-diff",
- "file_diff",
  "hex",
- "log",
  "move-binary-format",
- "move-cli",
- "move-command-line-common",
  "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-package",
- "move-prover",
- "move-unit-test",
+ "move-vm-runtime",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+]
+
+[[package]]
+name = "move-stdlib-natives-v0"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
  "move-vm-runtime-v0",
  "move-vm-types",
  "sha2",
  "sha3",
  "smallvec",
- "tempfile",
  "walkdir",
 ]
 
 [[package]]
-name = "move-stdlib-v1"
+name = "move-stdlib-natives-v1"
 version = "0.1.1"
 dependencies = [
- "anyhow",
- "dir-diff",
- "file_diff",
  "hex",
- "log",
  "move-binary-format",
- "move-cli",
- "move-command-line-common",
  "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-package",
- "move-prover",
- "move-unit-test",
  "move-vm-runtime-v1",
  "move-vm-types",
  "sha2",
  "sha3",
  "smallvec",
- "tempfile",
  "walkdir",
 ]
 
 [[package]]
-name = "move-stdlib-v2"
+name = "move-stdlib-natives-v2"
 version = "0.1.1"
 dependencies = [
- "anyhow",
- "dir-diff",
- "file_diff",
  "hex",
- "log",
  "move-binary-format",
- "move-cli",
- "move-command-line-common",
  "move-core-types",
- "move-docgen",
- "move-errmapgen",
- "move-package",
- "move-prover",
- "move-unit-test",
  "move-vm-runtime-v2",
  "move-vm-types",
  "sha2",
  "sha3",
  "smallvec",
- "tempfile",
  "walkdir",
 ]
 
@@ -2218,6 +2251,7 @@ dependencies = [
  "move-ir-compiler",
  "move-ir-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
@@ -2252,6 +2286,7 @@ dependencies = [
  "move-model",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2275,7 +2310,6 @@ name = "move-vm-integration-tests"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "expect-test",
  "fail",
  "memory-stats",
  "move-binary-format",
@@ -2283,6 +2317,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -3579,6 +3614,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",

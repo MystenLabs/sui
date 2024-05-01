@@ -74,6 +74,7 @@ async fn test_multiple_epochs() {
             authority_info.clone(),
             mock_dkg_output,
             committee.validity_threshold().try_into().unwrap(),
+            None,
         );
     }
     for rx in randomness_rxs.iter_mut() {
@@ -115,6 +116,7 @@ async fn test_multiple_epochs() {
             authority_info.clone(),
             mock_dkg_output,
             committee.validity_threshold().try_into().unwrap(),
+            None,
         );
     }
     let mut rounds_seen = BTreeSet::new(); // use a set because rounds could be generated out-of-order
@@ -194,6 +196,7 @@ async fn test_record_own_partial_sigs() {
             authority_info.clone(),
             mock_dkg_output,
             committee.validity_threshold().try_into().unwrap(),
+            None,
         );
     }
     for (i, rx) in randomness_rxs.iter_mut().enumerate() {
@@ -205,6 +208,76 @@ async fn test_record_own_partial_sigs() {
         } else {
             assert!(rx.try_recv().is_err());
         }
+    }
+}
+
+#[tokio::test]
+async fn test_restart_recovery() {
+    telemetry_subscribers::init_for_testing();
+    let committee_fixture = CommitteeFixture::generate(rand::rngs::OsRng, 0, 4);
+    let committee = committee_fixture.committee();
+
+    let mut randomness_rxs = Vec::new();
+    let mut networks: Vec<anemo::Network> = Vec::new();
+    let mut nodes = Vec::new();
+    let mut handles = Vec::new();
+    let mut authority_info = HashMap::new();
+
+    for (authority, stake) in committee.members() {
+        let (tx, rx) = mpsc::channel(3);
+        randomness_rxs.push(rx);
+        let (unstarted, router) = Builder::new(*authority, tx).build();
+
+        let network = utils::build_network(|r| r.merge(router));
+        for n in networks.iter() {
+            network.connect(n.local_addr()).await.unwrap();
+        }
+        networks.push(network.clone());
+
+        let node = node_from_committee(committee, authority, *stake);
+        authority_info.insert(*authority, (network.peer_id(), node.id));
+        nodes.push(node);
+
+        let (r, handle) = unstarted.build(network);
+        handles.push((authority, handle));
+
+        let span = tracing::span!(
+            tracing::Level::INFO,
+            "RandomnessEventLoop",
+            authority = ?authority.concise(),
+        );
+        tokio::spawn(r.start().instrument(span));
+    }
+    info!(?authority_info, "authorities constructed");
+
+    let nodes = nodes::Nodes::new(nodes).unwrap();
+
+    // Test first round.
+    for (authority, handle) in handles.iter() {
+        let mock_dkg_output = mocked_dkg::generate_mocked_output::<PkG, EncG>(
+            nodes.clone(),
+            committee.validity_threshold().try_into().unwrap(),
+            0,
+            committee
+                .authority_index(authority)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
+        handle.send_partial_signatures(0, RandomnessRound(1_000_000));
+        handle.update_epoch(
+            0,
+            authority_info.clone(),
+            mock_dkg_output,
+            committee.validity_threshold().try_into().unwrap(),
+            Some(RandomnessRound(999_999)),
+        );
+    }
+    for rx in randomness_rxs.iter_mut() {
+        let (epoch, round, bytes) = rx.recv().await.unwrap();
+        assert_eq!(0, epoch);
+        assert_eq!(1_000_000, round.0);
+        assert_ne!(0, bytes.len());
     }
 }
 

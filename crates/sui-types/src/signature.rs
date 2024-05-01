@@ -72,34 +72,6 @@ pub trait AuthenticatorTrait {
     ) -> SuiResult
     where
         T: Serialize;
-
-    fn verify_authenticator<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        epoch: Option<EpochId>,
-        verify_params: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
-        if let Some(epoch) = epoch {
-            self.verify_user_authenticator_epoch(
-                epoch,
-                verify_params.zklogin_max_epoch_upper_bound_delta,
-            )?;
-        }
-        self.verify_claims(value, author, verify_params)
-    }
-
-    fn verify_uncached_checks<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize;
 }
 
 /// Due to the incompatibility of [enum Signature] (which dispatches a trait that
@@ -122,6 +94,23 @@ impl GenericSignature {
 
     pub fn is_upgraded_multisig(&self) -> bool {
         matches!(self, GenericSignature::MultiSig(_))
+    }
+
+    pub fn verify_authenticator<T>(
+        &self,
+        value: &IntentMessage<T>,
+        author: SuiAddress,
+        epoch: EpochId,
+        verify_params: &VerifyParams,
+    ) -> SuiResult
+    where
+        T: Serialize,
+    {
+        self.verify_user_authenticator_epoch(
+            epoch,
+            verify_params.zklogin_max_epoch_upper_bound_delta,
+        )?;
+        self.verify_claims(value, author, verify_params)
     }
 
     /// Parse [enum CompressedSignature] from trait SuiSignature `flag || sig || pk`.
@@ -289,17 +278,6 @@ impl<'de> ::serde::Deserialize<'de> for GenericSignature {
 /// This ports the wrapper trait to the verify_secure defined on [enum Signature].
 impl AuthenticatorTrait for Signature {
     fn verify_user_authenticator_epoch(&self, _: EpochId, _: Option<EpochId>) -> SuiResult {
-        Ok(())
-    }
-    fn verify_uncached_checks<T>(
-        &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
-    ) -> SuiResult
-    where
-        T: Serialize,
-    {
         Ok(())
     }
 

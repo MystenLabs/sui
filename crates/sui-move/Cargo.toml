@@ -35,6 +35,7 @@ sui-move-natives = { path = "../../sui-execution/latest/sui-move-natives", packa
 sui-move-build.workspace = true
 sui-protocol-config.workspace = true
 sui-types.workspace = true
+better_any = "0.1.1"
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
 jemalloc-ctl.workspace = true

@@ -38,7 +38,9 @@
 //! The above design is used for both objects and markers.
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
+use crate::authority::authority_store::{
+    ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
+};
 use crate::authority::authority_store_pruner::{
     AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
 };
@@ -60,7 +62,7 @@ use moka::sync::Cache as MokaCache;
 use mysten_common::sync::notify_read::NotifyRead;
 use parking_lot::Mutex;
 use prometheus::Registry;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
 use sui_config::node::AuthorityStorePruningConfig;
@@ -83,14 +85,14 @@ use tracing::{debug, info, instrument, trace};
 
 use super::ExecutionCacheAPI;
 use super::{
-    cache_types::CachedVersionMap, implement_passthrough_traits, CheckpointCache,
-    ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
+    cache_types::CachedVersionMap, implement_passthrough_traits, object_locks::ObjectLocks,
+    CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
 };
 
 #[cfg(test)]
 #[path = "unit_tests/writeback_cache_tests.rs"]
-mod writeback_cache_tests;
+pub mod writeback_cache_tests;
 
 #[derive(Clone, PartialEq, Eq)]
 enum ObjectEntry {
@@ -197,6 +199,20 @@ impl UncommittedData {
         self.pending_transaction_writes.clear();
         self.transaction_events.clear();
     }
+
+    fn is_empty(&self) -> bool {
+        let empty = self.pending_transaction_writes.is_empty();
+        if empty && cfg!(debug_assertions) {
+            assert!(
+                self.objects.is_empty()
+                    && self.markers.is_empty()
+                    && self.transaction_effects.is_empty()
+                    && self.executed_effects_digests.is_empty()
+                    && self.transaction_events.is_empty()
+            );
+        }
+        empty
+    }
 }
 
 // TODO: set this via the config
@@ -282,6 +298,8 @@ pub struct WritebackCache {
     // - note that we removed any unfinalized packages from the cache during revert_state_update().
     packages: MokaCache<ObjectID, PackageObject>,
 
+    object_locks: ObjectLocks,
+
     executed_effects_digests_notify_read: NotifyRead<TransactionDigest, TransactionEffectsDigest>,
     store: Arc<AuthorityStore>,
     metrics: Arc<ExecutionCacheMetrics>,
@@ -327,6 +345,7 @@ impl WritebackCache {
             dirty: UncommittedData::new(),
             cached: CachedCommittedData::new(),
             packages,
+            object_locks: ObjectLocks::new(),
             executed_effects_digests_notify_read: NotifyRead::new(),
             store,
             metrics,
@@ -349,7 +368,7 @@ impl WritebackCache {
         version: SequenceNumber,
         object: ObjectEntry,
     ) {
-        tracing::trace!("inserting object entry {:?}: {:?}", object_id, version);
+        debug!("inserting object entry {:?}: {:?}", object_id, version);
         fail_point_async!("write_object_entry");
         self.dirty
             .objects
@@ -611,33 +630,48 @@ impl WritebackCache {
     async fn commit_transaction_outputs(
         &self,
         epoch: EpochId,
-        digest: TransactionDigest,
+        digests: &[TransactionDigest],
     ) -> SuiResult {
         fail_point_async!("writeback-cache-commit");
 
-        let DashMapEntry::Occupied(occupied) = self.dirty.pending_transaction_writes.entry(digest)
-        else {
-            panic!("Attempt to commit unknown transaction {:?}", digest);
-        };
-
-        let outputs = occupied.get().clone();
+        let mut all_outputs = Vec::with_capacity(digests.len());
+        for tx in digests {
+            let Some(outputs) = self
+                .dirty
+                .pending_transaction_writes
+                .get(tx)
+                .map(|o| o.clone())
+            else {
+                panic!("Attempt to commit unknown transaction {:?}", tx);
+            };
+            all_outputs.push(outputs);
+        }
 
         // Flush writes to disk before removing anything from dirty set. otherwise,
         // a cache eviction could cause a value to disappear briefly, even if we insert to the
         // cache before removing from the dirty set.
         self.store
-            .write_transaction_outputs(epoch, outputs.clone())
+            .write_transaction_outputs(epoch, &all_outputs)
             .await?;
 
-        // Cache transaction before removing entry from self.dirty to avoid
-        // unnecessary cache misses
-        self.cached
-            .transactions
-            .insert(digest, outputs.transaction.clone());
+        for (tx_digest, outputs) in digests.iter().zip(all_outputs.into_iter()) {
+            assert!(self
+                .dirty
+                .pending_transaction_writes
+                .remove(tx_digest)
+                .is_some());
+            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, &outputs);
+        }
 
-        // releases lock on pending_transaction_writes
-        occupied.remove();
+        Ok(())
+    }
 
+    fn flush_transactions_from_dirty_to_cached(
+        &self,
+        epoch: EpochId,
+        tx_digest: TransactionDigest,
+        outputs: &TransactionOutputs,
+    ) {
         // Now, remove each piece of committed data from the dirty state and insert it into the cache.
         // TODO: outputs should have a strong count of 1 so we should be able to move out of it
         let TransactionOutputs {
@@ -649,18 +683,22 @@ impl WritebackCache {
             wrapped,
             events,
             ..
-        } = &*outputs;
+        } = outputs;
 
-        let tx_digest = *transaction.digest();
         let effects_digest = effects.digest();
         let events_digest = events.digest();
 
+        // Update cache before removing from self.dirty to avoid
+        // unnecessary cache misses
+        self.cached
+            .transactions
+            .insert(tx_digest, transaction.clone());
         self.cached
             .transaction_effects
             .insert(effects_digest, effects.clone().into());
         self.cached
             .executed_effects_digests
-            .insert(digest, effects_digest);
+            .insert(tx_digest, effects_digest);
         self.cached
             .transaction_events
             .insert(events_digest, events.clone().into());
@@ -728,8 +766,33 @@ impl WritebackCache {
                 &ObjectEntry::Wrapped,
             );
         }
+    }
 
-        Ok(())
+    async fn persist_transactions(&self, digests: &[TransactionDigest]) -> SuiResult {
+        let mut txns = Vec::with_capacity(digests.len());
+        for tx_digest in digests {
+            let Some(tx) = self
+                .dirty
+                .pending_transaction_writes
+                .get(tx_digest)
+                .map(|o| o.transaction.clone())
+            else {
+                // tx should exist in the db if it is not in dirty set.
+                debug_assert!(self
+                    .store
+                    .get_transaction_block(tx_digest)
+                    .unwrap()
+                    .is_some());
+                // If the transaction is not in dirty, it does not need to be committed.
+                // This situation can happen if we build a checkpoint locally which was just executed
+                // via state sync.
+                continue;
+            };
+
+            txns.push((*tx_digest, (*tx).clone()));
+        }
+
+        self.store.commit_transactions(&txns)
     }
 
     // Move the oldest/least entry from the dirty queue to the cache queue.
@@ -807,6 +870,8 @@ impl WritebackCache {
             "should be empty due to revert_state_update"
         );
         self.dirty.clear();
+        info!("clearing old transaction locks");
+        self.object_locks.clear();
     }
 
     fn revert_state_update_impl(&self, tx: &TransactionDigest) -> SuiResult {
@@ -849,12 +914,19 @@ impl WritebackCache {
 impl ExecutionCacheAPI for WritebackCache {}
 
 impl ExecutionCacheCommit for WritebackCache {
-    fn commit_transaction_outputs(
-        &self,
+    fn commit_transaction_outputs<'a>(
+        &'a self,
         epoch: EpochId,
-        digest: &TransactionDigest,
-    ) -> BoxFuture<'_, SuiResult> {
-        WritebackCache::commit_transaction_outputs(self, epoch, *digest).boxed()
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult> {
+        WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
+    }
+
+    fn persist_transactions<'a>(
+        &'a self,
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult> {
+        WritebackCache::persist_transactions(self, digests).boxed()
     }
 }
 
@@ -880,6 +952,10 @@ impl ExecutionCacheRead for WritebackCache {
         if let Some(p) = ExecutionCacheRead::get_object(self, package_id)? {
             if p.is_package() {
                 let p = PackageObject::new(p);
+                tracing::trace!(
+                    "caching package: {:?}",
+                    p.object().compute_object_reference()
+                );
                 self.packages.insert(*package_id, p.clone());
                 Ok(Some(p))
             } else {
@@ -1215,32 +1291,96 @@ impl ExecutionCacheRead for WritebackCache {
         }
     }
 
-    fn get_lock(
-        &self,
-        _obj_ref: ObjectRef,
-        _epoch_store: &AuthorityPerEpochStore,
-    ) -> SuiLockResult {
-        todo!()
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
+        let cur_epoch = epoch_store.epoch();
+        match self.get_object_by_id_cache_only(&obj_ref.0) {
+            CacheResult::Hit((_, obj)) => {
+                let actual_objref = obj.compute_object_reference();
+                if obj_ref != actual_objref {
+                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
+                        locked_ref: actual_objref,
+                    })
+                } else {
+                    // requested object ref is live, check if there is a lock
+                    Ok(
+                        match self
+                            .object_locks
+                            .get_transaction_lock(&obj_ref, epoch_store)?
+                        {
+                            Some(tx_digest) => ObjectLockStatus::LockedToTx {
+                                locked_by_tx: LockDetailsDeprecated {
+                                    epoch: cur_epoch,
+                                    tx_digest,
+                                },
+                            },
+                            None => ObjectLockStatus::Initialized,
+                        },
+                    )
+                }
+            }
+            CacheResult::NegativeHit => {
+                Err(SuiError::from(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    // even though we know the requested version, we leave it as None to indicate
+                    // that the object does not exist at any version
+                    version: None,
+                }))
+            }
+            CacheResult::Miss => self.store.get_lock(obj_ref, epoch_store),
+        }
     }
 
-    fn _get_latest_lock_for_object_id(&self, _object_id: ObjectID) -> SuiResult<ObjectRef> {
-        todo!()
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+        let obj = ExecutionCacheRead::get_object(self, &object_id)?.ok_or(
+            UserInputError::ObjectNotFound {
+                object_id,
+                version: None,
+            },
+        )?;
+        Ok(obj.compute_object_reference())
     }
 
-    fn check_owned_object_locks_exist(&self, _owned_object_refs: &[ObjectRef]) -> SuiResult {
-        todo!()
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        do_fallback_lookup(
+            owned_object_refs,
+            |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
+                CacheResult::Hit((version, obj)) => {
+                    if obj.compute_object_reference() != *obj_ref {
+                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: version,
+                        }
+                        .into())
+                    } else {
+                        Ok(CacheResult::Hit(()))
+                    }
+                }
+                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: None,
+                }
+                .into()),
+                CacheResult::Miss => Ok(CacheResult::Miss),
+            },
+            |remaining| {
+                self.store.check_owned_objects_are_live(remaining)?;
+                Ok(vec![(); remaining.len()])
+            },
+        )?;
+        Ok(())
     }
 }
 
 impl ExecutionCacheWrite for WritebackCache {
-    #[instrument(level = "trace", skip_all)]
     fn acquire_transaction_locks<'a>(
         &'a self,
-        _epoch_store: &AuthorityPerEpochStore,
-        _owned_input_objects: &'a [ObjectRef],
-        _tx_digest: VerifiedSignedTransaction,
+        epoch_store: &'a AuthorityPerEpochStore,
+        owned_input_objects: &'a [ObjectRef],
+        transaction: VerifiedSignedTransaction,
     ) -> BoxFuture<'a, SuiResult> {
-        todo!()
+        self.object_locks
+            .acquire_transaction_locks(self, epoch_store, owned_input_objects, transaction)
+            .boxed()
     }
 
     fn write_transaction_outputs(
@@ -1379,6 +1519,50 @@ impl AccumulatorStore for WritebackCache {
         // The only time it is safe to iterate the live object set is at an epoch boundary,
         // at which point the db is consistent and the dirty cache is empty. So this does
         // read the cache
+        assert!(
+            self.dirty.is_empty(),
+            "cannot iterate live object set with dirty data"
+        );
         self.store.iter_live_object_set(include_wrapped_tombstone)
+    }
+
+    // A version of iter_live_object_set that reads the cache. Only use for testing. If used
+    // on a live validator, can cause the server to block for as long as it takes to iterate
+    // the entire live object set.
+    fn iter_cached_live_object_set_for_testing(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Box<dyn Iterator<Item = LiveObject> + '_> {
+        // hold iter until we are finished to prevent any concurrent inserts/deletes
+        let iter = self.dirty.objects.iter();
+        let mut dirty_objects = BTreeMap::new();
+
+        // add everything from the store
+        for obj in self.store.iter_live_object_set(include_wrapped_tombstone) {
+            dirty_objects.insert(obj.object_id(), obj);
+        }
+
+        // add everything from the cache, but also remove deletions
+        for entry in iter {
+            let id = *entry.key();
+            let value = entry.value();
+            match value.get_highest().unwrap() {
+                (_, ObjectEntry::Object(object)) => {
+                    dirty_objects.insert(id, LiveObject::Normal(object.clone()));
+                }
+                (version, ObjectEntry::Wrapped) => {
+                    if include_wrapped_tombstone {
+                        dirty_objects.insert(id, LiveObject::Wrapped(ObjectKey(id, *version)));
+                    } else {
+                        dirty_objects.remove(&id);
+                    }
+                }
+                (_, ObjectEntry::Deleted) => {
+                    dirty_objects.remove(&id);
+                }
+            }
+        }
+
+        Box::new(dirty_objects.into_values())
     }
 }

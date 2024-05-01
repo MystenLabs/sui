@@ -489,6 +489,8 @@ pub struct AuthorityEpochTables {
     pub(crate) randomness_rounds_pending: DBMap<RandomnessRound, ()>,
     /// Holds the value of the next RandomnessRound to be generated.
     pub(crate) randomness_next_round: DBMap<u64, RandomnessRound>,
+    /// Holds the value of the highest completed RandomnessRound (as reported to RandomnessReporter).
+    pub(crate) randomness_highest_completed_round: DBMap<u64, RandomnessRound>,
 }
 
 // TODO: move deferral related data structures to authority_per_epoch_store_util.rs
@@ -787,14 +789,12 @@ impl AuthorityEpochTables {
     pub fn write_transaction_locks(
         &self,
         transaction: VerifiedSignedTransaction,
-        locks_to_write: impl IntoIterator<Item = (ObjectRef, LockDetails)>,
+        locks_to_write: impl Iterator<Item = (ObjectRef, LockDetails)>,
     ) -> SuiResult {
         let mut batch = self.owned_object_locked_transactions.batch();
         batch.insert_batch(
             &self.owned_object_locked_transactions,
-            locks_to_write
-                .into_iter()
-                .map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
+            locks_to_write.map(|(obj_ref, lock)| (obj_ref, LockDetailsWrapper::from(lock))),
         )?;
         batch.insert_batch(
             &self.signed_transactions,
@@ -959,13 +959,16 @@ impl AuthorityPerEpochStore {
     pub fn tables(&self) -> SuiResult<Arc<AuthorityEpochTables>> {
         match self.tables.load_full() {
             Some(tables) => Ok(tables),
-            None => Err(SuiError::EpochEnded),
+            None => Err(SuiError::EpochEnded(self.epoch())),
         }
     }
 
+    // Ideally the epoch tables handle should have the same lifetime as the outer AuthorityPerEpochStore,
+    // and this function should be unnecesary. But unfortunately, Arc<AuthorityPerEpochStore> outlives the
+    // epoch significantly right now, so we need to manually release the tables to release its memory usage.
     pub fn release_db_handles(&self) {
-        // When force releasing DB handle is no longer needed, it will still be useful
-        // to make sure AuthorityPerEpochStore is not used after the next epoch starts.
+        // When the logic to release DB handles becomes obsolete, it may still be useful
+        // to make sure AuthorityEpochTables is not used after the next epoch starts.
         self.tables.store(None);
     }
 
@@ -1373,10 +1376,19 @@ impl AuthorityPerEpochStore {
             .collect())
     }
 
-    /// Deletes one pending certificate.
+    /// Deletes many pending certificates.
     #[instrument(level = "trace", skip_all)]
-    pub fn remove_pending_execution(&self, digest: &TransactionDigest) -> SuiResult<()> {
-        self.tables()?.pending_execution.remove(digest)?;
+    pub fn multi_remove_pending_execution(&self, digests: &[TransactionDigest]) -> SuiResult<()> {
+        let tables = match self.tables() {
+            Ok(tables) => tables,
+            // After Epoch ends, it is no longer necessary to remove pending transactions
+            // because the table will not be used anymore and be deleted eventually.
+            Err(SuiError::EpochEnded(_)) => return Ok(()),
+            Err(e) => return Err(e),
+        };
+        let mut batch = tables.pending_execution.batch();
+        batch.delete_batch(&tables.pending_execution, digests)?;
+        batch.write()?;
         Ok(())
     }
 
@@ -1467,8 +1479,7 @@ impl AuthorityPerEpochStore {
 
     pub fn object_lock_split_tables_enabled(&self) -> bool {
         self.epoch_start_configuration
-            .flags()
-            .contains(&EpochFlag::ObjectLockSplitTables)
+            .object_lock_split_tables_enabled()
     }
 
     // For each id in objects_to_init, return the next version for that id as recorded in the
@@ -2471,7 +2482,7 @@ impl AuthorityPerEpochStore {
         }
         let mut batch = self
             .db_batch()
-            .expect("Consensus should not be processed past end of epoch");
+            .expect("Failed to create DBBatch for processing consensus transactions");
 
         // Load transactions deferred from previous commits.
         let deferred_txs: Vec<(DeferralKey, Vec<VerifiedSequencedConsensusTransaction>)> = self

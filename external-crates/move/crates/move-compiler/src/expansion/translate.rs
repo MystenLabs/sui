@@ -25,7 +25,12 @@ use crate::{
         FunctionName, ModuleName, NameAccess, Var, VariantName, ENTRY_MODIFIER, MACRO_MODIFIER,
         NATIVE_MODIFIER,
     },
-    shared::{known_attributes::AttributePosition, unique_map::UniqueMap, *},
+    shared::{
+        known_attributes::AttributePosition,
+        string_utils::{is_pascal_case, is_upper_snake_case},
+        unique_map::UniqueMap,
+        *,
+    },
     FullyCompiledProgram,
 };
 use move_command_line_common::parser::{parse_u16, parse_u256, parse_u32};
@@ -2632,13 +2637,15 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 EE::UnresolvedError
             }
         },
-        pdotted_ @ PE::Dot(_, _) => match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
-            Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
-            None => {
-                assert!(context.env().has_errors());
-                EE::UnresolvedError
+        pdotted_ @ (PE::Dot(_, _) | PE::DotUnresolved(_, _)) => {
+            match exp_dotted(context, Box::new(sp(loc, pdotted_))) {
+                Some(edotted) => EE::ExpDotted(E::DottedUsage::Use, edotted),
+                None => {
+                    assert!(context.env().has_errors());
+                    EE::UnresolvedError
+                }
             }
-        },
+        }
 
         pdotted_ @ PE::Index(_, _) => {
             let cur_pkg = context.current_package();
@@ -2738,6 +2745,7 @@ fn exp_cast(context: &mut Context, in_parens: bool, plhs: Box<P::Exp>, pty: P::T
 
             PE::DotCall(lhs, _, _, _, _)
             | PE::Dot(lhs, _)
+            | PE::DotUnresolved(_, lhs)
             | PE::Index(lhs, _)
             | PE::Borrow(_, lhs)
             | PE::Dereference(lhs) => ambiguous_cast(lhs),
@@ -2854,7 +2862,9 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
                 return None;
             }
         }
-        E::ExpDotted_::Dot(_, _) | E::ExpDotted_::Index(_, _) => {
+        E::ExpDotted_::Dot(_, _)
+        | E::ExpDotted_::DotUnresolved(_, _)
+        | E::ExpDotted_::Index(_, _) => {
             let current_package = context.current_package();
             context
                 .env()
@@ -2891,6 +2901,10 @@ fn exp_dotted(context: &mut Context, pdotted: Box<P::Exp>) -> Option<Box<E::ExpD
                 .map(|arg| *exp(context, Box::new(arg)))
                 .collect::<Vec<_>>();
             EE::Index(lhs, sp(argloc, args))
+        }
+        PE::DotUnresolved(loc, plhs) => {
+            let lhs = exp_dotted(context, plhs)?;
+            EE::DotUnresolved(loc, lhs)
         }
         pe_ => EE::Exp(exp(context, Box::new(sp(loc, pe_)))),
     };
@@ -2942,7 +2956,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
         identifier_okay: bool,
     ) -> Option<E::ModuleAccess> {
         match &name.value {
-            EM::Variant(_, _) => Some(name),
+            EM::Variant(_, _) | EM::ModuleAccess(_, _) => Some(name),
             EM::Name(_) if identifier_okay => Some(name),
             EM::Name(_) => {
                 context.env().add_diag(diag!(
@@ -2950,18 +2964,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     (
                         name.loc,
                         "Unexpected name access. \
-                        Expected an '<enum>::<variant>' form."
-                    )
-                ));
-                None
-            }
-            EM::ModuleAccess(_mident, name) => {
-                context.env().add_diag(diag!(
-                    Syntax::UnexpectedToken,
-                    (
-                        name.loc,
-                        "Unexpected module member access. \
-                        Expected an identifier or enum variant."
+                        Expected a valid 'enum' variant, 'struct', or 'const'."
                     )
                 ));
                 None
@@ -2978,7 +2981,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             access,
             ptys_opt,
             is_macro,
-        } = context.name_access_chain_to_module_access(Access::Variant, name_chain)?;
+        } = context.name_access_chain_to_module_access(Access::Pattern, name_chain)?;
         let name = head_ctor_okay(context, access, identifier_okay)?;
         if let Some(loc) = is_macro {
             context.env().add_diag(diag!(
@@ -3005,7 +3008,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             };
             let tys = optional_sp_types(context, pts_opt);
             match head_ctor_name {
-                sp!(_, EM::Variant(_, _)) => {
+                sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
                     let ploc = pats.loc;
                     let mut out_pats = vec![];
                     let mut ellipsis_locs = vec![];
@@ -3040,7 +3043,7 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
             };
             let tys = optional_sp_types(context, pts_opt);
             match head_ctor_name {
-                head_ctor_name @ sp!(_, EM::Variant(_, _)) => {
+                head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
                     let mut ellipsis_locs = vec![];
                     let mut stripped_fields = vec![];
                     for field in fields.value.into_iter() {
@@ -3080,9 +3083,14 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                             with 'a'..'z' or '_'",
                             name_value,
                         );
-                        context
-                            .env()
-                            .add_diag(diag!(Declarations::InvalidName, (name.loc, msg)));
+                        let mut diag = diag!(Declarations::InvalidName, (name.loc, msg));
+                        if is_pascal_case(&name_value) || is_upper_snake_case(&name_value) {
+                            diag.add_note(
+                                "The compiler may have failed to \
+                                resolve this constant's name",
+                            );
+                        }
+                        context.env().add_diag(diag);
                         error_pattern!()
                     } else {
                         if let Some(_tys) = pts_opt {
@@ -3094,10 +3102,11 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                         sp(loc, EP::Binder(mutability(context, loc, mut_), Var(name)))
                     }
                 }
-                head_ctor_name @ sp!(_, EM::Variant(_, _)) => {
+                head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
                     if let Some(mloc) = mut_ {
                         let msg = "'mut' can only be used with variable bindings in patterns";
-                        let nmsg = "This refers to a variant, not a variable binding";
+                        let nmsg =
+                            "Expected a valid 'enum' variant, 'struct', or 'const', not a variable";
                         context.env().add_diag(diag!(
                             Declarations::InvalidName,
                             (mloc, msg),
@@ -3107,14 +3116,13 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
                     } else {
                         sp(
                             loc,
-                            EP::HeadConstructor(
+                            EP::ModuleAccessName(
                                 head_ctor_name,
                                 optional_sp_types(context, pts_opt),
                             ),
                         )
                     }
                 }
-                _ => error_pattern!(),
             }
         }
         PP::Literal(v) => {

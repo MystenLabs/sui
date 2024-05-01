@@ -4,10 +4,7 @@
 
 #![forbid(unsafe_code)]
 use crate::interfaces::LeftScreen;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CodeOffset, CompiledModule, FunctionDefinitionIndex},
-};
+use move_binary_format::file_format::{CodeOffset, CompiledModule, FunctionDefinitionIndex};
 use move_bytecode_source_map::{mapping::SourceMapping, source_map::SourceMap};
 use move_disassembler::disassembler::{Disassembler, DisassemblerOptions};
 use regex::Regex;
@@ -23,7 +20,7 @@ pub struct BytecodeInfo {
 #[derive(Clone, Debug)]
 pub struct BytecodeViewer<'a> {
     pub lines: Vec<String>,
-    pub view: &'a CompiledModule,
+    pub module: &'a CompiledModule,
     pub line_map: HashMap<usize, BytecodeInfo>,
 }
 
@@ -42,7 +39,7 @@ impl<'a> BytecodeViewer<'a> {
         let mut base_viewer = Self {
             lines: disassembled_string.lines().map(|x| x.to_string()).collect(),
             line_map: HashMap::new(),
-            view: module,
+            module,
         };
         base_viewer.build_mapping();
         base_viewer
@@ -56,14 +53,14 @@ impl<'a> BytecodeViewer<'a> {
         let mut line_map = HashMap::new();
 
         let function_def_for_name: HashMap<String, u16> = self
-            .view
+            .module
             .function_defs()
             .iter()
             .enumerate()
             .map(|(index, fdef)| {
                 (
-                    self.view
-                        .identifier_at(self.view.function_handle_at(fdef.function).name)
+                    self.module
+                        .identifier_at(self.module.function_handle_at(fdef.function).name)
                         .to_string(),
                     index as u16,
                 )

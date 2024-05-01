@@ -90,7 +90,7 @@ fn struct_def(context: &mut Context, sname: DatatypeName, sdef: &N::StructDefini
     context.current_datatype = Some(sname);
     match &sdef.fields {
         N::StructFields::Native(_) => (),
-        N::StructFields::Defined(fields) => {
+        N::StructFields::Defined(_, fields) => {
             fields.iter().for_each(|(_, _, (_, ty))| type_(context, ty))
         }
     };

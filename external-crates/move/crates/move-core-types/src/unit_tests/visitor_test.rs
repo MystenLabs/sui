@@ -353,7 +353,7 @@ fn nested_typed_struct_visit() {
 
     let mut struct_visitor = PrintVisitor::default();
     let from_struct =
-        MoveStruct::visit_deserialize(&bytes, &struct_layout, &mut struct_visitor).unwrap();
+        MoveStruct::visit_deserialize(&bytes, struct_layout, &mut struct_visitor).unwrap();
 
     let expected_output = r#"
 [0] struct 0x0::foo::Bar {

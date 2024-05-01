@@ -227,7 +227,7 @@ impl<'a> Context<'a> {
         sname: P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
         let sdef = self.program_info.struct_definition(&mident, &sname);
-        let N::StructFields::Defined(sfields) = &sdef.fields else {
+        let N::StructFields::Defined(_, sfields) = &sdef.fields else {
             return None;
         };
         sfields.iter().find_map(|(_, fname, (_, ftype))| {

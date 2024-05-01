@@ -25,9 +25,10 @@ use futures::Stream;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
+    commit::TrustedCommit,
     context::Context,
     error::ConsensusResult,
-    Round,
+    CommitIndex, Round,
 };
 
 // Anemo generated stubs for RPCs.
@@ -43,6 +44,8 @@ pub(crate) mod anemo_network;
 pub(crate) mod connection_monitor;
 pub(crate) mod epoch_filter;
 pub(crate) mod metrics;
+#[cfg(test)]
+pub(crate) mod test_network;
 pub(crate) mod tonic_network;
 
 /// A stream of serialized blocks returned over the network.
@@ -74,14 +77,29 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
         timeout: Duration,
     ) -> ConsensusResult<BlockStream>;
 
-    /// Fetches serialized `SignedBlock`s from a peer.
     // TODO: add a parameter for maximum total size of blocks returned.
+    /// Fetches serialized `SignedBlock`s from a peer. It also might return additional ancestor blocks
+    /// of the requested blocks according to the provided `highest_accepted_rounds`. The `highest_accepted_rounds`
+    /// length should be equal to the committee size. If `highest_accepted_rounds` is empty then it will
+    /// be simply ignored.
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
+
+    /// Fetches serialized commits from a peer, with index in [start, end].
+    /// Returns a tuple of both the serialized commits, and serialized blocks that contain
+    /// votes certifiying the last commit.
+    async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
 
 /// Network service for handling requests from peers.
@@ -89,17 +107,36 @@ pub(crate) trait NetworkClient: Send + Sync + 'static {
 /// of `anemo_gen::ConsensusRpc`, which itself is annotated with `async_trait`.
 #[async_trait]
 pub(crate) trait NetworkService: Send + Sync + 'static {
+    /// Handles the block sent from the peer via either unicast RPC or subscription stream.
+    /// Peer value can be trusted to be a valid authority index.
+    /// But serialized_block must be verified before its contents are trusted.
     async fn handle_send_block(&self, peer: AuthorityIndex, block: Bytes) -> ConsensusResult<()>;
+
+    /// Handles the subscription request from the peer.
+    /// A stream of newly proposed blocks is returned to the peer.
+    /// The stream continues until the end of epoch, peer unsubscribes, or a network error / crash
+    /// occurs.
     async fn handle_subscribe_blocks(
         &self,
         peer: AuthorityIndex,
         last_received: Round,
     ) -> ConsensusResult<BlockStream>;
+
+    /// Handles the request to fetch blocks by references from the peer.
     async fn handle_fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
     ) -> ConsensusResult<Vec<Bytes>>;
+
+    // Handles the request to fetch commits by index range from the peer.
+    async fn handle_fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+    ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

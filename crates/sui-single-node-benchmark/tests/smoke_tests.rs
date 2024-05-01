@@ -21,6 +21,9 @@ async fn benchmark_non_move_transactions_smoke_test() {
                         num_dynamic_fields: 0,
                         computation: 0,
                         num_shared_objects: 0,
+                        num_mints: 0,
+                        nft_size: 528,
+                        use_batch_mint: false,
                     },
                 ),
                 component,
@@ -46,6 +49,37 @@ async fn benchmark_move_transactions_smoke_test() {
                         num_dynamic_fields: 1,
                         computation: 1,
                         num_shared_objects: 2,
+                        num_mints: 2,
+                        nft_size: 528,
+                        use_batch_mint: false,
+                    },
+                ),
+                component,
+                1000,
+                false,
+                skip_signing,
+            )
+            .await;
+        }
+    }
+}
+
+#[sim_test]
+async fn benchmark_batch_mint_smoke_test() {
+    for skip_signing in [true, false] {
+        for component in Component::iter() {
+            run_benchmark(
+                Workload::new(
+                    10,
+                    WorkloadKind::PTB {
+                        num_transfers: 0,
+                        use_native_transfer: false,
+                        num_dynamic_fields: 0,
+                        computation: 0,
+                        num_shared_objects: 0,
+                        num_mints: 10,
+                        nft_size: 256,
+                        use_batch_mint: true,
                     },
                 ),
                 component,

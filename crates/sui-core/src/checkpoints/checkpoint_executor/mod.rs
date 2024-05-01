@@ -70,7 +70,49 @@ type CheckpointExecutionBuffer =
 /// The interval to log checkpoint progress, in # of checkpoints processed.
 const CHECKPOINT_PROGRESS_LOG_COUNT_INTERVAL: u64 = 5000;
 
-const SCHEDULING_EVENT_FUTURE_TIMEOUT_MS: u64 = 2000;
+#[derive(Debug, Clone, Copy)]
+pub struct CheckpointTimeoutConfig {
+    pub timeout: Duration,
+    pub panic_on_timeout: bool,
+}
+
+// We use a thread local so that the config can be overridden on a per-test basis. This means
+// that get_scheduling_timeout() can be called multiple times in a multithreaded context, but
+// the function is still very cheap to call so this is okay.
+thread_local! {
+    static SCHEDULING_TIMEOUT: once_cell::sync::OnceCell<CheckpointTimeoutConfig> =
+        once_cell::sync::OnceCell::new();
+}
+
+#[cfg(msim)]
+pub fn init_checkpoint_timeout_config(config: CheckpointTimeoutConfig) {
+    SCHEDULING_TIMEOUT.with(|s| {
+        s.set(config).expect("SchedulingTimeoutConfig already set");
+    });
+}
+
+fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
+    fn inner() -> CheckpointTimeoutConfig {
+        let panic_on_timeout = cfg!(msim)
+            || std::env::var("PANIC_ON_NEW_CHECKPOINT_TIMEOUT")
+                .map_or(false, |s| s == "true" || s == "1");
+
+        // if we are panicking on timeout default to a longer timeout than if we are simply logging.
+        let timeout = Duration::from_millis(
+            std::env::var("NEW_CHECKPOINT_TIMEOUT_MS")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(if panic_on_timeout { 20000 } else { 2000 }),
+        );
+
+        CheckpointTimeoutConfig {
+            timeout,
+            panic_on_timeout,
+        }
+    }
+
+    SCHEDULING_TIMEOUT.with(|s| *s.get_or_init(inner))
+}
 
 #[derive(PartialEq, Eq, Debug)]
 pub enum StopReason {
@@ -192,7 +234,8 @@ impl CheckpointExecutor {
             .as_ref()
             .map(|c| c.network_total_transactions)
             .unwrap_or(0);
-        let scheduling_timeout = Duration::from_millis(SCHEDULING_EVENT_FUTURE_TIMEOUT_MS);
+        let scheduling_timeout_config = get_scheduling_timeout();
+        let scheduling_timeout = scheduling_timeout_config.timeout;
 
         loop {
             // If we have executed the last checkpoint of the current epoch, stop.
@@ -215,6 +258,7 @@ impl CheckpointExecutor {
                     "Pending checkpoint execution buffer should be empty after processing last checkpoint of epoch",
                 );
                 fail_point_async!("crash");
+                debug!(epoch = epoch_store.epoch(), "finished epoch");
                 return StopReason::EpochComplete;
             }
 
@@ -264,6 +308,9 @@ impl CheckpointExecutor {
                         warn!(
                             "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
                         );
+                        if scheduling_timeout_config.panic_on_timeout {
+                            panic!("No new synced checkpoints received for {scheduling_timeout:?}");
+                        }
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },
                     Ok(Ok(checkpoint)) => {
@@ -355,12 +402,19 @@ impl CheckpointExecutor {
         // Commit all transaction effects to disk
         let cache_commit = self.state.get_cache_commit();
         debug!(seq = ?checkpoint.sequence_number, "committing checkpoint transactions to disk");
-        for digest in all_tx_digests {
-            cache_commit
-                .commit_transaction_outputs(epoch_store.epoch(), digest)
-                .await
-                .expect("commit_transaction_outputs cannot fail");
-        }
+        cache_commit
+            .commit_transaction_outputs(epoch_store.epoch(), all_tx_digests)
+            .await
+            .expect("commit_transaction_outputs cannot fail");
+
+        // pending_execution stores transactions received from consensus which may not have
+        // been executed yet. At this point, they have been committed to the db durably and
+        // can be removed.
+        // After end-to-end quarantining, we will not need pending_execution since the consensus
+        // log itself will be used for recovery.
+        epoch_store
+            .multi_remove_pending_execution(all_tx_digests)
+            .expect("cannot fail");
 
         if !checkpoint.is_last_checkpoint_of_epoch() {
             self.bump_highest_executed_checkpoint(checkpoint);
@@ -562,7 +616,7 @@ impl CheckpointExecutor {
 
                     let cache_commit = self.state.get_cache_commit();
                     cache_commit
-                        .commit_transaction_outputs(cur_epoch, &change_epoch_tx_digest)
+                        .commit_transaction_outputs(cur_epoch, &[change_epoch_tx_digest])
                         .await
                         .expect("commit_transaction_outputs cannot fail");
 
@@ -1179,7 +1233,7 @@ async fn execute_transactions(
     Ok(())
 }
 
-#[instrument(level = "debug", skip_all)]
+#[instrument(level = "info", skip_all, fields(seq = ?checkpoint.sequence_number(), epoch = ?epoch_store.epoch()))]
 async fn finalize_checkpoint(
     state: &AuthorityState,
     cache_reader: &dyn ExecutionCacheRead,
@@ -1191,6 +1245,7 @@ async fn finalize_checkpoint(
     effects: Vec<TransactionEffects>,
     data_ingestion_dir: Option<PathBuf>,
 ) -> SuiResult {
+    debug!("finalizing checkpoint");
     if epoch_store.per_epoch_finalized_txns_enabled() {
         epoch_store.insert_finalized_transactions(tx_digests, checkpoint.sequence_number)?;
     }

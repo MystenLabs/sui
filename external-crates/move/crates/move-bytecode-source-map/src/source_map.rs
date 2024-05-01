@@ -4,7 +4,6 @@
 
 use anyhow::{format_err, Result};
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         AbilitySet, CodeOffset, CodeUnit, ConstantPoolIndex, FunctionDefinitionIndex, LocalIndex,
         MemberCount, ModuleHandleIndex, SignatureIndex, StructDefinition, StructDefinitionIndex,

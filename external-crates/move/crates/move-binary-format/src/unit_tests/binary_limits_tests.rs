@@ -23,7 +23,7 @@ fn deserialize(
     let mut bytes = vec![];
     module.serialize(&mut bytes).unwrap();
     // deserialize the module just serialized (round trip)
-    CompiledModule::deserialize_with_config(&bytes, &binary_config)
+    CompiledModule::deserialize_with_config(&bytes, binary_config)
 }
 
 //

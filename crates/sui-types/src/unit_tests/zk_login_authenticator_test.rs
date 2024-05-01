@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 use crate::crypto::{PublicKey, SignatureScheme, ZkLoginPublicIdentifier};
 
-use crate::signature::{AuthenticatorTrait, VerifyParams};
+use crate::signature::VerifyParams;
 use crate::utils::{get_zklogin_user_address, make_zklogin_tx, sign_zklogin_personal_msg};
 use crate::utils::{load_test_vectors, SHORT_ADDRESS_SEED};
 use crate::{
@@ -99,8 +99,7 @@ fn zklogin_sign_personal_message() {
 
     // Construct the required info to verify a zk login authenticator, jwks, supported providers list and env (prod/test).
     let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, Some(30));
-    let res =
-        authenticator.verify_authenticator(&intent_msg, user_address, Some(0), &aux_verify_data);
+    let res = authenticator.verify_authenticator(&intent_msg, user_address, 0, &aux_verify_data);
     // Verify passes.
     assert!(res.is_ok());
 }

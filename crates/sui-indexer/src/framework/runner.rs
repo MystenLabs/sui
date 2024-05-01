@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use tokio_util::sync::CancellationToken;
+
 use crate::metrics::IndexerMetrics;
 
 use super::fetcher::CheckpointDownloadData;
@@ -12,8 +14,12 @@ use super::interface::Handler;
 const CHECKPOINT_PROCESSING_BATCH_DATA_LIMIT: usize = 20000000;
 const CHECKPOINT_PROCESSING_BATCH_SIZE: usize = 100;
 
-pub async fn run<S>(stream: S, mut handlers: Vec<Box<dyn Handler>>, metrics: IndexerMetrics)
-where
+pub async fn run<S>(
+    stream: S,
+    mut handlers: Vec<Box<dyn Handler>>,
+    metrics: IndexerMetrics,
+    cancel: CancellationToken,
+) where
     S: futures::Stream<Item = CheckpointDownloadData> + std::marker::Unpin,
 {
     use futures::StreamExt;
@@ -27,7 +33,13 @@ where
         .unwrap();
     tracing::info!("Indexer runner is starting with {batch_size}");
     let mut chunks: futures::stream::ReadyChunks<S> = stream.ready_chunks(batch_size);
-    while let Some(checkpoints) = chunks.next().await {
+    while let Some(checkpoints) = tokio::select! {
+       _ = cancel.cancelled() => {
+        tracing::info!("Indexer runner is cancelled");
+        return
+       }
+       chunk = chunks.next() => chunk,
+    } {
         //TODO create tracing spans for processing
         let mut cp_batch = vec![];
         let mut cp_batch_total_size = 0;

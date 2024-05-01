@@ -14,7 +14,7 @@ from typing import NamedTuple
 RE_NUM = re.compile("[0-9_]+")
 
 RE_PR = re.compile(
-    "^.*\(#(\d+)\)$",
+    r"^.*\(#(\d+)\)$",
     re.MULTILINE,
 )
 

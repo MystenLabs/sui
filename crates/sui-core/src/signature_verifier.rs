@@ -17,13 +17,14 @@ use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
+use sui_types::signature_verification::verify_sender_signed_data_message_signatures;
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     digests::CertificateDigest,
     error::{SuiError, SuiResult},
-    message_envelope::{AuthenticatedMessage, Message},
+    message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
@@ -360,10 +361,6 @@ impl SignatureVerifier {
         self.signed_data_cache.is_verified(
             signed_tx.full_message_digest(),
             || {
-                signed_tx.verify_max_epoch_for_all_sigs(
-                    self.committee.epoch(),
-                    self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
-                )?;
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(
                     jwks,
@@ -373,7 +370,11 @@ impl SignatureVerifier {
                     self.zk_login_params.accept_zklogin_in_multisig,
                     self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 );
-                signed_tx.verify_message_signature(&verify_params)
+                verify_sender_signed_data_message_signatures(
+                    signed_tx,
+                    self.committee.epoch(),
+                    &verify_params,
+                )
             },
             || Ok(()),
         )

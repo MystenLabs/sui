@@ -6,7 +6,6 @@
 //! - a constant's type only refers to primitive types
 //! - a constant's data serializes correctly for that type
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{CompiledModule, Constant, SignatureToken, TableIndex},
     IndexKind,

@@ -14,7 +14,6 @@
 use std::collections::{BTreeSet, HashMap};
 
 use move_binary_format::{
-    access::ModuleAccess,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         Bytecode, CodeOffset, CompiledModule, FunctionDefinition, FunctionDefinitionIndex,

@@ -31,6 +31,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            dry_run_set: false,
             gas_budget: Spanned {
                 span: Span {
                     start: 18,
@@ -68,6 +69,7 @@ expression: parsed
             serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
+            dry_run_set: false,
             gas_budget: Spanned {
                 span: Span {
                     start: 18,

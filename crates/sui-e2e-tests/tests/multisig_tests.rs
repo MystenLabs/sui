@@ -3,6 +3,7 @@
 
 use fastcrypto::traits::EncodeDecodeBase64;
 use shared_crypto::intent::{Intent, IntentMessage};
+use std::net::SocketAddr;
 use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
@@ -35,7 +36,7 @@ async fn do_upgraded_multisig_test() -> SuiResult {
         .next()
         .unwrap()
         .authority_client()
-        .handle_transaction(tx)
+        .handle_transaction(tx, Some(SocketAddr::new([127, 0, 0, 1].into(), 0)))
         .await
         .map(|_| ())
 }
@@ -344,6 +345,11 @@ async fn test_multisig_with_zklogin_scenerios() {
         0b1000,
         multisig_pk.clone(),
     ));
+    let sender = SuiAddress::try_from(&multisig).unwrap();
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+
     let tx_7 = Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]);
     let res = context.execute_transaction_may_fail(tx_7).await;
     assert!(res

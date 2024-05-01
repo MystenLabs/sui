@@ -349,18 +349,21 @@ impl AuthorityStorePruner {
     ) -> anyhow::Result<()> {
         let pruned_checkpoint_number =
             checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
+        let last_executed_checkpoint = checkpoint_store
+            .get_highest_executed_checkpoint()?
+            .map(|c| *c.sequence_number())
+            .unwrap_or_default();
         let latest_archived_checkpoint = archive_readers
             .get_archive_watermark()
             .await?
             .unwrap_or(u64::MAX);
-        let mut max_eligible_checkpoint = if config.num_epochs_to_retain != u64::MAX {
-            min(
+        let mut max_eligible_checkpoint = min(latest_archived_checkpoint, last_executed_checkpoint);
+        if config.num_epochs_to_retain != u64::MAX {
+            max_eligible_checkpoint = min(
+                max_eligible_checkpoint,
                 perpetual_db.get_highest_pruned_checkpoint()?,
-                latest_archived_checkpoint,
-            )
-        } else {
-            latest_archived_checkpoint
-        };
+            );
+        }
         if config.smooth {
             max_eligible_checkpoint = Self::smoothed_max_eligible_checkpoint_number(
                 pruned_checkpoint_number,

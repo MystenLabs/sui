@@ -1,6 +1,6 @@
-error[E03006]: unexpected name in this position
+error[E03003]: unbound module member
    ┌─ tests/development/enums/matching/invalid_head_ctor_3.move:16:13
    │
 16 │             l::a(_) => (),
-   │             ^^^^ Unexpected module member identifier. A module member identifier is not a valid variant
+   │             ^^^^ Invalid module access. Expected a type, but found function 'a' in module '0x42::l'
 

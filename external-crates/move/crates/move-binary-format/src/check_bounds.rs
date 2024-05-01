@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    access::ModuleAccess,
     errors::{
         bounds_error, offset_out_of_bounds as offset_out_of_bounds_error, verification_error,
         PartialVMError, PartialVMResult,
@@ -136,8 +135,7 @@ impl<'a> BoundsChecker<'a> {
     }
 
     fn check_function_defs(&mut self) -> PartialVMResult<()> {
-        let view = self.module;
-        for (function_def_idx, function_def) in view.function_defs().iter().enumerate() {
+        for (function_def_idx, function_def) in self.module.function_defs().iter().enumerate() {
             self.check_function_def(function_def_idx, function_def)?
         }
         Ok(())

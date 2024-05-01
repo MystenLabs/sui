@@ -277,7 +277,7 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
 //**************************************************************************************************
 
 fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
     }
 }
@@ -477,6 +477,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
+        E::InvalidAccess(e) => exp(context, e),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
@@ -493,7 +494,10 @@ fn exp(context: &mut Context, e: &T::Exp) {
 fn pat(context: &mut Context, p: &T::MatchPattern) {
     use T::UnannotatedPat_ as P;
     match &p.pat.value {
-        P::Constructor(m, _, _, tys, fields) | P::BorrowConstructor(_, m, _, _, tys, fields) => {
+        P::Variant(m, _, _, tys, fields)
+        | P::BorrowVariant(_, m, _, _, tys, fields)
+        | P::Struct(m, _, tys, fields)
+        | P::BorrowStruct(_, m, _, tys, fields) => {
             context.add_usage(*m, p.pat.loc);
             types(context, tys);
             for (_, _, (_, (_, p))) in fields {
@@ -505,6 +509,6 @@ fn pat(context: &mut Context, p: &T::MatchPattern) {
             pat(context, lhs);
             pat(context, rhs);
         }
-        P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
+        P::Constant(_, _) | P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
     }
 }

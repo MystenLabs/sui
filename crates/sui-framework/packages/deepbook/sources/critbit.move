@@ -278,7 +278,7 @@ module deepbook::critbit {
 
             if (removed_leaf_grand_parent_index == PARTITION_INDEX) {
                 // Parent of the removed leaf is the tree root
-                // Update the parent of the sibling node and and set sibling as the tree root
+                // Update the parent of the sibling node and set sibling as the tree root
                 if (sibling_index < PARTITION_INDEX) {
                     // sibling is an internal node
                     table::borrow_mut(&mut tree.internal_nodes, sibling_index).parent = PARTITION_INDEX;

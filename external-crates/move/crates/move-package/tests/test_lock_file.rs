@@ -160,7 +160,7 @@ fn update_lock_file_toolchain_version() {
     let move_manifest = pkg.path().join("Move.toml");
     // The 2024.beta in the manifest should override defaults.
     fs::write(
-        &move_manifest,
+        move_manifest,
         r#"
           [package]
           name = "test"
@@ -184,8 +184,7 @@ fn update_lock_file_toolchain_version() {
         lock_file: Some(lock_path.clone()),
         ..Default::default()
     };
-    let _ =
-        build_config.update_lock_file_toolchain_version(&pkg.path().to_path_buf(), "0.0.1".into());
+    let _ = build_config.update_lock_file_toolchain_version(pkg.path(), "0.0.1".into());
 
     let mut lock_file = File::open(lock_path).unwrap();
     let toolchain_version =
@@ -220,7 +219,7 @@ fn test_update_managed_address() {
     let mut lock = LockFile::from(pb, &lock_path).unwrap();
     update_managed_address(
         &mut lock,
-        "default".into(),
+        "default",
         ManagedAddressUpdate::Published {
             original_id: "0x123".into(),
             chain_id: "35834a8a".into(),
@@ -230,7 +229,7 @@ fn test_update_managed_address() {
 
     update_managed_address(
         &mut lock,
-        "default".into(),
+        "default",
         ManagedAddressUpdate::Upgraded {
             latest_id: "0x456".into(),
             version: 2,

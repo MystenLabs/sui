@@ -17,6 +17,9 @@ pub struct MoveTxGenerator {
     computation: u8,
     root_objects: HashMap<SuiAddress, ObjectRef>,
     shared_objects: Vec<(ObjectID, SequenceNumber)>,
+    num_mints: u16,
+    nft_size: u16,
+    use_batch_mint: bool,
 }
 
 impl MoveTxGenerator {
@@ -27,6 +30,9 @@ impl MoveTxGenerator {
         computation: u8,
         root_objects: HashMap<SuiAddress, ObjectRef>,
         shared_objects: Vec<(ObjectID, SequenceNumber)>,
+        num_mints: u16,
+        nft_size: u16,
+        use_batch_mint: bool,
     ) -> Self {
         Self {
             move_package,
@@ -35,6 +41,9 @@ impl MoveTxGenerator {
             computation,
             root_objects,
             shared_objects,
+            num_mints,
+            nft_size,
+            use_batch_mint,
         }
     }
 }
@@ -102,6 +111,47 @@ impl TxGenerator for MoveTxGenerator {
                     vec![],
                     vec![computation_arg],
                 );
+            }
+            if self.num_mints > 0 {
+                // Step 4: Mint some NFTs
+                let mut contents = Vec::new();
+                assert!(self.nft_size >= 32, "NFT size must be at least 32 bytes");
+                for _ in 0..self.nft_size - 32 {
+                    contents.push(7u8)
+                }
+                if self.use_batch_mint {
+                    // create a vector of sender addresses to pass to batch_mint
+                    let mut recipients = Vec::new();
+                    for _ in 0..self.num_mints {
+                        recipients.push(account.sender)
+                    }
+                    let args = vec![
+                        builder.pure(recipients).unwrap(),
+                        builder.pure(contents).unwrap(),
+                    ];
+                    builder.programmable_move_call(
+                        self.move_package,
+                        Identifier::new("benchmark").unwrap(),
+                        Identifier::new("batch_mint").unwrap(),
+                        vec![],
+                        args,
+                    );
+                } else {
+                    // create PTB with a command that transfers each
+                    for _ in 0..self.num_mints {
+                        let args = vec![
+                            builder.pure(account.sender).unwrap(),
+                            builder.pure(contents.clone()).unwrap(),
+                        ];
+                        builder.programmable_move_call(
+                            self.move_package,
+                            Identifier::new("benchmark").unwrap(),
+                            Identifier::new("mint_one").unwrap(),
+                            vec![],
+                            args,
+                        );
+                    }
+                }
             }
             builder.finish()
         };

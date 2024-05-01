@@ -5,7 +5,7 @@ mod iam;
 mod incidents;
 mod lib;
 pub mod pulumi;
-mod service;
+pub mod service;
 
 pub use iam::{iam_cmd, IAMArgs};
 pub use incidents::{incidents_cmd, IncidentsArgs};
