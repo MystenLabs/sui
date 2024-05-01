@@ -23,7 +23,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "New GitHub issue <https://github.com/MystenLabs/sui/issues/${{ github.event.issue.number }}|${{ github.event.issue.number }}> opened by <https://github.com/${{ github.event.issue.user.login }}|${{ github.event.issue.user.login }}. \n Please assign this issue to a team member on GitHub and mark this Slack message with :white_check_mark: once done."
+                  "text": "New issue *<https://github.com/MystenLabs/sui/issues/${{ github.event.issue.number }}|${{ github.event.issue.number }}>* opened by <https://github.com/${{ github.event.issue.user.login }}|${{ github.event.issue.user.login }}>. \n\n Please assign this issue to a team member on GitHub and mark this Slack message with :white_check_mark: once done."
                 }
               }
             ]
