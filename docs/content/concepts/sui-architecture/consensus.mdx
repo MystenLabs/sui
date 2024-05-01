@@ -6,11 +6,14 @@ description: Overview of the Sui consensus.
 
 ## Overview
 
-The basic purpose of consensus in blockchains is to agree on the order and ensure the availability of transactions.
-Validator operators and users can think of Sui consensus as a black box: validators submit different user transactions to consensus concurrently, and the consensus outputs a consistent stream of transactions across all well-behaving validators.
+The basic purpose of consensus in blockchains is to agree on a consistent order and ensure the availability of transactions.
+In Sui, consensus has a simple API: validators submit different user transactions to consensus concurrently, and the consensus outputs a consistent stream of transactions across all well-behaving validators.
 
-Byzantine-fault tolerant (BFT) consensus protocols are a fascinating area of research. If you want a deeper understanding of the consensus black box, the next-generation consensus engine set to roll out in Sui is based on the **Mysticeti** protocol. It represents the cutting edge of research, achieving the optimal frontier of low latency and high throughput by:
-- Weaving blocks into directed acyclic graphs (DAGs), utilizing the full bandwidth of the network and providing censorship resistance.
-- Mysticeti DAGs in particular are uncertified, where it takes only three rounds of messages to commit blocks from the DAGs.
+Byzantine-fault tolerant (BFT) consensus protocols are a rich area of research. The next-generation consensus engine set to roll out in Sui is based on the **Mysticeti** protocol.
+The protocol optimizes for both low latency and high throughput because:
+- It allows multiple validators to propose blocks in parallel, utilizing the full bandwidth of the network and providing censorship resistance. These are features of the DAG-based consensus protocols.
+- It takes only three rounds of messages to commit blocks from the DAGs, same as pBFT and matches the theoretical minimum.
+- The commit rule allows voting and certifying leaders on blocks in parallel, further reducing the median and tail latencies.
+- The commit rule also tolerates unavailable leaders without significantly increasing the commit latencies.
 
 For more details including correctness proofs, the [Mysticeti paper](https://arxiv.org/pdf/2310.14821) is the best source.
