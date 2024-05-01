@@ -12957,6 +12957,7 @@ dependencies = [
  "insta",
  "lru 0.10.0",
  "move-binary-format",
+ "move-command-line-common",
  "move-compiler",
  "move-core-types",
  "serde",

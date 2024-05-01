@@ -21,3 +21,6 @@ serde.workspace = true
 dirs-next.workspace = true
 
 move-core-types.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
