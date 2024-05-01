@@ -965,7 +965,7 @@ fn new_call_trace(
     CallTrace {
         depth,
         call_type,
-        module_id: function.module_id().cloned(),
+        module_id: Some(function.module_id().clone()),
         function: function.name_ident(),
         ty_args,
         args,
