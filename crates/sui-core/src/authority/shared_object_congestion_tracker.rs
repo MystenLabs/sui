@@ -339,7 +339,7 @@ mod object_cost_tests {
             },
         );
 
-        // New deferral key should have deferred_from_round equal to the current round.
+        // New deferral key should have deferred_from_round equal to the deferred randomness round.
         if let Some((
             DeferralKey::ConsensusRound {
                 future_round,
@@ -353,7 +353,7 @@ mod object_cost_tests {
             10,
         ) {
             assert_eq!(future_round, 11);
-            assert_eq!(deferred_from_round, 10);
+            assert_eq!(deferred_from_round, 5);
         } else {
             panic!("should defer");
         }
