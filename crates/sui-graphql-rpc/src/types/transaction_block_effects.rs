@@ -10,7 +10,7 @@ use async_graphql::{
 };
 use fastcrypto::encoding::{Base64 as FBase64, Encoding};
 use sui_indexer::models::transactions::StoredTransaction;
-use sui_package_resolver::{CleverError, ConstantErrorInfo};
+use sui_package_resolver::{CleverError, ErrorConstants};
 use sui_types::{
     effects::{TransactionEffects as NativeTransactionEffects, TransactionEffectsAPI},
     event::Event as NativeEvent,
@@ -118,11 +118,8 @@ impl TransactionBlockEffects {
     /// If the error is a Move abort, the error message will be resolved to a human-readable form if
     /// possible, otherwise it will fall back to displaying the abort code and location.
     async fn errors(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        let mut status = self.native().status().clone();
         let resolver: &PackageResolver = ctx.data_unchecked();
-
-        self.resolve_native_status_impl(resolver, &mut status)
-            .await?;
+        let status = self.resolve_native_status_impl(resolver).await?;
 
         match status {
             NativeExecutionStatus::Success => Ok(None),
@@ -154,30 +151,31 @@ impl TransactionBlockEffects {
                         .resolve_clever_error(loc.module.clone(), *code)
                         .await
                     else {
-                        break 'error error.to_string();
+                        break 'error format!(
+                            "from '{}{fname_string} (instruction {}), abort code: {code}",
+                            loc.module.to_canonical_display(true),
+                            loc.instruction,
+                        );
                     };
 
                     match error_info {
-                        ConstantErrorInfo::Rendered {
-                            error_identifier,
-                            error_constant,
+                        ErrorConstants::Rendered {
+                            identifier,
+                            constant,
                         } => {
                             format!(
-                                "from '{}{fname_string} (line {source_line_number}), '{error_identifier}': {error_constant}",
+                                "from '{}{fname_string} (line {source_line_number}), abort '{identifier}': {constant}",
                                 module_id.to_canonical_display(true)
                             )
                         }
-                        ConstantErrorInfo::Unrendered {
-                            error_identifier,
-                            error_bytes,
-                        } => {
-                            let const_str = FBase64::encode(error_bytes);
+                        ErrorConstants::Raw { identifier, bytes } => {
+                            let const_str = FBase64::encode(bytes);
                             format!(
-                                "from '{}{fname_string} (line {source_line_number}), '{error_identifier}': {const_str}",
+                                "from '{}{fname_string} (line {source_line_number}), abort '{identifier}': {const_str}",
                                 module_id.to_canonical_display(true)
                             )
                         }
-                        ConstantErrorInfo::None => {
+                        ErrorConstants::None => {
                             format!(
                                 "from '{}{fname_string} (line {source_line_number})",
                                 module_id.to_canonical_display(true)
@@ -525,8 +523,8 @@ impl TransactionBlockEffects {
     async fn resolve_native_status_impl(
         &self,
         resolver: &PackageResolver,
-        status: &mut NativeExecutionStatus,
-    ) -> Result<()> {
+    ) -> Result<NativeExecutionStatus> {
+        let mut status = self.native().status().clone();
         if let NativeExecutionStatus::Failure {
             error:
                 ExecutionFailureStatus::MoveAbort(MoveLocation { module, .. }, _)
@@ -535,7 +533,7 @@ impl TransactionBlockEffects {
                     ..
                 }))),
             command: Some(command_idx),
-        } = status
+        } = &mut status
         {
             // Get the Move call that this error is associated with.
             if let Some(Command::MoveCall(ptb_call)) = self
@@ -552,7 +550,7 @@ impl TransactionBlockEffects {
                     .map_err(|e| Error::Internal(format!("Error resolving Move location: {e}")))?;
             }
         }
-        Ok(())
+        Ok(status)
     }
 }
 

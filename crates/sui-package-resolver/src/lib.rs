@@ -107,22 +107,22 @@ pub struct CleverError {
     pub module_id: ModuleId,
     /// Inner error information. This is either a complete error, just a line number, or bytes that
     /// should be treated opaquely.
-    pub error_info: ConstantErrorInfo,
+    pub error_info: ErrorConstants,
     /// The line number in the source file where the error occured.
     pub source_line_number: u16,
 }
 
-/// The `ConstantErrorInfo` enum is used to represent the different kinds of error information that
+/// The `ErrorConstants` enum is used to represent the different kinds of error information that
 /// can be returned from a clever error when looking at the constant values for the clever error.
 /// These values are either:
 /// * `None` - No constant information is available, only a line number.
 /// * `Rendered` - The error is a complete error, with an error identifier and constant that can be
 ///    rendered in a human-readable format (see in-line doc comments for exact types of values
 ///    supported).
-/// * `Unrendered` - If there is an error constant value, but it is not a renderable type (e.g., a
+/// * `Raw` - If there is an error constant value, but it is not a renderable type (e.g., a
 ///   `vector<address>`), then it is treated as opaque and the bytes are returned.
 #[derive(Clone, Debug)]
-pub enum ConstantErrorInfo {
+pub enum ErrorConstants {
     /// No constant information is available, only a line number.
     None,
     /// The error is a complete error, with an error identifier and constant that can be rendered.
@@ -132,21 +132,21 @@ pub enum ConstantErrorInfo {
     /// * A numeric value (u8, u16, u32, u64, u128, u256); or
     /// * A boolean value; or
     /// * An address value
-    /// Otherwise, the `Unrendered` raw bytes of the error constant are returned.
+    /// Otherwise, the `Raw` bytes of the error constant are returned.
     Rendered {
         /// The name of the error constant.
-        error_identifier: String,
+        identifier: String,
         /// The value of the error constant.
-        error_constant: String,
+        constant: String,
     },
     /// If there is an error constant value, but ii is not one of the above types, then it is
     /// treated as opaque and the bytes are returned. The caller is responsible for determining how
     /// best to display the error constant in this case.
-    Unrendered {
+    Raw {
         /// The name of the error constant.
-        error_identifier: String,
+        identifier: String,
         /// The raw (BCS) bytes of the error constant.
-        error_bytes: Vec<u8>,
+        bytes: Vec<u8>,
     },
 }
 
@@ -544,7 +544,7 @@ impl<S: PackageStore> Resolver<S> {
         if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
             return Some(CleverError {
                 module_id,
-                error_info: ConstantErrorInfo::None,
+                error_info: ErrorConstants::None,
                 source_line_number,
             });
         } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
@@ -595,13 +595,13 @@ impl<S: PackageStore> Resolver<S> {
         };
 
         let error_info = match rendered {
-            None => ConstantErrorInfo::Unrendered {
-                error_identifier,
-                error_bytes: bytes,
+            None => ErrorConstants::Raw {
+                identifier: error_identifier,
+                bytes,
             },
-            Some(error_constant) => ConstantErrorInfo::Rendered {
-                error_identifier,
-                error_constant,
+            Some(error_constant) => ErrorConstants::Rendered {
+                identifier: error_identifier,
+                constant: error_constant,
             },
         };
 

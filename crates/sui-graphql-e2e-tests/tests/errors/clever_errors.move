@@ -33,7 +33,7 @@ module P0::m {
     const ImAString: vector<u8> = b"This is a string";
 
     #[error]
-    const ImNotAString: vector<u8> = vector[1,2,3,4,5];
+    const ImNotAString: vector<u64> = vector[1,2,3,4,5];
 
     public fun callU8() {
         abort ImAU8
@@ -67,7 +67,7 @@ module P0::m {
         abort ImAString
     }
 
-    public fun callBytevec() {
+    public fun callU64vec() {
         abort ImNotAString
     }
 
@@ -96,7 +96,7 @@ module P0::m {
 
 //# run P0::m::callString
 
-//# run P0::m::callBytevec
+//# run P0::m::callU64vec
 
 //# run P0::m::normalAbort
 
@@ -149,7 +149,7 @@ module P0::m {
     const ImAString: vector<u8> = b"This is a string in v2";
 
     #[error]
-    const ImNotAString: vector<u8> = vector[1,2,3,4,5,6];
+    const ImNotAString: vector<u64> = vector[1,2,3,4,5,6];
 
     public fun callU8() {
         abort ImAU8
@@ -183,7 +183,7 @@ module P0::m {
         abort ImAString
     }
 
-    public fun callBytevec() {
+    public fun callU64vec() {
         abort ImNotAString
     }
 
@@ -212,7 +212,7 @@ module P0::m {
 
 //# run P0::m::callString
 
-//# run P0::m::callBytevec
+//# run P0::m::callU64vec
 
 //# run P0::m::normalAbort
 

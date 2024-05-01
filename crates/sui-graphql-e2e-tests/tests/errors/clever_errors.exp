@@ -6,7 +6,7 @@ A: object(0,0)
 task 1 'publish'. lines 6-81:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
-gas summary: computation_cost: 1000000, storage_cost: 9484800,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9743200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 2 'run'. lines 83-83:
 Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU8 (function index 0) at offset 1, Abort Code: 9223372161408827393
@@ -41,8 +41,8 @@ Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callStri
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 7, instruction: 1, function_name: Some("callString") }, 9223372251604189201), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372251604189201), message: Some("P0::m::callString at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
 task 10 'run'. lines 99-99:
-Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callBytevec (function index 8) at offset 1, Abort Code: 9223372264489222163
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 8, instruction: 1, function_name: Some("callBytevec") }, 9223372264489222163), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372264489222163), message: Some("P0::m::callBytevec at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::callU64vec (function index 8) at offset 1, Abort Code: 9223372264489222163
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: P0, name: Identifier("m") }, function: 8, instruction: 1, function_name: Some("callU64vec") }, 9223372264489222163), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372264489222163), message: Some("P0::m::callU64vec at offset 1"), exec_state: None, location: Module(ModuleId { address: P0, name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
 task 11 'run'. lines 101-101:
 Error: Transaction Effects Status: Move Runtime Abort. Location: P0::m::normalAbort (function index 9) at offset 1, Abort Code: 0
@@ -63,67 +63,67 @@ Response: {
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU8' (line 29), 'ImAU8': 0"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU8' (line 29), abort 'ImAU8': 0"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU16' (line 32), 'ImAU16': 1"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU16' (line 32), abort 'ImAU16': 1"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU32' (line 35), 'ImAU32': 2"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU32' (line 35), abort 'ImAU32': 2"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU64' (line 38), 'ImAU64': 3"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU64' (line 38), abort 'ImAU64': 3"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU128' (line 41), 'ImAU128': 4"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU128' (line 41), abort 'ImAU128': 4"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callU256' (line 44), 'ImAU256': 5"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU256' (line 44), abort 'ImAU256': 5"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callAddress' (line 47), 'ImAnAddress': 0x0000000000000000000000000000000000000000000000000000000000000006"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callAddress' (line 47), abort 'ImAnAddress': 0x0000000000000000000000000000000000000000000000000000000000000006"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callString' (line 50), 'ImAString': This is a string"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callString' (line 50), abort 'ImAString': This is a string"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::callBytevec' (line 53), 'ImNotAString': \u0001\u0002\u0003\u0004\u0005"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::callU64vec' (line 53), abort 'ImNotAString': BQEAAAAAAAAAAgAAAAAAAAADAAAAAAAAAAQAAAAAAAAABQAAAAAAAAA="
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, Move Runtime Abort. Location: 549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::normalAbort (function index 9) at offset 1, Abort Code: 0"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::normalAbort' (instruction 1), abort code: 0"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0x549be5f8d75cf6ec1eedf3f3e5ce807ccbba27074c87b70f82eb656dcf40edf9::m::assertLineNo' (line 59)"
+            "errors": "Error in 1st command, from '0xc3ae63b89de6031e21331453c2886219014f129579ad88f0a425dde191c92526::m::assertLineNo' (line 59)"
           }
         }
       ]
@@ -134,7 +134,7 @@ Response: {
 task 15 'upgrade'. lines 119-197:
 created: object(15,0)
 mutated: object(0,0), object(1,1)
-gas summary: computation_cost: 1000000, storage_cost: 9538000,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
+gas summary: computation_cost: 1000000, storage_cost: 9849600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
 task 16 'run'. lines 199-199:
 Error: Transaction Effects Status: Move Runtime Abort. Location: fake(1,0)::m::callU8 (function index 0) at offset 1, Abort Code: 9223372659625033729
@@ -169,8 +169,8 @@ Error: Transaction Effects Status: Move Runtime Abort. Location: fake(1,0)::m::c
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: fake(1,0), name: Identifier("m") }, function: 7, instruction: 1, function_name: Some("callString") }, 9223372749820395537), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372749820395537), message: Some("fake(1,0)::m::callString at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(7), 1)] }), command: Some(0) } }
 
 task 24 'run'. lines 215-215:
-Error: Transaction Effects Status: Move Runtime Abort. Location: fake(1,0)::m::callBytevec (function index 8) at offset 1, Abort Code: 9223372762705428499
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: fake(1,0), name: Identifier("m") }, function: 8, instruction: 1, function_name: Some("callBytevec") }, 9223372762705428499), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372762705428499), message: Some("fake(1,0)::m::callBytevec at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
+Error: Transaction Effects Status: Move Runtime Abort. Location: fake(1,0)::m::callU64vec (function index 8) at offset 1, Abort Code: 9223372762705428499
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MoveAbort(MoveLocation { module: ModuleId { address: fake(1,0), name: Identifier("m") }, function: 8, instruction: 1, function_name: Some("callU64vec") }, 9223372762705428499), source: Some(VMError { major_status: ABORTED, sub_status: Some(9223372762705428499), message: Some("fake(1,0)::m::callU64vec at offset 1"), exec_state: None, location: Module(ModuleId { address: fake(1,0), name: Identifier("m") }), indices: [], offsets: [(FunctionDefinitionIndex(8), 1)] }), command: Some(0) } }
 
 task 25 'run'. lines 217-217:
 Error: Transaction Effects Status: Move Runtime Abort. Location: fake(1,0)::m::normalAbort (function index 9) at offset 1, Abort Code: 0
@@ -191,55 +191,55 @@ Response: {
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU32' (line 151), 'ImAU32': 9"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callU32' (line 151), abort 'ImAU32': 9"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU64' (line 154), 'ImAU64': 10"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callU64' (line 154), abort 'ImAU64': 10"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU128' (line 157), 'ImAU128': 11"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callU128' (line 157), abort 'ImAU128': 11"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callU256' (line 160), 'ImAU256': 12"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callU256' (line 160), abort 'ImAU256': 12"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callAddress' (line 163), 'ImAnAddress': 0x000000000000000000000000000000000000000000000000000000000000000d"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callAddress' (line 163), abort 'ImAnAddress': 0x000000000000000000000000000000000000000000000000000000000000000d"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callString' (line 166), 'ImAString': This is a string in v2"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callString' (line 166), abort 'ImAString': This is a string in v2"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::callBytevec' (line 169), 'ImNotAString': \u0001\u0002\u0003\u0004\u0005\u0006"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::callU64vec' (line 169), abort 'ImNotAString': BgEAAAAAAAAAAgAAAAAAAAADAAAAAAAAAAQAAAAAAAAABQAAAAAAAAAGAAAAAAAAAA=="
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, Move Runtime Abort. Location: c1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::normalAbort (function index 9) at offset 1, Abort Code: 0"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::normalAbort' (instruction 1), abort code: 0"
           }
         },
         {
           "effects": {
             "status": "FAILURE",
-            "errors": "Error in 1st command, from '0xc1677ea77d86a83505d0d6fbd5fc5c2d44a2a7457a34499b7d5e4288a41ef7d1::m::assertLineNo' (line 175)"
+            "errors": "Error in 1st command, from '0x1725b2137e1ce086337ba6c67bb89c390645ff898fbf218647090ea1f9bbd5f1::m::assertLineNo' (line 175)"
           }
         }
       ]
