@@ -2933,6 +2933,7 @@ impl AuthorityPerEpochStore {
                     dkg_failed,
                     randomness_round.is_some(),
                     execution_cost,
+                    authority_metrics,
                 )
                 .await?
             {
@@ -3124,6 +3125,7 @@ impl AuthorityPerEpochStore {
         dkg_failed: bool,
         generating_randomness: bool,
         shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
+        authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<ConsensusCertificateResult> {
         let _scope = monitored_scope("HandleConsensusTransaction");
         let VerifiedSequencedConsensusTransaction(SequencedConsensusTransaction {
@@ -3187,11 +3189,16 @@ impl AuthorityPerEpochStore {
                     shared_object_congestion_tracker,
                 );
 
-                if let Some((deferral_key, _)) = deferral_info {
+                if let Some((deferral_key, deferral_reason)) = deferral_info {
                     debug!(
                         "Deferring consensus certificate for transaction {:?} until {deferral_key:?}",
                         certificate.digest(),
                     );
+                    if let DeferralReason::SharedObjectCongestion(_) = deferral_reason {
+                        authority_metrics
+                            .consensus_handler_congested_transactions
+                            .inc();
+                    }
                     return Ok(ConsensusCertificateResult::Deferred(deferral_key));
                 }
 
