@@ -2561,10 +2561,10 @@ impl AuthorityPerEpochStore {
                     + previously_deferred_tx_digests.len(),
             );
 
-        let mut randomness_manager = match self.randomness_manager.get() {
-            Some(rm) => Some(rm.lock().await),
-            None => None,
-        };
+        let mut randomness_manager = self.randomness_manager.get().map(|rm| {
+            rm.try_lock()
+                .expect("should only ever be called from the commit handler thread")
+        });
         let mut dkg_failed = false;
         let randomness_round = if self.randomness_state_enabled() {
             let randomness_manager = randomness_manager

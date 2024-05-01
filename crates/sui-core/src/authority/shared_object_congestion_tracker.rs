@@ -81,20 +81,27 @@ impl SharedObjectCongestionTracker {
 
         assert!(!congested_objects.is_empty());
 
-        let deferral_key = if let Some(DeferralKey::ConsensusRound {
-            future_round: _,
-            deferred_from_round,
-        }) = previously_deferred_tx_digests.get(cert.digest())
-        {
-            // This transaction has been deferred in previous consensus commit. Use its previous deferred_from_round.
-            DeferralKey::new_for_consensus_round(commit_round + 1, *deferred_from_round)
-        } else {
-            // There are two cases where we can end up here:
-            // 1. This transaction has not been deferred before.
-            // 2. This transaction has been deferred due to randomness.
-            // In both case, we use the current commit round as the deferred_from_round.
-            DeferralKey::new_for_consensus_round(commit_round + 1, commit_round)
-        };
+        let deferral_key =
+            if let Some(previous_key) = previously_deferred_tx_digests.get(cert.digest()) {
+                // This transaction has been deferred in previous consensus commit. Use its previous deferred_from_round.
+                let deferred_from_round = match previous_key {
+                    DeferralKey::ConsensusRound {
+                        future_round: _,
+                        deferred_from_round,
+                    } => deferred_from_round,
+                    DeferralKey::Randomness {
+                        deferred_from_round,
+                    } => deferred_from_round,
+                };
+                DeferralKey::new_for_consensus_round(commit_round + 1, *deferred_from_round)
+            } else {
+                // There are two cases where we can end up here:
+                // 1. This transaction has not been deferred before.
+                // 2. This transaction has been deferred due to randomness.
+                // In both case, we use the current commit round as the deferred_from_round.
+                // TODO: preserve deferred_from_round if tx was previously deferred due to randomness.
+                DeferralKey::new_for_consensus_round(commit_round + 1, commit_round)
+            };
         Some((deferral_key, congested_objects))
     }
 
