@@ -27,7 +27,7 @@ module crypto::groth16 {
     }
 
     /// A Groth16 verifying key used to verify a zero-knowledge proof.
-    public struct VerifyingKey has drop {
+    public struct VerifyingKey has store, drop {
         alpha: Element<bls12381::G1>,
         beta: Element<bls12381::G2>,
         gamma: Element<bls12381::G2>,
@@ -102,8 +102,7 @@ module crypto::groth16 {
         gamma_abc.push_back(bls12381::g1_from_bytes(&x"b2c9c61ccc28e913284a47c34e60d487869ff423dd574db080d35844f9eddd2b2967141b588a35fa82a278ce39ae6b1a"));
         gamma_abc.push_back(bls12381::g1_from_bytes(&x"9026ae12d58d203b4fc5dfad4968cbf51e43632ed1a05afdcb2e380ee552b036fbefc7780afe9675bcb60201a2421b2c"));
 
-        let mut public_inputs = vector::empty<Element<bls12381::Scalar>>();
-        public_inputs.push_back(bls12381::scalar_from_bytes(&x"46722abc81a82d01ac89c138aa01a8223cb239ceb1f02cdaad7e1815eb997ca6"));
+        let public_inputs = vector::singleton<Element<bls12381::Scalar>>(bls12381::scalar_from_bytes(&x"46722abc81a82d01ac89c138aa01a8223cb239ceb1f02cdaad7e1815eb997ca6"));
 
         let vk = create_verifying_key(
             bls12381::g1_from_bytes(&x"b58cfc3b0f43d98e7dbe865af692577d52813cb62ef3c355215ec3be2a0355a1ae5da76dd3e626f8a60de1f4a8138dee"),
