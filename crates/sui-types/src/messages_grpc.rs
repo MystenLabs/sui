@@ -193,7 +193,18 @@ pub struct SystemStateRequest {
 pub struct HandleCertificateResponseV3 {
     pub effects: SignedTransactionEffects,
     pub events: Option<TransactionEvents>,
+
+    /// If requested, will included all initial versions of objects modified in this transaction.
+    /// This includes owned objects included as input into the transaction as well as the assigned
+    /// versions of shared objects.
+    //
+    // TODO: In the future we may want to include shared objects or child objects which were read
+    // but not modified during exectuion.
     pub input_objects: Option<Vec<Object>>,
+
+    /// If requested, will included all changed objects, including mutated, created and unwrapped
+    /// objects. In other words, all objects that still exist in the object state after this
+    /// transaction.
     pub output_objects: Option<Vec<Object>>,
     pub auxiliary_data: Option<Vec<u8>>,
 }
