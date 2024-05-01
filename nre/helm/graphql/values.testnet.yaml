@@ -5,7 +5,7 @@
 # Example: kubectl create secret generic db_url --from-literal=password=<actual db url> --namespace graphql
 #
 # RPC_URL is also expected to be an env var so the command properly populates
-command: ["/opt/sui/bin/sui-graphql-rpc", "start-server","--host","0.0.0.0","--port","8001","--db-url","$DB_URL","--node-rpc-url", "$RPC_URL","--config","/opt/sui/config/sui-graphql.toml","--ide-title","Sui Testnet GraphQL"]
+command: ["/opt/sui/bin/sui-graphql-rpc", "start-server","--host","0.0.0.0","--port","8001","--db-url","$DB_URL","--node-rpc-url", "$RPC_URL","--config","/opt/sui/config/graphql.toml","--ide-title","Sui Testnet GraphQL"]
 
 configMapName: graphql-testnet-toml
 
@@ -21,7 +21,10 @@ volumes:
 
 # Additional volumeMounts on the output Deployment definition.
 volumeMounts:
- - name: graphql-toml
-   mountPath: "/etc/graphql.toml"
+ - name: graphql-testnet-toml
+   mountPath: "/opt/sui/config/graphql.toml"
+   subPath: "graphql.toml"
    readOnly: true
+
+secretName: graphql-db-url
 
