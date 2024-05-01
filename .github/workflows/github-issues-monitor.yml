@@ -4,7 +4,11 @@ on:
   issues:
     types: [opened]
 
-jobs: 
+jobs:
+  post-to-slack:
+    name: Post new issue to Slack channel
+    runs-on: ubuntu-latest
+    steps:
     - name: Post to a Slack channel
       uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
       env:
