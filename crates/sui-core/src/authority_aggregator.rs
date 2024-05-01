@@ -42,7 +42,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -407,6 +407,14 @@ struct ProcessCertificateState {
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
     retryable: bool,
+
+    // collection of extended data returned from the validators.
+    // Not all validators will be asked to return this data so we need to hold onto it when one
+    // validator has provided it
+    events: Option<TransactionEvents>,
+    input_objects: Option<Vec<Object>>,
+    output_objects: Option<Vec<Object>>,
+    auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -1485,7 +1493,25 @@ where
             non_retryable_errors: vec![],
             retryable_errors: vec![],
             retryable: true,
+            events: None,
+            input_objects: None,
+            output_objects: None,
+            auxiliary_data: None,
         };
+
+        // create a set of validators that we should sample to request input/output objects from
+        let validators_to_sample =
+            if request.include_input_objects || request.include_output_objects {
+                // Always at least ask 1 validator
+                let number_to_sample = std::cmp::max(1, self.committee.num_members() / 2);
+
+                self.committee
+                    .choose_multiple_weighted_iter(number_to_sample)
+                    .cloned()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
 
         let tx_digest = *request.certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
@@ -1514,8 +1540,22 @@ where
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
                     if request_ref.include_input_objects || request_ref.include_output_objects {
+
+                        // adjust the request to validators we aren't planning on sampling
+                        let req = if validators_to_sample.contains(&name) {
+                            request_ref
+                        } else {
+                            HandleCertificateRequestV3 {
+                                include_events: false,
+                                include_input_objects: false,
+                                include_output_objects: false,
+                                include_auxiliary_data: false,
+                                ..request_ref
+                            }
+                        };
+
                         client
-                            .handle_certificate_v3(request_ref, client_addr)
+                            .handle_certificate_v3(req, client_addr)
                             .instrument(
                                 tracing::trace_span!("handle_certificate", authority =? name.concise()),
                             )
@@ -1676,6 +1716,23 @@ where
                     name = ?name.concise(),
                     "Validator handled certificate successfully",
                 );
+
+                if events.is_some() && state.events.is_none() {
+                    state.events = events;
+                }
+
+                if input_objects.is_some() && state.input_objects.is_none() {
+                    state.input_objects = input_objects;
+                }
+
+                if output_objects.is_some() && state.output_objects.is_none() {
+                    state.output_objects = output_objects;
+                }
+
+                if auxiliary_data.is_some() && state.auxiliary_data.is_none() {
+                    state.auxiliary_data = auxiliary_data;
+                }
+
                 let effects_digest = *signed_effects.digest();
                 // Note: here we aggregate votes by the hash of the effects structure
                 match state.effects_map.insert(
@@ -1708,10 +1765,10 @@ where
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
                             Some(QuorumDriverResponse {
                                 effects_cert: ct,
-                                events,
-                                input_objects,
-                                output_objects,
-                                auxiliary_data,
+                                events: state.events.take(),
+                                input_objects: state.input_objects.take(),
+                                output_objects: state.output_objects.take(),
+                                auxiliary_data: state.auxiliary_data.take(),
                             })
                         })
                     }
