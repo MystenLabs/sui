@@ -394,11 +394,14 @@ impl<'a> LayerBuilder<'a> {
     // Configuration methods
 
     // Only link 2f+1 random ancestors to the current layer round using a seed,
-    // if provided
+    // if provided. Also provide a flag to guarantee the leader is included.
     // note: configuration is terminal and layer will be built after this call.
-    pub fn min_ancestor_links(mut self, seed: Option<u64>) -> Self {
+    pub fn min_ancestor_links(mut self, include_leader: bool, seed: Option<u64>) -> Self {
         self.min_ancestor_links = true;
         self.min_ancestor_links_random_seed = seed;
+        if include_leader {
+            self.leader_round = Some(self.ancestors.iter().max_by_key(|b| b.round).unwrap().round);
+        }
         self.fully_linked_ancestors = false;
         self.build()
     }
@@ -474,7 +477,7 @@ impl<'a> LayerBuilder<'a> {
     // Apply the configurations & build the dag layer(s).
     pub fn build(mut self) -> Self {
         for round in self.start_round..=self.end_round.unwrap_or(self.start_round) {
-            tracing::info!("BUILDING LAYER ROUND {round}...");
+            tracing::debug!("BUILDING LAYER ROUND {round}...");
 
             let authorities = if self.specified_authorities.is_some() {
                 self.specified_authorities.clone().unwrap()
@@ -522,9 +525,9 @@ impl<'a> LayerBuilder<'a> {
 
     // Layer round is minimally and randomly connected with ancestors.
     pub fn configure_min_parent_links(&mut self) -> Vec<(AuthorityIndex, Vec<BlockRef>)> {
+        // TODO: handle quroum threshold properly with stake
         let quorum_threshold = self.dag_builder.context.committee.quorum_threshold() as usize;
-
-        let mut authorities: Vec<_> = self
+        let mut authorities: Vec<AuthorityIndex> = self
             .dag_builder
             .context
             .committee
@@ -532,17 +535,48 @@ impl<'a> LayerBuilder<'a> {
             .map(|authority| authority.0)
             .collect();
 
-        // Initialize the RNG with a seed for reproducibility, if provided
         let mut rng = match self.min_ancestor_links_random_seed {
             Some(s) => StdRng::seed_from_u64(s),
             None => StdRng::from_entropy(),
         };
-        authorities.shuffle(&mut rng);
+
+        let mut authorities_to_shuffle = authorities.clone();
+
+        let mut leaders = vec![];
+        if self.leader_round.is_some() {
+            let leader_offsets = (0..self.dag_builder.number_of_leaders).collect::<Vec<_>>();
+
+            for leader_offset in leader_offsets {
+                leaders.push(
+                    self.dag_builder
+                        .leader_schedule
+                        .elect_leader(self.leader_round.unwrap(), leader_offset),
+                );
+            }
+        }
 
         authorities
-            .into_iter()
-            .take(quorum_threshold)
-            .map(|authority| (authority, self.ancestors.clone()))
+            .iter()
+            .map(|authority| {
+                authorities_to_shuffle.shuffle(&mut rng);
+
+                let min_ancestors: HashSet<AuthorityIndex> = authorities_to_shuffle
+                    .iter()
+                    .take(quorum_threshold)
+                    .cloned()
+                    .collect();
+
+                (
+                    *authority,
+                    self.ancestors
+                        .iter()
+                        .filter(|a| {
+                            leaders.contains(&a.author) || min_ancestors.contains(&a.author)
+                        })
+                        .cloned()
+                        .collect::<Vec<BlockRef>>(),
+                )
+            })
             .collect()
     }
 

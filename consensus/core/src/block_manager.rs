@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
 use std::{
     collections::{BTreeMap, BTreeSet},
     iter,
     sync::Arc,
+    time::Instant,
 };
 
 use itertools::Itertools as _;
@@ -374,18 +374,18 @@ impl BlockManager {
             .set(max_round.into());
     }
 
+    /// Checks if block manager is empty.
+    #[cfg(test)]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.suspended_blocks.is_empty()
+            && self.missing_ancestors.is_empty()
+            && self.missing_blocks.is_empty()
+    }
+
     /// Returns all the suspended blocks whose causal history we miss hence we can't accept them yet.
     #[cfg(test)]
     fn suspended_blocks(&self) -> Vec<BlockRef> {
         self.suspended_blocks.keys().cloned().collect()
-    }
-
-    /// Checks if block manager is empty.
-    #[cfg(test)]
-    fn is_empty(&self) -> bool {
-        self.suspended_blocks.is_empty()
-            && self.missing_ancestors.is_empty()
-            && self.missing_blocks.is_empty()
     }
 }
 
@@ -408,7 +408,6 @@ mod tests {
     use parking_lot::RwLock;
     use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 
-    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
         block_manager::BlockManager,
@@ -417,6 +416,7 @@ mod tests {
         dag_state::DagState,
         error::{ConsensusError, ConsensusResult},
         storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
     };
 
     #[tokio::test]
