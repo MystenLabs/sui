@@ -3,10 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::unit_tests::testutils::compile_module_string;
-use move_binary_format::{
-    control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
-    file_format::Bytecode,
-};
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
+use move_binary_format::file_format::Bytecode;
 
 #[test]
 fn cfg_compile_script_ret() {

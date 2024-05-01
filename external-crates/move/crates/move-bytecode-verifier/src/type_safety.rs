@@ -7,10 +7,9 @@
 
 use std::num::NonZeroU64;
 
-use crate::absint::FunctionContext;
+use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
-    control_flow_graph::ControlFlowGraph,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CompiledModule, FieldHandleIndex,

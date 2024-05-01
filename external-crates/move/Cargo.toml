@@ -132,6 +132,7 @@ bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}
 invalid-mutations = { path = "crates/invalid-mutations" }
 module-generation = { path = "crates/module-generation" }
+move-abstract-interpreter = { path = "crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "crates/move-abstract-stack" }
 move-binary-format = { path = "crates/move-binary-format" }
 move-borrow-graph = { path = "crates/move-borrow-graph" }

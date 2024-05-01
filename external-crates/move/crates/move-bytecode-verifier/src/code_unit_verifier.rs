@@ -6,11 +6,11 @@
 //! The overall verification is split between stack_usage_verifier.rs and
 //! abstract_interpreter.rs. CodeUnitVerifier simply orchestrates calls into these two files.
 use crate::{
-    absint::FunctionContext, acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety,
-    reference_safety, stack_usage_verifier::StackUsageVerifier, type_safety,
+    acquires_list_verifier::AcquiresVerifier, control_flow, locals_safety, reference_safety,
+    stack_usage_verifier::StackUsageVerifier, type_safety,
 };
+use move_abstract_interpreter::{absint::FunctionContext, control_flow_graph::ControlFlowGraph};
 use move_binary_format::{
-    control_flow_graph::ControlFlowGraph,
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, FunctionDefinition, FunctionDefinitionIndex, IdentifierIndex, TableIndex,

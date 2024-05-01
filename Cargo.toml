@@ -12,6 +12,7 @@ exclude = [
   "external-crates/move/crates/invalid-mutations",
   "external-crates/move/crates/language-benchmarks",
   "external-crates/move/crates/module-generation",
+  "external-crates/move/crates/move-abstract-interpreter",
   "external-crates/move/crates/move-abstract-stack",
   "external-crates/move/crates/move-analyzer",
   "external-crates/move/crates/move-binary-format",
@@ -556,6 +557,7 @@ move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
 move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
+move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }

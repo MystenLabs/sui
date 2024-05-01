@@ -6567,6 +6567,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 
 [[package]]
+name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -6616,6 +6624,7 @@ dependencies = [
 name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6638,6 +6647,7 @@ dependencies = [
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6651,6 +6661,7 @@ dependencies = [
 name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6664,6 +6675,7 @@ dependencies = [
 name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6806,6 +6818,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -6824,6 +6837,7 @@ dependencies = [
  "clap",
  "colored",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -6868,6 +6882,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -14193,6 +14208,7 @@ dependencies = [
 name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",

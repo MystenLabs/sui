@@ -12,7 +12,6 @@ pub mod compatibility;
 #[macro_use]
 pub mod errors;
 pub mod constant;
-pub mod control_flow_graph;
 pub mod deserializer;
 pub mod file_format;
 pub mod file_format_common;

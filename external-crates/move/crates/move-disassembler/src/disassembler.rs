@@ -7,8 +7,8 @@ use std::collections::HashMap;
 use anyhow::{bail, format_err, Result};
 use clap::Parser;
 use colored::*;
+use move_abstract_interpreter::control_flow_graph::{ControlFlowGraph, VMControlFlowGraph};
 use move_binary_format::{
-    control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
         Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,
         FunctionDefinitionIndex, FunctionHandle, ModuleHandle, Signature, SignatureIndex,
