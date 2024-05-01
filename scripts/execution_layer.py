@@ -358,6 +358,7 @@ def cut_command(f):
         *["-p", "sui-adapter-latest"],
         *["-p", "sui-move-natives-latest"],
         *["-p", "sui-verifier-latest"],
+        *["-p", "move-abstract-interpreter"],
         *["-p", "move-bytecode-verifier"],
         *["-p", "move-stdlib-natives"],
         *["-p", "move-vm-runtime"],
@@ -379,6 +380,7 @@ def cut_directories(f):
     if f == "latest":
         crates.extend(
             [
+                external / "move" / "crates" / "move-abstract-interpreter",
                 external / "move" / "crates" / "move-bytecode-verifier",
                 external / "move" / "crates" / "move-stdlib-natives",
                 external / "move" / "crates" / "move-vm-runtime",
@@ -388,6 +390,7 @@ def cut_directories(f):
     else:
         crates.extend(
             [
+                external / "move" / "move-execution" / f / "crates" / "move-abstract-interpreter",
                 external / "move" / "move-execution" / f / "crates" / "move-bytecode-verifier",
                 external / "move" / "move-execution" / f / "crates" / "move-stdlib-natives",
                 external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",

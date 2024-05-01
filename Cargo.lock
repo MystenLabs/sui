@@ -6575,6 +6575,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-interpreter-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -6647,7 +6655,7 @@ dependencies = [
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
- "move-abstract-interpreter",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6661,7 +6669,7 @@ dependencies = [
 name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
- "move-abstract-interpreter",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6675,7 +6683,7 @@ dependencies = [
 name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
- "move-abstract-interpreter",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -12470,6 +12478,8 @@ name = "sui-execution"
 version = "0.1.0"
 dependencies = [
  "cargo_metadata 0.15.4",
+ "move-abstract-interpreter",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
