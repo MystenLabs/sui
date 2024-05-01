@@ -765,7 +765,7 @@ impl ValidatorService {
             traffic_controller.tally(TrafficTally {
                 connection_ip: connection_ip.map(|ip| ip.ip()),
                 proxy_ip: proxy_ip.map(|ip| ip.ip()),
-                weight: error.map(normalize).unwrap_or(Weight::zero()),
+                error_weight: error.map(normalize).unwrap_or(Weight::zero()),
                 timestamp: SystemTime::now(),
             })
         }
