@@ -1740,7 +1740,7 @@ impl AuthorityPerEpochStore {
         if !dkg_failed
             && !generating_randomness
             && self.randomness_state_enabled()
-            && cert.is_randomness_reader()
+            && cert.uses_randomness()
         {
             return Some((
                 DeferralKey::new_for_randomness(commit_round),
@@ -3203,10 +3203,7 @@ impl AuthorityPerEpochStore {
                     return Ok(ConsensusCertificateResult::Deferred(deferral_key));
                 }
 
-                if dkg_failed
-                    && self.randomness_state_enabled()
-                    && certificate.is_randomness_reader()
-                {
+                if dkg_failed && self.randomness_state_enabled() && certificate.uses_randomness() {
                     // TODO: Cancel these immediately instead of waiting until end of epoch.
                     debug!(
                         "Ignoring randomness-using certificate for transaction {:?} because DKG failed",

@@ -338,30 +338,7 @@ impl ValidatorService {
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        transaction.validity_check(epoch_store.protocol_config())?;
-
-        if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "zklogin is not enabled on this network".to_string(),
-            }
-            .into());
-        }
-
-        if !epoch_store.protocol_config().supports_upgraded_multisig()
-            && transaction.has_upgraded_multisig()
-        {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "upgraded multisig format not enabled on this network".to_string(),
-            }
-            .into());
-        }
-
-        if !epoch_store.randomness_state_enabled() && transaction.is_randomness_reader() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "randomness is not enabled on this network".to_string(),
-            }
-            .into());
-        }
+        Self::transaction_validity_check(&epoch_store, transaction.data())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -596,8 +573,15 @@ impl ValidatorService {
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        // The call to digest() assumes the transaction is valid, so we need to verify it first.
-        certificate.validity_check(epoch_store.protocol_config())?;
+        // Being double cautious to also check this for certificates even though we have
+        // already checked when signing transactions.
+        Self::transaction_validity_check(&epoch_store, certificate.data()).tap_err(|err| {
+            // TODO: This is an invariant violation.
+            error!(
+                "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
+                err
+            );
+        })?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
         let request = HandleCertificateRequestV3 {
@@ -623,8 +607,15 @@ impl ValidatorService {
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        // The call to digest() assumes the transaction is valid, so we need to verify it first.
-        certificate.validity_check(epoch_store.protocol_config())?;
+        // Being double cautious to also check this for certificates even though we have
+        // already checked when signing transactions.
+        Self::transaction_validity_check(&epoch_store, certificate.data()).tap_err(|err| {
+            // TODO: This is an invariant violation.
+            error!(
+                "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
+                err
+            );
+        })?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         let request = HandleCertificateRequestV3 {
@@ -670,6 +661,33 @@ impl ValidatorService {
                     ),
                 )
             })
+    }
+
+    fn transaction_validity_check(
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: &SenderSignedData,
+    ) -> SuiResult<()> {
+        let config = epoch_store.protocol_config();
+        if !config.zklogin_auth() && transaction.has_zklogin_sig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "zklogin is not enabled on this network".to_string(),
+            });
+        }
+
+        if !config.supports_upgraded_multisig() && transaction.has_upgraded_multisig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "upgraded multisig format not enabled on this network".to_string(),
+            });
+        }
+
+        if !epoch_store.randomness_state_enabled() && transaction.uses_randomness() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "randomness is not enabled on this network".to_string(),
+            });
+        }
+
+        transaction.validity_check(config, epoch_store.epoch())?;
+        Ok(())
     }
 
     async fn object_info_impl(
