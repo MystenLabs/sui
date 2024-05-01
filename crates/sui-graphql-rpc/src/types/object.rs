@@ -842,7 +842,7 @@ impl Object {
     /// nothing).
     pub(crate) async fn query_singleton(
         db: &Db,
-        type_: TypeTag,
+        type_: StructTag,
         checkpoint_viewed_at: u64,
     ) -> Result<Option<Object>, Error> {
         let filter = ObjectFilter {
