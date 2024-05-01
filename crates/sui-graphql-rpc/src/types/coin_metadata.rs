@@ -334,7 +334,7 @@ impl CoinMetadata {
             return Ok(None);
         };
 
-        let metadata_type = NativeCoinMetadata::type_(*coin_struct).into();
+        let metadata_type = NativeCoinMetadata::type_(*coin_struct);
         let Some(object) = Object::query_singleton(db, metadata_type, checkpoint_viewed_at).await?
         else {
             return Ok(None);
@@ -371,7 +371,7 @@ impl CoinMetadata {
         Ok(Some(if GAS::is_gas(coin_struct.as_ref()) {
             TOTAL_SUPPLY_SUI
         } else {
-            let cap_type = TreasuryCap::type_(*coin_struct).into();
+            let cap_type = TreasuryCap::type_(*coin_struct);
             let Some(object) = Object::query_singleton(db, cap_type, checkpoint_viewed_at).await?
             else {
                 return Ok(None);

@@ -102,7 +102,10 @@ mod ingestion_tests {
     }
 
     /// Wait for the indexer to catch up to the given epoch id.
-    async fn wait_for_epoch(pg_store: &PgIndexerStore, epoch: u64) -> Result<(), IndexerError> {
+    async fn wait_for_epoch(
+        pg_store: &PgIndexerStore<diesel::PgConnection>,
+        epoch: u64,
+    ) -> Result<(), IndexerError> {
         tokio::time::timeout(Duration::from_secs(10), async {
             while {
                 let cp_opt = pg_store.get_latest_epoch_id().unwrap();
@@ -164,11 +167,12 @@ mod ingestion_tests {
     #[tokio::test]
     pub async fn test_event_type() -> Result<(), IndexerError> {
         let mut sim = Simulacrum::new();
+        let data_ingestion_path = tempdir().unwrap().into_path();
 
         // Advance the epoch to generate some events.
         sim.advance_epoch(false);
 
-        let (_, pg_store, _) = set_up(Arc::new(sim)).await;
+        let (_, pg_store, _) = set_up(Arc::new(sim), data_ingestion_path).await;
 
         // Wait for the epoch to change so we can get some events.
         wait_for_epoch(&pg_store, 1).await?;
@@ -202,6 +206,7 @@ mod ingestion_tests {
     #[tokio::test]
     pub async fn test_object_type() -> Result<(), IndexerError> {
         let mut sim = Simulacrum::new();
+        let data_ingestion_path = tempdir().unwrap().into_path();
 
         // Execute a simple transaction.
         let transfer_recipient = SuiAddress::random_for_testing_only();
@@ -212,7 +217,7 @@ mod ingestion_tests {
         // Create a checkpoint which should include the transaction we executed.
         let _ = sim.create_checkpoint();
 
-        let (_, pg_store, _) = set_up(Arc::new(sim)).await;
+        let (_, pg_store, _) = set_up(Arc::new(sim), data_ingestion_path).await;
 
         // Wait for the indexer to catch up to the checkpoint.
         wait_for_checkpoint(&pg_store, 1).await?;
