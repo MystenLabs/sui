@@ -156,6 +156,14 @@ struct UseLoc {
     col_end: u32,
 }
 
+/// Type of a function
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub enum FunType {
+    Macro,
+    Entry,
+    Regular,
+}
+
 /// Information about a definition of some identifier
 #[derive(Debug, Clone, Eq, PartialEq)]
 #[allow(clippy::large_enum_variant)]
@@ -167,6 +175,8 @@ pub enum DefInfo {
         ModuleIdent_,
         /// Visibility
         Visibility,
+        /// For example, a macro or entry function
+        FunType,
         /// Name
         Symbol,
         /// Type args
@@ -419,7 +429,16 @@ impl fmt::Display for DefInfo {
                 // IDE independently on how compiler error messages are generated.
                 write!(f, "{}", type_to_ide_string(t))
             }
-            Self::Function(mod_ident, visibility, name, type_args, arg_names, arg_types, ret) => {
+            Self::Function(
+                mod_ident,
+                visibility,
+                fun_type,
+                name,
+                type_args,
+                arg_names,
+                arg_types,
+                ret,
+            ) => {
                 let type_args_str = type_args_to_ide_string(type_args);
                 let ret_str = match ret {
                     sp!(_, Type_::Unit) => "".to_string(),
@@ -427,8 +446,9 @@ impl fmt::Display for DefInfo {
                 };
                 write!(
                     f,
-                    "{}fun {}::{}{}({}){}",
+                    "{}{}fun {}::{}{}({}){}",
                     visibility_to_ide_string(visibility),
+                    fun_type_to_ide_string(fun_type),
                     mod_ident_to_ide_string(mod_ident),
                     name,
                     type_args_str,
@@ -741,6 +761,15 @@ fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
             format!("{n}::{}", mod_ident.module).to_string()
         }
     }
+}
+
+fn fun_type_to_ide_string(fun_type: &FunType) -> String {
+    match fun_type {
+        FunType::Entry => "entry ",
+        FunType::Macro => "macro ",
+        FunType::Regular => "",
+    }
+    .to_string()
 }
 
 impl SymbolicatorRunner {
@@ -1749,9 +1778,17 @@ fn get_mod_outer_defs(
                 continue;
             }
         };
+        let fun_type = if fun.entry.is_some() {
+            FunType::Entry
+        } else if fun.macro_.is_some() {
+            FunType::Macro
+        } else {
+            FunType::Regular
+        };
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
+            fun_type,
             *name,
             fun.signature
                 .type_parameters
@@ -3393,7 +3430,7 @@ fn def_info_to_type_def_loc(
 ) -> Option<DefLoc> {
     match def_info {
         DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Function(_, _, _, _, _, _, ret) => type_def_loc(mod_outer_defs, ret),
+        DefInfo::Function(_, _, _, _, _, _, _, ret) => type_def_loc(mod_outer_defs, ret),
         DefInfo::Struct(mod_ident, name, _, _, _, _, _) => {
             find_struct(mod_outer_defs, mod_ident, name)
         }
@@ -7023,4 +7060,74 @@ fn pkg_renaming_test() {
     let cpath = dunce::canonicalize(&fpath).unwrap();
 
     symbols.file_use_defs.get(&cpath).unwrap();
+}
+
+#[test]
+/// Tests if function types (`entry`, `macro`) are displayed correctly
+fn function_types_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/macros");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/fun_type.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // entry function definition
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        2,
+        14,
+        "fun_type.move",
+        2,
+        14,
+        "fun_type.move",
+        "entry fun Macros::fun_type::entry_fun()",
+        None,
+    );
+    // macro function definition
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        5,
+        14,
+        "fun_type.move",
+        5,
+        14,
+        "fun_type.move",
+        "macro fun Macros::fun_type::macro_fun()",
+        None,
+    );
+    // entry function call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        9,
+        8,
+        "fun_type.move",
+        2,
+        14,
+        "fun_type.move",
+        "entry fun Macros::fun_type::entry_fun()",
+        None,
+    );
+    // TODO: macro function call
 }
