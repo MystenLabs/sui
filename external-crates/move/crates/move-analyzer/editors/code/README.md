@@ -81,7 +81,8 @@ Move source file (a file with a `.move` file extension) and:
   Toggle Line Comment*).
 - Place your cursor on a delimiter, such as `<`, `(`, or `{`, and its corresponding delimiter --
   `>`, `)`, or `}` -- will be highlighted.
-- As you type, Move keywords will appear as completion suggestions.
+- As you type, the editor will offer completion suggestions, in particular:
+  - code snippets to complete `init` function and object type definitions
 - If the opened Move source file is located within a buildable project (a `Move.toml` file can be
   found in one of its parent directories), the following advanced features will also be available:
   - compiler diagnostics
