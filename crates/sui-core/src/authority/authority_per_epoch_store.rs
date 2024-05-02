@@ -2664,16 +2664,17 @@ impl AuthorityPerEpochStore {
         match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
                 roots.insert(processed_tx.key());
-                self.record_consensus_message_processed(
-                    batch,
-                    SequencedConsensusTransactionKey::System(*processed_tx.digest()),
-                )?;
                 transactions.push_front(processed_tx);
-                Ok(())
             }
-            ConsensusCertificateResult::IgnoredSystem => Ok(()),
+            ConsensusCertificateResult::IgnoredSystem => (),
             _ => unreachable!("process_consensus_system_transaction returned unexpected ConsensusCertificateResult."),
-        }
+        };
+
+        self.record_consensus_message_processed(
+            batch,
+            SequencedConsensusTransactionKey::System(*transaction.digest()),
+        )?;
+        Ok(())
     }
 
     // Assigns shared object versions to transactions and updates the shared object version state.

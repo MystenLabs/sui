@@ -278,7 +278,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             ExecutionIndices {
                 last_committed_round: round,
                 sub_dag_index: commit_sub_dag_index,
-                transaction_index: 0 as u64,
+                transaction_index: 0_u64,
             },
             &empty_bytes,
         );
@@ -777,6 +777,7 @@ pub struct ConsensusCommitInfo {
     pub timestamp: u64,
     pub consensus_commit_digest: ConsensusCommitDigest,
 
+    #[cfg(any(test, feature = "test-utils"))]
     skip_consensus_commit_prologue_in_test: bool,
 }
 
@@ -786,10 +787,13 @@ impl ConsensusCommitInfo {
             round: consensus_output.leader_round(),
             timestamp: consensus_output.commit_timestamp_ms(),
             consensus_commit_digest: consensus_output.consensus_digest(),
+
+            #[cfg(any(test, feature = "test-utils"))]
             skip_consensus_commit_prologue_in_test: false,
         }
     }
 
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn new_for_test(
         commit_round: u64,
         commit_timestamp: u64,
