@@ -969,9 +969,8 @@ title: Module `0xb::bridge`
     bridge_seq_num: u64,
     ctx: &<b>mut</b> TxContext,
 ): Coin&lt;T&gt; {
-    <b>let</b> (maybe_token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(
+    <b>let</b> (maybe_token, owner) = <a href="bridge.md#0xb_bridge">bridge</a>.<a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(
         <a href="../sui-framework/clock.md#0x2_clock">clock</a>,
-        <a href="bridge.md#0xb_bridge">bridge</a>,
         source_chain,
         bridge_seq_num,
         ctx,
@@ -1009,7 +1008,7 @@ title: Module `0xb::bridge`
     bridge_seq_num: u64,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> (token, owner) = <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="../sui-framework/clock.md#0x2_clock">clock</a>, <a href="bridge.md#0xb_bridge">bridge</a>, source_chain, bridge_seq_num, ctx);
+    <b>let</b> (token, owner) = <a href="bridge.md#0xb_bridge">bridge</a>.<a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="../sui-framework/clock.md#0x2_clock">clock</a>, source_chain, bridge_seq_num, ctx);
     <b>if</b> (token.is_some()) {
         <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(token.destroy_some(), owner)
     } <b>else</b> {
@@ -1089,7 +1088,7 @@ title: Module `0xb::bridge`
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, <a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, <b>address</b>)
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, source_chain: u8, bridge_seq_num: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;&gt;, <b>address</b>)
 </code></pre>
 
 
@@ -1099,8 +1098,8 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_claim_token_internal">claim_token_internal</a>&lt;T&gt;(
-    <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     <a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
     source_chain: u8,
     bridge_seq_num: u64,
     ctx: &<b>mut</b> TxContext,
@@ -1409,7 +1408,7 @@ title: Module `0xb::bridge`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
 </code></pre>
 
 
@@ -1419,11 +1418,11 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
-    <a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    <a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     source_chain: u8,
     bridge_seq_num: u64,
 ): u8 {
-    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
     <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(
         source_chain,
         <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
@@ -1457,7 +1456,7 @@ title: Module `0xb::bridge`
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_signatures">get_token_transfer_action_signatures</a>(self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;&gt;
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_signatures">get_token_transfer_action_signatures</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;&gt;
 </code></pre>
 
 
@@ -1467,11 +1466,11 @@ title: Module `0xb::bridge`
 
 
 <pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_signatures">get_token_transfer_action_signatures</a>(
-    self: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    <a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     source_chain: u8,
     bridge_seq_num: u64,
 ): Option&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;&gt; {
-    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(self);
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
     <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(
         source_chain,
         <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),

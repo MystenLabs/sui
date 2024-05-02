@@ -463,7 +463,7 @@ async fn wait_for_transfer_action_status(
         }
         if now.elapsed().as_secs() > 30 {
             panic!(
-                "Timeout waiting for token transfer action to be {:?}",
+                "Timeout waiting for token transfer action to be {:?}. chain_id: {chain_id}, nonce: {nonce}",
                 status
             );
         }
