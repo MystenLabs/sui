@@ -23,7 +23,7 @@ use sui_core::traffic_controller::{
 };
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::traffic_control::{PolicyConfig, Weight};
-use tracing::debug;
+use tracing::warn;
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
@@ -229,7 +229,7 @@ async fn process_request<L: Logger>(
         match monitored_reroute(raw_params, name_str, client_addr) {
             Ok((params_string, name)) => (params_string, name),
             Err(e) => {
-                debug!("Could not reroute request: {:?}", e);
+                warn!("Could not reroute request: {:?}", e);
                 (String::from(""), name_str.to_string())
             }
         };
@@ -318,22 +318,31 @@ pub fn monitored_reroute(
                     "Params not found for executeTransactionBlock",
                 )));
             };
-            let parsed_value: Value =
-                serde_json::from_str(params).expect("Failed to parse jsonrpsee params");
+            let parsed_value: Value = serde_json::from_str(params).map_err(|err| {
+                SuiError::Unknown(format!("Failed to parse jsonrpsee params: {:?}", err))
+            })?;
 
-            let params_str = if let Value::Array(mut params_vec) = parsed_value {
-                params_vec.push(Value::String(client_addr.to_string()));
-                serde_json::to_string(&params_vec).expect("Failed to serialize params")
-            } else if let Value::Object(mut params_map) = parsed_value {
-                params_map.insert(
-                    String::from("client_addr"),
-                    Value::String(client_addr.to_string()),
-                );
-                serde_json::to_string(&params_map).expect("Failed to serialize params")
-            } else {
-                return Err(SuiError::Unknown(String::from(
-                    "Failed to parse jsonrpsee params: expected array",
-                )));
+            let params_str = match parsed_value {
+                Value::Array(mut params_vec) => {
+                    params_vec.push(Value::String(client_addr.to_string()));
+                    serde_json::to_string(&params_vec).map_err(|err| {
+                        SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
+                    })?
+                }
+                Value::Object(mut params_map) => {
+                    params_map.insert(
+                        String::from("client_addr"),
+                        Value::String(client_addr.to_string()),
+                    );
+                    serde_json::to_string(&params_map).map_err(|err| {
+                        SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
+                    })?
+                }
+                _ => {
+                    return Err(SuiError::Unknown(String::from(
+                        "Failed to parse jsonrpsee params: expected array",
+                    )));
+                }
             };
 
             Ok((
