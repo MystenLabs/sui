@@ -421,7 +421,6 @@ impl ValidatorService {
         Ok(tonic::Response::new(info))
     }
 
-    // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
     async fn handle_certificate(
         &self,
         request: HandleCertificateRequestV3,

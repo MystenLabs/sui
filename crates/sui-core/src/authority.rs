@@ -1102,7 +1102,7 @@ impl AuthorityState {
         self.metrics.total_cert_attempts.inc();
 
         if !certificate.contains_shared_object() {
-            // Shared object transactions need to be sequenced by Narwhal before enqueueing
+            // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
@@ -2758,8 +2758,6 @@ impl AuthorityState {
     }
 
     /// Adds certificates to transaction manager for ordered execution.
-    /// It is unnecessary to persist the certificates into the pending_execution table,
-    /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,

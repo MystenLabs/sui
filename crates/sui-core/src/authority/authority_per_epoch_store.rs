@@ -271,7 +271,7 @@ pub struct AuthorityPerEpochStore {
     /// will start with the new epoch(and will open instance of per-epoch store for a new epoch).
     epoch_alive: tokio::sync::RwLock<bool>,
     end_of_publish: Mutex<StakeAggregator<(), true>>,
-    /// Pending certificates that we are waiting to be sequenced by consensus.
+    /// Pending certificates that are waiting to be sequenced by the consensus.
     /// This is an in-memory 'index' of a AuthorityPerEpochTables::pending_consensus_transactions.
     /// We need to keep track of those in order to know when to send EndOfPublish message.
     /// Lock ordering: this is a 'leaf' lock, no other locks should be acquired in the scope of this lock
@@ -403,7 +403,7 @@ pub struct AuthorityEpochTables {
     /// This table has information for the checkpoints for which we constructed all the data
     /// from consensus, but not yet constructed actual checkpoint.
     ///
-    /// Key in this table is the narwhal commit height and not a checkpoint sequence number.
+    /// Key in this table is the consensus commit height and not a checkpoint sequence number.
     ///
     /// Non-empty list of transactions here might result in empty list when we are forming checkpoint.
     /// Because we don't want to create checkpoints with empty content(see CheckpointBuilder::write_checkpoint),
@@ -2376,7 +2376,7 @@ impl AuthorityPerEpochStore {
             skipped_consensus_txns.inc();
             return None;
         }
-        // Signatures are verified as part of narwhal payload verification in SuiTxValidator
+        // Signatures are verified as part of the consensus payload verification in SuiTxValidator
         match &transaction.transaction {
             SequencedConsensusTransactionKind::External(ConsensusTransaction {
                 kind: ConsensusTransactionKind::UserTransaction(_certificate),
@@ -2387,7 +2387,11 @@ impl AuthorityPerEpochStore {
                 ..
             }) => {
                 if transaction.sender_authority() != data.summary.auth_sig().authority {
-                    warn!("CheckpointSignature authority {} does not match narwhal certificate source {}", data.summary.auth_sig().authority, transaction.certificate_author_index );
+                    warn!(
+                        "CheckpointSignature authority {} does not match its author from consensus {}",
+                        data.summary.auth_sig().authority,
+                        transaction.certificate_author_index
+                    );
                     return None;
                 }
             }
@@ -2397,7 +2401,7 @@ impl AuthorityPerEpochStore {
             }) => {
                 if &transaction.sender_authority() != authority {
                     warn!(
-                        "EndOfPublish authority {} does not match narwhal certificate source {}",
+                        "EndOfPublish authority {} does not match its author from consensus {}",
                         authority, transaction.certificate_author_index
                     );
                     return None;
@@ -2409,9 +2413,8 @@ impl AuthorityPerEpochStore {
             }) => {
                 if transaction.sender_authority() != capabilities.authority {
                     warn!(
-                        "CapabilityNotification authority {} does not match narwhal certificate source {}",
-                        capabilities.authority,
-                        transaction.certificate_author_index
+                        "CapabilityNotification authority {} does not match its author from consensus {}",
+                        capabilities.authority, transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -2422,7 +2425,7 @@ impl AuthorityPerEpochStore {
             }) => {
                 if transaction.sender_authority() != *authority {
                     warn!(
-                        "NewJWKFetched authority {} does not match narwhal certificate source {}",
+                        "NewJWKFetched authority {} does not match its author from consensus {}",
                         authority, transaction.certificate_author_index,
                     );
                     return None;
@@ -2445,9 +2448,8 @@ impl AuthorityPerEpochStore {
             }) => {
                 if transaction.sender_authority() != *authority {
                     warn!(
-                        "RandomnessDkgMessage authority {} does not match narwhal certificate source {}",
-                        authority,
-                        transaction.certificate_author_index
+                        "RandomnessDkgMessage authority {} does not match its author from consensus {}",
+                        authority, transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -2458,9 +2460,8 @@ impl AuthorityPerEpochStore {
             }) => {
                 if transaction.sender_authority() != *authority {
                     warn!(
-                        "RandomnessDkgConfirmation authority {} does not match narwhal certificate source {}",
-                        authority,
-                        transaction.certificate_author_index
+                        "RandomnessDkgConfirmation authority {} does not match its author from consensus {}",
+                        authority, transaction.certificate_author_index
                     );
                     return None;
                 }
@@ -3154,7 +3155,7 @@ impl AuthorityPerEpochStore {
                     && !previously_deferred_tx_digests.contains_key(certificate.digest())
                 {
                     // This can not happen with valid authority
-                    // With some edge cases narwhal might sometimes resend previously seen certificate after EndOfPublish
+                    // With some edge cases consensus might sometimes resend previously seen certificate after EndOfPublish
                     // However this certificate will be filtered out before this line by `consensus_message_processed` call in `verify_consensus_transaction`
                     // If we see some new certificate here it means authority is byzantine and sent certificate after EndOfPublish (or we have some bug in ConsensusAdapter)
                     warn!("[Byzantine authority] Authority {:?} sent a new, previously unseen certificate {:?} after it sent EndOfPublish message to consensus", certificate_author.concise(), certificate.digest());
