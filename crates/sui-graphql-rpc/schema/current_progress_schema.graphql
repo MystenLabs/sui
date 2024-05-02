@@ -2173,6 +2173,11 @@ type MovePackage implements IObject & IOwner {
 	"""
 	packageAtVersion(version: Int!): MovePackage
 	"""
+	Fetch the latest version of this package (the package with the highest `version` that shares
+	this packages's original ID)
+	"""
+	latestPackage: MovePackage!
+	"""
 	A representation of the module called `name` in this package, including the
 	structs and functions it defines.
 	"""
@@ -3057,6 +3062,13 @@ type Query {
 	interpretation of `version` for the `object` query).
 	"""
 	package(address: SuiAddress!, version: UInt53): MovePackage
+	"""
+	The latest version of the package at `address`.
+	
+	This corresponds to the package with the highest `version` that shares its original ID with
+	the package at `address`.
+	"""
+	latestPackage(address: SuiAddress!): MovePackage
 	"""
 	Look-up an Account by its SuiAddress.
 	"""
