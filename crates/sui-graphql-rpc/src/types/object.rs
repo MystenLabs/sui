@@ -17,6 +17,7 @@ use super::move_object::MoveObject;
 use super::move_package::MovePackage;
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
+use super::sui_address::addr;
 use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block;
 use super::transaction_block::TransactionBlockFilter;
@@ -181,6 +182,7 @@ pub(crate) struct AddressOwner {
     owner: Option<Owner>,
 }
 
+/// Filter for a point query of an Object.
 pub(crate) enum ObjectLookup {
     LatestAt {
         /// The checkpoint sequence number at which this was viewed at
@@ -1457,15 +1459,6 @@ impl From<&Object> for OwnerImpl {
             checkpoint_viewed_at: object.checkpoint_viewed_at,
         }
     }
-}
-
-/// Parse a `SuiAddress` from its stored representation.  Failure is an internal error: the
-/// database should never contain a malformed address (containing the wrong number of bytes).
-fn addr(bytes: impl AsRef<[u8]>) -> Result<SuiAddress, Error> {
-    SuiAddress::from_bytes(bytes.as_ref()).map_err(|e| {
-        let bytes = bytes.as_ref().to_vec();
-        Error::Internal(format!("Error deserializing address: {bytes:?}: {e}"))
-    })
 }
 
 pub(crate) async fn deserialize_move_struct(
