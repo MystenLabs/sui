@@ -199,7 +199,7 @@ fn update_index_and_hash(
 
 #[async_trait]
 impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandler<C> {
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
+    /// This function gets called by the consensus for each consensus commit.
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");

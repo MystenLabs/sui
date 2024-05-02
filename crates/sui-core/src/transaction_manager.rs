@@ -334,7 +334,7 @@ impl Inner {
 
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending_certificates,
-    /// which contains certificates not yet executed from Narwhal output and RPC.
+    /// which contains certified transactions from consensus output and RPC that are not executed.
     /// Transactions from other sources, e.g. checkpoint executor, have own persistent storage to
     /// retry transactions.
     pub(crate) fn new(
