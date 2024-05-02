@@ -14,6 +14,12 @@ jobs:
     outputs:
       run_pr_slack_job: ${{ steps.step1.run_pr_slack_job }}
     steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
     - name: Check if PR author is external
       id: step1
       env:
@@ -39,7 +45,7 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         RUN_JOB: ${{needs.external_pr.outputs.run_pr_slack_job}}
-      if: $RUN_JOB == 'true'
+      if:  ${{needs.external_pr.outputs.run_pr_slack_job}} == 'true'
       with:
         channel-id: '#github-new-issues'
         payload: |
