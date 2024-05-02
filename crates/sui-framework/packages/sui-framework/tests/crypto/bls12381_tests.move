@@ -173,6 +173,7 @@ module sui::bls12381_tests {
         let y = gen.generate_u32() as u64;
         let y_scalar = bls12381::scalar_from_u64(y);
 
+        // Since x, y are u32 numbers, the following operations do not overflow as u64.
         assert!(group_ops::equal(&bls12381::scalar_from_u64(x + y), &bls12381::scalar_add(&x_scalar, &y_scalar)), 0);
         let z_scalar = bls12381::scalar_sub(&x_scalar, &y_scalar);
         assert!(group_ops::equal(&bls12381::scalar_from_u64(x), &bls12381::scalar_add(&z_scalar, &y_scalar)), 0);
