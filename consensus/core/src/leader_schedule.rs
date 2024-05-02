@@ -302,8 +302,8 @@ mod tests {
     use super::*;
     use crate::commit::CommitRange;
 
-    #[tokio::test]
-    async fn test_elect_leader() {
+    #[test]
+    fn test_elect_leader() {
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = LeaderSchedule::new(context, LeaderSwapTable::default());
 
@@ -326,8 +326,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_elect_leader_stake_based() {
+    #[test]
+    fn test_elect_leader_stake_based() {
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = LeaderSchedule::new(context, LeaderSwapTable::default());
 
@@ -350,8 +350,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_leader_swap_table() {
+    #[test]
+    fn test_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -374,8 +374,8 @@ mod tests {
             .contains_key(&AuthorityIndex::new_for_test(0)));
     }
 
-    #[tokio::test]
-    async fn test_leader_swap_table_swap() {
+    #[test]
+    fn test_leader_swap_table_swap() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -402,8 +402,8 @@ mod tests {
         assert_eq!(swapped_leader, None);
     }
 
-    #[tokio::test]
-    async fn test_leader_swap_table_retrieve_first_nodes() {
+    #[test]
+    fn test_leader_swap_table_retrieve_first_nodes() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -440,11 +440,11 @@ mod tests {
         )));
     }
 
-    #[tokio::test]
+    #[test]
     #[should_panic(
         expected = "The swap_stake_threshold (34) should be in range [0 - 33], out of bounds parameter detected"
     )]
-    async fn test_leader_swap_table_swap_stake_threshold_out_of_bounds() {
+    fn test_leader_swap_table_swap_stake_threshold_out_of_bounds() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -456,8 +456,8 @@ mod tests {
         LeaderSwapTable::new(context, reputation_scores, swap_stake_threshold);
     }
 
-    #[tokio::test]
-    async fn test_update_leader_swap_table() {
+    #[test]
+    fn test_update_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -485,11 +485,11 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
     }
 
-    #[tokio::test]
+    #[test]
     #[should_panic(
         expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..20) vs new LeaderSwapTable CommitRange(21..25)"
     )]
-    async fn test_update_bad_leader_swap_table() {
+    fn test_update_bad_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
