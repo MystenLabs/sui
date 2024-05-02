@@ -165,7 +165,7 @@ describe('Contract links', () => {
 				contract: ZK_BAG_CONFIG,
 			});
 
-			const { url, transactionBlock } = await lostLink.link.createRegenerateTransaction(
+			const { url, transactionBlock } = await lostLink.createRegenerateTransaction(
 				keypair.toSuiAddress(),
 			);
 

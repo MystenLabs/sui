@@ -205,9 +205,7 @@ const { links, hasNextPage, cursor } = await listCreatedLinks({
 });
 
 // url will be the new link url
-const { url, transactionBlock } = await links[0].link.createRegenerateTransaction(
-	addressOfLinkCreator,
-);
+const { url, transactionBlock } = await links[0].createRegenerateTransaction(addressOfLinkCreator);
 
 // Execute the transaction block to regenerate the link
 await client.signAndExecuteTransactionBlock({

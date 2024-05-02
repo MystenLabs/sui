@@ -94,13 +94,7 @@ export async function getSentTransactionBlocksWithLinks({
 							loadClaimedAssets,
 						});
 
-						return {
-							link,
-							claimed: !!link.claimed,
-							assets: link.assets!,
-							digest: block.digest,
-							createdAt: block.timestampMs,
-						};
+						return link;
 					}),
 			);
 
@@ -142,13 +136,7 @@ export async function getSentTransactionBlocksWithLinks({
 
 						await link.loadAssets({ loadClaimedAssets });
 
-						return {
-							link,
-							claimed: !!link.claimed,
-							assets: link.assets!,
-							digest: block.digest,
-							createdAt: block.timestampMs,
-						};
+						return link;
 					}),
 			);
 
