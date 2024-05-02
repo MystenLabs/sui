@@ -19,7 +19,11 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_types::{bridge::BRIDGE_MODULE_NAME, event::EventID, Identifier};
+use sui_types::{
+    bridge::{BRIDGE_COMMITTEE_MODULE_NAME, BRIDGE_MODULE_NAME},
+    event::EventID,
+    Identifier,
+};
 use tokio::task::JoinHandle;
 use tracing::info;
 
@@ -113,30 +117,35 @@ fn get_sui_modules_to_watch(
     store: &std::sync::Arc<BridgeOrchestratorTables>,
     sui_bridge_module_last_processed_event_id_override: Option<EventID>,
 ) -> HashMap<Identifier, Option<EventID>> {
-    let module_identifier = BRIDGE_MODULE_NAME.to_owned();
-    let sui_bridge_modules = vec![module_identifier.clone()];
+    let sui_bridge_modules = vec![
+        BRIDGE_MODULE_NAME.to_owned(),
+        BRIDGE_COMMITTEE_MODULE_NAME.to_owned(),
+    ];
+    if let Some(cursor) = sui_bridge_module_last_processed_event_id_override {
+        info!("Overriding cursor for sui bridge modules to {:?}", cursor);
+        return HashMap::from_iter(
+            sui_bridge_modules
+                .iter()
+                .map(|module| (module.clone(), Some(cursor))),
+        );
+    }
+
     let sui_bridge_module_stored_cursor = store
         .get_sui_event_cursors(&sui_bridge_modules)
-        .expect("Failed to get eth sui event cursors from storage")[0];
+        .expect("Failed to get eth sui event cursors from storage");
     let mut sui_modules_to_watch = HashMap::new();
-    match sui_bridge_module_last_processed_event_id_override {
-        Some(cursor) => {
+    for (module_identifier, cursor) in sui_bridge_modules
+        .iter()
+        .zip(sui_bridge_module_stored_cursor)
+    {
+        if cursor.is_none() {
             info!(
-                "Overriding cursor for sui bridge module {} to {:?}. Stored cursor: {:?}",
-                module_identifier, cursor, sui_bridge_module_stored_cursor,
+                "No cursor found for sui bridge module {} in storage or config override, query start from the beginning.",
+                module_identifier
             );
-            sui_modules_to_watch.insert(module_identifier, Some(cursor));
         }
-        None => {
-            if sui_bridge_module_stored_cursor.is_none() {
-                info!(
-                    "No cursor found for sui bridge module {} in storage or config override",
-                    module_identifier
-                );
-            }
-            sui_modules_to_watch.insert(module_identifier, sui_bridge_module_stored_cursor);
-        }
-    };
+        sui_modules_to_watch.insert(module_identifier.clone(), cursor);
+    }
     sui_modules_to_watch
 }
 
@@ -257,14 +266,18 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
 
         let store = BridgeOrchestratorTables::new(temp_dir.path());
-        let module = BRIDGE_MODULE_NAME.to_owned();
+        let bridge_module = BRIDGE_MODULE_NAME.to_owned();
+        let committee_module = BRIDGE_COMMITTEE_MODULE_NAME.to_owned();
         // No override, no stored watermark, use None
         let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
         assert_eq!(
             sui_modules_to_watch,
-            vec![(module.clone(), None)]
-                .into_iter()
-                .collect::<HashMap<_, _>>()
+            vec![
+                (bridge_module.clone(), None),
+                (committee_module.clone(), None)
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>()
         );
 
         // no stored watermark, use override
@@ -275,34 +288,51 @@ mod tests {
         let sui_modules_to_watch = get_sui_modules_to_watch(&store, Some(override_cursor));
         assert_eq!(
             sui_modules_to_watch,
-            vec![(module.clone(), Some(override_cursor))]
-                .into_iter()
-                .collect::<HashMap<_, _>>()
+            vec![
+                (bridge_module.clone(), Some(override_cursor)),
+                (committee_module.clone(), Some(override_cursor))
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>()
         );
 
-        // No override, found stored watermark, use stored watermark
+        // No override, found stored watermark for `bridge` module, use stored watermark for `bridge`
+        // and None for `committee`
         let stored_cursor = EventID {
             tx_digest: TransactionDigest::random(),
             event_seq: 100,
         };
         store
-            .update_sui_event_cursor(module.clone(), stored_cursor)
+            .update_sui_event_cursor(bridge_module.clone(), stored_cursor)
             .unwrap();
         let sui_modules_to_watch = get_sui_modules_to_watch(&store, None);
         assert_eq!(
             sui_modules_to_watch,
-            vec![(module.clone(), Some(stored_cursor))]
-                .into_iter()
-                .collect::<HashMap<_, _>>()
+            vec![
+                (bridge_module.clone(), Some(stored_cursor)),
+                (committee_module.clone(), None)
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>()
         );
 
         // found stored watermark, use override
+        let stored_cursor = EventID {
+            tx_digest: TransactionDigest::random(),
+            event_seq: 100,
+        };
+        store
+            .update_sui_event_cursor(committee_module.clone(), stored_cursor)
+            .unwrap();
         let sui_modules_to_watch = get_sui_modules_to_watch(&store, Some(override_cursor));
         assert_eq!(
             sui_modules_to_watch,
-            vec![(module.clone(), Some(override_cursor))]
-                .into_iter()
-                .collect::<HashMap<_, _>>()
+            vec![
+                (bridge_module.clone(), Some(override_cursor)),
+                (committee_module.clone(), Some(override_cursor))
+            ]
+            .into_iter()
+            .collect::<HashMap<_, _>>()
         );
     }
 

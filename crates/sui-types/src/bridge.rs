@@ -34,6 +34,7 @@ pub type BridgeRecordDyanmicField = Field<
 >;
 
 pub const BRIDGE_MODULE_NAME: &IdentStr = ident_str!("bridge");
+pub const BRIDGE_COMMITTEE_MODULE_NAME: &IdentStr = ident_str!("committee");
 pub const BRIDGE_MESSAGE_MODULE_NAME: &IdentStr = ident_str!("message");
 pub const BRIDGE_CREATE_FUNCTION_NAME: &IdentStr = ident_str!("create");
 pub const BRIDGE_INIT_COMMITTEE_FUNCTION_NAME: &IdentStr = ident_str!("init_bridge_committee");
@@ -373,7 +374,7 @@ pub struct MoveTypeBridgeCommittee {
 
 /// Rust version of the Move committee::CommitteeMemberRegistration type.
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveTypeCommitteeMemberRegistration {
     pub sui_address: SuiAddress,
@@ -408,7 +409,7 @@ pub struct BridgeTreasurySummary {
 
 /// Rust version of the Move committee::CommitteeMember type.
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MoveTypeCommitteeMember {
     pub sui_address: SuiAddress,
