@@ -1,9 +1,10 @@
 ---
-title: NFT Rental Using Kiosk Apps 
+title: NFT Rental 
 description: An example using the Kiosk Apps standard that provides the ability for users to rent NFTs according to the rules of a provided policy instead of outright owning them. This approach closely aligns with the ERC-4907 renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+keywords: [ERC-721, NFT]
 ---
 
-NFT renting is a mechanism that allows individuals without ownership or possession of a specific NFT to temporarily utilize or experience it. The implementation of this process leverages the [Kiosk Apps standard](../kiosk-apps.mdx) to establish an infrastructure for rental transactions. This approach closely aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
+NFT renting is a mechanism that allows individuals without ownership or possession of a specific NFT to temporarily utilize or experience it. The implementation of this process leverages the [Kiosk Apps standard](../../../standards/kiosk-apps.mdx) to establish an infrastructure for rental transactions. This approach closely aligns with the [Ethereum ERC-4907](https://eips.ethereum.org/EIPS/eip-4907) renting standard, making it a suitable choice for Solidity-based use cases intended for implementation on Sui.
 
 The NFT Rental example satisfies the following project requirements:
 
@@ -14,7 +15,7 @@ The NFT Rental example satisfies the following project requirements:
     - Immutable access is read-only.
     - Mutable, the lender should consider downgrade and upgrade operations and include them in the renting fee.
 - After the renting period has finished, the item can be sold normally.
-- Creator-defined royalties are respected by encompassing [transfer policy rules](../../concepts/transfers/custom-rules.mdx).
+- Creator-defined royalties are respected by encompassing [transfer policy rules](../../../concepts/transfers/custom-rules.mdx).
 
 ## Use cases
 
@@ -54,7 +55,7 @@ Transferring kiosks might result in unexpected behaviors while an asset is being
 
 :::
 
-The rental smart contract uses the [Kiosk Apps](../kiosk-apps.mdx) standard. Both the lender and borrower must install a Kiosk extension to take part, and the creator of the borrowed asset type must create a rental policy and `ProtectedTP` object to allow the extension to manage rentals while enforcing royalties.
+The rental smart contract uses the [Kiosk Apps](../../../standards/kiosk-apps.mdx) standard. Both the lender and borrower must install a Kiosk extension to take part, and the creator of the borrowed asset type must create a rental policy and `ProtectedTP` object to allow the extension to manage rentals while enforcing royalties.
 
 :::info
 
@@ -96,7 +97,7 @@ The `Listed` struct represents a listed item. The only field the struct includes
 public struct Listed has store, copy, drop { id: ID }
 ```
 
-The `Promise` struct is created for borrowing by value. The `Promise` operates as the [hot potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx) that can only be resolved by returning the item back to the extension's `Bag`.
+The `Promise` struct is created for borrowing by value. The `Promise` operates as the [hot potato](../../../concepts/sui-move-concepts/patterns/hot-potato.mdx) that can only be resolved by returning the item back to the extension's `Bag`.
 
 The `Promise` field lacks the `store` ability as it shouldn't be wrapped inside other objects.
 It also lacks the `drop` ability because only the `return_val` function can consume it.
@@ -648,8 +649,8 @@ rect rgba(191, 223, 255, 0.2)
 
 ## Related links
 
-- [NFT Rental example](https://github.com/MystenLabs/sui-nft-rental): The source code that this document references.
-- [Sui Kiosk](../kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui.
-- [Kiosk Apps](../kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk. 
-- [Hot Potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx): The hot potato coding pattern the `Promise` struct uses. 
-- [Custom Transfer Rules](../../concepts/transfers/custom-rules.mdx): Custom transfer rules are used in this example to define rental policies.
+- [NFT Rental example](https://github.com/MystenLabs/sui/tree/main/examples/move/nft-rental): The source code that this document references.
+- [Sui Kiosk](../../../standards/kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui.
+- [Kiosk Apps](../../../standards/kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk. 
+- [Hot Potato](../../../concepts/sui-move-concepts/patterns/hot-potato.mdx): The hot potato coding pattern the `Promise` struct uses. 
+- [Custom Transfer Rules](../../../concepts/transfers/custom-rules.mdx): Custom transfer rules are used in this example to define rental policies.

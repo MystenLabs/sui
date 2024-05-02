@@ -3,24 +3,11 @@ title: Regulated Coin and Deny List
 description: You can create regulated coins on Sui, such as stablecoins. These coins are similar to other coins like SUI, but include the ability to control access to the coin using a deny list.
 ---
 
-The Sui [Coin](../../../../standards/coin.mdx) standard provides a `create_regulated_currency` function to create coins. This function is different than `create_currency` in that it generates a coin that you can block certain addresses from being able to use those coins in transactions. This ability is a requirement for assets like stablecoins.
+The Sui [Coin](../../../standards/coin.mdx) standard provides a `create_regulated_currency` function to create coins. This function is different than `create_currency` in that it generates a coin that you can block certain addresses from being able to use those coins in transactions. This ability is a requirement for assets like stablecoins.
 
 Behind the scenes, `create_regulated_currency` uses the `create_currency` function to create the coin, but also produces a `DenyCap` object that allows its bearer to control access to the coin's deny list in a `DenyList` object. Consequently, the way to create a coin using `create_regulated_currency` is similar to the previous example, with the addition of a transfer of the `DenyCap` object to the module publisher.
 
-```move title="regcoin.move"
-module examples::regcoin {
-    use sui::coin;
-
-    public struct REGCOIN has drop {}
-
-    fun init(witness: REGCOIN, ctx: &mut TxContext) {
-        let (treasury, deny_cap, metadata) = coin::create_regulated_currency(witness, 6, b"REGCOIN", b"", b"", option::none(), ctx);
-        transfer::public_freeze_object(metadata);
-        transfer::public_transfer(treasury, ctx.sender());
-        transfer::public_transfer(deny_cap, ctx.sender())
-    }
-}
-```
+{@inject: examples/move/coin/sources/regcoin.move}
 
 When you deploy the previous module using `sui client publish`, the console responds with transaction effects, including the creation of the following objects:
 

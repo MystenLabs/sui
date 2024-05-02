@@ -2,7 +2,7 @@
 title: Create Coins and Tokens
 ---
 
-Coins and tokens on Sui are similar. In practice, the terms are used interchangeably, but there are some differences in their implementation. You can learn about these differences in the respective standard documentation, [Closed-Loop Token](../../../standards/closed-loop-token.mdx) and [Coin](../../../standards/coin.mdx).
+Coins and tokens on Sui are similar. In practice, the terms are used interchangeably, but there are some differences in their implementation. You can learn about these differences in the respective standard documentation, [Closed-Loop Token](../../standards/closed-loop-token.mdx) and [Coin](../../standards/coin.mdx).
 
 Publishing a coin on Sui is similar to publishing a new type. The main difference is the requirement of a one time witness when creating a coin.
 
@@ -10,23 +10,13 @@ Publishing a coin on Sui is similar to publishing a new type. The main differenc
 
 The `Coin<T>` is a generic implementation of a coin on Sui. Access to the `TreasuryCap` provides control over the minting and burning of coins. Further transactions can be sent directly to the `sui::coin::Coin` with `TreasuryCap` object as authorization.
 
-Extending the example further, add a `mint` function to the module. Use the `mint` function of the `Coin` module to create (mint) a coin and then transfer it to an address. 
+The example module includes a `mint` function. You pass the `TreasuryCap` created from the `init` function to the module's `mint` function. The function then uses the `mint` function from the `Coin` module to create (mint) a coin and then transfer it to an address. 
 
-```move
-public fun mint(
-    treasury_cap: &mut TreasuryCap<MYCOIN>, 
-    amount: u64, 
-    recipient: address, 
-    ctx: &mut TxContext,
-) {
-    let coin = coin::mint(treasury_cap, amount, ctx);
-    transfer::public_transfer(coin, recipient)
-}
-``` 
+{@inject: examples/move/coin/sources/my_coin.move#fun=mint noComments}
 
 ### Sui CLI
 
-If you published the previous example to a Sui network, you can use the `sui client call` command to mint coins and deliver them to the address you provide. See [Sui CLI](../../../references/cli.mdx) for more information on the command line interface.
+If you published the previous example to a Sui network, you can use the `sui client call` command to mint coins and deliver them to the address you provide. See [Sui CLI](../../references/cli.mdx) for more information on the command line interface.
 
 ```shell
 sui client call --function mint --module mycoin --package <PACKAGE-ID> --args <TREASURY-CAP-ID> <COIN-AMOUNT> <RECIPIENT-ADDRESS> --gas-budget <GAS-AMOUNT>
@@ -69,11 +59,11 @@ Coin-like functions perform the minting and burning of tokens. Both require the 
 - `token::mint` - mint a token
 - `token::burn` - burn a token
 
-See [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard for complete details of working with tokens.
+See [Closed-Loop Token](../../standards/closed-loop-token.mdx) standard for complete details of working with tokens.
 
 ## Related links
 
-- [Regulated Coin and Deny List](./create-coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
-- [Loyalty Token](./create-coin/loyalty.mdx): Create a token to reward user loyalty.
-- [In-Game Token](./create-coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.
+- [Regulated Coin and Deny List](./coin/regulated.mdx): Create a regulated coin and add or remove names from the deny list.
+- [Loyalty Token](./coin/loyalty.mdx): Create a token to reward user loyalty.
+- [In-Game Token](./coin/in-game-token.mdx): Create tokens that can be used only within a mobile game.
 - [One Time Witness](https://move-book.com/programmability/one-time-witness.html): The Move Book documentation of the one time witness pattern. 

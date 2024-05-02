@@ -76,8 +76,8 @@ const guides = [
 				type: 'category',
 				label: 'Create NFTs',
 				link: {
-					label: 'Create NFT',
-					id: 'guides/developer/nft/create-nft',
+					type: 'doc',
+					id: 'guides/developer/nft',
 				},
 				items: ['guides/developer/nft/nft-rental'],
 			},
@@ -86,12 +86,12 @@ const guides = [
 				label: 'Create Coins and Tokens',
 				link: {
 					type: 'doc',
-					id: 'guides/developer/coin/create-coin',
+					id: 'guides/developer/coin',
 				},
 				items: [
-					'guides/developer/coin/create-coin/regulated',
-					'guides/developer/coin/create-coin/in-game-token',
-					'guides/developer/coin/create-coin/loyalty',
+					'guides/developer/coin/regulated',
+					'guides/developer/coin/in-game-token',
+					'guides/developer/coin/loyalty',
 				],
 			},
 			{
