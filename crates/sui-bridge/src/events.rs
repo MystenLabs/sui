@@ -8,8 +8,7 @@
 
 #![allow(non_upper_case_globals)]
 
-use std::str::FromStr;
-
+use crate::crypto::BridgeAuthorityPublicKey;
 use crate::error::BridgeError;
 use crate::error::BridgeResult;
 use crate::types::BridgeAction;
@@ -20,11 +19,15 @@ use fastcrypto::encoding::Hex;
 use move_core_types::language_storage::StructTag;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use sui_json_rpc_types::SuiEvent;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
-
 use sui_types::bridge::MoveTypeBridgeMessageKey;
+use sui_types::bridge::MoveTypeCommitteeMember;
+use sui_types::bridge::MoveTypeCommitteeMemberRegistration;
+use sui_types::collection_types::VecMap;
+use sui_types::crypto::ToFromBytes;
 use sui_types::digests::TransactionDigest;
 use sui_types::BRIDGE_PACKAGE_ID;
 
@@ -62,6 +65,20 @@ pub struct MoveTokenTransferAlreadyApproved {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 pub struct MoveTokenTransferAlreadyClaimed {
     pub message_key: MoveTypeBridgeMessageKey,
+}
+
+// `CommitteeUpdateEvent` emitted in committee.move
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveCommitteeUpdateEvent {
+    pub members: VecMap<Vec<u8>, MoveTypeCommitteeMember>,
+    pub stake_participation_percentage: u64,
+}
+
+// `BlocklistValidatorEvent` emitted in committee.move
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MoveBlocklistValidatorEvent {
+    pub blocklisted: bool,
+    pub public_keys: Vec<Vec<u8>>,
 }
 
 // Sanitized version of MoveTokenDepositedEvent
@@ -173,6 +190,53 @@ impl TryFrom<MoveTokenTransferAlreadyClaimed> for TokenTransferAlreadyClaimed {
     }
 }
 
+// Sanitized version of MoveCommitteeUpdateEvent
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct CommitteeUpdate {
+    pub members: Vec<MoveTypeCommitteeMember>,
+    pub stake_participation_percentage: u64,
+}
+
+impl TryFrom<MoveCommitteeUpdateEvent> for CommitteeUpdate {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveCommitteeUpdateEvent) -> BridgeResult<Self> {
+        let members = event
+            .members
+            .contents
+            .into_iter()
+            .map(|v| v.value)
+            .collect();
+        Ok(Self {
+            members,
+            stake_participation_percentage: event.stake_participation_percentage,
+        })
+    }
+}
+
+// Sanitized version of MoveBlocklistValidatorEvent
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct BlocklistValidatorEvent {
+    pub blocklisted: bool,
+    pub public_keys: Vec<BridgeAuthorityPublicKey>,
+}
+
+impl TryFrom<MoveBlocklistValidatorEvent> for BlocklistValidatorEvent {
+    type Error = BridgeError;
+
+    fn try_from(event: MoveBlocklistValidatorEvent) -> BridgeResult<Self> {
+        let public_keys = event.public_keys.into_iter().map(|bytes|
+            BridgeAuthorityPublicKey::from_bytes(&bytes).map_err(|e|
+                BridgeError::Generic(format!("Failed to convert MoveBlocklistValidatorEvent to BlocklistValidatorEvent. Failed to convert public key to BridgeAuthorityPublicKey: {:?}", e))
+            )
+        ).collect::<BridgeResult<Vec<_>>>()?;
+        Ok(Self {
+            blocklisted: event.blocklisted,
+            public_keys,
+        })
+    }
+}
+
 impl TryFrom<MoveTokenDepositedEvent> for EmittedSuiToEthTokenBridgeV1 {
     type Error = BridgeError;
 
@@ -232,6 +296,12 @@ crate::declare_events!(
     TokenTransferClaimed(TokenTransferClaimed) => ("bridge::TokenTransferClaimed", MoveTokenTransferClaimed),
     TokenTransferAlreadyApproved(TokenTransferAlreadyApproved) => ("bridge::TokenTransferAlreadyApproved", MoveTokenTransferAlreadyApproved),
     TokenTransferAlreadyClaimed(TokenTransferAlreadyClaimed) => ("bridge::TokenTransferAlreadyClaimed", MoveTokenTransferAlreadyClaimed),
+    // No need to define a sanitized event struct for MoveTypeCommitteeMemberRegistration
+    // because the info provided by validators could be invalid
+    CommitteeMemberRegistration(MoveTypeCommitteeMemberRegistration) => ("committee::CommitteeMemberRegistration", MoveTypeCommitteeMemberRegistration),
+    CommitteeUpdateEvent(CommitteeUpdate) => ("committee::CommitteeUpdateEvent", MoveCommitteeUpdateEvent),
+    BlocklistValidator(BlocklistValidatorEvent) => ("committee::CommitteeUpdateEvent", MoveBlocklistValidatorEvent),
+
     // Add new event types here. Format:
     // EnumVariantName(Struct) => ("{module}::{event_struct}", CorrespondingMoveStruct)
 );
@@ -289,13 +359,19 @@ impl SuiBridgeEvent {
             SuiBridgeEvent::TokenTransferClaimed(_event) => None,
             SuiBridgeEvent::TokenTransferAlreadyApproved(_event) => None,
             SuiBridgeEvent::TokenTransferAlreadyClaimed(_event) => None,
+            SuiBridgeEvent::CommitteeMemberRegistration(_event) => None,
+            SuiBridgeEvent::CommitteeUpdateEvent(_event) => None,
+            SuiBridgeEvent::BlocklistValidator(_event) => None,
         }
     }
 }
 
 #[cfg(test)]
 pub mod tests {
+    use std::collections::HashSet;
+
     use super::*;
+    use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
     use crate::types::BridgeAction;
     use crate::types::SuiToEthBridgeAction;
     use ethers::types::Address as EthAddress;
@@ -354,5 +430,38 @@ pub mod tests {
             timestamp_ms: None,
         };
         (event, bridge_action)
+    }
+
+    #[tokio::test]
+    async fn test_bridge_events_conversion() {
+        telemetry_subscribers::init_for_testing();
+        init_all_struct_tags();
+        let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
+            .with_eth_env(true)
+            .with_bridge_cluster(false)
+            .build()
+            .await;
+
+        let events = bridge_test_cluster
+            .new_bridge_events(
+                HashSet::from_iter([
+                    CommitteeMemberRegistration.get().unwrap().clone(),
+                    CommitteeUpdateEvent.get().unwrap().clone(),
+                ]),
+                false,
+            )
+            .await;
+        for event in events.iter() {
+            match SuiBridgeEvent::try_from_sui_event(event).unwrap().unwrap() {
+                SuiBridgeEvent::CommitteeMemberRegistration(_event) => (),
+                SuiBridgeEvent::CommitteeUpdateEvent(_event) => (),
+                _ => panic!(
+                    "Expected CommitteeMemberRegistration or CommitteeUpdateEvent, got {:?}",
+                    event
+                ),
+            }
+        }
+
+        // TODO: trigger other events and make sure they are converted correctly
     }
 }
