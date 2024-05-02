@@ -985,7 +985,8 @@ impl SuiClientCommands {
                 with_unpublished_dependencies,
                 opts,
             } => {
-                let sender = context.active_address()?;
+                let sender = context.try_get_object_owner(&opts.gas).await?;
+                let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let (package_id, compiled_modules, dependencies, package_digest, upgrade_policy) =
                     upgrade_package(
@@ -1063,7 +1064,8 @@ impl SuiClientCommands {
                     .into());
                 }
 
-                let sender = context.active_address()?;
+                let sender = context.try_get_object_owner(&opts.gas).await?;
+                let sender = sender.unwrap_or(context.active_address()?);
                 let client = context.get_client().await?;
                 let (dependencies, compiled_modules, _, _) = compile_package(
                     client.read_api(),
@@ -1265,10 +1267,11 @@ impl SuiClientCommands {
                     .move_call_tx_kind(package, &module, &function, type_args, args)
                     .await?;
 
-                let signer = context.active_address()?;
+                let sender = context.try_get_object_owner(&opts.gas).await?;
+                let sender = sender.unwrap_or(context.active_address()?);
 
                 dry_run_or_execute_or_serialize!(
-                    signer,
+                    sender,
                     tx_kind,
                     context,
                     None,
