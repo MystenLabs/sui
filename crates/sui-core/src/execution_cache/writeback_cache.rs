@@ -39,7 +39,7 @@
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
-    ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
+    self, ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
 };
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
@@ -398,7 +398,13 @@ impl WritebackCache {
             .objects
             .entry(*object_id)
             .or_default()
-            .insert(version, object);
+            .insert(version, object.clone());
+        let cache_entry = self.cached.object_cache.entry(*object_id).or_default();
+
+        let mut cache_map = cache_entry.value().lock();
+
+        cache_map.insert(version, object);
+        cache_map.truncate_to(3);
     }
 
     async fn write_marker_value(
@@ -721,6 +727,7 @@ impl WritebackCache {
 
         // Update cache before removing from self.dirty to avoid
         // unnecessary cache misses
+        /*
         self.cached
             .transactions
             .insert(tx_digest, transaction.clone());
@@ -733,6 +740,7 @@ impl WritebackCache {
         self.cached
             .transaction_events
             .insert(events_digest, events.clone().into());
+        */
 
         self.dirty
             .transaction_effects
@@ -761,17 +769,16 @@ impl WritebackCache {
         for (object_key, marker_value) in markers.iter() {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.markers,
-                &self.cached.marker_cache,
                 (epoch, object_key.0),
                 object_key.1,
                 marker_value,
             );
         }
 
+        // TODO: add to cache at execution time. then we only have to remove from dirty
         for (object_id, object) in written.iter() {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.objects,
-                &self.cached.object_cache,
                 *object_id,
                 object.version(),
                 &ObjectEntry::Object(object.clone()),
@@ -781,7 +788,6 @@ impl WritebackCache {
         for ObjectKey(object_id, version) in deleted.iter() {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.objects,
-                &self.cached.object_cache,
                 *object_id,
                 *version,
                 &ObjectEntry::Deleted,
@@ -791,7 +797,6 @@ impl WritebackCache {
         for ObjectKey(object_id, version) in wrapped.iter() {
             Self::move_version_from_dirty_to_cache(
                 &self.dirty.objects,
-                &self.cached.object_cache,
                 *object_id,
                 *version,
                 &ObjectEntry::Wrapped,
@@ -830,7 +835,7 @@ impl WritebackCache {
     // This is called after the entry is committed to the db.
     fn move_version_from_dirty_to_cache<K, V>(
         dirty: &DashMap<K, CachedVersionMap<V>>,
-        cache: &MokaCache<K, Arc<Mutex<CachedVersionMap<V>>>>,
+        //cache: &MokaCache<K, Arc<Mutex<CachedVersionMap<V>>>>,
         key: K,
         version: SequenceNumber,
         value: &V,
@@ -843,13 +848,13 @@ impl WritebackCache {
         // IMPORTANT: lock both the dirty set entry and the cache entry before modifying either.
         // this ensures that readers cannot see a value temporarily disappear.
         let dirty_entry = dirty.entry(key);
-        let cache_entry = cache.entry(key).or_default();
-        let mut cache_map = cache_entry.value().lock();
+        //let cache_entry = cache.entry(key).or_default();
+        //let mut cache_map = cache_entry.value().lock();
 
         // insert into cache and drop old versions.
-        cache_map.insert(version, value.clone());
+        //cache_map.insert(version, value.clone());
         // TODO: make this automatic by giving CachedVersionMap an optional max capacity
-        cache_map.truncate_to(MAX_VERSIONS);
+        //cache_map.truncate_to(MAX_VERSIONS);
 
         let DashMapEntry::Occupied(mut occupied_dirty_entry) = dirty_entry else {
             panic!("dirty map must exist");
