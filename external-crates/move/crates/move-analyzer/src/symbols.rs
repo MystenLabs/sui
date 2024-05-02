@@ -97,7 +97,7 @@ use move_compiler::{
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, DatatypeName},
-    shared::{unique_map::UniqueMap, Identifier, Name},
+    shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
@@ -330,6 +330,9 @@ pub struct ParsingSymbolicator<'a> {
     /// Module name lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts)
     alias_lengths: BTreeMap<Position, usize>,
+    /// A per-package mapping from package names to their addresses (needs to be appropriately set
+    /// before the package processint starts)
+    pkg_addresses: &'a NamedAddressMap,
 }
 
 /// Data used during symbolication over typed AST
@@ -426,9 +429,7 @@ impl fmt::Display for DefInfo {
                     f,
                     "{}fun {}::{}{}({}){}",
                     visibility_to_ide_string(visibility),
-                    // this mod_ident conversion will ensure that only pkg name (without numerical
-                    // address) is displayed which is the same as in source
-                    expansion_mod_ident_to_map_key(mod_ident),
+                    mod_ident_to_ide_string(mod_ident),
                     name,
                     type_args_str,
                     typed_id_list_to_ide_string(arg_names, arg_types, false),
@@ -464,7 +465,7 @@ impl fmt::Display for DefInfo {
                         f,
                         "{}struct {}::{}{}{} {{}}",
                         visibility_to_ide_string(visibility),
-                        expansion_mod_ident_to_map_key(mod_ident),
+                        mod_ident_to_ide_string(mod_ident),
                         name,
                         type_args_str,
                         abilities_str,
@@ -474,7 +475,7 @@ impl fmt::Display for DefInfo {
                         f,
                         "{}struct {}::{}{}{} {{\n{}\n}}",
                         visibility_to_ide_string(visibility),
-                        expansion_mod_ident_to_map_key(mod_ident),
+                        mod_ident_to_ide_string(mod_ident),
                         name,
                         type_args_str,
                         abilities_str,
@@ -727,6 +728,18 @@ fn ast_value_to_ide_string(sp!(_, val): &Value) -> String {
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
+    }
+}
+
+fn mod_ident_to_ide_string(mod_ident: &E::ModuleIdent_) -> String {
+    use E::Address as A;
+    match mod_ident.address {
+        A::Numerical {
+            name: None, value, ..
+        } => format!("{value}::{}", mod_ident.module).to_string(),
+        A::Numerical { name: Some(n), .. } | A::NamedUnassigned(n) => {
+            format!("{n}::{}", mod_ident.module).to_string()
+        }
     }
 }
 
@@ -1304,6 +1317,7 @@ pub fn get_symbols(
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
         alias_lengths: BTreeMap::new(),
+        pkg_addresses: &NamedAddressMap::new(),
     };
 
     parsing_symbolicator.prog_symbols(
@@ -1416,7 +1430,12 @@ fn mark_positional_struct(
         .iter()
         .find(|pkg_def| {
             if let P::Definition::Module(mod_def) = &pkg_def.def {
-                if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(mod_def) {
+                if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(
+                    parsed_program
+                        .named_address_maps
+                        .get(pkg_def.named_address_map),
+                    mod_def,
+                ) {
                     return mod_ident_str == &parsed_mod_ident_str;
                 }
             }
@@ -1425,7 +1444,12 @@ fn mark_positional_struct(
         .or_else(|| {
             parsed_program.lib_definitions.iter().find(|pkg_def| {
                 if let P::Definition::Module(mod_def) = &pkg_def.def {
-                    if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(mod_def) {
+                    if let Some(parsed_mod_ident_str) = parsing_mod_def_to_map_key(
+                        parsed_program
+                            .named_address_maps
+                            .get(pkg_def.named_address_map),
+                        mod_def,
+                    ) {
                         return mod_ident_str == &parsed_mod_ident_str;
                     }
                 }
@@ -1515,37 +1539,71 @@ fn file_sources(
         .collect()
 }
 
-/// Produces module ident string of the form pkg_name::module_name to be used as a map key.
+/// Produces module ident string of the form pkg::module to be used as a map key.
 /// It's important that these are consistent between parsing AST and typed AST,
-fn parsing_mod_ident_to_map_key(mod_ident: &P::ModuleIdent_) -> String {
-    format!("{}", mod_ident).to_string()
+fn parsing_mod_ident_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    mod_ident: &P::ModuleIdent_,
+) -> String {
+    format!(
+        "{}::{}",
+        parsed_address(mod_ident.address, pkg_addresses),
+        mod_ident.module
+    )
+    .to_string()
 }
 
-/// Produces module ident string of the form pkg_name::module_name to be used as a map key.
-/// It's important that these are consistent between parsing AST and typed AST,
-fn parsing_mod_def_to_map_key(mod_def: &P::ModuleDefinition) -> Option<String> {
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+fn parsing_mod_def_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    mod_def: &P::ModuleDefinition,
+) -> Option<String> {
     // we assume that modules are declared using the PkgName::ModName pattern (which seems to be the
     // standard practice) and while Move allows other ways of defining modules (i.e., with address
-    // preceding a sequence of modules), this method is now deprecated
+    // preceding a sequence of modules), this method is now deprecated.
     //
     // TODO: make this function simply return String when the other way of defining modules is
     // removed
     mod_def
         .address
-        .map(|a| format!("{}::{}", a, mod_def.name).to_string())
+        .map(|a| parsing_leading_and_mod_names_to_map_key(pkg_addresses, a, mod_def.name))
 }
 
-/// Produces module ident string of the form pkg_name::module_name to be used as a map key
-/// It's important that these are consistent between parsing AST and typed AST,
+/// Produces module ident string of the form pkg::module to be used as a map key.
+/// It's important that these are consistent between parsing AST and typed AST.
+fn parsing_leading_and_mod_names_to_map_key(
+    pkg_addresses: &NamedAddressMap,
+    ln: P::LeadingNameAccess,
+    name: P::ModuleName,
+) -> String {
+    format!("{}::{}", parsed_address(ln, pkg_addresses), name).to_string()
+}
+
+/// Converts parsing AST's `LeadingNameAccess` to expansion AST's `Address` (similarly to
+/// expansion::translate::top_level_address but disregarding the name portion of `Address` as we
+/// only care about actual address here if it's available). We need this to be able to reliably
+/// compare parsing AST's module identifier with expansion/typing AST's module identifier, even in
+/// presence of module renaming (i.e., we cannot rely on module names if addresses are available).
+fn parsed_address(ln: P::LeadingNameAccess, pkg_addresses: &NamedAddressMap) -> E::Address {
+    let sp!(loc, ln_) = ln;
+    match ln_ {
+        P::LeadingNameAccess_::AnonymousAddress(bytes) => E::Address::anonymous(loc, bytes),
+        P::LeadingNameAccess_::GlobalAddress(name) => E::Address::NamedUnassigned(name),
+        P::LeadingNameAccess_::Name(name) => match pkg_addresses.get(&name.value).copied() {
+            Some(addr) => E::Address::anonymous(loc, addr),
+            None => E::Address::NamedUnassigned(name),
+        },
+    }
+}
+
+/// Produces module ident string of the form pkg::module to be used as a map key
+/// It's important that these are consistent between parsing AST and typed AST.
 fn expansion_mod_ident_to_map_key(mod_ident: &E::ModuleIdent_) -> String {
     use E::Address as A;
     match mod_ident.address {
-        A::Numerical {
-            name: None, value, ..
-        } => format!("{value}::{}", mod_ident.module).to_string(),
-        A::Numerical { name: Some(n), .. } | A::NamedUnassigned(n) => {
-            format!("{n}::{}", mod_ident.module).to_string()
-        }
+        A::Numerical { value, .. } => format!("{value}::{}", mod_ident.module).to_string(),
+        A::NamedUnassigned(n) => format!("{n}::{}", mod_ident.module).to_string(),
     }
 }
 
@@ -1773,7 +1831,6 @@ fn get_mod_outer_defs(
     // insert use of the module name in the definition itself
     let mod_name = ident.module;
     if let Some(mod_name_start) = get_start_loc(&mod_name.loc(), files, file_id_mapping) {
-        let mod_ident_str = expansion_mod_ident_to_map_key(&ident);
         use_def_map.insert(
             mod_name_start.line,
             UseDef::new(
@@ -1793,7 +1850,7 @@ fn get_mod_outer_defs(
                 fhash: mod_defs.fhash,
                 start: mod_defs.start,
             },
-            DefInfo::Module(mod_ident_str.clone()),
+            DefInfo::Module(mod_ident_to_ide_string(&ident)),
         );
     }
 
@@ -1812,27 +1869,41 @@ impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for the whole program
     fn prog_symbols(
         &mut self,
-        prog: &P::Program,
+        prog: &'a P::Program,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
-        prog.source_definitions
-            .iter()
-            .for_each(|pkg_def| self.pkg_symbols(pkg_def, mod_use_defs, mod_to_alias_lengths));
-        prog.lib_definitions
-            .iter()
-            .for_each(|pkg_def| self.pkg_symbols(pkg_def, mod_use_defs, mod_to_alias_lengths));
+        prog.source_definitions.iter().for_each(|pkg_def| {
+            self.pkg_symbols(
+                &prog.named_address_maps,
+                pkg_def,
+                mod_use_defs,
+                mod_to_alias_lengths,
+            )
+        });
+        prog.lib_definitions.iter().for_each(|pkg_def| {
+            self.pkg_symbols(
+                &prog.named_address_maps,
+                pkg_def,
+                mod_use_defs,
+                mod_to_alias_lengths,
+            )
+        });
     }
 
     /// Get symbols for the whole package
     fn pkg_symbols(
         &mut self,
+        pkg_address_maps: &'a NamedAddressMaps,
         pkg_def: &P::PackageDefinition,
         mod_use_defs: &mut BTreeMap<String, UseDefMap>,
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
         if let P::Definition::Module(mod_def) = &pkg_def.def {
+            let pkg_addresses = pkg_address_maps.get(pkg_def.named_address_map);
+            let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses);
             self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
+            let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
         }
     }
 
@@ -1844,7 +1915,7 @@ impl<'a> ParsingSymbolicator<'a> {
         mod_to_alias_lengths: &mut BTreeMap<String, BTreeMap<Position, usize>>,
     ) {
         // parsing symbolicator is currently only responsible for processing use declarations
-        let Some(mod_ident_str) = parsing_mod_def_to_map_key(mod_def) else {
+        let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses, mod_def) else {
             return;
         };
 
@@ -2041,7 +2112,8 @@ impl<'a> ParsingSymbolicator<'a> {
     fn use_decl_symbols(&mut self, use_decl: &P::UseDecl) {
         match &use_decl.use_ {
             P::Use::ModuleUse(mod_ident, mod_use) => {
-                let mod_ident_str = parsing_mod_ident_to_map_key(&mod_ident.value);
+                let mod_ident_str =
+                    parsing_mod_ident_to_map_key(self.pkg_addresses, &mod_ident.value);
                 let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
                     return;
                 };
@@ -2050,7 +2122,12 @@ impl<'a> ParsingSymbolicator<'a> {
             }
             P::Use::NestedModuleUses(leading_name, uses) => {
                 for (mod_name, mod_use) in uses {
-                    let mod_ident_str = format!("{leading_name}::{mod_name}");
+                    let mod_ident_str = parsing_leading_and_mod_names_to_map_key(
+                        self.pkg_addresses,
+                        *leading_name,
+                        *mod_name,
+                    );
+
                     let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
                         continue;
                     };
@@ -2737,10 +2814,19 @@ impl<'a> TypingSymbolicator<'a> {
 
     fn mod_call_symbols(&mut self, mod_call: &ModuleCall, scope: &mut OrdMap<Symbol, LocalDef>) {
         let mod_ident = mod_call.module;
-        let mod_def = self
+        let Some(mod_def) = self
             .mod_outer_defs
             .get(&expansion_mod_ident_to_map_key(&mod_ident.value))
-            .unwrap();
+        else {
+            // this should not happen but due to a fix in unifying generation of mod ident map keys,
+            // but just in case - it's better to report it than to crash the analyzer due to
+            // unchecked unwrap
+            eprintln!(
+                "WARNING: could not locate module {:?} when processing a call to {:?}",
+                mod_ident, mod_call
+            );
+            return;
+        };
 
         if mod_def.functions.get(&mod_call.name.value()).is_none() {
             return;
@@ -3333,7 +3419,8 @@ fn find_struct(
     mod_ident: &ModuleIdent_,
     struct_name: &Symbol,
 ) -> Option<DefLoc> {
-    let mod_defs = match mod_outer_defs.get(&format!("{}", mod_ident)) {
+    let mod_ident_str = expansion_mod_ident_to_map_key(mod_ident);
+    let mod_defs = match mod_outer_defs.get(&mod_ident_str) {
         Some(v) => v,
         None => return None,
     };
@@ -6904,4 +6991,36 @@ fn partial_dot_test() {
         "s: PartialDot::M1::AnotherStruct",
         Some((5, 18, "M1.move")),
     );
+}
+
+#[test]
+/// Checks if a renamed dependent package is handled correctly, which could otherwise lead to a
+/// crash due to package identity being seen differently when processing parsed AST and when
+/// processing typed AST.
+fn pkg_renaming_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/pkg-naming-error");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M1.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/M2.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
 }
