@@ -1,0 +1,30 @@
+name: GitHubIssues
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  post-to-slack:
+    name: Post new issue to Slack channel
+    runs-on: ubuntu-latest
+    steps:
+    - name: Post to a Slack channel
+      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      with:
+        channel-id: '#github-new-issues'
+        payload: |
+          {
+            "text": "New Issue *${{ github.event.issue.number }}* opened by *${{ github.event.issue.user.login }}*",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "New issue *<https://github.com/MystenLabs/sui/issues/${{ github.event.issue.number }}|${{ github.event.issue.number }}>* opened by <https://github.com/${{ github.event.issue.user.login }}|${{ github.event.issue.user.login }}>. \n\n Please assign this issue to a team member on GitHub and mark this Slack message with :white_check_mark: once done."
+                }
+              }
+            ]
+          }

@@ -16,8 +16,8 @@ BUILDING A
 The following changes will be made.
 ============================================================
 
---- sources/address_migration.move
-+++ sources/address_migration.move
+--- ./sources/address_migration.move
++++ ./sources/address_migration.move
 @@ -1,2 +1,2 @@
 -address 0x2 {
 -module m {
@@ -29,8 +29,8 @@ The following changes will be made.
 @@ -6 +6 @@
 -}
 +/* } */
---- sources/address_migration1.move
-+++ sources/address_migration1.move
+--- ./sources/address_migration1.move
++++ ./sources/address_migration1.move
 @@ -1 +1 @@
 -address /* some inline comment */ 0x2 
 +/* address /* some inline comment */ 0x2 
@@ -45,13 +45,13 @@ The following changes will be made.
 @@ -8 +8 @@
 -/* an inline comment*/}
 +/* an inline comment*//* } */
---- sources/address_migration2.move
-+++ sources/address_migration2.move
+--- ./sources/address_migration2.move
++++ ./sources/address_migration2.move
 @@ -1 +1 @@
 -address 0x2{ module m {} module n {}}
 +/* address 0x2{ */ module 0x2::m {} module 0x2::n {}/* } */
---- sources/address_migration3.move
-+++ sources/address_migration3.move
+--- ./sources/address_migration3.move
++++ ./sources/address_migration3.move
 @@ -1,2 +1,2 @@
 -address A {
 -module m {
@@ -67,10 +67,10 @@ The following changes will be made.
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "sources/address_migration.move" . . .
-Updating "sources/address_migration1.move" . . .
-Updating "sources/address_migration2.move" . . .
-Updating "sources/address_migration3.move" . . .
+Updating "./sources/address_migration.move" . . .
+Updating "./sources/address_migration1.move" . . .
+Updating "./sources/address_migration2.move" . . .
+Updating "./sources/address_migration3.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

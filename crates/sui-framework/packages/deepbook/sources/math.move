@@ -6,10 +6,6 @@ module deepbook::math {
     const FLOAT_SCALING: u64 = 1_000_000_000;
     const FLOAT_SCALING_U128: u128 = 1_000_000_000;
 
-    /* friend deepbook::clob; */
-    /* friend deepbook::clob_v2; */
-    /* friend deepbook::critbit; */
-
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
     const EUnderflow: u64 = 1;
     // <<<<<<<<<<<<<<<<<<<<<<<< Error codes <<<<<<<<<<<<<<<<<<<<<<<<
@@ -23,11 +19,11 @@ module deepbook::math {
     // multiply two floating numbers
     // also returns whether the result is rounded down
     public(package) fun unsafe_mul_round(x: u64, y: u64): (bool, u64) {
-        let x = (x as u128);
-        let y = (y as u128);
+        let x = x as u128;
+        let y = y as u128;
         let mut is_round_down = true;
         if ((x * y) % FLOAT_SCALING_U128 == 0) is_round_down = false;
-        (is_round_down, ((x * y / FLOAT_SCALING_U128) as u64))
+        (is_round_down, (x * y / FLOAT_SCALING_U128) as u64)
     }
 
     // multiply two floating numbers and assert the result is non zero
@@ -55,11 +51,11 @@ module deepbook::math {
     // divide two floating numbers
     // also returns whether the result is rounded down
     public(package) fun unsafe_div_round(x: u64, y: u64): (bool, u64) {
-        let x = (x as u128);
-        let y = (y as u128);
+        let x = x as u128;
+        let y = y as u128;
         let mut is_round_down = true;
         if ((x * (FLOAT_SCALING as u128) % y) == 0) is_round_down = false;
-        (is_round_down, ((x * (FLOAT_SCALING as u128) / y) as u64))
+        (is_round_down, (x * (FLOAT_SCALING as u128) / y) as u64)
     }
 
     // divide two floating numbers and assert the result is non zero
@@ -134,12 +130,12 @@ module deepbook::math {
     fun test_count_leading_zeros() {
         let mut i: u8 = 0;
         while (i <= 127) {
-            assert_eq(count_leading_zeros((pow(2, i) as u128)), 128 - i - 1);
+            assert_eq(count_leading_zeros(pow(2, i) as u128), 128 - i - 1);
             i = i + 1;
         };
 
         while (i <= 127) {
-            assert_eq(count_leading_zeros((pow(2, i) as u128) + 1), 128 - i - 1);
+            assert_eq(count_leading_zeros(pow(2, i) as u128 + 1), 128 - i - 1);
             i = i + 1;
         };
         assert_eq(count_leading_zeros(0), 128);

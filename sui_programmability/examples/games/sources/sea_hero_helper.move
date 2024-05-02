@@ -11,15 +11,12 @@ module games::sea_hero_helper {
     use games::sea_hero::{Self, SeaMonster, RUM};
     use games::hero::Hero;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Created by `monster_owner`, a player with a monster that's too strong
     /// for them to slay + transferred to a player who can slay the monster.
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
-    struct HelpMeSlayThisMonster has key {
+    public struct HelpMeSlayThisMonster has key {
         id: UID,
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
@@ -45,14 +42,14 @@ module games::sea_hero_helper {
         // make sure the advertised reward is not too large + that the owner
         // gets a nonzero reward
         assert!(
-            sea_hero::monster_reward(&monster) > helper_reward,
+            monster.monster_reward() > helper_reward,
             EINVALID_HELPER_REWARD
         );
         transfer::transfer(
             HelpMeSlayThisMonster {
                 id: object::new(ctx),
                 monster,
-                monster_owner: tx_context::sender(ctx),
+                monster_owner: ctx.sender(),
                 helper_reward
             },
             helper
@@ -71,9 +68,9 @@ module games::sea_hero_helper {
             helper_reward
         } = wrapper;
         object::delete(id);
-        let owner_reward = sea_hero::slay(hero, monster);
+        let mut owner_reward = sea_hero::slay(hero, monster);
         let helper_reward = coin::take(&mut owner_reward, helper_reward, ctx);
-        transfer::public_transfer(coin::from_balance(owner_reward, ctx), monster_owner);
+        transfer::public_transfer(owner_reward.into_coin(ctx), monster_owner);
         helper_reward
     }
 
@@ -93,6 +90,6 @@ module games::sea_hero_helper {
     /// Return the number of coins that `wrapper.owner` will earn if the
     /// the helper slays the monster in `wrapper.
     public fun owner_reward(wrapper: &HelpMeSlayThisMonster): u64 {
-        sea_hero::monster_reward(&wrapper.monster) - wrapper.helper_reward
+        wrapper.monster.monster_reward() - wrapper.helper_reward
     }
 }

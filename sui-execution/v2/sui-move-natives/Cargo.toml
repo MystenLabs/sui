@@ -19,7 +19,7 @@ move-binary-format.workspace = true
 move-core-types.workspace = true
 move-vm-types.workspace = true
 
-move-stdlib = { path = "../../../external-crates/move/move-execution/v2/crates/move-stdlib", package = "move-stdlib-v2" }
+move-stdlib-natives = { path = "../../../external-crates/move/move-execution/v2/crates/move-stdlib-natives", package = "move-stdlib-natives-v2" }
 move-vm-runtime = { path = "../../../external-crates/move/move-execution/v2/crates/move-vm-runtime", package = "move-vm-runtime-v2" }
 
 sui-protocol-config.workspace = true

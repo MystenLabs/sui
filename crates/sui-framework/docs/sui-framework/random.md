@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::random`
 ---
@@ -508,7 +507,7 @@ Generate n random bytes.
         num_of_blocks = num_of_blocks - 1;
     };
     // Fill the generator's buffer <b>if</b> needed.
-    <b>let</b> num_of_bytes = (num_of_bytes <b>as</b> u64);
+    <b>let</b> num_of_bytes = num_of_bytes <b>as</b> u64;
     <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; (num_of_bytes - <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&result))) {
         <a href="../sui-framework/random.md#0x2_random_fill_buffer">fill_buffer</a>(g);
     };
@@ -540,7 +539,7 @@ Generate n random bytes.
 
 
 <pre><code><b>fun</b> <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, num_of_bytes: u8): u256 {
-    <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; (num_of_bytes <b>as</b> u64)) {
+    <b>if</b> (<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&g.buffer) &lt; num_of_bytes <b>as</b> u64) {
         <a href="../sui-framework/random.md#0x2_random_fill_buffer">fill_buffer</a>(g);
     };
     <b>let</b> <b>mut</b> result: u256 = 0;
@@ -600,7 +599,7 @@ Generate a u128.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u128">generate_u128</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u128 {
-    (<a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 16) <b>as</b> u128)
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 16) <b>as</b> u128
 }
 </code></pre>
 
@@ -625,7 +624,7 @@ Generate a u64.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64">generate_u64</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u64 {
-    (<a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 8) <b>as</b> u64)
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 8) <b>as</b> u64
 }
 </code></pre>
 
@@ -650,7 +649,7 @@ Generate a u32.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u32">generate_u32</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u32 {
-    (<a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 4) <b>as</b> u32)
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 4) <b>as</b> u32
 }
 </code></pre>
 
@@ -675,7 +674,7 @@ Generate a u16.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u16">generate_u16</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u16 {
-    (<a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 2) <b>as</b> u16)
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 2) <b>as</b> u16
 }
 </code></pre>
 
@@ -700,7 +699,7 @@ Generate a u8.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u8">generate_u8</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>): u8 {
-    (<a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 1) <b>as</b> u8)
+    <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, 1) <b>as</b> u8
 }
 </code></pre>
 
@@ -756,9 +755,9 @@ Generate a boolean.
     // Pick a <a href="../sui-framework/random.md#0x2_random">random</a> number in [0, max - <b>min</b>] by generating a <a href="../sui-framework/random.md#0x2_random">random</a> number that is larger than max-<b>min</b>, and taking
     // the modulo of the <a href="../sui-framework/random.md#0x2_random">random</a> number by the range size. Then add the <b>min</b> <b>to</b> the result <b>to</b> get a number in
     // [<b>min</b>, max].
-    <b>let</b> range_size = ((max - <b>min</b>) <b>as</b> u256) + 1;
+    <b>let</b> range_size = (max - <b>min</b>) <b>as</b> u256 + 1;
     <b>let</b> rand = <a href="../sui-framework/random.md#0x2_random_u256_from_bytes">u256_from_bytes</a>(g, num_of_bytes);
-    <b>min</b> + ((rand % range_size) <b>as</b> u128)
+    <b>min</b> + (rand % range_size <b>as</b> u128)
 }
 </code></pre>
 
@@ -807,7 +806,7 @@ Generate a random u128 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u64_in_range">generate_u64_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u64, max: u64): u64 {
-    (<a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, (<b>min</b> <b>as</b> u128), (max <b>as</b> u128), 16) <b>as</b> u64)
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 16) <b>as</b> u64
 }
 </code></pre>
 
@@ -832,7 +831,7 @@ Generate a random u32 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u32_in_range">generate_u32_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u32, max: u32): u32 {
-    (<a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, (<b>min</b> <b>as</b> u128), (max <b>as</b> u128), 12) <b>as</b> u32)
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 12) <b>as</b> u32
 }
 </code></pre>
 
@@ -857,7 +856,7 @@ Generate a random u16 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u16_in_range">generate_u16_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u16, max: u16): u16 {
-    (<a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, (<b>min</b> <b>as</b> u128), (max <b>as</b> u128), 10) <b>as</b> u16)
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 10) <b>as</b> u16
 }
 </code></pre>
 
@@ -882,7 +881,7 @@ Generate a random u8 in [min, max] (with a bias of 2^{-64}).
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/random.md#0x2_random_generate_u8_in_range">generate_u8_in_range</a>(g: &<b>mut</b> <a href="../sui-framework/random.md#0x2_random_RandomGenerator">RandomGenerator</a>, <b>min</b>: u8, max: u8): u8 {
-    (<a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, (<b>min</b> <b>as</b> u128), (max <b>as</b> u128), 9) <b>as</b> u8)
+    <a href="../sui-framework/random.md#0x2_random_u128_in_range">u128_in_range</a>(g, <b>min</b> <b>as</b> u128, max <b>as</b> u128, 9) <b>as</b> u8
 }
 </code></pre>
 
@@ -912,12 +911,12 @@ Shuffle a vector using the random generator (Fisher–Yates/Knuth shuffle).
         <b>return</b>
     };
     <b>assert</b>!(n &lt;= <a href="../sui-framework/random.md#0x2_random_U16_MAX">U16_MAX</a>, <a href="../sui-framework/random.md#0x2_random_EInvalidLength">EInvalidLength</a>);
-    <b>let</b> n = (n <b>as</b> u16);
+    <b>let</b> n = n <b>as</b> u16;
     <b>let</b> <b>mut</b> i: u16 = 0;
     <b>let</b> end = n - 1;
     <b>while</b> (i &lt; end) {
         <b>let</b> j = <a href="../sui-framework/random.md#0x2_random_generate_u16_in_range">generate_u16_in_range</a>(g, i, end);
-        <a href="../move-stdlib/vector.md#0x1_vector_swap">vector::swap</a>(v, (i <b>as</b> u64), (j <b>as</b> u64));
+        <a href="../move-stdlib/vector.md#0x1_vector_swap">vector::swap</a>(v, i <b>as</b> u64, j <b>as</b> u64);
         i = i + 1;
     };
 }

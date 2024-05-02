@@ -1,17 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use diesel::r2d2::R2D2Connection;
 use diesel::sql_types::{BigInt, VarChar};
 use diesel::{QueryableByName, RunQueryDsl};
 use std::collections::BTreeMap;
 use std::time::Duration;
 use tracing::{error, info};
 
-use crate::db::PgConnectionPool;
+use crate::db::ConnectionPool;
+use crate::errors::IndexerError;
 use crate::handlers::EpochToCommit;
 use crate::models::epoch::StoredEpochInfo;
-use crate::store::diesel_macro::{read_only_blocking, transactional_blocking_with_retry};
-use crate::IndexerError;
+use crate::store::diesel_macro::*;
+use downcast::Any;
 
 const GET_PARTITION_SQL: &str = r"
 SELECT parent.relname                                            AS table_name,
@@ -25,9 +27,16 @@ WHERE parent.relkind = 'p'
 GROUP BY table_name;
 ";
 
-#[derive(Clone)]
-pub struct PgPartitionManager {
-    cp: PgConnectionPool,
+pub struct PgPartitionManager<T: R2D2Connection + 'static> {
+    cp: ConnectionPool<T>,
+}
+
+impl<T: R2D2Connection> Clone for PgPartitionManager<T> {
+    fn clone(&self) -> PgPartitionManager<T> {
+        Self {
+            cp: self.cp.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -53,8 +62,8 @@ impl EpochPartitionData {
     }
 }
 
-impl PgPartitionManager {
-    pub fn new(cp: PgConnectionPool) -> Result<Self, IndexerError> {
+impl<T: R2D2Connection> PgPartitionManager<T> {
+    pub fn new(cp: ConnectionPool<T>) -> Result<Self, IndexerError> {
         let manager = Self { cp };
         let tables = manager.get_table_partitions()?;
         info!(

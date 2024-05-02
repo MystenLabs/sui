@@ -79,7 +79,7 @@ pub fn main() -> anyhow::Result<()> {
     let named_addr_map = verify_and_create_named_address_mapping(named_addresses)?;
     let bytecode_version = flags.bytecode_version();
     let (files, compiled_units) =
-        move_compiler::Compiler::from_files(source_files, dependencies, named_addr_map)
+        move_compiler::Compiler::from_files(None, source_files, dependencies, named_addr_map)
             .set_interface_files_dir(interface_files_dir)
             .set_flags(flags)
             .build_and_report()?;

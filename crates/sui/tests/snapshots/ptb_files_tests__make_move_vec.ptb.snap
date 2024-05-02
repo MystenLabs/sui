@@ -18,8 +18,6 @@ expression: "results.join(\"\\n\")"
 │ make-move-vec │ <std::option::Option<u64>> [none, some(1u64)]       │
 │ make-move-vec │ <std::option::Option<u64>> [none, some(some(1u64))] │
 │ make-move-vec │ <sui::coin::Coin<sui::sui::SUI>> [gas]              │
-├───────────────┼─────────────────────────────────────────────────────┤
-│ gas-budget    │ 1000                                                │
 ╰───────────────┴─────────────────────────────────────────────────────╯
  === BUILT PTB === 
 Input 0: Pure([1, 0, 0, 0, 0, 0, 0, 0])

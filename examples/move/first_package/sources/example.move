@@ -2,34 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module first_package::example {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
-    struct Sword has key, store {
+    // Part 1: These imports are provided by default
+    // use sui::object::{Self, UID};
+    // use sui::transfer;
+    // use sui::tx_context::{Self, TxContext};
+
+    // Part 2: struct definitions
+    public struct Sword has key, store {
         id: UID,
         magic: u64,
         strength: u64,
     }
 
-    struct Forge has key {
+    public struct Forge has key {
         id: UID,
         swords_created: u64,
     }
 
-    /// Module initializer to be executed when this module is published
+    // Part 3: Module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         let admin = Forge {
             id: object::new(ctx),
             swords_created: 0,
         };
 
-        // transfer the forge object to the module/package publisher
-        transfer::transfer(admin, tx_context::sender(ctx));
+        // Transfer the forge object to the module/package publisher
+        transfer::transfer(admin, ctx.sender());
     }
 
-    // === Accessors ===
-
+    // Part 4: Accessors required to read the struct fields
     public fun magic(self: &Sword): u64 {
         self.magic
     }
@@ -40,6 +42,16 @@ module first_package::example {
 
     public fun swords_created(self: &Forge): u64 {
         self.swords_created
+    }
+
+    // Part 5: Public/entry functions (introduced later in the tutorial)
+    public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
+        // Create a sword
+        Sword {
+            id: object::new(ctx),
+            magic: magic,
+            strength: strength,
+        }
     }
 
     /// Constructor for creating swords
@@ -57,81 +69,100 @@ module first_package::example {
         }
     }
 
-    // === Tests ===
-    #[test_only] use sui::test_scenario as ts;
-
-    #[test_only] const ADMIN: address = @0xAD;
-    #[test_only] const ALICE: address = @0xA;
-    #[test_only] const BOB: address = @0xB;
-
+    // Part 6: Tests
     #[test]
-    public fun test_module_init() {
-        let ts = ts::begin(@0x0);
+    fun test_sword_create() {
+        // Create a dummy TxContext for testing
+        let mut ctx = tx_context::dummy();
 
-        // first transaction to emulate module initialization.
-        {
-            ts::next_tx(&mut ts, ADMIN);
-            init(ts::ctx(&mut ts));
+        // Create a sword
+        let sword = Sword {
+            id: object::new(&mut ctx),
+            magic: 42,
+            strength: 7,
         };
 
-        // second transaction to check if the forge has been created
-        // and has initial value of zero swords created
-        {
-            ts::next_tx(&mut ts, ADMIN);
+        // Check if accessor functions return correct values
+        assert!(sword.magic() == 42 && sword.strength() == 7, 1);
 
-            // extract the Forge object
-            let forge: Forge = ts::take_from_sender(&ts);
-
-            // verify number of created swords
-            assert!(swords_created(&forge) == 0, 1);
-
-            // return the Forge object to the object pool
-            ts::return_to_sender(&ts, forge);
-        };
-
-        ts::end(ts);
+        // Create a dummy address and transfer the sword
+        let dummy_address = @0xCAFE;
+        transfer::public_transfer(sword, dummy_address);
     }
 
     #[test]
     fun test_sword_transactions() {
-        let ts = ts::begin(@0x0);
+        use sui::test_scenario;
 
-        // first transaction to emulate module initialization
+        // Create test addresses representing users
+        let initial_owner = @0xCAFE;
+        let final_owner = @0xFACE;
+
+        // First transaction executed by initial owner to create the sword
+        let mut scenario = test_scenario::begin(initial_owner);
         {
-            ts::next_tx(&mut ts, ADMIN);
-            init(ts::ctx(&mut ts));
+            // Create the sword and transfer it to the initial owner
+            let sword = sword_create(42, 7, scenario.ctx());
+            transfer::public_transfer(sword, initial_owner);
         };
 
-        // second transaction executed by admin to create the sword
+        // Second transaction executed by the initial sword owner
+        scenario.next_tx(initial_owner);
         {
-            ts::next_tx(&mut ts, ADMIN);
-            let forge: Forge = ts::take_from_sender(&ts);
-            // create the sword and transfer it to the initial owner
-            let sword = new_sword(&mut forge, 42, 7, ts::ctx(&mut ts));
-            transfer::public_transfer(sword, ALICE);
-            ts::return_to_sender(&ts, forge);
+            // Extract the sword owned by the initial owner
+            let sword = scenario.take_from_sender<Sword>();
+            // Transfer the sword to the final owner
+            transfer::public_transfer(sword, final_owner);
         };
 
-        // third transaction executed by the initial sword owner
+        // Third transaction executed by the final sword owner
+        scenario.next_tx(final_owner);
         {
-            ts::next_tx(&mut ts, ALICE);
-            // extract the sword owned by the initial owner
-            let sword: Sword = ts::take_from_sender(&ts);
-            // transfer the sword to the final owner
-            transfer::public_transfer(sword, BOB);
+            // Extract the sword owned by the final owner
+            let sword = scenario.take_from_sender<Sword>();
+            // Verify that the sword has expected properties
+            assert!(sword.magic() == 42 && sword.strength() == 7, 1);
+            // Return the sword to the object pool (it cannot be simply "dropped")
+            scenario.return_to_sender(sword)
+        };
+        scenario.end();
+    }
+
+    #[test]
+    fun test_module_init() {
+        use sui::test_scenario;
+
+        // Create test addresses representing users
+        let admin = @0xAD;
+        let initial_owner = @0xCAFE;
+
+        // First transaction to emulate module initialization
+        let mut scenario = test_scenario::begin(admin);
+        {
+            init(scenario.ctx());
         };
 
-        // fourth transaction executed by the final sword owner
+        // Second transaction to check if the forge has been created
+        // and has initial value of zero swords created
+        scenario.next_tx(admin);
         {
-            ts::next_tx(&mut ts, BOB);
-            // extract the sword owned by the final owner
-            let sword: Sword = ts::take_from_sender(&ts);
-            // verify that the sword has expected properties
-            assert!(magic(&sword) == 42 && strength(&sword) == 7, 1);
-            // return the sword to the object pool (it cannot be dropped)
-            ts::return_to_sender(&ts, sword)
+            // Extract the Forge object
+            let forge = scenario.take_from_sender<Forge>();
+            // Verify number of created swords
+            assert!(forge.swords_created() == 0, 1);
+            // Return the Forge object to the object pool
+            scenario.return_to_sender(forge);
         };
 
-        ts::end(ts);
+        // Third transaction executed by admin to create the sword
+        scenario.next_tx(admin);
+        {
+            let mut forge = scenario.take_from_sender<Forge>();
+            // Create the sword and transfer it to the initial owner
+            let sword = forge.new_sword(42, 7, scenario.ctx());
+            transfer::public_transfer(sword, initial_owner);
+            scenario.return_to_sender(forge);
+        };
+        scenario.end();
     }
 }

@@ -40,7 +40,9 @@ async fn start_graphiql_server_impl(
     // Add GraphiQL IDE handler on GET request to `/`` endpoint
     let server = server_builder
         .route("/", axum::routing::get(graphiql))
+        .route("/:version", axum::routing::get(graphiql))
         .route("/graphql", axum::routing::get(graphiql))
+        .route("/graphql/:version", axum::routing::get(graphiql))
         .layer(axum::extract::Extension(Some(ide_title)))
         .build()?;
 

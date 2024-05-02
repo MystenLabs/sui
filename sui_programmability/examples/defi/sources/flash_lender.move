@@ -5,12 +5,9 @@
 module defi::flash_lender {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// A shared object offering flash loans to any buyer willing to pay `fee`.
-    struct FlashLender<phantom T> has key {
+    public struct FlashLender<phantom T> has key {
         id: UID,
         /// Coins available to be lent to prospective borrowers
         to_lend: Balance<T>,
@@ -27,7 +24,7 @@ module defi::flash_lender {
     /// it cannot be discarded. Thus, the only way to get rid of this
     /// struct is to call `repay` sometime during the transaction that created it,
     /// which is exactly what we want from a flash loan.
-    struct Receipt<phantom T> {
+    public struct Receipt<phantom T> {
         /// ID of the flash lender object the debt holder borrowed from
         flash_lender_id: ID,
         /// Total amount of funds the borrower must repay: amount borrowed + the fee
@@ -37,7 +34,7 @@ module defi::flash_lender {
     /// An object conveying the privilege to withdraw funds from and deposit funds to the
     /// `FlashLender` instance with ID `flash_lender_id`. Initially granted to the creator
     /// of the `FlashLender`, and only one `AdminCap` per lender exists.
-    struct AdminCap has key, store {
+    public struct AdminCap has key, store {
         id: UID,
         flash_lender_id: ID,
     }

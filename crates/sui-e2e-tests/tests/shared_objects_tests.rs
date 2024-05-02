@@ -4,6 +4,7 @@
 use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
+use std::net::SocketAddr;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
 use sui_config::node::AuthorityOverloadConfig;
@@ -110,8 +111,9 @@ async fn shared_object_deletion_multiple_times() {
             .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
             .build();
         let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone())
+            .create_certificate(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         txs.push(signed);
@@ -173,8 +175,9 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
             .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
             .build();
         let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone())
+            .create_certificate(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         test_cluster
@@ -260,17 +263,18 @@ async fn shared_object_deletion_multi_certs() {
         .build();
     let inc_tx_b = test_cluster.sign_transaction(&inc_tx_b);
     let inc_tx_b_digest = *inc_tx_b.digest();
+    let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
     let _ = test_cluster
-        .create_certificate(delete_tx.clone())
+        .create_certificate(delete_tx.clone(), Some(client_ip))
         .await
         .unwrap();
     let _ = test_cluster
-        .create_certificate(inc_tx_a.clone())
+        .create_certificate(inc_tx_a.clone(), Some(client_ip))
         .await
         .unwrap();
     let _ = test_cluster
-        .create_certificate(inc_tx_b.clone())
+        .create_certificate(inc_tx_b.clone(), Some(client_ip))
         .await
         .unwrap();
 

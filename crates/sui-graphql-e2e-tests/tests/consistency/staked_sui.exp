@@ -53,12 +53,38 @@ Epoch advanced: 1
 task 10 'view-object'. lines 40-40:
 Owner: Account Address ( C )
 Version: 3
-Contents: sui_system::staking_pool::StakedSui {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,1)}}, pool_id: sui::object::ID {bytes: _}, stake_activation_epoch: 1u64, principal: sui::balance::Balance<sui::sui::SUI> {value: 10000000000u64}}
+Contents: sui_system::staking_pool::StakedSui {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,1),
+        },
+    },
+    pool_id: sui::object::ID {
+        bytes: _,
+    },
+    stake_activation_epoch: 1u64,
+    principal: sui::balance::Balance<sui::sui::SUI> {
+        value: 10000000000u64,
+    },
+}
 
 task 11 'view-object'. lines 42-42:
 Owner: Account Address ( C )
 Version: 5
-Contents: sui_system::staking_pool::StakedSui {id: sui::object::UID {id: sui::object::ID {bytes: fake(7,0)}}, pool_id: sui::object::ID {bytes: _}, stake_activation_epoch: 2u64, principal: sui::balance::Balance<sui::sui::SUI> {value: 10000000000u64}}
+Contents: sui_system::staking_pool::StakedSui {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(7,0),
+        },
+    },
+    pool_id: sui::object::ID {
+        bytes: _,
+    },
+    stake_activation_epoch: 2u64,
+    principal: sui::balance::Balance<sui::sui::SUI> {
+        value: 10000000000u64,
+    },
+}
 
 task 12 'run-graphql'. lines 44-56:
 Response: {

@@ -10,86 +10,14 @@ use crate::crypto::{
 use crate::error::SuiResult;
 use crate::executable_transaction::CertificateProof;
 use crate::messages_checkpoint::CheckpointSequenceNumber;
-use crate::signature::VerifyParams;
-use crate::transaction::VersionedProtocolMessage;
+use crate::transaction::{SenderSignedData, VersionedProtocolMessage};
 use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use shared_crypto::intent::{Intent, IntentScope};
 use std::fmt::{Debug, Display, Formatter};
 use std::ops::{Deref, DerefMut};
-use std::sync::Arc;
-use std::sync::RwLock;
 use sui_protocol_config::ProtocolConfig;
-
-pub static GOOGLE_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
-pub static TWITCH_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
-pub static FACEBOOK_JWK_BYTES: OnceCell<Arc<RwLock<Vec<u8>>>> = OnceCell::new();
-
-pub fn get_google_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
-    GOOGLE_JWK_BYTES
-        .get_or_init(|| {
-            Arc::new(RwLock::new(
-                r#"{
-                    "keys": [
-                        {
-                          "kty": "RSA",
-                          "e": "AQAB",
-                          "alg": "RS256",
-                          "kid": "2d9a5ef5b12623c91671a7093cb323333cd07d09",
-                          "use": "sig",
-                          "n": "0NDRXWtH6_HnmuSuTAisgYVZ3Z67PQjHbRFz4XNYuD95BKx0wQr0GWOi_UCGLfI0col3i6J3_AF-b1YrTFTMEr_bL8CYDdK2CYLcGUzc5bLRDAySsqnKdlhWkneqfFdr3J66mHu11KUaIIRWiLsCkR9QFF-8o2PtZzv3F-3Uh7L4q7i_Evs1s7SJlO0OAnI4ew4rP2HbRaO0Q2zK0DL_d1eoAC72apQuEzz-2aXfQ-QYSTlVK74McBhP1MRtgD6zGF2lwg4uhgb55fDDQQh0VHWQSxwbvAL0Oox69zzpkFgpjJAJUqaxegzETU1jf3iKs1vyFIB0C4N-Jr__zwLQZw=="
-                        },
-                        {
-                          "alg": "RS256",
-                          "use": "sig",
-                          "n": "1qrQCTst3RF04aMC9Ye_kGbsE0sftL4FOtB_WrzBDOFdrfVwLfflQuPX5kJ-0iYv9r2mjD5YIDy8b-iJKwevb69ISeoOrmL3tj6MStJesbbRRLVyFIm_6L7alHhZVyqHQtMKX7IaNndrfebnLReGntuNk76XCFxBBnRaIzAWnzr3WN4UPBt84A0KF74pei17dlqHZJ2HB2CsYbE9Ort8m7Vf6hwxYzFtCvMCnZil0fCtk2OQ73l6egcvYO65DkAJibFsC9xAgZaF-9GYRlSjMPd0SMQ8yU9i3W7beT00Xw6C0FYA9JAYaGaOvbT87l_6ZkAksOMuvIPD_jNVfTCPLQ==",
-                          "e": "AQAB",
-                          "kty": "RSA",
-                          "kid": "6083dd5981673f661fde9dae646b6f0380a0145c"
-                        }
-                      ]
-                  }"#.as_bytes().to_vec()
-            ))
-        }).clone()
-}
-
-pub fn get_twitch_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
-    TWITCH_JWK_BYTES
-        .get_or_init(|| {
-            Arc::new(RwLock::new(
-                r#"{"keys":[{"alg":"RS256","e":"AQAB","kid":"1","kty":"RSA","n":"6lq9MQ-q6hcxr7kOUp-tHlHtdcDsVLwVIw13iXUCvuDOeCi0VSuxCCUY6UmMjy53dX00ih2E4Y4UvlrmmurK0eG26b-HMNNAvCGsVXHU3RcRhVoHDaOwHwU72j7bpHn9XbP3Q3jebX6KIfNbei2MiR0Wyb8RZHE-aZhRYO8_-k9G2GycTpvc-2GBsP8VHLUKKfAs2B6sW3q3ymU6M0L-cFXkZ9fHkn9ejs-sqZPhMJxtBPBxoUIUQFTgv4VXTSv914f_YkNw-EjuwbgwXMvpyr06EyfImxHoxsZkFYB-qBYHtaMxTnFsZBr6fn8Ha2JqT1hoP7Z5r5wxDu3GQhKkHw","use":"sig"}]}"#.as_bytes().to_vec()
-            ))
-        }).clone()
-}
-
-pub fn get_facebook_jwk_bytes() -> Arc<RwLock<Vec<u8>>> {
-    FACEBOOK_JWK_BYTES
-        .get_or_init(|| {
-            Arc::new(RwLock::new(
-                r#"{
-                    "keys": [
-                       {
-                          "kid": "5931701331165f07f550ac5f0194942d54f9c249",
-                          "kty": "RSA",
-                          "alg": "RS256",
-                          "use": "sig",
-                          "n": "-GuAIboTsRYNprJQOkdmuKXRx8ARnKXOC9Pajg4KxHHPt3OY8rXRmVeDxTj1-m9TfW6V-wJa_8ncBbbFE-aV-eBi_XeuIToBBvLZp1-UPIjitS8WCDrUhHiJnbvkIZf1B1YBIq_Ua81fzxhtjQ0jDftV2m5aavmJG4_94VG3Md7noQjjUKzxJyUNl4v_joMA6pIRCeeamvfIZorjcR4wVf-wR8NiZjjRbcjKBpc7ztc7Gm778h34RSe9-DLH6uicTROSYNa99pUwhn3XVfAv4hTFpLIcgHYadLZjsHfUvivr76uiYbxDZx6UTkK5jmi51b87u1b6iYmijDIMztzrIQ",
-                          "e": "AQAB"
-                       },
-                       {
-                          "kid": "a378585d826a933cc207ce31cad63c019a53095c",
-                          "kty": "RSA",
-                          "alg": "RS256",
-                          "use": "sig",
-                          "n": "1aLDAmRq-QeOr1b8WbtpmD5D4CpE5S0YrNklM5BrRjuZ6FTG8AhqvyUUnAb7Dd1gCZgARbuk2yHOOca78JWX2ocAId9R4OV2PUoIYljDZ5gQJBaL6liMpolQjlqovmd7IpF8XZWudWU6Rfhoh-j6dd-8IHeJjBKMYij0CuA6HZ1L98vBW1ehEdnBZPfTe28H57hySzucnC1q1340h2E2cpCfLZ-vNoYQ4Qe-CZKpUAKOoOlC4tWCt2rLcsV_vXvmNlLv_UYGbJEFKS-I1tEwtlD71bvn9WWluE7L4pWlIolgzNyIz4yxe7G7V4jlvSSwsu1ZtIQzt5AtTC--5HEAyQ",
-                          "e": "AQAB"
-                       }
-                    ]
-                 }"#.as_bytes().to_vec()
-            ))
-        }).clone()
-}
 
 pub trait Message {
     type DigestType: Clone + Debug;
@@ -100,27 +28,7 @@ pub trait Message {
     }
 
     fn digest(&self) -> Self::DigestType;
-
-    /// Perform cheap validity checks before any expensive crypto verification.
-    fn verify_user_input(&self) -> SuiResult;
-
-    /// Verify that the message is from the correct epoch (e.g. for CertifiedCheckpointSummary
-    /// we verify that the checkpoint is from the same epoch as the committee signatures).
-    fn verify_epoch(&self, epoch: EpochId) -> SuiResult;
 }
-
-/// A message type that has an internal authenticator, such as SenderSignedData
-pub trait AuthenticatedMessage {
-    /// Verify internal signatures, e.g. for Transaction we verify the user signature(s).
-    fn verify_message_signature(&self, verify_params: &VerifyParams) -> SuiResult;
-
-    /// Checks that still need to be verified outside cache.
-    fn verify_uncached_checks(&self, verify_params: &VerifyParams) -> SuiResult;
-}
-
-/// A marker trait to indicate !AuthenticatedMessage since rust does not allow negative trait
-/// bounds.
-pub trait UnauthenticatedMessage {}
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct Envelope<T: Message, S> {
@@ -205,22 +113,6 @@ impl<T: Message> Envelope<T, EmptySignInfo> {
     }
 }
 
-impl<T: Message + AuthenticatedMessage> Envelope<T, EmptySignInfo> {
-    pub fn verify_signature(&self, verify_params: &VerifyParams) -> SuiResult {
-        self.data.verify_message_signature(verify_params)
-    }
-
-    pub fn verify(
-        self,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedEnvelope<T, EmptySignInfo>> {
-        self.verify_signature(verify_params)?;
-        Ok(VerifiedEnvelope::<T, EmptySignInfo>::new_from_verified(
-            self,
-        ))
-    }
-}
-
 impl<T> Envelope<T, AuthoritySignInfo>
 where
     T: Message + Serialize,
@@ -251,62 +143,15 @@ where
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
     }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult
-    where
-        <T as Message>::DigestType: PartialEq,
-    {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
 }
 
-impl<T> Envelope<T, AuthoritySignInfo>
-where
-    T: Message + AuthenticatedMessage + Serialize,
-{
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.data.verify_message_signature(verify_params)?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-
-    pub fn verify_authenticated(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
-        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
-            self,
-        ))
-    }
-}
-
-impl<T> Envelope<T, AuthoritySignInfo>
-where
-    T: Message + UnauthenticatedMessage + Serialize,
-{
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-
-    pub fn verify(
-        self,
-        committee: &Committee,
-    ) -> SuiResult<VerifiedEnvelope<T, AuthoritySignInfo>> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthoritySignInfo>::new_from_verified(
-            self,
-        ))
+impl Envelope<SenderSignedData, AuthoritySignInfo> {
+    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult {
+        self.auth_signature.verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::SenderSignedTransaction),
+            committee,
+        )
     }
 }
 
@@ -352,61 +197,6 @@ where
 
     pub fn epoch(&self) -> EpochId {
         self.auth_signature.epoch
-    }
-}
-
-impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
-where
-    T: Message + AuthenticatedMessage + Serialize,
-{
-    // TODO: Eventually we should remove all calls to verify_signature
-    // and make sure they all call verify to avoid repeated verifications.
-    pub fn verify_signatures_authenticated(
-        &self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.data.verify_message_signature(verify_params)?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-
-    pub fn verify_authenticated(
-        self,
-        committee: &Committee,
-        verify_params: &VerifyParams,
-    ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
-        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
-    }
-
-    pub fn verify_committee_sigs_only(&self, committee: &Committee) -> SuiResult
-    where
-        <T as Message>::DigestType: PartialEq,
-    {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-}
-
-impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
-where
-    T: Message + UnauthenticatedMessage + Serialize,
-{
-    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
-        self.data.verify_epoch(self.auth_sig().epoch)?;
-        self.auth_signature
-            .verify_secure(self.data(), Intent::sui_app(T::SCOPE), committee)
-    }
-
-    pub fn verify(
-        self,
-        committee: &Committee,
-    ) -> SuiResult<VerifiedEnvelope<T, AuthorityQuorumSignInfo<S>>> {
-        self.verify_authority_signatures(committee)?;
-        Ok(VerifiedEnvelope::<T, AuthorityQuorumSignInfo<S>>::new_from_verified(self))
     }
 }
 

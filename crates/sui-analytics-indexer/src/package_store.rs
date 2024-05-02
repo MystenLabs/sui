@@ -10,7 +10,7 @@ use sui_package_resolver::{
     error::Error as PackageResolverError, Package, PackageStore, PackageStoreWithLruCache, Result,
 };
 use sui_rest_api::Client;
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::ObjectID;
 use sui_types::object::Object;
 use thiserror::Error;
 use typed_store::rocks::{DBMap, MetricConf};
@@ -32,7 +32,7 @@ impl From<Error> for PackageResolverError {
         match source {
             Error::TypedStore(store_error) => Self::Store {
                 store: STORE,
-                source: Box::new(store_error),
+                source: Arc::new(store_error),
             },
         }
     }
@@ -112,14 +112,9 @@ impl LocalDBPackageStore {
 
 #[async_trait]
 impl PackageStore for LocalDBPackageStore {
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        let object = self.get(id).await?;
-        Ok(object.version())
-    }
-
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
         let object = self.get(id).await?;
-        Ok(Arc::new(Package::read(&object)?))
+        Ok(Arc::new(Package::read_from_object(&object)?))
     }
 }
 

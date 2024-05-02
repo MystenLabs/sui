@@ -1,5 +1,5 @@
 module 0x42::m {
-    fun t0(cond: bool): u64 {
+    fun t0(_cond: bool) {
         'name: {
             if (cond) { break 'name 10 };
             if (cond) { continue 'name };
@@ -7,13 +7,13 @@ module 0x42::m {
         }
     }
 
-    fun t1(cond: bool): u64 {
+    fun t1(_cond: bool) {
         loop 'name: {
             if (cond) { return 'name 10 };
         }
     }
 
-    fun t2(cond: bool): u64 {
+    fun t2(_cond: bool) {
         loop 'outer: {
             loop 'inner: {
                 if (cond) { return 'outer 10 };
@@ -22,7 +22,7 @@ module 0x42::m {
         }
     }
 
-    fun t3(cond: bool) {
+    fun t3(_cond: bool) {
         while (cond) 'outer: {
             while (cond) 'inner: {
                 if (cond) { return 'outer };
@@ -31,7 +31,7 @@ module 0x42::m {
         }
     }
 
-    fun t4(cond: bool) {
+    fun t4(_cond: bool) {
         while (cond) 'outer: {
             let _x = 'inner: {
                 if (cond) { return 'outer };
@@ -49,21 +49,21 @@ module 0x42::m {
         }
     }
 
-    fun t6(cond: bool): u64 {
+    fun t6(_cond: bool) {
         'name: {
             if (cond) { return 'name2 10 };
             20
         }
     }
 
-    fun t7(cond: bool): u64 {
+    fun t7(_cond: bool) {
         loop 'name: {
             if (cond) { continue 'name2 };
             if (cond) { break 'name2 10 };
         }
     }
 
-    fun t8(cond: bool): u64 {
+    fun t8(_cond: bool) {
         loop 'outer2: {
             loop 'inner2: {
                 if (cond) { break 'outer 10 };
@@ -72,7 +72,7 @@ module 0x42::m {
         }
     }
 
-    fun t9(cond: bool) {
+    fun t9(_cond: bool) {
         while (cond) 'outer: {
             while (cond) 'inner: {
                 if (cond) { continue 'outer2 };

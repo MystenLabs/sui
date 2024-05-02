@@ -13,7 +13,6 @@ serde.workspace = true
 serde_json.workspace = true
 schemars.workspace = true
 
-sui-framework.workspace = true
 sui-types.workspace = true
 
 move-binary-format.workspace = true
@@ -25,3 +24,4 @@ fastcrypto = { workspace = true }
 test-fuzz.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
 sui-move-build.workspace = true
+sui-framework.workspace = true

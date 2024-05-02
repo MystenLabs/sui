@@ -56,6 +56,7 @@ sui-keys.workspace = true
 sui-source-validation.workspace = true
 sui-move = { workspace = true, features = ["all"] }
 sui-move-build.workspace = true
+sui-package-management.workspace = true
 sui-protocol-config.workspace = true
 shared-crypto.workspace = true
 sui-replay.workspace = true
@@ -74,10 +75,12 @@ shell-words.workspace = true
 tempfile.workspace = true
 telemetry-subscribers.workspace = true
 
+move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-package.workspace = true
 csv.workspace = true
 move-vm-profiler.workspace = true
+move-vm-config.workspace = true
 move-command-line-common.workspace = true
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]
@@ -88,6 +91,7 @@ prometheus.workspace = true
 fs_extra.workspace = true
 expect-test.workspace = true
 assert_cmd.workspace = true
+toml.workspace = true
 
 test-cluster.workspace = true
 sui-macros.workspace = true

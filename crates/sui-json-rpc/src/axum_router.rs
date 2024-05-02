@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::time::SystemTime;
+use std::{net::SocketAddr, sync::Arc};
+use sui_types::traffic_control::RemoteFirewallConfig;
 
-use axum::extract::Json;
-use axum::extract::State;
+use axum::extract::{ConnectInfo, Json, State};
 use futures::StreamExt;
 use hyper::HeaderMap;
 use jsonrpsee::core::server::helpers::BoundedSubscriptions;
@@ -16,12 +17,19 @@ use jsonrpsee::server::RandomIntegerIdProvider;
 use jsonrpsee::types::error::{ErrorCode, BATCHES_NOT_SUPPORTED_CODE, BATCHES_NOT_SUPPORTED_MSG};
 use jsonrpsee::types::{ErrorObject, Id, InvalidRequest, Params, Request};
 use jsonrpsee::{core::server::rpc_module::Methods, server::logger::Logger};
-use serde_json::value::RawValue;
+use serde_json::value::{RawValue, Value};
+use sui_core::traffic_controller::{
+    metrics::TrafficControllerMetrics, policies::TrafficTally, TrafficController,
+};
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::traffic_control::{PolicyConfig, Weight};
+use tracing::warn;
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
 
 pub const MAX_RESPONSE_SIZE: u32 = 2 << 30;
+const TOO_MANY_REQUESTS_MSG: &str = "Too many requests";
 
 #[derive(Clone, Debug)]
 pub struct JsonRpcService<L> {
@@ -32,15 +40,30 @@ pub struct JsonRpcService<L> {
     /// Registered server methods.
     methods: Methods,
     rpc_router: RpcRouter,
+    traffic_controller: Option<Arc<TrafficController>>,
 }
 
 impl<L> JsonRpcService<L> {
-    pub fn new(methods: Methods, rpc_router: RpcRouter, logger: L) -> Self {
+    pub fn new(
+        methods: Methods,
+        rpc_router: RpcRouter,
+        logger: L,
+        remote_fw_config: Option<RemoteFirewallConfig>,
+        policy_config: Option<PolicyConfig>,
+        traffic_controller_metrics: TrafficControllerMetrics,
+    ) -> Self {
         Self {
             methods,
             rpc_router,
             logger,
             id_provider: Arc::new(RandomIntegerIdProvider),
+            traffic_controller: policy_config.map(|policy| {
+                Arc::new(TrafficController::spawn(
+                    policy,
+                    traffic_controller_metrics,
+                    remote_fw_config,
+                ))
+            }),
         }
     }
 }
@@ -98,6 +121,7 @@ pub(crate) fn ok_response(body: String) -> hyper::Response<hyper::Body> {
 }
 
 pub async fn json_rpc_handler<L: Logger>(
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     State(service): State<JsonRpcService<L>>,
     headers: HeaderMap,
     Json(raw_request): Json<Box<RawValue>>,
@@ -106,7 +130,7 @@ pub async fn json_rpc_handler<L: Logger>(
     let api_version = headers
         .get(CLIENT_TARGET_API_VERSION_HEADER)
         .and_then(|h| h.to_str().ok());
-    let response = process_raw_request(&service, api_version, raw_request.get()).await;
+    let response = process_raw_request(&service, api_version, raw_request.get(), client_addr).await;
 
     ok_response(response.result)
 }
@@ -115,9 +139,25 @@ async fn process_raw_request<L: Logger>(
     service: &JsonRpcService<L>,
     api_version: Option<&str>,
     raw_request: &str,
+    client_addr: SocketAddr,
 ) -> MethodResponse {
     if let Ok(request) = serde_json::from_str::<Request>(raw_request) {
-        process_request(request, api_version, service.call_data()).await
+        // check if either IP is blocked, in which case return early
+        if let Some(traffic_controller) = &service.traffic_controller {
+            if let Err(blocked_response) =
+                handle_traffic_req(traffic_controller.clone(), client_addr).await
+            {
+                return blocked_response;
+            }
+        }
+        let response =
+            process_request(request, api_version, service.call_data(), client_addr).await;
+
+        // handle response tallying
+        if let Some(traffic_controller) = &service.traffic_controller {
+            handle_traffic_resp(traffic_controller.clone(), client_addr, &response);
+        }
+        response
     } else if let Ok(_batch) = serde_json::from_str::<Vec<&RawValue>>(raw_request) {
         MethodResponse::error(
             Id::Null,
@@ -129,10 +169,47 @@ async fn process_raw_request<L: Logger>(
     }
 }
 
+async fn handle_traffic_req(
+    traffic_controller: Arc<TrafficController>,
+    client_ip: SocketAddr,
+) -> Result<(), MethodResponse> {
+    if !traffic_controller.check(Some(client_ip.ip()), None).await {
+        // Entity in blocklist
+        let err_obj =
+            ErrorObject::borrowed(ErrorCode::ServerIsBusy.code(), &TOO_MANY_REQUESTS_MSG, None);
+        Err(MethodResponse::error(Id::Null, err_obj))
+    } else {
+        Ok(())
+    }
+}
+
+fn handle_traffic_resp(
+    traffic_controller: Arc<TrafficController>,
+    client_ip: SocketAddr,
+    response: &MethodResponse,
+) {
+    let error = response.error_code.map(ErrorCode::from);
+    traffic_controller.tally(TrafficTally {
+        connection_ip: Some(client_ip.ip()),
+        proxy_ip: None,
+        error_weight: error.map(normalize).unwrap_or(Weight::zero()),
+        timestamp: SystemTime::now(),
+    });
+}
+
+// TODO: refine error matching here
+fn normalize(err: ErrorCode) -> Weight {
+    match err {
+        ErrorCode::InvalidRequest | ErrorCode::InvalidParams => Weight::one(),
+        _ => Weight::zero(),
+    }
+}
+
 async fn process_request<L: Logger>(
     req: Request<'_>,
     api_version: Option<&str>,
     call: CallData<'_, L>,
+    client_addr: SocketAddr,
 ) -> MethodResponse {
     let CallData {
         methods,
@@ -143,14 +220,37 @@ async fn process_request<L: Logger>(
     } = call;
     let conn_id = 0; // unused
 
-    let params = Params::new(req.params.map(|params| params.get()));
-    let name = rpc_router.route(&req.method, api_version);
+    let name_str = rpc_router.route(&req.method, api_version);
+    let raw_params: Option<&RawValue> = req.params;
+
+    // This is really ugly, but it's the only way to do it for now. We will
+    // kill this aggressively once we move away from this json rpc framework.
+    let (params_string, name): (String, String) =
+        match monitored_reroute(raw_params, name_str, client_addr) {
+            Ok((params_string, name)) => (params_string, name),
+            Err(e) => {
+                warn!("Could not reroute request: {:?}", e);
+                (String::from(""), name_str.to_string())
+            }
+        };
+
+    let params_str = params_string.as_str();
+
+    let params = if params_str.is_empty() {
+        // Failed to parse params
+        Params::new(raw_params.map(|params| params.get()))
+    } else if raw_params.is_some() {
+        Params::new(Some(params_str))
+    } else {
+        Params::new(None)
+    };
+
     let id = req.id;
 
-    let response = match methods.method_with_name(name) {
+    let response = match methods.method_with_name(&name) {
         None => {
             logger.on_call(
-                name,
+                &name,
                 params.clone(),
                 logger::MethodKind::Unknown,
                 TransportProtocol::Http,
@@ -177,7 +277,6 @@ async fn process_request<L: Logger>(
 
                 let id = id.into_owned();
                 let params = params.into_owned();
-
                 (callback)(id, params, conn_id, max_response_body_size as usize, None).await
             }
             MethodKind::Subscription(_) | MethodKind::Unsubscription(_) => {
@@ -194,13 +293,78 @@ async fn process_request<L: Logger>(
     };
 
     logger.on_result(
-        name,
+        &name,
         response.success,
         response.error_code,
         request_start,
         TransportProtocol::Http,
     );
     response
+}
+
+pub fn monitored_reroute(
+    raw_params: Option<&RawValue>,
+    name: &str,
+    client_addr: SocketAddr,
+) -> SuiResult<(String, String)> {
+    match name {
+        "sui_executeTransactionBlock" => {
+            // add client IP arg to the params, as this is a router redirect
+            // from `execute_transaction_block`, which does require the client IP
+            let params = if let Some(params) = raw_params {
+                params.get()
+            } else {
+                return Err(SuiError::Unknown(String::from(
+                    "Params not found for executeTransactionBlock",
+                )));
+            };
+            let parsed_value: Value = serde_json::from_str(params).map_err(|err| {
+                SuiError::Unknown(format!("Failed to parse jsonrpsee params: {:?}", err))
+            })?;
+
+            let params_str = match parsed_value {
+                Value::Array(mut params_vec) => {
+                    params_vec.push(Value::String(client_addr.to_string()));
+                    serde_json::to_string(&params_vec).map_err(|err| {
+                        SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
+                    })?
+                }
+                Value::Object(mut params_map) => {
+                    params_map.insert(
+                        String::from("client_addr"),
+                        Value::String(client_addr.to_string()),
+                    );
+                    serde_json::to_string(&params_map).map_err(|err| {
+                        SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
+                    })?
+                }
+                _ => {
+                    return Err(SuiError::Unknown(String::from(
+                        "Failed to parse jsonrpsee params: expected array",
+                    )));
+                }
+            };
+
+            Ok((
+                params_str,
+                String::from("sui_monitoredExecuteTransactionBlock"),
+            ))
+        }
+        "sui_monitoredExecuteTransactionBlock" => {
+            // Prevent an attacker calling it directly with a different
+            // client IP in order to bypass monitoring
+            Err(SuiError::InvalidRpcMethodError)
+        }
+        // in this case params_string should not be read below. We do this as Params<>
+        // object requires a slice whose lifetime is at least as long as this function call,
+        // therefore we cannot create a Params object within an if block scope
+        other_name => Ok((
+            raw_params
+                .map(|params| String::from(params.get()))
+                .unwrap_or_default(),
+            String::from(other_name),
+        )),
+    }
 }
 
 /// Figure out if this is a sufficiently complete request that we can extract an [`Id`] out of, or just plain

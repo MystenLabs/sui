@@ -8,11 +8,7 @@
 //# publish
 
 module Test::M1 {
-    use std::vector;
     use sui::bcs;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
 
     public struct S has key, store {
         id: UID,

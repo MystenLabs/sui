@@ -158,7 +158,7 @@ mod sim_only_tests {
             .with_async(|node| async {
                 // give time for restarted node to catch up, reconfig
                 // to new protocol, and reconfig again
-                sleep(Duration::from_secs(5)).await;
+                sleep(Duration::from_secs(15)).await;
 
                 let epoch_store = node.state().epoch_store_for_testing();
                 assert_eq!(epoch_store.epoch(), 2);

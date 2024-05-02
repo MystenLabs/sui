@@ -23,17 +23,17 @@ use crate::{
     unit_test,
 };
 use move_command_line_common::files::{
-    find_filenames_vfs, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION, SOURCE_MAP_EXTENSION,
+    extension_equals, find_filenames_and_keep_specified, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    SOURCE_MAP_EXTENSION,
 };
 use move_core_types::language_storage::ModuleId as CompiledModuleId;
 use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
-use pathdiff::diff_paths;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     fs,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::Arc,
 };
 use vfs::{
@@ -115,13 +115,16 @@ pub enum Visitor {
 
 impl Compiler {
     pub fn from_package_paths<Paths: Into<Symbol>, NamedAddress: Into<Symbol>>(
+        vfs_root: Option<VfsPath>,
         targets: Vec<PackagePaths<Paths, NamedAddress>>,
         deps: Vec<PackagePaths<Paths, NamedAddress>>,
     ) -> anyhow::Result<Self> {
         fn indexed_scopes(
             maps: &mut NamedAddressMaps,
             package_configs: &mut BTreeMap<Symbol, PackageConfig>,
+            vfs_root: &Option<VfsPath>,
             all_pkgs: Vec<PackagePaths<impl Into<Symbol>, impl Into<Symbol>>>,
+            mut find_move_files: impl FnMut(&Path) -> bool,
         ) -> anyhow::Result<Vec<IndexedPhysicalPackagePath>> {
             let mut idx_paths = vec![];
             for PackagePaths {
@@ -143,9 +146,19 @@ impl Compiler {
                         .map(|(k, v)| (k.into(), v))
                         .collect::<NamedAddressMap>(),
                 );
+                let paths: Vec<Symbol> = if vfs_root.is_none() {
+                    let paths: Vec<_> = paths.into_iter().map(|p| p.into()).collect();
+                    let paths: Vec<_> = paths.iter().map(|p| p.as_str()).collect();
+                    find_filenames_and_keep_specified(&paths, &mut find_move_files)?
+                        .into_iter()
+                        .map(Symbol::from)
+                        .collect()
+                } else {
+                    paths.into_iter().map(|p| p.into()).collect()
+                };
                 idx_paths.extend(paths.into_iter().map(|path| IndexedPhysicalPackagePath {
                     package: name,
-                    path: path.into(),
+                    path,
                     named_address_map: idx,
                 }))
             }
@@ -153,8 +166,17 @@ impl Compiler {
         }
         let mut maps = NamedAddressMaps::new();
         let mut package_configs = BTreeMap::new();
-        let targets = indexed_scopes(&mut maps, &mut package_configs, targets)?;
-        let deps = indexed_scopes(&mut maps, &mut package_configs, deps)?;
+        let targets = indexed_scopes(
+            &mut maps,
+            &mut package_configs,
+            &vfs_root,
+            targets,
+            |path| extension_equals(path, MOVE_EXTENSION),
+        )?;
+        let deps = indexed_scopes(&mut maps, &mut package_configs, &vfs_root, deps, |path| {
+            extension_equals(path, MOVE_EXTENSION)
+                || extension_equals(path, MOVE_COMPILED_EXTENSION)
+        })?;
 
         Ok(Self {
             maps,
@@ -169,11 +191,12 @@ impl Compiler {
             known_warning_filters: vec![],
             package_configs,
             default_config: None,
-            vfs_root: None,
+            vfs_root,
         })
     }
 
     pub fn from_files<Paths: Into<Symbol>, NamedAddress: Into<Symbol> + Clone>(
+        vfs_root: Option<VfsPath>,
         targets: Vec<Paths>,
         deps: Vec<Paths>,
         named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
@@ -188,7 +211,7 @@ impl Compiler {
             paths: deps,
             named_address_map,
         }];
-        Self::from_package_paths(targets, deps).unwrap()
+        Self::from_package_paths(vfs_root, targets, deps).unwrap()
     }
 
     pub fn set_flags(mut self, flags: Flags) -> Self {
@@ -268,36 +291,12 @@ impl Compiler {
         self
     }
 
-    pub fn set_vfs_root(mut self, vfs_root: VfsPath) -> Self {
-        assert!(self.vfs_root.is_none());
-        self.vfs_root = Some(vfs_root);
-        self
-    }
-
     pub fn run<const TARGET: Pass>(
         self,
     ) -> anyhow::Result<(
         FilesSourceText,
         Result<(CommentMap, SteppedCompiler<TARGET>), (Pass, Diagnostics)>,
     )> {
-        /// Path relativization after parsing is needed as paths are initially canonicalized when
-        /// converted to virtual file system paths and would show up as absolute in the test output
-        /// which wouldn't be machine-agnostic. We need to relativize using `vfs_root` beacuse it
-        /// was also used during canonicalization and might have altered path prefix in a
-        /// non-standard way (e.g., this can happen on Windows).
-        fn relativize_path(vsf_root: &VfsPath, path: Symbol) -> Symbol {
-            let Some(current_dir) = std::env::current_dir().ok() else {
-                return path;
-            };
-            let Ok(current_dir_vfs) = vsf_root.join(current_dir.to_string_lossy()) else {
-                return path;
-            };
-            let Some(new_path) = diff_paths(path.to_string(), current_dir_vfs.as_str()) else {
-                return path;
-            };
-            Symbol::from(new_path.to_string_lossy().to_string())
-        }
-
         let Self {
             maps,
             targets,
@@ -317,16 +316,42 @@ impl Compiler {
             Some(p) => p,
             None => VfsPath::new(PhysicalFS::new("/")),
         };
+        let mut vfs_to_original_path = HashMap::new();
 
         let targets = targets
             .into_iter()
-            .map(|p| Ok(p.to_vfs_path(&vfs_root)?))
+            .map(|p| {
+                let original = p.path;
+                let vfs = p.to_vfs_path(&vfs_root)?;
+                vfs_to_original_path.insert(Symbol::from(vfs.path.as_str()), original);
+                Ok(vfs)
+            })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
 
         let mut deps = deps
             .into_iter()
-            .map(|p| Ok(p.to_vfs_path(&vfs_root)?))
+            .map(|p| {
+                let original = p.path;
+                let vfs = p.to_vfs_path(&vfs_root)?;
+                vfs_to_original_path.insert(Symbol::from(vfs.path.as_str()), original);
+                Ok(vfs)
+            })
             .collect::<Result<Vec<_>, anyhow::Error>>()?;
+
+        for path in targets.iter().chain(&deps) {
+            if !path.path.is_file().unwrap_or(false) {
+                debug_assert!(
+                    false,
+                    "Specified path is not a file: {}",
+                    path.path.as_str()
+                );
+                anyhow::bail!(
+                    "Specified path is not a file: {}.\
+                    If vfs_root is set, all specified paths must be files",
+                    path.path.as_str()
+                );
+            }
+        }
 
         generate_interface_files_for_deps(
             &mut deps,
@@ -345,9 +370,10 @@ impl Compiler {
         let (mut source_text, pprog, comments) =
             parse_program(&mut compilation_env, maps, targets, deps)?;
 
-        source_text
-            .iter_mut()
-            .for_each(|(_, (path, _))| *path = relativize_path(&vfs_root, *path));
+        source_text.iter_mut().for_each(|(_, (path, _))| {
+            // TODO better support for bytecode interface file paths
+            *path = vfs_to_original_path.get(path).copied().unwrap_or(*path)
+        });
 
         for (fhash, (fname, contents)) in source_text.iter() {
             compilation_env.add_source_file(*fhash, *fname, contents.clone())
@@ -586,11 +612,14 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     interface_files_dir_opt: Option<String>,
     flags: Flags,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
-    let (files, pprog_and_comments_res) =
-        Compiler::from_package_paths(targets, Vec::<PackagePaths<Paths, NamedAddress>>::new())?
-            .set_interface_files_dir_opt(interface_files_dir_opt)
-            .set_flags(flags)
-            .run::<PASS_PARSER>()?;
+    let (files, pprog_and_comments_res) = Compiler::from_package_paths(
+        None,
+        targets,
+        Vec::<PackagePaths<Paths, NamedAddress>>::new(),
+    )?
+    .set_interface_files_dir_opt(interface_files_dir_opt)
+    .set_flags(flags)
+    .run::<PASS_PARSER>()?;
 
     let (_comments, stepped) = match pprog_and_comments_res {
         Err((_pass, errors)) => return Ok(Err((files, errors))),
@@ -756,46 +785,26 @@ fn generate_interface_files_for_deps(
     Ok(())
 }
 
+// TODO this should really be done by the package system, with the interface files stuffed into the
+// build/ directory for the package. This would give a more consistent location for errors.
 pub fn generate_interface_files(
     mv_file_locations: &mut [IndexedVfsPackagePath],
     interface_files_dir_opt: Option<String>,
     module_to_named_address: &BTreeMap<CompiledModuleId, String>,
     separate_by_hash: bool,
 ) -> anyhow::Result<Vec<IndexedVfsPackagePath>> {
-    let mv_files = {
-        let mut v = vec![];
-        let (mv_magic_files, other_file_locations): (Vec<_>, Vec<_>) =
-            mv_file_locations.iter().cloned().partition(|s| {
-                let is_file = s
-                    .path
-                    .metadata()
-                    .map(|d| d.file_type == VfsFileType::File)
-                    .unwrap_or(false);
-                is_file && has_compiled_module_magic_number(&s.path)
-            });
-        v.extend(mv_magic_files);
-        for IndexedVfsPackagePath {
-            package,
-            path,
-            named_address_map,
-        } in other_file_locations
-        {
-            v.extend(
-                find_filenames_vfs(&[path], |path| {
-                    path.extension()
-                        .map(|e| e.as_str() == MOVE_COMPILED_EXTENSION)
-                        .unwrap_or(false)
-                })?
-                .into_iter()
-                .map(|path| IndexedVfsPackagePath {
-                    package,
-                    path,
-                    named_address_map,
-                }),
-            );
-        }
-        v
-    };
+    let mv_files: Vec<_> = mv_file_locations
+        .iter()
+        .filter(|s| {
+            let is_file = s
+                .path
+                .metadata()
+                .map(|d| d.file_type == VfsFileType::File)
+                .unwrap_or(false);
+            is_file && has_compiled_module_magic_number(&s.path)
+        })
+        .cloned()
+        .collect();
     if mv_files.is_empty() {
         return Ok(vec![]);
     }
@@ -958,7 +967,11 @@ fn run(
         match cur {
             PassResult::Parser(prog) => {
                 let eprog = {
-                    let prog = unit_test::filter_test_members::program(compilation_env, prog);
+                    let prog = unit_test::filter_test_members::program(
+                        compilation_env,
+                        pre_compiled_lib.clone(),
+                        prog,
+                    );
                     let prog = verification_attribute_filter::program(compilation_env, prog);
                     expansion::translate::program(compilation_env, pre_compiled_lib.clone(), prog)
                 };

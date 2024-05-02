@@ -4,7 +4,6 @@
 #[test_only]
 module sui::groth16_tests {
     use sui::groth16;
-    use std::vector;
     use sui::groth16::{bls12381, bn254};
 
     #[test]
@@ -17,16 +16,16 @@ module sui::groth16_tests {
         let expected_gamma_bytes = x"8398b153643614fc1071a54e288edb6402f1d9e00d3408c76d95c16885cc992dff5c6ebee3b739cb22359ab2d126026a1626c43ea7b898a7c1d2904c1bd4bbce5d0b1b16fab8535a52d1b08a5217df2e912ee1b0f4140892afa31d479f78dfbc";
         let expected_delta_bytes = x"a2ab58a209ad00df6c86ab14841e8daa7a380a6853f28bacf38aad9903b6149fff4b119dea16de8aa3e5050b9d563a01009e061a950c233f66511c8fae2a8c58503059821df7f6defbba8f93d26e412cc07b66a9f3cdd740cce5c8488ce94fc8";
 
-        let delta_bytes = vector::pop_back(&mut arr);
+        let delta_bytes = arr.pop_back();
         assert!(delta_bytes == expected_delta_bytes, 0);
 
-        let gamma_bytes = vector::pop_back(&mut arr);
+        let gamma_bytes = arr.pop_back();
         assert!(gamma_bytes == expected_gamma_bytes, 0);
 
-        let alpha_bytes = vector::pop_back(&mut arr);
+        let alpha_bytes = arr.pop_back();
         assert!(alpha_bytes == expected_alpha_bytes, 0);
 
-        let vk_bytes = vector::pop_back(&mut arr);
+        let vk_bytes = arr.pop_back();
         assert!(vk_bytes == expected_vk_bytes, 0);
    }
 
@@ -57,7 +56,7 @@ module sui::groth16_tests {
         assert!(groth16::verify_groth16_proof(&curve, &pvk, &inputs, &proof) == true, 0);
 
         // Invalid prepared verifying key.
-        vector::pop_back(&mut vk_bytes);
+        vk_bytes.pop_back();
         let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
         assert!(groth16::verify_groth16_proof(&curve, &invalid_pvk, &inputs, &proof) == false, 0);
 
@@ -100,16 +99,16 @@ module sui::groth16_tests {
         let expected_gamma_bytes = x"6030ca5b462a3502d560df7ff62b7f1215195233f688320de19e4b3a2a2cb6120ae49bcc0abbd3cbbf06b29b489edbf86e3b679f4e247464992145f468e3c00d";
         let expected_delta_bytes = x"b41e5e09002a7170cb4cc56ae96b152d17b6b0d1b9333b41f2325c3c8a9d2e2df98f8e2315884fae52b3c6bb329df0359daac4eff4d2e7ce729078b10d79d4af";
 
-        let delta_bytes = vector::pop_back(&mut arr);
+        let delta_bytes = arr.pop_back();
         assert!(delta_bytes == expected_delta_bytes, 0);
 
-        let gamma_bytes = vector::pop_back(&mut arr);
+        let gamma_bytes = arr.pop_back();
         assert!(gamma_bytes == expected_gamma_bytes, 0);
 
-        let alpha_bytes = vector::pop_back(&mut arr);
+        let alpha_bytes = arr.pop_back();
         assert!(alpha_bytes == expected_alpha_bytes, 0);
 
-        let vk_bytes = vector::pop_back(&mut arr);
+        let vk_bytes = arr.pop_back();
         assert!(vk_bytes == expected_vk_bytes, 0);
     }
 
@@ -140,7 +139,7 @@ module sui::groth16_tests {
         assert!(groth16::verify_groth16_proof(&curve, &pvk, &inputs, &proof) == true, 0);
 
         // Invalid prepared verifying key.
-        vector::pop_back(&mut vk_bytes);
+        vk_bytes.pop_back();
         let invalid_pvk = groth16::pvk_from_bytes(vk_bytes, alpha_bytes, gamma_bytes, delta_bytes);
         assert!(groth16::verify_groth16_proof(&curve, &invalid_pvk, &inputs, &proof) == false, 0);
 

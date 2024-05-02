@@ -20,15 +20,6 @@ module sui_system::validator_set {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-
-    /* #[test_only] */
-    /* friend sui_system::validator_set_tests; */
-
-    /* #[test_only] */
-    /* friend sui_system::stake_tests; */
-
     public struct ValidatorSet has store {
         /// Total amount of stake from all active validators at the beginning of the epoch.
         total_stake: u64,
@@ -998,19 +989,19 @@ module sui_system::validator_set {
             // Use the slashing rate to compute the amount of staking rewards slashed from this punished validator.
             let unadjusted_staking_reward = unadjusted_staking_reward_amounts[validator_index];
             let staking_reward_adjustment_u128 =
-                (unadjusted_staking_reward as u128) * (reward_slashing_rate as u128)
+                unadjusted_staking_reward as u128 * (reward_slashing_rate as u128)
                 / BASIS_POINT_DENOMINATOR;
 
             // Insert into individual mapping and record into the total adjustment sum.
-            individual_staking_reward_adjustments.insert(validator_index, (staking_reward_adjustment_u128 as u64));
+            individual_staking_reward_adjustments.insert(validator_index, staking_reward_adjustment_u128 as u64);
             total_staking_reward_adjustment = total_staking_reward_adjustment + (staking_reward_adjustment_u128 as u64);
 
             // Do the same thing for storage fund rewards.
             let unadjusted_storage_fund_reward = unadjusted_storage_fund_reward_amounts[validator_index];
             let storage_fund_reward_adjustment_u128 =
-                (unadjusted_storage_fund_reward as u128) * (reward_slashing_rate as u128)
+                unadjusted_storage_fund_reward as u128 * (reward_slashing_rate as u128)
                 / BASIS_POINT_DENOMINATOR;
-            individual_storage_fund_reward_adjustments.insert(validator_index, (storage_fund_reward_adjustment_u128 as u64));
+            individual_storage_fund_reward_adjustments.insert(validator_index, storage_fund_reward_adjustment_u128 as u64);
             total_storage_fund_reward_adjustment = total_storage_fund_reward_adjustment + (storage_fund_reward_adjustment_u128 as u64);
         };
 
@@ -1063,9 +1054,9 @@ module sui_system::validator_set {
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_staking_reward`.
             // Use u128 to avoid multiplication overflow.
-            let voting_power: u128 = (validator.voting_power() as u128);
+            let voting_power: u128 = validator.voting_power() as u128;
             let reward_amount = voting_power * (total_staking_reward as u128) / (total_voting_power as u128);
-            staking_reward_amounts.push_back((reward_amount as u64));
+            staking_reward_amounts.push_back(reward_amount as u64);
             // Storage fund's share of the rewards are equally distributed among validators.
             storage_fund_reward_amounts.push_back(storage_fund_reward_per_validator);
             i = i + 1;
@@ -1100,7 +1091,7 @@ module sui_system::validator_set {
             // Integer divisions will truncate the results. Because of this, we expect that at the end
             // there will be some reward remaining in `total_reward`.
             // Use u128 to avoid multiplication overflow.
-            let voting_power: u128 = (validator.voting_power() as u128);
+            let voting_power = validator.voting_power() as u128;
 
             // Compute adjusted staking reward.
             let unadjusted_staking_reward_amount = unadjusted_staking_reward_amounts[i];
@@ -1112,7 +1103,7 @@ module sui_system::validator_set {
                 } else {
                     // Otherwise the slashed rewards should be distributed among the unslashed
                     // validators so add the corresponding adjustment.
-                    let adjustment = (total_staking_reward_adjustment as u128) * voting_power
+                    let adjustment = total_staking_reward_adjustment as u128 * voting_power
                                    / (total_unslashed_validator_voting_power as u128);
                     unadjusted_staking_reward_amount + (adjustment as u64)
                 };
@@ -1158,7 +1149,7 @@ module sui_system::validator_set {
             let validator_commission_amount = (staking_reward_amount as u128) * (validator.commission_rate() as u128) / BASIS_POINT_DENOMINATOR;
 
             // The validator reward = storage_fund_reward + commission.
-            let mut validator_reward = staker_reward.split((validator_commission_amount as u64));
+            let mut validator_reward = staker_reward.split(validator_commission_amount as u64);
 
             // Add storage fund rewards to the validator's reward.
             validator_reward.join(

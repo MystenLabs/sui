@@ -8,10 +8,6 @@
 //# publish
 
 module test::m {
-    use sui::transfer;
-    use sui::tx_context::TxContext;
-    use sui::object::{Self, UID};
-
     public struct S has store, key { id: UID }
     public struct Cup<phantom T: store> has store, key { id: UID }
 

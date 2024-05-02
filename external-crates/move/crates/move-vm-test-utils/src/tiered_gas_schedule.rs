@@ -579,7 +579,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn charge_read_ref(&mut self, ref_val: impl ValueView) -> PartialVMResult<()> {
-        // We read the the reference so we are decreasing the size of the stack by the size of the
+        // We read the reference so we are decreasing the size of the stack by the size of the
         // reference, and adding to it the size of the value that has been read from that
         // reference.
         self.charge(
@@ -596,7 +596,7 @@ impl<'b> GasMeter for GasStatus<'b> {
         new_val: impl ValueView,
         old_val: impl ValueView,
     ) -> PartialVMResult<()> {
-        // TODO(tzakian): We should account for this elsewhere as the owner of data the the
+        // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
         self.charge(

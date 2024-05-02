@@ -29,4 +29,5 @@ move-vm-types.workspace = true
 module-generation.workspace = true
 move-binary-format.workspace = true
 move-stdlib.workspace = true
+move-stdlib-natives.workspace = true
 move-compiler.workspace = true

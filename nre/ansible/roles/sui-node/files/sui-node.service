@@ -5,7 +5,7 @@ Description=Sui Node
 User=sui
 WorkingDirectory=/opt/sui/
 Environment=RUST_BACKTRACE=1
-Environment=RUST_LOG=info,sui_core=debug,narwhal=debug,narwhal-primary::helper=info,jsonrpsee=error
+Environment=RUST_LOG=info,sui_core=debug,narwhal=debug,consensus=debug,jsonrpsee=error
 ExecStart=/opt/sui/bin/sui-node --config-path /opt/sui/config/validator.yaml
 Restart=always
 

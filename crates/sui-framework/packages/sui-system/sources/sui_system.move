@@ -57,13 +57,6 @@ module sui_system::sui_system {
     #[test_only] use sui_system::validator_set::ValidatorSet;
     #[test_only] use sui::vec_set::VecSet;
 
-    /* friend sui_system::genesis; */
-
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
-    /* #[test_only] */
-    /* friend sui_system::sui_system_tests; */
-
     public struct SuiSystemState has key {
         id: UID,
         version: u64,

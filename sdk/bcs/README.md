@@ -51,8 +51,8 @@ built-in primitives, such as `string` or `u64`). There are no type hints in the 
 what they mean, so the schema used for decoding must match the schema used to encode the data.
 
 The `@mysten/bcs` library can be used to define schemas that can serialize and deserialize BCS
-encoded data, and and can infer the correct TypeScript for the schema from the definitions
-themselves rather than having to define them manually.
+encoded data, and can infer the correct TypeScript for the schema from the definitions themselves
+rather than having to define them manually.
 
 ## Basic types
 

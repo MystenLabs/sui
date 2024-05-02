@@ -99,7 +99,7 @@ fn convert_clever_move_abort_error(
 
     // Otherwise it should be a tagged error
     match location {
-        Location::Undefined | Location::Script => None,
+        Location::Undefined => None,
         Location::Module(module_id) => {
             let module = test_info.get(module_id)?;
             let name_constant_index = bitset.identifier_index()?;
@@ -138,9 +138,9 @@ impl TestRunner {
         let modules = tests.module_info.values().map(|info| &info.module);
         let starting_storage_state = setup_test_storage(modules)?;
         let native_function_table = native_function_table.unwrap_or_else(|| {
-            move_stdlib::natives::all_natives(
+            move_stdlib_natives::all_natives(
                 AccountAddress::from_hex_literal("0x1").unwrap(),
-                move_stdlib::natives::GasParameters::zeros(),
+                move_stdlib_natives::GasParameters::zeros(),
             )
         });
         Ok(Self {

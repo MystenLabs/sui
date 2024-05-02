@@ -8,7 +8,7 @@ use std::io::Read;
 use std::os::unix::fs::FileExt;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
 use sui_move_build::{BuildConfig, SuiPackageHooks};
 use sui_sdk::rpc_types::{
@@ -179,12 +179,9 @@ async fn run_publish(
     let resp = SuiClientCommands::Publish {
         package_path: package_path.clone(),
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;
@@ -209,12 +206,9 @@ async fn run_upgrade(
         package_path: upgrade_pkg_path,
         upgrade_capability: cap.reference.object_id,
         build_config,
-        gas: Some(gas_obj_id),
-        gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
-        serialize_unsigned_transaction: false,
-        serialize_signed_transaction: false,
+        opts: OptsWithGas::for_testing(Some(gas_obj_id), rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH),
     }
     .execute(context)
     .await?;

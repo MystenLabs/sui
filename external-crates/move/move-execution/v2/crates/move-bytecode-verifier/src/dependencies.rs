@@ -4,11 +4,9 @@
 
 //! This module contains verification of usage of dependencies for modules and scripts.
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CompiledModule, CompiledScript, FunctionDefinitionIndex,
+        AbilitySet, Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex,
         FunctionHandleIndex, ModuleHandleIndex, SignatureToken, StructHandleIndex,
         StructTypeParameter, TableIndex, Visibility,
     },
@@ -19,7 +17,7 @@ use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_sta
 use std::collections::{BTreeMap, BTreeSet};
 
 struct Context<'a, 'b> {
-    resolver: BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     // (Module -> CompiledModule) for (at least) all immediate dependencies
     dependency_map: BTreeMap<ModuleId, &'b CompiledModule>,
     // (Module::StructName -> handle) for all types of all dependencies
@@ -39,30 +37,19 @@ impl<'a, 'b> Context<'a, 'b> {
         module: &'a CompiledModule,
         dependencies: impl IntoIterator<Item = &'b CompiledModule>,
     ) -> Self {
-        Self::new(BinaryIndexedView::Module(module), dependencies)
-    }
-
-    fn script(
-        script: &'a CompiledScript,
-        dependencies: impl IntoIterator<Item = &'b CompiledModule>,
-    ) -> Self {
-        Self::new(BinaryIndexedView::Script(script), dependencies)
+        Self::new(module, dependencies)
     }
 
     fn new(
-        resolver: BinaryIndexedView<'a>,
+        resolver: &'a CompiledModule,
         dependencies: impl IntoIterator<Item = &'b CompiledModule>,
     ) -> Self {
         let self_module = resolver.self_id();
         let self_module_idx = resolver.self_handle_idx();
-        let empty_defs = &vec![];
-        let self_function_defs = match &resolver {
-            BinaryIndexedView::Module(m) => m.function_defs(),
-            BinaryIndexedView::Script(_) => empty_defs,
-        };
+        let self_function_defs = resolver.function_defs();
         let dependency_map = dependencies
             .into_iter()
-            .filter(|d| Some(d.self_id()) != self_module)
+            .filter(|d| d.self_id() != self_module)
             .map(|d| (d.self_id(), d))
             .collect();
 
@@ -103,9 +90,7 @@ impl<'a, 'b> Context<'a, 'b> {
                 );
                 let may_be_called = match func_def.visibility {
                     Visibility::Public => true,
-                    Visibility::Friend => self_module
-                        .as_ref()
-                        .map_or(false, |self_id| friend_module_ids.contains(self_id)),
+                    Visibility::Friend => friend_module_ids.contains(&self_module),
                     Visibility::Private => false,
                 };
                 if may_be_called {
@@ -128,7 +113,7 @@ impl<'a, 'b> Context<'a, 'b> {
             }
         }
         for (idx, function_handle) in context.resolver.function_handles().iter().enumerate() {
-            if Some(function_handle.module) == self_module_idx {
+            if function_handle.module == self_module_idx {
                 continue;
             }
             let dep_module_id = context
@@ -180,30 +165,11 @@ fn verify_module_impl<'a>(
     verify_all_script_visibility_usage(context)
 }
 
-pub fn verify_script<'a>(
-    script: &CompiledScript,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> VMResult<()> {
-    verify_script_impl(script, dependencies).map_err(|e| e.finish(Location::Script))
-}
-
-pub fn verify_script_impl<'a>(
-    script: &CompiledScript,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> PartialVMResult<()> {
-    let context = &Context::script(script, dependencies);
-
-    verify_imported_modules(context)?;
-    verify_imported_structs(context)?;
-    verify_imported_functions(context)?;
-    verify_all_script_visibility_usage(context)
-}
-
 fn verify_imported_modules(context: &Context) -> PartialVMResult<()> {
     let self_module = context.resolver.self_handle_idx();
     for (idx, module_handle) in context.resolver.module_handles().iter().enumerate() {
         let module_id = context.resolver.module_id_for_handle(module_handle);
-        if Some(ModuleHandleIndex(idx as u16)) != self_module
+        if ModuleHandleIndex(idx as u16) != self_module
             && !context.dependency_map.contains_key(&module_id)
         {
             return Err(verification_error(
@@ -219,7 +185,7 @@ fn verify_imported_modules(context: &Context) -> PartialVMResult<()> {
 fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
     let self_module = context.resolver.self_handle_idx();
     for (idx, struct_handle) in context.resolver.struct_handles().iter().enumerate() {
-        if Some(struct_handle.module) == self_module {
+        if struct_handle.module == self_module {
             continue;
         }
         let owner_module_id = context
@@ -262,7 +228,7 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
 fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
     let self_module = context.resolver.self_handle_idx();
     for (idx, function_handle) in context.resolver.function_handles().iter().enumerate() {
-        if Some(function_handle.module) == self_module {
+        if function_handle.module == self_module {
             continue;
         }
         let owner_module_id = context
@@ -526,15 +492,16 @@ fn verify_all_script_visibility_usage(context: &Context) -> PartialVMResult<()> 
         Some(s) => s,
     };
     debug_assert!(context.resolver.version() < VERSION_5);
-    match &context.resolver {
-        BinaryIndexedView::Module(m) => {
+    let m = context.resolver;
+    {
+        {
             for (idx, fdef) in m.function_defs().iter().enumerate() {
                 let code = match &fdef.code {
                     None => continue,
                     Some(code) => &code.code,
                 };
                 verify_script_visibility_usage(
-                    &context.resolver,
+                    context.resolver,
                     script_functions,
                     fdef.is_entry,
                     FunctionDefinitionIndex(idx as TableIndex),
@@ -543,18 +510,11 @@ fn verify_all_script_visibility_usage(context: &Context) -> PartialVMResult<()> 
             }
             Ok(())
         }
-        BinaryIndexedView::Script(s) => verify_script_visibility_usage(
-            &context.resolver,
-            script_functions,
-            true,
-            FunctionDefinitionIndex(0),
-            &s.code().code,
-        ),
     }
 }
 
 fn verify_script_visibility_usage(
-    resolver: &BinaryIndexedView,
+    resolver: &CompiledModule,
     script_functions: &BTreeSet<FunctionHandleIndex>,
     current_is_entry: bool,
     fdef_idx: FunctionDefinitionIndex,

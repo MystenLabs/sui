@@ -7,7 +7,7 @@ use crate::effects::{
     SignedTransactionEffects, TransactionEvents, VerifiedSignedTransactionEffects,
 };
 use crate::object::Object;
-use crate::transaction::{SenderSignedData, SignedTransaction};
+use crate::transaction::{CertifiedTransaction, SenderSignedData, SignedTransaction};
 use move_core_types::annotated_value::MoveStructLayout;
 use serde::{Deserialize, Serialize};
 
@@ -180,4 +180,51 @@ pub struct VerifiedHandleCertificateResponse {
 pub struct SystemStateRequest {
     // This is needed to make gRPC happy.
     pub _unused: bool,
+}
+
+/// Response type for version 3 of the handle certifacte validator API.
+///
+/// The coorisponding version 3 request type allows for a client to request events as well as
+/// input/output objects from a transaction's execution. Given Validators operate with very
+/// aggressive object pruning, the return of input/output objects is only done immediately after
+/// the transaction has been executed locally on the validator and will not be returned for
+/// requests to previously executed transactions.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateResponseV3 {
+    pub effects: SignedTransactionEffects,
+    pub events: Option<TransactionEvents>,
+
+    /// If requested, will included all initial versions of objects modified in this transaction.
+    /// This includes owned objects included as input into the transaction as well as the assigned
+    /// versions of shared objects.
+    //
+    // TODO: In the future we may want to include shared objects or child objects which were read
+    // but not modified during exectuion.
+    pub input_objects: Option<Vec<Object>>,
+
+    /// If requested, will included all changed objects, including mutated, created and unwrapped
+    /// objects. In other words, all objects that still exist in the object state after this
+    /// transaction.
+    pub output_objects: Option<Vec<Object>>,
+    pub auxiliary_data: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HandleCertificateRequestV3 {
+    pub certificate: CertifiedTransaction,
+
+    pub include_events: bool,
+    pub include_input_objects: bool,
+    pub include_output_objects: bool,
+    pub include_auxiliary_data: bool,
+}
+
+impl From<HandleCertificateResponseV3> for HandleCertificateResponseV2 {
+    fn from(value: HandleCertificateResponseV3) -> Self {
+        Self {
+            signed_effects: value.effects,
+            events: value.events.unwrap_or_default(),
+            fastpath_input_objects: Vec::new(),
+        }
+    }
 }

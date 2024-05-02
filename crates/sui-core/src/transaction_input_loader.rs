@@ -6,7 +6,6 @@ use itertools::izip;
 use once_cell::unsync::OnceCell;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, TransactionDigest},
     error::{SuiError, SuiResult, UserInputError},
@@ -37,12 +36,12 @@ impl TransactionInputLoader {
     #[instrument(level = "trace", skip_all)]
     pub async fn read_objects_for_signing(
         &self,
-        _tx_digest: &TransactionDigest,
+        _tx_digest_for_caching: Option<&TransactionDigest>,
         input_object_kinds: &[InputObjectKind],
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,
     ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        // Length of input_object_kinds have beeen checked via validity_check() for ProgrammableTransaction.
+        // Length of input_object_kinds have been checked via validity_check() for ProgrammableTransaction.
         let mut input_results = vec![None; input_object_kinds.len()];
         let mut object_refs = Vec::with_capacity(input_object_kinds.len());
         let mut fetch_indices = Vec::with_capacity(input_object_kinds.len());
@@ -95,7 +94,8 @@ impl TransactionInputLoader {
             });
         }
 
-        let receiving_results = self.read_receiving_objects(receiving_objects, epoch_id)?;
+        let receiving_results =
+            self.read_receiving_objects_for_signing(receiving_objects, epoch_id)?;
 
         Ok((
             input_results
@@ -105,61 +105,6 @@ impl TransactionInputLoader {
                 .into(),
             receiving_results,
         ))
-    }
-
-    /// Reads input objects assuming a synchronous context such as the end of epoch transaction.
-    /// By "synchronous" we mean that it is safe to read the latest version of all shared objects,
-    /// as opposed to relying on the shared input version assignment.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn read_objects_for_synchronous_execution(
-        &self,
-        tx_digest: &TransactionDigest,
-        input_object_kinds: &[InputObjectKind],
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult<InputObjects> {
-        self.read_objects_for_synchronous_execution_impl(
-            Some(tx_digest),
-            input_object_kinds,
-            &[],
-            protocol_config,
-        )
-        .await
-        .map(|r| r.0)
-    }
-
-    /// Read input objects for a dry run execution.
-    #[instrument(level = "trace", skip_all)]
-    pub async fn read_objects_for_dry_run_exec(
-        &self,
-        tx_digest: &TransactionDigest,
-        input_object_kinds: &[InputObjectKind],
-        receiving_objects: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        self.read_objects_for_synchronous_execution_impl(
-            Some(tx_digest),
-            input_object_kinds,
-            receiving_objects,
-            protocol_config,
-        )
-        .await
-    }
-
-    /// Read input objects for dev inspect
-    #[instrument(level = "trace", skip_all)]
-    pub async fn read_objects_for_dev_inspect(
-        &self,
-        input_object_kinds: &[InputObjectKind],
-        receiving_objects: &[ObjectRef],
-        protocol_config: &ProtocolConfig,
-    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        self.read_objects_for_synchronous_execution_impl(
-            None,
-            input_object_kinds,
-            receiving_objects,
-            protocol_config,
-        )
-        .await
     }
 
     /// Read the inputs for a transaction that is ready to be executed.
@@ -268,37 +213,7 @@ impl TransactionInputLoader {
 
 // private methods
 impl TransactionInputLoader {
-    async fn read_objects_for_synchronous_execution_impl(
-        &self,
-        _tx_digest: Option<&TransactionDigest>,
-        input_object_kinds: &[InputObjectKind],
-        receiving_objects: &[ObjectRef],
-        _protocol_config: &ProtocolConfig,
-    ) -> SuiResult<(InputObjects, ReceivingObjects)> {
-        let mut results = Vec::with_capacity(input_object_kinds.len());
-        // Length of input_object_kinds have beeen checked via validity_check() for ProgrammableTransaction.
-        for kind in input_object_kinds {
-            let obj = match kind {
-                InputObjectKind::MovePackage(id) => self
-                    .cache
-                    .get_package_object(id)?
-                    .map(|o| o.object().clone()),
-
-                InputObjectKind::SharedMoveObject { id, .. } => self.cache.get_object(id)?,
-                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
-                    self.cache.get_object_by_key(&objref.0, objref.1)?
-                }
-            }
-            .ok_or_else(|| SuiError::from(kind.object_not_found_error()))?;
-            results.push(ObjectReadResult::new(*kind, obj.into()));
-        }
-
-        let receiving_results = self.read_receiving_objects(receiving_objects, 0)?;
-
-        Ok((results.into(), receiving_results))
-    }
-
-    fn read_receiving_objects(
+    fn read_receiving_objects_for_signing(
         &self,
         receiving_objects: &[ObjectRef],
         epoch_id: EpochId,

@@ -14,11 +14,12 @@ use diesel::{
 };
 use sui_indexer::indexer_reader::IndexerReader;
 
+use sui_indexer::{run_query_async, run_query_repeatable_async, spawn_read_only_blocking};
 use tracing::error;
 
 #[derive(Clone)]
 pub(crate) struct PgExecutor {
-    pub inner: IndexerReader,
+    pub inner: IndexerReader<diesel::PgConnection>,
     pub limits: Limits,
     pub metrics: Metrics,
 }
@@ -29,7 +30,11 @@ pub(crate) struct PgConnection<'c> {
 }
 
 impl PgExecutor {
-    pub(crate) fn new(inner: IndexerReader, limits: Limits, metrics: Metrics) -> Self {
+    pub(crate) fn new(
+        inner: IndexerReader<diesel::PgConnection>,
+        limits: Limits,
+        metrics: Metrics,
+    ) -> Self {
         Self {
             inner,
             limits,
@@ -54,10 +59,8 @@ impl QueryExecutor for PgExecutor {
     {
         let max_cost = self.limits.max_db_query_cost;
         let instant = Instant::now();
-        let result = self
-            .inner
-            .run_query_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
-            .await;
+        let pool = self.inner.get_pool();
+        let result = run_query_async!(&pool, move |conn| txn(&mut PgConnection { max_cost, conn }));
         self.metrics
             .observe_db_data(instant.elapsed(), result.is_ok());
         if let Err(e) = &result {
@@ -76,10 +79,11 @@ impl QueryExecutor for PgExecutor {
     {
         let max_cost = self.limits.max_db_query_cost;
         let instant = Instant::now();
-        let result = self
-            .inner
-            .run_query_repeatable_async(move |conn| txn(&mut PgConnection { max_cost, conn }))
-            .await;
+        let pool = self.inner.get_pool();
+        let result = run_query_repeatable_async!(&pool, move |conn| txn(&mut PgConnection {
+            max_cost,
+            conn
+        }));
         self.metrics
             .observe_db_data(instant.elapsed(), result.is_ok());
         if let Err(e) = &result {
@@ -187,7 +191,7 @@ mod tests {
     use diesel::QueryDsl;
     use sui_framework::BuiltInFramework;
     use sui_indexer::{
-        db::{get_pg_pool_connection, new_pg_connection_pool, reset_database},
+        db::{get_pool_connection, new_connection_pool, reset_database},
         models::objects::StoredObject,
         schema::objects,
         types::IndexedObject,
@@ -195,8 +199,9 @@ mod tests {
 
     #[test]
     fn test_query_cost() {
-        let pool = new_pg_connection_pool(DEFAULT_SERVER_DB_URL, Some(5)).unwrap();
-        let mut conn = get_pg_pool_connection(&pool).unwrap();
+        let pool =
+            new_connection_pool::<diesel::PgConnection>(DEFAULT_SERVER_DB_URL, Some(5)).unwrap();
+        let mut conn = get_pool_connection(&pool).unwrap();
         reset_database(&mut conn, /* drop_all */ true).unwrap();
 
         let objects: Vec<StoredObject> = BuiltInFramework::iter_system_packages()

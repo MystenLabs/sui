@@ -6,10 +6,10 @@ language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
 # How to Install
 
 1. Open a new window in any Visual Studio Code application version 1.61.0 or greater.
-2. Open the command palette (`⇧⌘P` on macOS, or use the menu item *View > Command Palette...*) and
+2. Open the command palette (`⇧` + `⌘` + `P` on macOS, or use the menu item *View > Command Palette...*) and
    type **Extensions: Install Extensions**. This will open a panel named *Extensions* in the
    sidebar of your Visual Studio Code window.
-3. In the search bar labeled *Search Extensions in Marketplace*, type **Move**. The Move extension 
+3. In the search bar labeled *Search Extensions in Marketplace*, type **Mysten**. The Move extension 
    should appear as one of the option in the list below the search bar. Click **Install**.
 4. Open any file that ends in `.move`.
 
@@ -20,6 +20,13 @@ The move-analyzer binary is responsible for the advanced features of this VSCode
 definition, type on hover). Please see [Troubleshooting](#troubleshooting) for situations when
 the pre-built move-analyzer binary is not available for your platform or if you want to use move-analyzer
 binary stored in a different location.
+
+If you want to build and test Move code using the extension, you must install the `sui` binary on
+your machine - see [here](https://docs.sui.io/guides/developer/getting-started/sui-install) for
+instructions. The extension assumes that the `sui` binary is in your system path, but you can set
+its custom location location using VSCode's settings (`⌘` + `,` on macOS, or use the menu item *Code >
+Preferences > Settings*). Search for the `move.sui.path` user setting, set it to the new location of
+the `sui` binary, and restart VSCode.
 
 # Troubleshooting
 
@@ -47,9 +54,17 @@ If you are on Windows, the following answer assumes that your Windows user name 
 
 If your `move-analyzer` binary is in a different directory than the default one (`~/.sui/bin`
 on macOS or Linux, or `C:\Users\USER\.sui\bin` on Windows), you may have the extension look
-for the binary at this new location by using VSCode's settings (`⌘,` on macOS, or use the menu
-item *Code > Preferences > Settings*). Search for the `move.server.path` workspace setting,
+for the binary at this new location using VSCode's settings (`⌘` + `,` on macOS, or use the menu
+item *Code > Preferences > Settings*). Search for the `move.server.path` user setting,
 set it to the new location of the `move-analyzer` binary, and restart VSCode.
+
+## What if advanced features (e.g., go to def) do not work, particularly after re-install or upgrade
+
+Assuming you did not specify a different location for the move-analyzer binary and that the
+move-analyzer binary already exists in the default location (`~/.sui/bin` on macOS or Linux, or
+`C:\Users\USER\.sui\bin` on Windows), delete the existing move-analyzer binary and reinstall the
+extension.
+
 
 ## What if everything else fails?
 
@@ -62,7 +77,7 @@ Here are some of the features of the Move Visual Studio Code extension. To see t
 Move source file (a file with a `.move` file extension) and:
 
 - See Move keywords and types highlighted in appropriate colors.
-- Comment and un-comment lines of code using the `⌘/` shortcut on macOS (or the menu command *Edit >
+- Comment and un-comment lines of code (`⌘` + `/` on macOS or the menu item *Edit >
   Toggle Line Comment*).
 - Place your cursor on a delimiter, such as `<`, `(`, or `{`, and its corresponding delimiter --
   `>`, `)`, or `}` -- will be highlighted.
@@ -75,3 +90,6 @@ Move source file (a file with a `.move` file extension) and:
   - go to references
   - type on hover
   - outline view showing symbol tree for Move source files
+- If the opened Move source file is located within a buildable project you can build and (locally)
+  test this project using `Move: Build a Move package` and `Move: Test a Move package` commands from
+  VSCode's command palette

@@ -39,14 +39,14 @@ impl SurferTask {
             .iter()
             .map(|address| (*address, (None, HashMap::new())))
             .collect();
-        let validator = cluster
+        let node = cluster
             .swarm
-            .validator_nodes()
+            .all_nodes()
             .next()
             .unwrap()
             .get_node_handle()
             .unwrap();
-        let all_live_objects: Vec<_> = validator.with(|node| {
+        let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
                 .get_execution_cache()
                 .iter_live_object_set(false)

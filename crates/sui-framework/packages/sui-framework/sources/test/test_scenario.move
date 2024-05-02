@@ -28,6 +28,18 @@ module sui::test_scenario {
     /// Object of that ID was not found in that inventory. It was possibly already taken
     const EObjectNotFound: u64 = 4;
 
+    #[allow(unused_const)]
+    /// Unable to allocate a receiving ticket for the object
+    const EUnableToAllocateReceivingTicket: u64 = 5;
+
+    #[allow(unused_const)]
+    /// A receiving ticket for the object was already allocated in the transaction
+    const EReceivingTicketAlreadyAllocated: u64 = 6;
+
+    #[allow(unused_const)]
+    /// Unable to deallocate the receiving ticket 
+    const EUnableToDeallocateReceivingTicket: u64 = 7;
+
     /// Utility for mocking a multi-transaction Sui execution in a single Move procedure.
     /// A `Scenario` maintains a view of the global object pool built up by the execution.
     /// These objects can be accessed via functions like `take_from_sender`, which gives the
@@ -350,8 +362,48 @@ module sui::test_scenario {
         sui::transfer::share_object_impl(t)
     }
 
+    /// Return the IDs of the receivalbe objects that `object` owns.
+    public fun receivable_object_ids_for_owner_id<T: key>(object: ID): vector<ID> {
+        ids_for_address<T>(object::id_to_address(&object))
+    }
+
+    /// Create a `Receiving<T>` receiving ticket for the most recent 
+    /// object of type `T` that is owned by the `owner` object ID. 
+    public fun most_recent_receiving_ticket<T: key>(
+        owner: &ID
+    ): sui::transfer::Receiving<T> {
+        let id_opt = most_recent_id_for_address<T>(object::id_to_address(owner));
+        assert!(option::is_some(&id_opt), EEmptyInventory);
+        let id = option::destroy_some(id_opt);
+        receiving_ticket_by_id<T>(id)
+    }
+
+    /// Create a `Receiving<T>` receiving ticket for the object of type
+    /// `T` with the given `object_id`.
+    public fun receiving_ticket_by_id<T: key>(
+        object_id: ID
+    ): sui::transfer::Receiving<T> {
+        let version = allocate_receiving_ticket_for_object<T>(object_id);
+        sui::transfer::make_receiver(object_id, version)
+    }
+
+    /// Deallocate a `Receiving<T>` receiving ticket. This must be done in
+    /// order to use the object further (unless the object was received) in a
+    /// test scenario.
+    public fun return_receiving_ticket<T: key>(ticket: sui::transfer::Receiving<T>) {
+        let id = sui::transfer::receiving_id(&ticket);
+        deallocate_receiving_ticket_for_object(id);
+    }
+
     /// Returns true if the object with `ID` id was an shared object in the global inventory
     native fun was_taken_shared(id: ID): bool;
+
+    /// Allocate the receiving ticket for the object of type `T` with the given
+    /// `object_id`. Returns the current version of object.
+    native fun allocate_receiving_ticket_for_object<T: key>(object_id: ID): u64;
+
+    /// Deallocate the receiving ticket for the object with the given `object_id`.
+    native fun deallocate_receiving_ticket_for_object(object_id: ID);
 
     // == internal ==
 

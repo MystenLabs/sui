@@ -4,7 +4,8 @@
 use anyhow::Result;
 use clap::Parser;
 use suioplib::cli::{
-    incidents_cmd, pulumi_cmd, service_cmd, IncidentsArgs, PulumiArgs, ServiceArgs,
+    iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, IAMArgs, IncidentsArgs, PulumiArgs,
+    ServiceArgs,
 };
 use tracing_subscriber::{
     filter::{EnvFilter, LevelFilter},
@@ -27,6 +28,8 @@ pub(crate) enum Resource {
     Pulumi(PulumiArgs),
     #[clap(aliases = ["s", "svc"])]
     Service(ServiceArgs),
+    #[clap()]
+    Iam(IAMArgs),
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -51,6 +54,9 @@ async fn main() -> Result<()> {
         }
         Resource::Service(args) => {
             service_cmd(&args).await?;
+        }
+        Resource::Iam(args) => {
+            iam_cmd(&args).await?;
         }
     }
 

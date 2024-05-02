@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use crate::{errors::IndexerError, indexer_reader::IndexerReader};
 use async_trait::async_trait;
 use jsonrpsee::{core::RpcResult, RpcModule};
 
-use cached::{proc_macro::cached, SizedCache};
+use cached::{proc_macro::cached, CachedAsync, SizedCache};
+use diesel::r2d2::R2D2Connection;
 use sui_json_rpc::{governance_api::ValidatorExchangeRates, SuiRpcModule};
 use sui_json_rpc_api::GovernanceReadApiServer;
 use sui_json_rpc_types::{
@@ -21,15 +23,20 @@ use sui_types::{
     sui_serde::BigInt,
     sui_system_state::{sui_system_state_summary::SuiSystemStateSummary, PoolTokenExchangeRate},
 };
+use tokio::sync::Mutex;
 
 #[derive(Clone)]
-pub struct GovernanceReadApi {
-    inner: IndexerReader,
+pub struct GovernanceReadApi<T: R2D2Connection + 'static> {
+    inner: IndexerReader<T>,
+    exchange_rate_cache: Arc<Mutex<SizedCache<EpochId, Vec<ValidatorExchangeRates>>>>,
 }
 
-impl GovernanceReadApi {
-    pub fn new(inner: IndexerReader) -> Self {
-        Self { inner }
+impl<T: R2D2Connection + 'static> GovernanceReadApi<T> {
+    pub fn new(inner: IndexerReader<T>) -> Self {
+        Self {
+            inner,
+            exchange_rate_cache: Arc::new(Mutex::new(SizedCache::with_size(1))),
+        }
     }
 
     /// Get a validator's APY by its address
@@ -47,7 +54,15 @@ impl GovernanceReadApi {
         let epoch = system_state_summary.epoch;
         let stake_subsidy_start_epoch = system_state_summary.stake_subsidy_start_epoch;
 
-        let exchange_rate_table = exchange_rates(self, system_state_summary).await?;
+        let exchange_rate_table = self
+            .exchange_rate_cache
+            .lock()
+            .await
+            .get_or_set_with(epoch, || async {
+                self.exchange_rates(system_state_summary).await.unwrap()
+            })
+            .await
+            .clone();
 
         let apys = sui_json_rpc::governance_api::calculate_apys(
             stake_subsidy_start_epoch,
@@ -131,7 +146,8 @@ impl GovernanceReadApi {
         let system_state_summary = self.get_latest_sui_system_state().await?;
         let epoch = system_state_summary.epoch;
 
-        let rates = exchange_rates(self, system_state_summary)
+        let rates = self
+            .exchange_rates(system_state_summary)
             .await?
             .into_iter()
             .map(|rates| (rates.pool_id, rates))
@@ -189,100 +205,94 @@ impl GovernanceReadApi {
         }
         Ok(delegated_stakes)
     }
-}
 
-/// Cached exchange rates for validators for the given epoch, the cache size is 1, it will be cleared when the epoch changes.
-/// rates are in descending order by epoch.
-#[cached(
-    type = "SizedCache<EpochId, Vec<ValidatorExchangeRates>>",
-    create = "{ SizedCache::with_size(1) }",
-    convert = "{ system_state_summary.epoch }",
-    result = true
-)]
-async fn exchange_rates(
-    state: &GovernanceReadApi,
-    system_state_summary: SuiSystemStateSummary,
-) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
-    // Get validator rate tables
-    let mut tables = vec![];
+    /// Cached exchange rates for validators for the given epoch, the cache size is 1, it will be cleared when the epoch changes.
+    /// rates are in descending order by epoch.
+    async fn exchange_rates(
+        &self,
+        system_state_summary: SuiSystemStateSummary,
+    ) -> Result<Vec<ValidatorExchangeRates>, IndexerError> {
+        // Get validator rate tables
+        let mut tables = vec![];
 
-    for validator in system_state_summary.active_validators {
-        tables.push((
-            validator.sui_address,
-            validator.staking_pool_id,
-            validator.exchange_rates_id,
-            validator.exchange_rates_size,
-            true,
-        ));
-    }
+        for validator in system_state_summary.active_validators {
+            tables.push((
+                validator.sui_address,
+                validator.staking_pool_id,
+                validator.exchange_rates_id,
+                validator.exchange_rates_size,
+                true,
+            ));
+        }
 
-    // Get inactive validator rate tables
-    for df in state
-        .inner
-        .get_dynamic_fields_in_blocking_task(
-            system_state_summary.inactive_pools_id,
-            None,
-            system_state_summary.inactive_pools_size as usize,
-        )
-        .await?
-    {
-        let pool_id: sui_types::id::ID = bcs::from_bytes(&df.bcs_name).map_err(|e| {
-            sui_types::error::SuiError::ObjectDeserializationError {
-                error: e.to_string(),
-            }
-        })?;
-        let inactive_pools_id = system_state_summary.inactive_pools_id;
-        let validator = state
+        // Get inactive validator rate tables
+        for df in self
             .inner
-            .spawn_blocking(move |this| {
-                sui_types::sui_system_state::get_validator_from_table(
-                    &this,
-                    inactive_pools_id,
-                    &pool_id,
-                )
-            })
-            .await?;
-        tables.push((
-            validator.sui_address,
-            validator.staking_pool_id,
-            validator.exchange_rates_id,
-            validator.exchange_rates_size,
-            false,
-        ));
-    }
-
-    let mut exchange_rates = vec![];
-    // Get exchange rates for each validator
-    for (address, pool_id, exchange_rates_id, exchange_rates_size, active) in tables {
-        let mut rates = vec![];
-        for df in state
-            .inner
-            .get_dynamic_fields_raw_in_blocking_task(
-                exchange_rates_id,
+            .get_dynamic_fields_in_blocking_task(
+                system_state_summary.inactive_pools_id,
                 None,
-                exchange_rates_size as usize,
+                system_state_summary.inactive_pools_size as usize,
             )
             .await?
         {
-            let dynamic_field = df
-                .to_dynamic_field::<EpochId, PoolTokenExchangeRate>()
-                .ok_or_else(|| sui_types::error::SuiError::ObjectDeserializationError {
-                    error: "dynamic field malformed".to_owned(),
-                })?;
-
-            rates.push((dynamic_field.name, dynamic_field.value));
+            let pool_id: sui_types::id::ID = bcs::from_bytes(&df.bcs_name).map_err(|e| {
+                sui_types::error::SuiError::ObjectDeserializationError {
+                    error: e.to_string(),
+                }
+            })?;
+            let inactive_pools_id = system_state_summary.inactive_pools_id;
+            let validator = self
+                .inner
+                .spawn_blocking(move |this| {
+                    sui_types::sui_system_state::get_validator_from_table(
+                        &this,
+                        inactive_pools_id,
+                        &pool_id,
+                    )
+                })
+                .await?;
+            tables.push((
+                validator.sui_address,
+                validator.staking_pool_id,
+                validator.exchange_rates_id,
+                validator.exchange_rates_size,
+                false,
+            ));
         }
 
-        rates.sort_by(|(a, _), (b, _)| a.cmp(b).reverse());
+        let mut exchange_rates = vec![];
+        // Get exchange rates for each validator
+        for (address, pool_id, exchange_rates_id, exchange_rates_size, active) in tables {
+            let mut rates = vec![];
+            for df in self
+                .inner
+                .get_dynamic_fields_raw_in_blocking_task(
+                    exchange_rates_id,
+                    None,
+                    exchange_rates_size as usize,
+                )
+                .await?
+            {
+                let dynamic_field = df
+                    .to_dynamic_field::<EpochId, PoolTokenExchangeRate>()
+                    .ok_or_else(|| sui_types::error::SuiError::ObjectDeserializationError {
+                        error: "dynamic field malformed".to_owned(),
+                    })?;
 
-        exchange_rates.push(ValidatorExchangeRates {
-            address,
-            pool_id,
-            active,
-            rates,
-        });
+                rates.push((dynamic_field.name, dynamic_field.value));
+            }
+
+            rates.sort_by(|(a, _), (b, _)| a.cmp(b).reverse());
+
+            exchange_rates.push(ValidatorExchangeRates {
+                address,
+                pool_id,
+                active,
+                rates,
+            });
+        }
+        Ok(exchange_rates)
     }
-    Ok(exchange_rates)
 }
 
 /// Cache a map representing the validators' APYs for this epoch
@@ -296,7 +306,7 @@ fn validators_apys_map(apys: ValidatorApys) -> BTreeMap<SuiAddress, f64> {
 }
 
 #[async_trait]
-impl GovernanceReadApiServer for GovernanceReadApi {
+impl<T: R2D2Connection + 'static> GovernanceReadApiServer for GovernanceReadApi<T> {
     async fn get_stakes_by_ids(
         &self,
         staked_sui_ids: Vec<ObjectID>,
@@ -335,7 +345,7 @@ impl GovernanceReadApiServer for GovernanceReadApi {
     }
 }
 
-impl SuiRpcModule for GovernanceReadApi {
+impl<T: R2D2Connection> SuiRpcModule for GovernanceReadApi<T> {
     fn rpc(self) -> RpcModule<Self> {
         self.into_rpc()
     }

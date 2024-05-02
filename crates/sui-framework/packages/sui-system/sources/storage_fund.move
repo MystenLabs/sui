@@ -5,8 +5,6 @@ module sui_system::storage_fund {
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
 
-    /* friend sui_system::sui_system_state_inner; */
-
     /// Struct representing the storage fund, containing two `Balance`s:
     /// - `total_object_storage_rebates` has the invariant that it's the sum of `storage_rebate` of
     ///    all objects currently stored on-chain. To maintain this invariant, the only inflow of this

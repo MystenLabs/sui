@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
     use sui::dynamic_object_field as dof;
 
     const KEY: u64 = 0;

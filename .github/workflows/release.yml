@@ -32,6 +32,7 @@ env:
   RUSTUP_MAX_RETRIES: 10
   # Don't emit giant backtraces in the CI logs.
   RUST_BACKTRACE: short
+  TMP_BUILD_DIR: './tmp/release'
 
 jobs:
   release-build:
@@ -49,7 +50,7 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Clean up and validate tag name ${{ env.TAG_NAME }}
+      - name: Clean up and validate ${{ env.TAG_NAME }} tag name
         shell: bash
         run: |
           export sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)
@@ -59,7 +60,6 @@ jobs:
           echo "sui_version=${sui_version}" >> $GITHUB_ENV
 
       - name: Configure AWS credentials
-        if: ${{ env.TAG_NAME != 'main' }}
         uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -73,6 +73,7 @@ jobs:
           export arch=$(uname -m)
           export os_type="windows-${arch}"
           echo "os_type=${os_type}" >> $GITHUB_ENV
+          echo "extention=$(echo ".exe")" >> $GITHUB_ENV
 
       - name: Set os/arch variables
         if: ${{ matrix.os != 'windows-ghcloud' }}
@@ -83,7 +84,7 @@ jobs:
           export os_type="${system_os}-${arch}"
           echo "os_type=${system_os}-${arch}" >> $GITHUB_ENV     
 
-      - name: Check if archives of binaries have already been built
+      - name: Check if archive have already been published
         continue-on-error: true
         shell: bash
         run: |
@@ -93,8 +94,8 @@ jobs:
         if: ${{ env.s3_archive_exist != '' }}
         shell: bash
         run: |
-          mkdir -p ./target/release
-          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz
+          mkdir -p ${{ env.TMP_BUILD_DIR }}
+          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
 
       - name: Setup caching
         if: ${{ env.s3_archive_exist == '' }}
@@ -122,57 +123,45 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Checking out ${{ env.sui_tag }}
+      - name: Check out ${{ env.sui_tag }}
         if: ${{ env.s3_archive_exist == '' }}
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
         with:
           ref: ${{ env.sui_tag }}
 
-      - name: cargo build (release) for ${{ matrix.os }} platform
+      - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
           cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
-        if: ${{ matrix.os != 'windows-ghcloud' && env.s3_archive_exist == '' }}
+        if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ./target/release/sui ] && mv ./target/release/sui ./target/release/sui-${os_type}
-          [ -f ./target/release/sui-node ] && mv ./target/release/sui-node ./target/release/sui-node-${os_type}
-          [ -f ./target/release/sui-tool ] && mv ./target/release/sui-tool ./target/release/sui-tool-${os_type}
-          [ -f ./target/release/sui-faucet ] && mv ./target/release/sui-faucet ./target/release/sui-faucet-${os_type}
-          [ -f ./target/release/sui-test-validator ] && mv ./target/release/sui-test-validator ./target/release/sui-test-validator-${os_type}
-          [ -f ./target/release/sui-data-ingestion ] && mv ./target/release/sui-data-ingestion ./target/release/sui-data-ingestion-${os_type}
-          [ -f ./target/release/sui-bridge ] && mv ./target/release/sui-bridge ./target/release/sui-bridge-${os_type}
-          [ -f ./external-crates/move/target/release/move-analyzer ] && mv ./external-crates/move/target/release/move-analyzer ./external-crates/move/target/release/move-analyzer-${os_type}
-          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}
-          [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
-
-      - name: Rename binaries for Windows
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' }}
-        shell: bash
-        run: |
-          [ -f ./target/release/sui.exe ] && cp ./target/release/sui.exe ./target/release/sui-${os_type}.exe
-          [ -f ./target/release/sui-node.exe ] && mv ./target/release/sui-node.exe ./target/release/sui-node-${os_type}.exe
-          [ -f ./target/release/sui-tool.exe ] && mv ./target/release/sui-tool.exe ./target/release/sui-tool-${os_type}.exe
-          [ -f ./target/release/sui-faucet.exe ] && mv ./target/release/sui-faucet.exe ./target/release/sui-faucet-${os_type}.exe
-          [ -f ./target/release/sui-test-validator.exe ] && mv ./target/release/sui-test-validator.exe ./target/release/sui-test-validator-${os_type}.exe
-          [ -f ./target/release/sui-indexer.exe ] && mv ./target/release/sui-indexer.exe ./target/release/sui-indexer-${os_type}.exe
-          [ -f ./target/release/sui-data-ingestion.exe ] &&  mv ./target/release/sui-data-ingestion.exe ./target/release/sui-data-ingestion-${os_type}.exe
-          [ -f ./external-crates/move/target/release/move-analyzer.exe ] && mv ./external-crates/move/target/release/move-analyzer.exe ./external-crates/move/target/release/move-analyzer-${os_type}.exe
-          tar -cvzf ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz ./target/release/sui*-${os_type}* ./external-crates/move/target/release/move-analyzer-${os_type}.exe
-          [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./target/release/sui-${{ env.sui_tag }}-${os_type}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz || true
+          mkdir -p ${{ env.TMP_BUILD_DIR }}
+          [ -f ./target/debug/sui${{ env.extention }} ] && mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
+          [ -f ./target/release/sui${{ env.extention }} ] && mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui${{ env.extention }}
+          [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
+          [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
+          [ -f ./target/release/sui-faucet${{ env.extention }} ] && mv ./target/release/sui-faucet${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-faucet${{ env.extention }}
+          [ -f ./target/release/sui-test-validator${{ env.extention }} ] && mv ./target/release/sui-test-validator${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-test-validator${{ env.extention }}
+          [ -f ./target/release/sui-data-ingestion${{ env.extention }} ] && mv ./target/release/sui-data-ingestion${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-data-ingestion${{ env.extention }}
+          [ -f ./target/release/sui-bridge${{ env.extention }} ] && mv ./target/release/sui-bridge${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-bridge${{ env.extention }}
+          [ -f ./target/release/sui-graphql-rpc${{ env.extention }} ] && mv ./target/release/sui-graphql-rpc${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-graphql-rpc${{ env.extention }}
+          [ -f ./external-crates/move/target/release/move-analyzer${{ env.extention }} ] && mv ./external-crates/move/target/release/move-analyzer${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/move-analyzer${{ env.extention }}
+          tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
+          [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
       - name: "Publish Windows sui binary to Chocolately"
-        if: ${{ matrix.os == 'windows-ghcloud' && env.s3_archive_exist == '' && contains( env.sui_tag, 'testnet') }}
+        if: ${{ matrix.os == 'windows-ghcloud' && contains( env.sui_tag, 'testnet') }}
         working-directory: chocolatey
         continue-on-error: true
         shell: bash
         run: |
           choco install checksum
-          export sui_sha=$(checksum -t sha256 ../target/release/sui.exe)
+          export sui_sha=$(checksum -t sha256 .${{ env.TMP_BUILD_DIR }}/sui.exe)
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps
@@ -193,17 +182,17 @@ jobs:
           name: sui-binaries-${{ matrix.os }}
           if-no-files-found: error
           path: |
-            ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
-      - name: Publish binaries for ${{ env.sui_tag }} release
+      - name: Attach artifacts to ${{ env.sui_tag }} release in GH
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
         with:
           tag_name: ${{ env.sui_tag }}
           files: |
-            ./target/release/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
   update-homebrew-formula:
-    name: run brew bump-formula-pr for sui on testnet releases
+    name: Run brew bump-formula-pr for sui on testnet releases
     needs: release-build
     runs-on: ubuntu-latest
     # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
@@ -230,7 +219,7 @@ jobs:
           COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
 
   update-homebrew-tap:
-    name: update mysten-tap sui.rb file
+    name: Update mysten-tap sui.rb file
     needs: release-build
     runs-on: ubuntu-latest
     if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}

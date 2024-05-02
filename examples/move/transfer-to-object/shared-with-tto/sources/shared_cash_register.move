@@ -15,7 +15,7 @@ module shared_with_tto::shared_cash_register {
     const EInvalidOwner: u64 = 0;
     const ENotAuthorized: u64 = 2;
 
-    struct CashRegister has key {
+    public struct CashRegister has key {
         id: UID,
         authorized_individuals: VecSet<address>,
         business_name: String,
@@ -26,11 +26,11 @@ module shared_with_tto::shared_cash_register {
     /// business name, and authorized set of individuals that can process
     /// payments.
     public fun create_cash_register(
-        authorized_individuals_vec: vector<address>,
+        mut authorized_individuals_vec: vector<address>,
         business_name: String,
         ctx: &mut TxContext,
     ) {
-        let authorized_individuals = vec_set::empty();
+        let mut authorized_individuals = vec_set::empty();
 
         while (!vector::is_empty(&authorized_individuals_vec)) {
             let addr = vector::pop_back(&mut authorized_individuals_vec);
@@ -79,7 +79,7 @@ module shared_with_tto::shared_cash_register {
             vec_set::remove(&mut register.authorized_individuals, &addr);
         } else {
             vec_set::insert(&mut register.authorized_individuals, addr);
-        } 
+        }
     }
 
     //--------------------------------------------------------------------------------
@@ -88,7 +88,7 @@ module shared_with_tto::shared_cash_register {
 
     /// Process a payment that has been made, removing it from the register and
     /// returning the coin that can then be combined or sent elsewhere by the authorized individual.
-    /// Payments can ony be processed by either an account in the / `authorized_individuals` set or by the owner of the cash register.
+    /// Payments can only be processed by either an account in the / `authorized_individuals` set or by the owner of the cash register.
     public fun process_payment(register: &mut CashRegister, payment_ticket: Receiving<IdentifiedPayment>, ctx: &TxContext): Coin<SUI> {
         let sender = tx_context::sender(ctx);
         assert!(vec_set::contains(&register.authorized_individuals, &sender) || sender == register.register_owner, ENotAuthorized);

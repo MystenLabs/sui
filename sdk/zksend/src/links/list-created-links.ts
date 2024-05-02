@@ -66,22 +66,26 @@ export async function listCreatedLinks({
 	cursor,
 	network,
 	contract = MAINNET_CONTRACT_IDS,
+	fetch: fetchFn,
 	...linkOptions
 }: {
 	address: string;
 	contract?: ZkBagContractOptions;
 	cursor?: string;
 	network?: 'mainnet' | 'testnet';
+
 	// Link options:
 	host?: string;
 	path?: string;
 	client?: SuiClient;
+	fetch?: typeof fetch;
 }) {
 	const gqlClient = new SuiGraphQLClient({
 		url:
 			network === 'testnet'
 				? 'https://sui-testnet.mystenlabs.com/graphql'
 				: 'https://sui-mainnet.mystenlabs.com/graphql',
+		fetch: fetchFn,
 	});
 
 	const packageId = normalizeSuiAddress(contract.packageId);

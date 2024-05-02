@@ -15,7 +15,7 @@
 /// - Type owner (creator) can set any Rules as long as the ecosystem supports
 /// them. All of the Rules need to be resolved within a single transaction (eg
 /// pay royalty and pay fixed commission). Once required actions are performed,
-/// the `TransferRequest` can be "confimed" via `confirm_request` call.
+/// the `TransferRequest` can be "confirmed" via `confirm_request` call.
 ///
 /// - `TransferPolicy` aims to be the main interface for creators to control trades
 /// of their types and collect profits if a fee is required on sales. Custom
@@ -36,7 +36,7 @@ module sui::transfer_policy {
     /// A completed rule is not set in the `TransferPolicy`.
     const EIllegalRule: u64 = 1;
     /// A Rule is not set.
-    const EUnknownRequrement: u64 = 2;
+    const EUnknownRequirement: u64 = 2;
     /// Attempting to create a Rule that is already set.
     const ERuleAlreadySet: u64 = 3;
     /// Trying to `withdraw` or `close_and_withdraw` with a wrong Cap.
@@ -129,7 +129,7 @@ module sui::transfer_policy {
     }
 
     #[allow(lint(self_transfer, share_owned))]
-    /// Initialize the Tranfer Policy in the default scenario: Create and share
+    /// Initialize the Transfer Policy in the default scenario: Create and share
     /// the `TransferPolicy`, transfer `TransferPolicyCap` to the transaction
     /// sender.
     entry fun default<T>(pub: &Publisher, ctx: &mut TxContext) {
@@ -230,7 +230,7 @@ module sui::transfer_policy {
     public fun add_to_balance<T, Rule: drop>(
         _: Rule, policy: &mut TransferPolicy<T>, coin: Coin<SUI>
     ) {
-        assert!(has_rule<T, Rule>(policy), EUnknownRequrement);
+        assert!(has_rule<T, Rule>(policy), EUnknownRequirement);
         coin::put(&mut policy.balance, coin)
     }
 

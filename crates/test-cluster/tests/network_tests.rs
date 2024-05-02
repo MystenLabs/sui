@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::access::ModuleAccess;
 use sui_framework::BuiltInFramework;
 use sui_json_rpc_api::ReadApiClient;
 use sui_json_rpc_types::SuiObjectResponse;

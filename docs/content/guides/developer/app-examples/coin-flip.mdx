@@ -33,19 +33,15 @@ With that done, it's time to jump into some code. Create a new file in the `sour
 ```move title='house_data.move'
 module satoshi_flip::house_data {
 
-    use sui::object::{Self, UID};
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
     use sui::package::{Self};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self};
 
+    // Error codes
     const ECallerNotHouse: u64 = 0;
     const EInsufficientBalance: u64 = 1;
 
-    friend satoshi_flip::single_player_satoshi;
-    friend satoshi_flip::mev_attack_resistant_single_player_satoshi;
 ```
 
 There are few details to take note of in this code:
@@ -53,12 +49,12 @@ There are few details to take note of in this code:
 1. The first line declares the module name as `house_data` within the package `satoshi_flip`.
 1. Seven lines begin with the `use` keyword, which enables this module to use types and functions declared in other modules (in this case, they are all coming from the Sui standard library).
 1. Two error codes. These codes are used in assertions and unit tests to ensure that the program is running as intended.
-1. Two [`friend`, or trusted, modules](guides/developer/dev-cheat-sheet.mdx#general).
 
 Next, add some more code to this module:
 
 ```move title='house_data.move'
-    struct HouseData has key {
+    /// Configuration and Treasury object, managed by the house.
+    public struct HouseData has key {
         id: UID,
         balance: Balance<SUI>,
         house: address,
@@ -66,43 +62,48 @@ Next, add some more code to this module:
         max_stake: u64,
         min_stake: u64,
         fees: Balance<SUI>,
-        base_fee_in_bp: u16
+        base_fee_in_bp: u16 
     }
 
-    struct HouseCap has key {
+    /// A one-time use capability to initialize the house data; created and sent
+    /// to sender in the initializer.
+    public struct HouseCap has key {
         id: UID
     }
 
-    struct HOUSE_DATA has drop {}
+    /// Used as a one time witness to generate the publisher.
+    public struct HOUSE_DATA has drop {}
 
     fun init(otw: HOUSE_DATA, ctx: &mut TxContext) {
+        // Creating and sending the Publisher object to the sender.
         package::claim_and_keep(otw, ctx);
 
+        // Creating and sending the HouseCap object to the sender.
         let house_cap = HouseCap {
             id: object::new(ctx)
         };
 
-        transfer::transfer(house_cap, tx_context::sender(ctx));
+        transfer::transfer(house_cap, ctx.sender());
     }
 ```
 
 - The first struct, `HouseData`, stores the most essential information pertaining to the game.
-- The second struct, `HouseCap`, is a [capability](concepts/sui-move-concepts/patterns/capabilities.mdx) that initializes the house data.
-- The third struct, `HOUSE_DATA`, is a [one-time witness](concepts/sui-move-concepts/one-time-witness.mdx) that ensures only a single instance of this `HouseData` ever exists.
+- The second struct, `HouseCap`, is a capability that initializes the house data.
+- The third struct, `HOUSE_DATA`, is a one-time witness that ensures only a single instance of this `HouseData` ever exists.
 - The [`init` function](concepts/sui-move-concepts/init.mdx) creates and sends the `Publisher` and `HouseCap` objects to the sender.
 
 So far, you've set up the data structures within the module. Now, create a function that initializes the house data and shares the `HouseData` object:
 
 ```move title='house_data.move'
     public fun initialize_house_data(house_cap: HouseCap, coin: Coin<SUI>, public_key: vector<u8>, ctx: &mut TxContext) {
-        assert!(coin::value(&coin) > 0, EInsufficientBalance);
+        assert!(coin.value() > 0, EInsufficientBalance);
 
         let house_data = HouseData {
             id: object::new(ctx),
-            balance: coin::into_balance(coin),
-            house: tx_context::sender(ctx),
+            balance: coin.into_balance(),
+            house: ctx.sender(),
             public_key,
-            max_stake: 50_000_000_000, // 50 SUI.
+            max_stake: 50_000_000_000, // 50 SUI, 1 SUI = 10^9.
             min_stake: 1_000_000_000, // 1 SUI.
             fees: balance::zero(),
             base_fee_in_bp: 100 // 1% in basis points.
@@ -123,26 +124,34 @@ With the house data initialized, you also need to add some functions that enable
     }
 
     public fun withdraw(house_data: &mut HouseData, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+        // Only the house address can withdraw funds.
+        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+
         let total_balance = balance(house_data);
         let coin = coin::take(&mut house_data.balance, total_balance, ctx);
-        transfer::public_transfer(coin, house(house_data));
+        transfer::public_transfer(coin, house_data.house());
     }
 
     public fun claim_fees(house_data: &mut HouseData, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+        // Only the house address can withdraw fee funds.
+        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+
         let total_fees = fees(house_data);
         let coin = coin::take(&mut house_data.fees, total_fees, ctx);
-        transfer::public_transfer(coin, house(house_data));
+        transfer::public_transfer(coin, house_data.house());
     }
 
     public fun update_max_stake(house_data: &mut HouseData, max_stake: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+        // Only the house address can update the base fee.
+        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+
         house_data.max_stake = max_stake;
     }
 
     public fun update_min_stake(house_data: &mut HouseData, min_stake: u64, ctx: &mut TxContext) {
-        assert!(tx_context::sender(ctx) == house(house_data), ECallerNotHouse);
+        // Only the house address can update the min stake.
+        assert!(ctx.sender() == house_data.house(), ECallerNotHouse);
+
         house_data.min_stake = min_stake;
     }
 ```
@@ -157,55 +166,64 @@ All of these functions contain an `assert!` call that ensures only the house can
 You have established the data structure of this module, but without the appropriate functions this data is not accessible. Now add helper functions that return mutable references, read-only references, and test-only functions:
 
 ```move title='house_data.move'
-	// --------------- Mutable References ---------------
+    // --------------- Mutable References ---------------
 
-    public(friend) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
+    public(package) fun borrow_balance_mut(house_data: &mut HouseData): &mut Balance<SUI> {
         &mut house_data.balance
     }
 
-    public(friend) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SUI> {
+    public(package) fun borrow_fees_mut(house_data: &mut HouseData): &mut Balance<SUI> {
         &mut house_data.fees
     }
 
-    public(friend) fun borrow_mut(house_data: &mut HouseData): &mut UID {
+    public(package) fun borrow_mut(house_data: &mut HouseData): &mut UID {
         &mut house_data.id
     }
 
     // --------------- Read-only References ---------------
 
-    public(friend) fun borrow(house_data: &HouseData): &UID {
+    /// Returns a reference to the house id.
+    public(package) fun borrow(house_data: &HouseData): &UID {
         &house_data.id
     }
 
+    /// Returns the balance of the house.
     public fun balance(house_data: &HouseData): u64 {
-        balance::value(&house_data.balance)
+        house_data.balance.value()
     }
 
+    /// Returns the address of the house.
     public fun house(house_data: &HouseData): address {
         house_data.house
     }
 
+    /// Returns the public key of the house.
     public fun public_key(house_data: &HouseData): vector<u8> {
         house_data.public_key
     }
 
+    /// Returns the max stake of the house.
     public fun max_stake(house_data: &HouseData): u64 {
         house_data.max_stake
     }
 
+    /// Returns the min stake of the house.
     public fun min_stake(house_data: &HouseData): u64 {
         house_data.min_stake
     }
 
+    /// Returns the fees of the house.
     public fun fees(house_data: &HouseData): u64 {
-        balance::value(&house_data.fees)
+        house_data.fees.value()
     }
 
+    /// Returns the base fee.
     public fun base_fee_in_bp(house_data: &HouseData): u16 {
         house_data.base_fee_in_bp
     }
 
-	// --------------- Test-only Functions ---------------
+    // --------------- Test-only Functions ---------------
+
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
         init(HOUSE_DATA {}, ctx);
@@ -221,13 +239,10 @@ In the same `sources` directory, now create a file named `counter_nft.move`. A `
 
 ```move title='counter_nft.move'
 module satoshi_flip::counter_nft {
-    use std::vector;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self};
+
     use sui::bcs::{Self};
 
-    struct Counter has key {
+    public struct Counter has key {
         id: UID,
         count: u64,
     }
@@ -257,10 +272,10 @@ You have a `Counter` object, as well as functions that initialize and burn the o
 
 ```move title='counter_nft.move'
     public fun get_vrf_input_and_increment(self: &mut Counter): vector<u8> {
-        let vrf_input = object::id_bytes(self);
+        let mut vrf_input = object::id_bytes(self);
         let count_to_bytes = bcs::to_bytes(&count(self));
-        vector::append(&mut vrf_input, count_to_bytes);
-        increment(self);
+        vrf_input.append(count_to_bytes);
+        self.increment();
         vrf_input
     }
 
@@ -274,7 +289,7 @@ You have a `Counter` object, as well as functions that initialize and burn the o
 
     #[test_only]
     public fun burn_for_testing(self: Counter) {
-        burn(self);
+        self.burn();
     }
 }
 ```
@@ -291,22 +306,18 @@ Create the game module. In the `sources` directory, create a new file called `si
 
 ```move title='single_player_satoshi.move'
 module satoshi_flip::single_player_satoshi {
-    use std::string::{Self, String};
-    use std::vector;
+    use std::string::String;
 
     use sui::coin::{Self, Coin};
-    use sui::balance::{Self, Balance};
+    use sui::balance::Balance;
     use sui::sui::SUI;
     use sui::bls12381::bls12381_min_pk_verify;
-    use sui::object::{Self, UID, ID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
     use sui::event::emit;
     use sui::hash::{blake2b256};
     use sui::dynamic_object_field::{Self as dof};
 
-    use satoshi_flip::counter_nft::{Self, Counter};
-    use satoshi_flip::house_data::{Self as hd, HouseData};
+    use satoshi_flip::counter_nft::Counter;
+    use satoshi_flip::house_data::HouseData;
 
     const EPOCHS_CANCEL_AFTER: u64 = 7;
     const GAME_RETURN: u8 = 2;
@@ -324,16 +335,16 @@ module satoshi_flip::single_player_satoshi {
     const EInsufficientHouseBalance: u64 = 5;
     const EGameDoesNotExist: u64 = 6;
 
-    struct NewGame has copy, drop {
+    public struct NewGame has copy, drop {
         game_id: ID,
         player: address,
         vrf_input: vector<u8>,
         guess: String,
-        user_stake: u64,
+        user_stake: u64, 
         fee_bp: u16
     }
 
-    struct Outcome has copy, drop {
+    public struct Outcome has copy, drop {
         game_id: ID,
         status: u8
     }
@@ -346,7 +357,7 @@ Lastly in this section, you also create structs for two [events](concepts/events
 Add a struct to the module:
 
 ```move title='single_player_satoshi.move'
-    struct Game has key, store {
+    public struct Game has key, store {
         id: UID,
         guess_placed_epoch: u64,
         total_stake: Balance<SUI>,
@@ -363,44 +374,46 @@ Now take a look at the main function in this game, `finish_game`:
 
 ```move title='single_player_satoshi.move'
     public fun finish_game(game_id: ID, bls_sig: vector<u8>, house_data: &mut HouseData, ctx: &mut TxContext) {
+        // Ensure that the game exists.
         assert!(game_exists(house_data, game_id), EGameDoesNotExist);
 
         let Game {
             id,
             guess_placed_epoch: _,
-            total_stake,
+            mut total_stake,
             guess,
             player,
             vrf_input,
             fee_bp
-        } = dof::remove<ID, Game>(hd::borrow_mut(house_data), game_id);
+        } = dof::remove<ID, Game>(house_data.borrow_mut(), game_id);
 
         object::delete(id);
 
         // Step 1: Check the BLS signature, if its invalid abort.
-        let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &hd::public_key(house_data), &vrf_input);
+        let is_sig_valid = bls12381_min_pk_verify(&bls_sig, &house_data.public_key(), &vrf_input);
         assert!(is_sig_valid, EInvalidBlsSig);
-        let hashed_beacon = blake2b256(&bls_sig);
 
+        // Hash the beacon before taking the 1st byte.
+        let hashed_beacon = blake2b256(&bls_sig);
         // Step 2: Determine winner.
-        let first_byte = *vector::borrow(&hashed_beacon, 0);
+        let first_byte = hashed_beacon[0];
         let player_won = map_guess(guess) == (first_byte % 2);
 
         // Step 3: Distribute funds based on result.
         let status = if (player_won) {
             // Step 3.a: If player wins transfer the game balance as a coin to the player.
             // Calculate the fee and transfer it to the house.
-            let stake_amount = balance::value(&total_stake);
+            let stake_amount = total_stake.value();
             let fee_amount = fee_amount(stake_amount, fee_bp);
-            let fees = balance::split(&mut total_stake, fee_amount);
-            balance::join(hd::borrow_fees_mut(house_data), fees);
+            let fees = total_stake.split(fee_amount);
+            house_data.borrow_fees_mut().join(fees);
 
             // Calculate the rewards and take it from the game stake.
-            transfer::public_transfer(coin::from_balance(total_stake, ctx), player);
+            transfer::public_transfer(total_stake.into_coin(ctx), player);
             PLAYER_WON_STATE
         } else {
             // Step 3.b: If house wins, then add the game stake to the house_data.house_balance (no fees are taken).
-            balance::join(hd::borrow_balance_mut(house_data), total_stake);
+            house_data.borrow_balance_mut().join(total_stake);
             HOUSE_WON_STATE
         };
 
@@ -421,6 +434,7 @@ Now add a function that handles game disputes:
 
 ```move title='single_player_satoshi.move'
     public fun dispute_and_win(house_data: &mut HouseData, game_id: ID, ctx: &mut TxContext) {
+        // Ensure that the game exists.
         assert!(game_exists(house_data, game_id), EGameDoesNotExist);
 
         let Game {
@@ -431,16 +445,16 @@ Now add a function that handles game disputes:
             player,
             vrf_input: _,
             fee_bp: _
-        } = dof::remove(hd::borrow_mut(house_data), game_id);
+        } = dof::remove(house_data.borrow_mut(), game_id);
 
         object::delete(id);
 
-        let caller_epoch = tx_context::epoch(ctx);
+        let caller_epoch = ctx.epoch();
         let cancel_epoch = guess_placed_epoch + EPOCHS_CANCEL_AFTER;
-
+        // Ensure that minimum epochs have passed before user can cancel.
         assert!(cancel_epoch <= caller_epoch, ECanNotChallengeYet);
 
-        transfer::public_transfer(coin::from_balance(total_stake, ctx), player);
+        transfer::public_transfer(total_stake.into_coin(ctx), player);
 
         emit(Outcome {
             game_id,
@@ -461,7 +475,7 @@ The rest of the functions are accessors and helper functions used to retrieve va
     }
 
     public fun stake(game: &Game): u64 {
-        balance::value(&game.total_stake)
+        game.total_stake.value()
     }
 
     public fun guess(game: &Game): u8 {
@@ -487,46 +501,52 @@ The rest of the functions are accessors and helper functions used to retrieve va
         ((((game_stake / (GAME_RETURN as u64)) as u128) * (fee_in_bp as u128) / 10_000) as u64)
     }
 
-    /// Public helper function to check if a game exists.
+    /// Helper function to check if a game exists.
     public fun game_exists(house_data: &HouseData, game_id: ID): bool {
-        dof::exists_(hd::borrow(house_data), game_id)
+        dof::exists_(house_data.borrow(), game_id)
     }
 
-    /// Public helper function to check that a game exists and return a reference to the game Object.
+    /// Helper function to check that a game exists and return a reference to the game Object.
+    /// Can be used in combination with any accessor to retrieve the desired game field.
     public fun borrow_game(game_id: ID, house_data: &HouseData): &Game {
         assert!(game_exists(house_data, game_id), EGameDoesNotExist);
-        dof::borrow(hd::borrow(house_data), game_id)
+        dof::borrow(house_data.borrow(), game_id)
     }
 
-    /// Internal helper function used to create a new game
+    /// Internal helper function used to create a new game.
     fun internal_start_game(guess: String, counter: &mut Counter, coin: Coin<SUI>, house_data: &mut HouseData, fee_bp: u16, ctx: &mut TxContext): (ID, Game) {
+        // Ensure guess is valid.
         map_guess(guess);
-        let user_stake = coin::value(&coin);
-        assert!(user_stake <= hd::max_stake(house_data), EStakeTooHigh);
-        assert!(user_stake >= hd::min_stake(house_data), EStakeTooLow);
-        assert!(hd::balance(house_data) >= user_stake, EInsufficientHouseBalance);
+        let user_stake = coin.value();
+        // Ensure that the stake is not higher than the max stake.
+        assert!(user_stake <= house_data.max_stake(), EStakeTooHigh);
+        // Ensure that the stake is not lower than the min stake.
+        assert!(user_stake >= house_data.min_stake(), EStakeTooLow);
+        // Ensure that the house has enough balance to play for this game.
+        assert!(house_data.balance() >= user_stake, EInsufficientHouseBalance);
 
-        let total_stake = balance::split(hd::borrow_balance_mut(house_data), user_stake);
+        // Get the house's stake.
+        let mut total_stake = house_data.borrow_balance_mut().split(user_stake);
         coin::put(&mut total_stake, coin);
 
-        let vrf_input = counter_nft::get_vrf_input_and_increment(counter);
+        let vrf_input = counter.get_vrf_input_and_increment();
 
         let id = object::new(ctx);
         let game_id = object::uid_to_inner(&id);
 
         let new_game = Game {
             id,
-            guess_placed_epoch: tx_context::epoch(ctx),
+            guess_placed_epoch: ctx.epoch(),
             total_stake,
             guess,
-            player: tx_context::sender(ctx),
+            player: ctx.sender(),
             vrf_input,
             fee_bp
         };
 
         emit(NewGame {
             game_id,
-            player: tx_context::sender(ctx),
+            player: ctx.sender(),
             vrf_input,
             guess,
             user_stake,
@@ -536,11 +556,15 @@ The rest of the functions are accessors and helper functions used to retrieve va
         (game_id, new_game)
     }
 
-    /// Internal helper function to map (H)EADS and (T)AILS to 0 and 1 respectively
+    /// Helper function to map (H)EADS and (T)AILS to 0 and 1 respectively.
+    /// H = 0
+    /// T = 1
     fun map_guess(guess: String): u8 {
-        assert!(string::bytes(&guess) == &HEADS || string::bytes(&guess) == &TAILS, EInvalidGuess);
+        let heads = HEADS;
+        let tails = TAILS;
+        assert!(guess.bytes() == heads || guess.bytes() == tails, EInvalidGuess);
 
-        if (string::bytes(&guess) == &HEADS) {
+        if (guess.bytes() == heads) {
             0
         } else {
             1

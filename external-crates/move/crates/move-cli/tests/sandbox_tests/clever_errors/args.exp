@@ -70,7 +70,7 @@ Failures in 0x1::AModuleTestsShouldAllFail:
 
 Test result: FAILED. Total tests: 10; passed: 6; failed: 4
 warning[W10007]: issue with attribute value
-  ┌─ tests/AModuleTestsShouldAllFail.move:8:24
+  ┌─ ./tests/AModuleTestsShouldAllFail.move:8:24
   │
 8 │     #[expected_failure(abort_code = 0)]
   │                        ^^^^^^^^^^   - Replace value with constant from expected module or add `location=...` attribute.

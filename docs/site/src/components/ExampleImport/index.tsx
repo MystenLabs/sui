@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import React, { useState, useEffect } from "react";
-import Highlight from "prism-react-renderer";
-import github from "prism-react-renderer/themes/github";
+import {Highlight, themes} from "prism-react-renderer";
+
 import axios from "axios";
 import { Prism } from "prism-react-renderer";
 import CopyButton from "@theme/CodeBlock/CopyButton";
@@ -82,7 +82,7 @@ export default function ExampleImport(props) {
       Prism={Prism}
       code={example}
       language={highlight as Language}
-      theme={github}
+      theme={themes.github}
     >
       {({ className, style, tokens, getLineProps, getTokenProps }) => (
         <div className="codeBlockContainer_node_modules-@docusaurus-theme-classic-lib-theme-CodeBlock-Container-styles-module theme-code-block">
