@@ -7,6 +7,7 @@ pub use checked::*;
 mod checked {
 
     use move_binary_format::CompiledModule;
+    use move_core_types::ident_str;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};
     use sui_types::balance::{

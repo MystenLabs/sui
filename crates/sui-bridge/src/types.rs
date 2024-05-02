@@ -32,10 +32,8 @@ use sui_types::bridge::{
     APPROVAL_THRESHOLD_TOKEN_TRANSFER,
 };
 use sui_types::committee::CommitteeTrait;
-use sui_types::committee::EpochId;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
-use sui_types::error::SuiResult;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::TypeTag;
 

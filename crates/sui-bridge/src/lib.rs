@@ -32,7 +32,7 @@ pub(crate) mod sui_mock_client;
 #[cfg(test)]
 pub mod test_utils;
 
-pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 43;
+pub const BRIDGE_ENABLE_PROTOCOL_VERSION: u64 = 46;
 
 #[cfg(test)]
 pub mod e2e_tests;
