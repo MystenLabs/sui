@@ -169,6 +169,10 @@ export class ZkSendLink {
 		return link;
 	}
 
+	async loadClaimedStatus() {
+		await this.#loadBag({ loadAssets: false });
+	}
+
 	async loadAssets(
 		options: {
 			transactionBlock?: SuiTransactionBlockResponse;
@@ -310,7 +314,7 @@ export class ZkSendLink {
 		};
 	}
 
-	async loaBagObject() {
+	async #loadBagObject() {
 		if (!this.#contract) {
 			throw new Error('Cannot load bag object for non-contract based links');
 		}
@@ -328,9 +332,11 @@ export class ZkSendLink {
 
 	async #loadBag({
 		transactionBlock,
-		loadClaimedAssets = true,
+		loadAssets = true,
+		loadClaimedAssets = loadAssets,
 	}: {
 		transactionBlock?: SuiTransactionBlockResponse;
+		loadAssets?: boolean;
 		loadClaimedAssets?: boolean;
 	} = {}) {
 		if (!this.#contract) {
@@ -344,7 +350,11 @@ export class ZkSendLink {
 		};
 
 		if (!this.bagObject || !this.claimed) {
-			await this.loaBagObject();
+			await this.#loadBagObject();
+		}
+
+		if (!loadAssets) {
+			return;
 		}
 
 		if (!this.bagObject) {
