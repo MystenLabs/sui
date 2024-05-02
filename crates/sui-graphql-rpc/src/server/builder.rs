@@ -237,18 +237,7 @@ impl ServerBuilder {
 
     pub fn route(mut self, path: &str, method_handler: MethodRouter) -> Self {
         self.init_router();
-        self.router = self.router.map(|router| {
-            router
-                .route(path, method_handler)
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    set_version_middleware,
-                ))
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    check_version_middleware,
-                ))
-        });
+        self.router = self.router.map(|router| router.route(path, method_handler));
         self
     }
 
@@ -316,6 +305,14 @@ impl ServerBuilder {
         );
 
         let app = router
+            .route_layer(middleware::from_fn_with_state(
+                state.version,
+                set_version_middleware,
+            ))
+            .route_layer(middleware::from_fn_with_state(
+                state.version,
+                check_version_middleware,
+            ))
             .layer(axum::extract::Extension(schema))
             .layer(axum::extract::Extension(watermark_task.lock()))
             .layer(Self::cors()?);
