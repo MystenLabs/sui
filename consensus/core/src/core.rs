@@ -302,6 +302,7 @@ impl Core {
             if !self.leaders_exist(quorum_round) {
                 return None;
             }
+
             if Duration::from_millis(
                 self.context
                     .clock

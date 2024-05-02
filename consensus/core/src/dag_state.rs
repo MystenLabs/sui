@@ -736,10 +736,10 @@ mod test {
     use parking_lot::RwLock;
 
     use super::*;
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
-        test_dag::build_dag,
     };
 
     #[test]
@@ -1493,7 +1493,16 @@ mod test {
 
         // WHEN a fully connected DAG up to round 4 is created, then round 4 blocks should be returned as quorum
         {
-            let round_4_blocks = build_dag(context, dag_state.clone(), None, 4);
+            let mut dag_builder = DagBuilder::new(context.clone());
+            dag_builder
+                .layers(1..=4)
+                .build()
+                .persist_layers(dag_state.clone());
+            let round_4_blocks: Vec<_> = dag_builder
+                .blocks(4..=4)
+                .into_iter()
+                .map(|block| block.reference())
+                .collect();
 
             let last_quorum = dag_state.read().last_quorum();
 
@@ -1546,7 +1555,11 @@ mod test {
         // WHEN adding some blocks for authorities, only the last ones should be returned
         {
             // add blocks up to round 4
-            build_dag(context.clone(), dag_state.clone(), None, 4);
+            let mut dag_builder = DagBuilder::new(context.clone());
+            dag_builder
+                .layers(1..=4)
+                .build()
+                .persist_layers(dag_state.clone());
 
             // add block 5 for authority 0
             let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());
