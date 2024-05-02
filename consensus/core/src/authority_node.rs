@@ -542,7 +542,7 @@ mod tests {
 
     // TODO: build AuthorityFixture.
     #[rstest]
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
