@@ -78,7 +78,7 @@ use move_bytecode_utils::module_cache::SyncModuleCache;
 use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_common::sync::notify_read::NotifyRead;
 use mysten_metrics::monitored_scope;
-use narwhal_types::Round;
+use narwhal_types::{Round, TimestampMs};
 use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
@@ -2453,7 +2453,8 @@ impl AuthorityPerEpochStore {
                         .get_reconfig_state_read_lock_guard()
                         .should_accept_tx()
                     {
-                        randomness_manager.reserve_next_randomness(commit_timestamp, &mut batch)?
+                        randomness_manager
+                            .reserve_next_randomness(consensus_commit_info.timestamp, &mut batch)?
                     } else {
                         None
                     }
