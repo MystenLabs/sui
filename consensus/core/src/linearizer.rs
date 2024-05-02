@@ -246,7 +246,7 @@ mod tests {
 
         // Now take all the blocks from round `leader_round_wave_1` up to round `leader_round_wave_2-1`
         let mut blocks = dag_builder.blocks(leader_round_wave_1..=leader_round_wave_2 - 1);
-        // Filter out leader block or round `leader_round_wave_1`
+        // Filter out leader block of round `leader_round_wave_1`
         blocks.retain(|block| {
             !(block.round() == leader_round_wave_1
                 && block.author() == leader_schedule.elect_leader(leader_round_wave_1, 0))
