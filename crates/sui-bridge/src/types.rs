@@ -25,7 +25,6 @@ use sui_types::bridge::{
     BridgeChainId, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM, APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI,
     BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
-use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use sui_types::bridge::{
     APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
     APPROVAL_THRESHOLD_EMERGENCY_PAUSE, APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
@@ -33,11 +32,8 @@ use sui_types::bridge::{
     APPROVAL_THRESHOLD_TOKEN_TRANSFER,
 };
 use sui_types::committee::CommitteeTrait;
-use sui_types::committee::EpochId;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
-use sui_types::error::SuiResult;
-use sui_types::dynamic_field::Field;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::TypeTag;
 

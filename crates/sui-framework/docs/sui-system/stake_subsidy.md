@@ -26,7 +26,7 @@ title: Module `0x3::stake_subsidy`
 
 
 
-<pre><code><b>struct</b> <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> <b>has</b> store
+<pre><code><b>struct</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> <b>has</b> store
 </code></pre>
 
 
@@ -88,7 +88,7 @@ title: Module `0x3::stake_subsidy`
 
 
 
-<pre><code><b>const</b> <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
+<pre><code><b>const</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>: u128 = 10000;
 </code></pre>
 
 
@@ -97,7 +97,7 @@ title: Module `0x3::stake_subsidy`
 
 
 
-<pre><code><b>const</b> <a href="stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>: u64 = 0;
+<pre><code><b>const</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>: u64 = 0;
 </code></pre>
 
 
@@ -108,7 +108,7 @@ title: Module `0x3::stake_subsidy`
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, initial_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_create">create</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;, initial_distribution_amount: u64, stake_subsidy_period_length: u64, stake_subsidy_decrease_rate: u16, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>
 </code></pre>
 
 
@@ -117,20 +117,20 @@ title: Module `0x3::stake_subsidy`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_create">create</a>(
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_create">create</a>(
     <a href="../sui-framework/balance.md#0x2_balance">balance</a>: Balance&lt;SUI&gt;,
     initial_distribution_amount: u64,
     stake_subsidy_period_length: u64,
     stake_subsidy_decrease_rate: u16,
     ctx: &<b>mut</b> TxContext,
-): <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
+): <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
     // Rate can't be higher than 100%.
     <b>assert</b>!(
-        stake_subsidy_decrease_rate &lt;= <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u16,
-        <a href="stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>,
+        stake_subsidy_decrease_rate &lt;= <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a> <b>as</b> u16,
+        <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_ESubsidyDecreaseRateTooLarge">ESubsidyDecreaseRateTooLarge</a>,
     );
 
-    <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
+    <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a> {
         <a href="../sui-framework/balance.md#0x2_balance">balance</a>,
         distribution_counter: 0,
         current_distribution_amount: initial_distribution_amount,
@@ -152,7 +152,7 @@ title: Module `0x3::stake_subsidy`
 Advance the epoch counter and draw down the subsidy for the epoch.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): <a href="../sui-framework/balance.md#0x2_balance_Balance">balance::Balance</a>&lt;<a href="../sui-framework/sui.md#0x2_sui_SUI">sui::SUI</a>&gt;
 </code></pre>
 
 
@@ -161,25 +161,25 @@ Advance the epoch counter and draw down the subsidy for the epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(package) <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): Balance&lt;SUI&gt; {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_advance_epoch">advance_epoch</a>(self: &<b>mut</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): Balance&lt;SUI&gt; {
     // Take the minimum of the reward amount and the remaining <a href="../sui-framework/balance.md#0x2_balance">balance</a> in
     // order <b>to</b> ensure we don't overdraft the remaining stake subsidy
     // <a href="../sui-framework/balance.md#0x2_balance">balance</a>
     <b>let</b> to_withdraw = <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(self.current_distribution_amount, self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.value());
 
     // Drawn down the subsidy for this epoch.
-    <b>let</b> <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.split(to_withdraw);
+    <b>let</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a> = self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.split(to_withdraw);
 
     self.distribution_counter = self.distribution_counter + 1;
 
     // Decrease the subsidy amount only when the current period ends.
     <b>if</b> (self.distribution_counter % self.stake_subsidy_period_length == 0) {
         <b>let</b> decrease_amount = self.current_distribution_amount <b>as</b> u128
-            * (self.stake_subsidy_decrease_rate <b>as</b> u128) / <a href="stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
+            * (self.stake_subsidy_decrease_rate <b>as</b> u128) / <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_BASIS_POINT_DENOMINATOR">BASIS_POINT_DENOMINATOR</a>;
         self.current_distribution_amount = self.current_distribution_amount - (decrease_amount <b>as</b> u64)
     };
 
-    <a href="stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>
+    <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy">stake_subsidy</a>
 }
 </code></pre>
 
@@ -194,7 +194,7 @@ Advance the epoch counter and draw down the subsidy for the epoch.
 Returns the amount of stake subsidy to be added at the end of the current epoch.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">stake_subsidy::StakeSubsidy</a>): u64
 </code></pre>
 
 
@@ -203,7 +203,7 @@ Returns the amount of stake subsidy to be added at the end of the current epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_current_epoch_subsidy_amount">current_epoch_subsidy_amount</a>(self: &<a href="../sui-system/stake_subsidy.md#0x3_stake_subsidy_StakeSubsidy">StakeSubsidy</a>): u64 {
     <a href="../sui-framework/math.md#0x2_math_min">math::min</a>(self.current_distribution_amount, self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.value())
 }
 </code></pre>
