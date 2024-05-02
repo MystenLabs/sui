@@ -26,7 +26,6 @@ use clap::*;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use once_cell::sync::OnceCell;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     cell::RefCell,
@@ -887,37 +886,41 @@ pub enum SaveHook {
 }
 
 #[derive(Clone)]
-pub struct SaveParser(Rc<OnceCell<P::Program>>);
+pub struct SaveParser(Rc<RefCell<Option<P::Program>>>);
 
 #[derive(Clone)]
-pub struct SaveExpansion(Rc<OnceCell<E::Program>>);
+pub struct SaveExpansion(Rc<RefCell<Option<E::Program>>>);
 
 #[derive(Clone)]
-pub struct SaveNaming(Rc<OnceCell<N::Program>>);
+pub struct SaveNaming(Rc<RefCell<Option<N::Program>>>);
 
 #[derive(Clone)]
-pub struct SaveTyping(Rc<OnceCell<T::Program>>);
+pub struct SaveTyping(Rc<RefCell<Option<T::Program>>>);
 
 #[derive(Clone)]
-pub struct SaveTypingInfo(Rc<OnceCell<Arc<program_info::TypingProgramInfo>>>);
+pub struct SaveTypingInfo(Rc<RefCell<Option<Arc<program_info::TypingProgramInfo>>>>);
 
 #[derive(Clone)]
-pub struct SaveHLIR(Rc<OnceCell<H::Program>>);
+pub struct SaveHLIR(Rc<RefCell<Option<H::Program>>>);
 
 #[derive(Clone)]
-pub struct SaveCFGIR(Rc<OnceCell<G::Program>>);
+pub struct SaveCFGIR(Rc<RefCell<Option<G::Program>>>);
 
 impl SaveParser {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &crate::parser::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> crate::parser::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
@@ -929,15 +932,19 @@ impl From<SaveParser> for SaveHook {
 
 impl SaveExpansion {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &crate::expansion::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> crate::expansion::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
@@ -949,15 +956,19 @@ impl From<SaveExpansion> for SaveHook {
 
 impl SaveNaming {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &crate::naming::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> crate::naming::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
@@ -969,15 +980,19 @@ impl From<SaveNaming> for SaveHook {
 
 impl SaveTyping {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &crate::typing::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> crate::typing::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
@@ -989,15 +1004,19 @@ impl From<SaveTyping> for SaveHook {
 
 impl SaveTypingInfo {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &Arc<program_info::TypingProgramInfo>) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> Arc<program_info::TypingProgramInfo> {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
@@ -1009,15 +1028,19 @@ impl From<SaveTypingInfo> for SaveHook {
 
 impl SaveHLIR {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &crate::hlir::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> crate::hlir::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
@@ -1029,15 +1052,19 @@ impl From<SaveHLIR> for SaveHook {
 
 impl SaveCFGIR {
     pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+        Self(Rc::new(RefCell::new(None)))
     }
 
     pub(crate) fn set(&self, p: &crate::cfgir::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.is_none() {
+            *r = Some(p.clone())
+        }
     }
 
     pub fn into_inner(self) -> crate::cfgir::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+        let mut r = RefCell::borrow_mut(&self.0);
+        r.take().unwrap()
     }
 }
 
