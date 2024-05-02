@@ -75,7 +75,7 @@ jobs:
     name: Notify
     needs: [cargo-llvm-cov]
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' && failure()
+    if: always() # always notify
 
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
@@ -177,7 +177,7 @@ jobs:
                 "type": "section",
                 "text": {
                   "type": "mrkdwn",
-                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, please look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo."
+                  "text": "<@${{ env.SLACK_ID }}>, current `${{ env.ONCALL_NAME }}` oncall, you are notified to look over the code coverage <https://app.codecov.io/github/MystenLabs/sui/tree/${{ env.SUI_BRANCH_NAME_URL }}|report> for the `${{ env.SUI_BRANCH_NAME }}` branch in Sui repo, to manually check if there are coverage regressions."
                 }
               }
             ]
