@@ -210,11 +210,6 @@ fn build_packages_with_move_config(
             &mut files_to_write,
         );
         relocate_docs(
-            bridge_dir,
-            &bridge_pkg.package.compiled_docs.unwrap(),
-            &mut files_to_write,
-        );
-        relocate_docs(
             system_dir,
             &system_pkg.package.compiled_docs.unwrap(),
             &mut files_to_write,
@@ -222,6 +217,11 @@ fn build_packages_with_move_config(
         relocate_docs(
             framework_dir,
             &framework_pkg.package.compiled_docs.unwrap(),
+            &mut files_to_write,
+        );
+        relocate_docs(
+            bridge_dir,
+            &bridge_pkg.package.compiled_docs.unwrap(),
             &mut files_to_write,
         );
         for (fname, doc) in files_to_write {
