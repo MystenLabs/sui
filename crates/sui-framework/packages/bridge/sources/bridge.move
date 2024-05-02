@@ -300,9 +300,8 @@ module bridge::bridge {
         bridge_seq_num: u64,
         ctx: &mut TxContext,
     ): Coin<T> {
-        let (maybe_token, owner) = claim_token_internal<T>(
+        let (maybe_token, owner) = bridge.claim_token_internal<T>(
             clock,
-            bridge,
             source_chain,
             bridge_seq_num,
             ctx,
@@ -322,7 +321,7 @@ module bridge::bridge {
         bridge_seq_num: u64,
         ctx: &mut TxContext,
     ) {
-        let (token, owner) = claim_token_internal<T>(clock, bridge, source_chain, bridge_seq_num, ctx);
+        let (token, owner) = bridge.claim_token_internal<T>(clock, source_chain, bridge_seq_num, ctx);
         if (token.is_some()) {
             transfer::public_transfer(token.destroy_some(), owner)
         } else {
@@ -339,7 +338,6 @@ module bridge::bridge {
         inner
     }
 
-    #[allow(unused_function)] // TODO: remove annotation after implementing user-facing API
     fun load_inner(
         bridge: &Bridge,
     ): &BridgeInner {
@@ -355,8 +353,8 @@ module bridge::bridge {
     // Claim token from approved bridge message
     // Returns Some(Coin) if coin can be claimed. If already claimed, return None
     fun claim_token_internal<T>(
-        clock: &Clock,
         bridge: &mut Bridge,
+        clock: &Clock,
         source_chain: u8,
         bridge_seq_num: u64,
         ctx: &mut TxContext,
@@ -537,11 +535,11 @@ module bridge::bridge {
     }
 
     public fun get_token_transfer_action_status(
-        bridge: &mut Bridge,
+        bridge: &Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
     ): u8 {
-        let inner = load_inner_mut(bridge);
+        let inner = load_inner(bridge);
         let key = message::create_key(
             source_chain,
             message_types::token(),
@@ -566,11 +564,11 @@ module bridge::bridge {
 
     #[allow(unused_function)]
     fun get_token_transfer_action_signatures(
-        self: &mut Bridge,
+        bridge: &Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
     ): Option<vector<vector<u8>>> {
-        let inner = load_inner_mut(self);
+        let inner = load_inner(bridge);
         let key = message::create_key(
             source_chain,
             message_types::token(),

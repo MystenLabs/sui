@@ -19,7 +19,10 @@ use sui_types::{
     transaction::Transaction,
 };
 
-use crate::events::{TokenTransferAlreadyClaimed, TokenTransferClaimed};
+use crate::events::{
+    TokenTransferAlreadyApproved, TokenTransferAlreadyClaimed, TokenTransferApproved,
+    TokenTransferClaimed,
+};
 use crate::{
     client::bridge_authority_aggregator::BridgeAuthorityAggregator,
     error::BridgeError,
@@ -408,7 +411,12 @@ where
                     .data
                     .iter()
                     .any(|e| e.type_ == *TokenTransferAlreadyClaimed.get().unwrap()
-                        || e.type_ == *TokenTransferClaimed.get().unwrap()),);
+                        || e.type_ == *TokenTransferClaimed.get().unwrap()
+                        || e.type_ == *TokenTransferApproved.get().unwrap()
+                        || e.type_ == *TokenTransferAlreadyApproved.get().unwrap()),
+                    "Expected TokenTransferAlreadyClaimed, TokenTransferClaimed, TokenTransferApproved or TokenTransferAlreadyApproved event but got: {:?}",
+                    events,
+                    );
                 info!(?tx_digest, "Sui transaction executed successfully");
                 store
                     .remove_pending_actions(&[action.digest()])
