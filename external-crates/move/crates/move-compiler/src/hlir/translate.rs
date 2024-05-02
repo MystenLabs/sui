@@ -3166,7 +3166,12 @@ fn gen_unused_warnings(
     target_kind: TargetKind,
     structs: &UniqueMap<DatatypeName, H::StructDefinition>,
 ) {
-    if !matches!(target_kind, TargetKind::Source) {
+    if !matches!(
+        target_kind,
+        TargetKind::Source {
+            is_root_package: true
+        }
+    ) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass

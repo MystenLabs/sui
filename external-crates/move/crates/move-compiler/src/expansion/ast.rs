@@ -102,13 +102,12 @@ pub type Attributes = UniqueMap<Spanned<KnownAttribute>, Attribute>;
 #[derive(Debug, Clone, Copy)]
 /// Specifies a source target or dependency
 pub enum TargetKind {
-    /// A source module
-    Source,
-    /// A dependency where bytecode is being generated
-    DependencyBeingCompiled,
+    /// A source module. If is_root_package is false, some warnings might be suppressed.
+    /// Bytecode/CompiledModules will be generated for any Source target
+    Source { is_root_package: bool },
     /// A dependency only used for linking.
     /// No bytecode or CompiledModules are generated
-    DependencyBeingLinked,
+    External,
 }
 
 #[derive(Clone, Copy)]
@@ -1133,9 +1132,13 @@ impl AstDebug for ModuleDefinition {
         }
         attributes.ast_debug(w);
         w.writeln(match target_kind {
-            TargetKind::Source => "source module",
-            TargetKind::DependencyBeingCompiled => "dependency module",
-            TargetKind::DependencyBeingLinked => "linked module",
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
         });
         use_funs.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {

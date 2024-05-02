@@ -4334,7 +4334,12 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.
 fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
-    if !matches!(mdef.target_kind, TargetKind::Source) {
+    if !matches!(
+        mdef.target_kind,
+        TargetKind::Source {
+            is_root_package: true
+        }
+    ) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass

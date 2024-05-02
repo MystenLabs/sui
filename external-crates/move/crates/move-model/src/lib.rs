@@ -235,7 +235,9 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let E::Program { modules } = expansion_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.target_kind = TargetKind::Source;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });
@@ -246,7 +248,9 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let T::Program_ { modules } = inner;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.target_kind = TargetKind::Source;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });

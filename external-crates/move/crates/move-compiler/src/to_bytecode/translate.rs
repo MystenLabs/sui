@@ -138,7 +138,7 @@ pub fn program(
 
     let mut source_modules = gmodules
         .into_iter()
-        .filter(|(_, mdef)| !matches!(mdef.target_kind, TargetKind::DependencyBeingLinked))
+        .filter(|(_, mdef)| matches!(mdef.target_kind, TargetKind::Source { .. }))
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {

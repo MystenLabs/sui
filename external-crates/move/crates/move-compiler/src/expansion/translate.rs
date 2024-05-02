@@ -896,11 +896,10 @@ fn module_(
     context.pop_alias_scope(Some(&mut use_funs));
 
     let target_kind = if !context.is_source_definition {
-        TargetKind::DependencyBeingLinked
-    } else if context.env().package_config(package_name).is_dependency {
-        TargetKind::DependencyBeingCompiled
+        TargetKind::External
     } else {
-        TargetKind::Source
+        let is_root_package = !context.env().package_config(package_name).is_dependency;
+        TargetKind::Source { is_root_package }
     };
     let def = E::ModuleDefinition {
         package_name,

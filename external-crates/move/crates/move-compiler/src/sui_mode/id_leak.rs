@@ -105,7 +105,12 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             // Skip if not sui
             return None;
         }
-        if !matches!(mdef.target_kind, TargetKind::Source) {
+        if !matches!(
+            mdef.target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Skip non-source, dependency modules
             return None;
         }

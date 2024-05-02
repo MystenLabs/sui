@@ -114,7 +114,12 @@ impl<'a> TypingVisitorContext for Context<'a> {
             // Skip if not sui
             return true;
         }
-        if !matches!(mdef.target_kind, TargetKind::Source) {
+        if !matches!(
+            mdef.target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Skip non-source, dependency modules
             return true;
         }
