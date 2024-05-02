@@ -4,10 +4,9 @@ sidebar_label: Consensus
 description: Overview of the Sui consensus.
 ---
 
-## Overview
-
 The basic purpose of consensus in blockchains is to agree on a consistent order and ensure the availability of transactions.
-In Sui, consensus has a simple API: validators submit different user transactions to consensus concurrently, and the consensus outputs a consistent stream of transactions across all well-behaving validators.
+
+On Sui, consensus has a simple API: validators submit different user transactions to consensus concurrently, and the consensus outputs a consistent stream of transactions across all well-behaving validators.
 
 Byzantine-fault tolerant (BFT) consensus protocols are a rich area of research. The next-generation consensus engine set to roll out in Sui is based on the **Mysticeti** protocol.
 The protocol optimizes for both low latency and high throughput because:
