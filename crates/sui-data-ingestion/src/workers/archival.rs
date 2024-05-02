@@ -175,7 +175,7 @@ impl Worker for ArchivalWorker {
             state.checkpoint_range = sequence_number..sequence_number;
             state.buffer = vec![];
             state.summary_buffer = vec![];
-            state.last_commit_ms = 0;
+            state.last_commit_ms = checkpoint.checkpoint_summary.timestamp_ms;
             state.should_update_progress = true;
         }
         contents_blob.write(&mut state.buffer)?;
