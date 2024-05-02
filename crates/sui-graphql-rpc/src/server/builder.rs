@@ -228,14 +228,6 @@ impl ServerBuilder {
                 .route("/graphql/:version", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
                 .with_state(self.state.clone())
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    set_version_middleware,
-                ))
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    check_version_middleware,
-                ))
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
                 }));
@@ -245,7 +237,18 @@ impl ServerBuilder {
 
     pub fn route(mut self, path: &str, method_handler: MethodRouter) -> Self {
         self.init_router();
-        self.router = self.router.map(|router| router.route(path, method_handler));
+        self.router = self.router.map(|router| {
+            router
+                .route(path, method_handler)
+                .route_layer(middleware::from_fn_with_state(
+                    self.state.version,
+                    set_version_middleware,
+                ))
+                .route_layer(middleware::from_fn_with_state(
+                    self.state.version,
+                    check_version_middleware,
+                ))
+        });
         self
     }
 
