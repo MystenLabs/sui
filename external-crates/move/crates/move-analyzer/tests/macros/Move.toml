@@ -1,0 +1,7 @@
+[package]
+name = "Macror"
+version = "0.0.1"
+edition = "2024.alpha"
+
+[addresses]
+Macros = "0xCAFE"
