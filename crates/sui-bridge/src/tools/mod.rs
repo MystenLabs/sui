@@ -170,11 +170,11 @@ pub struct BridgeCliConfig {
     pub sui_rpc_url: String,
     /// Rpc url for Eth fullnode, used for query stuff.
     pub eth_rpc_url: String,
-    /// Proxy addresss for SuiBridge deployed on Eth
+    /// Proxy address for SuiBridge deployed on Eth
     pub eth_sui_bridge_proxy_address: EthAddress,
-    /// Proxy addresss for BridgeCommittee deployed on Eth
+    /// Proxy address for BridgeCommittee deployed on Eth
     pub eth_bridge_committee_proxy_address: EthAddress,
-    /// Proxy addresss for BridgeLimiter deployed on Eth
+    /// Proxy address for BridgeLimiter deployed on Eth
     pub eth_bridge_limiter_proxy_address: EthAddress,
     /// Path of the file where bridge client key (any SuiKeyPair) is stored as Base64 encoded `flag || privkey`.
     /// The derived accounts
