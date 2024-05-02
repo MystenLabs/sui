@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.5.0
+
+### Minor Changes
+
+- 44ba140be0: Add `getSentTransactionBlocksWithLinks` helper
+
 ## 0.4.4
 
 ### Patch Changes
