@@ -668,8 +668,8 @@ mod test {
         context::Context,
     };
 
-    #[tokio::test]
-    async fn test_commit_vote_monitor() {
+    #[test]
+    fn test_commit_vote_monitor() {
         let context = Arc::new(Context::new_for_test(4).0);
         let monitor = CommitVoteMonitor::new(context.clone());
 
