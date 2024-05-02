@@ -10,8 +10,6 @@ on:
       - 'releases/sui-*-release'
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
-env:
-  BRANCH_NAME: ${{ github.base_ref }}
 
 jobs:
   docker-images:
