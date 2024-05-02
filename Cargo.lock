@@ -13753,11 +13753,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bin-version",
  "clap",
- "const-str",
  "expect-test",
  "fs_extra",
- "git-version",
  "hyper",
  "jsonrpsee",
  "move-compiler",

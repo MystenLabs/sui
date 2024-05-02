@@ -20,18 +20,8 @@ struct Args {
     config_path: PathBuf,
 }
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
-
-pub const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[tokio::main]
 pub async fn main() -> anyhow::Result<()> {
