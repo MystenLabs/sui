@@ -18,6 +18,7 @@ petgraph.workspace = true
 tempfile.workspace = true
 once_cell.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 similar.workspace = true
 stacker.workspace = true
 vfs.workspace = true

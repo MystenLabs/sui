@@ -6766,6 +6766,7 @@ dependencies = [
  "petgraph 0.5.1",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",
