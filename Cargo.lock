@@ -12568,7 +12568,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "git-version",
+ "bin-version",
  "serde",
  "serde_json",
  "sui-framework",
