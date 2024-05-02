@@ -153,7 +153,6 @@ mod tests {
         context::Context,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
-        test_dag::get_all_uncommitted_leader_blocks,
     };
 
     #[test]
@@ -166,7 +165,6 @@ mod tests {
             Arc::new(MemStore::new()),
         )));
         let mut linearizer = Linearizer::new(dag_state.clone());
-        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
 
         // Populate fully connected test blocks for round 0 ~ 10, authorities 0 ~ 3.
         let num_rounds: u32 = 10;
@@ -176,14 +174,11 @@ mod tests {
             .build()
             .persist_layers(dag_state.clone());
 
-        let leaders = get_all_uncommitted_leader_blocks(
-            dag_state.clone(),
-            leader_schedule,
-            num_rounds,
-            DEFAULT_WAVE_LENGTH,
-            false,
-            1,
-        );
+        let leaders = dag_builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
 
         let commits = linearizer.handle_commit(leaders.clone());
         for (idx, subdag) in commits.into_iter().enumerate() {
@@ -191,19 +186,12 @@ mod tests {
             assert_eq!(subdag.leader, leaders[idx].reference());
             assert_eq!(subdag.timestamp_ms, leaders[idx].timestamp_ms());
             if idx == 0 {
-                // First subdag includes the leader block plus all ancestor blocks
-                // of the leader minus the genesis round blocks
-                assert_eq!(
-                    subdag.blocks.len(),
-                    (num_authorities * (DEFAULT_WAVE_LENGTH - 1) as usize) + 1
-                );
+                // First subdag includes the leader block only
+                assert_eq!(subdag.blocks.len(), 1);
             } else {
                 // Every subdag after will be missing the leader block from the previous
                 // committed subdag
-                assert_eq!(
-                    subdag.blocks.len(),
-                    (num_authorities * DEFAULT_WAVE_LENGTH as usize)
-                );
+                assert_eq!(subdag.blocks.len(), num_authorities);
             }
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
@@ -243,16 +231,9 @@ mod tests {
         );
         dag_state.write().accept_blocks(blocks.clone());
 
-        let leaders = get_all_uncommitted_leader_blocks(
-            dag_state.clone(),
-            leader_schedule.clone(),
-            leader_round_wave_1,
-            wave_length,
-            false,
-            1,
-        );
-
-        let first_leader = leaders[0].clone();
+        let first_leader = dag_builder
+            .leader_block(leader_round_wave_1)
+            .expect("Wave 1 leader round block should exist");
         let mut last_commit_index = 1;
         let first_commit_data = TrustedCommit::new_for_test(
             last_commit_index,
@@ -281,32 +262,27 @@ mod tests {
 
         let mut blocks: Vec<_> = blocks.into_iter().map(|block| block.reference()).collect();
 
-        let leaders = get_all_uncommitted_leader_blocks(
-            dag_state.clone(),
-            leader_schedule,
-            leader_round_wave_2,
-            wave_length,
-            false,
-            1,
-        );
+        // Now get the latest leader which is the leader round of wave 2
+        let leader = dag_builder
+            .leader_block(leader_round_wave_2)
+            .expect("Leader block should exist");
 
         last_commit_index += 1;
-        let second_leader = leaders[1].clone();
         let expected_second_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
             0,
-            second_leader.reference(),
+            leader.reference(),
             blocks.clone(),
         );
 
-        let commit = linearizer.handle_commit(vec![second_leader.clone()]);
+        let commit = linearizer.handle_commit(vec![leader.clone()]);
         assert_eq!(commit.len(), 1);
 
         let subdag = &commit[0];
         tracing::info!("{subdag:?}");
-        assert_eq!(subdag.leader, second_leader.reference());
-        assert_eq!(subdag.timestamp_ms, second_leader.timestamp_ms());
+        assert_eq!(subdag.leader, leader.reference());
+        assert_eq!(subdag.timestamp_ms, leader.timestamp_ms());
         assert_eq!(subdag.commit_index, expected_second_commit.index());
 
         // Using the same sorting as used in CommittedSubDag::sort

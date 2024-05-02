@@ -175,9 +175,7 @@ mod tests {
         commit::DEFAULT_WAVE_LENGTH,
         context::Context,
         dag_state::DagState,
-        leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
-        test_dag::get_all_uncommitted_leader_blocks,
     };
 
     #[test]
@@ -190,7 +188,6 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -214,14 +211,11 @@ mod tests {
             .build()
             .persist_layers(dag_state.clone());
 
-        let leaders = get_all_uncommitted_leader_blocks(
-            dag_state.clone(),
-            leader_schedule,
-            num_rounds,
-            DEFAULT_WAVE_LENGTH,
-            false,
-            1,
-        );
+        let leaders = builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
 
         let commits = observer.handle_commit(leaders.clone()).unwrap();
 
@@ -241,17 +235,11 @@ mod tests {
             if idx == 0 {
                 // First subdag includes the leader block plus all ancestor blocks
                 // of the leader minus the genesis round blocks
-                assert_eq!(
-                    subdag.blocks.len(),
-                    (num_authorities * (DEFAULT_WAVE_LENGTH - 1) as usize) + 1
-                );
+                assert_eq!(subdag.blocks.len(), 1);
             } else {
                 // Every subdag after will be missing the leader block from the previous
                 // committed subdag
-                assert_eq!(
-                    subdag.blocks.len(),
-                    (num_authorities * DEFAULT_WAVE_LENGTH as usize)
-                );
+                assert_eq!(subdag.blocks.len(), num_authorities);
             }
             for block in subdag.blocks.iter() {
                 expected_stored_refs.push(block.reference());
@@ -294,7 +282,6 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -317,14 +304,12 @@ mod tests {
             .layers(1..=num_rounds)
             .build()
             .persist_layers(dag_state.clone());
-        let leaders = get_all_uncommitted_leader_blocks(
-            dag_state.clone(),
-            leader_schedule,
-            num_rounds,
-            DEFAULT_WAVE_LENGTH,
-            false,
-            1,
-        );
+
+        let leaders = builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
 
         // Commit first batch of leaders (2) and "receive" the subdags as the
         // consumer of the consensus output channel.
@@ -377,7 +362,7 @@ mod tests {
                 .unwrap(),
         );
 
-        let expected_last_sent_index = 3;
+        let expected_last_sent_index = num_rounds as usize;
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
@@ -435,7 +420,6 @@ mod tests {
             context.clone(),
             mem_store.clone(),
         )));
-        let leader_schedule = LeaderSchedule::new(context.clone(), LeaderSwapTable::default());
         let last_processed_commit_round = 0;
         let last_processed_commit_index = 0;
         let (sender, mut receiver) = unbounded_channel();
@@ -458,18 +442,16 @@ mod tests {
             .layers(1..=num_rounds)
             .build()
             .persist_layers(dag_state.clone());
-        let leaders = get_all_uncommitted_leader_blocks(
-            dag_state.clone(),
-            leader_schedule,
-            num_rounds,
-            DEFAULT_WAVE_LENGTH,
-            false,
-            1,
-        );
+
+        let leaders = builder
+            .leader_blocks(1..=num_rounds)
+            .into_iter()
+            .map(Option::unwrap)
+            .collect::<Vec<_>>();
 
         // Commit all of the leaders and "receive" the subdags as the consumer of
         // the consensus output channel.
-        let expected_last_processed_index: usize = 3;
+        let expected_last_processed_index: usize = 10;
         let expected_last_processed_round =
             expected_last_processed_index as u32 * DEFAULT_WAVE_LENGTH;
         let commits = observer.handle_commit(leaders.clone()).unwrap();
