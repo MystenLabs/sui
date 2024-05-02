@@ -75,7 +75,7 @@ jobs:
     name: Notify
     needs: [cargo-llvm-cov]
     runs-on: ubuntu-latest
-    if: always() # always notify
+    if: github.event_name == 'schedule' && failure()
 
     steps:
     - uses: technote-space/workflow-conclusion-action@45ce8e0eb155657ab8ccf346ade734257fd196a5 # Pin v4.1.1
