@@ -57,7 +57,6 @@ impl BridgeAuthority {
     }
 }
 
-// A static Bridge committee implementation
 #[derive(Debug, Clone)]
 pub struct BridgeCommittee {
     members: BTreeMap<BridgeAuthorityPublicKeyBytes, BridgeAuthority>,
