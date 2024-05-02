@@ -550,6 +550,18 @@ impl DeferralKey {
             },
         )
     }
+
+    pub fn deferred_from_round(&self) -> Round {
+        match self {
+            Self::Randomness {
+                deferred_from_round,
+            } => *deferred_from_round,
+            Self::ConsensusRound {
+                deferred_from_round,
+                ..
+            } => *deferred_from_round,
+        }
+    }
 }
 
 #[tokio::test]
@@ -1742,8 +1754,12 @@ impl AuthorityPerEpochStore {
             && self.randomness_state_enabled()
             && cert.is_randomness_reader()
         {
+            let deferred_from_round = previously_deferred_tx_digests
+                .get(cert.digest())
+                .map(|previous_key| previous_key.deferred_from_round())
+                .unwrap_or(commit_round);
             return Some((
-                DeferralKey::new_for_randomness(commit_round),
+                DeferralKey::new_for_randomness(deferred_from_round),
                 DeferralReason::RandomnessNotReady,
             ));
         }
