@@ -119,6 +119,8 @@ impl<'c> super::DbConnection for PgConnection<'c> {
         Q: QueryId + QueryFragment<Self::Backend>,
     {
         let mut start = Instant::now();
+        let _ = diesel::sql_query("SET plan_cache_mode TO 'force_custom_plan';").execute(self.conn);
+
         query_cost::log(self.conn, self.max_cost, query());
         println!("Query cost took {:?}", start.elapsed());
         let binding = query();
