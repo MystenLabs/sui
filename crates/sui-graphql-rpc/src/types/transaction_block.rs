@@ -489,7 +489,7 @@ impl TransactionBlock {
                         } else if let Some(o) = &filter.changed_object {
                             let mut sub_query = tx_changed_objects_cp::dsl::tx_changed_objects_cp
                                 .select(tx_changed_objects_cp::tx_sequence_number)
-                                // .distinct()
+                                .distinct()
                                 .filter(tx_changed_objects_cp::object_id.eq(o.into_vec()))
                                 .into_boxed();
                             sub_query = filter.apply_addr_rel(
@@ -509,7 +509,7 @@ impl TransactionBlock {
                         } else if filter.sign_address.is_some() || filter.recv_address.is_some() {
                             let mut sub_query = tx_addresses::dsl::tx_addresses
                                 .select(tx_addresses::dsl::tx_sequence_number)
-                                // .distinct()
+                                .distinct()
                                 .into_boxed();
                             sub_query = filter.apply_addr_rel(
                                 sub_query,
