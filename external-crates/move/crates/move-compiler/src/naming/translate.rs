@@ -2465,7 +2465,12 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                             FeatureGate::CleverAssertions,
                             bloc,
                         );
-                        nes.value.push(sp(bloc, NE::ErrorConstant));
+                        nes.value.push(sp(
+                            bloc,
+                            NE::ErrorConstant {
+                                line_number_loc: bloc,
+                            },
+                        ));
                     }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }
@@ -3745,7 +3750,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
-        | N::Exp_::ErrorConstant
+        | N::Exp_::ErrorConstant { .. }
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)

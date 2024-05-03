@@ -514,7 +514,7 @@ mod check_valid_constant {
 
             // NB: module scoping is checked during constant type creation, so we don't need to
             // relitigate here.
-            E::Constant(_, _) | E::ErrorConstant(_) => {
+            E::Constant(_, _) | E::ErrorConstant { .. } => {
                 return;
             }
 
@@ -1439,7 +1439,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
     let sp!(eloc, ne_) = *ne;
     let (ty, e_) = match ne_ {
-        NE::ErrorConstant => (Type_::u64(eloc), TE::ErrorConstant(None)),
+        NE::ErrorConstant { line_number_loc } => (
+            Type_::u64(eloc),
+            TE::ErrorConstant {
+                line_number_loc,
+                error_constant: None,
+            },
+        ),
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
@@ -3756,13 +3762,11 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             attributes.contains_key_(&known_attributes::ErrorAttribute.into());
 
         if has_error_annotation {
-            *e = T::exp(
-                u64_type.clone(),
-                sp(
-                    *const_loc,
-                    T::UnannotatedExp_::ErrorConstant(Some(*constant_name)),
-                ),
-            );
+            let econst = T::UnannotatedExp_::ErrorConstant {
+                line_number_loc: *const_loc,
+                error_constant: Some(*constant_name),
+            };
+            *e = T::exp(u64_type.clone(), sp(*const_loc, econst));
         }
     }
 

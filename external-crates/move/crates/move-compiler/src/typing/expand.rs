@@ -217,7 +217,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
         | E::Continue(_)
-        | E::ErrorConstant(_)
+        | E::ErrorConstant { .. }
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => module_call(context, call),

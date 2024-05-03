@@ -1824,7 +1824,13 @@ fn value(
         }
         E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
         E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
-        E::ErrorConstant(c) => make_exp(HE::ErrorConstant(c)),
+        E::ErrorConstant {
+            line_number_loc,
+            error_constant,
+        } => make_exp(HE::ErrorConstant {
+            line_number_loc,
+            error_constant,
+        }),
         E::Move { from_user, var } => {
             let annotation = if from_user {
                 MoveOpAnnotation::FromUser
@@ -2212,7 +2218,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Annotate(_, _)
         | E::BorrowLocal(_, _)
         | E::Constant(_, _)
-        | E::ErrorConstant(_)
+        | E::ErrorConstant { .. }
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError

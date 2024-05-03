@@ -369,7 +369,7 @@ fn exp(context: &mut Context, parent_e: &Exp) {
         | E::Value(_)
         | E::Constant(_)
         | E::UnresolvedError
-        | E::ErrorConstant(_) => (),
+        | E::ErrorConstant { .. } => (),
 
         E::BorrowLocal(mut_, var) => {
             if *mut_ {

@@ -236,7 +236,10 @@ pub enum UnannotatedExp_ {
     // unfinished dot access (e.g. `some_field.`)
     InvalidAccess(Box<Exp>),
 
-    ErrorConstant(Option<ConstantName>),
+    ErrorConstant {
+        line_number_loc: Loc,
+        error_constant: Option<ConstantName>,
+    },
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
@@ -832,9 +835,12 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(".");
             }
             E::UnresolvedError => w.write("_|_"),
-            E::ErrorConstant(constant) => {
+            E::ErrorConstant {
+                line_number_loc: _,
+                error_constant,
+            } => {
                 w.write("ErrorConstant");
-                if let Some(c) = constant {
+                if let Some(c) = error_constant {
                     w.write(&format!("({})", c))
                 }
             }
