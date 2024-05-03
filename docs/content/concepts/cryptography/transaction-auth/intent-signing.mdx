@@ -60,7 +60,7 @@ let signature = Signature::new_secure(&intent_msg, signer);
 Here is an example in TypeScript:
 
 ```typescript
-const intentMessage = messageWithIntent(IntentScope.TransactionData, transactionBytes);
+const intentMessage = messageWithIntent('TransactionData', transactionBytes);
 const signature = await this.sign(intentMessage);
 ```
 

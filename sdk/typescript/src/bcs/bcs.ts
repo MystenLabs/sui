@@ -5,6 +5,7 @@ import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 import { bcs, fromB58, fromB64, fromHEX, toB58, toB64, toHEX } from '@mysten/bcs';
 
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
+import { TypeTagSerializer } from './type-tag-serializer.js';
 import type { TypeTag as TypeTagType } from './types.js';
 
 function unsafe_u64(options?: BcsTypeOptions<number>) {
@@ -57,24 +58,34 @@ export const ObjectArg = bcs.enum('ObjectArg', {
 });
 
 export const CallArg = bcs.enum('CallArg', {
-	Pure: bcs.vector(bcs.u8()),
+	Pure: bcs.struct('Pure', {
+		bytes: bcs.vector(bcs.u8()).transform({
+			input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+			output: (val) => toB64(new Uint8Array(val)),
+		}),
+	}),
 	Object: ObjectArg,
-	// ObjVec: bcs.vector(ObjectArg),
 });
 
-export const TypeTag: BcsType<TypeTagType> = bcs.enum('TypeTag', {
-	bool: null,
-	u8: null,
-	u64: null,
-	u128: null,
-	address: null,
-	signer: null,
-	vector: bcs.lazy(() => TypeTag),
-	struct: bcs.lazy(() => StructTag),
-	u16: null,
-	u32: null,
-	u256: null,
-}) as never;
+export const TypeTag: BcsType<string, string | TypeTagType> = (
+	bcs.enum('TypeTag', {
+		bool: null,
+		u8: null,
+		u64: null,
+		u128: null,
+		address: null,
+		signer: null,
+		vector: bcs.lazy(() => TypeTag),
+		struct: bcs.lazy(() => StructTag),
+		u16: null,
+		u32: null,
+		u256: null,
+	}) as BcsType<TypeTagType>
+).transform({
+	input: (typeTag: string | TypeTagType) =>
+		typeof typeTag === 'string' ? TypeTagSerializer.parseFromStr(typeTag, true) : typeTag,
+	output: (typeTag: TypeTagType) => TypeTagSerializer.tagToString(typeTag),
+});
 
 export const Argument = bcs.enum('Argument', {
 	GasCoin: null,
@@ -101,27 +112,66 @@ export const Transaction = bcs.enum('Transaction', {
 	/**
 	 * Transfer vector of objects to a receiver.
 	 */
-	TransferObjects: bcs.tuple([bcs.vector(Argument), Argument]),
+	TransferObjects: bcs.struct('TransferObjects', {
+		objects: bcs.vector(Argument),
+		address: Argument,
+	}),
 	// /**
 	//  * Split `amount` from a `coin`.
 	//  */
-	SplitCoins: bcs.tuple([Argument, bcs.vector(Argument)]),
+	SplitCoins: bcs.struct('SplitCoins', {
+		coin: Argument,
+		amounts: bcs.vector(Argument),
+	}),
 	// /**
 	//  * Merge Vector of Coins (`sources`) into a `destination`.
 	//  */
-	MergeCoins: bcs.tuple([Argument, bcs.vector(Argument)]),
+	MergeCoins: bcs.struct('MergeCoins', {
+		destination: Argument,
+		sources: bcs.vector(Argument),
+	}),
 	// /**
 	//  * Publish a Move module.
 	//  */
-	Publish: bcs.tuple([bcs.vector(bcs.vector(bcs.u8())), bcs.vector(Address)]),
+	Publish: bcs.struct('Publish', {
+		modules: bcs.vector(
+			bcs.vector(bcs.u8()).transform({
+				input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+				output: (val) => toB64(new Uint8Array(val)),
+			}),
+		),
+		dependencies: bcs.vector(Address),
+	}),
 	// /**
 	//  * Build a vector of objects using the input arguments.
 	//  * It is impossible to export construct a `vector<T: key>` otherwise,
 	//  * so this call serves a utility function.
 	//  */
-	MakeMoveVec: bcs.tuple([optionEnum(TypeTag), bcs.vector(Argument)]),
-	// /**  */
-	Upgrade: bcs.tuple([bcs.vector(bcs.vector(bcs.u8())), bcs.vector(Address), Address, Argument]),
+	MakeMoveVec: bcs.struct('MakeMoveVec', {
+		type: optionEnum(TypeTag).transform({
+			input: (val: string | null) =>
+				val === null
+					? {
+							None: true,
+					  }
+					: {
+							Some: val,
+					  },
+			output: (val) => val.Some ?? null,
+		}),
+		objects: bcs.vector(Argument),
+	}),
+	Upgrade: bcs.struct('Upgrade', {
+		modules: bcs.vector(
+			bcs.vector(bcs.u8()).transform({
+				input: (val: string | Uint8Array) => (typeof val === 'string' ? fromB64(val) : val),
+				output: (val) => toB64(new Uint8Array(val)),
+			}),
+		),
+		dependencies: bcs.vector(Address),
+		package: Address,
+		ticket: Argument,
+	}),
 });
 
 export const ProgrammableTransaction = bcs.struct('ProgrammableTransaction', {

@@ -9,7 +9,7 @@ import {
 	type SuiTransactionBlockResponse,
 	type SuiTransactionBlockResponseOptions,
 } from '@mysten/sui.js/client';
-import { IntentScope, messageWithIntent } from '@mysten/sui.js/cryptography';
+import { messageWithIntent } from '@mysten/sui.js/cryptography';
 import { isTransactionBlock, type TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
 
@@ -39,10 +39,7 @@ export abstract class WalletSigner {
 		clientIdentifier?: string,
 	): Promise<SignedMessage> {
 		const signature = await this.signData(
-			messageWithIntent(
-				IntentScope.PersonalMessage,
-				bcs.vector(bcs.u8()).serialize(input.message).toBytes(),
-			),
+			messageWithIntent('PersonalMessage', bcs.vector(bcs.u8()).serialize(input.message).toBytes()),
 		);
 
 		return {
@@ -80,7 +77,7 @@ export abstract class WalletSigner {
 		clientIdentifier?: string,
 	): Promise<SignedTransaction> {
 		const bytes = await this.prepareTransactionBlock(input.transactionBlock);
-		const signature = await this.signData(messageWithIntent(IntentScope.TransactionData, bytes));
+		const signature = await this.signData(messageWithIntent('TransactionData', bytes));
 
 		return {
 			transactionBlockBytes: toB64(bytes),

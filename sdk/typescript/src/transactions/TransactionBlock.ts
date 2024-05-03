@@ -6,30 +6,37 @@ import { fromB64, isSerializedBcs } from '@mysten/bcs';
 import type { Input } from 'valibot';
 import { is, parse } from 'valibot';
 
-import type { ProtocolConfig, SuiClient } from '../client/index.js';
+import type { SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { v1BlockDataFromTransactionBlockState } from './blockData/v1.js';
-import type { CallArg, Transaction, TypeTag } from './blockData/v2.js';
-import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './blockData/v2.js';
-import { getIdFromCallArg, Inputs } from './Inputs.js';
+import type { CallArg, Transaction } from './blockData/internal.js';
+import {
+	Argument,
+	NormalizedCallArg,
+	ObjectRef,
+	TransactionExpiration,
+} from './blockData/internal.js';
+import { serializeV1TransactionBlockData } from './blockData/v1.js';
+import { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
+import { Inputs } from './Inputs.js';
+import type {
+	BuildTransactionBlockOptions,
+	SerializeTransactionBlockOptions,
+	TransactionBlockPlugin,
+} from './json-rpc-resolver.js';
+import { resolveTransactionBlockData } from './json-rpc-resolver.js';
 import { createPure } from './pure.js';
 import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-import { DefaultTransactionBlockFeatures } from './TransactionBlockPlugin.js';
 import type { TransactionArgument } from './Transactions.js';
 import { Transactions } from './Transactions.js';
+import { getIdFromCallArg } from './utils.js';
 
-export type TransactionObjectArgument = Exclude<Argument, { Input: unknown; type?: 'pure' }>;
+export type TransactionObjectArgument =
+	| Exclude<Argument, { Input: unknown; type?: 'pure' }>
+	| ((txb: TransactionBlock) => Exclude<Argument, { Input: unknown; type?: 'pure' }>);
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
-
-const DefaultOfflineLimits = {
-	maxPureArgumentSize: 16 * 1024,
-	maxTxGas: 50_000_000_000,
-	maxGasObjects: 256,
-	maxTxSizeBytes: 128 * 1024,
-} satisfies Limits;
 
 function createTransactionResult(index: number): TransactionResult {
 	const baseResult: TransactionArgument = { $kind: 'Result', Result: index };
@@ -76,41 +83,9 @@ function createTransactionResult(index: number): TransactionResult {
 	}) as TransactionResult;
 }
 
-function expectClient(options: BuildOptions): SuiClient {
-	if (!options.client) {
-		throw new Error(
-			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,
-		);
-	}
-
-	return options.client;
-}
-
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
 
-const LIMITS = {
-	// The maximum gas that is allowed.
-	maxTxGas: 'max_tx_gas',
-	// The maximum number of gas objects that can be selected for one transaction.
-	maxGasObjects: 'max_gas_payment_objects',
-	// The maximum size (in bytes) that the transaction can be:
-	maxTxSizeBytes: 'max_tx_size_bytes',
-	// The maximum size (in bytes) that pure arguments can be:
-	maxPureArgumentSize: 'max_pure_argument_size',
-} as const;
-
-type Limits = Partial<Record<keyof typeof LIMITS, number>>;
-
-interface BuildOptions {
-	client?: SuiClient;
-	onlyTransactionKind?: boolean;
-	/** Define a protocol config to build against, instead of having it fetched from the provider at build time. */
-	protocolConfig?: ProtocolConfig;
-	/** Define limits that are used when building the transaction. In general, we recommend using the protocol configuration instead of defining limits. */
-	limits?: Limits;
-}
-
-interface SignOptions extends BuildOptions {
+interface SignOptions extends BuildTransactionBlockOptions {
 	signer: Signer;
 }
 
@@ -124,6 +99,10 @@ export type TransactionObjectInput = string | CallArg | TransactionObjectArgumen
  * Transaction Builder
  */
 export class TransactionBlock {
+	#serializationPlugins: TransactionBlockPlugin[] = [];
+	#buildPlugins: TransactionBlockPlugin[] = [];
+	#intentResolvers = new Map<string, TransactionBlockPlugin>();
+
 	/**
 	 * Converts from a serialize transaction kind (built with `build({ onlyTransactionKind: true })`) to a `Transaction` class.
 	 * Supports either a byte array, or base64-encoded bytes.
@@ -144,19 +123,36 @@ export class TransactionBlock {
 	 * - A string returned from `Transaction#serialize`. The serialized format must be compatible, or it will throw an error.
 	 * - A byte array (or base64-encoded bytes) containing BCS transaction data.
 	 */
-	static from(serialized: string | Uint8Array) {
+	static from(txb: string | Uint8Array | TransactionBlock) {
 		const tx = new TransactionBlock();
 
-		// Check for bytes:
-		if (typeof serialized !== 'string' || !serialized.startsWith('{')) {
+		if (isTransactionBlock(txb)) {
+			tx.#blockData = new TransactionBlockDataBuilder(txb.getBlockData());
+		} else if (typeof txb !== 'string' || !txb.startsWith('{')) {
 			tx.#blockData = TransactionBlockDataBuilder.fromBytes(
-				typeof serialized === 'string' ? fromB64(serialized) : serialized,
+				typeof txb === 'string' ? fromB64(txb) : txb,
 			);
 		} else {
-			tx.#blockData = TransactionBlockDataBuilder.restore(JSON.parse(serialized));
+			tx.#blockData = TransactionBlockDataBuilder.restore(JSON.parse(txb));
 		}
 
 		return tx;
+	}
+
+	addSerializationPlugin(step: TransactionBlockPlugin) {
+		this.#serializationPlugins.push(step);
+	}
+
+	addBuildPlugin(step: TransactionBlockPlugin) {
+		this.#buildPlugins.push(step);
+	}
+
+	addIntentResolver(intent: string, resolver: TransactionBlockPlugin) {
+		if (this.#intentResolvers.has(intent) && this.#intentResolvers.get(intent) !== resolver) {
+			throw new Error(`Intent resolver for ${intent} already exists`);
+		}
+
+		this.#intentResolvers.set(intent, resolver);
 	}
 
 	setSender(sender: string) {
@@ -191,7 +187,7 @@ export class TransactionBlock {
 	/** @deprecated Use `getBlockData()` instead. */
 
 	get blockData() {
-		return v1BlockDataFromTransactionBlockState(this.#blockData.snapshot());
+		return serializeV1TransactionBlockData(this.#blockData.snapshot());
 	}
 
 	/** Get a snapshot of the transaction data, in JSON form: */
@@ -211,20 +207,22 @@ export class TransactionBlock {
 			enumerable: false,
 			value: createPure((value): Argument => {
 				if (isSerializedBcs(value)) {
-					return this.#input('pure', {
+					return this.#blockData.addInput('pure', {
 						$kind: 'Pure',
-						Pure: Array.from(value.toBytes()),
+						Pure: {
+							bytes: value.toBase64(),
+						},
 					});
 				}
 
 				// TODO: we can also do some deduplication here
-				return this.#input(
+				return this.#blockData.addInput(
 					'pure',
 					is(NormalizedCallArg, value)
 						? parse(NormalizedCallArg, value)
 						: value instanceof Uint8Array
 						? Inputs.Pure(value)
-						: { $kind: 'RawValue', RawValue: { value } },
+						: { $kind: 'UnresolvedPure', UnresolvedPure: { value } },
 				);
 			}),
 		});
@@ -232,10 +230,8 @@ export class TransactionBlock {
 		return this.pure;
 	}
 
-	constructor(transaction?: TransactionBlock) {
-		this.#blockData = new TransactionBlockDataBuilder(
-			transaction ? transaction.getBlockData() : undefined,
-		);
+	constructor() {
+		this.#blockData = new TransactionBlockDataBuilder();
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
@@ -244,26 +240,15 @@ export class TransactionBlock {
 	}
 
 	/**
-	 * Dynamically create a new input, which is separate from the `input`. This is important
-	 * for generated clients to be able to define unique inputs that are non-overlapping with the
-	 * defined inputs.
-	 *
-	 * For `Uint8Array` type automatically convert the input into a `Pure` CallArg, since this
-	 * is the format required for custom serialization.
-	 *
-	 */
-	#input<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
-		const index = this.#blockData.inputs.length;
-		this.#blockData.inputs.push(arg);
-		return { Input: index, type, $kind: 'Input' as const };
-	}
-
-	/**
 	 * Add a new object input to the transaction.
 	 */
-	object(value: TransactionObjectInput): TransactionObjectArgument {
+	object(value: TransactionObjectInput): { $kind: 'Input'; Input: number; type?: 'object' } {
+		if (typeof value === 'function') {
+			return this.object(value(this));
+		}
+
 		if (typeof value === 'object' && is(Argument, value)) {
-			return value;
+			return value as { $kind: 'Input'; Input: number; type?: 'object' };
 		}
 
 		const id = getIdFromCallArg(value);
@@ -278,12 +263,12 @@ export class TransactionBlock {
 
 		return inserted
 			? { $kind: 'Input', Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
-			: this.#input(
+			: this.#blockData.addInput(
 					'object',
 					typeof value === 'string'
 						? {
 								$kind: 'UnresolvedObject',
-								UnresolvedObject: { value: normalizeSuiAddress(value), typeSignatures: [] },
+								UnresolvedObject: { objectId: normalizeSuiAddress(value) },
 						  }
 						: value,
 			  );
@@ -319,14 +304,20 @@ export class TransactionBlock {
 		return createTransactionResult(index - 1);
 	}
 
-	#normalizeTransactionArgument(
-		arg: TransactionArgument | SerializedBcs<any>,
-	): TransactionArgument {
+	#normalizeTransactionArgument(arg: TransactionArgument | SerializedBcs<any>) {
 		if (isSerializedBcs(arg)) {
 			return this.pure(arg);
 		}
 
-		return arg as TransactionArgument;
+		return this.#resolveArgument(arg as TransactionArgument);
+	}
+
+	#resolveArgument(arg: TransactionArgument): Argument {
+		if (typeof arg === 'function') {
+			return arg(this);
+		}
+
+		return arg;
 	}
 
 	// Method shorthands:
@@ -337,7 +328,7 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.SplitCoins(
-				typeof coin === 'string' ? this.object(coin) : coin,
+				typeof coin === 'string' ? this.object(coin) : this.#resolveArgument(coin),
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
 						? this.pure.u64(amount)
@@ -352,8 +343,8 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.MergeCoins(
-				typeof destination === 'string' ? this.object(destination) : destination,
-				sources.map((src) => (typeof src === 'string' ? this.object(src) : src)),
+				this.object(destination),
+				sources.map((src) => this.object(src)),
 			),
 		);
 	}
@@ -368,20 +359,20 @@ export class TransactionBlock {
 	upgrade({
 		modules,
 		dependencies,
-		packageId,
+		package: packageId,
 		ticket,
 	}: {
 		modules: number[][] | string[];
 		dependencies: string[];
-		packageId: string;
+		package: string;
 		ticket: TransactionObjectArgument | string;
 	}) {
 		return this.add(
 			Transactions.Upgrade({
 				modules,
 				dependencies,
-				packageId,
-				ticket: typeof ticket === 'string' ? this.object(ticket) : ticket,
+				package: packageId,
+				ticket: this.object(ticket),
 			}),
 		);
 	}
@@ -394,12 +385,12 @@ export class TransactionBlock {
 				module: string;
 				function: string;
 				arguments?: (TransactionArgument | SerializedBcs<any>)[];
-				typeArguments?: (string | TypeTag)[];
+				typeArguments?: string[];
 		  }
 		| {
 				target: string;
 				arguments?: (TransactionArgument | SerializedBcs<any>)[];
-				typeArguments?: (string | TypeTag)[];
+				typeArguments?: string[];
 		  }) {
 		return this.add(
 			Transactions.MoveCall({
@@ -414,7 +405,7 @@ export class TransactionBlock {
 	) {
 		return this.add(
 			Transactions.TransferObjects(
-				objects.map((obj) => (typeof obj === 'string' ? this.object(obj) : obj)),
+				objects.map((obj) => this.object(obj)),
 				typeof address === 'string'
 					? this.pure.address(address)
 					: this.#normalizeTransactionArgument(address),
@@ -431,7 +422,7 @@ export class TransactionBlock {
 		return this.add(
 			Transactions.MakeMoveVec({
 				type,
-				objects: objects.map((obj) => (typeof obj === 'string' ? this.object(obj) : obj)),
+				objects: objects.map((obj) => this.object(obj)),
 			}),
 		);
 	}
@@ -448,41 +439,24 @@ export class TransactionBlock {
 	 * information is automatically filled in (e.g. by querying for coin objects
 	 * and performing a dry run).
 	 */
-	serialize() {
-		return JSON.stringify(v1BlockDataFromTransactionBlockState(this.#blockData.snapshot()));
+	serialize(format: 'v1' | 'v2' = 'v1') {
+		if (format === 'v1') {
+			return JSON.stringify(serializeV1TransactionBlockData(this.#blockData.snapshot()));
+		}
+
+		return JSON.stringify(
+			parse(SerializedTransactionBlockDataV2, this.#blockData.snapshot()),
+			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+		);
 	}
 
-	#getConfig(key: keyof typeof LIMITS, { protocolConfig, limits }: BuildOptions) {
-		// Use the limits definition if that exists:
-		if (limits && typeof limits[key] === 'number') {
-			return limits[key]!;
-		}
-
-		if (!protocolConfig) {
-			return DefaultOfflineLimits[key];
-		}
-
-		// Fallback to protocol config:
-		const attribute = protocolConfig?.attributes[LIMITS[key]];
-		if (!attribute) {
-			throw new Error(`Missing expected protocol config: "${LIMITS[key]}"`);
-		}
-
-		const value =
-			'u64' in attribute
-				? attribute.u64
-				: 'u32' in attribute
-				? attribute.u32
-				: 'u16' in attribute
-				? attribute.u16
-				: attribute.f64;
-
-		if (!value) {
-			throw new Error(`Unexpected protocol config value found for: "${LIMITS[key]}"`);
-		}
-
-		// NOTE: Technically this is not a safe conversion, but we know all of the values in protocol config are safe
-		return Number(value);
+	async toJSON(options: SerializeTransactionBlockOptions = {}): Promise<string> {
+		await this.prepareForSerialization(options);
+		return JSON.stringify(
+			parse(SerializedTransactionBlockDataV2, this.#blockData.snapshot()),
+			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
+			2,
+		);
 	}
 
 	/** Build the transaction to BCS bytes, and sign it with the provided keypair. */
@@ -493,10 +467,10 @@ export class TransactionBlock {
 	}
 
 	/** Build the transaction to BCS bytes. */
-	async build(options: BuildOptions = {}): Promise<Uint8Array> {
-		await this.#prepare(options);
+	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
+		await this.prepareForSerialization(options);
+		await this.#prepareBuild(options);
 		return this.#blockData.build({
-			maxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
 			onlyTransactionKind: options.onlyTransactionKind,
 		});
 	}
@@ -507,7 +481,7 @@ export class TransactionBlock {
 			client?: SuiClient;
 		} = {},
 	): Promise<string> {
-		await this.#prepare(options);
+		await this.#prepareBuild(options);
 		return this.#blockData.getDigest();
 	}
 
@@ -515,44 +489,73 @@ export class TransactionBlock {
 	 * Prepare the transaction by validating the transaction data and resolving all inputs
 	 * so that it can be built into bytes.
 	 */
-	async #prepare(options: BuildOptions) {
+	async #prepareBuild(options: BuildTransactionBlockOptions) {
 		if (!options.onlyTransactionKind && !this.#blockData.sender) {
 			throw new Error('Missing transaction sender');
 		}
 
-		if (!options.protocolConfig && !options.limits && options.client) {
-			options.protocolConfig = await options.client.getProtocolConfig();
-		}
+		await this.#runPlugins([...this.#buildPlugins, resolveTransactionBlockData], options);
+	}
 
-		const plugins = new DefaultTransactionBlockFeatures([], () => expectClient(options));
-		await plugins.normalizeInputs(this.#blockData);
-		await plugins.resolveObjectReferences(this.#blockData);
-
-		this.#blockData.inputs.forEach((input, index) => {
-			if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
-				throw new Error(
-					`Input at index ${index} has not been resolved.  Expected a Pure or Object input, but found ${JSON.stringify(
-						input,
-					)}`,
-				);
+	async #runPlugins(plugins: TransactionBlockPlugin[], options: SerializeTransactionBlockOptions) {
+		const createNext = (i: number) => {
+			if (i >= plugins.length) {
+				return () => {};
 			}
-		});
+			const plugin = plugins[i];
 
-		if (!options.onlyTransactionKind) {
-			await plugins.setGasPrice(this.#blockData);
+			return async () => {
+				const next = createNext(i + 1);
+				let calledNext = false;
+				let nextResolved = false;
 
-			await plugins.setGasBudget(this.#blockData, {
-				maxTxGas: this.#getConfig('maxTxGas', options),
-				maxTxSizeBytes: this.#getConfig('maxTxSizeBytes', options),
-			});
+				await plugin(this.#blockData, options, async () => {
+					if (calledNext) {
+						throw new Error(`next() was call multiple times in TransactionBlockPlugin ${i}`);
+					}
 
-			await plugins.setGasPayment(this.#blockData, {
-				maxGasObjects: this.#getConfig('maxGasObjects', options),
-			});
+					calledNext = true;
+
+					await next();
+
+					nextResolved = true;
+				});
+
+				if (!calledNext) {
+					throw new Error(`next() was not called in TransactionBlockPlugin ${i}`);
+				}
+
+				if (!nextResolved) {
+					throw new Error(`next() was not awaited in TransactionBlockPlugin ${i}`);
+				}
+			};
+		};
+
+		await createNext(0)();
+	}
+
+	async prepareForSerialization(options: SerializeTransactionBlockOptions) {
+		const intents = new Set<string>();
+		for (const transaction of this.#blockData.transactions) {
+			if (transaction.Intent && options.supportedIntents) {
+				intents.add(transaction.Intent.name);
+			}
 		}
 
-		await plugins.validate(this.#blockData, {
-			maxPureArgumentSize: this.#getConfig('maxPureArgumentSize', options),
-		});
+		const steps = [...this.#serializationPlugins];
+
+		for (const intent of intents) {
+			if (options.supportedIntents?.includes(intent)) {
+				continue;
+			}
+
+			if (!this.#intentResolvers.has(intent)) {
+				throw new Error(`Missing intent resolver for ${intent}`);
+			}
+
+			steps.push(this.#intentResolvers.get(intent)!);
+		}
+
+		await this.#runPlugins(steps, options);
 	}
 }

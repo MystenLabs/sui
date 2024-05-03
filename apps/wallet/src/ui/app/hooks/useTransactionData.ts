@@ -13,7 +13,7 @@ export function useTransactionData(sender?: string | null, transaction?: Transac
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: ['transaction-data', transaction?.serialize()],
 		queryFn: async () => {
-			const clonedTransaction = new TransactionBlock(transaction!);
+			const clonedTransaction = TransactionBlock.from(transaction!);
 			if (sender) {
 				clonedTransaction.setSenderIfNotSet(sender);
 			}

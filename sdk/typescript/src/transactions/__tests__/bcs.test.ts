@@ -4,8 +4,8 @@
 import { toB58 } from '@mysten/bcs';
 import { expect, it } from 'vitest';
 
-import { bcs, TypeTagSerializer } from '../../bcs/index.js';
-import { normalizeSuiAddress } from '../../utils/sui-types.js';
+import { bcs } from '../../bcs/index.js';
+import { normalizeStructTag, normalizeSuiAddress } from '../../utils/sui-types.js';
 
 // Oooh-weeee we nailed it!
 it('can serialize simplified programmable call struct', () => {
@@ -13,7 +13,7 @@ it('can serialize simplified programmable call struct', () => {
 		package: '0x2',
 		module: 'display',
 		function: 'new',
-		typeArguments: [TypeTagSerializer.parseFromStr('0x6::capy::Capy', true)],
+		typeArguments: [normalizeStructTag('0x6::capy::Capy')],
 		arguments: [
 			{
 				$kind: 'GasCoin',
@@ -83,28 +83,33 @@ it('can serialize transaction data with a programmable transaction', () => {
 						// second argument is a vector of names
 						{
 							$kind: 'Pure',
-							Pure: Array.from(
-								bcs.vector(bcs.String).serialize(['name', 'description', 'img_url']).toBytes(),
-							),
+							Pure: {
+								bytes: bcs
+									.vector(bcs.String)
+									.serialize(['name', 'description', 'img_url'])
+									.toBase64(),
+							},
 						},
 						// third argument is a vector of values
 						{
 							$kind: 'Pure',
-							Pure: Array.from(
-								bcs
+							Pure: {
+								bytes: bcs
 									.vector(bcs.String)
 									.serialize([
 										'Capy {name}',
 										'A cute little creature',
 										'https://api.capy.art/{id}/svg',
 									])
-									.toBytes(),
-							),
+									.toBase64(),
+							},
 						},
 						// 4th and last argument is the account address to send display to
 						{
 							$kind: 'Pure',
-							Pure: Array.from(bcs.Address.serialize(ref().objectId).toBytes()),
+							Pure: {
+								bytes: bcs.Address.serialize(ref().objectId).toBase64(),
+							},
 						},
 					],
 					transactions: [
@@ -114,7 +119,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 								package: sui,
 								module: 'display',
 								function: 'new',
-								typeArguments: [TypeTagSerializer.parseFromStr(`${sui}::capy::Capy`)],
+								typeArguments: [`${sui}::capy::Capy`],
 								arguments: [
 									// publisher object
 									{
@@ -130,7 +135,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 								package: sui,
 								module: 'display',
 								function: 'add_multiple',
-								typeArguments: [TypeTagSerializer.parseFromStr(`${sui}::capy::Capy`)],
+								typeArguments: [`${sui}::capy::Capy`],
 								arguments: [
 									// result of the first transaction
 									{
@@ -156,7 +161,7 @@ it('can serialize transaction data with a programmable transaction', () => {
 								package: sui,
 								module: 'display',
 								function: 'update_version',
-								typeArguments: [TypeTagSerializer.parseFromStr(`${sui}::capy::Capy`)],
+								typeArguments: [`${sui}::capy::Capy`],
 								arguments: [
 									// result of the first transaction again
 									{
@@ -168,8 +173,8 @@ it('can serialize transaction data with a programmable transaction', () => {
 						},
 						{
 							$kind: 'TransferObjects',
-							TransferObjects: [
-								[
+							TransferObjects: {
+								objects: [
 									// the display object
 									{
 										$kind: 'Result',
@@ -177,11 +182,11 @@ it('can serialize transaction data with a programmable transaction', () => {
 									},
 								],
 								// address is also an input
-								{
+								address: {
 									$kind: 'Input',
 									Input: 3,
 								},
-							],
+							},
 						},
 					],
 				},

@@ -5,7 +5,6 @@ import { toB64 } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope } from '../../../src/cryptography/intent';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
@@ -47,9 +46,9 @@ describe('Keypair', () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 		const bytes = bcs.vector(bcs.U8).serialize(data).toBytes();
 
-		const sig1 = await k1.signWithIntent(bytes, IntentScope.PersonalMessage);
-		const sig2 = await k2.signWithIntent(data, IntentScope.TransactionData);
-		const sig3 = await k3.signWithIntent(bytes, IntentScope.PersonalMessage);
+		const sig1 = await k1.signWithIntent(bytes, 'PersonalMessage');
+		const sig2 = await k2.signWithIntent(data, 'TransactionData');
+		const sig3 = await k3.signWithIntent(bytes, 'PersonalMessage');
 
 		expect(sig1.bytes).toEqual(toB64(bytes));
 		expect(sig1.bytes).toEqual('CQAAAAVIZWxsbw==');

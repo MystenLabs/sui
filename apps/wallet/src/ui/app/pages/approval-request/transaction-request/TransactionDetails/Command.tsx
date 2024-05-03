@@ -3,25 +3,29 @@
 
 import { Text } from '_src/ui/app/shared/text';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import { TypeTagSerializer, type TypeTag } from '@mysten/sui.js/bcs';
-import { type TransactionArgument, type Transactions } from '@mysten/sui.js/transactions';
-import { formatAddress, normalizeSuiAddress, toB64 } from '@mysten/sui.js/utils';
+import {
+	type Argument,
+	type TransactionBlockData,
+	type Transactions,
+} from '@mysten/sui.js/transactions';
+import { toB64 } from '@mysten/sui.js/utils';
 import { useState } from 'react';
 
-type TransactionType = ReturnType<(typeof Transactions)[keyof typeof Transactions]>;
+type TransactionType = TransactionBlockData['transactions'][0];
 type MakeMoveVecTransaction = ReturnType<(typeof Transactions)['MakeMoveVec']>;
 type PublishTransaction = ReturnType<(typeof Transactions)['Publish']>;
 
 function convertCommandArgumentToString(
 	arg:
+		| null
 		| string
 		| number
 		| string[]
 		| number[]
-		| TransactionArgument
-		| TransactionArgument[]
-		| MakeMoveVecTransaction['MakeMoveVec'][0]
-		| PublishTransaction['Publish'][0],
+		| Argument
+		| Argument[]
+		| MakeMoveVecTransaction['MakeMoveVec']['type']
+		| PublishTransaction['Publish']['modules'],
 ): string | null {
 	if (!arg) return null;
 
@@ -29,14 +33,6 @@ function convertCommandArgumentToString(
 
 	if (typeof arg === 'object' && 'None' in arg) {
 		return null;
-	}
-
-	if (typeof arg === 'object' && 'Some' in arg) {
-		if (typeof arg.Some === 'object') {
-			// MakeMoveVecTransaction['type'] is TypeTag type
-			return TypeTagSerializer.tagToString(arg.Some as TypeTag);
-		}
-		return arg;
 	}
 
 	if (Array.isArray(arg)) {
@@ -64,20 +60,68 @@ function convertCommandArgumentToString(
 	}
 }
 
-function convertCommandToString({ $kind, ...command }: TransactionType) {
-	const commandArguments = Object.entries(command);
+function convertCommandToString(command: TransactionType) {
+	let normalizedCommand;
+	switch (command.$kind) {
+		case 'MoveCall':
+			normalizedCommand = {
+				kind: 'MoveCall',
+				...command.MoveCall,
+				typeArguments: command.MoveCall.typeArguments,
+			};
+			break;
+		case 'MakeMoveVec':
+			normalizedCommand = {
+				kind: 'MakeMoveVec',
+				type: command.MakeMoveVec.type,
+				objects: command.MakeMoveVec.objects,
+			};
+			break;
+		case 'MergeCoins':
+			normalizedCommand = {
+				kind: 'MergeCoins',
+				destination: command.MergeCoins.destination,
+				sources: command.MergeCoins.sources,
+			};
+			break;
+		case 'TransferObjects':
+			normalizedCommand = {
+				kind: 'TransferObjects',
+				objects: command.TransferObjects.objects,
+				address: command.TransferObjects.address,
+			};
+			break;
+		case 'SplitCoins':
+			normalizedCommand = {
+				kind: 'SplitCoins',
+				coin: command.SplitCoins.coin,
+				amounts: command.SplitCoins.amounts,
+			};
+			break;
+		case 'Publish':
+			normalizedCommand = {
+				kind: 'Publish',
+				modules: command.Publish.modules,
+				dependencies: command.Publish.dependencies,
+			};
+			break;
+		case 'Upgrade':
+			normalizedCommand = {
+				kind: 'Upgrade',
+				modules: command.Upgrade.modules,
+				dependencies: command.Upgrade.dependencies,
+				packageId: command.Upgrade.package,
+				ticket: command.Upgrade.ticket,
+			};
+			break;
+		case 'Intent': {
+			throw new Error('TransactionIntent is not supported');
+		}
+	}
 
+	const commandArguments = Object.entries(normalizedCommand);
 	return commandArguments
 		.map(([key, value]) => {
-			if (key === 'target') {
-				const [packageId, moduleName, functionName] = value.split('::');
-				return [
-					`package: ${formatAddress(normalizeSuiAddress(packageId))}`,
-					`module: ${moduleName}`,
-					`function: ${functionName}`,
-				].join(', ');
-			}
-
 			const stringValue = convertCommandArgumentToString(value);
 
 			if (!stringValue) return null;
