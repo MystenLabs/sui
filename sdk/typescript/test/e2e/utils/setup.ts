@@ -187,7 +187,7 @@ export async function upgradePackage(
 	const receipt = tx.upgrade({
 		modules,
 		dependencies,
-		packageId,
+		package: packageId,
 		ticket,
 	});
 

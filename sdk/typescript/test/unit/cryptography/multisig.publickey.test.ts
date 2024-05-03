@@ -7,7 +7,7 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope, messageWithIntent } from '../../../src/cryptography/intent';
+import { messageWithIntent } from '../../../src/cryptography/intent';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../../../src/cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../../../src/cryptography/signature.js';
@@ -299,7 +299,7 @@ describe('Publickey', () => {
 		let multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const intentMessage = messageWithIntent(
-			IntentScope.PersonalMessage,
+			'PersonalMessage',
 			bcs.vector(bcs.U8).serialize(data).toBytes(),
 		);
 		const digest = blake2b(intentMessage, { dkLen: 32 });
@@ -325,7 +325,7 @@ describe('Publickey', () => {
 		multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const intentMessage = messageWithIntent(
-			IntentScope.PersonalMessage,
+			'PersonalMessage',
 			bcs.vector(bcs.U8).serialize(data).toBytes(),
 		);
 		const digest = blake2b(intentMessage, { dkLen: 32 });

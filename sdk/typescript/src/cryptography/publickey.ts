@@ -7,7 +7,8 @@ import { bytesToHex } from '@noble/hashes/utils';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
-import { IntentScope, messageWithIntent } from './intent.js';
+import type { IntentScope } from './intent.js';
+import { messageWithIntent } from './intent.js';
 
 /**
  * Value to be converted into public key.
@@ -81,7 +82,7 @@ export abstract class PublicKey {
 		return this.verifyWithIntent(
 			bcs.vector(bcs.u8()).serialize(message).toBytes(),
 			signature,
-			IntentScope.PersonalMessage,
+			'PersonalMessage',
 		);
 	}
 
@@ -92,7 +93,7 @@ export abstract class PublicKey {
 		transactionBlock: Uint8Array,
 		signature: Uint8Array | string,
 	): Promise<boolean> {
-		return this.verifyWithIntent(transactionBlock, signature, IntentScope.TransactionData);
+		return this.verifyWithIntent(transactionBlock, signature, 'TransactionData');
 	}
 
 	/**

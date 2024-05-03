@@ -3,8 +3,8 @@
 
 export {
 	verifySignature,
-	verifyPersonalMessage,
-	verifyTransactionBlock,
+	verifyPersonalMessageSignature,
+	verifyTransactionBlockSignature,
 	publicKeyFromRawBytes,
 	publicKeyFromSuiBytes,
 } from './verify.js';
