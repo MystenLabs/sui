@@ -74,7 +74,7 @@ const guides = [
 			},
 			{
 				type: 'category',
-				label: 'Create NFTs',
+				label: 'NFTs',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/nft',
@@ -83,7 +83,7 @@ const guides = [
 			},
 			{
 				type: 'category',
-				label: 'Create Coins and Tokens',
+				label: 'Coins and Tokens',
 				link: {
 					type: 'doc',
 					id: 'guides/developer/coin',
