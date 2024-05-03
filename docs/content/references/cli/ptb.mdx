@@ -127,17 +127,21 @@ All the following examples were tested using a `bash` shell environment and your
 
 ### Types
 
-CLI PTBs requires in some cases to specify the type of a specific value / variable. For example, in the example below the `"<u64>"` type is required when calling the `0x1::option::is_none` function.
-```bash
+Sometimes, CLI PTBs require that you specify the type of a value or variable. For instance, in the following example you must provide the `<u64>` type when calling the `0x1::option::is_none` function.
+
+```shell
 sui client ptb \
 --assign my_variable none \
 --move-call 0x1::option::is_none "<u64>" my_variable \
 --gas-budget 50000000
 ```
 
-If you need to pass in multiple types, you can simply do so by delimiting them with a comma:
-```bash
---move-call package::module::function "<u64,u8,u256>"
+To pass in multiple types, delimit them with a comma:
+
+```shell
+...
+--move-call package::module::function "<u64,u8,u256>" \
+...
 ```
 
 ### Strings
