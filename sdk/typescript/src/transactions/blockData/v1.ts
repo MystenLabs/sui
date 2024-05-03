@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { BaseSchema, Output } from 'valibot';
+import { fromB64, toB64 } from '@mysten/bcs';
+import type { BaseSchema, Input, Output } from 'valibot';
 import {
 	array,
 	bigint,
@@ -22,9 +23,14 @@ import {
 } from 'valibot';
 
 import { TypeTagSerializer } from '../../bcs/index.js';
-import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/index.js';
-import type { Argument } from './v2.js';
-import { NormalizedCallArg, TransactionBlockState } from './v2.js';
+import type { StructTag as StructTagType, TypeTag as TypeTagType } from '../../bcs/types.js';
+import { ObjectArg, safeEnum, TransactionBlockData } from './internal.js';
+import type { Argument } from './internal.js';
+
+export const NormalizedCallArg = safeEnum({
+	Object: ObjectArg,
+	Pure: array(number([integer()])),
+});
 
 export const ObjectRef = object({
 	digest: string(),
@@ -170,7 +176,7 @@ const TransactionTypes = [
 
 const TransactionType = union([...TransactionTypes]);
 
-export const SerializedTransactionDataBuilderV1 = object({
+export const SerializedTransactionBlockDataV1 = object({
 	version: literal(1),
 	sender: optional(string()),
 	expiration: nullish(TransactionExpiration),
@@ -179,21 +185,19 @@ export const SerializedTransactionDataBuilderV1 = object({
 	transactions: array(TransactionType),
 });
 
-export type SerializedTransactionDataBuilderV1 = Output<typeof SerializedTransactionDataBuilderV1>;
+export type SerializedTransactionBlockDataV1 = Output<typeof SerializedTransactionBlockDataV1>;
 
-export function v1BlockDataFromTransactionBlockState(
-	v2: TransactionBlockState,
-): SerializedTransactionDataBuilderV1 {
-	const inputs: Output<typeof TransactionBlockInput>[] = v2.inputs.map((input, index) => {
+export function serializeV1TransactionBlockData(
+	blockData: TransactionBlockData,
+): SerializedTransactionBlockDataV1 {
+	const inputs: Output<typeof TransactionBlockInput>[] = blockData.inputs.map((input, index) => {
 		if (input.Object) {
 			return {
 				kind: 'Input',
 				index,
 				value: input.Object.ImmOrOwnedObject
 					? {
-							ImmOrOwnedObject: {
-								objectId: input.Object.ImmOrOwnedObject.objectId,
-							},
+							ImmOrOwnedObject: input.Object.ImmOrOwnedObject,
 					  }
 					: input.Object.Receiving
 					? {
@@ -218,9 +222,18 @@ export function v1BlockDataFromTransactionBlockState(
 				kind: 'Input',
 				index,
 				value: {
-					Pure: input.Pure,
+					Pure: Array.from(fromB64(input.Pure.bytes)),
 				},
 				type: 'pure',
+			};
+		}
+
+		if (input.UnresolvedPure) {
+			return {
+				kind: 'Input',
+				type: 'pure',
+				index,
+				value: input.UnresolvedPure.value,
 			};
 		}
 
@@ -229,16 +242,7 @@ export function v1BlockDataFromTransactionBlockState(
 				kind: 'Input',
 				type: 'object',
 				index,
-				value: input.UnresolvedObject.value,
-			};
-		}
-
-		if (input.RawValue) {
-			return {
-				kind: 'Input',
-				type: 'pure',
-				index,
-				value: input.RawValue.value,
+				value: input.UnresolvedObject.objectId,
 			};
 		}
 
@@ -247,44 +251,47 @@ export function v1BlockDataFromTransactionBlockState(
 
 	return {
 		version: 1,
-		sender: v2.sender ?? undefined,
+		sender: blockData.sender ?? undefined,
 		expiration:
-			v2.expiration?.$kind === 'Epoch'
-				? { Epoch: Number(v2.expiration.Epoch) }
-				: v2.expiration
+			blockData.expiration?.$kind === 'Epoch'
+				? { Epoch: Number(blockData.expiration.Epoch) }
+				: blockData.expiration
 				? { None: true }
 				: null,
 		gasConfig: {
-			owner: v2.gasData.owner ?? undefined,
-			budget: v2.gasData.budget ?? undefined,
-			price: v2.gasData.price ?? undefined,
-			payment: v2.gasData.payment ?? undefined,
+			owner: blockData.gasData.owner ?? undefined,
+			budget: blockData.gasData.budget ?? undefined,
+			price: blockData.gasData.price ?? undefined,
+			payment: blockData.gasData.payment ?? undefined,
 		},
 		inputs,
-		transactions: v2.transactions.map((transaction): Output<typeof TransactionType> => {
+		transactions: blockData.transactions.map((transaction): Output<typeof TransactionType> => {
 			if (transaction.MakeMoveVec) {
 				return {
 					kind: 'MakeMoveVec',
-					type: transaction.MakeMoveVec[0].Some
-						? { Some: transaction.MakeMoveVec[0].Some }
-						: { None: true },
-					objects: transaction.MakeMoveVec[1].map((arg) => convertTransactionArgument(arg, inputs)),
+					type:
+						transaction.MakeMoveVec.type === null
+							? { None: true }
+							: { Some: TypeTagSerializer.parseFromStr(transaction.MakeMoveVec.type) },
+					objects: transaction.MakeMoveVec.objects.map((arg) =>
+						convertTransactionArgument(arg, inputs),
+					),
 				};
 			}
 			if (transaction.MergeCoins) {
 				return {
 					kind: 'MergeCoins',
-					destination: convertTransactionArgument(transaction.MergeCoins[0], inputs),
-					sources: transaction.MergeCoins[1].map((arg) => convertTransactionArgument(arg, inputs)),
+					destination: convertTransactionArgument(transaction.MergeCoins.destination, inputs),
+					sources: transaction.MergeCoins.sources.map((arg) =>
+						convertTransactionArgument(arg, inputs),
+					),
 				};
 			}
 			if (transaction.MoveCall) {
 				return {
 					kind: 'MoveCall',
 					target: `${transaction.MoveCall.package}::${transaction.MoveCall.module}::${transaction.MoveCall.function}`,
-					typeArguments: transaction.MoveCall.typeArguments.map((arg) =>
-						TypeTagSerializer.tagToString(arg),
-					),
+					typeArguments: transaction.MoveCall.typeArguments,
 					arguments: transaction.MoveCall.arguments.map((arg) =>
 						convertTransactionArgument(arg, inputs),
 					),
@@ -293,34 +300,36 @@ export function v1BlockDataFromTransactionBlockState(
 			if (transaction.Publish) {
 				return {
 					kind: 'Publish',
-					modules: transaction.Publish[0],
-					dependencies: transaction.Publish[1],
+					modules: transaction.Publish.modules.map((mod) => Array.from(fromB64(mod))),
+					dependencies: transaction.Publish.dependencies,
 				};
 			}
 			if (transaction.SplitCoins) {
 				return {
 					kind: 'SplitCoins',
-					coin: convertTransactionArgument(transaction.SplitCoins[0], inputs),
-					amounts: transaction.SplitCoins[1].map((arg) => convertTransactionArgument(arg, inputs)),
+					coin: convertTransactionArgument(transaction.SplitCoins.coin, inputs),
+					amounts: transaction.SplitCoins.amounts.map((arg) =>
+						convertTransactionArgument(arg, inputs),
+					),
 				};
 			}
 			if (transaction.TransferObjects) {
 				return {
 					kind: 'TransferObjects',
-					objects: transaction.TransferObjects[0].map((arg) =>
+					objects: transaction.TransferObjects.objects.map((arg) =>
 						convertTransactionArgument(arg, inputs),
 					),
-					address: convertTransactionArgument(transaction.TransferObjects[1], inputs),
+					address: convertTransactionArgument(transaction.TransferObjects.address, inputs),
 				};
 			}
 
 			if (transaction.Upgrade) {
 				return {
 					kind: 'Upgrade',
-					modules: transaction.Upgrade[0],
-					dependencies: transaction.Upgrade[1],
-					packageId: transaction.Upgrade[2],
-					ticket: convertTransactionArgument(transaction.Upgrade[3], inputs),
+					modules: transaction.Upgrade.modules.map((mod) => Array.from(fromB64(mod))),
+					dependencies: transaction.Upgrade.dependencies,
+					packageId: transaction.Upgrade.package,
+					ticket: convertTransactionArgument(transaction.Upgrade.ticket, inputs),
 				};
 			}
 
@@ -349,12 +358,11 @@ function convertTransactionArgument(
 	throw new Error(`Invalid argument ${Object.keys(arg)}`);
 }
 
-export function transactionBlockStateFromV1BlockData(
-	data: SerializedTransactionDataBuilderV1,
-): TransactionBlockState {
-	return parse(TransactionBlockState, {
+export function transactionBlockDataFromV1(
+	data: SerializedTransactionBlockDataV1,
+): TransactionBlockData {
+	return parse(TransactionBlockData, {
 		version: 2,
-		features: [],
 		sender: data.sender ?? null,
 		expiration: data.expiration
 			? 'Epoch' in data.expiration
@@ -375,12 +383,31 @@ export function transactionBlockStateFromV1BlockData(
 		inputs: data.inputs.map((input) => {
 			if (input.kind === 'Input') {
 				if (is(NormalizedCallArg, input.value)) {
-					return input.value;
+					const value = parse(NormalizedCallArg, input.value);
+
+					if (value.Object) {
+						return {
+							Object: value.Object,
+						};
+					}
+
+					return {
+						Pure: {
+							bytes: toB64(new Uint8Array(value.Pure)),
+						},
+					};
+				}
+
+				if (input.type === 'object') {
+					return {
+						UnresolvedObject: {
+							objectId: input.value as string,
+						},
+					};
 				}
 
 				return {
-					RawValue: {
-						type: input.type ? (input.type === 'pure' ? 'Pure' : 'Object') : null,
+					UnresolvedPure: {
 						value: input.value,
 					},
 				};
@@ -392,23 +419,20 @@ export function transactionBlockStateFromV1BlockData(
 			switch (transaction.kind) {
 				case 'MakeMoveVec':
 					return {
-						MakeMoveVec: [
-							'Some' in transaction.type
-								? {
-										Some: transaction.type.Some,
-								  }
-								: {
-										None: true,
-								  },
-							transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
-						],
+						MakeMoveVec: {
+							type:
+								'Some' in transaction.type
+									? TypeTagSerializer.tagToString(transaction.type.Some)
+									: null,
+							objects: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
+						},
 					};
 				case 'MergeCoins': {
 					return {
-						MergeCoins: [
-							parseV1TransactionArgument(transaction.destination),
-							transaction.sources.map((arg) => parseV1TransactionArgument(arg)),
-						],
+						MergeCoins: {
+							destination: parseV1TransactionArgument(transaction.destination),
+							sources: transaction.sources.map((arg) => parseV1TransactionArgument(arg)),
+						},
 					};
 				}
 				case 'MoveCall': {
@@ -418,52 +442,55 @@ export function transactionBlockStateFromV1BlockData(
 							package: pkg,
 							module: mod,
 							function: fn,
-							typeArguments: transaction.typeArguments.map((arg) =>
-								TypeTagSerializer.parseFromStr(arg),
-							),
+							typeArguments: transaction.typeArguments,
 							arguments: transaction.arguments.map((arg) => parseV1TransactionArgument(arg)),
 						},
 					};
 				}
 				case 'Publish': {
 					return {
-						Publish: [transaction.modules, transaction.dependencies],
+						Publish: {
+							modules: transaction.modules.map((mod) => toB64(Uint8Array.from(mod))),
+							dependencies: transaction.dependencies,
+						},
 					};
 				}
 				case 'SplitCoins': {
 					return {
-						SplitCoins: [
-							parseV1TransactionArgument(transaction.coin),
-							transaction.amounts.map((arg) => parseV1TransactionArgument(arg)),
-						],
+						SplitCoins: {
+							coin: parseV1TransactionArgument(transaction.coin),
+							amounts: transaction.amounts.map((arg) => parseV1TransactionArgument(arg)),
+						},
 					};
 				}
 				case 'TransferObjects': {
 					return {
-						TransferObjects: [
-							transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
-							parseV1TransactionArgument(transaction.address),
-						],
+						TransferObjects: {
+							objects: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
+							address: parseV1TransactionArgument(transaction.address),
+						},
 					};
 				}
 				case 'Upgrade': {
 					return {
-						Upgrade: [
-							transaction.modules,
-							transaction.dependencies,
-							transaction.packageId,
-							parseV1TransactionArgument(transaction.ticket),
-						],
+						Upgrade: {
+							modules: transaction.modules.map((mod) => toB64(Uint8Array.from(mod))),
+							dependencies: transaction.dependencies,
+							package: transaction.packageId,
+							ticket: parseV1TransactionArgument(transaction.ticket),
+						},
 					};
 				}
 			}
 
 			throw new Error(`Unknown transaction ${Object.keys(transaction)}`);
 		}),
-	});
+	} satisfies Input<typeof TransactionBlockData>);
 }
 
-function parseV1TransactionArgument(arg: Output<typeof TransactionArgument>) {
+function parseV1TransactionArgument(
+	arg: Output<typeof TransactionArgument>,
+): Input<typeof Argument> {
 	switch (arg.kind) {
 		case 'GasCoin': {
 			return { GasCoin: true };

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64, toB58, toB64 } from '@mysten/bcs';
-import { bcs, TypeTagSerializer } from '@mysten/sui.js/bcs';
+import { fromB64, toB58 } from '@mysten/bcs';
+import { bcs } from '@mysten/sui.js/bcs';
 import type {
 	SuiArgument,
 	SuiCallArg,
@@ -214,7 +214,7 @@ function mapTransactionInput(input: typeof bcs.CallArg.$inferType): SuiCallArg {
 	if (input.Pure) {
 		return {
 			type: 'pure',
-			value: Uint8Array.from(input.Pure),
+			value: fromB64(input.Pure.bytes),
 		};
 	}
 
@@ -259,9 +259,7 @@ function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTran
 					function: transaction.MoveCall.function,
 					module: transaction.MoveCall.module,
 					package: transaction.MoveCall.package,
-					type_arguments: transaction.MoveCall.typeArguments.map((type) =>
-						TypeTagSerializer.tagToString(type),
-					),
+					type_arguments: transaction.MoveCall.typeArguments,
 				},
 			};
 		}
@@ -269,48 +267,46 @@ function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTran
 		case 'MakeMoveVec': {
 			return {
 				MakeMoveVec: [
-					transaction.MakeMoveVec[0].Some
-						? TypeTagSerializer.tagToString(transaction.MakeMoveVec[0].Some)
-						: null,
-					transaction.MakeMoveVec[1].map(mapTransactionArgument),
+					transaction.MakeMoveVec.type,
+					transaction.MakeMoveVec.objects.map(mapTransactionArgument),
 				],
 			};
 		}
 		case 'MergeCoins': {
 			return {
 				MergeCoins: [
-					mapTransactionArgument(transaction.MergeCoins[0]),
-					transaction.MergeCoins[1].map(mapTransactionArgument),
+					mapTransactionArgument(transaction.MergeCoins.destination),
+					transaction.MergeCoins.sources.map(mapTransactionArgument),
 				],
 			};
 		}
 		case 'Publish': {
 			return {
-				Publish: transaction.Publish[0].map((module) => toB64(Uint8Array.from(module))),
+				Publish: transaction.Publish.modules.map((module) => module),
 			};
 		}
 		case 'SplitCoins': {
 			return {
 				SplitCoins: [
-					mapTransactionArgument(transaction.SplitCoins[0]),
-					transaction.SplitCoins[1].map(mapTransactionArgument),
+					mapTransactionArgument(transaction.SplitCoins.coin),
+					transaction.SplitCoins.amounts.map(mapTransactionArgument),
 				],
 			};
 		}
 		case 'TransferObjects': {
 			return {
 				TransferObjects: [
-					transaction.TransferObjects[0].map(mapTransactionArgument),
-					mapTransactionArgument(transaction.TransferObjects[1]),
+					transaction.TransferObjects.objects.map(mapTransactionArgument),
+					mapTransactionArgument(transaction.TransferObjects.address),
 				],
 			};
 		}
 		case 'Upgrade': {
 			return {
 				Upgrade: [
-					transaction.Upgrade[0].map((module) => toB64(Uint8Array.from(module))),
-					transaction.Upgrade[2],
-					mapTransactionArgument(transaction.Upgrade[3]),
+					transaction.Upgrade.modules.map((module) => module),
+					transaction.Upgrade.package,
+					mapTransactionArgument(transaction.Upgrade.ticket),
 				],
 			};
 		}

@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { PureArg } from '@mysten/sui.js/bcs';
 import { bcs } from '@mysten/sui.js/bcs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
 import type {
@@ -12,6 +11,7 @@ import type {
 } from '@mysten/sui.js/client';
 import type { Keypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import type { TransactionObjectArgument } from '@mysten/sui.js/transactions';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	fromB64,
@@ -515,7 +515,7 @@ export class ZkSendLink {
 		const receiver =
 			typeof input.value === 'string'
 				? input.value
-				: bcs.Address.parse(new Uint8Array((input.value as PureArg).Pure));
+				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
 		this.assets = getAssetsFromTxnBlock({
 			transactionBlock: txb,
@@ -535,13 +535,6 @@ export class ZkSendLink {
 					await txb.build({
 						onlyTransactionKind: true,
 						client: this.#client,
-						// Theses limits will get verified during the final transaction construction, so we can safely ignore them here:
-						limits: {
-							maxGasObjects: Infinity,
-							maxPureArgumentSize: Infinity,
-							maxTxGas: Infinity,
-							maxTxSizeBytes: Infinity,
-						},
 					}),
 				),
 			}),
@@ -665,7 +658,7 @@ export class ZkSendLink {
 		const txb = new TransactionBlock();
 		txb.setSender(this.keypair.toSuiAddress());
 
-		const objectsToTransfer = this.#ownedObjects
+		const objectsToTransfer: TransactionObjectArgument[] = this.#ownedObjects
 			.filter((object) => {
 				if (this.#gasCoin) {
 					if (object.objectId === this.#gasCoin.coinObjectId) {

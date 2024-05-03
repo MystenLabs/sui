@@ -7,8 +7,7 @@ import { bcs } from '../bcs/index.js';
 import type { SuiMoveNormalizedType } from '../client/index.js';
 import { MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS } from '../utils/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { OpenMoveTypeSignature, OpenMoveTypeSignatureBody } from './blockData/v2.js';
-import { extractStructTag } from './utils.js';
+import type { OpenMoveTypeSignature, OpenMoveTypeSignatureBody } from './blockData/internal.js';
 
 const OBJECT_MODULE_NAME = 'object';
 const ID_STRUCT_NAME = 'ID';
@@ -22,10 +21,15 @@ const STD_UTF8_STRUCT_NAME = 'String';
 const STD_OPTION_MODULE_NAME = 'option';
 const STD_OPTION_STRUCT_NAME = 'Option';
 
-export function isTxContext(param: SuiMoveNormalizedType): boolean {
-	const struct = extractStructTag(param)?.Struct;
+export function isTxContext(param: OpenMoveTypeSignature): boolean {
+	const struct =
+		typeof param.body === 'object' && 'datatype' in param.body ? param.body.datatype : null;
+
 	return (
-		struct?.address === '0x2' && struct?.module === 'tx_context' && struct?.name === 'TxContext'
+		!!struct &&
+		normalizeSuiAddress(struct.package) === normalizeSuiAddress('0x2') &&
+		struct.module === 'tx_context' &&
+		struct.type === 'TxContext'
 	);
 }
 
@@ -165,4 +169,37 @@ function normalizedTypeToMoveTypeSignatureBody(
 	}
 
 	throw new Error(`Unexpected type ${JSON.stringify(type)}`);
+}
+
+export function pureBcsSchemaFromOpenMoveTypeSignatureBody(
+	typeSignature: OpenMoveTypeSignatureBody,
+): BcsType<any> {
+	if (typeof typeSignature === 'string') {
+		switch (typeSignature) {
+			case 'address':
+				return bcs.Address;
+			case 'bool':
+				return bcs.Bool;
+			case 'u8':
+				return bcs.U8;
+			case 'u16':
+				return bcs.U16;
+			case 'u32':
+				return bcs.U32;
+			case 'u64':
+				return bcs.U64;
+			case 'u128':
+				return bcs.U128;
+			case 'u256':
+				return bcs.U256;
+			default:
+				throw new Error(`Unknown type signature ${typeSignature}`);
+		}
+	}
+
+	if ('vector' in typeSignature) {
+		return bcs.vector(pureBcsSchemaFromOpenMoveTypeSignatureBody(typeSignature.vector));
+	}
+
+	throw new Error(`Expected pure typeSignature, but got ${JSON.stringify(typeSignature)}`);
 }

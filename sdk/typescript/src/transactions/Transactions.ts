@@ -1,17 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { fromB64 } from '@mysten/bcs';
-import { parse } from 'valibot';
+import { toB64 } from '@mysten/bcs';
 import type { Input } from 'valibot';
+import { parse } from 'valibot';
 
-import { TypeTagSerializer } from '../bcs/type-tag-serializer.js';
+import type { bcs } from '../bcs/index.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import type { CallArg, Transaction } from './blockData/v2.js';
-import { Argument, TypeTag } from './blockData/v2.js';
+import { Argument } from './blockData/internal.js';
+import type { CallArg } from './blockData/internal.js';
+import type { TransactionBlock } from './TransactionBlock.js';
 
-export type { Argument as TransactionArgument };
-export type { CallArg as TransactionBlockInput };
+export type TransactionArgument = Argument | ((txb: TransactionBlock) => Argument);
+export type TransactionBlockInput = CallArg;
 
 // Keep in sync with constants in
 // crates/sui-framework/packages/sui-framework/sources/package.move
@@ -21,8 +22,8 @@ export enum UpgradePolicy {
 	DEP_ONLY = 192,
 }
 
-type TransactionShape<T extends Transaction['$kind']> = { $kind: T } & {
-	[K in T]: Extract<Transaction, { [K in T]: any }>[T];
+type TransactionShape<T extends (typeof bcs.Transaction.$inferType)['$kind']> = { $kind: T } & {
+	[K in T]: Extract<typeof bcs.Transaction.$inferType, { [K in T]: any }>[T];
 };
 
 /**
@@ -36,12 +37,12 @@ export const Transactions = {
 					module: string;
 					function: string;
 					arguments?: Argument[];
-					typeArguments?: (string | TypeTag)[];
+					typeArguments?: string[];
 			  }
 			| {
 					target: string;
 					arguments?: Argument[];
-					typeArguments?: (string | TypeTag)[];
+					typeArguments?: string[];
 			  },
 	): TransactionShape<'MoveCall'> {
 		const [pkg, mod, fn] =
@@ -50,13 +51,10 @@ export const Transactions = {
 		return {
 			$kind: 'MoveCall',
 			MoveCall: {
-				package: pkg,
+				package: normalizeSuiObjectId(pkg),
 				module: mod,
 				function: fn,
-				typeArguments:
-					input.typeArguments?.map((arg) =>
-						typeof arg === 'string' ? parse(TypeTag, TypeTagSerializer.parseFromStr(arg)) : arg,
-					) ?? [],
+				typeArguments: input.typeArguments ?? [],
 				arguments: input.arguments ?? [],
 			},
 		};
@@ -66,31 +64,24 @@ export const Transactions = {
 		objects: Input<typeof Argument>[],
 		address: Input<typeof Argument>,
 	): TransactionShape<'TransferObjects'> {
-		// TODO: arguments aren't linked to inputs anymore, so we need to handle this somewhere else
-		// if (address.kind === 'Input' && address.type === 'pure' && typeof address.value !== 'object') {
-		// 	address.value = Inputs.Pure(bcs.Address.serialize(address.value));
-		// }
-
 		return {
 			$kind: 'TransferObjects',
-			TransferObjects: [objects.map((o) => parse(Argument, o)), parse(Argument, address)],
+			TransferObjects: {
+				objects: objects.map((o) => parse(Argument, o)),
+				address: parse(Argument, address),
+			},
 		};
 	},
 	SplitCoins(
 		coin: Input<typeof Argument>,
 		amounts: Input<typeof Argument>[],
 	): TransactionShape<'SplitCoins'> {
-		// TODO: arguments aren't linked to inputs anymore, so we need to handle this somewhere else
-		// Handle deprecated usage of `Input.Pure(100)`
-		// amounts.forEach((input) => {
-		// 	if (input.kind === 'Input' && input.type === 'pure' && typeof input.value !== 'object') {
-		// 		input.value = Inputs.Pure(bcs.U64.serialize(input.value));
-		// 	}
-		// });
-
 		return {
 			$kind: 'SplitCoins',
-			SplitCoins: [parse(Argument, coin), amounts.map((o) => parse(Argument, o))],
+			SplitCoins: {
+				coin: parse(Argument, coin),
+				amounts: amounts.map((o) => parse(Argument, o)),
+			},
 		};
 	},
 	MergeCoins(
@@ -99,7 +90,10 @@ export const Transactions = {
 	): TransactionShape<'MergeCoins'> {
 		return {
 			$kind: 'MergeCoins',
-			MergeCoins: [parse(Argument, destination), sources.map((o) => parse(Argument, o))],
+			MergeCoins: {
+				destination: parse(Argument, destination),
+				sources: sources.map((o) => parse(Argument, o)),
+			},
 		};
 	},
 	Publish({
@@ -111,35 +105,35 @@ export const Transactions = {
 	}): TransactionShape<'Publish'> {
 		return {
 			$kind: 'Publish',
-			Publish: [
-				modules.map((module) =>
-					typeof module === 'string' ? Array.from(fromB64(module)) : module,
+			Publish: {
+				modules: modules.map((module) =>
+					typeof module === 'string' ? module : toB64(new Uint8Array(module)),
 				),
-				dependencies.map((dep) => normalizeSuiObjectId(dep)),
-			],
+				dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
+			},
 		};
 	},
 	Upgrade({
 		modules,
 		dependencies,
-		packageId,
+		package: packageId,
 		ticket,
 	}: {
 		modules: number[][] | string[];
 		dependencies: string[];
-		packageId: string;
+		package: string;
 		ticket: Input<typeof Argument>;
 	}): TransactionShape<'Upgrade'> {
 		return {
 			$kind: 'Upgrade',
-			Upgrade: [
-				modules.map((module) =>
-					typeof module === 'string' ? Array.from(fromB64(module)) : module,
+			Upgrade: {
+				modules: modules.map((module) =>
+					typeof module === 'string' ? module : toB64(new Uint8Array(module)),
 				),
-				dependencies.map((dep) => normalizeSuiObjectId(dep)),
-				packageId,
-				parse(Argument, ticket),
-			],
+				dependencies: dependencies.map((dep) => normalizeSuiObjectId(dep)),
+				package: packageId,
+				ticket: parse(Argument, ticket),
+			},
 		};
 	},
 	MakeMoveVec({
@@ -151,12 +145,10 @@ export const Transactions = {
 	}): TransactionShape<'MakeMoveVec'> {
 		return {
 			$kind: 'MakeMoveVec',
-			MakeMoveVec: [
-				type
-					? { $kind: 'Some', Some: parse(TypeTag, TypeTagSerializer.parseFromStr(type)) }
-					: { $kind: 'None', None: true },
-				objects.map((o) => parse(Argument, o)),
-			],
+			MakeMoveVec: {
+				type: type ?? null,
+				objects: objects.map((o) => parse(Argument, o)),
+			},
 		};
 	},
 };
