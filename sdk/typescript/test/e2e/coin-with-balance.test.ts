@@ -28,7 +28,15 @@ describe('coinWithBalance', () => {
 		const txb = new TransactionBlock();
 		const receiver = new Ed25519Keypair();
 
-		txb.transferObjects([coinWithBalance('0x2::sui::SUI', 12345n)], receiver.toSuiAddress());
+		txb.transferObjects(
+			[
+				coinWithBalance({
+					type: 'gas',
+					balance: 12345n,
+				}),
+			],
+			receiver.toSuiAddress(),
+		);
 		txb.setSender(publishToolbox.keypair.toSuiAddress());
 
 		expect(
@@ -58,7 +66,7 @@ describe('coinWithBalance', () => {
 					Intent: {
 						data: {
 							balance: '12345',
-							type: '0x2::sui::SUI',
+							type: 'gas',
 						},
 						inputs: {},
 						name: 'CoinWithBalance',
@@ -167,7 +175,15 @@ describe('coinWithBalance', () => {
 		const txb = new TransactionBlock();
 		const receiver = new Ed25519Keypair();
 
-		txb.transferObjects([coinWithBalance(testType, 1n)], receiver.toSuiAddress());
+		txb.transferObjects(
+			[
+				coinWithBalance({
+					type: testType,
+					balance: 1n,
+				}),
+			],
+			receiver.toSuiAddress(),
+		);
 		txb.setSender(publishToolbox.keypair.toSuiAddress());
 
 		expect(
@@ -246,11 +262,6 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					Object: {
-						ImmOrOwnedObject: expect.anything(),
-					},
-				},
-				{
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(1).toBytes()),
 					},
@@ -259,11 +270,11 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					MergeCoins: {
-						destination: {
+					SplitCoins: {
+						coin: {
 							Input: 1,
 						},
-						sources: [
+						amounts: [
 							{
 								Input: 2,
 							},
@@ -271,20 +282,8 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					SplitCoins: {
-						coin: {
-							Input: 1,
-						},
-						amounts: [
-							{
-								Input: 3,
-							},
-						],
-					},
-				},
-				{
 					TransferObjects: {
-						objects: [{ NestedResult: [1, 0] }],
+						objects: [{ NestedResult: [0, 0] }],
 						address: {
 							Input: 0,
 						},
@@ -326,10 +325,10 @@ describe('coinWithBalance', () => {
 
 		txb.transferObjects(
 			[
-				coinWithBalance(testType, 1n),
-				coinWithBalance(testType, 2n),
-				coinWithBalance('0x2::sui::SUI', 3n),
-				coinWithBalance('0x2::sui::SUI', 4n),
+				coinWithBalance({ type: testType, balance: 1n }),
+				coinWithBalance({ type: testType, balance: 2n }),
+				coinWithBalance({ type: 'gas', balance: 3n }),
+				coinWithBalance({ type: 'gas', balance: 4n }),
 			],
 			receiver.toSuiAddress(),
 		);
@@ -383,7 +382,7 @@ describe('coinWithBalance', () => {
 					Intent: {
 						data: {
 							balance: '3',
-							type: '0x2::sui::SUI',
+							type: 'gas',
 						},
 						inputs: {},
 						name: 'CoinWithBalance',
@@ -393,7 +392,7 @@ describe('coinWithBalance', () => {
 					Intent: {
 						data: {
 							balance: '4',
-							type: '0x2::sui::SUI',
+							type: 'gas',
 						},
 						inputs: {},
 						name: 'CoinWithBalance',
@@ -451,11 +450,6 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					Object: {
-						ImmOrOwnedObject: expect.anything(),
-					},
-				},
-				{
 					Pure: {
 						bytes: toB64(bcs.u64().serialize(1).toBytes()),
 					},
@@ -479,11 +473,11 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					MergeCoins: {
-						destination: {
+					SplitCoins: {
+						coin: {
 							Input: 1,
 						},
-						sources: [
+						amounts: [
 							{
 								Input: 2,
 							},
@@ -505,7 +499,7 @@ describe('coinWithBalance', () => {
 				{
 					SplitCoins: {
 						coin: {
-							Input: 1,
+							GasCoin: true,
 						},
 						amounts: [
 							{
@@ -527,24 +521,12 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					SplitCoins: {
-						coin: {
-							GasCoin: true,
-						},
-						amounts: [
-							{
-								Input: 6,
-							},
-						],
-					},
-				},
-				{
 					TransferObjects: {
 						objects: [
+							{ NestedResult: [0, 0] },
 							{ NestedResult: [1, 0] },
 							{ NestedResult: [2, 0] },
 							{ NestedResult: [3, 0] },
-							{ NestedResult: [4, 0] },
 						],
 						address: {
 							Input: 0,

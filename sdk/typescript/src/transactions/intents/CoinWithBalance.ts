@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/bcs';
+import { bigint, object, parse, string } from 'valibot';
 
-import type { CoinStruct } from '../../client/index.js';
+import type { CoinStruct, SuiClient } from '../../client/index.js';
+import { normalizeStructTag } from '../../utils/sui-types.js';
 import type { Argument } from '../blockData/internal.js';
 import { Inputs } from '../Inputs.js';
 import type { BuildTransactionBlockOptions } from '../json-rpc-resolver.js';
@@ -13,10 +15,20 @@ import type { TransactionBlockDataBuilder } from '../TransactionBlockData.js';
 import { Transactions } from '../Transactions.js';
 
 const COIN_WITH_BALANCE = 'CoinWithBalance';
+const SUI_TYPE = normalizeStructTag('0x2::sui::SUI');
 
-export function coinWithBalance(type: string, balance: bigint | number) {
+export function coinWithBalance({
+	type,
+	balance,
+	useGasCoin = true,
+}: {
+	type: string;
+	balance: bigint | number;
+	useGasCoin?: boolean;
+}) {
 	return (txb: TransactionBlock) => {
 		txb.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
+		const coinType = type === 'gas' ? type : normalizeStructTag(type);
 
 		return txb.add({
 			$kind: 'Intent',
@@ -24,13 +36,18 @@ export function coinWithBalance(type: string, balance: bigint | number) {
 				name: COIN_WITH_BALANCE,
 				inputs: {},
 				data: {
-					type,
+					type: coinType === SUI_TYPE && useGasCoin ? 'gas' : coinType,
 					balance,
 				},
 			},
 		});
 	};
 }
+
+const CoinWithBalanceData = object({
+	type: string(),
+	balance: bigint(),
+});
 
 async function resolveCoinBalance(
 	blockData: TransactionBlockDataBuilder,
@@ -46,14 +63,12 @@ async function resolveCoinBalance(
 
 	for (const transaction of blockData.transactions) {
 		if (transaction.$kind === 'Intent' && transaction.Intent.name === COIN_WITH_BALANCE) {
-			const { type, balance } = transaction.Intent.data as {
-				type: string;
-				balance: bigint;
-			};
+			const { type, balance } = parse(CoinWithBalanceData, transaction.Intent.data);
 
-			if (type !== '0x2::sui::SUI') {
+			if (type !== 'gas') {
 				coinTypes.add(type);
 			}
+
 			totalByType.set(type, (totalByType.get(type) ?? 0n) + balance);
 		}
 	}
@@ -63,27 +78,31 @@ async function resolveCoinBalance(
 		if (input.Object?.ImmOrOwnedObject) {
 			usedIds.add(input.Object.ImmOrOwnedObject.objectId);
 		}
+		if (input.UnresolvedObject?.objectId) {
+			usedIds.add(input.UnresolvedObject.objectId);
+		}
 	}
 
 	const coinsByType = new Map<string, CoinStruct[]>();
 	const client = getClient(buildOptions);
 	await Promise.all(
 		[...coinTypes].map(async (coinType) => {
-			const result = await client.getCoins({ owner: blockData.sender!, coinType });
-
-			if (result.data.length === 0) {
-				throw new Error(`No coins of type ${coinType} owned by ${blockData.sender}`);
-			}
-
 			coinsByType.set(
 				coinType,
-				result.data.filter((coin) => !usedIds.has(coin.coinObjectId)),
+				await getCoinsOfType({
+					coinType,
+					balance: totalByType.get(coinType)!,
+					client,
+					owner: blockData.sender!,
+					usedIds,
+				}),
 			);
 		}),
 	);
 
 	const mergedCoins = new Map<string, Argument>();
-	mergedCoins.set('0x2::sui::SUI', { $kind: 'GasCoin', GasCoin: true });
+
+	mergedCoins.set('gas', { $kind: 'GasCoin', GasCoin: true });
 
 	for (const [index, transaction] of blockData.transactions.entries()) {
 		if (transaction.$kind !== 'Intent' || transaction.Intent.name !== COIN_WITH_BALANCE) {
@@ -137,4 +156,50 @@ async function resolveCoinBalance(
 	}
 
 	return next();
+}
+
+async function getCoinsOfType({
+	coinType,
+	balance,
+	client,
+	owner,
+	usedIds,
+}: {
+	coinType: string;
+	balance: bigint;
+	client: SuiClient;
+	owner: string;
+	usedIds: Set<string>;
+}): Promise<CoinStruct[]> {
+	let remainingBalance = balance;
+	const coins: CoinStruct[] = [];
+
+	return loadMoreCoins();
+
+	async function loadMoreCoins(cursor: string | null = null): Promise<CoinStruct[]> {
+		const { data, hasNextPage, nextCursor } = await client.getCoins({ owner, coinType, cursor });
+
+		const sortedCoins = data.sort((a, b) => Number(BigInt(b.balance) - BigInt(a.balance)));
+
+		for (const coin of sortedCoins) {
+			if (usedIds.has(coin.coinObjectId)) {
+				continue;
+			}
+
+			const coinBalance = BigInt(coin.balance);
+
+			coins.push(coin);
+			remainingBalance -= coinBalance;
+
+			if (remainingBalance <= 0) {
+				return coins;
+			}
+		}
+
+		if (hasNextPage) {
+			return loadMoreCoins(nextCursor);
+		}
+
+		throw new Error(`Not enough coins of type ${coinType} to satisfy requested balance`);
+	}
 }
