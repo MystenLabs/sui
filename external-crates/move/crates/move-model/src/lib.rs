@@ -24,10 +24,10 @@ use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{Diagnostics, WarningFilters},
-    expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
-    parser::ast::{self as P},
+    expansion::ast::{self as E, ModuleIdent, ModuleIdent_, TargetKind},
+    parser::ast as P,
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
-    typing::ast::{self as T},
+    typing::ast as T,
     Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::account_address::AccountAddress;
@@ -235,7 +235,9 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let E::Program { modules } = expansion_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });
@@ -246,7 +248,9 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let T::Program_ { modules } = inner;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });

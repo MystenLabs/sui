@@ -4,7 +4,7 @@
 
 use crate::{
     diagnostics::WarningFilters,
-    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability},
+    expansion::ast::{Attributes, Friend, ModuleIdent, Mutability, TargetKind},
     hlir::ast::{
         BaseType, Command, Command_, EnumDefinition, FunctionSignature, Label, SingleType,
         StructDefinition, Var, Visibility,
@@ -38,7 +38,7 @@ pub struct ModuleDefinition {
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     /// `dependency_order` is the topological order/rank in the dependency graph.
     pub dependency_order: usize,
     pub friends: UniqueMap<ModuleIdent, Friend>,
@@ -203,7 +203,7 @@ impl AstDebug for ModuleDefinition {
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             friends,
             structs,
@@ -216,11 +216,15 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        if *is_source_module {
-            w.writeln("library module")
-        } else {
-            w.writeln("source module")
-        }
+        w.writeln(match target_kind {
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
+        });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
