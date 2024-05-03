@@ -1,5 +1,5 @@
 ---
-title: Reviews Rating
+title: Review Rating
 ---
 
 The following documentation goes through an example implementation of a review rating platform for the food service industry on Sui.
@@ -93,7 +93,9 @@ public fun register_service(db: &mut Dashboard, service_id: ID) {
 ```
 
 A `Dashboard` is a [shared object](../../../concepts/object-ownership/shared.mdx), so any service owner can register their service to a dashboard.
+A service owner should look for dashboards that best match their service attribute and register.
 A [dynamic field](../../../concepts/dynamic-fields.mdx) stores the list of services that are registered to a dashboard.
+A service may be registered to multiple dashboards at the same time. For example, a Chinese-Italian fusion restaurant may be registered to both the Chinese and Italian dashboards.
 
 :::info
 
@@ -171,7 +173,7 @@ The pool of `SUI` tokens to be distributed to reviewers is stored in the `reward
 #### Storage for reviews
 
 Because anyone can submit a review for a service, `Service` is defined as a shared object. All the reviews are stored in the `reviews` field, which has [ObjectTable](../../../concepts/sui-move-concepts/collections.mdx#object_table)`<ID, Review>` type. The `reviews` are stored as children of the shared object, but they are still accessible by their `ID`.
-In other words, anyone can go to a transaction explorer and find a review object by its `object_id` but they won't be able to use a review as an input to a transaction by its `object_id`.
+In other words, anyone can go to a transaction explorer and find a review object by its object ID, but they won't be able to use a review as an input to a transaction by its object ID.
 
 :::info
 
