@@ -130,7 +130,7 @@ const addCodeInject = function (source) {
                 const funMatch = funRE.exec(injectFileContent);
                 if (funMatch) {
                   let preFun = capturePrepend(funMatch);
-                  if (!checkBracesBalance(injectFileContent)) {
+                  if (!checkBracesBalance(funMatch[0])) {
                     injectFileContent =
                       "Could not find valid function definition. If code is formatted correctly, consider using code comments instead.";
                   } else {
@@ -227,42 +227,44 @@ const addCodeInject = function (source) {
                 const pauseStr = `\\/\\/\\s?docs::${marker.trim()}-pause:?(.*)`;
                 const pauseRE = new RegExp(pauseStr, "g");
                 let matches = injectFileContent.match(pauseRE);
-                for (let match of matches) {
-                  const test = matches[match].replace(
-                    /[.*+?^${}()|[\]\\]/g,
-                    "\\$&",
-                  );
-                  let replacer = "";
-                  if (matches[match].indexOf("-pause:") > 0) {
-                    replacer = matches[match].substring(
-                      matches[match].indexOf("-pause") + 8,
+                if (matches) {
+                  for (let match of matches) {
+                    const test = matches[match].replace(
+                      /[.*+?^${}()|[\]\\]/g,
+                      "\\$&",
                     );
-                  }
+                    let replacer = "";
+                    if (matches[match].indexOf("-pause:") > 0) {
+                      replacer = matches[match].substring(
+                        matches[match].indexOf("-pause") + 8,
+                      );
+                    }
 
-                  const newRE = new RegExp(test);
-                  const resumeRE = new RegExp(
-                    `\\/\\/\\s?docs::${marker.trim()}-resume`,
-                  );
-                  let paused;
-                  if (replacer !== "") {
-                    paused = new RegExp(
-                      newRE.source.replace(":?(.*)", "") +
-                        ".*?" +
-                        resumeRE.source,
-                      "gs",
+                    const newRE = new RegExp(test);
+                    const resumeRE = new RegExp(
+                      `\\/\\/\\s?docs::${marker.trim()}-resume`,
                     );
-                  } else {
-                    paused = new RegExp(
-                      newRE.source.replace(":?(.*)", "") +
-                        "(?!:).*?" +
-                        resumeRE.source,
-                      "gs",
+                    let paused;
+                    if (replacer !== "") {
+                      paused = new RegExp(
+                        newRE.source.replace(":?(.*)", "") +
+                          ".*?" +
+                          resumeRE.source,
+                        "gs",
+                      );
+                    } else {
+                      paused = new RegExp(
+                        newRE.source.replace(":?(.*)", "") +
+                          "(?!:).*?" +
+                          resumeRE.source,
+                        "gs",
+                      );
+                    }
+                    injectFileContent = injectFileContent.replace(
+                      paused,
+                      replacer,
                     );
                   }
-                  injectFileContent = injectFileContent.replace(
-                    paused,
-                    replacer,
-                  );
                 }
               }
 

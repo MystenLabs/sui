@@ -2,7 +2,7 @@
 title: In-Game Currency
 ---
 
-Using the Sui [Closed-Loop Token](../../../../standards/closed-loop-token.mdx) standard, you can create in-game currency (such as gems or diamonds in mobile games) that you can grant to players for their actions or make available to purchase. You mint the tokens on Sui, but players can only use the tokens within the economy of the game itself. These types of tokens are usually not transferrable and you would typically mint them in predefined amounts to maintain scarcity and game balance.
+Using the Sui [Closed-Loop Token](../../../standards/closed-loop-token.mdx) standard, you can create in-game currency (such as gems or diamonds in mobile games) that you can grant to players for their actions or make available to purchase. You mint the tokens on Sui, but players can only use the tokens within the economy of the game itself. These types of tokens are usually not transferrable and you would typically mint them in predefined amounts to maintain scarcity and game balance.
 
 The following example creates an in-game currency called a GEM, which represents a certain number of SUI. In the example, the user can buy fungible GEMs using SUI, which can then be used as currency within the game. Use the code comments to follow the logic of the example.
 
@@ -54,7 +54,7 @@ Toggle complete source code
 
 ## Related links
 
-- [Closed Loop Token standard](../../../../standards/closed-loop-token.mdx): Details for the standard used to create tokens on Sui.
+- [Closed Loop Token standard](../../../standards/closed-loop-token.mdx): Details for the standard used to create tokens on Sui.
 - [Source code](https://github.com/MystenLabs/sui/blob/main/examples/move/token/sources/gems.move): The source code in GitHub for this example.
 - [Loyalty Tokens](./loyalty.mdx): Example of how to create tokens that are valid only for a specific service, useful in loyalty reward programs.
 - [Regulated Coin and Deny List](./regulated.mdx): Example of how to create regulated coins on the Sui network.
