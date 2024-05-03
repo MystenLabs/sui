@@ -513,13 +513,15 @@ export const bcs = {
 				);
 
 				if (keys.length !== 1) {
-					throw new TypeError(`Expected object with one key, found ${keys.length}`);
+					throw new TypeError(
+						`Expected object with one key, but found ${keys.length} for type ${name}}`,
+					);
 				}
 
-				const [name] = keys;
+				const [variant] = keys;
 
-				if (!Object.hasOwn(values, name)) {
-					throw new TypeError(`Invalid enum variant ${name}`);
+				if (!Object.hasOwn(values, variant)) {
+					throw new TypeError(`Invalid enum variant ${variant}`);
 				}
 			},
 		});

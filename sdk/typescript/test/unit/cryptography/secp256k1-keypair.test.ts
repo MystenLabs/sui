@@ -12,7 +12,10 @@ import {
 	Secp256k1Keypair,
 } from '../../../src/keypairs/secp256k1';
 import { TransactionBlock } from '../../../src/transactions';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import {
+	verifyPersonalMessageSignature,
+	verifyTransactionBlockSignature,
+} from '../../../src/verify';
 
 const PRIVATE_KEY_SIZE = 32;
 
@@ -183,7 +186,7 @@ describe('secp256k1-keypair', () => {
 		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(!!(await verifyTransactionBlock(bytes, serializedSignature))).toEqual(true);
+		expect(!!(await verifyTransactionBlockSignature(bytes, serializedSignature))).toEqual(true);
 	});
 
 	it('signs PersonalMessages', async () => {
@@ -198,6 +201,6 @@ describe('secp256k1-keypair', () => {
 		expect(
 			await keypair.getPublicKey().verifyPersonalMessage(message, serializedSignature),
 		).toEqual(true);
-		expect(!!(await verifyPersonalMessage(message, serializedSignature))).toEqual(true);
+		expect(!!(await verifyPersonalMessageSignature(message, serializedSignature))).toEqual(true);
 	});
 });

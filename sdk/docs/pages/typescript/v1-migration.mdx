@@ -17,6 +17,8 @@
   TypeTag instead of String
 - `Transaction` enumKind to enum\, replaced nested structs with tuples to align with Rust
   definitions
+- Removed some type exports
+- Use typeof bcs.XYZ.$inferType instead
 
 ## /transactions
 
@@ -32,6 +34,9 @@
 
 - `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
 - added getBlockData that returns new v2 blockData
+- removed txb.pure(rawValue)
+- Added support for (txb) => input as transaction arguments
+- renamed packageId -> package in Upgrade command
 
 ### exports
 
@@ -46,25 +51,21 @@ Removed `is` and `assert` helpers
 
 - publicKeyFromSuiBytes moved to /verify
 
+## /verify
+
+- verifyTransactionBlock -> verifyTransactionBlockSignature
+- verifyPersonalMessage -> verifyPersonalMessageSignature
+
+## /cryptography
+
+- Removed intent enum exports (use bcs instead)
+
+# @mysten/bcs
+
+- removed registry
+- default maxSize of writer = Infinity
+- renamed `size` to `initialSize` in writer
+
 # TODO
 
-- Remove Input and Transaction exports?
-- Move helpers in inputs.ts
-- Should remove legacy BCS registry
-- Should remove BCS registry name exports
-- TransactionBlock constructor args?
-- Remove pure inputs without types
-- Need to export types for blockData
-- Remove all type-exports from bcs\, only export export implementations and helper types to get type
-  from implementation
-- Serialize should be updated to allow exporting v2 state
-- Define TypeTag output type rather than input type?
-- Use valibot parser in TypeTagSerializer
-- Figure out what bcs should still export
-- cleanup typescript/bcs exports
-- maybe remove intent exports from cryptography and just use bcs intent encoding/decoding directly
-- Should fromB64, toB64, fromHEX, toHEX still be exported from utils?
-- Parse typeArguments from string in input
-- rename normalizeInputs hook
-- accept `(txb) -> txb.object` as txb argument?
-- handle string and address structs when encoding raw values (see getPureSerializationType)
+- Update wallet standard

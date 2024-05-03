@@ -7,17 +7,24 @@ import { parse } from 'valibot';
 
 import { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import { transactionBlockStateFromV1BlockData } from './blockData/v1.js';
-import type { SerializedTransactionDataBuilderV1 } from './blockData/v1.js';
-import type { CallArg, GasData, Transaction, TransactionExpiration } from './blockData/v2.js';
-import { TransactionBlockState } from './blockData/v2.js';
+import type {
+	Argument,
+	CallArg,
+	GasData,
+	Transaction,
+	TransactionExpiration,
+} from './blockData/internal.js';
+import { TransactionBlockData } from './blockData/internal.js';
+import { transactionBlockDataFromV1 } from './blockData/v1.js';
+import type { SerializedTransactionBlockDataV1 } from './blockData/v1.js';
+import type { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
 import { hashTypedData } from './hash.js';
 
 function prepareSuiAddress(address: string) {
 	return normalizeSuiAddress(address).replace('0x', '');
 }
 
-export class TransactionBlockDataBuilder implements TransactionBlockState {
+export class TransactionBlockDataBuilder implements TransactionBlockData {
 	static fromKindBytes(bytes: Uint8Array) {
 		const kind = bcs.TransactionKind.parse(bytes);
 
@@ -28,7 +35,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 
 		return TransactionBlockDataBuilder.restore({
 			version: 2,
-			features: [],
 			sender: null,
 			expiration: null,
 			gasData: {
@@ -53,7 +59,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 
 		return TransactionBlockDataBuilder.restore({
 			version: 2,
-			features: [],
 			sender: data.sender,
 			expiration: data.expiration,
 			gasData: data.gasData,
@@ -63,13 +68,15 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 	}
 
 	static restore(
-		data: Input<typeof TransactionBlockState> | Input<typeof SerializedTransactionDataBuilderV1>,
+		data:
+			| Input<typeof SerializedTransactionBlockDataV2>
+			| Input<typeof SerializedTransactionBlockDataV1>,
 	) {
 		if (data.version === 2) {
-			return new TransactionBlockDataBuilder(parse(TransactionBlockState, data));
+			return new TransactionBlockDataBuilder(parse(TransactionBlockData, data));
 		} else {
 			return new TransactionBlockDataBuilder(
-				parse(TransactionBlockState, transactionBlockStateFromV1BlockData(data)),
+				parse(TransactionBlockData, transactionBlockDataFromV1(data)),
 			);
 		}
 	}
@@ -94,7 +101,6 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		this.gasData = value;
 	}
 
-	features: string[];
 	version = 2 as const;
 	sender: string | null;
 	expiration: TransactionExpiration | null;
@@ -102,8 +108,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 	inputs: CallArg[];
 	transactions: Transaction[];
 
-	constructor(clone?: TransactionBlockState) {
-		this.features = clone?.features ?? [];
+	constructor(clone?: TransactionBlockData) {
 		this.sender = clone?.sender ?? null;
 		this.expiration = clone?.expiration ?? null;
 		this.inputs = clone?.inputs ?? [];
@@ -131,12 +136,17 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		};
 		onlyTransactionKind?: boolean;
 	} = {}) {
-		// TODO validate that inputs are actually resolved
-		const inputs = this.inputs as Extract<CallArg, { Object: unknown } | { Pure: unknown }>[];
+		// TODO validate that inputs and intents are actually resolved
+		const inputs = this.inputs as (typeof bcs.CallArg.$inferInput)[];
+		const transactions = this.transactions as Extract<
+			Transaction<Exclude<Argument, { IntentResult: unknown } | { NestedIntentResult: unknown }>>,
+			{ Upgrade: unknown }
+		>[];
+
 		const kind = {
 			ProgrammableTransaction: {
 				inputs,
-				transactions: this.transactions,
+				transactions,
 			},
 		};
 
@@ -176,7 +186,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 			kind: {
 				ProgrammableTransaction: {
 					inputs,
-					transactions: this.transactions,
+					transactions,
 				},
 			},
 		};
@@ -187,12 +197,88 @@ export class TransactionBlockDataBuilder implements TransactionBlockState {
 		).toBytes();
 	}
 
+	addInput<T extends 'object' | 'pure'>(type: T, arg: CallArg) {
+		const index = this.inputs.length;
+		this.inputs.push(arg);
+		return { Input: index, type, $kind: 'Input' as const };
+	}
+
+	mapArguments(fn: (arg: Argument) => Argument) {
+		for (const tx of this.transactions) {
+			switch (tx.$kind) {
+				case 'MoveCall':
+					tx.MoveCall.arguments = tx.MoveCall.arguments.map((arg) => fn(arg));
+					break;
+				case 'TransferObjects':
+					tx.TransferObjects.objects = tx.TransferObjects.objects.map((arg) => fn(arg));
+					tx.TransferObjects.address = fn(tx.TransferObjects.address);
+					break;
+				case 'SplitCoins':
+					tx.SplitCoins.coin = fn(tx.SplitCoins.coin);
+					tx.SplitCoins.amounts = tx.SplitCoins.amounts.map((arg) => fn(arg));
+					break;
+				case 'MergeCoins':
+					tx.MergeCoins.destination = fn(tx.MergeCoins.destination);
+					tx.MergeCoins.sources = tx.MergeCoins.sources.map((arg) => fn(arg));
+					break;
+				case 'MakeMoveVec':
+					tx.MakeMoveVec.objects = tx.MakeMoveVec.objects.map((arg) => fn(arg));
+					break;
+				case 'Upgrade':
+					tx.Upgrade.ticket = fn(tx.Upgrade.ticket);
+					break;
+				case 'Intent':
+					const inputs = tx.Intent.inputs;
+					tx.Intent.inputs = {};
+
+					for (const [key, value] of Object.entries(inputs)) {
+						tx.Intent.inputs[key] = Array.isArray(value) ? value.map((arg) => fn(arg)) : fn(value);
+					}
+
+					break;
+				case 'Publish':
+					break;
+				default:
+					throw new Error(`Unexpected transaction kind: ${(tx as { $kind: unknown }).$kind}`);
+			}
+		}
+	}
+
+	replaceTransaction(index: number, replacement: Transaction | Transaction[]) {
+		if (!Array.isArray(replacement)) {
+			this.transactions[index] = replacement;
+			return;
+		}
+
+		const sizeDiff = replacement.length - 1;
+		this.transactions.splice(index, 1, ...replacement);
+
+		if (sizeDiff !== 0) {
+			this.mapArguments((arg) => {
+				switch (arg.$kind) {
+					case 'Result':
+						if (arg.Result > index) {
+							arg.Result += sizeDiff;
+						}
+						break;
+
+					case 'NestedResult':
+						if (arg.NestedResult[0] > index) {
+							arg.NestedResult[0] += sizeDiff;
+						}
+						break;
+				}
+				return arg;
+			});
+		}
+	}
+
 	getDigest() {
 		const bytes = this.build({ onlyTransactionKind: false });
 		return TransactionBlockDataBuilder.getDigestFromBytes(bytes);
 	}
 
-	snapshot(): TransactionBlockState {
-		return parse(TransactionBlockState, this);
+	snapshot(): TransactionBlockData {
+		return parse(TransactionBlockData, this);
 	}
 }

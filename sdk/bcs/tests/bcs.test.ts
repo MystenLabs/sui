@@ -20,7 +20,7 @@ describe('BCS: Primitives', () => {
 			is_locked: false,
 		};
 
-		const setBytes = Coin.serialize(expected, { size: 1, maxSize: 1024 });
+		const setBytes = Coin.serialize(expected, { initialSize: 1, maxSize: 1024 });
 
 		expect(Coin.parse(fromB64(rustBcs))).toEqual(expected);
 		expect(setBytes.toBase64()).toEqual(rustBcs);
@@ -39,6 +39,6 @@ describe('BCS: Primitives', () => {
 			is_locked: false,
 		};
 
-		expect(() => Coin.serialize(expected, { size: 1 })).toThrowError();
+		expect(() => Coin.serialize(expected, { initialSize: 1, maxSize: 1 })).toThrowError();
 	});
 });

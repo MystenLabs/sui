@@ -41,7 +41,10 @@ export class BcsType<T, Input = T> {
 		this.#serialize =
 			options.serialize ??
 			((value, options) => {
-				const writer = new BcsWriter({ size: this.serializedSize(value) ?? undefined, ...options });
+				const writer = new BcsWriter({
+					initialSize: this.serializedSize(value) ?? undefined,
+					...options,
+				});
 				this.#write(value, writer);
 				return writer.toBytes();
 			});

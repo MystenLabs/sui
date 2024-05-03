@@ -22,7 +22,7 @@ export async function verifySignature(bytes: Uint8Array, signature: string): Pro
 	return parsedSignature.publicKey;
 }
 
-export async function verifyPersonalMessage(
+export async function verifyPersonalMessageSignature(
 	message: Uint8Array,
 	signature: string,
 ): Promise<PublicKey> {
@@ -40,7 +40,7 @@ export async function verifyPersonalMessage(
 	return parsedSignature.publicKey;
 }
 
-export async function verifyTransactionBlock(
+export async function verifyTransactionBlockSignature(
 	transactionBlock: Uint8Array,
 	signature: string,
 ): Promise<PublicKey> {
