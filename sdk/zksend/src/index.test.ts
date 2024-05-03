@@ -437,6 +437,49 @@ describe('Non contract links', () => {
 			timeout: 30_000,
 		},
 	);
+
+	test(
+		'Send to address',
+		async () => {
+			const link = new ZkSendLinkBuilder({
+				client,
+				sender: keypair.toSuiAddress(),
+				contract: null,
+			});
+
+			const bears = await createBears(3);
+
+			for (const bear of bears) {
+				link.addClaimableObject(bear.objectId);
+			}
+
+			link.addClaimableMist(100n);
+
+			const receiver = new Ed25519Keypair();
+
+			const txb = await link.createSendToAddressTransaction({
+				address: receiver.toSuiAddress(),
+			});
+
+			const { digest } = await client.signAndExecuteTransactionBlock({
+				transactionBlock: txb,
+				signer: keypair,
+			});
+
+			await client.waitForTransactionBlock({
+				digest,
+			});
+
+			const objects = await client.getOwnedObjects({
+				owner: receiver.toSuiAddress(),
+			});
+
+			expect(objects.data.length).toEqual(4);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
 });
 
 async function createBears(totalBears: number) {
