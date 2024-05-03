@@ -67,11 +67,11 @@ const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedS
 
 ## Multisig with zkLogin
 
-zkLogin can be used to participate in multisig just like keys for other signature schemes. Unlike
-other keys that come with a public key, we define a public identifier for zkLogin.
+You can use zkLogin to participate in multisig just like keys for other signature schemes. Unlike
+other keys that come with a public key, you define a public identifier for zkLogin.
 
-For example, a 1-out-of-2 multisig with a single key and a zkLogin public identifier is created as
-follows:
+For example, the following example creates a 1-out-of-2 multisig with a single key and a zkLogin
+public identifier:
 
 ```typescript
 // a single Ed25519 keypair and its public key.
@@ -100,7 +100,7 @@ const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
 const multisigAddress = multiSigPublicKey.toSuiAddress();
 
 // create a regular zklogin signature from the zkproof and ephemeral signature for zkLogin.
-// See zklogin-integration.mdx for more details.
+// see zklogin-integration.mdx for more details.
 const zkLoginSig = getZkLoginSignature({
 	inputs: zkLoginInputs,
 	maxEpoch: '2',
@@ -113,21 +113,21 @@ const multisig = multiSigPublicKey.combinePartialSignatures([zkLoginSig]);
 
 ### Benefits and Design for zkLogin in Multisig
 
-Because zkLogin assumes the application client ID and its issuer (e.g. Google)'s liveliness, using
-zkLogin with multisig provides improved recoverability to a zkLogin account. In the above example of
-1-out-of-2 multisig, user can use zkLogin in their regular wallet flow, but if the application
-and/or the issuer is deprecated, the user can still use the regular private key account to access
-funds in the multisig wallet.
+Because zkLogin assumes the application client ID and its issuer (such as Google) liveliness, using
+zkLogin with multisig provides improved recoverability to a zkLogin account. In the previous example
+of 1-out-of-2 multisig, users can use zkLogin in their regular wallet flow, but if the application
+or the issuer is deprecated, the user can still use the regular private key account to access funds
+in the multisig wallet.
 
-This also opens the doors to design multisig across any numbers of zkLogin accounts and of different
-providers (max number is capped at 10 accounts) with customizable weights and threshold. For
-example, one can set up a multisig address with threshold as 2, where the public keys or identifiers
+This also opens the door to design multisig across any number of zkLogin accounts and of different
+providers (max number is capped at 10 accounts) with customizable weights and thresholds. For
+example, you can set up a multisig address with threshold of 2, where the public keys or identifiers
 are defined as:
 
-1. His own Google account with weight 2
-2. His friend Alice's Apple account with weight 1
-3. His friend Bob's Facebook account with weight 1
+1. Charlie's own Google account with weight 2
+2. Charlie's friend Alice's Apple account with weight 1
+3. Charlie's friend Bob's Facebook account with weight 1
 
-In this case, he can always use his Google account for transactions out of the multisig address for
-the threshold. At the same time, he still have access to his account by combining partial signatures
-from Alice and Bob.
+In this case, Charlie can always use their Google account for transactions out of the multisig
+address for the threshold. At the same time, Charlie still has access to his account by combining
+partial signatures from Alice and Bob.
