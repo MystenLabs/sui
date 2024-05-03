@@ -14,6 +14,8 @@ import type {
 	StandardEventsOnMethod,
 	SuiSignPersonalMessageFeature,
 	SuiSignPersonalMessageMethod,
+	SuiSignTransactionBlockFeature,
+	SuiSignTransactionBlockMethod,
 	SuiSignTransactionBlockV2Feature,
 	SuiSignTransactionBlockV2Method,
 	Wallet,
@@ -61,6 +63,7 @@ export class StashedWallet implements Wallet {
 	get features(): StandardConnectFeature &
 		StandardDisconnectFeature &
 		StandardEventsFeature &
+		SuiSignTransactionBlockFeature &
 		SuiSignTransactionBlockV2Feature &
 		SuiSignPersonalMessageFeature {
 		return {
@@ -76,9 +79,13 @@ export class StashedWallet implements Wallet {
 				version: '1.0.0',
 				on: this.#on,
 			},
+			'sui:signTransactionBlock': {
+				version: '1.0.0',
+				signTransactionBlock: this.#signTransactionBlock,
+			},
 			'sui:signTransactionBlock:v2': {
 				version: '2.0.0',
-				signTransactionBlock: this.#signTransactionBlock,
+				signTransactionBlock: this.#signTransactionBlockV2,
 			},
 			'sui:signPersonalMessage': {
 				version: '1.0.0',
@@ -106,7 +113,25 @@ export class StashedWallet implements Wallet {
 		}
 	}
 
-	#signTransactionBlock: SuiSignTransactionBlockV2Method = async ({
+	#signTransactionBlock: SuiSignTransactionBlockMethod = async ({ transactionBlock, account }) => {
+		transactionBlock.setSenderIfNotSet(account.address);
+
+		const data = transactionBlock.serialize();
+
+		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
+		const response = await popup.createRequest({
+			type: 'sign-transaction-block',
+			data,
+			address: account.address,
+		});
+
+		return {
+			transactionBlockBytes: response.bytes,
+			signature: response.signature,
+		};
+	};
+
+	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
 		transactionBlock,
 		account,
 	}) => {

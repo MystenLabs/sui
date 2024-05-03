@@ -1,17 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { bcs } from '@mysten/sui.js/bcs';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { fromB64, toB64 } from '@mysten/sui.js/utils';
 import type { Wallet, WalletWithFeatures } from '@wallet-standard/core';
 import { getWallets } from '@wallet-standard/core';
 
 import { isWalletWithRequiredFeatureSet } from './detect.js';
-
-import './features/index.js';
-
-import { bcs } from '@mysten/sui.js/bcs';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-
 import type { MinimallyRequiredFeatures, SuiWalletFeatures } from './features/index.js';
 
 declare module '@wallet-standard/core' {

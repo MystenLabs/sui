@@ -44,16 +44,13 @@ type UseSignAndExecuteTransactionBlockMutationOptions = Omit<
 		unknown
 	>,
 	'mutationFn'
-> & {
-	executeFromWallet?: boolean;
-};
+>;
 
 /**
  * Mutation hook for prompting the user to sign and execute a transaction block.
  */
 export function useSignAndExecuteTransactionBlock({
 	mutationKey,
-	executeFromWallet,
 	...mutationOptions
 }: UseSignAndExecuteTransactionBlockMutationOptions = {}): UseMutationResult<
 	UseSignAndExecuteTransactionBlockResult,
@@ -78,12 +75,10 @@ export function useSignAndExecuteTransactionBlock({
 				);
 			}
 
-			const shouldExecuteFromWallet =
-				executeFromWallet ||
-				(executeFromWallet === undefined &&
-					currentWallet.features['sui:signAndExecuteTransactionBlock:v2']);
+			const canExecuteFromWallet =
+				!!currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
 
-			if (shouldExecuteFromWallet) {
+			if (canExecuteFromWallet) {
 				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
 				if (!walletFeature) {
 					throw new WalletFeatureNotSupportedError(
@@ -126,12 +121,6 @@ export function useSignAndExecuteTransactionBlock({
 					showRawEffects: true,
 					showBalanceChanges: true,
 				},
-			});
-
-			console.log({
-				rawEffects,
-				balanceChanges,
-				digest,
 			});
 
 			return {
