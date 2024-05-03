@@ -393,8 +393,6 @@ pub enum SuiError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSigs,
-    #[error("System Transaction not accepted")]
-    InvalidSystemTransaction,
 
     // Account access
     #[error("Invalid authenticator")]
