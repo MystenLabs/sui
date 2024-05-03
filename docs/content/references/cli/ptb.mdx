@@ -125,6 +125,25 @@ All the following examples were tested using a `bash` shell environment and your
 
 :::
 
+### Types
+
+Sometimes, CLI PTBs require that you specify the type of a value or variable. For instance, in the following example you must provide the `<u64>` type when calling the `0x1::option::is_none` function.
+
+```shell
+sui client ptb \
+--assign my_variable none \
+--move-call 0x1::option::is_none "<u64>" my_variable \
+--gas-budget 50000000
+```
+
+To pass in multiple types, delimit them with a comma:
+
+```shell
+...
+--move-call package::module::function "<u64,u8,u256>" \
+...
+```
+
 ### Strings
 
 CLI PTBs support string literals as inputs, which will be encoded as pure values that can be used as inputs to `vector<u8>`, `std::ascii::String` and `std::string::String` parameters. The following example previews a transaction block that passes the string `"Hello, world"` to a function `m::f` in a package `$PKG` (its ID is held in an environment variable).
