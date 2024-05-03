@@ -24,14 +24,8 @@ const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
 /// by calling the `acknowledge` method. If the guard is dropped without getting acknowledged then
 /// that means the transaction has not been included to a block and the consensus is shutting down.
 pub(crate) struct TransactionGuard {
-    pub transaction: Transaction,
+    transaction: Transaction,
     included_in_block_ack: oneshot::Sender<()>,
-}
-
-impl TransactionGuard {
-    pub fn acknowledge(self) {
-        self.included_in_block_ack.send(()).ok();
-    }
 }
 
 /// The TransactionConsumer is responsible for fetching the next transactions to be included for the block proposals.
@@ -63,14 +57,16 @@ impl TransactionConsumer {
 
     // Attempts to fetch the next transactions that have been submitted for sequence. Also a `max_consumed_bytes_per_request` parameter
     // is given in order to ensure up to `max_consumed_bytes_per_request` bytes of transactions are retrieved.
-    pub(crate) fn next(&mut self) -> Vec<TransactionGuard> {
+    pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce()>) {
         let mut transactions = Vec::new();
+        let mut acks = Vec::new();
         let mut total_size: usize = 0;
 
         if let Some(t) = self.pending_transaction.take() {
             // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
             total_size += t.transaction.data().len();
-            transactions.push(t);
+            transactions.push(t.transaction);
+            acks.push(t.included_in_block_ack);
         }
 
         while let Ok(t) = self.tx_receiver.try_recv() {
@@ -82,13 +78,34 @@ impl TransactionConsumer {
                 break;
             }
 
-            transactions.push(t);
+            transactions.push(t.transaction);
+            acks.push(t.included_in_block_ack);
 
             if transactions.len() as u64 >= self.max_consumed_transactions_per_request {
                 break;
             }
         }
-        transactions
+
+        (
+            transactions,
+            Box::new(move || {
+                for ack in acks {
+                    let _ = ack.send(());
+                }
+            }),
+        )
+    }
+
+    #[cfg(test)]
+    fn is_empty(&mut self) -> bool {
+        if self.pending_transaction.is_some() {
+            return false;
+        }
+        if let Ok(t) = self.tx_receiver.try_recv() {
+            self.pending_transaction = Some(t);
+            return false;
+        }
+        true
     }
 }
 
@@ -201,7 +218,7 @@ impl TransactionVerifier for NoopTransactionVerifier {
 #[cfg(test)]
 mod tests {
     use crate::context::Context;
-    use crate::transaction::{TransactionClient, TransactionConsumer, TransactionGuard};
+    use crate::transaction::{TransactionClient, TransactionConsumer};
     use futures::stream::FuturesUnordered;
     use futures::StreamExt;
     use std::sync::Arc;
@@ -234,11 +251,11 @@ mod tests {
         }
 
         // now pull the transactions from the consumer
-        let transactions = consumer.next();
+        let (transactions, ack_transactions) = consumer.next();
         assert_eq!(transactions.len(), 3);
 
         for (i, t) in transactions.iter().enumerate() {
-            let t: String = bcs::from_bytes(t.transaction.data()).unwrap();
+            let t: String = bcs::from_bytes(t.data()).unwrap();
             assert_eq!(format!("transaction {i}").to_string(), t);
         }
 
@@ -250,9 +267,7 @@ mod tests {
         );
 
         // Now acknowledge the inclusion of transactions
-        transactions
-            .into_iter()
-            .for_each(TransactionGuard::acknowledge);
+        ack_transactions();
 
         // Now make sure that all the waiters have returned
         while let Some(result) = included_in_block_waiters.next().await {
@@ -260,7 +275,7 @@ mod tests {
         }
 
         // try to pull again transactions, result should be empty
-        assert!(consumer.next().is_empty());
+        assert!(consumer.is_empty());
     }
 
     #[tokio::test]
@@ -287,14 +302,11 @@ mod tests {
 
         // now pull the transactions from the consumer
         let mut all_transactions = Vec::new();
-        let transactions = consumer.next();
+        let (transactions, _ack_transactions) = consumer.next();
         assert_eq!(transactions.len(), 7);
 
         // ensure their total size is less than `max_bytes_to_fetch`
-        let total_size: u64 = transactions
-            .iter()
-            .map(|t| t.transaction.data().len() as u64)
-            .sum();
+        let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
             total_size
                 <= context
@@ -308,14 +320,11 @@ mod tests {
         all_transactions.extend(transactions);
 
         // try to pull again transactions, next should be provided
-        let transactions = consumer.next();
+        let (transactions, _ack_transactions) = consumer.next();
         assert_eq!(transactions.len(), 3);
 
         // ensure their total size is less than `max_bytes_to_fetch`
-        let total_size: u64 = transactions
-            .iter()
-            .map(|t| t.transaction.data().len() as u64)
-            .sum();
+        let total_size: u64 = transactions.iter().map(|t| t.data().len() as u64).sum();
         assert!(
             total_size
                 <= context
@@ -329,10 +338,10 @@ mod tests {
         all_transactions.extend(transactions);
 
         // try to pull again transactions, result should be empty
-        assert!(consumer.next().is_empty());
+        assert!(consumer.is_empty());
 
         for (i, t) in all_transactions.iter().enumerate() {
-            let t: String = bcs::from_bytes(t.transaction.data()).unwrap();
+            let t: String = bcs::from_bytes(t.data()).unwrap();
             assert_eq!(format!("transaction {i}").to_string(), t);
         }
     }

@@ -28,7 +28,7 @@ use crate::{
     leader_schedule::LeaderSchedule,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     threshold_clock::ThresholdClock,
-    transaction::{TransactionConsumer, TransactionGuard},
+    transaction::TransactionConsumer,
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
@@ -365,11 +365,7 @@ impl Core {
 
         // Consume the next transactions to be included. Do not drop the guards yet as this would acknowledge
         // the inclusion of transactions. Just let this be done in the end of the method.
-        let transaction_guards = self.transaction_consumer.next();
-        let transactions = transaction_guards
-            .iter()
-            .map(|t| t.transaction.clone())
-            .collect::<Vec<_>>();
+        let (transactions, ack_transactions) = self.transaction_consumer.next();
 
         // Consume the commit votes to be included.
         let commit_votes = self
@@ -418,9 +414,7 @@ impl Core {
         self.last_proposed_block = verified_block.clone();
 
         // Now acknowledge the transactions for their inclusion to block
-        transaction_guards
-            .into_iter()
-            .for_each(TransactionGuard::acknowledge);
+        ack_transactions();
 
         info!("Created block {:?}", verified_block);
 
