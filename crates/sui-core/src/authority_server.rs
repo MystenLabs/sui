@@ -575,15 +575,11 @@ impl ValidatorService {
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        // Being double cautious to also check this for certificates even though we have
-        // already checked when signing transactions.
-        Self::transaction_validity_check(&epoch_store, certificate.data()).tap_err(|err| {
-            // TODO: Send invariant violation metric in release mode; panic in debug mode.
-            error!(
-                "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
-                err
-            );
-        })?;
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        // We need to check this first because we haven't verified the cert signature.
+        Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
         let request = HandleCertificateRequestV3 {
@@ -609,15 +605,11 @@ impl ValidatorService {
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let certificate = request.into_inner();
-        // Being double cautious to also check this for certificates even though we have
-        // already checked when signing transactions.
-        Self::transaction_validity_check(&epoch_store, certificate.data()).tap_err(|err| {
-            // TODO: Send invariant violation metric in release mode; panic in debug mode.
-            error!(
-                "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
-                err
-            );
-        })?;
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        // We need to check this first because we haven't verified the cert signature.
+        Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
         let request = HandleCertificateRequestV3 {
@@ -646,18 +638,11 @@ impl ValidatorService {
     ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
-
-        // Being double cautious to also check this for certificates even though we have
-        // already checked when signing transactions.
-        Self::transaction_validity_check(&epoch_store, request.certificate.data()).tap_err(
-            |err| {
-                // TODO: Send invariant violation metric in release mode; panic in debug mode.
-                error!(
-                    "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
-                    err
-                );
-            },
-        )?;
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        // We need to check this first because we haven't verified the cert signature.
+        Self::transaction_validity_check(&epoch_store, request.certificate.data())?;
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
 
         self.handle_certificate(request, &epoch_store, true)
