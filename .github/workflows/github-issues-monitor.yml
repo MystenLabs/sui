@@ -1,4 +1,4 @@
-name: GitHubIssues
+name: GitHub Issues and External PRs Monitor
 
 on:
   issues:
