@@ -135,7 +135,12 @@ export function getAssetsFromTxnBlock({
 			isObjectOwner(change, normalizedAddress, isSent) &&
 			(change.type === 'created' || change.type === 'transferred' || change.type === 'mutated')
 		) {
-			nfts.push(change);
+			nfts.push({
+				objectId: change.objectId,
+				type: change.objectType,
+				version: change.version,
+				digest: change.digest,
+			});
 		}
 	});
 
