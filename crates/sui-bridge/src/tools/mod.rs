@@ -9,12 +9,18 @@ use crate::types::{
 use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
 use clap::*;
+use ethers::abi::param_type::Reader;
+use ethers::abi::token::{LenientTokenizer, Tokenizer};
+use ethers::abi::Abi;
+use ethers::contract::BaseContract;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::fs;
 use std::path::PathBuf;
+use std::str::FromStr;
 use sui_config::Config;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectRef;
@@ -106,8 +112,12 @@ pub enum GovernanceClientCommands {
         proxy_address: EthAddress,
         #[clap(name = "implementation-address", long)]
         implementation_address: EthAddress,
-        #[clap(name = "call-data", long)]
-        call_data: String,
+        #[clap(name = "contract-abi-name", long)]
+        contract_abi_name: String,
+        #[clap(name = "function-selector", long)]
+        function_selector: String,
+        #[clap(name = "params", long)]
+        params: Vec<String>,
     },
 }
 
@@ -158,14 +168,46 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             nonce,
             proxy_address,
             implementation_address,
-            call_data,
-        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-            nonce: *nonce,
-            chain_id,
-            proxy_address: *proxy_address,
-            new_impl_address: *implementation_address,
-            call_data: call_data.clone().into(),
-        }),
+            contract_abi_name,
+            function_selector,
+            params,
+        } => {
+            let abi_path = format!("./abi/{}.json", contract_abi_name);
+            let abi = fs::read_to_string(abi_path).unwrap();
+            let contract = BaseContract::from(serde_json::from_str::<Abi>(&abi.clone()).unwrap());
+
+            if contract_abi_name == "mock_sui_bridge_v2" {
+                let param1 =
+                    LenientTokenizer::tokenize(&Reader::read("uint256").unwrap(), &params[0])
+                        .unwrap()
+                        .into_uint()
+                        .unwrap();
+                let param2 = LenientTokenizer::tokenize(&Reader::read("bool").unwrap(), &params[1])
+                    .unwrap()
+                    .into_bool()
+                    .unwrap();
+                let param3 =
+                    LenientTokenizer::tokenize(&Reader::read("string").unwrap(), &params[2])
+                        .unwrap()
+                        .into_string()
+                        .unwrap();
+
+                // given function_selector like "initializeV2Params(uint256,bool,string)"
+                let call_data = contract
+                    .encode(&function_selector, (param1, param2, param3))
+                    .unwrap();
+
+                BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+                    nonce: *nonce,
+                    chain_id,
+                    proxy_address: *proxy_address,
+                    new_impl_address: *implementation_address,
+                    call_data: call_data.to_vec(),
+                })
+            } else {
+                panic!("Invalid contract name");
+            }
+        }
     }
 }
 
