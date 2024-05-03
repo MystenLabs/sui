@@ -304,15 +304,23 @@ The key differentiators that zkLogin brings to Sui are:
 
 ### How to verify a zkLogin signature off chain?
 
-The following options support a zkLogin signature over either transaction data or personal message.
+The following options support a zkLogin signature over either transaction data or personal message using the JWK state on Sui and current epoch. 
 
-1. Use keytool: See usage in keytool.
+1. Use Sui Typescript SDK. This initializes a GraphQL client and calls the endpoint under the hood.
+
+2. Use the GraphQL endpoint directly: https://sui-[network].mystenlabs.com/graphql. See [documenetation](https://docs.sui.io/references/sui-api/sui-graphql/reference/api/queries/verify-zklogin-signature). This is recommended if you do not plan to run any server or handle any JWK rotations. 
+
+3. Use Sui Keytool. This is recommended for debug usage. 
 
 ```bash
-$SUI_BINARY keytool zk-login-sig-verify -h
+$SUI_BINARY keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --bytes $BYTES --intent-scope 3 --network devnet --curr-epoch 3
 ```
 
-2. Use a self hosted server endpoint: See usage in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier).
+4. Use a self hosted server endpoint and calls this endpoint. See instructions in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier). This provides flexibility in the logic.
+
+### Can I use zkLogin inside a multisig wallet? 
+
+Yes. See the [Multisig Guide](../../guides/developer/cryptography/multisig.mdx) for more details.
 
 ## Related links
 
