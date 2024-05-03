@@ -1,5 +1,15 @@
 # @mysten/zksend
 
+## 0.6.0
+
+### Minor Changes
+
+- 905bc99e88: Add `createSendToAddressTransaction` method
+
+### Patch Changes
+
+- 9a9ff3cde1: Fix assets extracted from transactionBlocks using type instead of objectType from object changes"
+
 ## 0.5.0
 
 ### Minor Changes
