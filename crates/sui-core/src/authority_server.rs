@@ -576,7 +576,7 @@ impl ValidatorService {
         // Being double cautious to also check this for certificates even though we have
         // already checked when signing transactions.
         Self::transaction_validity_check(&epoch_store, certificate.data()).tap_err(|err| {
-            // TODO: This is an invariant violation.
+            // TODO: Send invariant violation metric in release mode; panic in debug mode.
             error!(
                 "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
                 err
@@ -610,7 +610,7 @@ impl ValidatorService {
         // Being double cautious to also check this for certificates even though we have
         // already checked when signing transactions.
         Self::transaction_validity_check(&epoch_store, certificate.data()).tap_err(|err| {
-            // TODO: This is an invariant violation.
+            // TODO: Send invariant violation metric in release mode; panic in debug mode.
             error!(
                 "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
                 err

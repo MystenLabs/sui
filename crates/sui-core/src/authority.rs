@@ -878,7 +878,9 @@ impl AuthorityState {
             &self.metrics.bytecode_verifier_metrics,
         )?;
 
-        self.check_coin_deny(tx_data.sender(), &checked_input_objects, &receiving_objects)?;
+        if epoch_store.coin_deny_list_state_enabled() {
+            self.check_coin_deny(tx_data.sender(), &checked_input_objects, &receiving_objects)?;
+        }
 
         let owned_objects = checked_input_objects.inner().filter_owned_objects();
 
