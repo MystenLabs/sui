@@ -1,5 +1,13 @@
 # @mysten/dapp-kit
 
+## 0.12.12
+
+### Patch Changes
+
+- Updated dependencies [9a9ff3cde1]
+- Updated dependencies [905bc99e88]
+  - @mysten/zksend@0.6.0
+
 ## 0.12.11
 
 ### Patch Changes
