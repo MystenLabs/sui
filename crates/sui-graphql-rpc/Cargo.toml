@@ -22,7 +22,7 @@ either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
 futures.workspace = true
-git-version.workspace = true
+bin-version.workspace = true
 hex.workspace = true
 http.workspace = true
 hyper.workspace = true

@@ -1790,6 +1790,7 @@ dependencies = [
  "petgraph",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",

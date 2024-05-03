@@ -134,9 +134,19 @@ impl PTB {
         };
 
         // get all the metadata needed for executing the PTB: sender, gas, signing tx
-        // get sender's address -- active address
-        let Some(sender) = context.config.active_address else {
-            anyhow::bail!("No active address, cannot execute PTB");
+
+        let gas = program_metadata.gas_object_id.map(|x| x.value);
+
+        // the sender is the gas object if gas is provided, otherwise the active address
+        let sender = match gas {
+            Some(gas) => context
+                .get_object_owner(&gas)
+                .await
+                .map_err(|_| anyhow!("Could not find owner for gas object ID"))?,
+            None => context
+                .config
+                .active_address
+                .ok_or_else(|| anyhow!("No active address, cannot execute PTB"))?,
         };
 
         // get the gas price
@@ -162,8 +172,8 @@ impl PTB {
         };
 
         // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = program_metadata.gas_object_id {
-            context.get_object_ref(gas.value).await?
+        let coins = if let Some(gas) = gas {
+            context.get_object_ref(gas).await?
         } else {
             context
                 .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())

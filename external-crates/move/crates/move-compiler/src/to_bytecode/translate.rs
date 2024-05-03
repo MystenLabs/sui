@@ -7,7 +7,9 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
+    expansion::ast::{
+        AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
+    },
     hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
         ast::{BuiltinTypeName_, DatatypeTypeParameter, TParam},
@@ -136,7 +138,7 @@ pub fn program(
 
     let mut source_modules = gmodules
         .into_iter()
-        .filter(|(_, mdef)| mdef.is_source_module)
+        .filter(|(_, mdef)| matches!(mdef.target_kind, TargetKind::Source { .. }))
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
@@ -162,7 +164,7 @@ fn module(
         warning_filter: _warning_filter,
         package_name,
         attributes,
-        is_source_module: _is_source_module,
+        target_kind: _,
         dependency_order: _dependency_order,
         friends: gfriends,
         structs: gstructs,

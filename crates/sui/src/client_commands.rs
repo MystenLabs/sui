@@ -48,7 +48,7 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_package_management::LockCommand;
-use sui_replay::ReplayToolCommand;
+use sui_replay::{ReplayToolCommand, SandboxFileFormat};
 use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
@@ -755,6 +755,7 @@ impl SuiClientCommands {
                     terminate_early,
                     num_tasks: 16,
                     persist_path: None,
+                    sandbox_format: SandboxFileFormat::Json,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =

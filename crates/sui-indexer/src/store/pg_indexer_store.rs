@@ -40,7 +40,8 @@ use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
     checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+    transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
+    tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{read_only_blocking, transactional_blocking_with_retry};
@@ -77,8 +78,8 @@ const PG_DB_COMMIT_SLEEP_DURATION: Duration = Duration::from_secs(3600);
 // with rn = 1, we only select the latest version of each object,
 // so that we don't have to update the same object multiple times.
 const UPDATE_OBJECTS_SNAPSHOT_QUERY: &str = r"
-INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
-SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
+INSERT INTO objects_snapshot (object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, object_type_package, object_type_module, object_type_name, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id)
+SELECT object_id, object_version, object_status, object_digest, checkpoint_sequence_number, owner_type, owner_id, object_type, object_type_package, object_type_module, object_type_name, serialized_object, coin_type, coin_balance, df_kind, df_name, df_object_type, df_object_id
 FROM (
     SELECT *,
            ROW_NUMBER() OVER (PARTITION BY object_id ORDER BY object_version DESC) as rn
@@ -94,6 +95,9 @@ SET object_version = EXCLUDED.object_version,
     owner_type = EXCLUDED.owner_type,
     owner_id = EXCLUDED.owner_id,
     object_type = EXCLUDED.object_type,
+    object_type_package = EXCLUDED.object_type_package,
+    object_type_module = EXCLUDED.object_type_module,
+    object_type_name = EXCLUDED.object_type_name,
     serialized_object = EXCLUDED.serialized_object,
     coin_type = EXCLUDED.coin_type,
     coin_balance = EXCLUDED.coin_balance,
@@ -103,12 +107,18 @@ SET object_version = EXCLUDED.object_version,
     df_object_id = EXCLUDED.df_object_id;
 ";
 
+#[derive(Clone)]
+pub struct PgIndexerStoreConfig {
+    pub parallel_chunk_size: usize,
+    pub parallel_objects_chunk_size: usize,
+    pub epochs_to_keep: Option<u64>,
+}
+
 pub struct PgIndexerStore<T: R2D2Connection + 'static> {
     blocking_cp: ConnectionPool<T>,
     metrics: IndexerMetrics,
-    parallel_chunk_size: usize,
-    parallel_objects_chunk_size: usize,
     partition_manager: PgPartitionManager<T>,
+    config: PgIndexerStoreConfig,
 }
 
 impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
@@ -116,9 +126,8 @@ impl<T: R2D2Connection> Clone for PgIndexerStore<T> {
         Self {
             blocking_cp: self.blocking_cp.clone(),
             metrics: self.metrics.clone(),
-            parallel_chunk_size: self.parallel_chunk_size,
-            parallel_objects_chunk_size: self.parallel_objects_chunk_size,
             partition_manager: self.partition_manager.clone(),
+            config: self.config.clone(),
         }
     }
 }
@@ -133,20 +142,37 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .unwrap_or_else(|_e| PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE.to_string())
             .parse::<usize>()
             .unwrap();
+        let epochs_to_keep = std::env::var("EPOCHS_TO_KEEP")
+            .map(|s| s.parse::<u64>().ok())
+            .unwrap_or_else(|_e| None);
         let partition_manager = PgPartitionManager::new(blocking_cp.clone())
             .expect("Failed to initialize partition manager");
+        let config = PgIndexerStoreConfig {
+            parallel_chunk_size,
+            parallel_objects_chunk_size,
+            epochs_to_keep,
+        };
 
         Self {
             blocking_cp,
             metrics,
-            parallel_chunk_size,
-            parallel_objects_chunk_size,
             partition_manager,
+            config,
         }
     }
 
     pub fn blocking_cp(&self) -> ConnectionPool<T> {
         self.blocking_cp.clone()
+    }
+
+    pub fn get_latest_epoch_id(&self) -> Result<Option<u64>, IndexerError> {
+        read_only_blocking!(&self.blocking_cp, |conn| {
+            epochs::dsl::epochs
+                .select(max(epochs::epoch))
+                .first::<Option<i64>>(conn)
+                .map(|v| v.map(|v| v as u64))
+        })
+        .context("Failed reading latest epoch id from PostgresDB")
     }
 
     fn get_latest_checkpoint_sequence_number(&self) -> Result<Option<u64>, IndexerError> {
@@ -618,15 +644,23 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .checkpoint_db_commit_latency_tx_indices_chunks
             .start_timer();
         let len = indices.len();
-        let (senders, recipients, input_objects, changed_objects, calls) =
+        let (senders, recipients, input_objects, changed_objects, calls, digests) =
             indices.into_iter().map(|i| i.split()).fold(
-                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new()),
+                (
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                ),
                 |(
                     mut tx_senders,
                     mut tx_recipients,
                     mut tx_input_objects,
                     mut tx_changed_objects,
                     mut tx_calls,
+                    mut tx_digests,
                 ),
                  index| {
                     tx_senders.extend(index.0);
@@ -634,13 +668,14 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                     tx_input_objects.extend(index.2);
                     tx_changed_objects.extend(index.3);
                     tx_calls.extend(index.4);
-
+                    tx_digests.extend(index.5);
                     (
                         tx_senders,
                         tx_recipients,
                         tx_input_objects,
                         tx_changed_objects,
                         tx_calls,
+                        tx_digests,
                     )
                 },
             );
@@ -775,6 +810,33 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 tracing::error!("Failed to persist tx_calls with error: {}", e);
             })
         }));
+        futures.push(self.spawn_blocking_task(move |this| {
+            let now = Instant::now();
+            let calls_len = digests.len();
+            transactional_blocking_with_retry!(
+                &this.blocking_cp,
+                |conn| {
+                    for chunk in digests.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX) {
+                        diesel::insert_into(tx_digests::table)
+                            .values(chunk)
+                            .on_conflict_do_nothing()
+                            .execute(conn)
+                            .map_err(IndexerError::from)
+                            .context("Failed to write tx_digests chunk to PostgresDB")?;
+                    }
+                    Ok::<(), IndexerError>(())
+                },
+                Duration::from_secs(60)
+            )
+            .tap_ok(|_| {
+                let elapsed = now.elapsed().as_secs_f64();
+                info!(elapsed, "Persisted {} rows to tx_digests tables", calls_len);
+            })
+            .tap_err(|e| {
+                tracing::error!("Failed to persist tx_digests with error: {}", e);
+            })
+        }));
+
         futures::future::join_all(futures)
             .await
             .into_iter()
@@ -872,12 +934,14 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                 let epoch_partition_data =
                     EpochPartitionData::compose_data(epoch_to_commit, last_epoch);
                 let table_partitions = self.partition_manager.get_table_partitions()?;
-                for (table, last_partition) in table_partitions {
+                for (table, (first_partition, last_partition)) in table_partitions {
                     let guard = self.metrics.advance_epoch_latency.start_timer();
-                    self.partition_manager.advance_table_epoch_partition(
+                    self.partition_manager.advance_and_prune_epoch_partition(
                         table.clone(),
+                        first_partition,
                         last_partition,
                         &epoch_partition_data,
+                        self.config.epochs_to_keep,
                     )?;
                     let elapsed = guard.stop_and_record();
                     info!(
@@ -1000,8 +1064,10 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
         let mutation_len = object_mutations.len();
         let deletion_len = object_deletions.len();
 
-        let object_mutation_chunks = chunk!(object_mutations, self.parallel_objects_chunk_size);
-        let object_deletion_chunks = chunk!(object_deletions, self.parallel_objects_chunk_size);
+        let object_mutation_chunks =
+            chunk!(object_mutations, self.config.parallel_objects_chunk_size);
+        let object_deletion_chunks =
+            chunk!(object_deletions, self.config.parallel_objects_chunk_size);
         let mutation_futures = object_mutation_chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_object_mutation_chunk(c)))
@@ -1073,7 +1139,7 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .start_timer();
         let objects = make_final_list_of_objects_to_commit(object_changes);
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.backfill_objects_snapshot_chunk(c)))
@@ -1125,7 +1191,7 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .start_timer();
 
         let len = objects.len();
-        let chunks = chunk!(objects, self.parallel_objects_chunk_size);
+        let chunks = chunk!(objects, self.config.parallel_objects_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_objects_history_chunk(c)))
@@ -1204,7 +1270,7 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .start_timer();
         let len = transactions.len();
 
-        let chunks = chunk!(transactions, self.parallel_chunk_size);
+        let chunks = chunk!(transactions, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_transactions_chunk(c)))
@@ -1240,7 +1306,7 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .metrics
             .checkpoint_db_commit_latency_events
             .start_timer();
-        let chunks = chunk!(events, self.parallel_chunk_size);
+        let chunks = chunk!(events, self.config.parallel_chunk_size);
         let futures = chunks
             .into_iter()
             .map(|c| self.spawn_blocking_task(move |this| this.persist_events_chunk(c)))
@@ -1296,7 +1362,7 @@ impl<T: R2D2Connection> IndexerStore for PgIndexerStore<T> {
             .metrics
             .checkpoint_db_commit_latency_tx_indices
             .start_timer();
-        let chunks = chunk!(indices, self.parallel_chunk_size);
+        let chunks = chunk!(indices, self.config.parallel_chunk_size);
 
         let futures = chunks
             .into_iter()

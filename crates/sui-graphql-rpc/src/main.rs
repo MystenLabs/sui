@@ -14,20 +14,8 @@ use sui_graphql_rpc::server::graphiql_server::start_graphiql_server;
 use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
-// WARNING!!!
-//
-// Do not move or use similar logic to generate git revision information outside of a binary entry
-// point (e.g. main.rs). Placing the below logic into a library can result in unnecessary builds.
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        git_version::git_version!(
-            args = ["--always", "--abbrev=40", "--dirty", "--exclude", "*"],
-            fallback = "DIRTY"
-        )
-    }
-};
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
 
 // VERSION mimics what other sui binaries use for the same const
 static VERSION: Version = Version {

@@ -235,6 +235,11 @@ impl CheckpointReader {
             checkpoints.len(),
         );
         for checkpoint in checkpoints {
+            if self.remote_store_url.is_none()
+                && checkpoint.checkpoint_summary.sequence_number > self.current_checkpoint_number
+            {
+                break;
+            }
             assert_eq!(
                 checkpoint.checkpoint_summary.sequence_number,
                 self.current_checkpoint_number

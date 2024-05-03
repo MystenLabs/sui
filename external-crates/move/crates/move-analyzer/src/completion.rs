@@ -253,7 +253,7 @@ fn context_specific_no_trigger(
             let Some(def_info) = symbols.def_info(&def_loc) else {
                 break;
             };
-            let DefInfo::Function(mod_ident, v, _, _, _, _, _) = def_info else {
+            let DefInfo::Function(mod_ident, v, _, _, _, _, _, _) = def_info else {
                 // not a function
                 break;
             };

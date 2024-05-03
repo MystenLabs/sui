@@ -17,8 +17,8 @@ use sui_network::{
     tonic,
 };
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::effects::TransactionEvents;
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
@@ -421,13 +421,14 @@ impl ValidatorService {
         Ok(tonic::Response::new(info))
     }
 
-    // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
     async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        request: HandleCertificateRequestV3,
         epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<Option<HandleCertificateResponseV2>, tonic::Status> {
+    ) -> Result<Option<HandleCertificateResponseV3>, tonic::Status> {
+        let certificate = request.certificate;
+
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
         fp_ensure!(
@@ -459,16 +460,22 @@ impl ValidatorService {
             .state
             .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
         {
-            let events = if let Some(digest) = signed_effects.events_digest() {
-                self.state.get_transaction_events(digest)?
+            let events = if request.include_events {
+                if let Some(digest) = signed_effects.events_digest() {
+                    Some(self.state.get_transaction_events(digest)?)
+                } else {
+                    None
+                }
             } else {
-                TransactionEvents::default()
+                None
             };
 
-            return Ok(Some(HandleCertificateResponseV2 {
-                signed_effects: signed_effects.into_inner(),
+            return Ok(Some(HandleCertificateResponseV3 {
+                effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects: vec![], // unused field
+                input_objects: None,
+                output_objects: None,
+                auxiliary_data: None,
             }));
         }
 
@@ -545,15 +552,32 @@ impl ValidatorService {
             .state
             .execute_certificate(&certificate, epoch_store)
             .await?;
-        let events = if let Some(event_digest) = effects.events_digest() {
-            self.state.get_transaction_events(event_digest)?
+        let events = if request.include_events {
+            if let Some(digest) = effects.events_digest() {
+                Some(self.state.get_transaction_events(digest)?)
+            } else {
+                None
+            }
         } else {
-            TransactionEvents::default()
+            None
         };
-        Ok(Some(HandleCertificateResponseV2 {
-            signed_effects: effects.into_inner(),
+
+        let input_objects = request
+            .include_input_objects
+            .then(|| self.state.get_transaction_input_objects(&effects))
+            .and_then(Result::ok);
+
+        let output_objects = request
+            .include_output_objects
+            .then(|| self.state.get_transaction_output_objects(&effects))
+            .and_then(Result::ok);
+
+        Ok(Some(HandleCertificateResponseV3 {
+            effects: effects.into_inner(),
             events,
-            fastpath_input_objects: vec![], // unused field
+            input_objects,
+            output_objects,
+            auxiliary_data: None, // We don't have any aux data generated presently
         }))
     }
 }
@@ -576,10 +600,21 @@ impl ValidatorService {
         certificate.validity_check(epoch_store.protocol_config())?;
 
         let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
-        self.handle_certificate(certificate, &epoch_store, false)
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        self.handle_certificate(request, &epoch_store, false)
             .instrument(span)
             .await
-            .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
+            .map(|executed| {
+                tonic::Response::new(SubmitCertificateResponse {
+                    executed: executed.map(Into::into),
+                })
+            })
     }
 
     async fn handle_certificate_v2_impl(
@@ -592,7 +627,40 @@ impl ValidatorService {
         certificate.validity_check(epoch_store.protocol_config())?;
 
         let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
-        self.handle_certificate(certificate, &epoch_store, true)
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        self.handle_certificate(request, &epoch_store, true)
+            .instrument(span)
+            .await
+            .map(|v| {
+                tonic::Response::new(
+                    v.expect(
+                        "handle_certificate should not return none with wait_for_effects=true",
+                    )
+                    .into(),
+                )
+            })
+    }
+
+    async fn handle_certificate_v3_impl(
+        &self,
+        request: tonic::Request<HandleCertificateRequestV3>,
+    ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let request = request.into_inner();
+
+        // The call to digest() assumes the transaction is valid, so we need to verify it first.
+        request
+            .certificate
+            .validity_check(epoch_store.protocol_config())?;
+        let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
+
+        self.handle_certificate(request, &epoch_store, true)
             .instrument(span)
             .await
             .map(|v| {
@@ -696,7 +764,7 @@ impl ValidatorService {
             traffic_controller.tally(TrafficTally {
                 connection_ip: connection_ip.map(|ip| ip.ip()),
                 proxy_ip: proxy_ip.map(|ip| ip.ip()),
-                weight: error.map(normalize).unwrap_or(Weight::zero()),
+                error_weight: error.map(normalize).unwrap_or(Weight::zero()),
                 timestamp: SystemTime::now(),
             })
         }
@@ -831,6 +899,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         handle_with_decoration!(self, handle_certificate_v2_impl, request)
+    }
+
+    async fn handle_certificate_v3(
+        &self,
+        request: tonic::Request<HandleCertificateRequestV3>,
+    ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
+        handle_with_decoration!(self, handle_certificate_v3_impl, request)
     }
 
     async fn object_info(

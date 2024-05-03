@@ -117,19 +117,19 @@ module games::drand_based_lottery {
             participant_index: game.participants,
         };
         game.participants = game.participants + 1;
-        transfer::public_transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(ticket, ctx.sender());
     }
 
     /// The winner can redeem its ticket.
     public entry fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
         assert!(object::id(game) == ticket.game_id, EInvalidTicket);
-        assert!(option::contains(&game.winner, &ticket.participant_index), EInvalidTicket);
+        assert!(game.winner.contains(&ticket.participant_index), EInvalidTicket);
 
         let winner = GameWinner {
             id: object::new(ctx),
             game_id: ticket.game_id,
         };
-        transfer::public_transfer(winner, tx_context::sender(ctx));
+        transfer::public_transfer(winner, ctx.sender());
     }
 
     // Note that a ticket can be deleted before the game was completed.

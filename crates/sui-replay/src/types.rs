@@ -32,6 +32,8 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
     "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
+// TODO: A lot of the information in OnChainTransactionInfo is redundant from what's already in
+// SenderSignedData. We should consider removing them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,

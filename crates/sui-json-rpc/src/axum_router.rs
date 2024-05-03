@@ -23,6 +23,7 @@ use sui_core::traffic_controller::{
 };
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::traffic_control::{PolicyConfig, Weight};
+use tracing::warn;
 
 use crate::routing_layer::RpcRouter;
 use sui_json_rpc_api::CLIENT_TARGET_API_VERSION_HEADER;
@@ -191,7 +192,7 @@ fn handle_traffic_resp(
     traffic_controller.tally(TrafficTally {
         connection_ip: Some(client_ip.ip()),
         proxy_ip: None,
-        weight: error.map(normalize).unwrap_or(Weight::zero()),
+        error_weight: error.map(normalize).unwrap_or(Weight::zero()),
         timestamp: SystemTime::now(),
     });
 }
@@ -228,20 +229,17 @@ async fn process_request<L: Logger>(
         match monitored_reroute(raw_params, name_str, client_addr) {
             Ok((params_string, name)) => (params_string, name),
             Err(e) => {
-                return MethodResponse {
-                    result: format!(
-                        "Failed to handle request for method {:?}: {:?}",
-                        name_str, e
-                    ),
-                    success: false,
-                    error_code: None,
-                };
+                warn!("Could not reroute request: {:?}", e);
+                (String::from(""), name_str.to_string())
             }
         };
 
     let params_str = params_string.as_str();
 
-    let params = if raw_params.is_some() {
+    let params = if params_str.is_empty() {
+        // Failed to parse params
+        Params::new(raw_params.map(|params| params.get()))
+    } else if raw_params.is_some() {
         Params::new(Some(params_str))
     } else {
         Params::new(None)
@@ -313,22 +311,43 @@ pub fn monitored_reroute(
         "sui_executeTransactionBlock" => {
             // add client IP arg to the params, as this is a router redirect
             // from `execute_transaction_block`, which does require the client IP
-            let parsed_value: Value = serde_json::from_str(
-                raw_params
-                    .unwrap_or_else(|| panic!("Expected params for executeTransactionBlock"))
-                    .get(),
-            )
-            .expect("Failed to parse jsonrpsee params");
+            let params = if let Some(params) = raw_params {
+                params.get()
+            } else {
+                return Err(SuiError::Unknown(String::from(
+                    "Params not found for executeTransactionBlock",
+                )));
+            };
+            let parsed_value: Value = serde_json::from_str(params).map_err(|err| {
+                SuiError::Unknown(format!("Failed to parse jsonrpsee params: {:?}", err))
+            })?;
 
-            let Value::Array(mut params_vec) = parsed_value else {
-                panic!("Expected a JSON array");
+            let params_str = match parsed_value {
+                Value::Array(mut params_vec) => {
+                    params_vec.push(Value::String(client_addr.to_string()));
+                    serde_json::to_string(&params_vec).map_err(|err| {
+                        SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
+                    })?
+                }
+                Value::Object(mut params_map) => {
+                    params_map.insert(
+                        String::from("client_addr"),
+                        Value::String(client_addr.to_string()),
+                    );
+                    serde_json::to_string(&params_map).map_err(|err| {
+                        SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
+                    })?
+                }
+                _ => {
+                    return Err(SuiError::Unknown(String::from(
+                        "Failed to parse jsonrpsee params: expected array",
+                    )));
+                }
             };
 
-            params_vec.push(Value::String(client_addr.to_string()));
-            let name = String::from("sui_monitoredExecuteTransactionBlock");
             Ok((
-                serde_json::to_string(&params_vec).expect("Failed to serialize params"),
-                name,
+                params_str,
+                String::from("sui_monitoredExecuteTransactionBlock"),
             ))
         }
         "sui_monitoredExecuteTransactionBlock" => {

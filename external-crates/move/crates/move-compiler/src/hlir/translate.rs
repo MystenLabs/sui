@@ -5,7 +5,7 @@
 use crate::{
     debug_display, debug_display_verbose, diag,
     editions::{FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
     hlir::{
         ast::{self as H, Block, BlockLabel, MoveOpAnnotation, UnpackType},
         detect_dead_code::program as detect_dead_code_analysis,
@@ -132,6 +132,8 @@ pub(super) struct HLIRDebugFlags {
     pub(super) match_counterexample: bool,
     pub(super) match_work_queue: bool,
     pub(super) match_constant_conversion: bool,
+    pub(super) function_translation: bool,
+    pub(super) eval_order: bool,
 }
 
 pub(super) struct Context<'env> {
@@ -327,6 +329,8 @@ impl<'env> Context<'env> {
             match_counterexample: false,
             match_work_queue: false,
             match_constant_conversion: false,
+            function_translation: false,
+            eval_order: false,
         };
         Context {
             env,
@@ -589,7 +593,7 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         dependency_order,
         immediate_neighbors: _,
         used_addresses: _,
@@ -615,7 +619,7 @@ fn module(
         }
     });
 
-    gen_unused_warnings(context, is_source_module, &structs);
+    gen_unused_warnings(context, target_kind, &structs);
 
     context.current_package = None;
     context.env.pop_warning_filter_scope();
@@ -625,7 +629,7 @@ fn module(
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             friends,
             structs,
@@ -657,7 +661,7 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
     assert!(macro_.is_none(), "ICE macros filtered above");
     context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
-    let body = function_body(context, &signature, body);
+    let body = function_body(context, &signature, _name, body);
     context.env.pop_warning_filter_scope();
     H::Function {
         warning_filter,
@@ -693,6 +697,7 @@ fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::Fu
 fn function_body(
     context: &mut Context,
     sig: &H::FunctionSignature,
+    _name: FunctionName,
     sp!(loc, tb_): T::FunctionBody,
 ) -> H::FunctionBody {
     use H::FunctionBody_ as HB;
@@ -703,7 +708,13 @@ fn function_body(
             HB::Native
         }
         TB::Defined((_, seq)) => {
+            debug_print!(context.debug.function_translation,
+                         (msg format!("-- {} ----------------", _name)),
+                         (lines "body" => &seq));
             let (locals, body) = function_body_defined(context, sig, loc, seq);
+            debug_print!(context.debug.function_translation,
+                         (msg "--------"),
+                         (lines "body" => &body));
             HB::Defined { locals, body }
         }
         TB::Macro => unreachable!("ICE macros filtered above"),
@@ -2699,6 +2710,7 @@ fn value_evaluation_order(
     let mut values = vec![];
     for (exp, expected_type) in input_exps.into_iter().rev() {
         let mut new_stmts = make_block!();
+        debug_print!(context.debug.eval_order, ("has new statements" => !new_stmts.is_empty(); fmt));
         let exp = value(context, &mut new_stmts, expected_type.as_ref(), exp);
         let exp = if needs_binding {
             bind_exp(context, &mut new_stmts, exp)
@@ -2935,8 +2947,11 @@ fn process_binops(
                     }
                 }
                 op => {
-                    let (mut lhs_block, lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                    let (mut lhs_block, mut lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
                     let (mut rhs_block, rhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                    if !rhs_block.is_empty() {
+                        lhs_exp = bind_exp(context, &mut lhs_block, lhs_exp);
+                    }
                     lhs_block.append(&mut rhs_block);
                     // NB: here we could check if the LHS and RHS are "large" terms and let-bind
                     // them if they are getting too big.
@@ -3148,10 +3163,15 @@ fn freeze_single(sp!(sloc, s): H::SingleType) -> H::SingleType {
 
 fn gen_unused_warnings(
     context: &mut Context,
-    is_source_module: bool,
+    target_kind: TargetKind,
     structs: &UniqueMap<DatatypeName, H::StructDefinition>,
 ) {
-    if !is_source_module {
+    if !matches!(
+        target_kind,
+        TargetKind::Source {
+            is_root_package: true
+        }
+    ) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass
