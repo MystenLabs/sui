@@ -1751,7 +1751,9 @@ async fn test_publish_dependent_module_ok() {
     let dependent_module = make_dependent_module(&genesis_module);
     let dependent_module_bytes = {
         let mut bytes = Vec::new();
-        dependent_module.serialize(&mut bytes).unwrap();
+        dependent_module
+            .serialize_with_version(dependent_module.version, &mut bytes)
+            .unwrap();
         bytes
     };
 
@@ -1806,7 +1808,9 @@ async fn test_publish_module_no_dependencies_ok() {
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
-    module.serialize(&mut module_bytes).unwrap();
+    module
+        .serialize_with_version(module.version, &mut module_bytes)
+        .unwrap();
     let module_bytes = vec![module_bytes];
     let dependencies = vec![]; // no dependencies
     let data = TransactionData::new_module(
@@ -1859,7 +1863,9 @@ async fn test_publish_non_existing_dependent_module() {
     });
     let dependent_module_bytes = {
         let mut bytes = Vec::new();
-        dependent_module.serialize(&mut bytes).unwrap();
+        dependent_module
+            .serialize_with_version(dependent_module.version, &mut bytes)
+            .unwrap();
         bytes
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
@@ -1914,7 +1920,9 @@ async fn test_package_size_limit() {
             Identifier::new(format!("TestModule{:0>21000?}", modules_size)).unwrap();
         let module_bytes = {
             let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
+            module
+                .serialize_with_version(module.version, &mut bytes)
+                .unwrap();
             bytes
         };
         modules_size += module_bytes.len() as u64;

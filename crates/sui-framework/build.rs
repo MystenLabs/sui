@@ -281,7 +281,7 @@ fn serialize_modules_to_file<'a>(
         }
 
         let mut buf = Vec::new();
-        module.serialize(&mut buf)?;
+        module.serialize_with_version(module.version, &mut buf)?;
         serialized_modules.push(buf);
     }
     assert!(

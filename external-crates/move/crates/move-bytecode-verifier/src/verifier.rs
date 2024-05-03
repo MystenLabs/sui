@@ -15,6 +15,7 @@ use move_binary_format::{
     check_bounds::BoundsChecker,
     errors::{Location, VMResult},
     file_format::CompiledModule,
+    file_format_common::VERSION_6,
 };
 use move_bytecode_verifier_meter::{dummy::DummyMeter, Meter};
 use move_vm_config::verifier::VerifierConfig;
@@ -42,7 +43,12 @@ pub fn verify_module_with_config_for_test(
 ) -> VMResult<()> {
     const MAX_MODULE_SIZE: usize = 65355;
     let mut bytes = vec![];
-    module.serialize(&mut bytes).unwrap();
+    let version = if config.bytecode_version > VERSION_6 {
+        module.version
+    } else {
+        VERSION_6
+    };
+    module.serialize_with_version(version, &mut bytes).unwrap();
     let now = Instant::now();
     let result = verify_module_with_config_metered(config, module, meter);
     eprintln!(

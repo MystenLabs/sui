@@ -10,7 +10,7 @@ use crate::{
     parser::ast::{FunctionName, ModuleName},
     shared::{unique_map::UniqueMap, Name, NumericalAddress},
 };
-use move_binary_format::file_format as F;
+use move_binary_format::{file_format as F, file_format_common::VERSION_MAX};
 use move_bytecode_source_map::source_map::SourceMap;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier as MoveCoreIdentifier,
@@ -126,8 +126,9 @@ impl NamedCompiledModule {
 
     pub fn serialize(&self, bytecode_version: Option<u32>) -> Vec<u8> {
         let mut serialized = Vec::<u8>::new();
+        let bytecode_version = bytecode_version.unwrap_or(VERSION_MAX);
         self.module
-            .serialize_for_version(bytecode_version, &mut serialized)
+            .serialize_with_version(bytecode_version, &mut serialized)
             .unwrap();
         serialized
     }
