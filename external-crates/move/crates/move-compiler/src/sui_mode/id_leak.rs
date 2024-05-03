@@ -160,7 +160,7 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
         let E::Pack(s, _tys, fields) = e__ else {
             return None;
         };
-        let abilities = self.declared_abilities.get(s).unwrap();
+        let abilities = self.declared_abilities.get(s)?;
         if !abilities.has_ability_(Ability_::Key) {
             return None;
         }
