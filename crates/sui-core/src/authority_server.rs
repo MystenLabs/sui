@@ -645,10 +645,17 @@ impl ValidatorService {
         let epoch_store = self.state.load_epoch_store_one_call_per_task();
         let request = request.into_inner();
 
-        // The call to digest() assumes the transaction is valid, so we need to verify it first.
-        request
-            .certificate
-            .validity_check(epoch_store.protocol_config())?;
+        // Being double cautious to also check this for certificates even though we have
+        // already checked when signing transactions.
+        Self::transaction_validity_check(&epoch_store, request.certificate.data()).tap_err(
+            |err| {
+                // TODO: Send invariant violation metric in release mode; panic in debug mode.
+                error!(
+                    "INVARIANT VIOLATION: Transaction validity check failed for certificate: {:?}",
+                    err
+                );
+            },
+        )?;
         let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
 
         self.handle_certificate(request, &epoch_store, true)
