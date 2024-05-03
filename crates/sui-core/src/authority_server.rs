@@ -335,9 +335,11 @@ impl ValidatorService {
             traffic_controller: _,
         } = self.clone();
         let transaction = request.into_inner();
-
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
         Self::transaction_validity_check(&epoch_store, transaction.data())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
@@ -675,6 +677,11 @@ impl ValidatorService {
         transaction: &SenderSignedData,
     ) -> SuiResult<()> {
         let config = epoch_store.protocol_config();
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check because the transaction may not even be valid to
+        // access for any other checks.
+        transaction.validity_check(config, epoch_store.epoch())?;
+
         if !config.zklogin_auth() && transaction.has_zklogin_sig() {
             return Err(SuiError::UnsupportedFeatureError {
                 error: "zklogin is not enabled on this network".to_string(),
@@ -693,7 +700,6 @@ impl ValidatorService {
             });
         }
 
-        transaction.validity_check(config, epoch_store.epoch())?;
         Ok(())
     }
 
