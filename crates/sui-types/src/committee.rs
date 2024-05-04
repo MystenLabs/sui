@@ -170,6 +170,18 @@ impl Committee {
             .map(|(a, _)| a)
     }
 
+    pub fn choose_multiple_weighted_iter(
+        &self,
+        count: usize,
+    ) -> impl Iterator<Item = &AuthorityName> {
+        self.voting_rights
+            .choose_multiple_weighted(&mut ThreadRng::default(), count, |(_, weight)| {
+                *weight as f64
+            })
+            .unwrap()
+            .map(|(a, _)| a)
+    }
+
     pub fn total_votes(&self) -> StakeUnit {
         TOTAL_VOTING_POWER
     }

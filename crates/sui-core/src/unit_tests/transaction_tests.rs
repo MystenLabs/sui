@@ -49,6 +49,8 @@ use crate::{
 
 use super::*;
 use fastcrypto::traits::AggregateAuthenticator;
+use sui_types::digests::ConsensusCommitDigest;
+use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 
 pub use crate::authority::authority_test_utils::init_state_with_ids;
@@ -271,11 +273,63 @@ async fn test_gas_wrong_owner() {
 }
 
 #[sim_test]
-async fn test_user_sends_system_transaction() {
+async fn test_user_sends_genesis_transaction() {
+    test_user_sends_system_transaction_impl(TransactionKind::Genesis(GenesisTransaction {
+        objects: vec![],
+    }))
+    .await;
+}
+
+#[tokio::test]
+async fn test_user_sends_consensus_commit_prologue() {
+    test_user_sends_system_transaction_impl(TransactionKind::ConsensusCommitPrologue(
+        ConsensusCommitPrologue {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 42,
+        },
+    ))
+    .await;
+}
+
+#[tokio::test]
+async fn test_user_sends_consensus_commit_prologue_v2() {
+    test_user_sends_system_transaction_impl(TransactionKind::ConsensusCommitPrologueV2(
+        ConsensusCommitPrologueV2 {
+            epoch: 0,
+            round: 0,
+            commit_timestamp_ms: 42,
+            consensus_commit_digest: ConsensusCommitDigest::default(),
+        },
+    ))
+    .await;
+}
+
+#[tokio::test]
+async fn test_user_sends_change_epoch_transaction() {
+    test_user_sends_system_transaction_impl(TransactionKind::ChangeEpoch(ChangeEpoch {
+        epoch: 0,
+        protocol_version: ProtocolVersion::MIN,
+        storage_charge: 0,
+        computation_charge: 0,
+        storage_rebate: 0,
+        non_refundable_storage_fee: 0,
+        epoch_start_timestamp_ms: 0,
+        system_packages: vec![],
+    }))
+    .await;
+}
+
+#[tokio::test]
+async fn test_user_sends_end_of_epoch_transaction() {
+    test_user_sends_system_transaction_impl(TransactionKind::EndOfEpochTransaction(vec![])).await;
+}
+
+async fn test_user_sends_system_transaction_impl(transaction_kind: TransactionKind) {
     do_transaction_test_skip_cert_checks(
         0,
         |tx| {
-            *tx.kind_mut() = TransactionKind::Genesis(GenesisTransaction { objects: vec![] });
+            *tx.kind_mut() = transaction_kind;
         },
         |_| {},
         |err| {

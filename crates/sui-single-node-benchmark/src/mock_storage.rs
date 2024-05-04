@@ -39,8 +39,9 @@ impl InMemoryObjectStore {
         self.num_object_reads.get()
     }
 
-    // TODO: remove this when TransactionInputLoader is able to use the ExecutionCache trait
-    // note: does not support shared object deletion.
+    // TODO: This function is out-of-sync with read_objects_for_execution from transaction_input_loader.rs.
+    // For instance, it does not support the use of deleted shared objects.
+    // We will need a trait to unify the these functions. (similarly the one in simulacrum)
     pub(crate) fn read_objects_for_execution(
         &self,
         shared_locks: &dyn GetSharedLocks,

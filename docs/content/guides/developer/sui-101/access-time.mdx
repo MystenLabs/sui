@@ -20,18 +20,15 @@ module sui::clock {
 The example below demonstrates an entry function that emits an event containing a timestamp from the `Clock`:
 
 ```move
-module example::clock {
-    use sui::clock::{Self, Clock};
-    use sui::event;
+module basics::clock {
+    use sui::{clock::Clock, event};
 
-    struct TimeEvent has copy, drop, store {
-        timestamp_ms: u64
+    public struct TimeEvent has copy, drop, store {
+        timestamp_ms: u64,
     }
 
     entry fun access(clock: &Clock) {
-        event::emit(TimeEvent {
-            timestamp_ms: clock::timestamp_ms(clock),
-        });
+        event::emit(TimeEvent { timestamp_ms: clock.timestamp_ms() });
     }
 }
 ```
@@ -42,7 +39,7 @@ A call to the previous entry function takes the following form, passing `0x6` as
 sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
 ```
 
-Expect the `Clock` timestamp to change **every 2 to 3 seconds**, at the rate the network commits checkpoints.
+Expect the `Clock` timestamp to change at the rate the network generates checkpoints, which is **every 1 second** with Narwhal/Bullshark consensus and **every 0.1 to 0.2 seconds** with Mysticeti consensus.
 
 Successive calls to `sui::clock::timestamp_ms` in the same transaction always produce the same result (transactions are considered to take effect instantly), but timestamps from `Clock` are otherwise monotonic across transactions that touch the same shared objects: Successive transactions seeing a greater or equal timestamp to their predecessors.
 
@@ -83,13 +80,13 @@ module example::clock_tests {
         let ctx = tx_context::dummy();
         let clock = clock::create_for_testing(&mut ctx);
 
-        clock::increment_for_testing(&mut clock, 42);
-        assert!(clock::timestamp_ms(&clock) == 42, 1);
+        clock.increment_for_testing(42);
+        assert!(clock.timestamp_ms() == 42, 1);
 
-        clock::set_for_testing(&mut clock, 50);
-        assert!(clock::timestamp_ms(&clock) == 50, 1);
+        clock.set_for_testing(50);
+        assert!(clock.timestamp_ms() == 50, 1);
 
-        clock::destroy_for_testing(clock);
+        clock.destroy_for_testing();
     }
 }
 ```

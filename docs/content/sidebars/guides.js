@@ -98,6 +98,7 @@ const guides = [
 					'guides/developer/cryptography/groth16',
 					'guides/developer/cryptography/hashing',
 					'guides/developer/cryptography/ecvrf',
+					'guides/developer/cryptography/multisig',
 					{
 						type: 'category',
 						label: 'zkLogin Integration Guide',

@@ -99,7 +99,7 @@ impl Event {
     /// the sending module would be A::m1.
     async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
         MoveModule::query(
-            ctx.data_unchecked(),
+            ctx,
             self.native.package_id.into(),
             &self.native.transaction_module.to_string(),
             self.checkpoint_viewed_at,
@@ -206,7 +206,13 @@ impl Event {
                     }
 
                     if let Some(type_) = &filter.event_type {
-                        query = type_.apply(query, events::dsl::event_type);
+                        query = type_.apply(
+                            query,
+                            events::dsl::event_type,
+                            events::dsl::event_type_package,
+                            events::dsl::event_type_module,
+                            events::dsl::event_type_name,
+                        );
                     }
 
                     query
@@ -259,6 +265,9 @@ impl Event {
             event_type: native_event
                 .type_
                 .to_canonical_string(/* with_prefix */ true),
+            event_type_package: native_event.type_.address.to_vec(),
+            event_type_module: native_event.type_.module.to_string(),
+            event_type_name: native_event.type_.name.to_string(),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
         };

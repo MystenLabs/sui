@@ -163,7 +163,7 @@ impl TestCluster {
     pub fn all_node_handles(&self) -> Vec<SuiNodeHandle> {
         self.swarm
             .all_nodes()
-            .map(|n| n.get_node_handle().unwrap())
+            .flat_map(|n| n.get_node_handle())
             .collect()
     }
 
@@ -438,16 +438,16 @@ impl TestCluster {
     /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
     /// the entire version range.
     pub async fn update_validator_supported_versions(
-        &mut self,
+        &self,
         new_supported_versions: SupportedProtocolVersions,
     ) {
         for authority in self.get_validator_pubkeys() {
             self.stop_node(&authority);
             tokio::time::sleep(Duration::from_millis(1000)).await;
             self.swarm
-                .node_mut(&authority)
+                .node(&authority)
                 .unwrap()
-                .config
+                .config()
                 .supported_protocol_versions = Some(new_supported_versions);
             self.start_node(&authority).await;
             info!("Restarted validator {}", authority);
@@ -499,6 +499,22 @@ impl TestCluster {
         )
         .await
         .expect("Timed out waiting for authenticator state update");
+    }
+
+    /// Return the highest observed protocol version in the test cluster.
+    pub fn highest_protocol_version(&self) -> ProtocolVersion {
+        self.all_node_handles()
+            .into_iter()
+            .map(|h| {
+                h.with(|node| {
+                    node.state()
+                        .epoch_store_for_testing()
+                        .epoch_start_state()
+                        .protocol_version()
+                })
+            })
+            .max()
+            .expect("at least one node must be up to get highest protocol version")
     }
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
@@ -770,6 +786,9 @@ pub struct TestClusterBuilder {
     fullnode_run_with_range: Option<RunWithRange>,
     fullnode_policy_config: Option<PolicyConfig>,
     fullnode_fw_config: Option<RemoteFirewallConfig>,
+
+    max_submit_position: Option<usize>,
+    submit_delay_step_override_millis: Option<u64>,
 }
 
 impl TestClusterBuilder {
@@ -794,6 +813,8 @@ impl TestClusterBuilder {
             fullnode_run_with_range: None,
             fullnode_policy_config: None,
             fullnode_fw_config: None,
+            max_submit_position: None,
+            submit_delay_step_override_millis: None,
         }
     }
 
@@ -939,6 +960,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_additional_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.get_or_init_genesis_config().accounts.extend(accounts);
+        self
+    }
+
     pub fn with_config_dir(mut self, config_dir: PathBuf) -> Self {
         self.config_dir = Some(config_dir);
         self
@@ -957,6 +983,19 @@ impl TestClusterBuilder {
 
     pub fn with_data_ingestion_dir(mut self, path: PathBuf) -> Self {
         self.data_ingestion_dir = Some(path);
+        self
+    }
+
+    pub fn with_max_submit_position(mut self, max_submit_position: usize) -> Self {
+        self.max_submit_position = Some(max_submit_position);
+        self
+    }
+
+    pub fn with_submit_delay_step_override_millis(
+        mut self,
+        submit_delay_step_override_millis: u64,
+    ) -> Self {
+        self.submit_delay_step_override_millis = Some(submit_delay_step_override_millis);
         self
     }
 
@@ -997,7 +1036,7 @@ impl TestClusterBuilder {
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
-        let json_rpc_address = fullnode.config.json_rpc_address;
+        let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 
@@ -1074,6 +1113,15 @@ impl TestClusterBuilder {
 
         if let Some(data_ingestion_dir) = self.data_ingestion_dir.take() {
             builder = builder.with_data_ingestion_dir(data_ingestion_dir);
+        }
+
+        if let Some(max_submit_position) = self.max_submit_position {
+            builder = builder.with_max_submit_position(max_submit_position);
+        }
+
+        if let Some(submit_delay_step_override_millis) = self.submit_delay_step_override_millis {
+            builder =
+                builder.with_submit_delay_step_override_millis(submit_delay_step_override_millis);
         }
 
         let mut swarm = builder.build();

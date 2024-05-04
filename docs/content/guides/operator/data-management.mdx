@@ -120,6 +120,8 @@ authority-store-pruning-config:
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
   periodic-compaction-threshold-days: 1
+  # Smooth pruning traffic throughout an epoch
+  smooth: true
 ```
 
 ### Full Node with indexing but no history
@@ -145,6 +147,8 @@ authority-store-pruning-config:
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
   periodic-compaction-threshold-days: 1
+  # Smooth pruning traffic throughout an epoch
+  smooth: true
 ```
 
 ### Full Node with full object history but pruned transaction history
@@ -169,4 +173,6 @@ authority-store-pruning-config:
   # Prune historic transactions of the past epochs
   num-epochs-to-retain-for-checkpoints: 2
   periodic-compaction-threshold-days: 1
+  # Smooth pruning traffic throughout an epoch
+  smooth: true
 ```

@@ -1,5 +1,3 @@
---gas-budget 100000000
-
 # Split gas coin, and then assign out to its different parts
 --split-coins gas [1,2,3]
 --assign coins

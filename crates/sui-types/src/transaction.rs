@@ -2250,6 +2250,13 @@ impl SenderSignedData {
             .any(|sig| sig.is_upgraded_multisig())
     }
 
+    pub fn uses_randomness(&self) -> bool {
+        self.transaction_data()
+            .shared_input_objects()
+            .iter()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
+    }
+
     #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
@@ -2274,24 +2281,9 @@ impl SenderSignedData {
     }
 
     /// Validate untrusted user transaction, including its size, input count, command count, etc.
-    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
-        // Enforce overall transaction size limit.
-        let tx_size = self.serialized_size()?;
-        let max_tx_size_bytes = config.max_tx_size_bytes();
-
-        fp_ensure!(
-            tx_size as u64 <= max_tx_size_bytes,
-            SuiError::UserInputError {
-                error: UserInputError::SizeLimitExceeded {
-                    limit: format!(
-                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
-                    ),
-                    value: tx_size.to_string(),
-                }
-            }
-        );
-
+    pub fn validity_check(&self, config: &ProtocolConfig, epoch: EpochId) -> SuiResult {
         // SenderSignedData must contain exactly one transaction.
+        // Many operations assume this invariant, so it is safest to check this one before anything else.
         fp_ensure!(
             self.inner_transactions().len() == 1,
             SuiError::UserInputError {
@@ -2301,14 +2293,38 @@ impl SenderSignedData {
             }
         );
 
+        // CRITICAL!!
         // Users cannot send system transactions.
-        let tx_data = &self.intent_message().value;
+        let tx_data = &self.transaction_data();
         fp_ensure!(
             !tx_data.is_system_tx(),
             SuiError::UserInputError {
                 error: UserInputError::Unsupported(
                     "SenderSignedData must not contain system transaction".to_string()
                 )
+            }
+        );
+
+        // Checks to see if the transaction has expired
+        if match &tx_data.expiration() {
+            TransactionExpiration::None => false,
+            TransactionExpiration::Epoch(exp_poch) => *exp_poch < epoch,
+        } {
+            return Err(SuiError::TransactionExpired);
+        }
+
+        // Enforce overall transaction size limit.
+        let tx_size = self.serialized_size()?;
+        let max_tx_size_bytes = config.max_tx_size_bytes();
+        fp_ensure!(
+            tx_size as u64 <= max_tx_size_bytes,
+            SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: format!(
+                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
+                    ),
+                    value: tx_size.to_string(),
+                }
             }
         );
 
@@ -2417,11 +2433,6 @@ impl<S> Envelope<SenderSignedData, S> {
 
     pub fn is_sponsored_tx(&self) -> bool {
         self.data().intent_message().value.is_sponsored_tx()
-    }
-
-    pub fn is_randomness_reader(&self) -> bool {
-        self.shared_input_objects()
-            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 }
 

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use surf_strategy::SurfStrategy;
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::sync::watch;
 use tracing::info;
 
@@ -32,33 +32,46 @@ pub async fn run<S: SurfStrategy + Default>(
     epoch_duration: Duration,
     package_paths: Vec<PathBuf>,
 ) -> SurfStatistics {
-    let cluster = Arc::new(
-        TestClusterBuilder::new()
-            .with_num_validators(VALIDATOR_COUNT)
-            .with_epoch_duration_ms(epoch_duration.as_millis() as u64)
-            .with_accounts(vec![
-                AccountConfig {
-                    address: None,
-                    gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
-                };
-                ACCOUNT_NUM
-            ])
-            .build()
-            .await,
-    );
+    let cluster = TestClusterBuilder::new()
+        .with_num_validators(VALIDATOR_COUNT)
+        .with_epoch_duration_ms(epoch_duration.as_millis() as u64)
+        .with_accounts(vec![
+            AccountConfig {
+                address: None,
+                gas_amounts: vec![DEFAULT_GAS_AMOUNT; GAS_OBJECT_COUNT],
+            };
+            ACCOUNT_NUM
+        ])
+        .build()
+        .await;
     info!(
         "Started cluster with {} validators and epoch duration of {:?}ms",
         VALIDATOR_COUNT,
         epoch_duration.as_millis()
     );
+    run_with_test_cluster::<S>(run_duration, package_paths, cluster.into(), 0).await
+}
 
+pub async fn run_with_test_cluster<S: SurfStrategy + Default>(
+    run_duration: Duration,
+    package_paths: Vec<PathBuf>,
+    cluster: Arc<TestCluster>,
+    // Skips the first N accounts, for use in case this is running concurrently with other
+    // processes that also need gas.
+    skip_accounts: usize,
+) -> SurfStatistics {
     let seed = rand::thread_rng().gen::<u64>();
     info!("Initial Seed: {:?}", seed);
     let mut rng = StdRng::seed_from_u64(seed);
     let (exit_sender, exit_rcv) = watch::channel(());
 
-    let mut tasks =
-        SurferTask::create_surfer_tasks::<S>(cluster.clone(), rng.gen::<u64>(), exit_rcv).await;
+    let mut tasks = SurferTask::create_surfer_tasks::<S>(
+        cluster.clone(),
+        rng.gen::<u64>(),
+        exit_rcv,
+        skip_accounts,
+    )
+    .await;
     info!("Created {} surfer tasks", tasks.len());
 
     for path in package_paths {

@@ -137,7 +137,7 @@ pub enum ConsensusError {
         commit: Box<Commit>,
     },
 
-    #[error("Received unexpected block from from peer {peer}: {requested:?} vs {received:?}")]
+    #[error("Received unexpected block from peer {peer}: {requested:?} vs {received:?}")]
     UnexpectedBlockForCommit {
         peer: AuthorityIndex,
         requested: BlockRef,

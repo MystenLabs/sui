@@ -269,6 +269,7 @@ pub struct AuthorityMetrics {
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
+    pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -649,6 +650,11 @@ impl AuthorityMetrics {
                 "Number of transactions deferred by consensus handler",
                 registry,
             ).unwrap(),
+            consensus_handler_congested_transactions: register_int_counter_with_registry!(
+                "consensus_handler_congested_transactions",
+                "Number of transactions deferred by consensus handler due to congestion",
+                registry,
+            ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
                 "consensus_committed_subdags",
                 "Number of committed subdags, sliced by author",
@@ -838,10 +844,6 @@ impl AuthorityState {
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
-        // Cheap validity checks for a transaction, including input size limits.
-        tx_data.check_version_supported(epoch_store.protocol_config())?;
-        tx_data.validity_check(epoch_store.protocol_config())?;
-
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
@@ -860,7 +862,7 @@ impl AuthorityState {
         let (input_objects, receiving_objects) = self
             .input_loader
             .read_objects_for_signing(
-                tx_digest,
+                Some(tx_digest),
                 &input_object_kinds,
                 &receiving_objects_refs,
                 epoch_store.epoch(),
@@ -907,17 +909,10 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<HandleTransactionResponse> {
-        // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
         let tx_digest = *transaction.digest();
         debug!("handle_transaction");
 
-        // Ensure an idempotent answer. This is checked before the system_tx check so that
-        // a validator is able to return the signed system tx if it was already signed locally.
+        // Ensure an idempotent answer.
         if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
@@ -936,14 +931,6 @@ impl AuthorityState {
             .should_accept_user_certs()
         {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        // Checks to see if the transaction has expired
-        if match &transaction.inner().data().transaction_data().expiration() {
-            TransactionExpiration::None => false,
-            TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
-        } {
-            return Err(SuiError::TransactionExpired);
         }
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
@@ -1096,7 +1083,7 @@ impl AuthorityState {
         self.metrics.total_cert_attempts.inc();
 
         if !certificate.contains_shared_object() {
-            // Shared object transactions need to be sequenced by Narwhal before enqueueing
+            // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
@@ -1129,7 +1116,9 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
-        let input_objects = self.read_objects(certificate, epoch_store).await?;
+        let input_objects = self
+            .read_objects_for_execution(certificate, epoch_store)
+            .await?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -1148,7 +1137,7 @@ impl AuthorityState {
         .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
 
-    async fn read_objects(
+    pub async fn read_objects_for_execution(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -1159,32 +1148,14 @@ impl AuthorityState {
             .execution_load_input_objects_latency
             .start_timer();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
-        if certificate.data().transaction_data().is_end_of_epoch_tx() {
-            self.input_loader
-                .read_objects_for_synchronous_execution(
-                    certificate.digest(),
-                    input_objects,
-                    epoch_store.protocol_config(),
-                )
-                .await
-        } else {
-            self.input_loader
-                .read_objects_for_execution(
-                    epoch_store.as_ref(),
-                    &certificate.key(),
-                    input_objects,
-                    epoch_store.epoch(),
-                )
-                .await
-        }
-    }
-
-    pub async fn read_objects_for_benchmarking(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<InputObjects> {
-        self.read_objects(certificate, epoch_store).await
+        self.input_loader
+            .read_objects_for_execution(
+                epoch_store.as_ref(),
+                &certificate.key(),
+                input_objects,
+                epoch_store.epoch(),
+            )
+            .await
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -1708,11 +1679,12 @@ impl AuthorityState {
 
         let (input_objects, receiving_objects) = self
             .input_loader
-            .read_objects_for_dry_run_exec(
-                &transaction_digest,
+            .read_objects_for_signing(
+                // We don't want to cache this transaction since it's a dry run.
+                None,
                 &input_object_kinds,
                 &receiving_object_refs,
-                epoch_store.protocol_config(),
+                epoch_store.epoch(),
             )
             .await?;
 
@@ -1927,10 +1899,12 @@ impl AuthorityState {
 
         let (mut input_objects, receiving_objects) = self
             .input_loader
-            .read_objects_for_dev_inspect(
+            .read_objects_for_signing(
+                // We don't want to cache this transaction since it's a dev inspect.
+                None,
                 &input_object_kinds,
                 &receiving_object_refs,
-                protocol_config,
+                epoch_store.epoch(),
             )
             .await?;
 
@@ -2765,8 +2739,6 @@ impl AuthorityState {
     }
 
     /// Adds certificates to transaction manager for ordered execution.
-    /// It is unnecessary to persist the certificates into the pending_execution table,
-    /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -3484,6 +3456,62 @@ impl AuthorityState {
         self.execution_cache
             .get_events(digest)?
             .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
+    }
+
+    pub fn get_transaction_input_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> anyhow::Result<Vec<Object>> {
+        let input_object_keys = effects
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version))
+            .collect::<Vec<_>>();
+
+        let input_objects = self
+            .get_object_store()
+            .multi_get_objects_by_key(&input_object_keys)?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing input object key {:?} from tx {}",
+                        input_object_keys[idx],
+                        effects.transaction_digest()
+                    )
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(input_objects)
+    }
+
+    pub fn get_transaction_output_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> anyhow::Result<Vec<Object>> {
+        let output_object_keys = effects
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+            .collect::<Vec<_>>();
+
+        let output_objects = self
+            .get_object_store()
+            .multi_get_objects_by_key(&output_object_keys)?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing output object key {:?} from tx {}",
+                        output_object_keys[idx],
+                        effects.transaction_digest()
+                    )
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(output_objects)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -4531,17 +4559,17 @@ impl AuthorityState {
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
 
-        let input_objects = self
-            .input_loader
-            .read_objects_for_synchronous_execution(
-                tx_digest,
-                &executable_tx
-                    .data()
-                    .intent_message()
-                    .value
-                    .input_objects()?,
-                epoch_store.protocol_config(),
+        // We must manually assign the shared object versions to the transaction before executing it.
+        // This is because we do not sequence end-of-epoch transactions through consensus.
+        epoch_store
+            .assign_shared_object_versions_idempotent(
+                self.get_cache_reader().as_ref(),
+                &[executable_tx.clone()],
             )
+            .await?;
+
+        let input_objects = self
+            .read_objects_for_execution(&executable_tx, epoch_store)
             .await?;
 
         let (temporary_store, effects, _execution_error_opt) =

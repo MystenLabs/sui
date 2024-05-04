@@ -1019,6 +1019,12 @@ impl SuiNode {
 
             // Set high-performance defaults for quinn transport.
             // With 200MiB buffer size and ~500ms RTT, max throughput ~400MiB/s.
+            if quic_config.max_concurrent_bidi_streams.is_none() {
+                quic_config.max_concurrent_bidi_streams = Some(500);
+            }
+            if quic_config.max_concurrent_uni_streams.is_none() {
+                quic_config.max_concurrent_uni_streams = Some(500);
+            }
             if quic_config.stream_receive_window.is_none() {
                 quic_config.stream_receive_window = Some(100 << 20);
             }

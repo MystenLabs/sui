@@ -165,10 +165,8 @@ impl<C> ConsensusHandler<C> {
         }
     }
 
-    /// Updates the execution indexes based on the provided input. Some is returned when the indexes
-    /// are updated which means that the transaction has been seen for first time. None is returned
-    /// otherwise.
-    fn update_index_and_hash(&mut self, index: ExecutionIndices, v: &[u8]) -> bool {
+    /// Updates the execution indexes based on the provided input.
+    fn update_index_and_hash(&mut self, index: ExecutionIndices, v: &[u8]) {
         update_index_and_hash(&mut self.last_consensus_stats, index, v)
     }
 }
@@ -177,10 +175,10 @@ fn update_index_and_hash(
     last_consensus_stats: &mut ExecutionIndicesWithStats,
     index: ExecutionIndices,
     v: &[u8],
-) -> bool {
-    if last_consensus_stats.index >= index {
-        return false;
-    }
+) {
+    // The entry point of handle_consensus_output_internal() has filtered out any already processed
+    // consensus output. So we can safely assume that the index is always increasing.
+    assert!(last_consensus_stats.index < index);
 
     let previous_hash = last_consensus_stats.hash;
     let mut hasher = DefaultHasher::new();
@@ -197,12 +195,11 @@ fn update_index_and_hash(
 
     last_consensus_stats.index = index;
     last_consensus_stats.hash = hash;
-    true
 }
 
 #[async_trait]
 impl<C: CheckpointServiceNotify + Send + Sync> ExecutionState for ConsensusHandler<C> {
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
+    /// This function gets called by the consensus for each consensus commit.
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output(&mut self, consensus_output: ConsensusOutput) {
         let _scope = monitored_scope("HandleConsensusOutput");
@@ -399,21 +396,13 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             for (seq, (serialized, transaction, cert_origin)) in
                 transactions.into_iter().enumerate()
             {
-                let index = ExecutionIndices {
+                let current_tx_index = ExecutionIndices {
                     last_committed_round: round,
                     sub_dag_index: commit_sub_dag_index,
                     transaction_index: seq as u64,
                 };
 
-                let index_with_stats = if self.update_index_and_hash(index, serialized) {
-                    self.last_consensus_stats.clone()
-                } else {
-                    debug!(
-                        "Ignore consensus transaction at index {:?} as it appear to be already processed",
-                        index
-                    );
-                    continue;
-                };
+                self.update_index_and_hash(current_tx_index, serialized);
 
                 let certificate_author = self
                     .committee
@@ -423,7 +412,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 let sequenced_transaction = SequencedConsensusTransaction {
                     certificate_author_index: cert_origin,
                     certificate_author,
-                    consensus_index: index_with_stats.index,
+                    consensus_index: current_tx_index,
                     transaction,
                 };
 
@@ -777,7 +766,7 @@ impl SequencedConsensusTransaction {
         else {
             return false;
         };
-        certificate.is_randomness_reader()
+        certificate.uses_randomness()
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
@@ -840,7 +829,7 @@ mod tests {
     use super::*;
     use crate::{
         authority::{
-            authority_per_epoch_store::{ConsensusStats, ConsensusStatsAPI},
+            authority_per_epoch_store::ConsensusStatsAPI,
             test_authority_builder::TestAuthorityBuilder,
         },
         checkpoints::CheckpointServiceNoop,
@@ -974,30 +963,25 @@ mod tests {
     pub fn test_update_index_and_hash() {
         let index0 = ExecutionIndices {
             sub_dag_index: 0,
-            transaction_index: 0,
+            transaction_index: 5,
             last_committed_round: 0,
         };
         let index1 = ExecutionIndices {
-            sub_dag_index: 0,
-            transaction_index: 1,
-            last_committed_round: 0,
-        };
-        let index2 = ExecutionIndices {
             sub_dag_index: 1,
-            transaction_index: 0,
-            last_committed_round: 0,
+            transaction_index: 2,
+            last_committed_round: 3,
         };
 
         let mut last_seen = ExecutionIndicesWithStats {
-            index: index1,
+            index: index0,
             hash: 1000,
             stats: ConsensusStats::default(),
         };
 
         let tx = &[0];
-        assert!(!update_index_and_hash(&mut last_seen, index0, tx));
-        assert!(!update_index_and_hash(&mut last_seen, index1, tx));
-        assert!(update_index_and_hash(&mut last_seen, index2, tx));
+        update_index_and_hash(&mut last_seen, index1, tx);
+        assert_eq!(last_seen.index, index1);
+        assert_ne!(last_seen.hash, 1000);
     }
 
     #[test]

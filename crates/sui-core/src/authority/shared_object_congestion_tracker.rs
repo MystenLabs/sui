@@ -327,7 +327,7 @@ mod object_cost_tests {
         // Insert `tx`` as previously deferred transaction due to randomness.
         previously_deferred_tx_digests.insert(
             *tx.digest(),
-            DeferralKey::RandomnessDkg {
+            DeferralKey::Randomness {
                 deferred_from_round: 5,
             },
         );

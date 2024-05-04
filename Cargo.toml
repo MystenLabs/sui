@@ -74,7 +74,7 @@ members = [
   "consensus/config",
   "consensus/core",
   "crates/anemo-benchmark",
-  "crates/data-transform",
+  "crates/bin-version",
   "crates/mysten-common",
   "crates/mysten-metrics",
   "crates/mysten-network",
@@ -571,6 +571,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
+bin-version = { path = "crates/bin-version" }
 mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }

@@ -121,8 +121,23 @@ impl TrafficSketch {
 pub struct TrafficTally {
     pub connection_ip: Option<IpAddr>,
     pub proxy_ip: Option<IpAddr>,
-    pub weight: Weight,
+    pub error_weight: Weight,
     pub timestamp: SystemTime,
+}
+
+impl TrafficTally {
+    pub fn new(
+        connection_ip: Option<IpAddr>,
+        proxy_ip: Option<IpAddr>,
+        error_weight: Weight,
+    ) -> Self {
+        Self {
+            connection_ip,
+            proxy_ip,
+            error_weight,
+            timestamp: SystemTime::now(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -392,13 +407,13 @@ mod tests {
         let alice = TrafficTally {
             connection_ip: Some(IpAddr::V4(Ipv4Addr::new(1, 2, 3, 4))),
             proxy_ip: None,
-            weight: Weight::zero(),
+            error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
         let bob = TrafficTally {
             connection_ip: Some(IpAddr::V4(Ipv4Addr::new(4, 3, 2, 1))),
             proxy_ip: None,
-            weight: Weight::zero(),
+            error_weight: Weight::zero(),
             timestamp: SystemTime::now(),
         };
 
