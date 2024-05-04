@@ -96,7 +96,7 @@ async fn test_batch_verify() {
         *certs[i].auth_sig_mut_for_testing() = other_cert.auth_sig().clone();
         batch_verify_all_certificates_and_checkpoints(&committee, &certs, &ckpts).unwrap_err();
 
-        let results = batch_verify_certificates(&committee, &certs);
+        let results = batch_verify_certificates(&committee, &certs, None);
         results[i].as_ref().unwrap_err();
         for (_, r) in results.iter().enumerate().filter(|(j, _)| *j != i) {
             r.as_ref().unwrap();

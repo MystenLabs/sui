@@ -2,6 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::crypto::PublicKey;
+use crate::signature_verification::VerifiedDigestCache;
 use crate::{
     base_types::{EpochId, SuiAddress},
     crypto::{DefaultHash, Signature, SignatureScheme, SuiSignature},
@@ -18,6 +19,7 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::sync::Arc;
 
 #[cfg(test)]
 #[path = "unit_tests/zk_login_authenticator_test.rs"]
@@ -35,10 +37,15 @@ pub struct ZkLoginAuthenticator {
 }
 
 impl ZkLoginAuthenticator {
+    /// The caching key for zklogin signature, it is the hash of bcs bytes of ZkLoginInputs || max_epoch || flagged_pk_bytes.
+    /// If any of these fields change, zklogin signature is re-verified without using the caching result.
     pub fn hash_inputs(&self) -> ZKLoginInputsDigest {
         use fastcrypto::hash::HashFunction;
         let mut hasher = DefaultHash::default();
         hasher.update(bcs::to_bytes(&self.inputs).expect("serde should not fail"));
+        hasher.update(self.max_epoch.to_be_bytes());
+        hasher.update(vec![self.user_signature.scheme().flag()]);
+        hasher.update(self.user_signature.public_key_bytes());
         ZKLoginInputsDigest::new(hasher.finalize().into())
     }
 
@@ -67,6 +74,14 @@ impl ZkLoginAuthenticator {
     #[cfg(feature = "test-utils")]
     pub fn user_signature_mut_for_testing(&mut self) -> &mut Signature {
         &mut self.user_signature
+    }
+    #[cfg(feature = "test-utils")]
+    pub fn max_epoch_mut_for_testing(&mut self) -> &mut EpochId {
+        &mut self.max_epoch
+    }
+    #[cfg(feature = "test-utils")]
+    pub fn zk_login_inputs_mut_for_testing(&mut self) -> &mut ZkLoginInputs {
+        &mut self.inputs
     }
 }
 
@@ -127,6 +142,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         intent_msg: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
+        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
     ) -> SuiResult
     where
         T: Serialize,
@@ -164,19 +180,40 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
             SignatureScheme::ZkLoginAuthenticator,
         )?;
 
-        // Use flag || pk_bytes.
-        let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
-        extended_pk_bytes.extend(self.user_signature.public_key_bytes());
-        verify_zk_login(
-            &self.inputs,
-            self.max_epoch,
-            &extended_pk_bytes,
-            &aux_verify_data.oidc_provider_jwks,
-            &aux_verify_data.zk_login_env,
-        )
-        .map_err(|e| SuiError::InvalidSignature {
-            error: e.to_string(),
-        })
+        if zklogin_inputs_cache.is_some()
+            && zklogin_inputs_cache
+                .clone()
+                .unwrap()
+                .is_cached(&self.hash_inputs())
+        {
+            // If the zklogin inputs hits the cache, we don't need to verify the zklogin again that contains the heavy computation.
+            Ok(())
+        } else {
+            // if it is not cached, we verify the full zklogin inputs.
+            // build extended_pk_bytes as flag || pk_bytes.
+            let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];
+            extended_pk_bytes.extend(self.user_signature.public_key_bytes());
+            let res = verify_zk_login(
+                &self.inputs,
+                self.max_epoch,
+                &extended_pk_bytes,
+                &aux_verify_data.oidc_provider_jwks,
+                &aux_verify_data.zk_login_env,
+            )
+            .map_err(|e| SuiError::InvalidSignature {
+                error: e.to_string(),
+            });
+            match res {
+                Ok(_) => {
+                    // If it's verified ok, we cache the digest.
+                    if let Some(cache) = zklogin_inputs_cache {
+                        cache.cache_digest(self.hash_inputs());
+                    }
+                    Ok(())
+                }
+                Err(e) => Err(e),
+            }
+        }
     }
 }
 

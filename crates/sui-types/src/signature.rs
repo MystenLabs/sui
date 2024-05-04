@@ -5,8 +5,10 @@ use crate::committee::EpochId;
 use crate::crypto::{
     CompressedSignature, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes,
 };
+use crate::digests::ZKLoginInputsDigest;
 use crate::error::SuiError;
 use crate::multisig_legacy::MultiSigLegacy;
+use crate::signature_verification::VerifiedDigestCache;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::{base_types::SuiAddress, crypto::Signature, error::SuiResult, multisig::MultiSig};
 pub use enum_dispatch::enum_dispatch;
@@ -24,6 +26,7 @@ use schemars::JsonSchema;
 use serde::Serialize;
 use shared_crypto::intent::IntentMessage;
 use std::hash::Hash;
+use std::sync::Arc;
 #[derive(Default, Debug, Clone)]
 pub struct VerifyParams {
     // map from JwkId (iss, kid) => JWK
@@ -69,6 +72,7 @@ pub trait AuthenticatorTrait {
         value: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
+        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
     ) -> SuiResult
     where
         T: Serialize;
@@ -102,6 +106,7 @@ impl GenericSignature {
         author: SuiAddress,
         epoch: EpochId,
         verify_params: &VerifyParams,
+        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
     ) -> SuiResult
     where
         T: Serialize,
@@ -110,7 +115,7 @@ impl GenericSignature {
             epoch,
             verify_params.zklogin_max_epoch_upper_bound_delta,
         )?;
-        self.verify_claims(value, author, verify_params)
+        self.verify_claims(value, author, verify_params, zklogin_inputs_cache)
     }
 
     /// Parse [enum CompressedSignature] from trait SuiSignature `flag || sig || pk`.
@@ -286,6 +291,7 @@ impl AuthenticatorTrait for Signature {
         value: &IntentMessage<T>,
         author: SuiAddress,
         _aux_verify_data: &VerifyParams,
+        _zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
     ) -> SuiResult
     where
         T: Serialize,

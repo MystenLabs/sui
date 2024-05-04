@@ -130,7 +130,8 @@ pub(crate) async fn verify_zklogin_signature(
                 return Err(Error::Client("Tx sender mismatch author".to_string()));
             }
             let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
-            match sig.verify_authenticator(&intent_msg, tx_sender, curr_epoch, &verify_params) {
+            match sig.verify_authenticator(&intent_msg, tx_sender, curr_epoch, &verify_params, None)
+            {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],
@@ -153,7 +154,13 @@ pub(crate) async fn verify_zklogin_signature(
             );
 
             let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
-            match sig.verify_authenticator(&intent_msg, author.into(), curr_epoch, &verify_params) {
+            match sig.verify_authenticator(
+                &intent_msg,
+                author.into(),
+                curr_epoch,
+                &verify_params,
+                None,
+            ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],

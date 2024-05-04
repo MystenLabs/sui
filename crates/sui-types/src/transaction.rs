@@ -10,8 +10,8 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::digests::{ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::SharedInput;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
@@ -19,7 +19,9 @@ use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologue
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{GenericSignature, VerifyParams};
-use crate::signature_verification::verify_sender_signed_data_message_signatures;
+use crate::signature_verification::{
+    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+};
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
@@ -38,6 +40,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -2624,14 +2627,21 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 impl Transaction {
+    // this is used in simulacrum and unit test only.
     pub fn verify_signature(
         &self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
     ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(self.data(), current_epoch, verify_params)
+        verify_sender_signed_data_message_signatures(
+            self.data(),
+            current_epoch,
+            verify_params,
+            None,
+        )
     }
 
+    // this is used in simulacrum and unit test only.
     pub fn try_into_verified(
         self,
         current_epoch: EpochId,
@@ -2643,6 +2653,7 @@ impl Transaction {
 }
 
 impl SignedTransaction {
+    // used for testing only.
     pub fn verify_signatures_authenticated(
         &self,
         committee: &Committee,
@@ -2652,6 +2663,7 @@ impl SignedTransaction {
             self.data(),
             committee.epoch(),
             verify_params,
+            None,
         )?;
 
         self.auth_sig().verify_secure(
@@ -2661,6 +2673,7 @@ impl SignedTransaction {
         )
     }
 
+    // used for testing only.
     pub fn try_into_verified(
         self,
         committee: &Committee,
@@ -2691,11 +2704,13 @@ impl CertifiedTransaction {
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
+        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),
             committee.epoch(),
             verify_params,
+            zklogin_inputs_cache,
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -2704,12 +2719,13 @@ impl CertifiedTransaction {
         )
     }
 
+    // used for testing only.
     pub fn try_into_verified(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
+        self.verify_signatures_authenticated(committee, verify_params, None)?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }
 

@@ -133,7 +133,7 @@ fn batch_verification_bench(c: &mut Criterion) {
                     assert_eq!(certs.len() as u64, *batch_size);
                     b.iter(|| {
                         certs.shuffle(&mut thread_rng());
-                        batch_verify_certificates(&committee, &certs);
+                        batch_verify_certificates(&committee, &certs, None);
                     })
                 },
             );

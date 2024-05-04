@@ -418,7 +418,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         .collect();
 
     let aux_verify_data = VerifyParams::new(parsed, vec![], ZkLoginEnv::Test, true, true, Some(30));
-    let res = multisig.verify_claims(intent_msg, multisig_address, &aux_verify_data);
+    let res = multisig.verify_claims(intent_msg, multisig_address, &aux_verify_data, None);
     // since the zklogin inputs is crafted, it is expected that the proof verify failed, but all checks before passes.
     assert!(
         matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
@@ -453,8 +453,12 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         multisig_pk_padded,
     );
 
-    let res =
-        multisig_padded.verify_claims(intent_msg_padded, multisig_address_padded, &aux_verify_data);
+    let res = multisig_padded.verify_claims(
+        intent_msg_padded,
+        multisig_address_padded,
+        &aux_verify_data,
+        None,
+    );
     assert!(
         matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))
     );

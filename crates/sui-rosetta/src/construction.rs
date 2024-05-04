@@ -119,6 +119,7 @@ pub async fn combine(
         &signed_tx,
         place_holder_epoch,
         &VerifyParams::default(),
+        None, // no need to optimize for caching in rosseta
     )?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 

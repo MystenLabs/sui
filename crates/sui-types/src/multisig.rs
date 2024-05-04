@@ -3,7 +3,9 @@
 
 use crate::{
     crypto::{CompressedSignature, DefaultHash, SignatureScheme},
+    digests::ZKLoginInputsDigest,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
+    signature_verification::VerifiedDigestCache,
     zk_login_authenticator::ZkLoginAuthenticator,
 };
 pub use enum_dispatch::enum_dispatch;
@@ -24,6 +26,7 @@ use shared_crypto::intent::IntentMessage;
 use std::{
     hash::{Hash, Hasher},
     str::FromStr,
+    sync::Arc,
 };
 
 use crate::{
@@ -93,6 +96,7 @@ impl AuthenticatorTrait for MultiSig {
         value: &IntentMessage<T>,
         multisig_address: SuiAddress,
         verify_params: &VerifyParams,
+        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
@@ -180,7 +184,12 @@ impl AuthenticatorTrait for MultiSig {
                         }
                     })?;
                     authenticator
-                        .verify_claims(value, SuiAddress::from(subsig_pubkey), verify_params)
+                        .verify_claims(
+                            value,
+                            SuiAddress::from(subsig_pubkey),
+                            verify_params,
+                            zklogin_inputs_cache.clone(),
+                        )
                         .map_err(|e| FastCryptoError::GeneralError(e.to_string()))
                 }
             };

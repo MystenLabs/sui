@@ -539,6 +539,7 @@ impl KeyToolCommand {
                         address,
                         cur_epoch,
                         &VerifyParams::default(),
+                        None,
                     );
                     output.transaction_result = format!("{:?}", res);
                 };
@@ -565,6 +566,7 @@ impl KeyToolCommand {
                             tx_data.sender(),
                             cur_epoch,
                             &VerifyParams::default(),
+                            None,
                         );
                         CommandOutput::DecodeOrVerifyTx(DecodeOrVerifyTxOutput {
                             tx: tx_data,
@@ -1161,6 +1163,7 @@ impl KeyToolCommand {
                                     tx_data.execution_parts().1,
                                     cur_epoch.unwrap(),
                                     &verify_params,
+                                    None,
                                 );
                                 (serde_json::to_string(&tx_data)?, res)
                             }
@@ -1177,6 +1180,7 @@ impl KeyToolCommand {
                                     (&zk).try_into()?,
                                     cur_epoch.unwrap(),
                                     &verify_params,
+                                    None,
                                 );
                                 (serde_json::to_string(&data)?, res)
                             }

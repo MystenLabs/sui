@@ -466,7 +466,7 @@ pub fn make_cert_with_large_committee(
         .collect();
 
     let cert = CertifiedTransaction::new(transaction.clone().into_data(), sigs, committee).unwrap();
-    cert.verify_signatures_authenticated(committee, &Default::default())
+    cert.verify_signatures_authenticated(committee, &Default::default(), None)
         .unwrap();
     cert
 }
