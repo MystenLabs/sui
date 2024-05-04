@@ -6,6 +6,7 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
 import { bcs } from '../bcs/index.js';
+import type { Signer } from '../cryptography/keypair.js';
 import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
 import {
 	SIGNATURE_FLAG_TO_SCHEME,
@@ -19,6 +20,7 @@ import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
 import { toZkLoginPublicIdentifier } from '../zklogin/publickey.js';
+import { MultiSigSigner } from './signer.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }
@@ -169,6 +171,14 @@ export class MultiSigPublicKey extends PublicKey {
 
 	getPublicKeys() {
 		return this.publicKeys;
+	}
+
+	getThreshold() {
+		return this.multisigPublicKey.threshold;
+	}
+
+	getSigner(signers: Signer[]) {
+		return new MultiSigSigner(this, signers);
 	}
 
 	/**
