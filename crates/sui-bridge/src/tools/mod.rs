@@ -4,7 +4,7 @@ use crate::config::read_bridge_client_key;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
-    EmergencyActionType, LimitUpdateAction,
+    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
 };
 use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
@@ -12,6 +12,7 @@ use clap::*;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
+use fastcrypto::hash::{HashFunction, Keccak256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use std::path::PathBuf;
@@ -98,6 +99,22 @@ pub enum GovernanceClientCommands {
         #[clap(name = "new-usd-price", long)]
         new_usd_price: u64,
     },
+    #[clap(name = "upgrade-evm-contract")]
+    UpgradeEVMContract {
+        #[clap(name = "nonce", long)]
+        nonce: u64,
+        #[clap(name = "proxy-address", long)]
+        proxy_address: EthAddress,
+        /// The address of the new implementation contract
+        #[clap(name = "implementation-address", long)]
+        implementation_address: EthAddress,
+        /// Function selector with params types, e.g. `foo(uint256,bool,string)`
+        #[clap(name = "function-selector", long)]
+        function_selector: String,
+        /// Params to be passed to the function, e.g. `420,false,hello`
+        #[clap(name = "params", long)]
+        params: Vec<String>,
+    },
 }
 
 pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> BridgeAction {
@@ -143,7 +160,63 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             token_id: *token_id,
             new_usd_price: *new_usd_price,
         }),
+        GovernanceClientCommands::UpgradeEVMContract {
+            nonce,
+            proxy_address,
+            implementation_address,
+            function_selector,
+            params,
+        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: *nonce,
+            chain_id,
+            proxy_address: *proxy_address,
+            new_impl_address: *implementation_address,
+            call_data: encode_call_data(function_selector, params),
+        }),
     }
+}
+
+fn encode_call_data(function_selector: &str, params: &Vec<String>) -> Vec<u8> {
+    let left = function_selector
+        .find('(')
+        .expect("Invalid function selector, no left parentheses");
+    let right = function_selector
+        .find(')')
+        .expect("Invalid function selector, no right parentheses");
+    let param_types = function_selector[left + 1..right]
+        .split(',')
+        .map(|x| x.trim())
+        .collect::<Vec<&str>>();
+
+    assert_eq!(param_types.len(), params.len(), "Invalid number of params");
+
+    let mut call_data = Keccak256::digest(function_selector).digest[0..4].to_vec();
+    let mut tokens = vec![];
+    for (param, param_type) in params.iter().zip(param_types.iter()) {
+        match param_type.to_lowercase().as_str() {
+            "uint256" => {
+                tokens.push(ethers::abi::Token::Uint(
+                    ethers::types::U256::from_dec_str(param).expect("Invalid U256"),
+                ));
+            }
+            "bool" => {
+                tokens.push(ethers::abi::Token::Bool(match param.as_str() {
+                    "true" => true,
+                    "false" => false,
+                    _ => panic!("Invalid bool in params"),
+                }));
+            }
+            "string" => {
+                tokens.push(ethers::abi::Token::String(param.clone()));
+            }
+            // TODO: need to support more types if needed
+            _ => panic!("Invalid param type"),
+        }
+    }
+    if !tokens.is_empty() {
+        call_data.extend(ethers::abi::encode(&tokens));
+    }
+    call_data
 }
 
 pub fn select_contract_address(
@@ -158,7 +231,8 @@ pub fn select_contract_address(
         GovernanceClientCommands::UpdateLimit { .. } => config.eth_bridge_limiter_proxy_address,
         GovernanceClientCommands::UpdateAssetPrice { .. } => {
             config.eth_bridge_limiter_proxy_address
-        } // TODO: evm upgrade
+        }
+        GovernanceClientCommands::UpgradeEVMContract { proxy_address, .. } => *proxy_address,
     }
 }
 
@@ -213,5 +287,41 @@ impl BridgeCliConfig {
             .ok_or(anyhow!("Did not find gas object with enough balance"))?;
         println!("Using Gas object: {}", gas.coin_object_id);
         Ok((client_key, sui_client_address, gas.object_ref()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ethers::abi::FunctionExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_encode_call_data() {
+        let abi_json = std::fs::read_to_string("abi/tests/mock_sui_bridge_v2.json").unwrap();
+        let abi: ethers::abi::Abi = serde_json::from_str(&abi_json).unwrap();
+
+        let function_selector = "initializeV2Params(uint256,bool,string)";
+        let params = vec!["420".to_string(), "false".to_string(), "hello".to_string()];
+        let call_data = encode_call_data(function_selector, &params);
+
+        let function = abi
+            .functions()
+            .find(|f| {
+                let selector = f.selector();
+                call_data.starts_with(selector.as_ref())
+            })
+            .expect("Function not found");
+
+        // Decode the data excluding the selector
+        let tokens = function.decode_input(&call_data[4..]).unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                ethers::abi::Token::Uint(ethers::types::U256::from_dec_str("420").unwrap()),
+                ethers::abi::Token::Bool(false),
+                ethers::abi::Token::String("hello".to_string())
+            ]
+        )
     }
 }
