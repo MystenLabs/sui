@@ -132,11 +132,13 @@ impl CheckpointReader {
                 Ok(data) => return Ok(data),
                 Err(err) => match backoff.next_backoff() {
                     Some(duration) => {
-                        info!(
-                            "remote reader retry in {} ms. Error is {:?}",
-                            duration.as_millis(),
-                            err
-                        );
+                        if !err.to_string().contains("404") {
+                            debug!(
+                                "remote reader retry in {} ms. Error is {:?}",
+                                duration.as_millis(),
+                                err
+                            );
+                        }
                         tokio::time::sleep(duration).await
                     }
                     None => return Err(err),
