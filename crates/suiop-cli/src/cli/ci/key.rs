@@ -53,7 +53,7 @@ struct KeyResponse {
     pub_key: String,
 }
 
-async fn send_key_request(token: &str, action: &KeyAction) -> Result<KeyResponse> {
+async fn send_key_request(token: &str, action: &KeyAction) -> Result<()> {
     let full_url = format!("{}{}", API_SERVER, ENDPOINT);
     debug!("full_url: {}", full_url);
     let client = reqwest::Client::new();
@@ -87,9 +87,9 @@ async fn send_key_request(token: &str, action: &KeyAction) -> Result<KeyResponse
     let status = resp.status();
 
     if status.is_success() {
-        let json_resp = resp.json::<KeyResponse>().await?;
         match action {
             KeyAction::Create { repo_name } | KeyAction::ReCreate { repo_name } => {
+                let json_resp = resp.json::<KeyResponse>().await?;
                 let add_key_link = format!(
                     "https://github.com/MystenLabs/{}/settings/keys/new",
                     repo_name
@@ -110,7 +110,7 @@ Please add the public key above to your repository {} via the link below:
                 info!("Key for repo {} deleted", repo_name);
             }
         }
-        Ok(json_resp)
+        Ok(())
     } else {
         Err(anyhow::anyhow!(
             "Failed to manage keys, status code: {}",
