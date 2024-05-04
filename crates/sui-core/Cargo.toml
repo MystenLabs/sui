@@ -50,6 +50,7 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tokio-retry.workspace = true
 tokio-stream.workspace = true
+tonic.workspace = true
 tracing.workspace = true
 twox-hash.workspace = true
 
@@ -95,6 +96,12 @@ sui-simulator.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
 zeroize.workspace = true
+
+# Begin Scalaris extension
+serde_bytes = "0.11.14"
+consensus-common = { git = "https://github.com/scalarorg/common", branch = "dev", package = "consensus-common" }
+lazy_static = "1.4"
+# End scalaris extension
 
 [dev-dependencies]
 clap.workspace = true

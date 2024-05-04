@@ -68,3 +68,10 @@ pub mod signature_verifier;
 
 pub mod runtime;
 mod transaction_signing_filter;
+
+//----- Begin Scalaris extension -----//
+pub mod scalaris;
+// Reexport consensus-common
+pub use consensus_common::proto::ConsensusApiServer;
+pub use scalaris::ConsensusTransactionWrapper;
+//----- End of scalaris extension -----//

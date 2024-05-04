@@ -42,6 +42,7 @@ use crate::{
         committee_api::CommitteeAPI, consensus_output_api::ConsensusOutputAPI, AuthorityIndex,
     },
     execution_cache::ExecutionCacheRead,
+    scalaris::CONSENSUS_LISTENER,
     scoring_decision::update_low_scoring_authorities,
     transaction_manager::TransactionManager,
 };
@@ -220,7 +221,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
     #[instrument(level = "debug", skip_all)]
     async fn handle_consensus_output_internal(
         &mut self,
-        consensus_output: impl ConsensusOutputAPI,
+        consensus_output: impl crate::scalaris::ConsensusOutputAPI,
     ) {
         // This code no longer supports old protocol versions.
         assert!(self
@@ -246,6 +247,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
         /* (serialized, transaction, output_cert) */
         let mut transactions = vec![];
+        /*
+         * 20240504
+         * Scalaris: filter out ns_transactions
+         */
+        let mut ns_transactions = vec![];
         let timestamp = consensus_output.commit_timestamp_ms();
         let leader_author = consensus_output.leader_author_index();
         let commit_sub_dag_index = consensus_output.commit_sub_dag_index();
@@ -344,26 +350,44 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .inc_num_messages(authority_index as usize);
                 for (serialized_transaction, transaction) in authority_transactions {
                     bytes += serialized_transaction.len();
-                    self.metrics
-                        .consensus_handler_processed
-                        .with_label_values(&[classify(&transaction)])
-                        .inc();
-                    if matches!(
-                        &transaction.kind,
-                        ConsensusTransactionKind::UserTransaction(_)
-                    ) {
-                        self.last_consensus_stats
-                            .stats
-                            .inc_num_user_transactions(authority_index as usize);
-                    }
-                    if let ConsensusTransactionKind::RandomnessStateUpdate(randomness_round, _) =
-                        &transaction.kind
-                    {
-                        // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
-                        error!("BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}")
-                    } else {
-                        let transaction = SequencedConsensusTransactionKind::External(transaction);
-                        transactions.push((serialized_transaction, transaction, authority_index));
+                    match transaction {
+                        crate::scalaris::ConsensusTransactionWrapper::Namespace(transaction) => {
+                            self.metrics
+                                .consensus_handler_processed
+                                .with_label_values(&[transaction.namespace.as_str()])
+                                .inc();
+                            ns_transactions.push(transaction);
+                        }
+                        crate::scalaris::ConsensusTransactionWrapper::Consensus(transaction) => {
+                            self.metrics
+                                .consensus_handler_processed
+                                .with_label_values(&[classify(&transaction)])
+                                .inc();
+                            if matches!(
+                                &transaction.kind,
+                                ConsensusTransactionKind::UserTransaction(_)
+                            ) {
+                                self.last_consensus_stats
+                                    .stats
+                                    .inc_num_user_transactions(authority_index as usize);
+                            }
+                            if let ConsensusTransactionKind::RandomnessStateUpdate(
+                                randomness_round,
+                                _,
+                            ) = &transaction.kind
+                            {
+                                // These are deprecated and we should never see them. Log an error and eat the tx if one appears.
+                                error!("BUG: saw deprecated RandomnessStateUpdate tx for commit round {round:?}, randomness round {randomness_round:?}")
+                            } else {
+                                let transaction =
+                                    SequencedConsensusTransactionKind::External(transaction);
+                                transactions.push((
+                                    serialized_transaction,
+                                    transaction,
+                                    authority_index,
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -458,7 +482,11 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
         });
 
         fail_point_async!("crash"); // for tests that produce random crashes
-
+        if ns_transactions.len() > 0 {
+            self.transaction_scheduler
+                .send_ns_transactions(ns_transactions)
+                .await;
+        }
         self.transaction_scheduler
             .schedule(transactions_to_schedule)
             .await;
@@ -467,6 +495,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
 
 struct AsyncTransactionScheduler {
     sender: tokio::sync::mpsc::Sender<Vec<VerifiedExecutableTransaction>>,
+    tx_ns_transaction: tokio::sync::mpsc::Sender<Vec<crate::scalaris::NsTransaction>>,
 }
 
 impl AsyncTransactionScheduler {
@@ -475,14 +504,18 @@ impl AsyncTransactionScheduler {
         epoch_store: Arc<AuthorityPerEpochStore>,
     ) -> Self {
         let (sender, recv) = tokio::sync::mpsc::channel(16);
+        let (tx_ns_transaction, rx_ns_transaction) = tokio::sync::mpsc::channel(16);
+        spawn_monitored_task!(Self::listen_ns_transactions(rx_ns_transaction));
         spawn_monitored_task!(Self::run(recv, transaction_manager, epoch_store));
-        Self { sender }
+        Self {
+            sender,
+            tx_ns_transaction,
+        }
     }
 
     pub async fn schedule(&self, transactions: Vec<VerifiedExecutableTransaction>) {
         self.sender.send(transactions).await.ok();
     }
-
     pub async fn run(
         mut recv: tokio::sync::mpsc::Receiver<Vec<VerifiedExecutableTransaction>>,
         transaction_manager: Arc<TransactionManager>,
@@ -491,6 +524,18 @@ impl AsyncTransactionScheduler {
         while let Some(transactions) = recv.recv().await {
             let _guard = monitored_scope("ConsensusHandler::enqueue");
             transaction_manager.enqueue(transactions, &epoch_store);
+        }
+    }
+    pub async fn send_ns_transactions(&self, ns_transactions: Vec<crate::scalaris::NsTransaction>) {
+        //Scalar Todo: send transactions in seperated task
+        self.tx_ns_transaction.send(ns_transactions).await.ok();
+    }
+    pub async fn listen_ns_transactions(
+        mut recv: tokio::sync::mpsc::Receiver<Vec<crate::scalaris::NsTransaction>>,
+    ) {
+        while let Some(transactions) = recv.recv().await {
+            let _guard = monitored_scope("ConsensusListener::enqueue");
+            CONSENSUS_LISTENER.notify(transactions).await;
         }
     }
 }

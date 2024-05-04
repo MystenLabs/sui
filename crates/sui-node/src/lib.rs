@@ -1365,6 +1365,20 @@ impl SuiNode {
 
         server_builder = server_builder.add_service(ValidatorServer::new(validator_service));
 
+        /*
+         * 20240504 - Taivv
+         * Scalaris: Add consensus grpc service for external grpc client
+         */
+        let consensus_config = config
+            .consensus_config
+            .as_ref()
+            .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
+        let consensus_service =
+            sui_core::scalaris::ConsensusService::new(consensus_config, prometheus_registry);
+        server_builder =
+            server_builder.add_service(sui_core::ConsensusApiServer::new(consensus_service));
+        /************And adding consensus grpc server ****************/
+
         let server = server_builder
             .bind(config.network_address())
             .await
