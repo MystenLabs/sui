@@ -82,29 +82,6 @@ pub async fn update_lock_file(
     Ok(())
 }
 
-/*
-    let chain_id = context
-        .get_client()
-        .await
-        .context(
-            "Network issue: couldn't use client to connect to chain for determining environment",
-        )?
-        .read_api()
-        .get_chain_identifier()
-        .await
-        .context(
-            "Network issue: couldn't determine chain identifier for determining environment",
-)?;
-
-
-/// env
-context
-                .config
-                .get_active_env()
-                .map(|e| e.alias.clone())
-                .unwrap_or_else(|_| "unknown".into());
-    */
-
 /// Find the published on-chain ID in the `Move.lock` or
 /// `Move.toml` file for the current environmnent. Resolving from the
 /// `Move.lock` takes precedence, where addresses are automatically managed. The
