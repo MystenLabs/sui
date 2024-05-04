@@ -844,10 +844,6 @@ impl AuthorityState {
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
-        // Cheap validity checks for a transaction, including input size limits.
-        tx_data.check_version_supported(epoch_store.protocol_config())?;
-        tx_data.validity_check(epoch_store.protocol_config())?;
-
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
@@ -913,17 +909,10 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<HandleTransactionResponse> {
-        // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
         let tx_digest = *transaction.digest();
         debug!("handle_transaction");
 
-        // Ensure an idempotent answer. This is checked before the system_tx check so that
-        // a validator is able to return the signed system tx if it was already signed locally.
+        // Ensure an idempotent answer.
         if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
@@ -942,14 +931,6 @@ impl AuthorityState {
             .should_accept_user_certs()
         {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        // Checks to see if the transaction has expired
-        if match &transaction.inner().data().transaction_data().expiration() {
-            TransactionExpiration::None => false,
-            TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
-        } {
-            return Err(SuiError::TransactionExpired);
         }
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;

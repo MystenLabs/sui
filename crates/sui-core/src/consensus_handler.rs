@@ -766,7 +766,7 @@ impl SequencedConsensusTransaction {
         else {
             return false;
         };
-        certificate.is_randomness_reader()
+        certificate.uses_randomness()
     }
 
     pub fn as_shared_object_txn(&self) -> Option<&SenderSignedData> {
