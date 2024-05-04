@@ -169,7 +169,6 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
 ////////////////////////////////////////////////////////////////////////
 //                        Eth Message Conversion                      //
 ////////////////////////////////////////////////////////////////////////
-///
 
 impl From<SuiToEthBridgeAction> for eth_sui_bridge::Message {
     fn from(action: SuiToEthBridgeAction) -> Self {

@@ -9,18 +9,13 @@ use crate::types::{
 use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
 use clap::*;
-use ethers::abi::param_type::Reader;
-use ethers::abi::token::{LenientTokenizer, Tokenizer};
-use ethers::abi::Abi;
-use ethers::contract::BaseContract;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
+use fastcrypto::hash::{HashFunction, Keccak256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fs;
 use std::path::PathBuf;
-use std::str::FromStr;
 use sui_config::Config;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::ObjectRef;
@@ -110,12 +105,13 @@ pub enum GovernanceClientCommands {
         nonce: u64,
         #[clap(name = "proxy-address", long)]
         proxy_address: EthAddress,
+        /// The address of the new implementation contract
         #[clap(name = "implementation-address", long)]
         implementation_address: EthAddress,
-        #[clap(name = "contract-abi-name", long)]
-        contract_abi_name: String,
+        /// Function selector with params types, e.g. `foo(uint256,bool,string)`
         #[clap(name = "function-selector", long)]
         function_selector: String,
+        /// Params to be passed to the function, e.g. `420,false,hello`
         #[clap(name = "params", long)]
         params: Vec<String>,
     },
@@ -168,47 +164,59 @@ pub fn make_action(chain_id: BridgeChainId, cmd: &GovernanceClientCommands) -> B
             nonce,
             proxy_address,
             implementation_address,
-            contract_abi_name,
             function_selector,
             params,
-        } => {
-            let abi_path = format!("./abi/{}.json", contract_abi_name);
-            let abi = fs::read_to_string(abi_path).unwrap();
-            let contract = BaseContract::from(serde_json::from_str::<Abi>(&abi.clone()).unwrap());
+        } => BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
+            nonce: *nonce,
+            chain_id,
+            proxy_address: *proxy_address,
+            new_impl_address: *implementation_address,
+            call_data: encode_call_data(function_selector, params),
+        }),
+    }
+}
 
-            if contract_abi_name == "mock_sui_bridge_v2" {
-                let param1 =
-                    LenientTokenizer::tokenize(&Reader::read("uint256").unwrap(), &params[0])
-                        .unwrap()
-                        .into_uint()
-                        .unwrap();
-                let param2 = LenientTokenizer::tokenize(&Reader::read("bool").unwrap(), &params[1])
-                    .unwrap()
-                    .into_bool()
-                    .unwrap();
-                let param3 =
-                    LenientTokenizer::tokenize(&Reader::read("string").unwrap(), &params[2])
-                        .unwrap()
-                        .into_string()
-                        .unwrap();
+fn encode_call_data(function_selector: &str, params: &Vec<String>) -> Vec<u8> {
+    let left = function_selector
+        .find('(')
+        .expect("Invalid function selector, no left parentheses");
+    let right = function_selector
+        .find(')')
+        .expect("Invalid function selector, no right parentheses");
+    let param_types = function_selector[left + 1..right]
+        .split(',')
+        .map(|x| x.trim())
+        .collect::<Vec<&str>>();
 
-                // given function_selector like "initializeV2Params(uint256,bool,string)"
-                let call_data = contract
-                    .encode(&function_selector, (param1, param2, param3))
-                    .unwrap();
+    assert_eq!(param_types.len(), params.len(), "Invalid number of params");
 
-                BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
-                    nonce: *nonce,
-                    chain_id,
-                    proxy_address: *proxy_address,
-                    new_impl_address: *implementation_address,
-                    call_data: call_data.to_vec(),
-                })
-            } else {
-                panic!("Invalid contract name");
+    let mut call_data = Keccak256::digest(function_selector).digest[0..4].to_vec();
+    let mut tokens = vec![];
+    for (param, param_type) in params.iter().zip(param_types.iter()) {
+        match param_type.to_lowercase().as_str() {
+            "uint256" => {
+                tokens.push(ethers::abi::Token::Uint(
+                    ethers::types::U256::from_dec_str(param).expect("Invalid U256"),
+                ));
             }
+            "bool" => {
+                tokens.push(ethers::abi::Token::Bool(match param.as_str() {
+                    "true" => true,
+                    "false" => false,
+                    _ => panic!("Invalid bool in params"),
+                }));
+            }
+            "string" => {
+                tokens.push(ethers::abi::Token::String(param.clone()));
+            }
+            // TODO: need to support more types if needed
+            _ => panic!("Invalid param type"),
         }
     }
+    if !tokens.is_empty() {
+        call_data.extend(ethers::abi::encode(&tokens));
+    }
+    call_data
 }
 
 pub fn select_contract_address(
@@ -228,7 +236,6 @@ pub fn select_contract_address(
     }
 }
 
-// TODO: eth_bridge_committee and eth_bridge_limiter can be referenced from the sui_bridge contract
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -280,5 +287,41 @@ impl BridgeCliConfig {
             .ok_or(anyhow!("Did not find gas object with enough balance"))?;
         println!("Using Gas object: {}", gas.coin_object_id);
         Ok((client_key, sui_client_address, gas.object_ref()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use ethers::abi::FunctionExt;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_encode_call_data() {
+        let abi_json = std::fs::read_to_string("abi/tests/mock_sui_bridge_v2.json").unwrap();
+        let abi: ethers::abi::Abi = serde_json::from_str(&abi_json).unwrap();
+
+        let function_selector = "initializeV2Params(uint256,bool,string)";
+        let params = vec!["420".to_string(), "false".to_string(), "hello".to_string()];
+        let call_data = encode_call_data(function_selector, &params);
+
+        let function = abi
+            .functions()
+            .find(|f| {
+                let selector = f.selector();
+                call_data.starts_with(selector.as_ref())
+            })
+            .expect("Function not found");
+
+        // Decode the data excluding the selector
+        let tokens = function.decode_input(&call_data[4..]).unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                ethers::abi::Token::Uint(ethers::types::U256::from_dec_str("420").unwrap()),
+                ethers::abi::Token::Bool(false),
+                ethers::abi::Token::String("hello".to_string())
+            ]
+        )
     }
 }
