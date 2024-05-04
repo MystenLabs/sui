@@ -44,6 +44,7 @@ use sui_types::{
 use sui_types::{coin::CoinMetadata, event::EventID};
 
 use crate::db::{ConnectionConfig, ConnectionPool, ConnectionPoolConfig};
+use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
 use crate::store::diesel_macro::*;
 use crate::{
     errors::IndexerError,
@@ -982,14 +983,10 @@ impl<U: R2D2Connection> IndexerReader<U> {
             transactions::table
                 .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
                 .select((transactions::timestamp_ms, transactions::events))
-                .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
+                .first::<(i64, StoredTransactionEvents)>(conn)
         })?;
 
-        let events = serialized_events
-            .into_iter()
-            .flatten()
-            .map(|event| bcs::from_bytes::<sui_types::event::Event>(&event))
-            .collect::<Result<Vec<_>, _>>()?;
+        let events = stored_events_to_events(serialized_events)?;
         let tx_events = TransactionEvents { data: events };
 
         let sui_tx_events = tx_events_to_sui_tx_events(

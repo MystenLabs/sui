@@ -357,10 +357,8 @@ impl TransactionBlockEffects {
             return Ok(connection);
         };
 
-        let Some((prev, next, _, cs)) = page.paginate_consistent_indices(
-            stored_tx.balance_changes.len(),
-            self.checkpoint_viewed_at,
-        )?
+        let Some((prev, next, _, cs)) = page
+            .paginate_consistent_indices(stored_tx.get_balance_len(), self.checkpoint_viewed_at)?
         else {
             return Ok(connection);
         };
@@ -369,7 +367,7 @@ impl TransactionBlockEffects {
         connection.has_next_page = next;
 
         for c in cs {
-            let Some(serialized) = &stored_tx.balance_changes[c.ix] else {
+            let Some(serialized) = &stored_tx.get_balance_at_idx(c.ix) else {
                 continue;
             };
 
@@ -394,7 +392,7 @@ impl TransactionBlockEffects {
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let mut connection = Connection::new(false, false);
         let len = match &self.kind {
-            TransactionBlockEffectsKind::Stored { stored_tx, .. } => stored_tx.events.len(),
+            TransactionBlockEffectsKind::Stored { stored_tx, .. } => stored_tx.get_event_len(),
             TransactionBlockEffectsKind::Executed { events, .. }
             | TransactionBlockEffectsKind::DryRun { events, .. } => events.len(),
         };
