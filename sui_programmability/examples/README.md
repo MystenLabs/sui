@@ -1,5 +1,5 @@
 >[!IMPORTANT]
-> These examples are out-of-date and have been retained as an archive, please **find the latest examples in the [examples](../../examples) directory** which contains up-to-date [Move](../../examples/move) examples as well as end-to-end examples!
+> These examples are out-of-date and have been retained as an archive, please **find the latest versions in the [examples](../../examples) directory** which contains up-to-date [Move](../../examples/move) and end-to-end examples!
 
 Lots of Move code examples, partitioned by category:
 
