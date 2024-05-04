@@ -364,6 +364,7 @@ pub struct TxIndex {
     pub senders: Vec<SuiAddress>,
     pub recipients: Vec<SuiAddress>,
     pub move_calls: Vec<(ObjectID, String, String)>,
+    pub transaction_kind: TransactionKind,
 }
 
 // ObjectChange is not bcs deserializable, IndexedObjectChange is.

@@ -223,12 +223,14 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_calls (package, tx_sequence_number, cp_sequence_number) {
+    tx_calls (package, module, func, address, tx_sequence_number, cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         package -> Bytea,
         module -> Text,
         func -> Text,
+        address -> Bytea,
+        rel -> Int2,
     }
 }
 
@@ -237,6 +239,8 @@ diesel::table! {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         object_id -> Bytea,
+        address -> Bytea,
+        rel -> Int2,
     }
 }
 
@@ -253,6 +257,8 @@ diesel::table! {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         object_id -> Bytea,
+        address -> Bytea,
+        rel -> Int2,
     }
 }
 
@@ -261,6 +267,7 @@ diesel::table! {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         recipient -> Bytea,
+        transaction_kind -> Int2,
     }
 }
 
@@ -269,6 +276,7 @@ diesel::table! {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         sender -> Bytea,
+        transaction_kind -> Int2,
     }
 }
 

@@ -414,7 +414,7 @@ where
                 object_changes,
                 balance_change,
                 events,
-                transaction_kind,
+                transaction_kind: transaction_kind.clone(),
                 successful_tx_num: if fx.status().is_ok() {
                     tx.kind().tx_count() as u64
                 } else {
@@ -473,6 +473,7 @@ where
                 payers,
                 recipients,
                 move_calls,
+                transaction_kind,
             });
         }
         Ok((db_transactions, db_events, db_indices, db_displays))
