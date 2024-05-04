@@ -3,7 +3,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     fmt::Debug,
     ops::Bound::{Excluded, Included},
     sync::Arc,
@@ -11,7 +11,6 @@ use std::{
 
 use consensus_config::AuthorityIndex;
 use serde::{Deserialize, Serialize};
-use itertools::Itertools;
 
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Slot, VerifiedBlock},
@@ -62,14 +61,7 @@ impl<'a> ReputationScoreCalculator<'a> {
         );
 
         let unscored_subdag = UnscoredSubdag::new(context.clone(), unscored_subdags);
-
-        let commit_indexes = unscored_subdags
-            .iter()
-            .map(|subdag| subdag.commit_index)
-            .collect::<Vec<_>>();
-        let (min_commit_index, max_commit_index) =
-            commit_indexes.iter().minmax().into_option().unwrap();
-        let commit_range = CommitRange::new(*min_commit_index..*max_commit_index);
+        let commit_range = unscored_subdag.commit_range.clone();
 
         Self {
             unscored_subdag,
@@ -81,12 +73,10 @@ impl<'a> ReputationScoreCalculator<'a> {
     }
 
     pub(crate) fn calculate(&mut self) -> ReputationScores {
-        let leader_rounds = self.unscored_subdag.get_leader_rounds();
-        let (min_leader_round, max_leader_round) =
-            leader_rounds.iter().minmax().into_option().unwrap();
+        let (min_leader_round, max_leader_round) = self.unscored_subdag.get_leader_round_range();
         let scoring_round_range = self
             .scoring_strategy
-            .leader_scoring_round_range(*min_leader_round, *max_leader_round);
+            .leader_scoring_round_range(min_leader_round, max_leader_round);
 
         for leader_round in scoring_round_range {
             for committer in self.committer.get_committers() {
@@ -194,34 +184,63 @@ impl ReputationScores {
 /// scores.
 pub(crate) struct UnscoredSubdag {
     pub context: Arc<Context>,
+    // When the blocks are collected form the list of provided subdags we ensure
+    // that the CommittedSubDag instances are contiguous in commit index order.
+    // Therefore we can guarnatee the blocks of UnscoredSubdag are also sorted
+    // via the commit index.
     pub blocks: BTreeMap<BlockRef, VerifiedBlock>,
+    pub commit_range: CommitRange,
 }
 
 impl UnscoredSubdag {
     pub(crate) fn new(context: Arc<Context>, subdags: &[CommittedSubDag]) -> Self {
         let blocks = subdags
             .iter()
-            .flat_map(|subdag| subdag.blocks.iter())
+            .enumerate()
+            .flat_map(|(subdag_index, subdag)| {
+                if subdag_index == 0 {
+                    subdag.blocks.iter()
+                } else {
+                    let previous_subdag = &subdags[subdag_index - 1];
+                    let expected_next_subdag_index = previous_subdag.commit_index + 1;
+                    assert_eq!(
+                        subdag.commit_index, expected_next_subdag_index,
+                        "Non-contiguous commit index (expected: {}, found: {})",
+                        expected_next_subdag_index, subdag.commit_index
+                    );
+                    subdag.blocks.iter()
+                }
+            })
             .map(|block| (block.reference(), block.clone()))
             .collect::<BTreeMap<_, _>>();
+
+        // Guaranteed to have a contiguous list of commit indices
+        let commit_range = CommitRange::new(
+            subdags.first().unwrap().commit_index..subdags.last().unwrap().commit_index,
+        );
 
         assert!(
             !blocks.is_empty(),
             "Attempted to create UnscoredSubdag with no blocks"
         );
 
-        Self { context, blocks }
+        Self {
+            context,
+            blocks,
+            commit_range,
+        }
     }
 
-    // Skip genesis round as we don't produce leaders for that round.
-    pub(crate) fn get_leader_rounds(&self) -> Vec<Round> {
-        self.blocks
+    pub(crate) fn get_leader_round_range(&self) -> (Round, Round) {
+        // Skip genesis round as we don't produce leaders for that round.
+        let first_round = self
+            .blocks
             .keys()
+            .find(|block_ref| block_ref.round != 0)
             .map(|block_ref| block_ref.round)
-            .filter(|round| *round != 0)
-            .collect::<HashSet<Round>>()
-            .into_iter()
-            .collect::<Vec<Round>>()
+            .expect("There should be a non-zero round in the set of blocks");
+        let last_round = self.blocks.keys().last().unwrap().round;
+        (first_round, last_round)
     }
 
     pub(crate) fn find_supported_block(
@@ -341,7 +360,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        block::{timestamp_utc_ms, BlockTimestampMs, TestBlock},
+        block::{BlockTimestampMs, TestBlock},
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         leader_scoring_strategy::VoteScoringStrategy,
@@ -470,7 +489,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             commit_index,
         )];
         let mut calculator = ReputationScoreCalculator::new(
@@ -542,7 +561,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             BlockRef::new(1, AuthorityIndex::ZERO, BlockDigest::MIN),
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             1,
         )];
         let mut calculator = ReputationScoreCalculator::new(
@@ -625,7 +644,7 @@ mod tests {
         let unscored_subdags = vec![CommittedSubDag::new(
             leader_ref,
             blocks,
-            timestamp_utc_ms(),
+            context.clock.timestamp_utc_ms(),
             commit_index,
         )];
         let mut calculator = ReputationScoreCalculator::new(
