@@ -4,7 +4,7 @@
 use anyhow::Result;
 use clap::Parser;
 use suioplib::cli::{
-    docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, DockerArgs, IAMArgs,
+    ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, DockerArgs, IAMArgs,
     IncidentsArgs, PulumiArgs, ServiceArgs,
 };
 use tracing_subscriber::{
@@ -32,6 +32,8 @@ pub(crate) enum Resource {
     Pulumi(PulumiArgs),
     #[clap(aliases = ["s", "svc"])]
     Service(ServiceArgs),
+    #[clap()]
+    CI(CIArgs),
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -62,6 +64,12 @@ async fn main() -> Result<()> {
         }
         Resource::Service(args) => {
             service_cmd(&args).await?;
+        }
+        Resource::Iam(args) => {
+            iam_cmd(&args).await?;
+        }
+        Resource::CI(args) => {
+            ci_cmd(&args).await?;
         }
     }
 
