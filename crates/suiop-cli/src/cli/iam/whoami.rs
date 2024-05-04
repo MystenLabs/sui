@@ -12,7 +12,9 @@ pub async fn get_identity(base_url: &str, token: &str) -> Result<String> {
     debug!("full_url: {}", full_url);
     let client = reqwest::Client::new();
 
-    let req = client.get(full_url).header("token", token);
+    let req = client
+        .get(full_url)
+        .header("Authorization", format!("Bearer {}", token));
     debug!("req: {:?}", req);
 
     let resp = req.send().await?;
