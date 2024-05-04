@@ -73,7 +73,6 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
             .zip(&self.batches)
             .map(|(cert, batches)| {
                 assert_eq!(cert.header().payload().len(), batches.len());
-                
                 let transactions: Vec<(&[u8], ConsensusTransactionWrapper)> = batches
                     .iter()
                     .flat_map(|batch| {
@@ -91,14 +90,13 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                         //         Err(err) => {
                         //             // This should have been prevented by Narwhal batch verification.
                         //             panic!(
-                        //                                 "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
-                        //                                 err, cert, digest, serialized_transaction
-                        //                             );
+                        //                 "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
+                        //                 err, cert, digest, serialized_transaction
+                        //             );
                         //         }
                         //     };
                         //     (serialized_transaction.as_ref(), transaction)
                         // };
-    
                         batch.transactions().iter().map(move |serialized_transaction: &Vec<u8>| {
                             let transaction = bcs::from_bytes::<ConsensusTransaction>(serialized_transaction)
                             .map_or_else(
