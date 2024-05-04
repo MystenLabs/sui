@@ -99,7 +99,7 @@ Locally unique and never reassigned identifier within the issuer for the end use
 
 ### JSON Web Key (JWK)
 
-A JSON data structure that represents a set of public keys for an OP. A public endpoint (e.g. https://www.googleapis.com/oauth2/v3/certs) can be queried to retrieve the valid public keys corresponding to `kid` for the provider. Upon matching with the `kid` in the header of a JWT, the JWT can be verified against the payload and its corresponding JWK. In Sui, all authorities call the JWK endpoints independently, and update the latest view of JWKs for all supported providers during protocol upgrades. The correctness of JWKs is guaranteed by the quorum (2f+1) of validator stake.
+A JSON data structure that represents a set of public keys for an OP. A public endpoint (as in https://www.googleapis.com/oauth2/v3/certs) can be queried to retrieve the valid public keys corresponding to `kid` for the provider. Upon matching with the `kid` in the header of a JWT, the JWT can be verified against the payload and its corresponding JWK. In Sui, all authorities call the JWK endpoints independently, and update the latest view of JWKs for all supported providers during protocol upgrades. The correctness of JWKs is guaranteed by the quorum (2f+1) of validator stake.
 
 ### JSON Web Token (JWT)
 
@@ -296,23 +296,31 @@ The key differentiators that zkLogin brings to Sui are:
 
 1. Native Support in Sui: Unlike other solutions that are blockchain agnostic, zkLogin is deployed just for Sui. This means a zkLogin transaction can be combined with Multisig and sponsored transactions seamlessly.
 
-2. Self-Custodial without additional trust: We leverage the nonce field in JWT to commit to ephemeral public key, so no persistent private key management is required with any trusted parties. In addition, the JWK itself is an oracle agreed upon by the quorum of stakes by the validators with trusting any source of authority.
+1. Self-Custodial without additional trust: We leverage the nonce field in JWT to commit to ephemeral public key, so no persistent private key management is required with any trusted parties. In addition, the JWK itself is an oracle agreed upon by the quorum of stakes by the validators with trusting any source of authority.
 
-3. Full privacy: Nothing is required to submit on-chain except the ZK proof and the ephemeral signature.
+1. Full privacy: Nothing is required to submit on-chain except the ZK proof and the ephemeral signature.
 
-4. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
+1. Compatible with Existing Identity Providers: zkLogin is compatible with providers that adopt OpenID Connect. No need to trust any intermediate identity issuers or verifiers other than the OAuth providers themselves.
 
 ### How to verify a zkLogin signature off chain?
 
-The following options support a zkLogin signature over either transaction data or personal message.
+The following options support a zkLogin signature over either transaction data or personal message using the JWK state on Sui and current epoch. 
 
-1. Use keytool: See usage in keytool.
+1. Use Sui Typescript SDK. This initializes a GraphQL client and calls the endpoint under the hood.
 
-```bash
-$SUI_BINARY keytool zk-login-sig-verify -h
-```
+1. Use the GraphQL endpoint directly: `https://sui-[network].mystenlabs.com/graphql`, changing `[network]` to the appropriate value. See the <a href="/references/sui-api/sui-graphql/reference/api/queries/verify-zklogin-signature" data-noBrokenLinkCheck="true">GraphQL documentation</a> for more details. This is recommended if you do not plan to run any servers or handle any JWK rotations. 
 
-2. Use a self hosted server endpoint: See usage in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier).
+1. Use the [Sui Keytool CLI](../../references/cli/keytool.mdx). This is recommended for debug usage. 
+
+   ```sh
+   $SUI_BINARY keytool zk-login-sig-verify --sig $ZKLOGIN_SIG --bytes $BYTES --intent-scope 3 --network devnet --curr-epoch 3
+   ```
+
+1. Use a self-hosted server endpoint and call this endpoint, as described in [zklogin-verifier](https://github.com/MystenLabs/zklogin-verifier). This provides logic flexibility.
+
+### Can I use zkLogin inside a multisig wallet? 
+
+Yes. See the [Multisig Guide](../../guides/developer/cryptography/multisig.mdx) for more details.
 
 ## Related links
 
