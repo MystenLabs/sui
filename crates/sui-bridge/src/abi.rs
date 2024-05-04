@@ -3,7 +3,7 @@
 
 use crate::encoding::{
     BridgeMessageEncoding, ADD_TOKENS_ON_EVM_MESSAGE_VERSION, ASSET_PRICE_UPDATE_MESSAGE_VERSION,
-    LIMIT_UPDATE_MESSAGE_VERSION,
+    EVM_CONTRACT_UPGRADE_MESSAGE_VERSION, LIMIT_UPDATE_MESSAGE_VERSION,
 };
 use crate::encoding::{
     COMMITTEE_BLOCKLIST_MESSAGE_VERSION, EMERGENCY_BUTTON_MESSAGE_VERSION,
@@ -12,8 +12,8 @@ use crate::encoding::{
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction, BridgeAction,
-    BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, LimitUpdateAction,
-    SuiToEthBridgeAction,
+    BridgeActionType, EmergencyAction, EthLog, EthToSuiBridgeAction, EvmContractUpgradeAction,
+    LimitUpdateAction, SuiToEthBridgeAction,
 };
 use ethers::types::Log;
 use ethers::{
@@ -60,6 +60,12 @@ abigen!(
 abigen!(
     EthBridgeConfig,
     "abi/bridge_config.json",
+    event_derives(serde::Deserialize, serde::Serialize)
+);
+
+abigen!(
+    EthCommitteeUpgradeableContract,
+    "abi/bridge_committee_upgradeable.json",
     event_derives(serde::Deserialize, serde::Serialize)
 );
 
@@ -164,8 +170,6 @@ impl TryFrom<&TokensDepositedFilter> for EthToSuiTokenBridgeV1 {
 //                        Eth Message Conversion                      //
 ////////////////////////////////////////////////////////////////////////
 
-// TODO: add EvmContractUpgradeAction and tests
-
 impl From<SuiToEthBridgeAction> for eth_sui_bridge::Message {
     fn from(action: SuiToEthBridgeAction) -> Self {
         eth_sui_bridge::Message {
@@ -231,6 +235,18 @@ impl From<AddTokensOnEvmAction> for eth_bridge_config::Message {
         eth_bridge_config::Message {
             message_type: BridgeActionType::AddTokensOnEvm as u8,
             version: ADD_TOKENS_ON_EVM_MESSAGE_VERSION,
+            nonce: action.nonce,
+            chain_id: action.chain_id as u8,
+            payload: action.as_payload_bytes().into(),
+        }
+    }
+}
+
+impl From<EvmContractUpgradeAction> for eth_committee_upgradeable_contract::Message {
+    fn from(action: EvmContractUpgradeAction) -> Self {
+        eth_committee_upgradeable_contract::Message {
+            message_type: BridgeActionType::EvmContractUpgrade as u8,
+            version: EVM_CONTRACT_UPGRADE_MESSAGE_VERSION,
             nonce: action.nonce,
             chain_id: action.chain_id as u8,
             payload: action.as_payload_bytes().into(),
@@ -319,6 +335,30 @@ mod tests {
                 nonce: 2,
                 chain_id: BridgeChainId::EthSepolia as u8,
                 payload: Hex::decode("010000000000401640").unwrap().into(),
+            }
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_eth_message_conversion_contract_upgrade_action_regression() -> anyhow::Result<()> {
+        telemetry_subscribers::init_for_testing();
+        let action = EvmContractUpgradeAction {
+            nonce: 2,
+            chain_id: BridgeChainId::EthSepolia,
+            proxy_address: EthAddress::repeat_byte(1),
+            new_impl_address: EthAddress::repeat_byte(2),
+            call_data: Vec::from("deadbeef"),
+        };
+        let message: eth_committee_upgradeable_contract::Message = action.into();
+        assert_eq!(
+            message,
+            eth_committee_upgradeable_contract::Message {
+                message_type: BridgeActionType::EvmContractUpgrade as u8,
+                version: EVM_CONTRACT_UPGRADE_MESSAGE_VERSION,
+                nonce: 2,
+                chain_id: BridgeChainId::EthSepolia as u8,
+                payload: Hex::decode("0x00000000000000000000000001010101010101010101010101010101010101010000000000000000000000000202020202020202020202020202020202020202000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000086465616462656566000000000000000000000000000000000000000000000000").unwrap().into(),
             }
         );
         Ok(())

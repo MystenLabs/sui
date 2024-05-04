@@ -11,6 +11,16 @@ contract MockSuiBridgeV2 is SuiBridge {
         _pause();
     }
 
+    function initializeV2Params(uint256 value, bool _override, string memory _event) external {
+        if (_override) {
+            _pause();
+        } else if (value == 42) {
+            _pause();
+        }
+
+        emit MockEvent(_event);
+    }
+
     function newMockFunction(bool _pausing) external {
         isPausing = _pausing;
     }
@@ -22,4 +32,6 @@ contract MockSuiBridgeV2 is SuiBridge {
 
     // used to ignore for forge coverage
     function testSkip() external view {}
+
+    event MockEvent(string _event);
 }
