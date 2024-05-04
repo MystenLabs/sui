@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module utils::locked_coin {
-    use sui::balance::{Self, Balance};
+    use sui::balance::Balance;
     use sui::coin::{Self, Coin};
     use utils::epoch_time_lock::{Self, EpochTimeLock};
 
@@ -25,7 +25,7 @@ module utils::locked_coin {
 
     /// Public getter for the locked coin's value
     public fun value<T>(self: &LockedCoin<T>): u64 {
-        balance::value(&self.balance)
+        self.balance.value()
     }
 
     /// Lock a coin up until `locked_until_epoch`. The input Coin<T> is deleted and a LockedCoin<T>
@@ -34,7 +34,7 @@ module utils::locked_coin {
     public entry fun lock_coin<T>(
         coin: Coin<T>, recipient: address, locked_until_epoch: u64, ctx: &mut TxContext
     ) {
-        let balance = coin::into_balance(coin);
+        let balance = coin.into_balance();
         new_from_balance(balance, epoch_time_lock::new(locked_until_epoch, ctx), recipient, ctx);
     }
 
@@ -43,9 +43,9 @@ module utils::locked_coin {
     /// to the sender.
     public entry fun unlock_coin<T>(locked_coin: LockedCoin<T>, ctx: &mut TxContext) {
         let LockedCoin { id, balance, locked_until_epoch } = locked_coin;
-        object::delete(id);
-        epoch_time_lock::destroy(locked_until_epoch, ctx);
+        id.delete();
+        locked_until_epoch.destroy(ctx);
         let coin = coin::from_balance(balance, ctx);
-        transfer::public_transfer(coin, tx_context::sender(ctx));
+        transfer::public_transfer(coin, ctx.sender());
     }
 }
