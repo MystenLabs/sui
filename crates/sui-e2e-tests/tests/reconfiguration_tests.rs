@@ -690,7 +690,7 @@ async fn do_test_reconfig_with_committee_change_stress() {
             // otherwise new validators to the committee will not be able to catch up to the network
             // TODO: remove and replace with usage of archival solution
             .filter(|node| {
-                node.config
+                node.config()
                     .authority_store_pruning_config
                     .num_epochs_to_retain_for_checkpoints()
                     .is_some()

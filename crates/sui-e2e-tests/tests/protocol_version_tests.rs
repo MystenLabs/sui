@@ -193,7 +193,7 @@ mod sim_only_tests {
         // verify that the node that didn't support the new version shut itself down.
         for v in test_cluster.swarm.validator_nodes() {
             if !v
-                .config
+                .config()
                 .supported_protocol_versions
                 .unwrap()
                 .is_version_supported(ProtocolVersion::new(FINISH))

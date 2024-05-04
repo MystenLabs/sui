@@ -163,7 +163,7 @@ impl TestCluster {
     pub fn all_node_handles(&self) -> Vec<SuiNodeHandle> {
         self.swarm
             .all_nodes()
-            .map(|n| n.get_node_handle().unwrap())
+            .flat_map(|n| n.get_node_handle())
             .collect()
     }
 
@@ -438,16 +438,16 @@ impl TestCluster {
     /// Note that we don't restart the fullnode here, and it is assumed that the fulnode supports
     /// the entire version range.
     pub async fn update_validator_supported_versions(
-        &mut self,
+        &self,
         new_supported_versions: SupportedProtocolVersions,
     ) {
         for authority in self.get_validator_pubkeys() {
             self.stop_node(&authority);
             tokio::time::sleep(Duration::from_millis(1000)).await;
             self.swarm
-                .node_mut(&authority)
+                .node(&authority)
                 .unwrap()
-                .config
+                .config()
                 .supported_protocol_versions = Some(new_supported_versions);
             self.start_node(&authority).await;
             info!("Restarted validator {}", authority);
@@ -499,6 +499,22 @@ impl TestCluster {
         )
         .await
         .expect("Timed out waiting for authenticator state update");
+    }
+
+    /// Return the highest observed protocol version in the test cluster.
+    pub fn highest_protocol_version(&self) -> ProtocolVersion {
+        self.all_node_handles()
+            .into_iter()
+            .map(|h| {
+                h.with(|node| {
+                    node.state()
+                        .epoch_store_for_testing()
+                        .epoch_start_state()
+                        .protocol_version()
+                })
+            })
+            .max()
+            .expect("at least one node must be up to get highest protocol version")
     }
 
     pub async fn test_transaction_builder(&self) -> TestTransactionBuilder {
@@ -944,6 +960,11 @@ impl TestClusterBuilder {
         self
     }
 
+    pub fn with_additional_accounts(mut self, accounts: Vec<AccountConfig>) -> Self {
+        self.get_or_init_genesis_config().accounts.extend(accounts);
+        self
+    }
+
     pub fn with_config_dir(mut self, config_dir: PathBuf) -> Self {
         self.config_dir = Some(config_dir);
         self
@@ -1015,7 +1036,7 @@ impl TestClusterBuilder {
             PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG)).unwrap();
 
         let fullnode = swarm.fullnodes().next().unwrap();
-        let json_rpc_address = fullnode.config.json_rpc_address;
+        let json_rpc_address = fullnode.config().json_rpc_address;
         let fullnode_handle =
             FullNodeHandle::new(fullnode.get_node_handle().unwrap(), json_rpc_address).await;
 

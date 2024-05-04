@@ -12069,6 +12069,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-storage",
+ "sui-surfer",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
