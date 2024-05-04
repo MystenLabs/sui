@@ -104,6 +104,7 @@ pub type ImmObjects = Arc<RwLock<HashMap<StructTag, Vec<ObjectRef>>>>;
 pub type SharedObjects = Arc<RwLock<HashMap<StructTag, Vec<(ObjectID, SequenceNumber)>>>>;
 
 pub struct SurferState {
+    pub id: usize,
     pub cluster: Arc<TestCluster>,
     pub rng: StdRng,
 
@@ -119,6 +120,7 @@ pub struct SurferState {
 
 impl SurferState {
     pub fn new(
+        id: usize,
         cluster: Arc<TestCluster>,
         rng: StdRng,
         address: SuiAddress,
@@ -129,6 +131,7 @@ impl SurferState {
         entry_functions: Arc<RwLock<Vec<EntryFunction>>>,
     ) -> Self {
         Self {
+            id,
             cluster,
             rng,
             address,
@@ -141,6 +144,7 @@ impl SurferState {
         }
     }
 
+    #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     pub async fn execute_move_transaction(
         &mut self,
         package: ObjectID,
@@ -201,6 +205,7 @@ impl SurferState {
         self.process_tx_effects(&effects).await;
     }
 
+    #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     async fn process_tx_effects(&mut self, effects: &SuiTransactionBlockEffects) {
         for (owned_ref, write_kind) in effects.all_changed_objects() {
             if matches!(owned_ref.owner, Owner::ObjectOwner(_)) {
@@ -310,6 +315,7 @@ impl SurferState {
         self.entry_functions.write().await.extend(entry_functions);
     }
 
+    #[tracing::instrument(skip_all, fields(surfer_id = self.id))]
     pub async fn publish_package(&mut self, path: PathBuf) {
         let rgp = self.cluster.get_reference_gas_price().await;
         let package = BuildConfig::new_for_testing().build(path.clone()).unwrap();

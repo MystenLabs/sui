@@ -779,6 +779,7 @@ mod test {
                 test_duration,
                 test_package_paths,
                 test_cluster,
+                1, // skip first account for use by bench_task
             )
             .await;
             info!("sui_surfer test complete with results: {results:?}");
