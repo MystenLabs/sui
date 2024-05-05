@@ -12,7 +12,7 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
-use super::move_package::MovePackage;
+use super::move_package::{self, MovePackage, MovePackageCheckpointFilter};
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -433,6 +433,28 @@ impl Query {
         )
         .await
         .extend()
+    }
+
+    /// The Move packages that exist in the network, optionally filtered to be strictly before
+    /// `beforeCheckpoint` and/or strictly after `afterCheckpoint`.
+    ///
+    /// This query will return all versions of a given user package that appear between the
+    /// specified checkpoints, but only records the latest versions of system packages.
+    async fn packages(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<move_package::Cursor>,
+        last: Option<u64>,
+        before: Option<move_package::Cursor>,
+        filter: Option<MovePackageCheckpointFilter>,
+    ) -> Result<Connection<String, MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        MovePackage::paginate_by_checkpoint(ctx.data_unchecked(), page, filter, checkpoint)
+            .await
+            .extend()
     }
 
     /// Fetch the protocol config by protocol version (defaults to the latest protocol
