@@ -1,4 +1,4 @@
-processed 14 tasks
+processed 15 tasks
 
 init:
 A: object(0,0)
@@ -13,7 +13,7 @@ task 2, line 11:
 //# create-checkpoint
 Checkpoint created: 1
 
-task 3, lines 13-21:
+task 3, lines 13-28:
 //# run-graphql
 Response: {
   "data": {
@@ -28,21 +28,45 @@ Response: {
           ]
         }
       }
+    },
+    "packages": {
+      "nodes": [
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "version": 1
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "version": 1
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+          "version": 1
+        },
+        {
+          "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+          "version": 1
+        },
+        {
+          "address": "0x175ae86f2df1eb652d57fbe9e44c7f2d67870d2b6776a4356f30930221b63b88",
+          "version": 1
+        }
+      ]
     }
   }
 }
 
-task 4, lines 23-27:
+task 4, lines 30-34:
 //# upgrade --package P0 --upgrade-capability 1,1 --sender A
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5251600,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5, line 29:
+task 5, line 36:
 //# create-checkpoint
 Checkpoint created: 2
 
-task 6, lines 31-39:
+task 6, lines 38-53:
 //# run-graphql
 Response: {
   "data": {
@@ -60,21 +84,49 @@ Response: {
           ]
         }
       }
+    },
+    "packages": {
+      "nodes": [
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "version": 1
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "version": 1
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+          "version": 1
+        },
+        {
+          "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+          "version": 1
+        },
+        {
+          "address": "0x175ae86f2df1eb652d57fbe9e44c7f2d67870d2b6776a4356f30930221b63b88",
+          "version": 1
+        },
+        {
+          "address": "0x351bc614b36f0f522a64334e4c278d4bfe200234958870c084e0a005f041d681",
+          "version": 2
+        }
+      ]
     }
   }
 }
 
-task 7, lines 41-46:
+task 7, lines 55-60:
 //# upgrade --package P1 --upgrade-capability 1,1 --sender A
 created: object(7,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 5426400,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 8, line 48:
+task 8, line 62:
 //# create-checkpoint
 Checkpoint created: 3
 
-task 9, lines 50-58:
+task 9, lines 64-79:
 //# run-graphql
 Response: {
   "data": {
@@ -95,11 +147,43 @@ Response: {
           ]
         }
       }
+    },
+    "packages": {
+      "nodes": [
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "version": 1
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "version": 1
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+          "version": 1
+        },
+        {
+          "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+          "version": 1
+        },
+        {
+          "address": "0x175ae86f2df1eb652d57fbe9e44c7f2d67870d2b6776a4356f30930221b63b88",
+          "version": 1
+        },
+        {
+          "address": "0x351bc614b36f0f522a64334e4c278d4bfe200234958870c084e0a005f041d681",
+          "version": 2
+        },
+        {
+          "address": "0x0eae57b7a07b0548b1f6b0c309f0692828ff994e9159b541334b25582980631c",
+          "version": 3
+        }
+      ]
     }
   }
 }
 
-task 10, lines 60-97:
+task 10, lines 81-118:
 //# run-graphql
 Response: {
   "data": {
@@ -199,7 +283,7 @@ Response: {
   }
 }
 
-task 11, lines 99-136:
+task 11, lines 120-157:
 //# run-graphql
 Response: {
   "data": {
@@ -290,7 +374,7 @@ Response: {
   }
 }
 
-task 12, lines 138-193:
+task 12, lines 159-214:
 //# run-graphql
 Response: {
   "data": {
@@ -429,7 +513,7 @@ Response: {
   }
 }
 
-task 13, lines 195-223:
+task 13, lines 216-244:
 //# run-graphql
 Response: {
   "data": {
@@ -439,5 +523,101 @@ Response: {
       "v4": null
     },
     "v4": null
+  }
+}
+
+task 14, lines 246-277:
+//# run-graphql
+Response: {
+  "data": {
+    "before": {
+      "nodes": [
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+          "version": 1,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+          "version": 1,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+          "version": 1,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        },
+        {
+          "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+          "version": 1,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 0
+              }
+            }
+          }
+        }
+      ]
+    },
+    "after": {
+      "nodes": [
+        {
+          "address": "0x351bc614b36f0f522a64334e4c278d4bfe200234958870c084e0a005f041d681",
+          "version": 2,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        },
+        {
+          "address": "0x0eae57b7a07b0548b1f6b0c309f0692828ff994e9159b541334b25582980631c",
+          "version": 3,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 3
+              }
+            }
+          }
+        }
+      ]
+    },
+    "between": {
+      "nodes": [
+        {
+          "address": "0x351bc614b36f0f522a64334e4c278d4bfe200234958870c084e0a005f041d681",
+          "version": 2,
+          "previousTransactionBlock": {
+            "effects": {
+              "checkpoint": {
+                "sequenceNumber": 2
+              }
+            }
+          }
+        }
+      ]
+    }
   }
 }
