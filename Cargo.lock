@@ -12246,7 +12246,6 @@ dependencies = [
  "indexmap 2.1.0",
  "itertools 0.10.5",
  "jsonrpsee",
- "lazy_static",
  "lru 0.10.0",
  "mockall",
  "moka",

@@ -1,3 +1,6 @@
+// Copyright (c) 2024, Scalaris.
+// SPDX-License-Identifier: Apache-2.0
+
 /*
 * 20240504
 * Listener for handling consensus output result

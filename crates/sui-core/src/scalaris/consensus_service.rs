@@ -1,3 +1,6 @@
+// Copyright (c) 2024, Scalaris.
+// SPDX-License-Identifier: Apache-2.0
+
 /*
 * 20240504
 * Implement grpc server for listening consensus request and sends transaction into consensus layer

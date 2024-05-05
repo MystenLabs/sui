@@ -1,3 +1,6 @@
+// Copyright (c) 2024, Scalaris.
+// SPDX-License-Identifier: Apache-2.0
+
 use consensus_common::proto::{CommitedTransactions, ExternalTransaction};
 use narwhal_types::Transaction;
 use serde::{Deserialize, Serialize};

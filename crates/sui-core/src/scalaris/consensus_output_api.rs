@@ -1,3 +1,6 @@
+// Copyright (c) 2024, Scalaris.
+// SPDX-License-Identifier: Apache-2.0
+
 /* 20240504
 * Parse consensus output byte array to ConsensusTransactionWrapper
 * Replace origin trait consensus_types/consensus_output_api.rs
