@@ -31,6 +31,7 @@ use crate::models::checkpoints::StoredCheckpoint;
 use crate::models::display::StoredDisplay;
 use crate::models::epoch::StoredEpochInfo;
 use crate::models::events::StoredEvent;
+use crate::models::obj_indices::StoredObjectVersion;
 use crate::models::objects::{
     StoredDeletedHistoryObject, StoredDeletedObject, StoredHistoryObject, StoredObject,
     StoredObjectSnapshot,
@@ -38,9 +39,9 @@ use crate::models::objects::{
 use crate::models::packages::StoredPackage;
 use crate::models::transactions::StoredTransaction;
 use crate::schema::{
-    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot, packages,
-    transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
-    tx_senders,
+    checkpoints, display, epochs, events, objects, objects_history, objects_snapshot,
+    objects_version, packages, transactions, tx_calls, tx_changed_objects, tx_digests,
+    tx_input_objects, tx_recipients, tx_senders,
 };
 use crate::types::{IndexedCheckpoint, IndexedEvent, IndexedPackage, IndexedTransaction, TxIndex};
 use crate::{
@@ -437,13 +438,16 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
             .checkpoint_db_commit_latency_objects_history_chunks
             .start_timer();
         let mut mutated_objects: Vec<StoredHistoryObject> = vec![];
+        let mut object_versions: Vec<StoredObjectVersion> = vec![];
         let mut deleted_object_ids: Vec<StoredDeletedHistoryObject> = vec![];
         for object in objects {
             match object {
                 ObjectChangeToCommit::MutatedObject(stored_object) => {
+                    object_versions.push(StoredObjectVersion::from(&stored_object));
                     mutated_objects.push(stored_object.into());
                 }
                 ObjectChangeToCommit::DeletedObject(stored_deleted_object) => {
+                    object_versions.push(StoredObjectVersion::from(&stored_deleted_object));
                     deleted_object_ids.push(stored_deleted_object.into());
                 }
             }
@@ -460,6 +464,11 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         mutated_object_change_chunk,
                         conn
                     );
+                }
+
+                for object_version_chunk in object_versions.chunks(PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX)
+                {
+                    insert_or_ignore_into!(objects_version::table, object_version_chunk, conn);
                 }
 
                 for deleted_objects_chunk in
