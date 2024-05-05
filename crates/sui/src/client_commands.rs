@@ -55,7 +55,7 @@ use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
     wallet_context::WalletContext,
-    SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
+    SuiClient, SUI_COIN_TYPE, SUI_DEVNET_URL, SUI_LOCAL_NETWORK_URL, SUI_TESTNET_URL,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -2527,7 +2527,7 @@ fn format_balance(
 
 /// Helper function to reduce code duplication for executing dry run
 pub async fn execute_dry_run(
-    context: &mut WalletContext,
+    client: &SuiClient,
     signer: SuiAddress,
     kind: TransactionKind,
     gas_budget: Option<u64>,
@@ -2537,17 +2537,13 @@ pub async fn execute_dry_run(
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
     let gas_budget = match gas_budget {
         Some(gas_budget) => gas_budget,
-        None => max_gas_budget(context).await?,
+        None => max_gas_budget(client).await?,
     };
-    let dry_run_tx_data = context
-        .get_client()
-        .await?
+    let dry_run_tx_data = client
         .transaction_builder()
         .tx_data_for_dry_run(signer, kind, gas_budget, gas_price, gas_payment, sponsor)
         .await;
-    let response = context
-        .get_client()
-        .await?
+    let response = client
         .read_api()
         .dry_run_transaction_block(dry_run_tx_data)
         .await
@@ -2565,16 +2561,15 @@ pub async fn execute_dry_run(
 /// This gas estimate is computed exactly as in the TypeScript SDK
 /// <https://github.com/MystenLabs/sui/blob/3c4369270605f78a243842098b7029daf8d883d9/sdk/typescript/src/transactions/TransactionBlock.ts#L845-L858>
 pub async fn estimate_gas_budget(
-    context: &mut WalletContext,
+    client: &SuiClient,
     signer: SuiAddress,
     kind: TransactionKind,
     gas_price: u64,
     gas_payment: Option<Vec<ObjectID>>,
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
-    let client = context.get_client().await?;
     let Ok(SuiClientCommandResult::DryRun(dry_run)) =
-        execute_dry_run(context, signer, kind, None, gas_price, gas_payment, sponsor).await
+        execute_dry_run(&client, signer, kind, None, gas_price, gas_payment, sponsor).await
     else {
         bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
     };
@@ -2588,13 +2583,8 @@ pub async fn estimate_gas_budget(
 }
 
 /// Queries the protocol config for the maximum gas allowed in a transaction.
-pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::Error> {
-    let cfg = context
-        .get_client()
-        .await?
-        .read_api()
-        .get_protocol_config(None)
-        .await?;
+pub async fn max_gas_budget(client: &SuiClient) -> Result<u64, anyhow::Error> {
+    let cfg = client.read_api().get_protocol_config(None).await?;
     Ok(match cfg.attributes.get("max_tx_gas") {
         Some(Some(sui_json_rpc_types::SuiProtocolConfigValue::U64(y))) => *y,
         _ => bail!(
@@ -2654,9 +2644,10 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         None => gas.map(|x| vec![x]),
     };
 
+    let client = context.get_client().await?;
     if dry_run {
         return execute_dry_run(
-            context,
+            &client,
             signer,
             tx_kind,
             gas_budget,
@@ -2671,7 +2662,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         Some(gas_budget) => gas_budget,
         None => {
             estimate_gas_budget(
-                context,
+                &client,
                 signer,
                 tx_kind.clone(),
                 gas_price,
@@ -2682,7 +2673,6 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
         }
     };
 
-    let client = context.get_client().await?;
     let tx_data = client
         .transaction_builder()
         .tx_data(
