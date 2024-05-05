@@ -27,6 +27,10 @@ module bridge::treasury {
     #[test_only]
     const USD_VALUE_MULTIPLIER: u64 = 100000000; // 8 DP accuracy
 
+    //////////////////////////////////////////////////////
+    // Types
+    //
+
     public struct BridgeTreasury has store {
         // token treasuries, values are TreasuryCaps for native bridge V1.
         treasuries: ObjectBag,
@@ -69,6 +73,25 @@ module bridge::treasury {
         native_token: bool
     }
 
+    public fun token_id<T>(self: &BridgeTreasury): u8 {
+        let metadata = self.get_token_metadata<T>();
+        metadata.id
+    }
+
+    public fun decimal_multiplier<T>(self: &BridgeTreasury): u64 {
+        let metadata = self.get_token_metadata<T>();
+        metadata.decimal_multiplier
+    }
+
+    public fun notional_value<T>(self: &BridgeTreasury): u64 {
+        let metadata = self.get_token_metadata<T>();
+        metadata.notional_value
+    }
+
+    //////////////////////////////////////////////////////
+    // Internal functions
+    //
+
     public(package) fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
         // Make sure TreasuryCap has not been minted before.
         assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
@@ -91,21 +114,6 @@ module bridge::treasury {
             decimal: coin::get_decimals(metadata),
             native_token: false
         });
-    }
-
-    public fun token_id<T>(self: &BridgeTreasury): u8 {
-        let metadata = self.get_token_metadata<T>();
-        metadata.id
-    }
-
-    public fun decimal_multiplier<T>(self: &BridgeTreasury): u64 {
-        let metadata = self.get_token_metadata<T>();
-        metadata.decimal_multiplier
-    }
-
-    public fun notional_value<T>(self: &BridgeTreasury): u64 {
-        let metadata = self.get_token_metadata<T>();
-        metadata.notional_value
     }
 
     public(package) fun add_new_token(self: &mut BridgeTreasury, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
@@ -177,6 +185,10 @@ module bridge::treasury {
         assert!(metadata.is_some(), EUnsupportedTokenType);
         metadata.destroy_some()
     }
+
+    //////////////////////////////////////////////////////
+    // Test functions
+    //
 
     #[test_only]
     public struct ETH {}
