@@ -146,6 +146,7 @@ struct RandomnessEventLoop {
     epoch: EpochId,
     authority_info: Arc<HashMap<AuthorityName, (PeerId, PartyId)>>,
     peer_share_ids: Option<HashMap<PeerId, Vec<ShareIndex>>>,
+    blacklisted_peers: BTreeSet<PeerId>,
     dkg_output: Option<dkg::Output<bls12381::G2Element, bls12381::G2Element>>,
     aggregation_threshold: u16,
     pending_tasks: BTreeSet<(EpochId, RandomnessRound)>,
@@ -232,6 +233,7 @@ impl RandomnessEventLoop {
                 Ok(acc)
             },
         )?);
+        self.blacklisted_peers = BTreeSet::new();
         self.allowed_peers.update(Arc::new(
             authority_info
                 .values()
@@ -337,6 +339,10 @@ impl RandomnessEventLoop {
         sig_bytes: Vec<Vec<u8>>,
     ) {
         // Big slate of validity checks on received partial signatures.
+        if self.blacklisted_peers.contains(&peer_id) {
+            debug!("skipping received partial sigs, peer is blacklisted");
+            return;
+        }
         let peer_share_ids = if let Some(peer_share_ids) = &self.peer_share_ids {
             peer_share_ids
         } else {
@@ -496,9 +502,9 @@ impl RandomnessEventLoop {
 
         // Try to verify the aggregated signature all at once. (Should work in the happy path.)
         if ThresholdBls12381MinSig::verify(vss_pk.c0(), &round.signature_message(), &sig).is_err() {
-            // If verifiation fails, some of the inputs must be invalid. We have to go through
+            // If verification fails, some of the inputs must be invalid. We have to go through
             // one-by-one to find which.
-            // TODO: add test for individual sig verification.
+            // TODO: add test for individual sig verification and the blacklisted_peers set.
             self.received_partial_sigs
                 .retain(|&(e, r, peer_id), partial_sigs| {
                     if epoch != e || round != r {
@@ -512,10 +518,10 @@ impl RandomnessEventLoop {
                     )
                     .is_err()
                     {
+                        self.blacklisted_peers.insert(peer_id);
                         warn!(
                             "received invalid partial signatures from possibly-Byzantine peer {peer_id}"
                         );
-                        // TODO: Ignore future messages from peers sending bad signatures.
                         return false;
                     }
                     true
