@@ -251,9 +251,10 @@ impl Owner {
         Object::query(
             ctx,
             self.address,
-            object::ObjectLookup::LatestAt {
-                parent_version: self.root_version,
-                checkpoint_viewed_at: self.checkpoint_viewed_at,
+            if let Some(parent_version) = self.root_version {
+                Object::under_parent(parent_version, self.checkpoint_viewed_at)
+            } else {
+                Object::latest_at(self.checkpoint_viewed_at)
             },
         )
         .await
