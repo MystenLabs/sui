@@ -2655,7 +2655,7 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     };
 
     if dry_run {
-        execute_dry_run(
+        return execute_dry_run(
             context,
             signer,
             tx_kind,
@@ -2664,66 +2664,65 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
             gas.clone(),
             None,
         )
-        .await
-    } else {
-        let gas_budget = match gas_budget {
-            Some(gas_budget) => gas_budget,
-            None => {
-                estimate_gas_budget(
-                    context,
-                    signer,
-                    tx_kind.clone(),
-                    gas_price,
-                    gas.clone(),
-                    None,
-                )
-                .await?
-            }
-        };
+        .await;
+    }
 
-        let client = context.get_client().await?;
-        let tx_data = client
-            .transaction_builder()
-            .tx_data(
+    let gas_budget = match gas_budget {
+        Some(gas_budget) => gas_budget,
+        None => {
+            estimate_gas_budget(
+                context,
                 signer,
-                tx_kind,
-                gas_budget,
+                tx_kind.clone(),
                 gas_price,
-                gas.unwrap_or_default(),
+                gas.clone(),
                 None,
             )
-            .await?;
+            .await?
+        }
+    };
 
-        if serialize_unsigned_transaction {
-            Ok(SuiClientCommandResult::SerializedUnsignedTransaction(
-                tx_data,
+    let client = context.get_client().await?;
+    let tx_data = client
+        .transaction_builder()
+        .tx_data(
+            signer,
+            tx_kind,
+            gas_budget,
+            gas_price,
+            gas.unwrap_or_default(),
+            None,
+        )
+        .await?;
+
+    if serialize_unsigned_transaction {
+        Ok(SuiClientCommandResult::SerializedUnsignedTransaction(
+            tx_data,
+        ))
+    } else {
+        let signature = context.config.keystore.sign_secure(
+            &tx_data.sender(),
+            &tx_data,
+            Intent::sui_transaction(),
+        )?;
+        let sender_signed_data = SenderSignedData::new_from_sender_signature(tx_data, signature);
+        if serialize_signed_transaction {
+            Ok(SuiClientCommandResult::SerializedSignedTransaction(
+                sender_signed_data,
             ))
         } else {
-            let signature = context.config.keystore.sign_secure(
-                &tx_data.sender(),
-                &tx_data,
-                Intent::sui_transaction(),
-            )?;
-            let sender_signed_data =
-                SenderSignedData::new_from_sender_signature(tx_data, signature);
-            if serialize_signed_transaction {
-                Ok(SuiClientCommandResult::SerializedSignedTransaction(
-                    sender_signed_data,
-                ))
-            } else {
-                let transaction = Transaction::new(sender_signed_data);
-                let response = context.execute_transaction_may_fail(transaction).await?;
-                let effects = response.effects.as_ref().ok_or_else(|| {
-                    anyhow!("Effects from SuiTransactionBlockResult should not be empty")
-                })?;
-                if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
-                    return Err(anyhow!(
-                        "Error executing transaction: {:#?}",
-                        effects.status()
-                    ));
-                }
-                Ok(SuiClientCommandResult::TransactionBlock(response))
+            let transaction = Transaction::new(sender_signed_data);
+            let response = context.execute_transaction_may_fail(transaction).await?;
+            let effects = response.effects.as_ref().ok_or_else(|| {
+                anyhow!("Effects from SuiTransactionBlockResult should not be empty")
+            })?;
+            if matches!(effects.status(), SuiExecutionStatus::Failure { .. }) {
+                return Err(anyhow!(
+                    "Error executing transaction: {:#?}",
+                    effects.status()
+                ));
             }
+            Ok(SuiClientCommandResult::TransactionBlock(response))
         }
     }
 }

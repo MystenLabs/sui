@@ -155,22 +155,11 @@ impl PTB {
             },
         };
 
-        // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = gas {
-            context.get_object_ref(gas).await?
-        } else {
-            context
-                .gas_for_owner_budget(sender, gas_budget, BTreeSet::new())
-                .await?
-                .1
-                .object_ref()
-        };
-
         let transaction_response = dry_run_or_execute_or_serialize(
-            signer,
+            sender,
             tx_kind,
             context,
-            Some(coins),
+            None,
             None,
             Some(opts),
             None::<Opts>,
