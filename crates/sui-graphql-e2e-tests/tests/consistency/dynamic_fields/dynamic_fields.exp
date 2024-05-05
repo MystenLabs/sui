@@ -1166,7 +1166,17 @@ task 34, lines 497-528:
 Response: {
   "data": {
     "parent_version_4": {
-      "dfAtParentVersion4_outside_range": null
+      "dfAtParentVersion4_outside_range": {
+        "name": {
+          "bcs": "A2RmMQ==",
+          "type": {
+            "repr": "0x0000000000000000000000000000000000000000000000000000000000000001::string::String"
+          }
+        },
+        "value": {
+          "json": "df1"
+        }
+      }
     },
     "parent_version_6": {
       "dfAtParentVersion6": null
