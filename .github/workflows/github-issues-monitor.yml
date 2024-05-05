@@ -26,7 +26,7 @@ jobs:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         export author=${{ github.event.pull_request.user.login }}
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
 
         # if we don't have the slack id or the author is not part of Mysten org, then we slack this PR in a next job
         if [ -z "$slack_id" ]; then
@@ -45,7 +45,7 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         RUN_JOB: ${{needs.external_pr.outputs.run_pr_slack_job}}
-      if:  ${{needs.external_pr.outputs.run_pr_slack_job}} == 'true'
+      if:  ${{needs.external_pr.outputs.run_pr_slack_job == 'true'}}
       with:
         channel-id: '#github-new-issues'
         payload: |
