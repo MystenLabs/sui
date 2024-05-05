@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    client_commands::{
-        estimate_gas_budget, execute_dry_run, Opts, OptsWithGas, SuiClientCommandResult,
-    },
+    client_commands::{dry_run_or_execute_or_serialize, Opts, OptsWithGas, SuiClientCommandResult},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
@@ -12,7 +10,7 @@ use crate::{
         token::{Lexeme, Token},
     },
     displays::Pretty,
-    dry_run_or_execute_or_serialize, sp,
+    sp,
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
@@ -20,16 +18,13 @@ use anyhow::{anyhow, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
-use shared_crypto::intent::Intent;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{wallet_context::WalletContext, SuiClient};
 use sui_types::{
     digests::TransactionDigest,
     gas::GasCostSummary,
-    transaction::{
-        ProgrammableTransaction, SenderSignedData, Transaction, TransactionDataAPI, TransactionKind,
-    },
+    transaction::{ProgrammableTransaction, TransactionKind},
 };
 
 #[derive(Clone, Debug, Args)]
@@ -171,13 +166,24 @@ impl PTB {
                 .object_ref()
         };
 
+        let transaction_response = dry_run_or_execute_or_serialize(
+            signer,
+            tx_kind,
+            context,
+            Some(coins),
+            None,
+            Some(opts),
+            None::<Opts>,
+        )
+        .await?;
+
         if let SuiClientCommandResult::DryRun(response) = transaction_response {
             println!("{}", Pretty(&response));
             return Ok(());
         }
 
         let transaction_response =
-            if let SuiClientCommandResult::PTB(response) = transaction_response {
+            if let SuiClientCommandResult::TransactionBlock(response) = transaction_response {
                 response
             } else {
                 anyhow::bail!("Internal error. Cannot run the PTB")
