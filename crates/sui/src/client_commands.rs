@@ -2607,8 +2607,8 @@ pub async fn max_gas_budget(context: &mut WalletContext) -> Result<u64, anyhow::
 /// Dry run, execute, or serialize a transaction.
 ///
 /// This basically extracts the logical code for each command that deals with dry run, executing,
-/// or serializing a transaction and puts it in a single macro function to reduce code duplication.
-// TODO (stefan): Add gas_price option for all commands and remove it from this macro
+/// or serializing a transaction and puts it in a function to reduce code duplication.
+// TODO (stefan): Add gas_price option for all commands and remove it from this function
 pub(crate) async fn dry_run_or_execute_or_serialize(
     signer: SuiAddress,
     tx_kind: TransactionKind,
