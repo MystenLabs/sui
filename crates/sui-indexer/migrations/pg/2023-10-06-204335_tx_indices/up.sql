@@ -52,8 +52,9 @@ CREATE TABLE tx_calls (
     func                        TEXT         NOT NULL,
     address                     BYTEA        NOT NULL,
     rel                         smallint     NOT NULL,
-    -- 1. Using Primary Key as a unique index.
-    -- 2. Diesel does not like tables with no primary key.
+    -- The primary key is a composite key on the function type and address. In a single transaction
+    -- block, the same package, module, and even func may appear multiple times. This is then
+    -- broadcasted by the participants of a transaction block.
     PRIMARY KEY(package, module, func, address, tx_sequence_number, cp_sequence_number)
 );
 CREATE INDEX tx_calls_pkg_tx ON tx_calls (package, tx_sequence_number);
