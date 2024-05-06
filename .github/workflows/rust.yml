@@ -206,6 +206,7 @@ jobs:
           echo "PQ_LIB_DIR=C:\Program Files\PostgreSQL\12\lib" >> $GITHUB_ENV
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
+          cargo install diesel_cli --no-default-features --features postgres
       - name: cargo build
         run: |
           cargo build --all-features
