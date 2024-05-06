@@ -325,7 +325,7 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
         }
 
         E::Unit { .. } => vec![],
-        E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => svalue(),
+        E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant { .. } => svalue(),
 
         E::Cast(e, _) | E::UnaryExp(_, e) => {
             let v = exp(context, e);

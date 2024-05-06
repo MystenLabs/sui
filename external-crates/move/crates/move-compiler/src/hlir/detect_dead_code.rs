@@ -545,7 +545,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::Constant(_, _)
         | E::Move { .. }
         | E::Copy { .. }
-        | E::ErrorConstant(_) => None,
+        | E::ErrorConstant { .. } => None,
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -744,7 +744,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         | E::Annotate(_, _)
         | E::BorrowLocal(_, _)
         | E::Constant(_, _)
-        | E::ErrorConstant(_)
+        | E::ErrorConstant { .. }
         | E::Move { .. }
         | E::Copy { .. }
         | E::InvalidAccess(_)
