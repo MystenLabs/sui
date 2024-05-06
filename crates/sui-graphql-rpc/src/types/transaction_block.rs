@@ -22,8 +22,8 @@ use std::str::FromStr;
 use sui_indexer::{
     models::transactions::StoredTransaction,
     schema::{
-        transactions, tx_addresses, tx_calls, tx_changed_objects, tx_changed_objects_cp,
-        tx_input_objects, tx_input_objects_cp, tx_recipients, tx_senders,
+        transactions, tx_addresses, tx_calls, tx_changed_objects, tx_changed_objects_rel,
+        tx_input_objects, tx_input_objects_rel, tx_recipients, tx_senders,
     },
 };
 use sui_types::{
@@ -466,8 +466,8 @@ impl TransactionBlock {
                                 .distinct() // because the same tx_sequence_number may have multiple entries in these lookup tables
                                 .into_boxed();
 
-                            // sub_query =
-                            // filter.apply_addr_rel(sub_query, tx_calls::address, tx_calls::rel);
+                            sub_query =
+                                filter.apply_addr_rel(sub_query, tx_calls::address, tx_calls::rel);
                             sub_query = f.apply(
                                 sub_query,
                                 tx_calls::package,
@@ -485,40 +485,40 @@ impl TransactionBlock {
                             );
                             query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
                         } else if let Some(o) = &filter.changed_object {
-                            let mut sub_query = tx_changed_objects_cp::dsl::tx_changed_objects_cp
-                                .select(tx_changed_objects_cp::tx_sequence_number)
+                            let mut sub_query = tx_changed_objects_rel::dsl::tx_changed_objects_rel
+                                .select(tx_changed_objects_rel::tx_sequence_number)
                                 .distinct()
-                                .filter(tx_changed_objects_cp::object_id.eq(o.into_vec()))
+                                .filter(tx_changed_objects_rel::object_id.eq(o.into_vec()))
                                 .into_boxed();
                             sub_query = filter.apply_addr_rel(
                                 sub_query,
-                                tx_changed_objects_cp::address,
-                                tx_changed_objects_cp::rel,
+                                tx_changed_objects_rel::address,
+                                tx_changed_objects_rel::rel,
                             );
                             sub_query = crate::apply_filters_and_pagination!(
                                 sub_query,
-                                tx_changed_objects_cp::tx_sequence_number,
-                                tx_changed_objects_cp::rel,
+                                tx_changed_objects_rel::tx_sequence_number,
+                                tx_changed_objects_rel::rel,
                                 &filter,
                                 &page,
                                 checkpoint_viewed_at
                             );
                             query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
                         } else if let Some(o) = &filter.input_object {
-                            let mut sub_query = tx_input_objects_cp::dsl::tx_input_objects_cp
-                                .select(tx_input_objects_cp::tx_sequence_number)
+                            let mut sub_query = tx_input_objects_rel::dsl::tx_input_objects_rel
+                                .select(tx_input_objects_rel::tx_sequence_number)
                                 .distinct()
-                                .filter(tx_input_objects_cp::object_id.eq(o.into_vec()))
+                                .filter(tx_input_objects_rel::object_id.eq(o.into_vec()))
                                 .into_boxed();
                             sub_query = filter.apply_addr_rel(
                                 sub_query,
-                                tx_input_objects_cp::address,
-                                tx_input_objects_cp::rel,
+                                tx_input_objects_rel::address,
+                                tx_input_objects_rel::rel,
                             );
                             sub_query = crate::apply_filters_and_pagination!(
                                 sub_query,
-                                tx_input_objects_cp::tx_sequence_number,
-                                tx_input_objects_cp::rel,
+                                tx_input_objects_rel::tx_sequence_number,
+                                tx_input_objects_rel::rel,
                                 &filter,
                                 &page,
                                 checkpoint_viewed_at
@@ -545,6 +545,9 @@ impl TransactionBlock {
                             query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
                         }
 
+                        // todo: transaction_kind + address
+
+                        // otherwise apply directly to transactions
                         println!("Time taken to build query: {:?}", start.elapsed());
                         if page.is_from_front() {
                             query.order(tx::dsl::tx_sequence_number.asc())

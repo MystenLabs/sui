@@ -235,6 +235,26 @@ diesel::table! {
 }
 
 diesel::table! {
+    tx_changed_objects_rel (object_id, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+        address -> Bytea,
+        rel -> Int2,
+    }
+}
+
+diesel::table! {
+    tx_input_objects_rel (object_id, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+        object_id -> Bytea,
+        address -> Bytea,
+        rel -> Int2,
+    }
+}
+
+diesel::table! {
     tx_changed_objects (object_id, tx_sequence_number, cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
@@ -314,8 +334,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     transactions,
     transactions_partition_0,
     tx_calls,
+    tx_changed_objects_rel,
     tx_changed_objects,
     tx_digests,
+    tx_input_objects_rel,
     tx_input_objects,
     tx_recipients,
     tx_senders,
