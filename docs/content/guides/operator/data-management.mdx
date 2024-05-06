@@ -124,7 +124,7 @@ authority-store-pruning-config:
   smooth: true
 ```
 
-### Full Node with indexing but no history
+### Full node with indexing but no history
 
 This setup manages secondary indexing in addition to the latest state, but aggressively prunes historic data. A Full node with this configuration:
 
@@ -151,7 +151,7 @@ authority-store-pruning-config:
   smooth: true
 ```
 
-### Full Node with full object history but pruned transaction history
+### Full node with full object history but pruned transaction history
 
 This configuration manages the full object history while still pruning historic transactions. A Full node with this configuration can answer all historic and indexing queries (using the transaction query fallback for transactional data), including the ones that require historic objects such as the `showBalanceChanges` filter of `sui_getTransactionBlock()`.
 
