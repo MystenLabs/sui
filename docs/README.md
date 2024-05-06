@@ -1,6 +1,6 @@
 ## Overview
 
-This directory contains the assets required to build and update the [Sui documentation](https://docs.sui.io). The directory is split between `content` and `site`. To run the docs.sui.io site locally, open the `site` directory in a terminal or console. Use a package manager to install the required modules:
+This directory contains the assets required to build and update the [Sui documentation](https://docs.sui.io). The directory is split between `content` and `site`. To run the `docs.sui.io` site locally, open the `site` directory in a terminal or console. Use a package manager to install the required modules:
 
 ```shell
 pnpm install
