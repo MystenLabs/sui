@@ -108,6 +108,10 @@ impl Indexer {
             )
             .await?;
 
+        // Index protocol configs for protocol versions not yet in the db
+        let store_clone = store.clone();
+        spawn_monitored_task!(store_clone.persist_protocol_configs_and_feature_flags());
+
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
         // Spawn a task that links the cancellation token to the exit sender
