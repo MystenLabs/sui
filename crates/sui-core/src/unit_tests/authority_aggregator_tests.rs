@@ -1958,23 +1958,32 @@ async fn test_handle_overload_retry_response() {
         666, // this is a dummy value which does not matter
     );
 
-    let overload_error = SuiError::ValidatorOverloadedRetryAfter {
-        retry_after_secs: 0,
-    };
     let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
 
     // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
+    // Uses different retry_after_secs for each validator.
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
-    set_tx_info_response_with_error(&mut clients, authority_keys.iter().skip(1), overload_error);
+    for (index, (name, _)) in authority_keys.iter().skip(1).enumerate() {
+        clients.get_mut(name).unwrap().set_tx_info_response_error(
+            SuiError::ValidatorOverloadedRetryAfter {
+                retry_after_secs: index as u64,
+            },
+        );
+    }
 
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
+
+    // We should get the `SystemOverloadRetryAfter` error with the highest retry_after_secs.
     assert_resp_err(
         &agg,
         txn.clone(),
         |e| {
             matches!(
                 e,
-                AggregatorProcessTransactionError::SystemOverloadRetryAfter { .. }
+                AggregatorProcessTransactionError::SystemOverloadRetryAfter {
+                    retry_after_secs,
+                    ..
+                } if *retry_after_secs == (authority_keys.len() as u64 - 2)
             )
         },
         |e| {

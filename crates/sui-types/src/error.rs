@@ -820,6 +820,13 @@ impl SuiError {
     pub fn is_retryable_overload(&self) -> bool {
         matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
     }
+
+    pub fn retry_after_secs(&self) -> u64 {
+        match self {
+            SuiError::ValidatorOverloadedRetryAfter { retry_after_secs } => *retry_after_secs,
+            _ => 0,
+        }
+    }
 }
 
 impl Ord for SuiError {
