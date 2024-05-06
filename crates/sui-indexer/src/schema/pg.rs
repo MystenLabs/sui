@@ -177,6 +177,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    feature_flags (protocol_version, flag_name) {
+        protocol_version -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
+    }
+}
+
+diesel::table! {
     objects (object_id) {
         object_id -> Bytea,
         object_version -> Int8,
@@ -272,6 +280,14 @@ diesel::table! {
         object_id -> Bytea,
         object_version -> Int8,
         cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
     }
 }
 
@@ -406,11 +422,12 @@ macro_rules! for_all_tables {
             event_struct_name,
             event_struct_package,
             events,
-            objects,
+            feature_flags,
             objects_history,
             objects_snapshot,
             objects_version,
             packages,
+            protocol_configs,
             transactions,
             tx_calls_fun,
             tx_calls_mod,
