@@ -89,11 +89,8 @@ impl SharedObjectCongestionTracker {
                     previous_key.deferred_from_round(),
                 )
             } else {
-                // There are two cases where we can end up here:
-                // 1. This transaction has not been deferred before.
-                // 2. This transaction has been deferred due to randomness.
-                // In both case, we use the current commit round as the deferred_from_round.
-                // TODO: preserve deferred_from_round if tx was previously deferred due to randomness.
+                // This transaction has not been deferred before. Use the current commit round
+                // as the deferred_from_round.
                 DeferralKey::new_for_consensus_round(commit_round + 1, commit_round)
             };
         Some((deferral_key, congested_objects))
@@ -329,7 +326,7 @@ mod object_cost_tests {
         previously_deferred_tx_digests.insert(
             *tx.digest(),
             DeferralKey::Randomness {
-                deferred_from_round: 5,
+                deferred_from_round: 4,
             },
         );
 
@@ -347,7 +344,7 @@ mod object_cost_tests {
             10,
         ) {
             assert_eq!(future_round, 11);
-            assert_eq!(deferred_from_round, 5);
+            assert_eq!(deferred_from_round, 4);
         } else {
             panic!("should defer");
         }
