@@ -17,8 +17,8 @@ import { useAutoConnectWallet } from '../hooks/wallet/useAutoConnectWallet.js';
 import { useUnsafeBurnerWallet } from '../hooks/wallet/useUnsafeBurnerWallet.js';
 import { useWalletPropertiesChanged } from '../hooks/wallet/useWalletPropertiesChanged.js';
 import { useWalletsChanged } from '../hooks/wallet/useWalletsChanged.js';
-import type { ZkSendWalletConfig } from '../hooks/wallet/useZkSendWallet.js';
-import { useZkSendWallet } from '../hooks/wallet/useZkSendWallet.js';
+import type { ZkSendWalletConfig } from '../hooks/wallet/useStashedWallet.js';
+import { useZkSendWallet } from '../hooks/wallet/useStashedWallet.js';
 import { lightTheme } from '../themes/lightTheme.js';
 import type { Theme } from '../themes/themeContract.js';
 import { createInMemoryStore } from '../utils/stateStorage.js';
@@ -39,8 +39,8 @@ export type WalletProviderProps = {
 	/** Enables automatically reconnecting to the most recently used wallet account upon mounting. */
 	autoConnect?: boolean;
 
-	/** Enables the zkSend wallet */
-	zkSend?: ZkSendWalletConfig;
+	/** Enables the Stashed wallet */
+	stashedWallet?: ZkSendWalletConfig;
 
 	/** Configures how the most recently connected to wallet account is stored. Set to `null` to disable persisting state entirely. Defaults to using localStorage if it is available. */
 	storage?: StateStorage | null;
