@@ -1847,6 +1847,7 @@
                 "max_verifier_meter_ticks_per_function": {
                   "u64": "6000000"
                 },
+                "min_move_binary_format_version": null,
                 "move_binary_format_version": {
                   "u32": "6"
                 },
