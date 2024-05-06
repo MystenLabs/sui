@@ -7,13 +7,13 @@ import { Callout } from 'nextra/components';
 	the Stashed wallet. [Read how to integrate with dapp-kit.](../dapp-kit/stashed.mdx)
 </Callout>
 
-Using the zkSend SDK, you can allow users to connect to the Stashed wallet from your dApp. The wallet
-is provided through the [Wallet Standard](https://docs.sui.io/standards/wallet-standard), and should
-appear automatically in your existing wallet connection UI.
+Using the zkSend SDK, you can allow users to connect to the Stashed wallet from your dApp. The
+wallet is provided through the [Wallet Standard](https://docs.sui.io/standards/wallet-standard), and
+should appear automatically in your existing wallet connection UI.
 
 ## Considerations
 
-- Stashed only supports mainnet at this time.
+- Stashed only supports Mainnet at this time.
 - Users will only be able to connect their zkLogin wallet from Stashed.
 - The zkLogin account will be managed by Stashed, you do not need to set up any OAuth providers.
 - You will not get access to the user's private key, you will only be able to connect to the wallet,
@@ -51,7 +51,7 @@ provides better control around execution, and avoids potential issues around dat
 you believe you have a strong reason for using `signAndExecuteTransactionBlock`, please
 [open an issue](https://github.com/MystenLabs/sui/issues/new/choose).
 
-## Detecting the Stashed Wallet
+## Detecting the Stashed wallet
 
 If you'd like to detect whether the user is connected to the Stashed wallet, you can use the `name`
 property on the wallet

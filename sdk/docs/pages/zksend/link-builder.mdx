@@ -12,7 +12,7 @@ import { Callout } from 'nextra/components';
 
 ## Limitations
 
-- zkSend only supports mainnet at this time.
+- zkSend only supports Mainnet at this time.
 - Objects within links must be publicly transferrable.
 
 ## Create a link
@@ -138,9 +138,9 @@ takes the following params:
 - **`name`** - The name of your dApp. This will be shown to the user when claiming the link.
 
 When redirecting to the URL, if the user claims with zkLogin, then Stashed will automatically add a
-`stashed_address` query parameter to the URL, containing the Sui address of the user that claimed the
-asset. The [Stashed Wallet](./dapp.mdx) will automatically read this query parameter, and consider
-itself connected as a result of a claim redirect.
+`stashed_address` query parameter to the URL, containing the Sui address of the user that claimed
+the asset. The [Stashed wallet](./dapp.mdx) will automatically read this query parameter, and
+consider itself connected as a result of a claim redirect.
 
 ```ts
 import { ZkSendLinkBuilder } from '@mysten/zksend';
