@@ -3,7 +3,7 @@
 
 use async_graphql::connection::CursorType;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObjectGraphQL;
 
 use crate::raw_query::RawQuery;
 use crate::types::available_range::AvailableRange;
@@ -137,7 +137,7 @@ pub(crate) fn build_objects_query(
     // Always apply cursor pagination and limit to constrain the number of rows returned, ensure
     // that the inner queries are in step, and to handle the scenario where a user provides more
     // `objectKeys` than allowed by the maximum page size.
-    snapshot_objs = page.apply::<StoredHistoryObject>(snapshot_objs);
+    snapshot_objs = page.apply::<StoredHistoryObjectGraphQL>(snapshot_objs);
 
     // Similar to the snapshot query, construct the filtered inner query for the history table.
     let mut history_objs_inner = query!("SELECT * FROM objects_history");
@@ -176,7 +176,7 @@ pub(crate) fn build_objects_query(
     // Always apply cursor pagination and limit to constrain the number of rows returned, ensure
     // that the inner queries are in step, and to handle the scenario where a user provides more
     // `objectKeys` than allowed by the maximum page size.
-    history_objs = page.apply::<StoredHistoryObject>(history_objs);
+    history_objs = page.apply::<StoredHistoryObjectGraphQL>(history_objs);
 
     // Combine the two queries, and select the most recent version of each object. The result set is
     // the most recent version of objects from `objects_snapshot` and `objects_history` that match

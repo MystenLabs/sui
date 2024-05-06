@@ -33,11 +33,11 @@ use crate::{filter, or_filter};
 use async_graphql::connection::{CursorType, Edge};
 use async_graphql::dataloader::Loader;
 use async_graphql::{connection::Connection, *};
-use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, QueryDsl, SelectableHelper};
 use move_core_types::annotated_value::{MoveStruct, MoveTypeLayout};
 use move_core_types::language_storage::StructTag;
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::{StoredDeletedHistoryObject, StoredHistoryObject};
+use sui_indexer::models::objects::{StoredDeletedHistoryObject, StoredHistoryObjectGraphQL};
 use sui_indexer::schema::objects_history;
 use sui_indexer::types::ObjectStatus as NativeObjectStatus;
 use sui_indexer::types::OwnerType;
@@ -65,7 +65,7 @@ pub(crate) enum ObjectKind {
     /// been indexed yet.
     NotIndexed(NativeObject),
     /// An object fetched from the index.
-    Indexed(NativeObject, StoredHistoryObject),
+    Indexed(NativeObject, StoredHistoryObjectGraphQL),
     /// The object is wrapped or deleted and only partial information can be loaded from the
     /// indexer.
     WrappedOrDeleted(StoredDeletedHistoryObject),
@@ -752,11 +752,13 @@ impl Object {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    checkpoint_viewed_at,
-                    objects_query(&filter, range, &page),
-                )?))
+                Ok(Some(
+                    page.paginate_raw_query::<StoredHistoryObjectGraphQL>(
+                        conn,
+                        checkpoint_viewed_at,
+                        objects_query(&filter, range, &page),
+                    )?,
+                ))
             })
             .await?
         else {
@@ -859,7 +861,7 @@ impl Object {
     /// constructed in. This is stored on `Object` so that when viewing that entity's state, it will
     /// be as if it was read at the same checkpoint.
     pub(crate) fn try_from_stored_history_object(
-        history_object: StoredHistoryObject,
+        history_object: StoredHistoryObjectGraphQL,
         checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
         let address = addr(&history_object.object_id)?;
@@ -1083,7 +1085,7 @@ impl Checkpointed for Cursor {
     }
 }
 
-impl RawPaginated<Cursor> for StoredHistoryObject {
+impl RawPaginated<Cursor> for StoredHistoryObjectGraphQL {
     fn filter_ge(cursor: &Cursor, query: RawQuery) -> RawQuery {
         filter!(
             query,
@@ -1113,7 +1115,7 @@ impl RawPaginated<Cursor> for StoredHistoryObject {
     }
 }
 
-impl Target<Cursor> for StoredHistoryObject {
+impl Target<Cursor> for StoredHistoryObjectGraphQL {
     fn cursor(&self, checkpoint_viewed_at: u64) -> Cursor {
         Cursor::new(HistoricalObjectCursor::new(
             self.object_id.clone(),
@@ -1135,10 +1137,12 @@ impl Loader<HistoricalKey> for Db {
             .map(|key| (key.id.into_vec(), key.version as i64))
             .collect();
 
-        let objects: Vec<StoredHistoryObject> = self
+        let objects: Vec<StoredHistoryObjectGraphQL> = self
             .execute(move |conn| {
                 conn.results(move || {
-                    let mut query = dsl::objects_history.into_boxed();
+                    let mut query = dsl::objects_history
+                        .select(StoredHistoryObjectGraphQL::as_select())
+                        .into_boxed();
 
                     // TODO: Speed up using an `obj_version` table.
                     for (id, version) in id_versions.iter().cloned() {
@@ -1214,9 +1218,10 @@ impl Loader<LatestAtKey> for Db {
                 self.execute_repeatable(move |conn| {
                     let Some(range) = AvailableRange::result(conn, group_key.checkpoint_viewed_at)?
                     else {
-                        return Ok::<Vec<(GroupKey, StoredHistoryObject)>, diesel::result::Error>(
-                            vec![],
-                        );
+                        return Ok::<
+                            Vec<(GroupKey, StoredHistoryObjectGraphQL)>,
+                            diesel::result::Error,
+                        >(vec![]);
                     };
 
                     let filter = ObjectFilter {

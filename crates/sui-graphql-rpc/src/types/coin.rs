@@ -26,7 +26,7 @@ use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
 
 use async_graphql::connection::{Connection, CursorType, Edge};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObjectGraphQL;
 use sui_indexer::types::OwnerType;
 use sui_types::coin::Coin as NativeCoin;
 use sui_types::TypeTag;
@@ -317,7 +317,7 @@ impl Coin {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
+                Ok(Some(page.paginate_raw_query::<StoredHistoryObjectGraphQL>(
                     conn,
                     checkpoint_viewed_at,
                     coins_query(coin_type, owner, range, &page),

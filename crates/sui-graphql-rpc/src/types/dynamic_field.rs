@@ -4,7 +4,7 @@
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_core_types::annotated_value::{self as A, MoveStruct};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObjectGraphQL;
 use sui_indexer::types::OwnerType;
 use sui_types::dynamic_field::{derive_dynamic_field_id, DynamicFieldInfo, DynamicFieldType};
 
@@ -208,11 +208,13 @@ impl DynamicField {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
-                    conn,
-                    checkpoint_viewed_at,
-                    dynamic_fields_query(parent, parent_version, range, &page),
-                )?))
+                Ok(Some(
+                    page.paginate_raw_query::<StoredHistoryObjectGraphQL>(
+                        conn,
+                        checkpoint_viewed_at,
+                        dynamic_fields_query(parent, parent_version, range, &page),
+                    )?,
+                ))
             })
             .await?
         else {

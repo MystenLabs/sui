@@ -31,7 +31,7 @@ use crate::{
 use async_graphql::{connection::Connection, *};
 use move_core_types::{ident_str, identifier::IdentStr, language_storage::StructTag};
 use serde::{Deserialize, Serialize};
-use sui_indexer::models::objects::StoredHistoryObject;
+use sui_indexer::models::objects::StoredHistoryObjectGraphQL;
 use sui_json_rpc::name_service::{
     Domain as NativeDomain, NameRecord, NameServiceConfig, NameServiceError,
 };
@@ -487,7 +487,7 @@ impl NameService {
                     move |newer| newer,
                 );
 
-                let objects: Vec<StoredHistoryObject> =
+                let objects: Vec<StoredHistoryObjectGraphQL> =
                     conn.results(move || sql.clone().into_boxed())?;
 
                 Ok(Some((timestamp_ms, objects)))

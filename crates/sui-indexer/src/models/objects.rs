@@ -155,6 +155,29 @@ pub struct StoredHistoryObject {
     pub df_object_id: Option<Vec<u8>>,
 }
 
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName, Selectable)]
+#[diesel(table_name = objects_history, primary_key(object_id, object_version, checkpoint_sequence_number))]
+pub struct StoredHistoryObjectGraphQL {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_status: i16,
+    pub object_digest: Option<Vec<u8>>,
+    pub checkpoint_sequence_number: i64,
+    pub owner_type: Option<i16>,
+    pub owner_id: Option<Vec<u8>>,
+    pub object_type: Option<String>,
+    // pub object_type_package: Option<Vec<u8>>,
+    // pub object_type_module: Option<String>,
+    // pub object_type_name: Option<String>,
+    pub serialized_object: Option<Vec<u8>>,
+    pub coin_type: Option<String>,
+    pub coin_balance: Option<i64>,
+    pub df_kind: Option<i16>,
+    pub df_name: Option<Vec<u8>>,
+    pub df_object_type: Option<String>,
+    pub df_object_id: Option<Vec<u8>>,
+}
+
 impl From<StoredObject> for StoredHistoryObject {
     fn from(o: StoredObject) -> Self {
         Self {
