@@ -269,6 +269,10 @@ pub fn bool_true() -> bool {
     true
 }
 
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 impl Config for NodeConfig {}
 
 impl NodeConfig {
@@ -578,7 +582,7 @@ pub struct AuthorityStorePruningConfig {
     /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub killswitch_tombstone_pruning: bool,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
     pub smooth: bool,
 }
 
@@ -598,6 +602,10 @@ fn default_max_checkpoints_in_batch() -> usize {
     10
 }
 
+fn default_smoothing() -> bool {
+    cfg!(not(test))
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
@@ -610,7 +618,7 @@ impl Default for AuthorityStorePruningConfig {
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
-            smooth: false,
+            smooth: true,
         }
     }
 }
