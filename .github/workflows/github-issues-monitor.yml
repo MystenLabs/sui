@@ -20,13 +20,14 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
+
     - name: Check if PR author is external
       id: step1
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         export author=${{ github.event.pull_request.user.login }}
-        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
 
         # if we don't have the slack id or the author is not part of Mysten org, then we slack this PR in a next job
         if [ -z "$slack_id" ]; then
