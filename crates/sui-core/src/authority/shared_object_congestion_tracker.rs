@@ -81,20 +81,18 @@ impl SharedObjectCongestionTracker {
 
         assert!(!congested_objects.is_empty());
 
-        let deferral_key = if let Some(DeferralKey::ConsensusRound {
-            future_round: _,
-            deferred_from_round,
-        }) = previously_deferred_tx_digests.get(cert.digest())
-        {
-            // This transaction has been deferred in previous consensus commit. Use its previous deferred_from_round.
-            DeferralKey::new_for_consensus_round(commit_round + 1, *deferred_from_round)
-        } else {
-            // There are two cases where we can end up here:
-            // 1. This transaction has not been deferred before.
-            // 2. This transaction has been deferred due to randomness.
-            // In both case, we use the current commit round as the deferred_from_round.
-            DeferralKey::new_for_consensus_round(commit_round + 1, commit_round)
-        };
+        let deferral_key =
+            if let Some(previous_key) = previously_deferred_tx_digests.get(cert.digest()) {
+                // This transaction has been deferred in previous consensus commit. Use its previous deferred_from_round.
+                DeferralKey::new_for_consensus_round(
+                    commit_round + 1,
+                    previous_key.deferred_from_round(),
+                )
+            } else {
+                // This transaction has not been deferred before. Use the current commit round
+                // as the deferred_from_round.
+                DeferralKey::new_for_consensus_round(commit_round + 1, commit_round)
+            };
         Some((deferral_key, congested_objects))
     }
 
@@ -328,11 +326,11 @@ mod object_cost_tests {
         previously_deferred_tx_digests.insert(
             *tx.digest(),
             DeferralKey::Randomness {
-                deferred_from_round: 5,
+                deferred_from_round: 4,
             },
         );
 
-        // New deferral key should have deferred_from_round equal to the current round.
+        // New deferral key should have deferred_from_round equal to the deferred randomness round.
         if let Some((
             DeferralKey::ConsensusRound {
                 future_round,
@@ -346,7 +344,7 @@ mod object_cost_tests {
             10,
         ) {
             assert_eq!(future_round, 11);
-            assert_eq!(deferred_from_round, 10);
+            assert_eq!(deferred_from_round, 4);
         } else {
             panic!("should defer");
         }

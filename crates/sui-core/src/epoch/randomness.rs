@@ -436,7 +436,7 @@ impl RandomnessManager {
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_num_shares
-                        .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+                        .set(num_shares as i64);
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_epoch_start_completion_time_ms

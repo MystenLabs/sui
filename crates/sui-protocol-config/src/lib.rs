@@ -1964,7 +1964,7 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.random_beacon = true;
                         cfg.random_beacon_reduction_lower_bound = Some(1600);
-                        cfg.random_beacon_dkg_timeout_round = Some(200);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
                         cfg.random_beacon_min_round_interval_ms = Some(150);
                     }
                     // Only enable consensus digest in consensus commit prologue in devnet.

@@ -550,6 +550,18 @@ impl DeferralKey {
             },
         )
     }
+
+    pub fn deferred_from_round(&self) -> Round {
+        match self {
+            Self::Randomness {
+                deferred_from_round,
+            } => *deferred_from_round,
+            Self::ConsensusRound {
+                deferred_from_round,
+                ..
+            } => *deferred_from_round,
+        }
+    }
 }
 
 #[tokio::test]
@@ -1742,8 +1754,12 @@ impl AuthorityPerEpochStore {
             && self.randomness_state_enabled()
             && cert.uses_randomness()
         {
+            let deferred_from_round = previously_deferred_tx_digests
+                .get(cert.digest())
+                .map(|previous_key| previous_key.deferred_from_round())
+                .unwrap_or(commit_round);
             return Some((
-                DeferralKey::new_for_randomness(commit_round),
+                DeferralKey::new_for_randomness(deferred_from_round),
                 DeferralReason::RandomnessNotReady,
             ));
         }
@@ -2562,10 +2578,10 @@ impl AuthorityPerEpochStore {
                     + previously_deferred_tx_digests.len(),
             );
 
-        let mut randomness_manager = match self.randomness_manager.get() {
-            Some(rm) => Some(rm.lock().await),
-            None => None,
-        };
+        let mut randomness_manager = self.randomness_manager.get().map(|rm| {
+            rm.try_lock()
+                .expect("should only ever be called from the commit handler thread")
+        });
         let mut dkg_failed = false;
         let randomness_round = if self.randomness_state_enabled() {
             let randomness_manager = randomness_manager
