@@ -225,6 +225,7 @@ impl ServerBuilder {
                 .route("/", post(graphql_handler))
                 .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
+                .route("/graphql/:version", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
                 .with_state(self.state.clone())
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
