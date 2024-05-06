@@ -277,7 +277,7 @@ async fn test_conflicting_jwks() {
     use tokio::time::Duration;
 
     let test_cluster = TestClusterBuilder::new()
-        .with_epoch_duration_ms(30000)
+        .with_epoch_duration_ms(15000)
         .with_jwk_fetch_interval(Duration::from_secs(5))
         .build()
         .await;
