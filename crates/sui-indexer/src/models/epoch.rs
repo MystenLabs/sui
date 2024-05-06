@@ -3,7 +3,7 @@
 
 use diesel::{Insertable, Queryable, Selectable};
 
-use crate::errors::IndexerError;
+use crate::{errors::IndexerError, schema::protocol_configs};
 use crate::schema::epochs;
 use crate::types::IndexedEpochInfo;
 use sui_json_rpc_types::{EndOfEpochInfo, EpochInfo};
@@ -31,6 +31,14 @@ pub struct StoredEpochInfo {
     pub total_stake_rewards_distributed: Option<i64>,
     pub leftover_storage_fund_inflow: Option<i64>,
     pub epoch_commitments: Option<Vec<u8>>,
+}
+
+#[derive(Queryable, Insertable, Debug, Clone, Default)]
+#[diesel(table_name = protocol_configs)]
+pub struct StoredProtocolConfig {
+    pub protocol_version: i64,
+    pub config_name: String,
+    pub config_value: Option<String>,
 }
 
 #[derive(Queryable, Selectable, Clone)]

@@ -164,6 +164,8 @@ async fn commit_checkpoints<S>(
             })
             .expect("Advancing epochs in DB should not fail.");
         metrics.total_epoch_committed.inc();
+        // The epoch has advanced so we update the configs for the new protocol version, if it has changed.
+        state.persist_protocol_configs_and_feature_flags();
     }
 
     state

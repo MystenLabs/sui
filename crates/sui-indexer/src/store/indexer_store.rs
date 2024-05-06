@@ -26,6 +26,10 @@ pub trait IndexerStore: Any + Clone + Sync + Send + 'static {
         &self,
     ) -> Result<Option<u64>, IndexerError>;
 
+    async fn persist_protocol_configs_and_feature_flags(
+        &self,
+    ) -> Result<(), IndexerError>;
+
     async fn persist_objects(
         &self,
         object_changes: Vec<TransactionObjectChangesToCommit>,

@@ -108,6 +108,9 @@ impl Indexer {
             )
             .await?;
 
+        // Index protocol configs for protocol versions not yet in the db
+        store.persist_protocol_configs_and_feature_flags().await?;
+
         let cancel_clone = cancel.clone();
         let (exit_sender, exit_receiver) = oneshot::channel();
         // Spawn a task that links the cancellation token to the exit sender
@@ -150,6 +153,12 @@ impl Indexer {
             )
             .await?;
         Ok(())
+    }
+
+    pub async fn index_protocol_configs<S: IndexerStore + Sync + Send + Clone + 'static>(
+        store: S,
+    ) {
+
     }
 
     pub async fn start_reader<T: R2D2Connection + 'static>(

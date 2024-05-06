@@ -1,5 +1,3 @@
-// Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
@@ -89,6 +87,14 @@ diesel::table! {
         event_type_name -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
+    }
+}
+
+diesel::table! {
+    feature_flags (protocol_version, flag_name) {
+        protocol_version -> Int8,
+        flag_name -> Text,
+        flag_value -> Bool,
     }
 }
 
@@ -191,6 +197,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    protocol_configs (protocol_version, config_name) {
+        protocol_version -> Int8,
+        config_name -> Text,
+        config_value -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     transactions (tx_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -280,11 +294,13 @@ macro_rules! for_all_tables {
             epochs,
             events,
             events_partition_0,
+            feature_flags,
             objects,
             objects_history,
             objects_history_partition_0,
             objects_snapshot,
             packages,
+            protocol_configs,
             transactions,
             transactions_partition_0,
             tx_calls,
