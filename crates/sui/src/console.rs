@@ -46,7 +46,7 @@ pub async fn start_console(
         version.push('-');
         version.push_str(git_rev);
     }
-    writeln!(out, "--- Sui Console {version} ---")?;
+    writeln!(out, "--- Welcome to the Sui Console {version} ---")?;
     writeln!(out)?;
     writeln!(out, "{}", context.config.deref())?;
 
