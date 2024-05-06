@@ -44,9 +44,8 @@ impl SurferTask {
         let node = cluster
             .swarm
             .all_nodes()
+            .flat_map(|node| node.get_node_handle())
             .next()
-            .unwrap()
-            .get_node_handle()
             .unwrap();
         let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
