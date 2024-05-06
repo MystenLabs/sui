@@ -11,12 +11,10 @@ use async_graphql::{
 };
 use diesel::{
     alias,
-    dsl::{max, min},
     expression::{is_aggregate::No, ValidGrouping},
     query_builder::QueryFragment,
-    sql_types::{BigInt, Binary, Bytea, SmallInt, Text},
-    AppearsOnTable, BoolExpressionMethods, Expression, ExpressionMethods,
-    NullableExpressionMethods, OptionalExtension, QueryDsl, QuerySource,
+    sql_types::{BigInt, Binary, SmallInt, Text},
+    AppearsOnTable, Expression, ExpressionMethods, OptionalExtension, QueryDsl, QuerySource,
 };
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
@@ -24,8 +22,8 @@ use std::str::FromStr;
 use sui_indexer::{
     models::transactions::StoredTransaction,
     schema::{
-        transactions, tx_addresses, tx_calls, tx_calls_cp, tx_changed_objects,
-        tx_changed_objects_cp, tx_input_objects, tx_recipients, tx_senders,
+        transactions, tx_addresses, tx_calls, tx_changed_objects, tx_changed_objects_cp,
+        tx_input_objects, tx_input_objects_cp, tx_recipients, tx_senders,
     },
 };
 use sui_types::{
@@ -446,7 +444,7 @@ impl TransactionBlock {
         checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, TransactionBlock>, Error> {
         use transactions as tx;
-        use tx_calls_cp::dsl as tx_calls;
+        use tx_calls::dsl as tx_calls;
 
         let cursor_viewed_at = page.validate_cursor_consistency()?;
         let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
@@ -463,13 +461,13 @@ impl TransactionBlock {
                         let start = Instant::now();
                         let mut query = tx::dsl::transactions.into_boxed();
                         if let Some(f) = &filter.function {
-                            let mut sub_query = tx_calls::tx_calls_cp
+                            let mut sub_query = tx_calls::tx_calls
                                 .select(tx_calls::tx_sequence_number)
                                 .distinct() // because the same tx_sequence_number may have multiple entries in these lookup tables
                                 .into_boxed();
 
-                            sub_query =
-                                filter.apply_addr_rel(sub_query, tx_calls::address, tx_calls::rel);
+                            // sub_query =
+                            // filter.apply_addr_rel(sub_query, tx_calls::address, tx_calls::rel);
                             sub_query = f.apply(
                                 sub_query,
                                 tx_calls::package,
@@ -501,6 +499,26 @@ impl TransactionBlock {
                                 sub_query,
                                 tx_changed_objects_cp::tx_sequence_number,
                                 tx_changed_objects_cp::rel,
+                                &filter,
+                                &page,
+                                checkpoint_viewed_at
+                            );
+                            query = query.filter(tx::dsl::tx_sequence_number.eq_any(sub_query));
+                        } else if let Some(o) = &filter.input_object {
+                            let mut sub_query = tx_input_objects_cp::dsl::tx_input_objects_cp
+                                .select(tx_input_objects_cp::tx_sequence_number)
+                                .distinct()
+                                .filter(tx_input_objects_cp::object_id.eq(o.into_vec()))
+                                .into_boxed();
+                            sub_query = filter.apply_addr_rel(
+                                sub_query,
+                                tx_input_objects_cp::address,
+                                tx_input_objects_cp::rel,
+                            );
+                            sub_query = crate::apply_filters_and_pagination!(
+                                sub_query,
+                                tx_input_objects_cp::tx_sequence_number,
+                                tx_input_objects_cp::rel,
                                 &filter,
                                 &page,
                                 checkpoint_viewed_at
@@ -563,82 +581,6 @@ impl TransactionBlock {
 
         Ok(conn)
     }
-
-    pub(crate) async fn get_transactions(
-        db: &Db,
-        page: Page<Cursor>,
-        checkpoint_viewed_at: u64,
-    ) -> Result<Connection<String, TransactionBlock>, Error> {
-        let query = r#"
-            SELECT "transactions"."tx_sequence_number", "transactions"."transaction_digest", "transactions"."raw_transaction",
-                   "transactions"."raw_effects", "transactions"."checkpoint_sequence_number", "transactions"."timestamp_ms",
-                   "transactions"."object_changes", "transactions"."balance_changes", "transactions"."events",
-                   "transactions"."transaction_kind", "transactions"."success_command_count"
-            FROM "transactions"
-            WHERE "transactions"."tx_sequence_number" = ANY(
-                SELECT DISTINCT "tx_calls_cp"."tx_sequence_number"
-                FROM "tx_calls_cp"
-                WHERE ("tx_calls_cp"."package" = $1)
-                  AND ("tx_calls_cp"."module" = $2)
-                  AND ("tx_calls_cp"."tx_sequence_number" <= (
-                    SELECT max("transactions"."tx_sequence_number")
-                    FROM "transactions"
-                    WHERE "transactions"."checkpoint_sequence_number" = $3
-                    LIMIT 1
-                  ))
-                  AND ("tx_calls_cp"."tx_sequence_number" >= $4)
-                ORDER BY "tx_calls_cp"."tx_sequence_number" ASC
-                LIMIT $5
-            )
-            ORDER BY "transactions"."tx_sequence_number" ASC;
-        "#;
-
-        let mut cursor = 0;
-        if let Some(c) = page.after() {
-            cursor = c.tx_sequence_number;
-        }
-
-        let responses: Vec<StoredTransaction> = db
-            .execute(move |conn| {
-                conn.results(move || {
-                    let package = SuiAddress::from_str("0x2").unwrap().into_vec();
-                    let module = "coin";
-
-                    diesel::sql_query(query)
-                        .bind::<Binary, _>(package)
-                        .bind::<Text, _>(module)
-                        .bind::<BigInt, _>(checkpoint_viewed_at as i64)
-                        .bind::<BigInt, _>(cursor as i64)
-                        .bind::<BigInt, _>(52 as i64)
-                })
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
-
-        let (prev, next, results) = page.paginate_results(
-            responses.first().map(|f| f.cursor(checkpoint_viewed_at)),
-            responses.last().map(|l| l.cursor(checkpoint_viewed_at)),
-            responses,
-        );
-
-        let mut conn = Connection::new(prev, next);
-
-        for stored in results {
-            println!(
-                "cp, tx: {}, {}",
-                stored.checkpoint_sequence_number, stored.tx_sequence_number
-            );
-            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let inner = TransactionBlockInner::try_from(stored)?;
-            let transaction = TransactionBlock {
-                inner,
-                checkpoint_viewed_at,
-            };
-            conn.edges.push(Edge::new(cursor, transaction));
-        }
-
-        Ok(conn)
-    }
 }
 
 impl TransactionBlockFilter {
@@ -691,11 +633,9 @@ impl TransactionBlockFilter {
         QS: QuerySource,
     {
         if let Some(a) = &self.sign_address {
-            query = query.filter(rel.le(2)).filter(address.eq(a.into_vec()));
+            query = query.filter(rel.le(1)).filter(address.eq(a.into_vec()));
         } else if let Some(a) = &self.recv_address {
-            query = query
-                .filter(rel.between(1, 2))
-                .filter(address.eq(a.into_vec()));
+            query = query.filter(rel.ge(1)).filter(address.eq(a.into_vec()));
         }
 
         query

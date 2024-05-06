@@ -350,22 +350,6 @@ impl Query {
         .extend()
     }
 
-    async fn transaction_blocks_hmm(
-        &self,
-        ctx: &Context<'_>,
-        first: Option<u64>,
-        after: Option<transaction_block::Cursor>,
-        last: Option<u64>,
-        before: Option<transaction_block::Cursor>,
-    ) -> Result<Connection<String, TransactionBlock>> {
-        let Watermark { checkpoint, .. } = *ctx.data()?;
-        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-
-        TransactionBlock::get_transactions(ctx.data_unchecked(), page, checkpoint)
-            .await
-            .extend()
-    }
-
     /// The events that exist in the network.
     async fn events(
         &self,
