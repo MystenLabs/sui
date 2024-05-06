@@ -20,6 +20,7 @@ jobs:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: us-west-2
+
     - name: Check if PR author is external
       id: step1
       env:
@@ -45,7 +46,7 @@ jobs:
       env:
         SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         RUN_JOB: ${{needs.external_pr.outputs.run_pr_slack_job}}
-      if:  ${{needs.external_pr.outputs.run_pr_slack_job}} == 'true'
+      if:  ${{needs.external_pr.outputs.run_pr_slack_job == 'true'}}
       with:
         channel-id: '#github-new-issues'
         payload: |
