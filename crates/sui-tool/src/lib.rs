@@ -1,6 +1,6 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) Mysten Labs, Inc.
-// SPDX-License-Identifier: Apache-2.0.1
+// SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
 use fastcrypto::traits::ToFromBytes;
@@ -138,7 +138,7 @@ where
 
 struct OwnerOutput(Owner);
 
-// grep/awk-friendly output for Owner
+// grep/awk-friendly output for Owner test
 impl std::fmt::Display for OwnerOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
