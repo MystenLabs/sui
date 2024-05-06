@@ -3,7 +3,7 @@
 
 mod whoami;
 
-use crate::cli::lib::{get_oauth_token, API_SERVER};
+use crate::cli::lib::{get_api_server, get_oauth_token};
 use anyhow::Result;
 use clap::Parser;
 use colored::Colorize;
@@ -27,7 +27,7 @@ pub async fn iam_cmd(args: &IAMArgs) -> Result<()> {
             let token_resp = get_oauth_token().await;
             match token_resp {
                 Ok(token) => {
-                    let resp = whoami::get_identity(API_SERVER, &token.access_token).await;
+                    let resp = whoami::get_identity(&get_api_server(), &token.access_token).await;
                     match resp {
                         Ok(username) => {
                             println!("You are: {}", username.bright_purple());
