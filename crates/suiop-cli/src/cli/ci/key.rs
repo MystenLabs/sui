@@ -100,7 +100,7 @@ Please add the public key above to your repository {} via the link below:
     } else {
         Err(anyhow::anyhow!(
             "Failed to manage keys: {} - {}",
-            status.yellow(),
+            status,
             json_resp.message.yellow()
         ))
     }
