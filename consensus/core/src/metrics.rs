@@ -91,7 +91,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) core_lock_dequeued: IntCounter,
     pub(crate) core_lock_enqueued: IntCounter,
     pub(crate) highest_accepted_round: IntGauge,
-    pub(crate) accepted_blocks: IntCounter,
+    pub(crate) accepted_blocks: IntCounterVec,
     pub(crate) dag_state_recent_blocks: IntGauge,
     pub(crate) dag_state_recent_refs: IntGauge,
     pub(crate) dag_state_store_read_count: IntCounterVec,
@@ -127,6 +127,8 @@ pub(crate) struct NodeMetrics {
     pub(crate) commit_sync_fetched_commits: IntCounter,
     pub(crate) commit_sync_fetched_blocks: IntCounter,
     pub(crate) commit_sync_total_fetched_blocks_size: IntCounter,
+    pub(crate) commit_sync_quorum_index: IntGauge,
+    pub(crate) commit_sync_fetched_index: IntGauge,
     pub(crate) commit_sync_local_index: IntGauge,
     pub(crate) commit_sync_fetch_loop_latency: Histogram,
     pub(crate) commit_sync_fetch_once_latency: Histogram,
@@ -205,9 +207,10 @@ impl NodeMetrics {
                 "The highest round where a block has been accepted. Resets on restart.",
                 registry,
             ).unwrap(),
-            accepted_blocks: register_int_counter_with_registry!(
+            accepted_blocks: register_int_counter_vec_with_registry!(
                 "accepted_blocks",
-                "Number of accepted blocks",
+                "Number of accepted blocks by source (own, others)",
+                &["source"],
                 registry,
             ).unwrap(),
             dag_state_recent_blocks: register_int_gauge_with_registry!(
@@ -403,9 +406,19 @@ impl NodeMetrics {
                 "The total size in bytes of blocks fetched via commit syncer",
                 registry,
             ).unwrap(),
+            commit_sync_quorum_index: register_int_gauge_with_registry!(
+                "commit_sync_quorum_index",
+                "The maximum commit index voted by a quorum of authorities",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_index: register_int_gauge_with_registry!(
+                "commit_sync_fetched_index",
+                "The max commit index among local and fetched commits",
+                registry,
+            ).unwrap(),
             commit_sync_local_index: register_int_gauge_with_registry!(
                 "commit_sync_local_index",
-                "The max commit index among local and fetched commits",
+                "The local commit index",
                 registry,
             ).unwrap(),
             commit_sync_fetch_loop_latency: register_histogram_with_registry!(
