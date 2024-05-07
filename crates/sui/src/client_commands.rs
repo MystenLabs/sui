@@ -2569,7 +2569,7 @@ pub async fn estimate_gas_budget(
     sponsor: Option<SuiAddress>,
 ) -> Result<u64, anyhow::Error> {
     let Ok(SuiClientCommandResult::DryRun(dry_run)) =
-        execute_dry_run(&client, signer, kind, None, gas_price, gas_payment, sponsor).await
+        execute_dry_run(client, signer, kind, None, gas_price, gas_payment, sponsor).await
     else {
         bail!("Could not automatically determine the gas budget. Please supply one using the --gas-budget flag.")
     };
