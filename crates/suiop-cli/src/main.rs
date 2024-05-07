@@ -4,8 +4,8 @@
 use anyhow::Result;
 use clap::Parser;
 use suioplib::cli::{
-    ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, DockerArgs, IAMArgs,
-    IncidentsArgs, PulumiArgs, ServiceArgs,
+    ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, CIArgs, DockerArgs,
+    IAMArgs, IncidentsArgs, PulumiArgs, ServiceArgs,
 };
 use tracing_subscriber::{
     filter::{EnvFilter, LevelFilter},
@@ -64,9 +64,6 @@ async fn main() -> Result<()> {
         }
         Resource::Service(args) => {
             service_cmd(&args).await?;
-        }
-        Resource::Iam(args) => {
-            iam_cmd(&args).await?;
         }
         Resource::CI(args) => {
             ci_cmd(&args).await?;
