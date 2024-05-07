@@ -208,12 +208,11 @@ jobs:
       #     echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
       #     echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
-      - name: Install MySql Connector
+      - name: Install MySql
         shell: bash
         run: |
-          choco install mysql-connector --force --params '/Password:root'
-          ls -al C:\Program Files\MySQL
-          echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Connector C 8.0\lib\vs14" >> $GITHUB_ENV
+          choco install mysql --force --params '/Password:root'
+          echo "MYSQLCLIENT_LIB_DIR=C:\Program Files\MySQL\MySQL Server 8.0\lib" >> $GITHUB_ENV
 
       - name: cargo build
         run: |
