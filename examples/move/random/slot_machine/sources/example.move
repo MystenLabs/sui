@@ -8,7 +8,7 @@
 ///
 /// Anyone can play the game by betting on X SUI. They win X with probability 49% and lose the X SUI otherwise.
 ///
-module games::slot_machine {
+module slot_machine::example {
     use sui::balance::Balance;
     use sui::coin::{Self, Coin};
     use sui::math;
@@ -78,12 +78,12 @@ module games::slot_machine {
     }
 
     #[test_only]
-    public fun get_balance(game: &Game): u64 {
+    public fun balance(game: &Game): u64 {
         game.balance.value()
     }
 
     #[test_only]
-    public fun get_epoch(game: &Game): u64 {
+    public fun epoch(game: &Game): u64 {
         game.epoch
     }
 }

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module games::slot_machine_tests {
+module slot_machine::tests {
     use sui::coin::{Self, Coin};
     use sui::random::{Self, update_randomness_state_for_testing, Random};
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};
-    use games::slot_machine;
+    use slot_machine::example;
 
     fun mint(addr: address, amount: u64, scenario: &mut Scenario) {
         transfer::public_transfer(coin::mint_for_testing<SUI>(amount, scenario.ctx()), addr);
@@ -35,18 +35,18 @@ module games::slot_machine_tests {
         // Create the game and get back the output objects.
         mint(user1, 1000, scenario);
         let coin = scenario.take_from_sender<Coin<SUI>>();
-        slot_machine::create(coin, scenario.ctx());
+        example::create(coin, scenario.ctx());
         scenario.next_tx(user1);
-        let mut game = scenario.take_shared<slot_machine::Game>();
-        assert!(game.get_balance() == 1000, 1);
-        assert!(game.get_epoch() == 0, 1);
+        let mut game = scenario.take_shared<example::Game>();
+        assert!(game.balance() == 1000, 1);
+        assert!(game.epoch() == 0, 1);
 
         // Play 4 turns (everything here is deterministic)
         scenario.next_tx(user2);
         mint(user2, 100, scenario);
         let mut coin = scenario.take_from_sender<Coin<SUI>>();
         game.play(&random_state, &mut coin, scenario.ctx());
-        assert!(game.get_balance() == 1100, 1); // lost 100
+        assert!(game.balance() == 1100, 1); // lost 100
         assert!(coin.value() == 0, 1);
         scenario.return_to_sender(coin);
 
@@ -54,7 +54,7 @@ module games::slot_machine_tests {
         mint(user2, 200, scenario);
         let mut coin = scenario.take_from_sender<Coin<SUI>>();
         game.play(&random_state, &mut coin, scenario.ctx());
-        assert!(game.get_balance() == 900, 1); // won 200
+        assert!(game.balance() == 900, 1); // won 200
         // check that received the right amount
         assert!(coin.value() == 400, 1);
         scenario.return_to_sender(coin);
@@ -63,7 +63,7 @@ module games::slot_machine_tests {
         mint(user2, 300, scenario);
         let mut coin = scenario.take_from_sender<Coin<SUI>>();
         game.play(&random_state, &mut coin, scenario.ctx());
-        assert!(game.get_balance() == 600, 1); // won 300
+        assert!(game.balance() == 600, 1); // won 300
         // check that received the remaining amount
         assert!(coin.value() == 600, 1);
         scenario.return_to_sender(coin);
@@ -72,7 +72,7 @@ module games::slot_machine_tests {
         mint(user2, 200, scenario);
         let mut coin = scenario.take_from_sender<Coin<SUI>>();
         game.play(&random_state, &mut coin, scenario.ctx());
-        assert!(game.get_balance() == 800, 1); // lost 200
+        assert!(game.balance() == 800, 1); // lost 200
         // check that received the right amount
         assert!(coin.value() == 0, 1);
         scenario.return_to_sender(coin);
