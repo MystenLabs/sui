@@ -60,8 +60,7 @@ module utils::safe_tests {
     /// Ensure that all funds can be withdrawn by the owners
     fun test_safe_create_and_withdraw_funds_as_owner() {
         let owner = TEST_OWNER_ADDR;
-        let mut scenario_val = ts::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = ts::begin(TEST_SENDER_ADDR);
 
         let initial_funds = 1000u64;
         create_safe(scenario, owner, initial_funds);
@@ -79,7 +78,7 @@ module utils::safe_tests {
         scenario.return_to_sender(cap);
         ts::return_shared(safe);
 
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
@@ -87,8 +86,7 @@ module utils::safe_tests {
     fun test_safe_create_and_withdraw_funds_as_delegatee() {
         let owner = TEST_OWNER_ADDR;
         let delegatee = TEST_DELEGATEE_ADDR;
-        let mut scenario_val = ts::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = ts::begin(TEST_SENDER_ADDR);
 
         let initial_funds = 1000u64;
         let delegated_funds = 1000u64;
@@ -97,7 +95,7 @@ module utils::safe_tests {
         delegate_safe(scenario, owner, delegatee, delegated_funds);
         withdraw_as_delegatee(scenario, delegatee, delegated_funds);
 
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
@@ -106,8 +104,7 @@ module utils::safe_tests {
     fun test_safe_attempt_to_over_withdraw() {
         let owner = TEST_OWNER_ADDR;
         let delegatee = TEST_DELEGATEE_ADDR;
-        let mut scenario_val = ts::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = ts::begin(TEST_SENDER_ADDR);
 
         let initial_funds = 1000u64;
         let delegated_funds = 1000u64;
@@ -120,7 +117,7 @@ module utils::safe_tests {
         // Attempt to withdraw by 1 coin.
         withdraw_as_delegatee(scenario, delegatee, 1);
 
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
@@ -129,8 +126,7 @@ module utils::safe_tests {
     fun test_safe_withdraw_revoked() {
         let owner = TEST_OWNER_ADDR;
         let delegatee = TEST_DELEGATEE_ADDR;
-        let mut scenario_val = ts::begin(TEST_SENDER_ADDR);
-        let scenario = &mut scenario_val;
+        let mut scenario = ts::begin(TEST_SENDER_ADDR);
 
         let initial_funds = 1000u64;
         let delegated_funds = 1000u64;
@@ -143,7 +139,7 @@ module utils::safe_tests {
         // Withdraw funds
         withdraw_as_delegatee(scenario, delegatee, delegated_funds);
 
-        scenario_val.end();
+        scenario.end();
     }
 
     #[test]
@@ -151,8 +147,7 @@ module utils::safe_tests {
     /// Ensure owner cannot withdraw funds after revoking itself.
     fun test_safe_withdraw_self_revoked() {
         let owner = TEST_OWNER_ADDR;
-        let mut scenario_val = ts::begin(owner);
-        let scenario = &mut scenario_val;
+        let mut scenario = ts::begin(owner);
 
         let initial_funds = 1000u64;
         create_safe(scenario, owner, initial_funds);
@@ -174,6 +169,6 @@ module utils::safe_tests {
         ts::return_shared(safe);
         scenario.return_to_sender(cap);
         scenario.return_to_sender(transfer_capability);
-        scenario_val.end();
+        scenario.end();
     }
 }
