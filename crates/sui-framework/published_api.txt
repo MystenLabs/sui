@@ -1210,6 +1210,9 @@ max
 min
 	public fun
 	0x2::math
+min_u256
+	public fun
+	0x2::math
 diff
 	public fun
 	0x2::math
@@ -1223,6 +1226,12 @@ sqrt_u128
 	public fun
 	0x2::math
 divide_and_round_up
+	public fun
+	0x2::math
+log2_u256
+	public fun
+	0x2::math
+sqrt_u256
 	public fun
 	0x2::math
 Field
@@ -2155,6 +2164,51 @@ exists_with_type
 id
 	public fun
 	0x2::dynamic_object_field
+Expr
+	public struct
+	0x2::formula
+Formula
+	public struct
+	0x2::formula
+new
+	public fun
+	0x2::formula
+div
+	public fun
+	0x2::formula
+mul
+	public fun
+	0x2::formula
+add
+	public fun
+	0x2::formula
+sub
+	public fun
+	0x2::formula
+scale
+	public fun
+	0x2::formula
+sqrt
+	public fun
+	0x2::formula
+calculate_u8
+	public fun
+	0x2::formula
+calculate_u64
+	public fun
+	0x2::formula
+calculate_u128
+	public fun
+	0x2::formula
+log2_u256
+	public fun
+	0x2::formula
+min_u256
+	public fun
+	0x2::formula
+sqrt_u256
+	public fun
+	0x2::formula
 SUI
 	public struct
 	0x2::sui

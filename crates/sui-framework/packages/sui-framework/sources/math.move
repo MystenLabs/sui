@@ -22,6 +22,14 @@ module sui::math {
         }
     }
 
+    public fun min_u256(x: u256, y: u256): u256 {
+        if (x < y) {
+            x
+        } else {
+            y
+        }
+    }
+
     /// Return the absolute value of x - y
     public fun diff(x: u64, y: u64): u64 {
         if (x > y) {
@@ -141,4 +149,64 @@ module sui::math {
             x / y + 1
         }
     }
+
+    public fun log2_u256(mut x: u256): u8 {
+        let mut result = 0;
+        if (x >> 128 > 0) {
+            x = x >> 128;
+            result = result + 128;
+        };
+
+        if (x >> 64 > 0) {
+            x = x >> 64;
+            result = result + 64;
+        };
+
+        if (x >> 32 > 0) {
+            x = x >> 32;
+            result = result + 32;
+        };
+
+        if (x >> 16 > 0) {
+            x = x >> 16;
+            result = result + 16;
+        };
+
+        if (x >> 8 > 0) {
+            x = x >> 8;
+            result = result + 8;
+        };
+
+        if (x >> 4 > 0) {
+            x = x >> 4;
+            result = result + 4;
+        };
+
+        if (x >> 2 > 0) {
+            x = x >> 2;
+            result = result + 2;
+        };
+
+        if (x >> 1 > 0)
+            result = result + 1;
+
+        result
+    }
+
+    public fun sqrt_u256(x: u256): u256 {
+        if (x == 0) return 0;
+
+        let mut result = 1 << ((log2_u256(x) >> 1) as u8);
+
+        result = (result + x / result) >> 1;
+        result = (result + x / result) >> 1;
+        result = (result + x / result) >> 1;
+        result = (result + x / result) >> 1;
+        result = (result + x / result) >> 1;
+        result = (result + x / result) >> 1;
+        result = (result + x / result) >> 1;
+
+        min_u256(result, x / result)
+    }
+
 }

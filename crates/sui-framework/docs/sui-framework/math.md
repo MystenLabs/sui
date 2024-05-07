@@ -7,11 +7,14 @@ Basic math for nicer programmability
 
 -  [Function `max`](#0x2_math_max)
 -  [Function `min`](#0x2_math_min)
+-  [Function `min_u256`](#0x2_math_min_u256)
 -  [Function `diff`](#0x2_math_diff)
 -  [Function `pow`](#0x2_math_pow)
 -  [Function `sqrt`](#0x2_math_sqrt)
 -  [Function `sqrt_u128`](#0x2_math_sqrt_u128)
 -  [Function `divide_and_round_up`](#0x2_math_divide_and_round_up)
+-  [Function `log2_u256`](#0x2_math_log2_u256)
+-  [Function `sqrt_u256`](#0x2_math_sqrt_u256)
 
 
 <pre><code></code></pre>
@@ -64,6 +67,34 @@ Return the smaller of <code>x</code> and <code>y</code>
 
 
 <pre><code><b>public</b> <b>fun</b> <b>min</b>(x: u64, y: u64): u64 {
+    <b>if</b> (x &lt; y) {
+        x
+    } <b>else</b> {
+        y
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_math_min_u256"></a>
+
+## Function `min_u256`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_min_u256">min_u256</a>(x: u256, y: u256): u256
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_min_u256">min_u256</a>(x: u256, y: u256): u256 {
     <b>if</b> (x &lt; y) {
         x
     } <b>else</b> {
@@ -289,6 +320,105 @@ Calculate x / y, but round up the result.
     } <b>else</b> {
         x / y + 1
     }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_math_log2_u256"></a>
+
+## Function `log2_u256`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_log2_u256">log2_u256</a>(x: u256): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_log2_u256">log2_u256</a>(<b>mut</b> x: u256): u8 {
+    <b>let</b> <b>mut</b> result = 0;
+    <b>if</b> (x &gt;&gt; 128 &gt; 0) {
+        x = x &gt;&gt; 128;
+        result = result + 128;
+    };
+
+    <b>if</b> (x &gt;&gt; 64 &gt; 0) {
+        x = x &gt;&gt; 64;
+        result = result + 64;
+    };
+
+    <b>if</b> (x &gt;&gt; 32 &gt; 0) {
+        x = x &gt;&gt; 32;
+        result = result + 32;
+    };
+
+    <b>if</b> (x &gt;&gt; 16 &gt; 0) {
+        x = x &gt;&gt; 16;
+        result = result + 16;
+    };
+
+    <b>if</b> (x &gt;&gt; 8 &gt; 0) {
+        x = x &gt;&gt; 8;
+        result = result + 8;
+    };
+
+    <b>if</b> (x &gt;&gt; 4 &gt; 0) {
+        x = x &gt;&gt; 4;
+        result = result + 4;
+    };
+
+    <b>if</b> (x &gt;&gt; 2 &gt; 0) {
+        x = x &gt;&gt; 2;
+        result = result + 2;
+    };
+
+    <b>if</b> (x &gt;&gt; 1 &gt; 0)
+        result = result + 1;
+
+    result
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_math_sqrt_u256"></a>
+
+## Function `sqrt_u256`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u256">sqrt_u256</a>(x: u256): u256
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/math.md#0x2_math_sqrt_u256">sqrt_u256</a>(x: u256): u256 {
+    <b>if</b> (x == 0) <b>return</b> 0;
+
+    <b>let</b> <b>mut</b> result = 1 &lt;&lt; ((<a href="../sui-framework/math.md#0x2_math_log2_u256">log2_u256</a>(x) &gt;&gt; 1) <b>as</b> u8);
+
+    result = (result + x / result) &gt;&gt; 1;
+    result = (result + x / result) &gt;&gt; 1;
+    result = (result + x / result) &gt;&gt; 1;
+    result = (result + x / result) &gt;&gt; 1;
+    result = (result + x / result) &gt;&gt; 1;
+    result = (result + x / result) &gt;&gt; 1;
+    result = (result + x / result) &gt;&gt; 1;
+
+    <a href="../sui-framework/math.md#0x2_math_min_u256">min_u256</a>(result, x / result)
 }
 </code></pre>
 
