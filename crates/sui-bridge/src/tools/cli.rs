@@ -4,11 +4,13 @@
 use clap::*;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
+use sui_sdk::SuiClientBuilder;
 use std::sync::Arc;
 use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
 use sui_bridge::sui_client::SuiClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
+use sui_bridge::tools::LoadedBridgeCliConfig;
 use sui_bridge::tools::{
     make_action, select_contract_address, Args, BridgeCliConfig, BridgeValidatorCommand,
 };
@@ -47,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
             );
         }
 
-        BridgeValidatorCommand::GovernanceClient {
+        BridgeValidatorCommand::Governance {
             config_path,
             chain_id,
             cmd,
@@ -55,6 +57,7 @@ async fn main() -> anyhow::Result<()> {
             let chain_id = BridgeChainId::try_from(chain_id).expect("Invalid chain id");
             println!("Chain ID: {:?}", chain_id);
             let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
+            let config = LoadedBridgeCliConfig::load(config).await?;
             let sui_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
 
             let (sui_key, sui_address, gas_object_ref) = config
@@ -123,11 +126,7 @@ async fn main() -> anyhow::Result<()> {
 
             // Handle eth side
             // TODO assert chain id returned from rpc matches chain_id
-            let eth_signer_client = config
-                .get_eth_signer_client()
-                .await
-                .expect("Failed to get eth signer client");
-            println!("Using Eth address: {:?}", eth_signer_client.address());
+            let eth_signer_client = config.eth_signer();
             // Create BridgeAction
             let eth_action = make_action(chain_id, &cmd);
             println!("Action to execute on Eth: {:?}", eth_action);
@@ -138,7 +137,7 @@ async fn main() -> anyhow::Result<()> {
                 .await
                 .expect("Failed to request committee signatures");
             let contract_address = select_contract_address(&config, &cmd);
-            let tx = build_eth_transaction(contract_address, eth_signer_client, certified_action)
+            let tx = build_eth_transaction(contract_address, eth_signer_client.clone(), certified_action)
                 .await
                 .expect("Failed to build eth transaction");
             println!("sending Eth tx: {:?}", tx);
@@ -153,6 +152,16 @@ async fn main() -> anyhow::Result<()> {
             };
 
             return Ok(());
+        }
+        BridgeValidatorCommand::Client {
+            config_path,
+            cmd,
+        } => {
+            let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
+            let config = LoadedBridgeCliConfig::load(config).await?;
+            let sui_client = SuiClientBuilder::default().build(&config.sui_rpc_url).await?;
+            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
+
         }
     }
 

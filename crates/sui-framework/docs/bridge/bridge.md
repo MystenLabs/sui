@@ -35,6 +35,7 @@ title: Module `0xb::bridge`
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
 -  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 -  [Function `get_token_transfer_action_signatures`](#0xb_bridge_get_token_transfer_action_signatures)
+-  [Function `get_token_transfer_payload`](#0xb_bridge_get_token_transfer_payload)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
@@ -1408,7 +1409,7 @@ title: Module `0xb::bridge`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
 </code></pre>
 
 
@@ -1417,7 +1418,7 @@ title: Module `0xb::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
     <a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
     source_chain: u8,
     bridge_seq_num: u64,
@@ -1483,6 +1484,46 @@ title: Module `0xb::bridge`
 
     <b>let</b> record = &inner.token_transfer_records[key];
     record.verified_signatures
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_get_token_transfer_payload"></a>
+
+## Function `get_token_transfer_payload`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_payload">get_token_transfer_payload</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="message.md#0xb_message_TokenTransferPayload">message::TokenTransferPayload</a>&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_payload">get_token_transfer_payload</a>(
+    <a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    source_chain: u8,
+    bridge_seq_num: u64,
+): Option&lt;TokenTransferPayload&gt; {
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+    <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(
+        source_chain,
+        <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
+        bridge_seq_num
+    );
+
+    <b>if</b> (!inner.token_transfer_records.contains(key)) {
+        <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
+    };
+
+    <b>let</b> record = &inner.token_transfer_records[key];
+    <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(record.<a href="message.md#0xb_message">message</a>.extract_token_bridge_payload())
 }
 </code></pre>
 

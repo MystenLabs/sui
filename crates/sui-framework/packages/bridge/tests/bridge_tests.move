@@ -5,7 +5,7 @@
 module bridge::bridge_tests {
     use bridge::bridge::{
         assert_not_paused, assert_paused, create_bridge_for_testing, execute_system_message,
-        get_token_transfer_action_status, inner_limiter, inner_paused,
+        test_get_token_transfer_action_status, inner_limiter, inner_paused,
         inner_treasury, inner_token_transfer_records, new_bridge_record_for_testing,
         new_for_testing, send_token, test_execute_emergency_op, test_init_bridge_committee,
         test_get_current_seq_num_and_increment, test_execute_update_asset_price,
@@ -608,7 +608,7 @@ module bridge::bridge_tests {
     }
 
     #[test]
-    fun test_get_token_transfer_action_status() {
+    fun test_get_token_transfer_action_data() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = scenario.ctx();
         let chain_id = chain_ids::sui_testnet();
@@ -632,7 +632,7 @@ module bridge::bridge_tests {
             new_bridge_record_for_testing(message, option::none(), false),
         );
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 10)
+            bridge.test_get_token_transfer_action_status(chain_id, 10)
                 == transfer_status_pending(),
             UNEXPECTED_ERROR,
         );
@@ -657,7 +657,7 @@ module bridge::bridge_tests {
             new_bridge_record_for_testing(message, option::some(vector[]), false),
         );
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 11)
+            bridge.test_get_token_transfer_action_status(chain_id, 11)
                 == transfer_status_approved(),
             UNEXPECTED_ERROR + 2,
         );
@@ -665,6 +665,11 @@ module bridge::bridge_tests {
             bridge.test_get_token_transfer_action_signatures(chain_id, 11)
                 == option::some(vector[]),
             UNEXPECTED_ERROR + 3,
+        );
+        assert!(
+            bridge.test_get_token_transfer_payload(chain_id, 11)
+                == option::some(message.extract_token_bridge_payload()),
+            UNEXPECTED_ERROR + 7,
         );
 
         // Test when already claimed
@@ -683,7 +688,7 @@ module bridge::bridge_tests {
             new_bridge_record_for_testing(message, option::some(vector[b"1234"]), true),
         );
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 12)
+            bridge.test_get_token_transfer_action_status(chain_id, 12)
                 == transfer_status_claimed(),
             UNEXPECTED_ERROR + 3,
         );
@@ -692,10 +697,15 @@ module bridge::bridge_tests {
                 == option::some(vector[b"1234"]),
             UNEXPECTED_ERROR + 4,
         );
+        assert!(
+            bridge.test_get_token_transfer_payload(chain_id, 12)
+                == option::some(message.extract_token_bridge_payload()),
+            UNEXPECTED_ERROR + 8,
+        );
 
         // Test when message not found
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 13)
+            bridge.test_get_token_transfer_action_status(chain_id, 13)
                 == transfer_status_not_found(),
             UNEXPECTED_ERROR + 5,
         );
@@ -703,6 +713,11 @@ module bridge::bridge_tests {
             bridge.test_get_token_transfer_action_signatures(chain_id, 13)
                 == option::none(),
             UNEXPECTED_ERROR + 6,
+        );
+        assert!(
+            bridge.test_get_token_transfer_payload(chain_id, 13)
+                == option::none(),
+            UNEXPECTED_ERROR + 8,
         );
 
         destroy(bridge);

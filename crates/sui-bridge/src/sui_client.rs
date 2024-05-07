@@ -7,6 +7,7 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 use axum::response::sse::Event;
+use serde::de::DeserializeOwned;
 use core::panic;
 use ethers::types::{Address, U256};
 use fastcrypto::traits::KeyPair;
@@ -34,6 +35,7 @@ use sui_types::bridge::BridgeSummary;
 use sui_types::bridge::BridgeTreasurySummary;
 use sui_types::bridge::MoveTypeBridgeCommittee;
 use sui_types::bridge::MoveTypeCommitteeMember;
+use sui_types::bridge::MoveTypeTokenTransferPayload;
 use sui_types::collection_types::LinkedTableNode;
 use sui_types::crypto::get_key_pair;
 use sui_types::dynamic_field::DynamicFieldName;
@@ -390,6 +392,13 @@ pub trait SuiClientInner: Send + Sync {
         seq_number: u64,
     ) -> Result<Option<Vec<Vec<u8>>>, BridgeError>;
 
+    async fn get_token_transfer_payload(
+        &self,
+        bridge_object_arg: ObjectArg,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<Option<MoveTypeTokenTransferPayload>, BridgeError>;
+
     async fn get_gas_data_panic_if_not_gas(
         &self,
         gas_object_id: ObjectID,
@@ -449,60 +458,71 @@ impl SuiClientInner for SuiSdkClient {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError> {
-        let pt = ProgrammableTransaction {
-            inputs: vec![
-                CallArg::Object(bridge_object_arg),
-                CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
-            ],
-            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-                package: BRIDGE_PACKAGE_ID,
-                module: Identifier::new("bridge").unwrap(),
-                function: Identifier::new("get_token_transfer_action_status").unwrap(),
-                type_arguments: vec![],
-                arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
-            }))],
-        };
-        let kind = TransactionKind::programmable(pt.clone());
-        let resp = self
-            .read_api()
-            .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
-            .await?;
-        let DevInspectResults {
-            results, effects, ..
-        } = resp;
-        let Some(results) = results else {
-            return Err(BridgeError::Generic(format!(
-                "Can't get token transfer action status (empty results). effects: {:?}",
-                effects
-            )));
-        };
-        let return_values = &results
-            .first()
-            .ok_or(BridgeError::Generic(format!(
-                "Can't get token transfer action status, results: {:?}",
-                results
-            )))?
-            .return_values;
-        let (value_bytes, _type_tag) =
-            return_values.first().ok_or(BridgeError::Generic(format!(
-                "Can't get token transfer action status, results: {:?}",
-                results
-            )))?;
-        let status = bcs::from_bytes::<u8>(value_bytes).map_err(|_e| {
-            BridgeError::Generic(format!(
-                "Can't parse token transfer action status as u8: {:?}",
-                results
-            ))
-        })?;
-        let status = BridgeActionStatus::try_from(status).map_err(|_e| {
-            BridgeError::Generic(format!(
-                "Can't parse token transfer action status as BridgeActionStatus: {:?}",
-                results
-            ))
-        })?;
+        
+        dev_inspect_bridge::<u8>(
+            self,
+            bridge_object_arg,
+            source_chain_id,
+            seq_number,
+            "get_token_transfer_action_status",
+        )
+        .await
+        .and_then(|status_byte| BridgeActionStatus::try_from(status_byte).map_err(Into::into))
 
-        return Ok(status);
+        // let pt = ProgrammableTransaction {
+        //     inputs: vec![
+        //         CallArg::Object(bridge_object_arg),
+        //         CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
+        //         CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
+        //     ],
+        //     commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+        //         package: BRIDGE_PACKAGE_ID,
+        //         module: Identifier::new("bridge").unwrap(),
+        //         function: Identifier::new("get_token_transfer_action_status").unwrap(),
+        //         type_arguments: vec![],
+        //         arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+        //     }))],
+        // };
+        // let kind = TransactionKind::programmable(pt.clone());
+        // let resp = self
+        //     .read_api()
+        //     .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
+        //     .await?;
+        // let DevInspectResults {
+        //     results, effects, ..
+        // } = resp;
+        // let Some(results) = results else {
+        //     return Err(BridgeError::Generic(format!(
+        //         "Can't get token transfer action status (empty results). effects: {:?}",
+        //         effects
+        //     )));
+        // };
+        // let return_values = &results
+        //     .first()
+        //     .ok_or(BridgeError::Generic(format!(
+        //         "Can't get token transfer action status, results: {:?}",
+        //         results
+        //     )))?
+        //     .return_values;
+        // let (value_bytes, _type_tag) =
+        //     return_values.first().ok_or(BridgeError::Generic(format!(
+        //         "Can't get token transfer action status, results: {:?}",
+        //         results
+        //     )))?;
+        // let status = bcs::from_bytes::<u8>(value_bytes).map_err(|_e| {
+        //     BridgeError::Generic(format!(
+        //         "Can't parse token transfer action status as u8: {:?}",
+        //         results
+        //     ))
+        // })?;
+        // let status = BridgeActionStatus::try_from(status).map_err(|_e| {
+        //     BridgeError::Generic(format!(
+        //         "Can't parse token transfer action status as BridgeActionStatus: {:?}",
+        //         results
+        //     ))
+        // })?;
+
+        // return Ok(status);
     }
 
     async fn get_token_transfer_action_onchain_signatures(
@@ -511,52 +531,122 @@ impl SuiClientInner for SuiSdkClient {
         source_chain_id: u8,
         seq_number: u64,
     ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
-        let pt = ProgrammableTransaction {
-            inputs: vec![
-                CallArg::Object(bridge_object_arg),
-                CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
-                CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
-            ],
-            commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
-                package: BRIDGE_PACKAGE_ID,
-                module: Identifier::new("bridge").unwrap(),
-                function: Identifier::new("get_token_transfer_action_signatures").unwrap(),
-                type_arguments: vec![],
-                arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
-            }))],
-        };
-        let kind = TransactionKind::programmable(pt.clone());
-        let resp = self
-            .read_api()
-            .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
-            .await?;
-        let DevInspectResults {
-            results, effects, ..
-        } = resp;
-        let Some(results) = results else {
-            return Err(BridgeError::Generic(format!(
-                "Can't get token transfer action signatures (empty results). effects: {:?}",
-                effects
-            )));
-        };
-        let return_values = &results
-            .first()
-            .ok_or(BridgeError::Generic(format!(
-                "Can't get token transfer action signatures, results: {:?}",
-                results
-            )))?
-            .return_values;
-        let (value_bytes, _type_tag) =
-            return_values.first().ok_or(BridgeError::Generic(format!(
-                "Can't get token transfer action signatures, results: {:?}",
-                results
-            )))?;
-        bcs::from_bytes::<Option<Vec<Vec<u8>>>>(value_bytes).map_err(|_e| {
-            BridgeError::Generic(format!(
-                "Can't parse token transfer action signatures as Option<Vec<Vec<u8>>>: {:?}",
-                results
-            ))
-        })
+        dev_inspect_bridge::<Option<Vec<Vec<u8>>>>(
+            self,
+            bridge_object_arg,
+            source_chain_id,
+            seq_number,
+            "get_token_transfer_action_signatures",
+        )
+        .await
+        // let pt = ProgrammableTransaction {
+        //     inputs: vec![
+        //         CallArg::Object(bridge_object_arg),
+        //         CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
+        //         CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
+        //     ],
+        //     commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+        //         package: BRIDGE_PACKAGE_ID,
+        //         module: Identifier::new("bridge").unwrap(),
+        //         function: Identifier::new("get_token_transfer_action_signatures").unwrap(),
+        //         type_arguments: vec![],
+        //         arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+        //     }))],
+        // };
+        // let kind = TransactionKind::programmable(pt.clone());
+        // let resp = self
+        //     .read_api()
+        //     .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
+        //     .await?;
+        // let DevInspectResults {
+        //     results, effects, ..
+        // } = resp;
+        // let Some(results) = results else {
+        //     return Err(BridgeError::Generic(format!(
+        //         "Can't get token transfer action signatures (empty results). effects: {:?}",
+        //         effects
+        //     )));
+        // };
+        // let return_values = &results
+        //     .first()
+        //     .ok_or(BridgeError::Generic(format!(
+        //         "Can't get token transfer action signatures, results: {:?}",
+        //         results
+        //     )))?
+        //     .return_values;
+        // let (value_bytes, _type_tag) =
+        //     return_values.first().ok_or(BridgeError::Generic(format!(
+        //         "Can't get token transfer action signatures, results: {:?}",
+        //         results
+        //     )))?;
+        // bcs::from_bytes::<Option<Vec<Vec<u8>>>>(value_bytes).map_err(|_e| {
+        //     BridgeError::Generic(format!(
+        //         "Can't parse token transfer action signatures as Option<Vec<Vec<u8>>>: {:?}",
+        //         results
+        //     ))
+        // })
+    }
+
+    async fn get_token_transfer_payload(
+        &self,
+        bridge_object_arg: ObjectArg,
+        source_chain_id: u8,
+        seq_number: u64,
+    ) -> Result<Option<MoveTypeTokenTransferPayload>, BridgeError> {
+        dev_inspect_bridge::<Option<MoveTypeTokenTransferPayload>>(
+            self,
+            bridge_object_arg,
+            source_chain_id,
+            seq_number,
+            "get_token_transfer_payload",
+        )
+        .await
+        // let pt = ProgrammableTransaction {
+        //     inputs: vec![
+        //         CallArg::Object(bridge_object_arg),
+        //         CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
+        //         CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
+        //     ],
+        //     commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+        //         package: BRIDGE_PACKAGE_ID,
+        //         module: Identifier::new("bridge").unwrap(),
+        //         function: Identifier::new("get_token_transfer_payload").unwrap(),
+        //         type_arguments: vec![],
+        //         arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+        //     }))],
+        // };
+        // let kind = TransactionKind::programmable(pt.clone());
+        // let resp = self
+        //     .read_api()
+        //     .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
+        //     .await?;
+        // let DevInspectResults {
+        //     results, effects, ..
+        // } = resp;
+        // let Some(results) = results else {
+        //     return Err(BridgeError::Generic(format!(
+        //         "Can't get token transfer payload (empty results). effects: {:?}",
+        //         effects
+        //     )));
+        // };
+        // let return_values = &results
+        //     .first()
+        //     .ok_or(BridgeError::Generic(format!(
+        //         "Can't get token transfer payload, results: {:?}",
+        //         results
+        //     )))?
+        //     .return_values;
+        // let (value_bytes, _type_tag) =
+        //     return_values.first().ok_or(BridgeError::Generic(format!(
+        //         "Can't get token transfer payload, results: {:?}",
+        //         results
+        //     )))?;
+        // bcs::from_bytes::<Option<MoveTypeTokenTransferPayload>>(value_bytes).map_err(|_e| {
+        //     BridgeError::Generic(format!(
+        //         "Can't parse token transfer payload as Option<MoveTypeTokenTransferPayload>: {:?}",
+        //         results
+        //     ))
+        // })
     }
 
     async fn execute_transaction_block_with_effects(
@@ -600,6 +690,66 @@ impl SuiClientInner for SuiSdkClient {
             }
         }
     }
+}
+
+/// Helper function to dev-inspect `bridge::{function_name}` function
+/// with bridge object arg, source chain id, seq number as param
+/// and parse the return value as `T`.
+async fn dev_inspect_bridge<T>(
+    sui_client: &SuiSdkClient,
+    bridge_object_arg: ObjectArg,
+    source_chain_id: u8,
+    seq_number: u64,
+    function_name: &str,
+) -> Result<T, BridgeError>
+where
+    T: DeserializeOwned,
+{
+    let pt = ProgrammableTransaction {
+        inputs: vec![
+            CallArg::Object(bridge_object_arg),
+            CallArg::Pure(bcs::to_bytes(&source_chain_id).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&seq_number).unwrap()),
+        ],
+        commands: vec![Command::MoveCall(Box::new(ProgrammableMoveCall {
+            package: BRIDGE_PACKAGE_ID,
+            module: Identifier::new("bridge").unwrap(),
+            function: Identifier::new(function_name).unwrap(),
+            type_arguments: vec![],
+            arguments: vec![Argument::Input(0), Argument::Input(1), Argument::Input(2)],
+        }))],
+    };
+    let kind = TransactionKind::programmable(pt);
+    let resp = sui_client
+        .read_api()
+        .dev_inspect_transaction_block(SuiAddress::ZERO, kind, None, None, None)
+        .await?;
+    let DevInspectResults { results, effects, .. } = resp;
+    let Some(results) = results else {
+        return Err(BridgeError::Generic(format!(
+            "No results returned for '{}', effects: {:?}",
+            function_name, effects
+        )));
+    };
+    let return_values = &results
+        .first()
+        .ok_or(BridgeError::Generic(format!(
+            "No return values for '{}', results: {:?}",
+            function_name, results
+        )))?
+        .return_values;
+    let (value_bytes, _type_tag) = return_values
+        .first()
+        .ok_or(BridgeError::Generic(format!(
+            "No first return value for '{}', results: {:?}",
+            function_name, results
+        )))?;
+    bcs::from_bytes::<T>(value_bytes).map_err(|e| {
+        BridgeError::Generic(format!(
+            "Failed to parse return value for '{}', error: {:?}, results: {:?}",
+            function_name, e, results
+        ))
+    })
 }
 
 #[cfg(test)]

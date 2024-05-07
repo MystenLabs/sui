@@ -1,23 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::config::read_bridge_client_key;
+
+use crate::abi::EthSuiBridge;
+use crate::config::read_key;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::events::EmittedSuiToEthTokenBridgeV1;
+use crate::sui_client::{self, SuiBridgeClient};
 use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
-    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
+    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction, SuiToEthBridgeAction,
 };
 use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
 use clap::*;
+use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::hash::{HashFunction, Keccak256};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sui_types::digests::TransactionDigest;
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui_config::Config;
-use sui_sdk::SuiClientBuilder;
+use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
@@ -49,9 +56,9 @@ pub enum BridgeValidatorCommand {
         #[clap(name = "run-client", long)]
         run_client: bool,
     },
-    /// Client to facilitate and execute Bridge governance actions
-    #[clap(name = "client")]
-    GovernanceClient {
+    /// Governance client to facilitate and execute Bridge governance actions
+    #[clap(name = "governance")]
+    Governance {
         /// Path of BridgeCliConfig
         #[clap(long = "config-path")]
         config_path: PathBuf,
@@ -59,6 +66,15 @@ pub enum BridgeValidatorCommand {
         chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
+    },
+    /// Client to facilitate and execute Bridge actions
+    #[clap(name = "client")]
+    Client {
+        /// Path of BridgeCliConfig
+        #[clap(long = "config-path")]
+        config_path: PathBuf,
+        #[clap(subcommand)]
+        cmd: BridgeClientCommands,
     },
 }
 
@@ -220,11 +236,11 @@ fn encode_call_data(function_selector: &str, params: &Vec<String>) -> Vec<u8> {
 }
 
 pub fn select_contract_address(
-    config: &BridgeCliConfig,
+    config: &LoadedBridgeCliConfig,
     cmd: &GovernanceClientCommands,
 ) -> EthAddress {
     match cmd {
-        GovernanceClientCommands::EmergencyButton { .. } => config.eth_sui_bridge_proxy_address,
+        GovernanceClientCommands::EmergencyButton { .. } => config.eth_bridge_proxy_address,
         GovernanceClientCommands::UpdateCommitteeBlocklist { .. } => {
             config.eth_bridge_committee_proxy_address
         }
@@ -245,33 +261,111 @@ pub struct BridgeCliConfig {
     /// Rpc url for Eth fullnode, used for query stuff.
     pub eth_rpc_url: String,
     /// Proxy address for SuiBridge deployed on Eth
-    pub eth_sui_bridge_proxy_address: EthAddress,
-    /// Proxy address for BridgeCommittee deployed on Eth
-    pub eth_bridge_committee_proxy_address: EthAddress,
-    /// Proxy address for BridgeLimiter deployed on Eth
-    pub eth_bridge_limiter_proxy_address: EthAddress,
-    /// Path of the file where bridge client key (any SuiKeyPair) is stored as Base64 encoded `flag || privkey`.
-    /// The derived accounts
-    pub bridge_client_key_path_base64_sui_key: PathBuf,
+    pub eth_bridge_proxy_address: EthAddress,
+    /// Path of the file where private key is stored. The content could be any of the following:
+    /// - Base64 encoded `flag || privkey` for ECDSA key
+    /// - Base64 encoded `privkey` for Raw key
+    /// - Hex encoded `privkey` for Raw key
+    /// At leaset one of `sui_key_path` or `eth_key_path` must be provided.
+    /// If only one is provided, it will be used for both Sui and Eth.
+    pub sui_key_path: Option<PathBuf>,
+    /// See `sui_key_path`. Must be Secp256k1 key.
+    pub eth_key_path: Option<PathBuf>,
 }
 
 impl Config for BridgeCliConfig {}
 
-impl BridgeCliConfig {
-    pub async fn get_eth_signer_client(self: &BridgeCliConfig) -> anyhow::Result<EthSigner> {
-        let client_key = read_bridge_client_key(&self.bridge_client_key_path_base64_sui_key)?;
-        let private_key = Hex::encode(client_key.to_bytes_no_flag());
-        let url = self.eth_rpc_url.clone();
-        get_eth_signer_client(&url, &private_key).await
+pub struct LoadedBridgeCliConfig {
+    /// Rpc url for Sui fullnode, used for query stuff and submit transactions.
+    pub sui_rpc_url: String,
+    /// Rpc url for Eth fullnode, used for query stuff.
+    pub eth_rpc_url: String,
+    /// Proxy address for SuiBridge deployed on Eth
+    pub eth_bridge_proxy_address: EthAddress,
+    /// Proxy address for BridgeCommittee deployed on Eth
+    pub eth_bridge_committee_proxy_address: EthAddress,
+    /// Proxy address for BridgeLimiter deployed on Eth
+    pub eth_bridge_limiter_proxy_address: EthAddress,
+    /// Key pair for Sui operations
+    sui_key: SuiKeyPair,
+    /// Key pair for Eth operations, must be Secp256k1 key
+    // pub eth_key: SuiKeyPair,
+    eth_signer: EthSigner,
+}
+
+impl LoadedBridgeCliConfig {
+    pub async fn load(cli_config: BridgeCliConfig) -> anyhow::Result<Self> {
+        if cli_config.eth_key_path.is_none() && cli_config.sui_key_path.is_none() {
+            return Err(anyhow!(
+                "At least one of `sui_key_path` or `eth_key_path` must be provided"
+            ));
+        }
+        let sui_key = if let Some(sui_key_path) = &cli_config.sui_key_path {
+            Some(read_key(sui_key_path, false)?)
+        } else {
+            None
+        };
+        let eth_key = if let Some(eth_key_path) = &cli_config.eth_key_path {
+            let eth_key = read_key(eth_key_path, true)?;
+            Some(eth_key)
+        } else {
+            None
+        };
+        let (eth_key, sui_key) = {
+            if eth_key.is_none() {
+                let sui_key = sui_key.unwrap();
+                if !matches!(sui_key, SuiKeyPair::Secp256k1(_)) {
+                    return Err(anyhow!("Eth key must be an ECDSA key"));
+                }
+                (sui_key.copy(), sui_key)
+            } else if sui_key.is_none() {
+                let eth_key = eth_key.unwrap();
+                (eth_key.copy(), eth_key)
+            } else {
+                (eth_key.unwrap(), sui_key.unwrap())
+            }
+        };
+
+        let provider = Arc::new(
+            ethers::prelude::Provider::<ethers::providers::Http>::try_from(&cli_config.eth_rpc_url)
+                .unwrap()
+                .interval(std::time::Duration::from_millis(2000)),
+        );
+        let private_key = Hex::encode(eth_key.to_bytes_no_flag());
+        let eth_signer = get_eth_signer_client(&cli_config.eth_rpc_url, &private_key).await?;
+        let sui_bridge = EthSuiBridge::new(cli_config.eth_bridge_proxy_address, provider.clone());
+        let eth_bridge_committee_proxy_address: EthAddress = sui_bridge.committee().call().await?;
+        let eth_bridge_limiter_proxy_address: EthAddress = sui_bridge.limiter().call().await?;
+
+        let eth_address = eth_signer.address();
+        let eth_chain_id = provider.get_chainid().await?;
+        let sui_address = SuiAddress::from(&sui_key.public());
+        println!("Using Sui address: {:?}", sui_address);
+        println!("Using Eth address: {:?}", eth_address);
+        println!("Using Eth chain: {:?}", eth_chain_id);
+
+        Ok(Self {
+            sui_rpc_url: cli_config.sui_rpc_url,
+            eth_rpc_url: cli_config.eth_rpc_url,
+            eth_bridge_proxy_address: cli_config.eth_bridge_proxy_address,
+            eth_bridge_committee_proxy_address,
+            eth_bridge_limiter_proxy_address,
+            sui_key,
+            eth_signer,
+        })
+    }
+}
+
+impl LoadedBridgeCliConfig {
+    pub fn eth_signer(self: &LoadedBridgeCliConfig) -> &EthSigner {
+        &self.eth_signer
     }
 
     pub async fn get_sui_account_info(
-        self: &BridgeCliConfig,
+        self: &LoadedBridgeCliConfig,
     ) -> anyhow::Result<(SuiKeyPair, SuiAddress, ObjectRef)> {
-        let client_key = read_bridge_client_key(&self.bridge_client_key_path_base64_sui_key)?;
-        let pubkey = client_key.public();
+        let pubkey = self.sui_key.public();
         let sui_client_address = SuiAddress::from(&pubkey);
-        println!("Using Sui address: {:?}", sui_client_address);
         let sui_sdk_client = SuiClientBuilder::default()
             .build(self.sui_rpc_url.clone())
             .await?;
@@ -286,9 +380,75 @@ impl BridgeCliConfig {
             .find(|coin| coin.balance >= 5_000_000_000)
             .ok_or(anyhow!("Did not find gas object with enough balance"))?;
         println!("Using Gas object: {}", gas.coin_object_id);
-        Ok((client_key, sui_client_address, gas.object_ref()))
+        Ok((self.sui_key.copy(), sui_client_address, gas.object_ref()))
     }
 }
+
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub enum BridgeClientCommands {
+    /// Default address used for commands when none specified
+    // #[clap(name = "active-address")]
+    // ClaimOnEth
+    // /// Default environment used for commands when none specified
+    // #[clap(name = "active-env")]
+    // ActiveEnv,
+    // /// Obtain the Addresses managed by the client.
+    #[clap(name = "addresses")]
+    ClaimOnEth {
+        #[clap(long)]
+        seq_num: u64,
+    },
+
+}
+
+impl BridgeClientCommands {
+    pub async fn handle_command(
+        self,
+        config: &LoadedBridgeCliConfig,
+        // sui_client: SuiClient,
+        sui_bridge_client: SuiBridgeClient,
+    ) -> anyhow::Result<()> {
+        match self {
+            BridgeClientCommands::ClaimOnEth { seq_num } => {
+                // let sui_chain_id = sui_bridge_client.get_bridge_summary().await?.chain_id;
+                // let sigs = sui_bridge_client.get_token_transfer_action_onchain_signatures_until_success(sui_chain_id, seq_num).await;
+                // if sigs.is_none() {
+                //     println!("No signatures found for seq_num: {}, chain id: {}", seq_num);
+                //     return Ok(());
+                // }
+                // let signatures = sigs.unwrap().into_iter()
+                //     .map(|sig: Vec<u8>| ethers::types::Bytes::from(sig))
+                //     .collect::<Vec<_>>();
+
+                // let eth_sui_bridge = EthSuiBridge::new(
+                //     config.eth_bridge_proxy_address,
+                //     Arc::new(config.eth_signer().clone()),
+                // );
+                // let action = SuiToEthBridgeAction {
+                //     sui_tx_digest: TransactionDigest::random(), // dummy, this is not used in conversion
+                //     sui_tx_event_index: 0,  // dummy, this is not used in conversion
+                //     sui_bridge_event: EmittedSuiToEthTokenBridgeV1 {
+                //         nonce: u64,
+                //         sui_chain_id: BridgeChainId,
+                //         eth_chain_id: BridgeChainId,
+                //         sui_address: SuiAddress,
+                //         eth_address: EthAddress,
+                //         token_id: u8,
+                //         amount_sui_adjusted: u64,
+
+                //     } 
+                // };
+                // let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
+                // let tx = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
+                // let _eth_claim_tx_receipt = tx.send().await.unwrap().await.unwrap().unwrap();
+                // info!("Sui to Eth bridge transfer claimed");
+                Ok(())
+            }
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

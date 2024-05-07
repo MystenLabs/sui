@@ -133,14 +133,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     assert_eq!(events.len(), 2);
     let message = eth_sui_bridge::Message::from(sui_to_eth_bridge_action);
 
-    let signatures = get_signatures(
-        &sui_bridge_client,
-        nonce,
-        sui_chain_id,
-        &sui_client,
-        message.message_type,
-    )
-    .await;
+    let signatures = get_signatures(&sui_bridge_client, nonce, sui_chain_id).await;
 
     let eth_sui_bridge = EthSuiBridge::new(
         bridge_test_cluster.contracts().sui_bridge,

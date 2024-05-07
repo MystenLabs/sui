@@ -13,6 +13,7 @@ use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
 use sui_types::bridge::BridgeSummary;
+use sui_types::bridge::MoveTypeTokenTransferPayload;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
@@ -222,6 +223,15 @@ impl SuiClientInner for SuiMockClient {
         _source_chain_id: u8,
         _seq_number: u64,
     ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
+        unimplemented!()
+    }
+
+    async fn get_token_transfer_payload(
+        &self,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<Option<MoveTypeTokenTransferPayload>, BridgeError> {
         unimplemented!()
     }
 

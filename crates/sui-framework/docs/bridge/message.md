@@ -7,7 +7,7 @@ title: Module `0xb::message`
 
 -  [Struct `BridgeMessage`](#0xb_message_BridgeMessage)
 -  [Struct `BridgeMessageKey`](#0xb_message_BridgeMessageKey)
--  [Struct `TokenPayload`](#0xb_message_TokenPayload)
+-  [Struct `TokenTransferPayload`](#0xb_message_TokenTransferPayload)
 -  [Struct `EmergencyOp`](#0xb_message_EmergencyOp)
 -  [Struct `Blocklist`](#0xb_message_Blocklist)
 -  [Struct `UpdateBridgeLimit`](#0xb_message_UpdateBridgeLimit)
@@ -49,6 +49,7 @@ title: Module `0xb::message`
 -  [Function `token_ids`](#0xb_message_token_ids)
 -  [Function `token_type_names`](#0xb_message_token_type_names)
 -  [Function `token_prices`](#0xb_message_token_prices)
+-  [Function `key_message_type`](#0xb_message_key_message_type)
 -  [Function `emergency_op_pause`](#0xb_message_emergency_op_pause)
 -  [Function `emergency_op_unpause`](#0xb_message_emergency_op_unpause)
 -  [Function `required_voting_power`](#0xb_message_required_voting_power)
@@ -155,13 +156,13 @@ title: Module `0xb::message`
 
 </details>
 
-<a name="0xb_message_TokenPayload"></a>
+<a name="0xb_message_TokenTransferPayload"></a>
 
-## Struct `TokenPayload`
+## Struct `TokenTransferPayload`
 
 
 
-<pre><code><b>struct</b> <a href="message.md#0xb_message_TokenPayload">TokenPayload</a> <b>has</b> drop
+<pre><code><b>struct</b> <a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a> <b>has</b> drop
 </code></pre>
 
 
@@ -484,7 +485,7 @@ title: Module `0xb::message`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>): <a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>): <a href="message.md#0xb_message_TokenTransferPayload">message::TokenTransferPayload</a>
 </code></pre>
 
 
@@ -493,7 +494,7 @@ title: Module `0xb::message`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_TokenPayload">TokenPayload</a> {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_extract_token_bridge_payload">extract_token_bridge_payload</a>(<a href="message.md#0xb_message">message</a>: &<a href="message.md#0xb_message_BridgeMessage">BridgeMessage</a>): <a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a> {
     <b>let</b> <b>mut</b> <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a> = bcs::new(<a href="message.md#0xb_message">message</a>.payload);
     <b>let</b> sender_address = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_vec_u8();
     <b>let</b> target_chain = <a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.peel_u8();
@@ -506,7 +507,7 @@ title: Module `0xb::message`
     <a href="chain_ids.md#0xb_chain_ids_assert_valid_chain_id">chain_ids::assert_valid_chain_id</a>(target_chain);
     <b>assert</b>!(<a href="../move-stdlib/bcs.md#0x1_bcs">bcs</a>.into_remainder_bytes().is_empty(), <a href="message.md#0xb_message_ETrailingBytes">ETrailingBytes</a>);
 
-    <a href="message.md#0xb_message_TokenPayload">TokenPayload</a> {
+    <a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a> {
         sender_address,
         target_chain,
         target_address,
@@ -1221,7 +1222,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_chain">token_target_chain</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_chain">token_target_chain</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">message::TokenTransferPayload</a>): u8
 </code></pre>
 
 
@@ -1230,7 +1231,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_chain">token_target_chain</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_chain">token_target_chain</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a>): u8 {
     self.target_chain
 }
 </code></pre>
@@ -1245,7 +1246,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_address">token_target_address</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_address">token_target_address</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">message::TokenTransferPayload</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -1254,7 +1255,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_address">token_target_address</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_target_address">token_target_address</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     self.target_address
 }
 </code></pre>
@@ -1269,7 +1270,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type">token_type</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u8
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type">token_type</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">message::TokenTransferPayload</a>): u8
 </code></pre>
 
 
@@ -1278,7 +1279,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type">token_type</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u8 {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_type">token_type</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a>): u8 {
     self.token_type
 }
 </code></pre>
@@ -1293,7 +1294,7 @@ Update Sui token message
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_amount">token_amount</a>(self: &<a href="message.md#0xb_message_TokenPayload">message::TokenPayload</a>): u64
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_amount">token_amount</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">message::TokenTransferPayload</a>): u64
 </code></pre>
 
 
@@ -1302,7 +1303,7 @@ Update Sui token message
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_amount">token_amount</a>(self: &<a href="message.md#0xb_message_TokenPayload">TokenPayload</a>): u64 {
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_amount">token_amount</a>(self: &<a href="message.md#0xb_message_TokenTransferPayload">TokenTransferPayload</a>): u64 {
     self.amount
 }
 </code></pre>
@@ -1592,6 +1593,30 @@ Update Sui token message
 
 <pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_token_prices">token_prices</a>(self: &<a href="message.md#0xb_message_AddTokenOnSui">AddTokenOnSui</a>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt; {
     self.token_prices
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_message_key_message_type"></a>
+
+## Function `key_message_type`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_key_message_type">key_message_type</a>(self: &<a href="message.md#0xb_message_BridgeMessageKey">message::BridgeMessageKey</a>): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="message.md#0xb_message_key_message_type">key_message_type</a>(self: &<a href="message.md#0xb_message_BridgeMessageKey">BridgeMessageKey</a>): u8 {
+    self.message_type
 }
 </code></pre>
 

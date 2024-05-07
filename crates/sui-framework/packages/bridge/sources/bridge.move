@@ -17,7 +17,7 @@ module bridge::bridge {
     use bridge::limiter::{Self, TransferLimiter};
     use bridge::message::{
         Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
-        UpdateBridgeLimit, AddTokenOnSui
+        UpdateBridgeLimit, AddTokenOnSui, TokenTransferPayload,
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -534,7 +534,11 @@ module bridge::bridge {
         seq_num
     }
 
-    public fun get_token_transfer_action_status(
+    /////////////////////////////////////////////////////////
+    //              DevInspect Functions for Read         //
+    /////////////////////////////////////////////////////////
+    #[allow(unused_function)]
+    fun get_token_transfer_action_status(
         bridge: &Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
@@ -581,6 +585,27 @@ module bridge::bridge {
 
         let record = &inner.token_transfer_records[key];
         record.verified_signatures
+    }
+
+    #[allow(unused_function)]
+    fun get_token_transfer_payload(
+        bridge: &Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): Option<TokenTransferPayload> {
+        let inner = load_inner(bridge);
+        let key = message::create_key(
+            source_chain,
+            message_types::token(),
+            bridge_seq_num
+        );
+
+        if (!inner.token_transfer_records.contains(key)) {
+            return option::none()
+        };
+
+        let record = &inner.token_transfer_records[key];
+        option::some(record.message.extract_token_bridge_payload())
     }
 
     //
@@ -658,12 +683,30 @@ module bridge::bridge {
     }
 
     #[test_only]
+    public fun test_get_token_transfer_action_status(
+        bridge: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): u8 {
+        bridge.get_token_transfer_action_status(source_chain, bridge_seq_num)
+    }
+
+    #[test_only]
     public fun test_get_token_transfer_action_signatures(
         bridge: &mut Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
     ): Option<vector<vector<u8>>> {
         bridge.get_token_transfer_action_signatures(source_chain, bridge_seq_num)
+    }
+
+    #[test_only]
+    public fun test_get_token_transfer_payload(
+        bridge: &Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): Option<TokenTransferPayload> {
+        bridge.get_token_transfer_payload(source_chain, bridge_seq_num)
     }
 
     #[test_only]
