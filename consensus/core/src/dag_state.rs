@@ -164,7 +164,17 @@ impl DagState {
         }
         self.update_block_metadata(&block);
         self.blocks_to_write.push(block);
-        self.context.metrics.node_metrics.accepted_blocks.inc();
+        let source = if self.context.own_index == block_ref.author {
+            "own"
+        } else {
+            "others"
+        };
+        self.context
+            .metrics
+            .node_metrics
+            .accepted_blocks
+            .with_label_values(&[source])
+            .inc();
     }
 
     /// Updates internal metadata for a block.

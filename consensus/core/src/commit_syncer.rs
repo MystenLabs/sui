@@ -125,6 +125,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 _ = interval.tick() => {
                     let quorum_commit_index = inner.commit_vote_monitor.quorum_commit_index();
                     let local_commit_index = inner.dag_state.read().last_commit_index();
+                    let metrics = &inner.context.metrics.node_metrics;
+                    metrics.commit_sync_quorum_index.set(quorum_commit_index as i64);
+                    metrics.commit_sync_local_index.set(local_commit_index as i64);
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
                     synced_commit_index = synced_commit_index.max(local_commit_index);
@@ -272,7 +275,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .commit_sync_pending_fetches
                 .set(pending_fetches.len() as i64);
             metrics
-                .commit_sync_local_index
+                .commit_sync_fetched_index
                 .set(synced_commit_index as i64);
         }
     }
