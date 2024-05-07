@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(msim))]
 use std::str::FromStr;
 
 use move_core_types::identifier::Identifier;
