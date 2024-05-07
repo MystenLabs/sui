@@ -160,6 +160,7 @@ fn main() {
                     Arc::new(Mutex::new(BTreeMap::new())),
                     ide_files_root.clone(),
                     p.as_path(),
+                    None,
                     lint,
                 ) {
                     let mut old_symbols = symbols.lock().unwrap();

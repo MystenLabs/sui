@@ -13,8 +13,9 @@ use lsp_types::{
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     editions::Edition,
-    expansion::ast::Visibility,
+    expansion::ast::{ModuleIdent_, Visibility},
     linters::LintLevel,
+    naming::ast::{Type, TypeName_, Type_},
     parser::{
         ast::Ability_,
         keywords::{BUILTINS, CONTEXTUAL_KEYWORDS, KEYWORDS, PRIMITIVE_TYPES},
@@ -212,6 +213,86 @@ fn context_specific_lbrace(
     completions
 }
 
+/// Handle context-specific auto-completion requests with dot (`.`) trigger character.
+fn context_specific_dot(
+    symbols: &Symbols,
+    use_fpath: &Path,
+    position: &Position,
+) -> Vec<CompletionItem> {
+    let mut completions = vec![];
+
+    let Some(dot_mod_defs) = symbols.file_mods().get(use_fpath) else {
+        return completions;
+    };
+    if dot_mod_defs.is_empty() {
+        return completions;
+    }
+    // the following is safe as the exact same calculation was successfully performed
+    // when figuring out that we just saw the `.` token (which triggered
+    // call of this function)
+    let dot_position = Position::new(position.line, position.character - 1);
+    let Some(dot_completion_info) = symbols.unresolved_dots().get(&dot_position) else {
+        return completions;
+    };
+
+    dot_field_completions(
+        &dot_completion_info.prefix_type,
+        symbols,
+        use_fpath,
+        &dot_completion_info.mod_ident,
+        &mut completions,
+    );
+    for n in &dot_completion_info.method_names {
+        let field_completion = CompletionItem {
+            label: n.to_string(),
+            kind: Some(CompletionItemKind::Function),
+            insert_text_format: Some(InsertTextFormat::PlainText),
+            ..Default::default()
+        };
+        completions.push(field_completion);
+    }
+
+    completions
+}
+
+fn dot_field_completions(
+    sp!(_, prefix_type): &Type,
+    symbols: &Symbols,
+    use_fpath: &Path,
+    use_module: &ModuleIdent_,
+    completions: &mut Vec<CompletionItem>,
+) {
+    match prefix_type {
+        Type_::Ref(_, t) => dot_field_completions(t, symbols, use_fpath, use_module, completions),
+        Type_::Apply(_, sp!(_, TypeName_::ModuleType(sp!(_, mod_ident), struct_name)), _)
+            // only complete fields if struct and use in the same module
+            if mod_ident == use_module =>
+        {
+            let Some(struct_mod_defs) = symbols.file_mods().get(use_fpath) else {
+                return;
+            };
+
+            if let Some(prefix_struct) = struct_mod_defs
+                .iter()
+                .find(|d| &d.ident() == mod_ident)
+                .and_then(|d| d.structs().get(&struct_name.value()))
+            {
+                for n in prefix_struct.field_names() {
+                    let field_completion = CompletionItem {
+                        label: n.to_string(),
+                        kind: Some(CompletionItemKind::Field),
+                        detail: Some("detail".to_string()),
+                        insert_text_format: Some(InsertTextFormat::PlainText),
+                        ..Default::default()
+                    };
+                    completions.push(field_completion);
+                }
+            }
+        }
+        _ => (),
+    }
+}
+
 /// Handle context-specific auto-completion requests with no trigger character.
 fn context_specific_no_trigger(
     symbols: &Symbols,
@@ -381,6 +462,7 @@ pub fn on_completion_request(
                 pkg_dependencies,
                 ide_files_root.clone(),
                 &pkg_path,
+                Some(&path),
                 LintLevel::None,
             ) {
                 Ok((Some(symbols), _)) => {
@@ -442,8 +524,18 @@ fn completion_items(
             Some(Tok::Colon) => {
                 items.extend_from_slice(&primitive_types());
             }
-            Some(Tok::Period) | Some(Tok::ColonColon) => {
-                // `.` or `::` must be followed by identifiers, which are added to the completion items
+            Some(Tok::Period) => {
+                let custom_items = context_specific_dot(
+                    symbols,
+                    path,
+                    &parameters.text_document_position.position,
+                );
+                items.extend_from_slice(&custom_items);
+                // "generic" autocompletion for `.` does not make sense
+                only_custom_items = true;
+            }
+            Some(Tok::ColonColon) => {
+                // `::` must be followed by identifiers, which are added to the completion items
                 // below.
             }
             Some(Tok::LBrace) => {
