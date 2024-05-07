@@ -158,6 +158,10 @@ impl Core {
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
             );
+            println!(
+                "Waiting for {} ms while recovering ancestors from storage",
+                wait_ms
+            );
             std::thread::sleep(Duration::from_millis(wait_ms));
         }
         // Recover the last available quorum to correctly advance the threshold clock.
