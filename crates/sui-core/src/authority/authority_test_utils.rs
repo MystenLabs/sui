@@ -10,7 +10,6 @@ use fastcrypto::traits::KeyPair;
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_move_build::{BuildConfig, CompiledPackage};
-use sui_types::crypto::Signature;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair};
 use sui_types::messages_consensus::ConsensusTransaction;
 use sui_types::move_package::UpgradePolicy;
@@ -147,7 +146,7 @@ pub async fn init_state_validator_with_fullnode() -> (Arc<AuthorityState>, Arc<A
     use sui_types::crypto::get_authority_key_pair;
 
     let validator = TestAuthorityBuilder::new().build().await;
-    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode_key_pair = get_authority_key_pair();
     let fullnode = TestAuthorityBuilder::new()
         .with_keypair(&fullnode_key_pair)
         .build()
@@ -476,7 +475,7 @@ pub fn build_test_modules_with_dep_addr(
 pub async fn publish_package_on_single_authority(
     path: PathBuf,
     sender: SuiAddress,
-    sender_key: &dyn Signer<Signature>,
+    sender_key: &AccountKeyPair,
     gas_payment: ObjectRef,
     dep_original_addresses: impl IntoIterator<Item = (&'static str, ObjectID)>,
     dep_ids: Vec<ObjectID>,
@@ -529,7 +528,7 @@ pub async fn publish_package_on_single_authority(
 pub async fn upgrade_package_on_single_authority(
     path: PathBuf,
     sender: SuiAddress,
-    sender_key: &dyn Signer<Signature>,
+    sender_key: &AccountKeyPair,
     gas_payment: ObjectRef,
     package_id: ObjectID,
     upgrade_cap: ObjectRef,

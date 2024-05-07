@@ -15,7 +15,7 @@ use sui_macros::{register_fail_point_async, sim_test};
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::{
     base_types::{random_object_ref, SuiAddress},
-    crypto::{deterministic_random_account_key, get_key_pair_from_rng, AccountKeyPair},
+    crypto::{get_key_pair_from_rng, AccountKeyPair},
     object::{MoveObject, Owner, OBJECT_START_VERSION},
     storage::ChildObjectResolver,
 };

@@ -192,7 +192,7 @@ fn make_key_files(
         println!("Use existing {:?} key file.", file_name);
         return Ok(());
     } else if is_protocol_key {
-        let (_, keypair) = get_authority_key_pair();
+        let keypair = get_authority_key_pair();
         write_authority_keypair_to_file(&keypair, file_name.clone())?;
         println!("Generated new key file: {:?}.", file_name);
     } else {

@@ -1013,7 +1013,7 @@ async fn execute_transfer_with_price(
     run_confirm: bool,
     min_budget_pre_rgp: bool,
 ) -> TransferResult {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;

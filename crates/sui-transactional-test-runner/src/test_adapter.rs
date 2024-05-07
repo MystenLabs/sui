@@ -1908,7 +1908,7 @@ async fn create_validator_fullnode(
         .with_protocol_config(protocol_config.clone())
         .with_starting_objects(objects);
     let state = builder.clone().build().await;
-    let fullnode_key_pair = get_authority_key_pair().1;
+    let fullnode_key_pair = get_authority_key_pair();
     let fullnode = builder.with_keypair(&fullnode_key_pair).build().await;
     (state, fullnode)
 }

@@ -9,7 +9,7 @@ use std::sync::Arc;
 use proptest::prelude::*;
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::{get_account_key_pair, AccountKeyPair},
     object::Object,
 };
 
@@ -45,7 +45,7 @@ pub struct AccountCurrent {
 
 impl Account {
     pub fn new_random() -> Self {
-        let (address, key) = get_key_pair();
+        let (address, key) = get_account_key_pair();
         Self { address, key }
     }
 }

@@ -3,8 +3,7 @@
 use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
-use sui_types::crypto::Ed25519SuiSignature;
-use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
+use sui_types::crypto::SignatureScheme;
 #[test]
 fn mnemonic_test() {
     let temp_dir = TempDir::new().unwrap();
@@ -19,7 +18,7 @@ fn mnemonic_test() {
     let imported_address = keystore2
         .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None)
         .unwrap();
-    assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
+    assert_eq!(scheme.flag(), SignatureScheme::ED25519.flag());
     assert_eq!(address, imported_address);
 }
 

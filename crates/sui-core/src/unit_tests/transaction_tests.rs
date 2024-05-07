@@ -406,7 +406,7 @@ async fn do_transaction_test_impl(
     err_check: impl Fn(&SuiError),
 ) {
     telemetry_subscribers::init_for_testing();
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();

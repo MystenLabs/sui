@@ -8,8 +8,7 @@ use std::sync::Arc;
 use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::{random_object_ref, ExecutionDigests, ObjectID, VersionNumber};
 use sui_types::committee::Committee;
-use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::{get_key_pair, AccountKeyPair};
+use sui_types::crypto::{get_account_key_pair, KeypairTraits};
 use sui_types::digests::{
     CheckpointContentsDigest, CheckpointDigest, TransactionDigest, TransactionEventsDigest,
 };
@@ -30,7 +29,7 @@ use sui_types::object::Object;
 use sui_types::storage::ObjectKey;
 
 fn random_tx() -> Transaction {
-    let (sender, key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, key) = get_account_key_pair();
     let gas = random_object_ref();
     TestTransactionBuilder::new(sender, gas, 1)
         .transfer(random_object_ref(), sender)

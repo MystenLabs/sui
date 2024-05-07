@@ -6,23 +6,21 @@ use super::*;
 use crate::base_types::random_object_ref;
 use crate::committee::Committee;
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
-use crate::crypto::Secp256k1SuiSignature;
-use crate::crypto::SuiKeyPair;
-use crate::crypto::SuiSignature;
-use crate::crypto::SuiSignatureInner;
-use crate::crypto::VerificationObligation;
-use crate::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-    AuthoritySignInfoTrait, SuiAuthoritySignature,
-};
+use crate::crypto::{get_account_key_pair, VerificationObligation};
+use crate::crypto::{get_authority_key_pair, SignatureScheme};
+use crate::crypto::{get_key_pair, get_key_pair_from_rng, AuthorityKeyPair};
+use crate::crypto::{AccountKeyPair, SuiKeyPair};
+use crate::crypto::{AuthorityPublicKeyBytes, AuthoritySignInfoTrait, SuiAuthoritySignature};
 use crate::digests::TransactionEventsDigest;
 use crate::effects::{SignedTransactionEffects, TestEffectsBuilder, TransactionEffectsAPI};
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 use crate::object::Owner;
+use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::AggregateAuthenticator;
 use fastcrypto::traits::KeyPair;
 use move_core_types::language_storage::StructTag;
+use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
@@ -31,12 +29,13 @@ use std::hash::Hasher;
 #[test]
 fn test_signed_values() {
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    // check qvq
     // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
-    let (_a3, sec3): (_, AuthorityKeyPair) = get_key_pair();
-    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (_a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+    let sec1 = get_authority_key_pair();
+    let sec2 = get_authority_key_pair();
+    let sec3 = get_authority_key_pair();
+    let (a_sender, sender_sec) = get_account_key_pair();
+    let (a_sender2, sender_sec2) = get_account_key_pair();
 
     authorities.insert(
         /* address */ AuthorityPublicKeyBytes::from(sec1.public()),
@@ -50,7 +49,7 @@ fn test_signed_values() {
     let gas_price = 10;
     let transaction = Transaction::from_data_and_signer(
         TransactionData::new_transfer(
-            _a2,
+            a_sender2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
@@ -64,7 +63,7 @@ fn test_signed_values() {
 
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
         TransactionData::new_transfer(
-            _a2,
+            a_sender2,
             random_object_ref(),
             a_sender,
             random_object_ref(),
@@ -190,7 +189,7 @@ fn test_new_with_signatures() {
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for _ in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
         signatures.push(AuthoritySignInfo::new(
             0,
@@ -201,7 +200,7 @@ fn test_new_with_signatures() {
         ));
         authorities.insert(name, 1);
     }
-    let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+    let sec = get_authority_key_pair();
     authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
 
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities.clone());
@@ -237,7 +236,7 @@ fn test_handle_reject_malicious_signature() {
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for i in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
         authorities.insert(name, 1);
         if i < 4 {
@@ -255,7 +254,7 @@ fn test_handle_reject_malicious_signature() {
     let mut quorum =
         AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(signatures, &committee).unwrap();
     {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let sig = AuthoritySignature::new_secure(
             &IntentMessage::new(Intent::sui_transaction(), message.clone()),
             &committee.epoch,
@@ -279,7 +278,7 @@ fn test_auth_sig_commit_to_wrong_epoch_id_fail() {
         0, // Obligation added with correct epoch id.
         Intent::sui_app(IntentScope::SenderSignedTransaction),
     );
-    let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+    let sec = get_authority_key_pair();
 
     // Auth signtaure commits to epoch 0 verifies ok.
     let sig = AuthoritySignature::new_secure(
@@ -320,7 +319,7 @@ fn test_bitmap_out_of_range() {
     let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
         authorities.insert(name, 1);
         signatures.push(AuthoritySignInfo::new(
@@ -352,7 +351,7 @@ fn test_reject_extra_public_key() {
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     // TODO: quite duplicated code in this file (4 times).
     for _ in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
         authorities.insert(name, 1);
         signatures.push(AuthoritySignInfo::new(
@@ -392,7 +391,7 @@ fn test_reject_reuse_signatures() {
     let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
         authorities.insert(name, 1);
         signatures.push(AuthoritySignInfo::new(
@@ -428,7 +427,7 @@ fn test_empty_bitmap() {
     let mut signatures: Vec<AuthoritySignInfo> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sec = get_authority_key_pair();
         let name = AuthorityPublicKeyBytes::from(sec.public());
         authorities.insert(name, 1);
         signatures.push(AuthoritySignInfo::new(
@@ -454,12 +453,11 @@ fn test_empty_bitmap() {
 #[test]
 fn test_digest_caching() {
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-    // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    let sec1 = get_authority_key_pair();
+    let sec2 = get_authority_key_pair();
 
-    let (sa1, _ssec1): (_, AccountKeyPair) = get_key_pair();
-    let (sa2, ssec2): (_, AccountKeyPair) = get_key_pair();
+    let (sa1, _ssec1) = get_account_key_pair();
+    let (sa2, ssec2) = get_account_key_pair();
 
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
@@ -539,10 +537,10 @@ fn test_digest_caching() {
 
 #[test]
 fn test_user_signature_committed_in_transactions() {
-    // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
-
+    let (a_sender, kp) = get_account_key_pair();
+    let sender_sec = kp.into();
+    let (a_sender2, kp2) = get_account_key_pair();
+    let sender_sec2 = kp2.into();
     let gas_price = 10;
     let tx_data = TransactionData::new_transfer(
         a_sender2,
@@ -586,10 +584,9 @@ fn test_user_signature_committed_in_transactions() {
 
 #[test]
 fn test_user_signature_committed_in_signed_transactions() {
-    // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+    let sec1 = get_authority_key_pair();
+    let (a_sender, sender_sec) = get_account_key_pair();
+    let (a_sender2, sender_sec2) = get_account_key_pair();
 
     let epoch = 0;
     let gas_price = 10;
@@ -663,11 +660,7 @@ fn test_user_signature_committed_in_signed_transactions() {
     assert_ne!(signed_tx_a, signed_tx_b)
 }
 
-fn signature_from_signer(
-    data: TransactionData,
-    intent: Intent,
-    signer: &dyn Signer<Signature>,
-) -> Signature {
+fn signature_from_signer(data: TransactionData, intent: Intent, signer: &SuiKeyPair) -> Signature {
     let intent_msg = IntentMessage::new(intent, data);
     Signature::new_secure(&intent_msg, signer)
 }
@@ -675,9 +668,9 @@ fn signature_from_signer(
 #[test]
 fn test_sponsored_transaction_message() {
     let epoch = 0;
-    let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sender_kp = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut OsRng).1);
     let sender = (&sender_kp.public()).into();
-    let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair().1);
+    let sponsor_kp = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut OsRng).1);
     let sponsor = (&sponsor_kp.public()).into();
     let pt = {
         let mut builder = ProgrammableTransactionBuilder::new();
@@ -741,9 +734,13 @@ fn test_sponsored_transaction_message() {
     ));
 
     // Test incomplete signature lists (more sigs than expected)
-    let third_party_kp = SuiKeyPair::Ed25519(get_key_pair().1);
-    let third_party_sig: GenericSignature =
-        signature_from_signer(tx_data.clone(), intent.clone(), &third_party_kp).into();
+    let (_, third_party_kp) = get_account_key_pair();
+    let third_party_sig: GenericSignature = signature_from_signer(
+        tx_data.clone(),
+        intent.clone(),
+        &SuiKeyPair::Ed25519(third_party_kp),
+    )
+    .into();
     assert!(matches!(
         Transaction::from_generic_sig_data(
             tx_data.clone(),
@@ -883,22 +880,19 @@ fn test_sponsored_transaction_validity_check() {
 fn verify_sender_signature_correctly_with_flag() {
     // set up authorities
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
-    let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
-    let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    let sec1 = get_authority_key_pair();
+    let sec2 = get_authority_key_pair();
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
     let committee = Committee::new_for_testing_with_normalized_voting_power(0, authorities);
 
-    // create a receiver keypair with Secp256k1
-    let receiver_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
-    let receiver_address = (&receiver_kp.public()).into();
-
     // create a sender keypair with Secp256k1
-    let sender_kp = SuiKeyPair::Secp256k1(get_key_pair().1);
+    let kp: Secp256k1KeyPair = get_key_pair().1;
+    let sender_kp = SuiKeyPair::Secp256k1(kp.copy());
     // and creates a corresponding transaction
     let gas_price = 10;
     let tx_data = TransactionData::new_transfer(
-        receiver_address,
+        SuiAddress::ZERO,
         random_object_ref(),
         (&sender_kp.public()).into(),
         random_object_ref(),
@@ -907,18 +901,27 @@ fn verify_sender_signature_correctly_with_flag() {
     );
 
     // create a sender keypair with Ed25519
-    let sender_kp_2 = SuiKeyPair::Ed25519(get_key_pair().1);
+    let (_, sender_kp_2) = get_account_key_pair();
+    let sender_skp_2 = SuiKeyPair::Ed25519(sender_kp_2.copy());
     let mut tx_data_2 = tx_data.clone();
-    *tx_data_2.sender_mut_for_testing() = (&sender_kp_2.public()).into();
+    *tx_data_2.sender_mut_for_testing() = (&sender_skp_2.public()).into();
     tx_data_2.gas_data_mut().owner = tx_data_2.sender();
 
     // create a sender keypair with Secp256r1
-    let sender_kp_3 = SuiKeyPair::Secp256r1(get_key_pair().1);
+    let sender_kp_3 = get_account_key_pair().1;
+    let sender_skp_3: SuiKeyPair = sender_kp_3.copy().into();
     let mut tx_data_3 = tx_data.clone();
-    *tx_data_3.sender_mut_for_testing() = (&sender_kp_3.public()).into();
+    *tx_data_3.sender_mut_for_testing() = (&(sender_skp_3.public())).into();
     tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
-    let transaction = Transaction::from_data_and_signer(tx_data, vec![&sender_kp])
+    let signatures = {
+        let intent_msg = IntentMessage::new(Intent::sui_transaction(), &tx_data);
+        vec![kp]
+            .into_iter()
+            .map(|s| Signature::new_secure(&intent_msg, &SuiKeyPair::Secp256k1(s.copy())))
+            .collect()
+    };
+    let transaction = Transaction::from_data(tx_data, signatures)
         .try_into_verified(committee.epoch(), &Default::default())
         .unwrap();
 
@@ -935,7 +938,7 @@ fn verify_sender_signature_correctly_with_flag() {
         _ => panic!("invalid"),
     };
     // signature contains the correct Secp256k1 flag
-    assert_eq!(s.scheme().flag(), Secp256k1SuiSignature::SCHEME.flag());
+    assert_eq!(s.scheme().flag(), SignatureScheme::Secp256k1.flag());
 
     // authority accepts signs tx after verification
     assert!(signed_tx
@@ -963,7 +966,7 @@ fn verify_sender_signature_correctly_with_flag() {
     };
 
     // signature contains the correct Ed25519 flag
-    assert_eq!(s.scheme().flag(), Ed25519SuiSignature::SCHEME.flag());
+    assert_eq!(s.scheme().flag(), SignatureScheme::ED25519.flag());
 
     // signature verified
     assert!(signed_tx_1
@@ -1221,8 +1224,7 @@ fn test_unique_input_objects() {
         }))
         .unwrap()];
 
-    let sender_kp = SuiKeyPair::Ed25519(get_key_pair().1);
-    let sender = (&sender_kp.public()).into();
+    let (sender, _sender_kp) = get_account_key_pair();
     let gas_price = 10;
     let gas_object_ref = random_object_ref();
     let gas_data = GasData {
@@ -1265,7 +1267,9 @@ fn test_certificate_digest() {
     let (committee, key_pairs) = Committee::new_simple_test_committee();
 
     let (receiver, _): (_, AccountKeyPair) = get_key_pair();
+
     let (sender1, sender1_sec): (_, AccountKeyPair) = get_key_pair();
+
     let (sender2, sender2_sec): (_, AccountKeyPair) = get_key_pair();
 
     let gas_price = 10;

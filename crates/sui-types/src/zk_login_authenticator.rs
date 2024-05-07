@@ -4,7 +4,7 @@
 use crate::crypto::PublicKey;
 use crate::{
     base_types::{EpochId, SuiAddress},
-    crypto::{DefaultHash, Signature, SignatureScheme, SuiSignature},
+    crypto::{DefaultHash, Signature, SignatureScheme},
     digests::ZKLoginInputsDigest,
     error::{SuiError, SuiResult},
     signature::{AuthenticatorTrait, VerifyParams},
@@ -158,11 +158,7 @@ impl AuthenticatorTrait for ZkLoginAuthenticator {
         }
 
         // Verify the ephemeral signature over the intent message of the transaction data.
-        self.user_signature.verify_secure(
-            intent_msg,
-            author,
-            SignatureScheme::ZkLoginAuthenticator,
-        )?;
+        self.user_signature.verify_secure(intent_msg)?;
 
         // Use flag || pk_bytes.
         let mut extended_pk_bytes = vec![self.user_signature.scheme().flag()];

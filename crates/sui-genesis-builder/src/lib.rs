@@ -1141,10 +1141,9 @@ mod test {
     use sui_config::node::DEFAULT_COMMISSION_RATE;
     use sui_config::node::DEFAULT_VALIDATOR_GAS_PRICE;
     use sui_types::base_types::SuiAddress;
-    use sui_types::crypto::{
-        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        NetworkKeyPair,
-    };
+    use sui_types::crypto::generate_proof_of_possession;
+    use sui_types::crypto::get_account_key_pair;
+    use sui_types::crypto::get_authority_key_pair;
 
     #[test]
     fn allocation_csv() {
@@ -1168,10 +1167,10 @@ mod test {
     fn ceremony() {
         let dir = tempfile::TempDir::new().unwrap();
 
-        let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-        let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-        let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-        let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let key = get_authority_key_pair();
+        let worker_key = get_account_key_pair().1;
+        let account_key = get_account_key_pair().1;
+        let network_key = get_account_key_pair().1;
         let validator = ValidatorInfo {
             name: "0".into(),
             protocol_key: key.public().into(),

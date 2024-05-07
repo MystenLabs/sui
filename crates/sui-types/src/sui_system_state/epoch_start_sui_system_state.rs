@@ -320,9 +320,8 @@ impl EpochStartValidatorInfoV1 {
 
 #[cfg(test)]
 mod test {
-    use crate::base_types::SuiAddress;
     use crate::committee::CommitteeTrait;
-    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use crate::crypto::{get_account_key_pair, get_authority_key_pair};
     use crate::sui_system_state::epoch_start_sui_system_state::{
         EpochStartSystemStateTrait, EpochStartSystemStateV1, EpochStartValidatorInfoV1,
     };
@@ -338,7 +337,8 @@ mod test {
         let mut active_validators = vec![];
 
         for i in 0..10 {
-            let (sui_address, protocol_key): (SuiAddress, AuthorityKeyPair) = get_key_pair();
+            let protocol_key = get_authority_key_pair();
+            let (sui_address, _) = get_account_key_pair();
             let narwhal_network_key = NetworkKeyPair::generate(&mut thread_rng());
 
             active_validators.push(EpochStartValidatorInfoV1 {

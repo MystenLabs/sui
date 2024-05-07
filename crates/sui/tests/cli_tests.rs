@@ -48,9 +48,7 @@ use sui_sdk::wallet_context::WalletContext;
 use sui_swarm_config::genesis_config::{AccountConfig, GenesisConfig};
 use sui_swarm_config::network_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{
-    Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
-};
+use sui_types::crypto::{Ed25519SuiSignature, Secp256k1SuiSignature, SignatureScheme, SuiKeyPair};
 use sui_types::error::SuiObjectResponseError;
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use test_cluster::{TestCluster, TestClusterBuilder};
@@ -138,7 +136,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
         context
             .config
             .keystore
-            .add_key(None, SuiKeyPair::Ed25519(get_key_pair().1))?;
+            .add_key(None, SuiKeyPair::Ed25519(get_key_pair()))?;
     }
 
     // Print all addresses
@@ -2254,7 +2252,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
             .keystore
             .keys()
             .iter()
-            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
+            .filter(|k| k.flag() == SignatureScheme::ED25519.flag())
             .count(),
         5
     );

@@ -25,7 +25,9 @@ use tracing::{debug, info};
 use crate::load_test::LoadTestConfig;
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair};
+use sui_types::crypto::{
+    get_account_key_pair, AccountKeyPair, EncodeDecodeBase64, Signature, SuiKeyPair,
+};
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::transaction::{Transaction, TransactionData};
 
@@ -578,7 +580,7 @@ async fn prepare_new_signer_and_coins(
     // We don't want to split coins in our primary address because we want to avoid having
     // a million coin objects in our address. We can also fetch directly from the faucet, but in
     // some environment that might not be possible when faucet resource is scarce
-    let (burner_address, burner_keypair): (_, AccountKeyPair) = get_key_pair();
+    let (burner_address, burner_keypair): (_, AccountKeyPair) = get_account_key_pair();
     let burner_keypair = SuiKeyPair::Ed25519(burner_keypair);
     let pay_amounts = split_amounts
         .iter()

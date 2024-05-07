@@ -20,7 +20,7 @@ use serde_with::Bytes;
 
 use crate::base_types::{MoveObjectType, ObjectIDParseError};
 use crate::coin::{Coin, CoinMetadata, TreasuryCap};
-use crate::crypto::{default_hash, deterministic_random_account_key};
+use crate::crypto::{default_hash, get_account_key_pair};
 use crate::error::{ExecutionError, ExecutionErrorKind, UserInputError, UserInputResult};
 use crate::error::{SuiError, SuiResult};
 use crate::gas_coin::GAS;
@@ -37,7 +37,7 @@ use sui_protocol_config::ProtocolConfig;
 
 use self::balance_traversal::BalanceTraversal;
 use self::bounded_visitor::BoundedVisitor;
-
+use crate::crypto::SuiKeyPair;
 mod balance_traversal;
 pub mod bounded_visitor;
 
@@ -1051,7 +1051,8 @@ impl Object {
     /// Generate a new gas coin object with default balance and random owner.
     pub fn new_gas_for_testing() -> Self {
         let gas_object_id = ObjectID::random();
-        let (owner, _) = deterministic_random_account_key();
+        let key = SuiKeyPair::Ed25519(get_account_key_pair().1);
+        let owner = (&key.public()).into();
         Object::with_id_owner_for_testing(gas_object_id, owner)
     }
 }
@@ -1062,7 +1063,7 @@ pub fn generate_test_gas_objects() -> Vec<Object> {
         static GAS_OBJECTS: Vec<Object> = (0..50)
             .map(|_| {
                 let gas_object_id = ObjectID::random();
-                let (owner, _) = deterministic_random_account_key();
+                let (owner, _) = get_account_key_pair();
                 Object::with_id_owner_for_testing(gas_object_id, owner)
             })
             .collect();

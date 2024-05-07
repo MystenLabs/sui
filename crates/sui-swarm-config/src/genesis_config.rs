@@ -13,8 +13,9 @@ use sui_config::{local_ip_utils, Config};
 use sui_genesis_builder::validator_info::{GenesisValidatorInfo, ValidatorInfo};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes, NetworkKeyPair, NetworkPublicKey, PublicKey, SuiKeyPair,
+    generate_proof_of_possession, get_account_key_pair, get_authority_key_pair,
+    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
+    NetworkKeyPair, NetworkPublicKey, PublicKey, SuiKeyPair,
 };
 use sui_types::multiaddr::Multiaddr;
 use tracing::info;
@@ -239,9 +240,9 @@ impl GenesisConfig {
             let address = if let Some(address) = account.address {
                 address
             } else {
-                let (address, keypair) = get_key_pair_from_rng(&mut rng);
-                keys.push(keypair);
-                address
+                let keypair: AccountKeyPair = get_key_pair_from_rng(&mut rng).1;
+                keys.push(keypair.copy());
+                SuiAddress::from(&SuiKeyPair::Ed25519(keypair).public())
             };
 
             addresses.push(address);
@@ -273,15 +274,15 @@ fn default_stake() -> u64 {
 }
 
 fn default_bls12381_key_pair() -> AuthorityKeyPair {
-    get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+    get_authority_key_pair()
 }
 
 fn default_ed25519_key_pair() -> NetworkKeyPair {
-    get_key_pair_from_rng(&mut rand::rngs::OsRng).1
+    get_account_key_pair().1
 }
 
 fn default_sui_key_pair() -> SuiKeyPair {
-    SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut rand::rngs::OsRng).1)
+    SuiKeyPair::Ed25519(get_account_key_pair().1)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

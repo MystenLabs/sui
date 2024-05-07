@@ -10,11 +10,8 @@ use sui_keys::key_derive::generate_new_key;
 use tempfile::TempDir;
 
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, InMemKeystore, Keystore};
-use sui_types::crypto::{DefaultHash, SignatureScheme, SuiSignatureInner};
-use sui_types::{
-    base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
-    crypto::Ed25519SuiSignature,
-};
+use sui_types::base_types::{SuiAddress, SUI_ADDRESS_LENGTH};
+use sui_types::crypto::{DefaultHash, SignatureScheme};
 
 #[test]
 fn alias_exists_test() {
@@ -206,7 +203,7 @@ fn mnemonic_test() {
     let imported_address = keystore2
         .import_from_mnemonic(&phrase, SignatureScheme::ED25519, None)
         .unwrap();
-    assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
+    assert_eq!(scheme.flag(), SignatureScheme::ED25519.flag());
     assert_eq!(address, imported_address);
 }
 
@@ -226,7 +223,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
         .unwrap();
 
     let pubkey = keystore.keys()[0].clone();
-    assert_eq!(pubkey.flag(), Ed25519SuiSignature::SCHEME.flag());
+    assert_eq!(pubkey.flag(), SignatureScheme::ED25519.flag());
 
     let mut hasher = DefaultHash::default();
     hasher.update([pubkey.flag()]);

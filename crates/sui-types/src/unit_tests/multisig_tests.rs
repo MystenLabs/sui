@@ -5,8 +5,9 @@ use super::{MultiSigPublicKey, ThresholdUnit, WeightUnit};
 use crate::{
     base_types::SuiAddress,
     crypto::{
-        get_key_pair, get_key_pair_from_rng, Ed25519SuiSignature, PublicKey, Signature, SuiKeyPair,
-        SuiSignatureInner, ZkLoginPublicIdentifier,
+        deterministic_random_account_key, get_account_key_pair, get_key_pair_from_rng,
+        Ed25519SuiSignature, PublicKey, Signature, SignatureScheme, SuiKeyPair,
+        ZkLoginPublicIdentifier,
     },
     multisig::{as_indices, MultiSig, MAX_SIGNER_IN_MULTISIG},
     multisig_legacy::bitmap_to_u16,
@@ -28,15 +29,16 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use fastcrypto_zkp::zk_login_utils::Bn254FrElement;
 use im::hashmap::HashMap as ImHashMap;
 use once_cell::sync::OnceCell;
+use rand::rngs::OsRng;
 use rand::{rngs::StdRng, SeedableRng};
 use roaring::RoaringBitmap;
 use shared_crypto::intent::{Intent, IntentMessage, PersonalMessage};
 use std::str::FromStr;
 #[test]
 fn test_combine_sigs() {
-    let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_key_pair().1);
-    let kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair().1);
-    let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair().1);
+    let kp1: SuiKeyPair = SuiKeyPair::Ed25519(get_account_key_pair().1);
+    let kp2: SuiKeyPair = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut OsRng).1);
+    let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut OsRng).1);
 
     let pk1 = kp1.public();
     let pk2 = kp2.public();
@@ -121,16 +123,14 @@ fn test_serde_roundtrip() {
 
     // Single sig serialization unchanged.
     let sig = Ed25519SuiSignature::default();
-    let single_sig = GenericSignature::Signature(sig.clone().into());
+    let single_sig = GenericSignature::Signature(Signature::Ed25519SuiSignature(sig));
     let single_sig_bytes = single_sig.as_bytes();
     let single_sig_roundtrip = GenericSignature::from_bytes(single_sig_bytes).unwrap();
     assert_eq!(single_sig, single_sig_roundtrip);
-    assert_eq!(single_sig_bytes.len(), Ed25519SuiSignature::LENGTH);
     assert_eq!(
         single_sig_bytes.first().unwrap(),
-        &Ed25519SuiSignature::SCHEME.flag()
+        &SignatureScheme::ED25519.flag()
     );
-    assert_eq!(sig.as_bytes().len(), single_sig_bytes.len());
 }
 
 #[test]
@@ -334,8 +334,7 @@ fn multisig_get_indices() {
 #[test]
 fn multisig_zklogin_scenarios() {
     // consistency test with sui/sdk/typescript/test/unit/cryptography/multisig.test.ts
-    let mut seed = StdRng::from_seed([0; 32]);
-    let kp: Ed25519KeyPair = get_key_pair_from_rng(&mut seed).1;
+    let kp: Ed25519KeyPair = deterministic_random_account_key().1;
     let skp: SuiKeyPair = SuiKeyPair::Ed25519(kp);
     let pk1 = skp.public();
 
@@ -375,8 +374,7 @@ fn multisig_zklogin_scenarios() {
 
 #[test]
 fn zklogin_in_multisig_works_with_both_addresses() {
-    let mut seed = StdRng::from_seed([0; 32]);
-    let kp: Ed25519KeyPair = get_key_pair_from_rng(&mut seed).1;
+    let (_address, kp) = get_account_key_pair();
     let skp: SuiKeyPair = SuiKeyPair::Ed25519(kp);
 
     // create a new multisig address based on pk1 and pk2 where pk1 is a zklogin public identifier, with a crafted unpadded bytes.

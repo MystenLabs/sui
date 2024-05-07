@@ -10,7 +10,7 @@ use rand::{thread_rng, Rng};
 use std::sync::Arc;
 use sui_macros::sim_test;
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
+use sui_types::crypto::{get_account_key_pair, get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointSummary, SignedCheckpointSummary,
@@ -23,11 +23,9 @@ fn gen_certs(
     key_pairs: &[AuthorityKeyPair],
     count: usize,
 ) -> Vec<CertifiedTransaction> {
-    let (receiver, _): (_, AccountKeyPair) = get_key_pair();
+    let (receiver, _): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
 
-    let senders: Vec<_> = (0..count)
-        .map(|_| get_key_pair::<AccountKeyPair>())
-        .collect();
+    let senders: Vec<_> = (0..count).map(|_| get_account_key_pair().1).collect();
 
     let txns: Vec<_> = senders
         .iter()

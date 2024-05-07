@@ -5,7 +5,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::AccountKeyPair,
     digests::ObjectDigest,
     effects::{TransactionEffects, TransactionEffectsAPI},
     error::{SuiError, UserInputError},
@@ -77,7 +77,7 @@ impl TestRunner {
         aggressive_pruning_enabled: bool,
     ) -> Self {
         telemetry_subscribers::init_for_testing();
-        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
 
         let authority_state = TestAuthorityBuilder::new().build().await;
         let rgp = authority_state.reference_gas_price_for_testing().unwrap();

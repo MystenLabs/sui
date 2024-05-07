@@ -370,14 +370,14 @@ impl Display for CommitteeWithNetworkMetadata {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use crate::crypto::get_authority_key_pair;
     use fastcrypto::traits::KeyPair;
 
     #[test]
     fn test_shuffle_by_weight() {
-        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
-        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
-        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+        let sec1 = get_authority_key_pair();
+        let sec2 = get_authority_key_pair();
+        let sec3 = get_authority_key_pair();
         let a1: AuthorityName = sec1.public().into();
         let a2: AuthorityName = sec2.public().into();
         let a3: AuthorityName = sec3.public().into();

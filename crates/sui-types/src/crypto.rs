@@ -150,16 +150,6 @@ impl SuiKeyPair {
     }
 }
 
-impl Signer<Signature> for SuiKeyPair {
-    fn sign(&self, msg: &[u8]) -> Signature {
-        match self {
-            SuiKeyPair::Ed25519(kp) => kp.sign(msg),
-            SuiKeyPair::Secp256k1(kp) => kp.sign(msg),
-            SuiKeyPair::Secp256r1(kp) => kp.sign(msg),
-        }
-    }
-}
-
 impl EncodeDecodeBase64 for SuiKeyPair {
     fn encode_base64(&self) -> String {
         Base64::encode(self.to_bytes())
@@ -251,7 +241,6 @@ pub enum PublicKey {
     Secp256r1(Secp256r1PublicKeyAsBytes),
     ZkLogin(ZkLoginPublicIdentifier),
 }
-
 /// A wrapper struct to retrofit in [enum PublicKey] for zkLogin.
 /// Useful to construct [struct MultiSigPublicKey].
 #[derive(Clone, Debug, PartialEq, Eq, JsonSchema, Serialize, Deserialize)]
@@ -341,9 +330,9 @@ impl PublicKey {
 
     pub fn scheme(&self) -> SignatureScheme {
         match self {
-            PublicKey::Ed25519(_) => Ed25519SuiSignature::SCHEME,
-            PublicKey::Secp256k1(_) => Secp256k1SuiSignature::SCHEME,
-            PublicKey::Secp256r1(_) => Secp256r1SuiSignature::SCHEME,
+            PublicKey::Ed25519(_) => SignatureScheme::ED25519,
+            PublicKey::Secp256k1(_) => SignatureScheme::Secp256k1,
+            PublicKey::Secp256r1(_) => SignatureScheme::Secp256r1,
             PublicKey::ZkLogin(_) => SignatureScheme::ZkLoginAuthenticator,
         }
     }
@@ -563,8 +552,6 @@ impl SuiAuthoritySignature for AuthoritySignature {
     }
 }
 
-// TODO: get_key_pair() and get_key_pair_from_bytes() should return KeyPair only.
-// TODO: rename to random_key_pair
 pub fn get_key_pair<KP: KeypairTraits>() -> (SuiAddress, KP)
 where
     <KP as KeypairTraits>::PubKey: SuiPublicKey,
@@ -582,11 +569,11 @@ pub fn random_committee_key_pairs_of_size(size: usize) -> Vec<AuthorityKeyPair> 
             // we are using these key generation functions as fixtures and we call them
             // independently in different paths and exact the results to be the same.
             // We should eliminate them.
-            let key_pair = get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng);
+            let key_pair = get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng).1;
             get_key_pair_from_rng::<AuthorityKeyPair, _>(&mut rng);
             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng);
-            key_pair.1
+            key_pair
         })
         .collect()
 }
@@ -600,8 +587,8 @@ pub fn get_account_key_pair() -> (SuiAddress, AccountKeyPair) {
     get_key_pair()
 }
 
-pub fn get_authority_key_pair() -> (SuiAddress, AuthorityKeyPair) {
-    get_key_pair()
+pub fn get_authority_key_pair() -> AuthorityKeyPair {
+    get_key_pair().1
 }
 
 /// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
@@ -687,18 +674,110 @@ impl<'de> Deserialize<'de> for Signature {
 }
 
 impl Signature {
-    /// The messaged passed in is already hashed form.
-    pub fn new_hashed(hashed_msg: &[u8], secret: &dyn Signer<Signature>) -> Self {
-        Signer::sign(secret, hashed_msg)
+    pub fn signature_bytes(&self) -> &[u8] {
+        // Access array slice is safe because the array bytes is initialized as
+        // flag || signature || pubkey with its defined length.
+        match self {
+            Signature::Ed25519SuiSignature(sig) => &sig.as_ref()[1..1 + Ed25519Signature::LENGTH],
+            Signature::Secp256k1SuiSignature(sig) => {
+                &sig.as_ref()[1..1 + Secp256k1Signature::LENGTH]
+            }
+            Signature::Secp256r1SuiSignature(sig) => {
+                &sig.as_ref()[1..1 + Secp256r1Signature::LENGTH]
+            }
+        }
     }
 
-    pub fn new_secure<T>(value: &IntentMessage<T>, secret: &dyn Signer<Signature>) -> Self
+    pub fn public_key_bytes(&self) -> &[u8] {
+        // Access array slice is safe because the array bytes is initialized as
+        // flag || signature || pubkey with its defined length.
+        match self {
+            Signature::Ed25519SuiSignature(_) => &self.as_ref()[Ed25519Signature::LENGTH + 1..],
+            Signature::Secp256k1SuiSignature(_) => &self.as_ref()[Secp256k1Signature::LENGTH + 1..],
+            Signature::Secp256r1SuiSignature(_) => &self.as_ref()[Secp256r1Signature::LENGTH + 1..],
+        }
+    }
+
+    pub fn scheme(&self) -> SignatureScheme {
+        match self {
+            Signature::Ed25519SuiSignature(_) => SignatureScheme::ED25519,
+            Signature::Secp256k1SuiSignature(_) => SignatureScheme::Secp256k1,
+            Signature::Secp256r1SuiSignature(_) => SignatureScheme::Secp256r1,
+        }
+    }
+
+    // takes the raw message and sign it. prefer new_secure over this, everything signed should be an intent message in sui.
+    pub fn new(message: &[u8], skp: &SuiKeyPair) -> Self {
+        let sig_bytes = match skp {
+            SuiKeyPair::Ed25519(kp) => kp.sign(message).as_ref().to_vec(),
+            SuiKeyPair::Secp256k1(kp) => kp.sign(message).as_ref().to_vec(),
+            SuiKeyPair::Secp256r1(kp) => kp.sign(message).as_ref().to_vec(),
+        };
+        let mut signature_bytes: Vec<u8> = Vec::new();
+        signature_bytes.extend_from_slice(&[skp.public().flag()]);
+        signature_bytes.extend_from_slice(&sig_bytes);
+        signature_bytes.extend_from_slice(skp.public().as_ref());
+        Self::from_bytes(&signature_bytes[..])
+            .expect("Serialized signature did not have expected size")
+    }
+
+    // takes the intent message and hash the bcs serialized message of it, and sign.
+    pub fn new_secure<T>(value: &IntentMessage<T>, kp: &SuiKeyPair) -> Self
     where
         T: Serialize,
     {
         let mut hasher = DefaultHash::default();
         hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
-        Signer::sign(secret, &hasher.finalize().digest)
+        Self::new(&hasher.finalize().digest, kp)
+    }
+
+    pub fn new_hashed(hashed_msg: &[u8], kp: &SuiKeyPair) -> Self {
+        Self::new(hashed_msg, kp)
+    }
+
+    pub fn verify_secure<T>(&self, value: &IntentMessage<T>) -> Result<(), SuiError>
+    where
+        T: Serialize,
+    {
+        let mut hasher = DefaultHash::default();
+        hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
+        let digest = hasher.finalize().digest;
+
+        match self {
+            Signature::Ed25519SuiSignature(_) => {
+                let pk = Ed25519PublicKey::from_bytes(self.public_key_bytes())
+                    .map_err(|_| SuiError::KeyConversionError("Invalid public key".to_string()))?;
+
+                let sig = Ed25519Signature::from_bytes(self.signature_bytes())
+                    .map_err(|_| SuiError::KeyConversionError("Invalid signature".to_string()))?;
+                pk.verify(&digest, &sig)
+                    .map_err(|e| SuiError::InvalidSignature {
+                        error: format!("Fail to verify user sig {}", e),
+                    })
+            }
+            Signature::Secp256k1SuiSignature(_) => {
+                let pk = Secp256k1PublicKey::from_bytes(self.public_key_bytes())
+                    .map_err(|_| SuiError::KeyConversionError("Invalid public key".to_string()))?;
+
+                let sig = Secp256k1Signature::from_bytes(self.signature_bytes())
+                    .map_err(|_| SuiError::KeyConversionError("Invalid signature".to_string()))?;
+                pk.verify(&digest, &sig)
+                    .map_err(|e| SuiError::InvalidSignature {
+                        error: format!("Fail to verify user sig {}", e),
+                    })
+            }
+            Signature::Secp256r1SuiSignature(_) => {
+                let pk = Secp256r1PublicKey::from_bytes(self.public_key_bytes())
+                    .map_err(|_| SuiError::KeyConversionError("Invalid public key".to_string()))?;
+
+                let sig = Secp256r1Signature::from_bytes(self.signature_bytes())
+                    .map_err(|_| SuiError::KeyConversionError("Invalid signature".to_string()))?;
+                pk.verify(&digest, &sig)
+                    .map_err(|e| SuiError::InvalidSignature {
+                        error: format!("Fail to verify user sig {}", e),
+                    })
+            }
+        }
     }
 }
 
@@ -711,6 +790,7 @@ impl AsRef<[u8]> for Signature {
         }
     }
 }
+
 impl AsMut<[u8]> for Signature {
     fn as_mut(&mut self) -> &mut [u8] {
         match self {
@@ -725,12 +805,38 @@ impl ToFromBytes for Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
         match bytes.first() {
             Some(x) => {
-                if x == &Ed25519SuiSignature::SCHEME.flag() {
-                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
-                } else if x == &Secp256k1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
-                } else if x == &Secp256r1SuiSignature::SCHEME.flag() {
-                    Ok(<Secp256r1SuiSignature as ToFromBytes>::from_bytes(bytes)?.into())
+                if *x == SignatureScheme::ED25519.flag() {
+                    const LENGTH: usize = Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1;
+                    if bytes.len() != LENGTH {
+                        return Err(FastCryptoError::InputLengthWrong(LENGTH));
+                    }
+                    let mut sig_bytes = [0; LENGTH];
+                    sig_bytes.copy_from_slice(bytes);
+                    Ok(Signature::Ed25519SuiSignature(Ed25519SuiSignature(
+                        sig_bytes,
+                    )))
+                } else if *x == SignatureScheme::Secp256k1.flag() {
+                    const LENGTH: usize =
+                        Secp256k1PublicKey::LENGTH + Secp256k1Signature::LENGTH + 1;
+                    if bytes.len() != LENGTH {
+                        return Err(FastCryptoError::InputLengthWrong(LENGTH));
+                    }
+                    let mut sig_bytes = [0; LENGTH];
+                    sig_bytes.copy_from_slice(bytes);
+                    Ok(Signature::Secp256k1SuiSignature(Secp256k1SuiSignature(
+                        sig_bytes,
+                    )))
+                } else if *x == SignatureScheme::Secp256r1.flag() {
+                    const LENGTH: usize =
+                        Secp256r1PublicKey::LENGTH + Secp256r1Signature::LENGTH + 1;
+                    if bytes.len() != LENGTH {
+                        return Err(FastCryptoError::InputLengthWrong(LENGTH));
+                    }
+                    let mut sig_bytes = [0; LENGTH];
+                    sig_bytes.copy_from_slice(bytes);
+                    Ok(Signature::Secp256r1SuiSignature(Secp256r1SuiSignature(
+                        sig_bytes,
+                    )))
                 } else {
                     Err(FastCryptoError::InvalidInput)
                 }
@@ -764,38 +870,32 @@ pub struct Ed25519SuiSignature(
 
 // Implementation useful for simplify testing when mock signature is needed
 impl Default for Ed25519SuiSignature {
+    // testing only
     fn default() -> Self {
         Self([0; Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1])
     }
-}
-
-impl SuiSignatureInner for Ed25519SuiSignature {
-    type Sig = Ed25519Signature;
-    type PubKey = Ed25519PublicKey;
-    type KeyPair = Ed25519KeyPair;
-    const LENGTH: usize = Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1;
 }
 
 impl SuiPublicKey for Ed25519PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::ED25519;
 }
 
-impl ToFromBytes for Ed25519SuiSignature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
-        if bytes.len() != Self::LENGTH {
-            return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
-        }
-        let mut sig_bytes = [0; Self::LENGTH];
-        sig_bytes.copy_from_slice(bytes);
-        Ok(Self(sig_bytes))
-    }
-}
+// impl ToFromBytes for Ed25519SuiSignature {
+//     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
+//         if bytes.len() != Self::LENGTH {
+//             return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
+//         }
+//         let mut sig_bytes = [0; Self::LENGTH];
+//         sig_bytes.copy_from_slice(bytes);
+//         Ok(Self(sig_bytes))
+//     }
+// }
 
-impl Signer<Signature> for Ed25519KeyPair {
-    fn sign(&self, msg: &[u8]) -> Signature {
-        Ed25519SuiSignature::new(self, msg).into()
-    }
-}
+// impl Signer<Signature> for Ed25519KeyPair {
+//     fn sign(&self, msg: &[u8]) -> Signature {
+//         Ed25519SuiSignature::new(self, msg).into()
+//     }
+// }
 
 //
 // Secp256k1 Sui Signature port
@@ -810,33 +910,26 @@ pub struct Secp256k1SuiSignature(
     [u8; Secp256k1PublicKey::LENGTH + Secp256k1Signature::LENGTH + 1],
 );
 
-impl SuiSignatureInner for Secp256k1SuiSignature {
-    type Sig = Secp256k1Signature;
-    type PubKey = Secp256k1PublicKey;
-    type KeyPair = Secp256k1KeyPair;
-    const LENGTH: usize = Secp256k1PublicKey::LENGTH + Secp256k1Signature::LENGTH + 1;
-}
-
 impl SuiPublicKey for Secp256k1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256k1;
 }
 
-impl ToFromBytes for Secp256k1SuiSignature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
-        if bytes.len() != Self::LENGTH {
-            return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
-        }
-        let mut sig_bytes = [0; Self::LENGTH];
-        sig_bytes.copy_from_slice(bytes);
-        Ok(Self(sig_bytes))
-    }
-}
+// impl ToFromBytes for Secp256k1SuiSignature {
+//     fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
+//         if bytes.len() != Self::LENGTH {
+//             return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
+//         }
+//         let mut sig_bytes = [0; Self::LENGTH];
+//         sig_bytes.copy_from_slice(bytes);
+//         Ok(Self(sig_bytes))
+//     }
+// }
 
-impl Signer<Signature> for Secp256k1KeyPair {
-    fn sign(&self, msg: &[u8]) -> Signature {
-        Secp256k1SuiSignature::new(self, msg).into()
-    }
-}
+// impl Signer<Signature> for Secp256k1KeyPair {
+//     fn sign(&self, msg: &[u8]) -> Signature {
+//         Secp256k1SuiSignature::new(self, msg).into()
+//     }
+// }
 
 //
 // Secp256r1 Sui Signature port
@@ -851,144 +944,19 @@ pub struct Secp256r1SuiSignature(
     [u8; Secp256r1PublicKey::LENGTH + Secp256r1Signature::LENGTH + 1],
 );
 
-impl SuiSignatureInner for Secp256r1SuiSignature {
-    type Sig = Secp256r1Signature;
-    type PubKey = Secp256r1PublicKey;
-    type KeyPair = Secp256r1KeyPair;
-    const LENGTH: usize = Secp256r1PublicKey::LENGTH + Secp256r1Signature::LENGTH + 1;
-}
+// impl  for Secp256r1SuiSignature {
+//     type Sig = Secp256r1Signature;
+//     type PubKey = Secp256r1PublicKey;
+//     type KeyPair = Secp256r1KeyPair;
+//     const LENGTH: usize = Secp256r1PublicKey::LENGTH + Secp256r1Signature::LENGTH + 1;
+// }
 
 impl SuiPublicKey for Secp256r1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256r1;
 }
 
-impl ToFromBytes for Secp256r1SuiSignature {
-    fn from_bytes(bytes: &[u8]) -> Result<Self, FastCryptoError> {
-        if bytes.len() != Self::LENGTH {
-            return Err(FastCryptoError::InputLengthWrong(Self::LENGTH));
-        }
-        let mut sig_bytes = [0; Self::LENGTH];
-        sig_bytes.copy_from_slice(bytes);
-        Ok(Self(sig_bytes))
-    }
-}
-
-impl Signer<Signature> for Secp256r1KeyPair {
-    fn sign(&self, msg: &[u8]) -> Signature {
-        Secp256r1SuiSignature::new(self, msg).into()
-    }
-}
-
-//
-// This struct exists due to the limitations of the `enum_dispatch` library.
-//
-pub trait SuiSignatureInner: Sized + ToFromBytes + PartialEq + Eq + Hash {
-    type Sig: Authenticator<PubKey = Self::PubKey>;
-    type PubKey: VerifyingKey<Sig = Self::Sig> + SuiPublicKey;
-    type KeyPair: KeypairTraits<PubKey = Self::PubKey, Sig = Self::Sig>;
-
-    const LENGTH: usize = Self::Sig::LENGTH + Self::PubKey::LENGTH + 1;
-    const SCHEME: SignatureScheme = Self::PubKey::SIGNATURE_SCHEME;
-
-    /// Returns the deserialized signature and deserialized pubkey.
-    fn get_verification_inputs(&self) -> SuiResult<(Self::Sig, Self::PubKey)> {
-        let pk = Self::PubKey::from_bytes(self.public_key_bytes())
-            .map_err(|_| SuiError::KeyConversionError("Invalid public key".to_string()))?;
-
-        // deserialize the signature
-        let signature = Self::Sig::from_bytes(self.signature_bytes()).map_err(|_| {
-            SuiError::InvalidSignature {
-                error: "Fail to get pubkey and sig".to_string(),
-            }
-        })?;
-
-        Ok((signature, pk))
-    }
-
-    fn new(kp: &Self::KeyPair, message: &[u8]) -> Self {
-        let sig = Signer::sign(kp, message);
-
-        let mut signature_bytes: Vec<u8> = Vec::new();
-        signature_bytes
-            .extend_from_slice(&[<Self::PubKey as SuiPublicKey>::SIGNATURE_SCHEME.flag()]);
-        signature_bytes.extend_from_slice(sig.as_ref());
-        signature_bytes.extend_from_slice(kp.public().as_ref());
-        Self::from_bytes(&signature_bytes[..])
-            .expect("Serialized signature did not have expected size")
-    }
-}
-
 pub trait SuiPublicKey: VerifyingKey {
     const SIGNATURE_SCHEME: SignatureScheme;
-}
-
-#[enum_dispatch(Signature)]
-pub trait SuiSignature: Sized + ToFromBytes {
-    fn signature_bytes(&self) -> &[u8];
-    fn public_key_bytes(&self) -> &[u8];
-    fn scheme(&self) -> SignatureScheme;
-
-    fn verify_secure<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        scheme: SignatureScheme,
-    ) -> SuiResult<()>
-    where
-        T: Serialize;
-}
-
-impl<S: SuiSignatureInner + Sized> SuiSignature for S {
-    fn signature_bytes(&self) -> &[u8] {
-        // Access array slice is safe because the array bytes is initialized as
-        // flag || signature || pubkey with its defined length.
-        &self.as_ref()[1..1 + S::Sig::LENGTH]
-    }
-
-    fn public_key_bytes(&self) -> &[u8] {
-        // Access array slice is safe because the array bytes is initialized as
-        // flag || signature || pubkey with its defined length.
-        &self.as_ref()[S::Sig::LENGTH + 1..]
-    }
-
-    fn scheme(&self) -> SignatureScheme {
-        S::PubKey::SIGNATURE_SCHEME
-    }
-
-    fn verify_secure<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        scheme: SignatureScheme,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        let mut hasher = DefaultHash::default();
-        hasher.update(&bcs::to_bytes(&value).expect("Message serialization should not fail"));
-        let digest = hasher.finalize().digest;
-
-        let (sig, pk) = &self.get_verification_inputs()?;
-        match scheme {
-            SignatureScheme::ZkLoginAuthenticator => {} // Pass this check because zk login does not derive address from pubkey.
-            _ => {
-                let address = SuiAddress::from(pk);
-                if author != address {
-                    return Err(SuiError::IncorrectSigner {
-                        error: format!(
-                            "Incorrect signer, expected {:?}, got {:?}",
-                            author, address
-                        ),
-                    });
-                }
-            }
-        }
-
-        pk.verify(&digest, sig)
-            .map_err(|e| SuiError::InvalidSignature {
-                error: format!("Fail to verify user sig {}", e),
-            })
-    }
 }
 
 /// AuthoritySignInfoTrait is a trait used specifically for a few structs in messages.rs

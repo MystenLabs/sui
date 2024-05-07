@@ -23,14 +23,13 @@ use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockResponseOptions}
 use sui_keys::keypair_file::read_keypair_from_file;
 use sui_sdk::{rpc_types::SuiTransactionBlockEffectsAPI, SuiClient, SuiClientBuilder};
 use sui_types::base_types::{ObjectRef, SuiAddress};
-use sui_types::crypto::{generate_proof_of_possession, get_key_pair, SuiKeyPair};
+use sui_types::crypto::{generate_proof_of_possession, get_account_key_pair, SuiKeyPair};
 use sui_types::multiaddr::{Multiaddr, Protocol};
 use sui_types::transaction::{
     CallArg, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_GENERIC,
 };
 use sui_types::{committee::EpochId, crypto::get_authority_key_pair, SUI_SYSTEM_PACKAGE_ID};
 use tracing::info;
-
 #[derive(Parser)]
 pub enum FireDrill {
     MetadataRotation(MetadataRotation),
@@ -133,18 +132,18 @@ async fn update_next_epoch_metadata(
     let mut new_config = config.clone();
 
     // protocol key
-    let new_protocol_key_pair = get_authority_key_pair().1;
+    let new_protocol_key_pair = get_authority_key_pair();
     let new_protocol_key_pair_copy = new_protocol_key_pair.copy();
     let pop = generate_proof_of_possession(&new_protocol_key_pair, sui_address);
     new_config.protocol_key_pair = AuthorityKeyPairWithPath::new(new_protocol_key_pair);
 
     // network key
-    let new_network_key_pair: Ed25519KeyPair = get_key_pair().1;
+    let new_network_key_pair: Ed25519KeyPair = get_account_key_pair().1;
     let new_network_key_pair_copy = new_network_key_pair.copy();
     new_config.network_key_pair = KeyPairWithPath::new(SuiKeyPair::Ed25519(new_network_key_pair));
 
     // worker key
-    let new_worker_key_pair: Ed25519KeyPair = get_key_pair().1;
+    let new_worker_key_pair: Ed25519KeyPair = get_account_key_pair().1;
     let new_worker_key_pair_copy = new_worker_key_pair.copy();
     new_config.worker_key_pair = KeyPairWithPath::new(SuiKeyPair::Ed25519(new_worker_key_pair));
 
@@ -336,7 +335,7 @@ async fn execute_tx(
     tx_data: TransactionData,
     action: &str,
 ) -> anyhow::Result<()> {
-    let tx = Transaction::from_data_and_signer(tx_data, vec![account_key]);
+    let tx = Transaction::from_data_and_signer(tx_data, vec![account_key.into()]);
     info!("Executing {:?}", tx.digest());
     let tx_digest = *tx.digest();
     let resp = sui_client

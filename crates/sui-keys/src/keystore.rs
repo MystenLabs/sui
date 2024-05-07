@@ -6,7 +6,6 @@ use crate::random_names::{random_name, random_names};
 use anyhow::{anyhow, bail, ensure, Context};
 use bip32::DerivationPath;
 use bip39::{Language, Mnemonic, Seed};
-use rand::{rngs::StdRng, SeedableRng};
 use regex::Regex;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use shared_crypto::intent::{Intent, IntentMessage};
@@ -18,7 +17,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::crypto::get_account_key_pair;
 use sui_types::crypto::{
     enum_dispatch, EncodeDecodeBase64, PublicKey, Signature, SignatureScheme, SuiKeyPair,
 };
@@ -579,9 +578,8 @@ impl AccountKeystore for InMemKeystore {
 
 impl InMemKeystore {
     pub fn new_insecure_for_tests(initial_key_number: usize) -> Self {
-        let mut rng = StdRng::from_seed([0; 32]);
         let keys = (0..initial_key_number)
-            .map(|_| get_key_pair_from_rng(&mut rng))
+            .map(|_| get_account_key_pair())
             .map(|(ad, k)| (ad, SuiKeyPair::Ed25519(k)))
             .collect::<BTreeMap<SuiAddress, SuiKeyPair>>();
 

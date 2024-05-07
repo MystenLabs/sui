@@ -8,12 +8,13 @@ use sui_core::authority_client::AuthorityAPI;
 use sui_macros::sim_test;
 use sui_protocol_config::ProtocolConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
+use sui_types::crypto::random_account_key;
 use sui_types::multisig_legacy::MultiSigLegacy;
 use sui_types::{
     base_types::SuiAddress,
     crypto::{
-        get_key_pair, CompressedSignature, PublicKey, Signature, SuiKeyPair,
-        ZkLoginAuthenticatorAsBytes, ZkLoginPublicIdentifier,
+        CompressedSignature, PublicKey, Signature, SuiKeyPair, ZkLoginAuthenticatorAsBytes,
+        ZkLoginPublicIdentifier,
     },
     error::{SuiError, SuiResult},
     multisig::{MultiSig, MultiSigPublicKey},
@@ -150,7 +151,7 @@ async fn test_multisig_e2e() {
         .contains("Invalid ed25519 pk bytes"));
 
     // 7. mismatch pks in sig with multisig address fails to execute.
-    let kp3: SuiKeyPair = SuiKeyPair::Secp256r1(get_key_pair().1);
+    let kp3 = random_account_key();
     let pk3 = kp3.public();
     let wrong_multisig_pk = MultiSigPublicKey::new(
         vec![pk0.clone(), pk1.clone(), pk3.clone()],

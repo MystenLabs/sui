@@ -128,7 +128,7 @@ async fn construct_shared_object_transaction_with_sequence_number(
     ObjectID,
     ObjectID,
 ) {
-    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
@@ -3562,7 +3562,7 @@ async fn test_store_get_dynamic_field() {
 }
 
 async fn create_and_retrieve_df_info(function: &IdentStr) -> (SuiAddress, Vec<DynamicFieldInfo>) {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
     let gas_object_id = ObjectID::random();
     let (authority_state, object_basics) =
         init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
@@ -4623,7 +4623,7 @@ async fn make_test_transaction(
 
 async fn prepare_authority_and_shared_object_cert(
 ) -> (Arc<AuthorityState>, VerifiedCertificate, ObjectID) {
-    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();

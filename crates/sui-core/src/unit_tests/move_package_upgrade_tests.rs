@@ -117,7 +117,7 @@ struct UpgradeStateRunner {
 impl UpgradeStateRunner {
     pub async fn new(base_package_name: &str) -> Self {
         telemetry_subscribers::init_for_testing();
-        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
         let gas_object_id = ObjectID::random();
         let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
         let authority_state = TestAuthorityBuilder::new().build().await;

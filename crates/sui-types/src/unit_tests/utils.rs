@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::{Signer, SuiKeyPair};
+use crate::crypto::{get_key_pair, AccountKeyPair, SuiKeyPair};
 use crate::multisig::{MultiSig, MultiSigPublicKey};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::transaction::{SenderSignedData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER};
@@ -10,8 +10,8 @@ use crate::{
     base_types::{dbg_addr, ExecutionDigests, ObjectID},
     committee::Committee,
     crypto::{
-        get_key_pair, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        AuthorityPublicKeyBytes, DefaultHash, Signature, SignatureScheme,
+        get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes, DefaultHash, Signature,
+        SignatureScheme,
     },
     gas::GasCostSummary,
     messages_checkpoint::{
@@ -22,6 +22,7 @@ use crate::{
     transaction::{Transaction, TransactionData},
     zk_login_authenticator::ZkLoginAuthenticator,
 };
+use fastcrypto::bls12381::min_sig::BLS12381KeyPair;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::KeyPair as KeypairTraits;
@@ -55,7 +56,7 @@ where
     let mut keys = Vec::new();
 
     for _ in 0..num {
-        let (_, inner_authority_key): (_, AuthorityKeyPair) = get_key_pair_from_rng(rand);
+        let inner_authority_key: BLS12381KeyPair = get_key_pair_from_rng(rand).1;
         authorities.insert(
             /* address */ AuthorityPublicKeyBytes::from(inner_authority_key.public()),
             /* voting right */ 1,
@@ -70,7 +71,7 @@ where
 // Creates a fake sender-signed transaction for testing. This transaction will
 // not actually work.
 pub fn create_fake_transaction() -> Transaction {
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, kp) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
@@ -86,7 +87,7 @@ pub fn create_fake_transaction() -> Transaction {
         TEST_ONLY_GAS_UNIT_FOR_TRANSFER, // gas price is 1
         1,
     );
-    to_sender_signed_transaction(data, &sender_key)
+    to_sender_signed_transaction(data, &kp)
 }
 
 pub fn make_transaction_data(sender: SuiAddress) -> TransactionData {
@@ -109,22 +110,19 @@ pub fn make_transaction_data(sender: SuiAddress) -> TransactionData {
 
 /// Make a user signed transaction with the given sender and its keypair. This
 /// is not verified or signed by authority.
-pub fn make_transaction(sender: SuiAddress, kp: &SuiKeyPair) -> Transaction {
+pub fn make_transaction(sender: SuiAddress, kp: &AccountKeyPair) -> Transaction {
     let data = make_transaction_data(sender);
     Transaction::from_data_and_signer(data, vec![kp])
 }
 
 // This is used to sign transaction with signer using default Intent.
-pub fn to_sender_signed_transaction(
-    data: TransactionData,
-    signer: &dyn Signer<Signature>,
-) -> Transaction {
+pub fn to_sender_signed_transaction(data: TransactionData, signer: &AccountKeyPair) -> Transaction {
     to_sender_signed_transaction_with_multi_signers(data, vec![signer])
 }
 
 pub fn to_sender_signed_transaction_with_multi_signers(
     data: TransactionData,
-    signers: Vec<&dyn Signer<Signature>>,
+    signers: Vec<&AccountKeyPair>,
 ) -> Transaction {
     Transaction::from_data_and_signer(data, signers)
 }
@@ -252,7 +250,11 @@ mod zk_login {
         proof: ZkLoginInputs,
         data: TransactionData,
     ) -> (SuiAddress, Transaction, GenericSignature) {
-        let tx = Transaction::from_data_and_signer(data.clone(), vec![user_key]);
+        let kp = match user_key {
+            SuiKeyPair::Ed25519(kp) => kp,
+            _ => panic!("Unexpected"),
+        };
+        let tx = Transaction::from_data_and_signer(data.clone(), vec![kp]);
 
         let s = match tx.inner().tx_signatures.first().unwrap() {
             GenericSignature::Signature(s) => s,
@@ -299,7 +301,11 @@ mod zk_login {
         )
         .unwrap();
         let addr = SuiAddress::from(&multisig_pk);
-        let tx = make_transaction(addr, &keys[0]);
+        let kp = match &keys[0] {
+            SuiKeyPair::Ed25519(kp) => kp,
+            _ => panic!("Unexpected"),
+        };
+        let tx = make_transaction(addr, kp);
 
         let msg = IntentMessage::new(Intent::sui_transaction(), tx.transaction_data().clone());
         let sig1 = Signature::new_secure(&msg, &keys[0]).into();

@@ -44,7 +44,8 @@ use sui_keys::keypair_file::{
 use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     crypto::{
-        get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKey, NetworkPublicKey, SuiKeyPair,
+        get_authority_key_pair, get_key_pair, get_key_pair_from_rng, AuthorityPublicKey,
+        NetworkPublicKey, SuiKeyPair,
     },
     multiaddr::Multiaddr,
 };
@@ -206,11 +207,11 @@ async fn main() -> Result<(), eyre::Report> {
             base_port,
         } => benchmark_genesis(ips, working_directory, *num_workers, *base_port)?,
         Commands::GenerateKeys { filename } => {
-            let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let keypair = get_authority_key_pair();
             write_authority_keypair_to_file(&keypair, filename).unwrap();
         }
         Commands::GenerateNetworkKeys { filename } => {
-            let network_keypair: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+            let network_keypair = get_key_pair().1;
             write_keypair_to_file(&SuiKeyPair::Ed25519(network_keypair), filename).unwrap();
         }
         Commands::GetPubKey { filename } => {
@@ -328,7 +329,7 @@ fn benchmark_genesis(
         .collect::<Vec<_>>();
 
     for filename in primary_key_files {
-        let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rng).1;
+        let keypair = get_key_pair_from_rng(&mut rng).1;
         write_authority_keypair_to_file(&keypair, filename).unwrap();
         let pk = keypair.public().to_string();
         primary_names.push(pk);

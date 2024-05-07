@@ -7,8 +7,8 @@ use crate::base_types::{
 };
 use crate::committee::{EpochId, ProtocolVersion, StakeUnit};
 use crate::crypto::{
-    default_hash, get_key_pair, AccountKeyPair, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
+    default_hash, get_account_key_pair, AggregateAuthoritySignature, AuthoritySignInfo,
+    AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo, SuiKeyPair,
 };
 use crate::digests::Digest;
 use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
@@ -24,6 +24,7 @@ use crate::transaction::{Transaction, TransactionData};
 use crate::{base_types::AuthorityName, committee::Committee, error::SuiError};
 use anyhow::Result;
 use fastcrypto::hash::MultisetHash;
+use fastcrypto::traits::KeyPair;
 use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -626,7 +627,9 @@ impl FullCheckpointContents {
     }
 
     pub fn random_for_testing() -> Self {
-        let (a, key): (_, AccountKeyPair) = get_key_pair();
+        let kp = get_account_key_pair().1;
+        let key = SuiKeyPair::Ed25519(kp.copy());
+        let a = (&key.public()).into();
         let transaction = Transaction::from_data_and_signer(
             TransactionData::new_transfer(
                 a,
@@ -636,7 +639,7 @@ impl FullCheckpointContents {
                 100000000000,
                 100,
             ),
-            vec![&key],
+            vec![&kp],
         );
         let effects = TestEffectsBuilder::new(transaction.data()).build();
         let exe_data = ExecutionData {

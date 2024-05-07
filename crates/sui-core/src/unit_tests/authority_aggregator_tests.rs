@@ -16,6 +16,7 @@ use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
 use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
@@ -81,7 +82,7 @@ pub fn set_local_client_config(
 
 pub fn create_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn Signer<Signature>,
+    secret: &SuiKeyPair,
     dest: SuiAddress,
     value: u64,
     package_id: ObjectID,
@@ -113,7 +114,7 @@ pub fn create_object_move_transaction(
 
 pub fn delete_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn Signer<Signature>,
+    secret: &SuiKeyPair,
     object_ref: ObjectRef,
     framework_obj_id: ObjectID,
     gas_object_ref: ObjectRef,
@@ -138,7 +139,7 @@ pub fn delete_object_move_transaction(
 
 pub fn set_object_move_transaction(
     src: SuiAddress,
-    secret: &dyn Signer<Signature>,
+    secret: &SuiKeyPair,
     object_ref: ObjectRef,
     value: u64,
     framework_obj_id: ObjectID,
@@ -267,8 +268,8 @@ async fn execute_transaction_with_fault_configs(
     configs_before_process_transaction: &[(usize, LocalAuthorityClientFaultConfig)],
     configs_before_process_certificate: &[(usize, LocalAuthorityClientFaultConfig)],
 ) -> bool {
-    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
-    let (addr2, _): (_, AccountKeyPair) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
+    let (addr2, _): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let (mut authorities, _, genesis, _) =
@@ -670,7 +671,7 @@ fn get_authorities(
     let mut authorities_vec = Vec::new();
     let mut clients = BTreeMap::new();
     for _ in 0..committee_size {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair_from_rng(&mut OsRng);
         let name: AuthorityName = sec.public().into();
         authorities.insert(name, 1);
         authorities_vec.push((name, 1));
@@ -2211,7 +2212,7 @@ fn make_fake_authorities() -> (
     let mut clients = BTreeMap::new();
     let mut authority_keys = Vec::new();
     for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair_from_rng(&mut OsRng);
         let name: AuthorityName = sec.public().into();
         authorities.insert(name, 1);
         authority_keys.push((name, sec));

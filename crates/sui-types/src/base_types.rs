@@ -8,9 +8,8 @@ use crate::coin::TreasuryCap;
 use crate::coin::COIN_MODULE_NAME;
 use crate::coin::COIN_STRUCT_NAME;
 pub use crate::committee::EpochId;
-use crate::crypto::{
-    AuthorityPublicKeyBytes, DefaultHash, PublicKey, SignatureScheme, SuiPublicKey, SuiSignature,
-};
+use crate::crypto::SuiPublicKey;
+use crate::crypto::{AuthorityPublicKeyBytes, DefaultHash, PublicKey, SignatureScheme};
 pub use crate::digests::{ObjectDigest, TransactionDigest, TransactionEffectsDigest};
 use crate::dynamic_field::DynamicFieldInfo;
 use crate::dynamic_field::DynamicFieldType;

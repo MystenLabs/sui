@@ -1,28 +1,26 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::traits::KeyPair;
-
 use crate::{
     base_types::{dbg_addr, ObjectID},
     committee::EpochId,
     crypto::{
-        AccountKeyPair, AuthorityKeyPair, AuthoritySignature, Signature, SignatureScheme,
-        SuiAuthoritySignature, SuiSignature,
+        get_account_key_pair, get_authority_key_pair, AccountKeyPair, AuthoritySignature,
+        Signature, SuiAuthoritySignature,
     },
     object::Object,
+    signature::AuthenticatorTrait,
     transaction::{Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER},
 };
 
-use crate::crypto::get_key_pair;
-
+use fastcrypto::traits::KeyPair;
 use shared_crypto::intent::{
     AppId, Intent, IntentMessage, IntentScope, IntentVersion, PersonalMessage,
 };
 
 #[test]
 fn test_personal_message_intent() {
-    let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
+    let (addr1, sec1): (_, AccountKeyPair) = get_account_key_pair();
     let message = "Hello".as_bytes().to_vec();
     let p_message = PersonalMessage { message };
     let p_message_2 = p_message.clone();
@@ -48,11 +46,14 @@ fn test_personal_message_intent() {
     assert_eq!(&intent_bcs[3..], &p_message_bcs);
 
     // Let's ensure we can sign and verify intents.
-    let s = Signature::new_secure(&IntentMessage::new(intent1, p_message), &sec1);
-    let verification = s.verify_secure(
+    let s = Signature::new_secure(
+        &IntentMessage::new(intent1, p_message),
+        &crate::crypto::SuiKeyPair::Ed25519(sec1),
+    );
+    let verification = s.verify_claims(
         &IntentMessage::new(intent2, p_message_2),
         addr1,
-        SignatureScheme::ED25519,
+        &Default::default(),
     );
     assert!(verification.is_ok())
 }
@@ -60,10 +61,10 @@ fn test_personal_message_intent() {
 #[test]
 fn test_authority_signature_intent() {
     let epoch: EpochId = 0;
-    let kp: AuthorityKeyPair = get_key_pair().1;
+    let kp = get_authority_key_pair();
 
     // Create a signed user transaction.
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (sender, sender_key) = get_account_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let object = Object::immutable_with_id_for_testing(object_id);
@@ -78,7 +79,7 @@ fn test_authority_signature_intent() {
     );
     let signature = Signature::new_secure(
         &IntentMessage::new(Intent::sui_transaction(), data.clone()),
-        &sender_key,
+        &crate::crypto::SuiKeyPair::Ed25519(sender_key),
     );
     let tx = Transaction::from_data(data, vec![signature]);
     let tx1 = tx.clone();

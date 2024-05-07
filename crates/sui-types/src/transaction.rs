@@ -6,9 +6,9 @@ use super::{base_types::*, error::*};
 use crate::authenticator_state::ActiveJwk;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
+    default_hash, AccountKeyPair, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
-    RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
+    RandomnessRound, Signature, Signer, SuiKeyPair,
 };
 use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
@@ -27,6 +27,7 @@ use crate::{
     SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
 };
 use enum_dispatch::enum_dispatch;
+use fastcrypto::traits::KeyPair;
 use fastcrypto::{encoding::Base64, hash::HashFunction};
 use itertools::Either;
 use move_core_types::ident_str;
@@ -2437,15 +2438,12 @@ impl<S> Envelope<SenderSignedData, S> {
 }
 
 impl Transaction {
-    pub fn from_data_and_signer(
-        data: TransactionData,
-        signers: Vec<&dyn Signer<Signature>>,
-    ) -> Self {
+    pub fn from_data_and_signer(data: TransactionData, signers: Vec<&AccountKeyPair>) -> Self {
         let signatures = {
             let intent_msg = IntentMessage::new(Intent::sui_transaction(), &data);
             signers
                 .into_iter()
-                .map(|s| Signature::new_secure(&intent_msg, s))
+                .map(|s| Signature::new_secure(&intent_msg, &SuiKeyPair::Ed25519(s.copy())))
                 .collect()
         };
         Self::from_data(data, signatures)
@@ -2454,15 +2452,6 @@ impl Transaction {
     // TODO: Rename this function and above to make it clearer.
     pub fn from_data(data: TransactionData, signatures: Vec<Signature>) -> Self {
         Self::from_generic_sig_data(data, signatures.into_iter().map(|s| s.into()).collect())
-    }
-
-    pub fn signature_from_signer(
-        data: TransactionData,
-        intent: Intent,
-        signer: &dyn Signer<Signature>,
-    ) -> Signature {
-        let intent_msg = IntentMessage::new(intent, data);
-        Signature::new_secure(&intent_msg, signer)
     }
 
     pub fn from_generic_sig_data(data: TransactionData, signatures: Vec<GenericSignature>) -> Self {
@@ -2587,9 +2576,7 @@ impl VerifiedTransaction {
             .pipe(|data| {
                 SenderSignedData::new_from_sender_signature(
                     data,
-                    Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
-                        .unwrap()
-                        .into(),
+                    Signature::Ed25519SuiSignature(Ed25519SuiSignature::default()),
                 )
             })
             .pipe(Transaction::new)

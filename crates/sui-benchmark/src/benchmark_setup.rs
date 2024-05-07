@@ -16,7 +16,7 @@ use sui_swarm_config::genesis_config::AccountConfig;
 use sui_types::base_types::ConciseableName;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{deterministic_random_account_key, AccountKeyPair};
+use sui_types::crypto::{get_account_key_pair, AccountKeyPair};
 use sui_types::gas_coin::TOTAL_SUPPLY_MIST;
 use sui_types::object::Owner;
 use test_cluster::TestClusterBuilder;
@@ -80,8 +80,7 @@ impl Env {
         num_server_threads: u64,
     ) -> Result<BenchmarkSetup> {
         info!("Running benchmark setup in local mode..");
-        let (primary_gas_owner, keypair): (SuiAddress, AccountKeyPair) =
-            deterministic_random_account_key();
+        let (primary_gas_owner, keypair): (SuiAddress, AccountKeyPair) = get_account_key_pair();
         let keypair = Arc::new(keypair);
 
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime.

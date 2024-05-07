@@ -12,11 +12,12 @@ use move_binary_format::file_format;
 
 use crate::crypto::bcs_signable_test::{Bar, Foo};
 use crate::crypto::{
-    get_key_pair, get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
-    Signature, SuiAuthoritySignature, SuiSignature,
+    deterministic_random_account_key, get_account_key_pair, get_authority_key_pair,
+    AuthoritySignature, Signature, SuiAuthoritySignature,
 };
 use crate::digests::Digest;
 use crate::id::{ID, UID};
+use crate::signature::AuthenticatorTrait;
 use crate::{gas_coin::GasCoin, object::Object, SUI_FRAMEWORK_ADDRESS};
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use sui_protocol_config::ProtocolConfig;
@@ -25,43 +26,37 @@ use super::*;
 
 #[test]
 fn test_signatures() {
-    let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
-    let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
+    let (addr1, kp) = get_account_key_pair();
+    let sec1 = kp.into();
+    let (addr2, _sec2) = get_account_key_pair();
 
     let foo = IntentMessage::new(Intent::sui_transaction(), Foo("hello".into()));
     let foox = IntentMessage::new(Intent::sui_transaction(), Foo("hellox".into()));
     let bar = IntentMessage::new(Intent::sui_transaction(), Bar("hello".into()));
 
     let s = Signature::new_secure(&foo, &sec1);
+    assert!(s.verify_claims(&foo, addr1, &Default::default()).is_ok());
+    assert!(s.verify_claims(&foo, addr2, &Default::default()).is_err());
+    assert!(s.verify_claims(&foox, addr1, &Default::default()).is_err());
     assert!(s
-        .verify_secure(&foo, addr1, SignatureScheme::ED25519)
-        .is_ok());
-    assert!(s
-        .verify_secure(&foo, addr2, SignatureScheme::ED25519)
-        .is_err());
-    assert!(s
-        .verify_secure(&foox, addr1, SignatureScheme::ED25519)
-        .is_err());
-    assert!(s
-        .verify_secure(
+        .verify_claims(
             &IntentMessage::new(
                 Intent::sui_app(IntentScope::SenderSignedTransaction),
                 Foo("hello".into())
             ),
             addr1,
-            SignatureScheme::ED25519
+            &Default::default()
         )
         .is_err());
 
     // The struct type is different, but the serialization is the same.
-    assert!(s
-        .verify_secure(&bar, addr1, SignatureScheme::ED25519)
-        .is_ok());
+    assert!(s.verify_claims(&bar, addr1, &Default::default()).is_ok());
 }
 
 #[test]
 fn test_signatures_serde() {
-    let (_, sec1): (_, AccountKeyPair) = get_key_pair();
+    let (_, kp) = get_account_key_pair();
+    let sec1 = kp.into();
     let foo = Foo("hello".into());
     let s = Signature::new_secure(&IntentMessage::new(Intent::sui_transaction(), foo), &sec1);
 
@@ -294,7 +289,7 @@ fn test_transaction_digest_serde_human_readable() {
 
 #[test]
 fn test_authority_signature_serde_not_human_readable() {
-    let (_, key): (_, AuthorityKeyPair) = get_key_pair();
+    let key = get_authority_key_pair();
     let sig = AuthoritySignature::new_secure(
         &IntentMessage::new(Intent::sui_transaction(), Foo("some data".to_string())),
         &0,
@@ -310,7 +305,7 @@ fn test_authority_signature_serde_not_human_readable() {
 
 #[test]
 fn test_authority_signature_serde_human_readable() {
-    let (_, key): (_, AuthorityKeyPair) = get_key_pair();
+    let key = get_authority_key_pair();
     let sig = AuthoritySignature::new_secure(
         &IntentMessage::new(Intent::sui_transaction(), Foo("some data".to_string())),
         &0,
@@ -367,22 +362,10 @@ const SAMPLE_ADDRESS_VEC: [u8; 32] = [
     44, 110, 130, 169, 143, 125, 31, 122, 74, 159, 48,
 ];
 
-// Derive a sample address and public key tuple from KeyPair bytes.
-fn derive_sample_address() -> (SuiAddress, AccountKeyPair) {
-    let (address, pub_key) = get_key_pair_from_bytes(&[
-        10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
-        92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
-        90, 106, 17, 10, 123, 200, 40, 18, 34, 173, 240, 91, 213, 72, 183, 249, 213, 210, 39, 181,
-        105, 254, 59, 163,
-    ])
-    .unwrap();
-    (address, pub_key)
-}
-
 // Required to capture address derivation algorithm updates that break some tests and deployments.
 #[test]
 fn test_address_backwards_compatibility() {
-    let (address, _) = derive_sample_address();
+    let (address, _) = deterministic_random_account_key();
     assert_eq!(
         address.to_vec(),
         Hex::decode(SAMPLE_ADDRESS).expect("Decoding failed"),

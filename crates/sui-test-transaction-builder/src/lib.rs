@@ -11,7 +11,9 @@ use sui_sdk::rpc_types::{
 };
 use sui_sdk::wallet_context::WalletContext;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress};
-use sui_types::crypto::{get_key_pair, AccountKeyPair, Signature, Signer};
+use sui_types::crypto::{
+    get_account_key_pair, AccountKeyPair, KeypairTraits, Signature, SuiKeyPair,
+};
 use sui_types::digests::TransactionDigest;
 use sui_types::multisig::{BitmapUnit, MultiSig, MultiSigPublicKey};
 use sui_types::multisig_legacy::{MultiSigLegacy, MultiSigPublicKeyLegacy};
@@ -335,14 +337,14 @@ impl TestTransactionBuilder {
         }
     }
 
-    pub fn build_and_sign(self, signer: &dyn Signer<Signature>) -> Transaction {
+    pub fn build_and_sign(self, signer: &AccountKeyPair) -> Transaction {
         Transaction::from_data_and_signer(self.build(), vec![signer])
     }
 
     pub fn build_and_sign_multisig(
         self,
         multisig_pk: MultiSigPublicKey,
-        signers: &[&dyn Signer<Signature>],
+        signers: &[&AccountKeyPair],
         bitmap: BitmapUnit,
     ) -> Transaction {
         let data = self.build();
@@ -351,9 +353,12 @@ impl TestTransactionBuilder {
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
             signatures.push(
-                GenericSignature::from(Signature::new_secure(&intent_msg, *signer))
-                    .to_compressed()
-                    .unwrap(),
+                GenericSignature::from(Signature::new_secure(
+                    &intent_msg,
+                    &SuiKeyPair::Ed25519(signer.copy()),
+                ))
+                .to_compressed()
+                .unwrap(),
             );
         }
 
@@ -366,7 +371,7 @@ impl TestTransactionBuilder {
     pub fn build_and_sign_multisig_legacy(
         self,
         multisig_pk: MultiSigPublicKeyLegacy,
-        signers: &[&dyn Signer<Signature>],
+        signers: &[&SuiKeyPair],
     ) -> Transaction {
         let data = self.build();
         let intent = Intent::sui_transaction();
@@ -374,7 +379,7 @@ impl TestTransactionBuilder {
 
         let mut signatures = Vec::with_capacity(signers.len());
         for signer in signers {
-            signatures.push(Signature::new_secure(&intent_msg, *signer).into());
+            signatures.push(Signature::new_secure(&intent_msg, signer).into());
         }
 
         let multisig = GenericSignature::MultiSigLegacy(
@@ -433,7 +438,7 @@ pub async fn batch_make_transfer_transactions(
     context: &WalletContext,
     max_txn_num: usize,
 ) -> Vec<Transaction> {
-    let recipient = get_key_pair::<AccountKeyPair>().0;
+    let (recipient, _kp) = get_account_key_pair();
     let result = context.get_all_accounts_and_gas_objects().await;
     let accounts_and_objs = result.unwrap();
     let mut res = Vec::with_capacity(max_txn_num);

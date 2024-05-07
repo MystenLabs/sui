@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::committee::EpochId;
-use crate::crypto::{
-    CompressedSignature, PublicKey, SignatureScheme, SuiSignature, ZkLoginAuthenticatorAsBytes,
-};
+use crate::crypto::{CompressedSignature, PublicKey, SignatureScheme, ZkLoginAuthenticatorAsBytes};
 use crate::error::SuiError;
 use crate::multisig_legacy::MultiSigLegacy;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
@@ -290,6 +288,15 @@ impl AuthenticatorTrait for Signature {
     where
         T: Serialize,
     {
-        self.verify_secure(value, author, self.scheme())
+        let pk = PublicKey::try_from_bytes(self.scheme(), self.public_key_bytes())
+            .map_err(|_| SuiError::InvalidAddress)?;
+        let derived = SuiAddress::from(&pk);
+        if derived != author {
+            return Err(SuiError::IncorrectSigner {
+                error: format!("Expected {}, got {}", derived, author),
+            });
+        }
+
+        self.verify_secure(value)
     }
 }

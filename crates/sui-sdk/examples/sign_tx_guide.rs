@@ -23,14 +23,10 @@ use sui_sdk::{
     },
     SuiClientBuilder,
 };
-use sui_types::crypto::Signer;
-use sui_types::crypto::SuiSignature;
 use sui_types::crypto::ToFromBytes;
-use sui_types::signature::GenericSignature;
-use sui_types::{
-    base_types::SuiAddress,
-    crypto::{get_key_pair_from_rng, SuiKeyPair},
-};
+use sui_types::crypto::{get_account_key_pair, Signature};
+use sui_types::signature::{AuthenticatorTrait, GenericSignature};
+use sui_types::{base_types::SuiAddress, crypto::SuiKeyPair};
 
 /// This example walks through the Rust SDK use case described in
 /// https://github.com/MystenLabs/sui/blob/main/docs/content/guides/developer/sui-101/sign-and-send-txn.mdx
@@ -49,9 +45,9 @@ async fn main() -> Result<(), anyhow::Error> {
         SuiKeyPair::Secp256r1(Secp256r1KeyPair::generate(&mut StdRng::from_seed([0; 32])));
 
     // randomly generate a keypair.
-    let _skp_rand_0 = SuiKeyPair::Ed25519(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
-    let _skp_rand_1 = SuiKeyPair::Secp256k1(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
-    let _skp_rand_2 = SuiKeyPair::Secp256r1(get_key_pair_from_rng(&mut rand::rngs::OsRng).1);
+    let (_address_0, _skp_rand_0) = get_account_key_pair();
+    let (_address_1, _skp_rand_1) = get_account_key_pair();
+    let (_address_2, _skp_rand_2) = get_account_key_pair();
 
     // import a keypair from a base64 encoded 32-byte `private key` assuming scheme is Ed25519.
     let _skp_import_no_flag_0 = SuiKeyPair::Ed25519(Ed25519KeyPair::from_bytes(
@@ -138,15 +134,11 @@ async fn main() -> Result<(), anyhow::Error> {
     let digest = hasher.finalize().digest;
 
     // use SuiKeyPair to sign the digest.
-    let sui_sig = skp_determ_0.sign(&digest);
+    let sui_sig = Signature::new_hashed(&digest, &skp_determ_0);
 
     // if you would like to verify the signature locally before submission, use this function.
     // if it fails to verify locally, the transaction will fail to execute in Sui.
-    let res = sui_sig.verify_secure(
-        &intent_msg,
-        sender,
-        sui_types::crypto::SignatureScheme::ED25519,
-    );
+    let res = sui_sig.verify_claims(&intent_msg, sender, &Default::default());
     assert!(res.is_ok());
 
     // execute the transaction.

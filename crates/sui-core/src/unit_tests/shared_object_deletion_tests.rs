@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair},
+    crypto::AccountKeyPair,
     effects::TransactionEffects,
     execution_status::{CommandArgumentError, ExecutionFailureStatus},
     object::Object,
@@ -49,7 +49,7 @@ pub struct TestRunner {
 impl TestRunner {
     pub async fn new(base_package_name: &str) -> Self {
         telemetry_subscribers::init_for_testing();
-        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+        let (sender, sender_key): (_, AccountKeyPair) = get_key_pair_from_rng(&mut OsRng);
 
         let mut protocol_config =
             ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);

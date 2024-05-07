@@ -41,8 +41,8 @@ use sui_keys::keystore::{AccountKeystore, Keystore};
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::EpochId;
 use sui_types::crypto::{
-    get_authority_key_pair, EncodeDecodeBase64, Signature, SignatureScheme, SuiKeyPair,
-    ZkLoginPublicIdentifier,
+    get_account_key_pair, get_authority_key_pair, EncodeDecodeBase64, Signature, SignatureScheme,
+    SuiKeyPair, ZkLoginPublicIdentifier,
 };
 use sui_types::crypto::{DefaultHash, PublicKey};
 use sui_types::error::SuiResult;
@@ -579,7 +579,8 @@ impl KeyToolCommand {
                 word_length,
             } => match key_scheme {
                 SignatureScheme::BLS12381 => {
-                    let (sui_address, kp) = get_authority_key_pair();
+                    let kp = get_authority_key_pair();
+                    let (sui_address, _kp) = get_account_key_pair();
                     let file_name = format!("bls-{sui_address}.key");
                     write_authority_keypair_to_file(&kp, file_name)?;
                     CommandOutput::Generate(Key {
