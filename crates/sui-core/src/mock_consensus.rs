@@ -1,25 +1,25 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
+use crate::authority::{AuthorityMetrics, AuthorityState};
+use crate::checkpoints::CheckpointServiceNoop;
+use crate::consensus_adapter::SubmitToConsensus;
+use crate::consensus_handler::SequencedConsensusTransaction;
 use prometheus::Registry;
 use std::sync::Arc;
-use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::{AuthorityMetrics, AuthorityState};
-use sui_core::checkpoints::CheckpointServiceNoop;
-use sui_core::consensus_adapter::SubmitToConsensus;
-use sui_core::consensus_handler::SequencedConsensusTransaction;
 use sui_types::error::SuiResult;
 use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
 use sui_types::transaction::VerifiedCertificate;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
-pub(crate) struct MockConsensusClient {
+pub struct MockConsensusClient {
     tx_sender: mpsc::Sender<ConsensusTransaction>,
     _consensus_handle: JoinHandle<()>,
 }
 
-pub(crate) enum ConsensusMode {
+pub enum ConsensusMode {
     // ConsensusClient does absolutely nothing when receiving a transaction
     Noop,
     // ConsensusClient directly sequences the transaction into the store.
@@ -27,7 +27,7 @@ pub(crate) enum ConsensusMode {
 }
 
 impl MockConsensusClient {
-    pub(crate) fn new(validator: Arc<AuthorityState>, consensus_mode: ConsensusMode) -> Self {
+    pub fn new(validator: Arc<AuthorityState>, consensus_mode: ConsensusMode) -> Self {
         let (tx_sender, tx_receiver) = mpsc::channel(1000000);
         let _consensus_handle = Self::run(validator, tx_receiver, consensus_mode);
         Self {
@@ -36,7 +36,7 @@ impl MockConsensusClient {
         }
     }
 
-    pub(crate) fn run(
+    pub fn run(
         validator: Arc<AuthorityState>,
         tx_receiver: mpsc::Receiver<ConsensusTransaction>,
         consensus_mode: ConsensusMode,
