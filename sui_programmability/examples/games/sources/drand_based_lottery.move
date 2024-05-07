@@ -41,10 +41,6 @@
 ///
 module games::drand_based_lottery {
     use games::drand_lib::{derive_randomness, verify_drand_signature, safe_selection};
-    use std::option::{Self, Option};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
 
     /// Error codes
@@ -60,7 +56,7 @@ module games::drand_based_lottery {
     /// Game represents a set of parameters of a single game.
     /// This game can be extended to require ticket purchase, reward winners, etc.
     ///
-    struct Game has key, store {
+    public struct Game has key, store {
         id: UID,
         round: u64,
         status: u8,
@@ -70,7 +66,7 @@ module games::drand_based_lottery {
 
     /// Ticket represents a participant in a single game.
     /// Can be deconstructed only by the owner.
-    struct Ticket has key, store {
+    public struct Ticket has key, store {
         id: UID,
         game_id: ID,
         participant_index: u64,
@@ -78,7 +74,7 @@ module games::drand_based_lottery {
 
     /// GameWinner represents a participant that won in a specific game.
     /// Can be deconstructed only by the owner.
-    struct GameWinner has key, store {
+    public struct GameWinner has key, store {
         id: UID,
         game_id: ID,
     }
@@ -121,19 +117,19 @@ module games::drand_based_lottery {
             participant_index: game.participants,
         };
         game.participants = game.participants + 1;
-        transfer::public_transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(ticket, ctx.sender());
     }
 
     /// The winner can redeem its ticket.
     public entry fun redeem(ticket: &Ticket, game: &Game, ctx: &mut TxContext) {
         assert!(object::id(game) == ticket.game_id, EInvalidTicket);
-        assert!(option::contains(&game.winner, &ticket.participant_index), EInvalidTicket);
+        assert!(game.winner.contains(&ticket.participant_index), EInvalidTicket);
 
         let winner = GameWinner {
             id: object::new(ctx),
             game_id: ticket.game_id,
         };
-        transfer::public_transfer(winner, tx_context::sender(ctx));
+        transfer::public_transfer(winner, ctx.sender());
     }
 
     // Note that a ticket can be deleted before the game was completed.

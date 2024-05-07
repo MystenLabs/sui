@@ -5,11 +5,9 @@
 
 //# publish --upgradeable --sender A
 module V0::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct String has copy, drop, store { bytes: vector<u8>, }
-   public struct Char has copy, drop, store { byte: u8, }
+    public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
     public fun char(byte: u8): Char {
         assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
@@ -58,11 +56,9 @@ module V0::ascii {
 // Bytecode has changed so should fail in dep only mode
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A --policy dep_only
 module V1::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct String has copy, drop, store { bytes: vector<u8>, }
-   public struct Char has copy, drop, store { byte: u8, }
+    public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
     public fun char(byte: u8): Char {
         assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
@@ -112,11 +108,9 @@ module V1::ascii {
 // we can still upgrade in a less strict mode since it wasn't committed.
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A --policy additive
 module V1::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct String has copy, drop, store { bytes: vector<u8>, }
-   public struct Char has copy, drop, store { byte: u8, }
+    public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
     public fun char(byte: u8): Char {
         assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
         Char { byte }
@@ -136,7 +130,7 @@ module V1::ascii {
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
            if (!is_valid_char(possible_byte)) return option::none();
-           i = i + 1; 
+           i = i + 1;
        };
        option::some(String { bytes })
     }
@@ -166,11 +160,9 @@ module V1::ascii {
 // Shuffle them around -- should succeed
 //# upgrade --package V0 --upgrade-capability 1,1 --sender A --policy additive
 module V1::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct Char has copy, drop, store { byte: u8, }
-   public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
+    public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -219,12 +211,10 @@ module V1::ascii {
 // Add new things to the module -- the first one should fail in dep_only mode
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy dep_only
 module V2::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct Char has copy, drop, store { byte: u8, }
-   public struct NewStruct { }
-   public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
+    public struct NewStruct { }
+    public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -274,12 +264,10 @@ module V2::ascii {
 // This one should succeed since we're in additive mode
 //# upgrade --package V1 --upgrade-capability 1,1 --sender A --policy additive
 module V2::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct Char has copy, drop, store { byte: u8, }
-   public struct NewStruct { } // <<<<<<<<< NEW STRUCT
-   public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
+    public struct NewStruct { } // <<<<<<<<< NEW STRUCT
+    public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -329,12 +317,10 @@ module V2::ascii {
 // This one should succeed since we just changed it above
 //# upgrade --package V2 --upgrade-capability 1,1 --sender A --policy dep_only
 module V3::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct Char has copy, drop, store { byte: u8, }
-   public struct NewStruct { } // <<<<<<<<< NEW STRUCT
-   public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
+    public struct NewStruct { } // <<<<<<<<< NEW STRUCT
+    public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(
@@ -384,12 +370,10 @@ module V3::ascii {
 // This should now fail since we succeeded with `dep_only` -- we can no longer go back down the policy ordering.
 //# upgrade --package V3 --upgrade-capability 1,1 --sender A --policy additive
 module V4::ascii {
-    use std::vector;
-    use std::option::{Self, Option};
     const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
-   public struct Char has copy, drop, store { byte: u8, }
-   public struct NewStruct { } // <<<<<<<<< NEW STRUCT
-   public struct String has copy, drop, store { bytes: vector<u8>, }
+    public struct Char has copy, drop, store { byte: u8, }
+    public struct NewStruct { } // <<<<<<<<< NEW STRUCT
+    public struct String has copy, drop, store { bytes: vector<u8>, }
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
        assert!(

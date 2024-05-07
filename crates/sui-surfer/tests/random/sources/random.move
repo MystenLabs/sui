@@ -11,7 +11,7 @@ module random::random_test {
 
     // Test transactions that use the same shared object, sometimes with Random and sometimes without.
 
-    struct SharedObject has key, store {
+    public struct SharedObject has key, store {
         id: UID,
         value: u256,
     }
@@ -26,7 +26,7 @@ module random::random_test {
 
     // Update the shared object using Random.
     entry fun mutate_with_random(obj: &mut SharedObject, r: &random::Random, n: u8, ctx: &mut TxContext) {
-        let gen = random::new_generator(r, ctx);
+        let mut gen = random::new_generator(r, ctx);
         let _b = random::generate_bytes(&mut gen, (n as u16));
         obj.value = random::generate_u256(&mut gen);
         assert!(obj.value > 0, 0); // very low probability
@@ -42,7 +42,7 @@ module random::random_test {
     entry fun generate(r: &random::Random, ctx: &mut TxContext): u64 {
         let _gen1 = random::new_generator(r, ctx);
         let _gen2 = random::new_generator(r, ctx);
-        let gen3 = random::new_generator(r, ctx);
+        let mut gen3 = random::new_generator(r, ctx);
         random::generate_u64(&mut gen3)
     }
 }

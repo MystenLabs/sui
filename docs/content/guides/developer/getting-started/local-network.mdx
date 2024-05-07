@@ -102,16 +102,22 @@ The command returns an address:
 
 Use the active address to get test SUI to use on your local network. Use the `sui client addresses` command to see all of the addresses on your local network.
 
-**Note:** The address returned when you run the command is unique and does not match the one used in this example.
+:::info
+
+The address returned when you run the command is unique and does not match the one used in this example.
+
+:::
 
 ## Use the local faucet {#use-the-local-faucet}
 
-Transactions on your local network require SUI coins to pay for gas fees just like other networks. To send coins to a Sui Wallet connected to your local network, see [Set up a local Sui Wallet](#set-up-a-local-sui-wallet). You can use the address for the local Sui Wallet with the faucet.
+Transactions on your local network require SUI coins to pay for gas fees just like other networks. You can use the currently active address with the faucet.
 
-Sui CLI provides the `sui client faucet` command to get coins from the faucet. In the most basic case, run `sui client faucet` and wait up to 60 seconds for the coins to reach your wallet. Use `sui client gas` to check for the new coins.
+Sui CLI provides the `sui client faucet` command to get coins from the faucet. In the most basic case, run `sui client faucet` and wait up to 60 seconds for the coins to reach your address. Use `sui client gas` to check for the new coins.
 
 :::info
+
 The `faucet` command uses the active address and the active network environment by default. If you need to pass in a different address or faucet server URL, check the `help` menu. If you're using a different network than a local network or the public ones (fullnode.network.sui.io), you will have to pass the URL to the faucet server.
+
 :::
 
 
@@ -137,55 +143,9 @@ The response resembles the following, but with different IDs:
 ╰────────────────────────────────────────────────────────────────────┴────────────╯
 ```
 
-## Install Sui Wallet locally
-
-To install and use the apps locally, you must first install [pnpm](https://pnpm.io/installation). Use the instructions appropriate for your operating system.
-
-After you install `pnpm`, use the following command to install the required dependencies in your workspace:
-
-```shell
-pnpm install
-```
-
-After the installation completes, run the following command to install Sui Wallet:
-
-```shell
-pnpm turbo build
-```
-
-If you encounter an error from turbo build, confirm that there is no `package-lock.json`. If the file exists, remove it and then run the command again.
-
-## Set up a local Sui Wallet
-
-You can also use a local Sui Wallet to test with your local network.
-
-**Note:** To run the command you must have `pnpm` installed. See [Install Sui Wallet locally](#install-sui-wallet-locally) for details.
-
-Before you start the Sui Wallet app, update its default environment to point to your local network. To do so, first make a copy of `sui/apps/wallet/configs/environment/.env.defaults` and rename it to `.env` in the same directory. In your `.env` file, edit the first line to read `API_ENV=local` and then save the file.
-
-Run the following command from the `sui` root folder to start Sui Wallet on your local network:
-
-```bash
-pnpm wallet dev
-```
-
-### Add local Sui Wallet to Chrome
-
-After you build your local version of Sui Wallet, you can add the extension to Chrome:
-
-1. Open a Chrome browser to `chrome://extensions`.
-1. Click the **Developer mode** toggle to enable, if it's not already on.
-1. Click the **Load unpacked** button and select your `sui/apps/wallet/dist` directory.
-
-Consult the Sui Wallet [Readme](https://github.com/MystenLabs/sui/blob/main/apps/wallet/README.md#install-the-extension-to-chrome) for more information on working with a locally built wallet on Chrome.
-
 ## Generate example data
 
-Use the TypeScript SDK to add example data to your network.
-
-**Note:** To run the command you must complete the `Pre-requisites for Building Apps locally` section first.
-
-Run the following command from the `sui` root folder:
+Use the TypeScript SDK to add example data to your network. Run the following command from the `sui` root folder:
 
 ```bash
 pnpm --filter @mysten/sui.js test:e2e

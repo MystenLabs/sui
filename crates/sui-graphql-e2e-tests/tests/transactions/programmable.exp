@@ -3,15 +3,15 @@ processed 21 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-19:
+task 1 'publish'. lines 6-16:
 created: object(1,0), object(1,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 6315600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'create-checkpoint'. lines 21-21:
+task 2 'create-checkpoint'. lines 18-18:
 Checkpoint created: 1
 
-task 3 'run-graphql'. lines 23-202:
+task 3 'run-graphql'. lines 20-199:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -170,15 +170,15 @@ Response: {
   }
 }
 
-task 4 'upgrade'. lines 204-222:
+task 4 'upgrade'. lines 201-216:
 created: object(4,0)
 mutated: object(0,0), object(1,1)
 gas summary: computation_cost: 1000000, storage_cost: 6589200,  storage_rebate: 2595780, non_refundable_storage_fee: 26220
 
-task 5 'create-checkpoint'. lines 224-224:
+task 5 'create-checkpoint'. lines 218-218:
 Checkpoint created: 2
 
-task 6 'run-graphql'. lines 226-405:
+task 6 'run-graphql'. lines 220-399:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -441,20 +441,20 @@ Response: {
   }
 }
 
-task 7 'programmable'. lines 407-410:
+task 7 'programmable'. lines 401-404:
 created: object(7,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2280000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 8 'programmable'. lines 412-421:
+task 8 'programmable'. lines 406-415:
 created: object(8,0), object(8,1)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3328800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 9 'create-checkpoint'. lines 423-423:
+task 9 'create-checkpoint'. lines 417-417:
 Checkpoint created: 3
 
-task 10 'run-graphql'. lines 425-613:
+task 10 'run-graphql'. lines 419-607:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -842,14 +842,14 @@ Response: {
   }
 }
 
-task 11 'programmable'. lines 615-616:
+task 11 'programmable'. lines 609-610:
 Error: Transaction Effects Status: Unused result without the drop ability. Command result 0, return value 0
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: UnusedValueWithoutDrop { result_idx: 0, secondary_idx: 0 }, source: None, command: None } }
 
-task 12 'create-checkpoint'. lines 618-618:
+task 12 'create-checkpoint'. lines 612-612:
 Checkpoint created: 4
 
-task 13 'run-graphql'. lines 620-799:
+task 13 'run-graphql'. lines 614-793:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -975,7 +975,7 @@ Response: {
   }
 }
 
-task 14 'run-graphql'. lines 801-811:
+task 14 'run-graphql'. lines 795-805:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1033,7 +1033,7 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 813-823:
+task 15 'run-graphql'. lines 807-817:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1051,7 +1051,7 @@ Response: {
   }
 }
 
-task 16 'run-graphql'. lines 825-835:
+task 16 'run-graphql'. lines 819-829:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1101,7 +1101,7 @@ Response: {
   }
 }
 
-task 17 'run-graphql'. lines 837-844:
+task 17 'run-graphql'. lines 831-838:
 Response: {
   "data": {
     "address": {
@@ -1112,7 +1112,7 @@ Response: {
   }
 }
 
-task 18 'run-graphql'. lines 846-851:
+task 18 'run-graphql'. lines 840-845:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1128,7 +1128,7 @@ Response: {
   }
 }
 
-task 19 'run-graphql'. lines 853-858:
+task 19 'run-graphql'. lines 847-852:
 Response: {
   "data": {
     "transactionBlocks": {
@@ -1144,7 +1144,7 @@ Response: {
   }
 }
 
-task 20 'run-graphql'. lines 860-870:
+task 20 'run-graphql'. lines 854-864:
 Response: {
   "data": {
     "transactionBlocks": {

@@ -4,7 +4,8 @@
 use anyhow::Result;
 use clap::Parser;
 use suioplib::cli::{
-    incidents_cmd, pulumi_cmd, service_cmd, IncidentsArgs, PulumiArgs, ServiceArgs,
+    ci_cmd, docker_cmd, iam_cmd, incidents_cmd, pulumi_cmd, service_cmd, CIArgs, DockerArgs,
+    IAMArgs, IncidentsArgs, PulumiArgs, ServiceArgs,
 };
 use tracing_subscriber::{
     filter::{EnvFilter, LevelFilter},
@@ -21,12 +22,18 @@ pub(crate) struct SuiOpArgs {
 
 #[derive(clap::Subcommand, Debug)]
 pub(crate) enum Resource {
+    #[clap()]
+    Docker(DockerArgs),
+    #[clap()]
+    Iam(IAMArgs),
     #[clap(aliases = ["inc", "i"])]
     Incidents(IncidentsArgs),
     #[clap(aliases = ["p"])]
     Pulumi(PulumiArgs),
     #[clap(aliases = ["s", "svc"])]
     Service(ServiceArgs),
+    #[clap()]
+    CI(CIArgs),
 }
 
 #[tokio::main(flavor = "current_thread")]
@@ -43,6 +50,12 @@ async fn main() -> Result<()> {
 
     let args = SuiOpArgs::parse();
     match args.resource {
+        Resource::Docker(args) => {
+            docker_cmd(&args).await?;
+        }
+        Resource::Iam(args) => {
+            iam_cmd(&args).await?;
+        }
         Resource::Incidents(args) => {
             incidents_cmd(&args).await?;
         }
@@ -51,6 +64,9 @@ async fn main() -> Result<()> {
         }
         Resource::Service(args) => {
             service_cmd(&args).await?;
+        }
+        Resource::CI(args) => {
+            ci_cmd(&args).await?;
         }
     }
 

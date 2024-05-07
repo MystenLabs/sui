@@ -42,7 +42,7 @@ pub trait ControlFlowGraph {
     /// Checks if the block ID is a loop head
     fn is_loop_head(&self, block_id: BlockId) -> bool;
 
-    /// Checks if the the edge from cur->next is a back edge
+    /// Checks if the edge from cur->next is a back edge
     /// returns false if the edge is not in the cfg
     fn is_back_edge(&self, cur: BlockId, next: BlockId) -> bool;
 

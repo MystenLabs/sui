@@ -12,6 +12,7 @@ pub enum AttributePosition {
     Friend,
     Constant,
     Struct,
+    Enum,
     Function,
     Spec,
 }
@@ -158,6 +159,7 @@ impl TestingAttribute {
                 AttributePosition::Friend,
                 AttributePosition::Constant,
                 AttributePosition::Struct,
+                AttributePosition::Enum,
                 AttributePosition::Function,
             ])
         });
@@ -201,6 +203,7 @@ impl VerificationAttribute {
                 AttributePosition::Friend,
                 AttributePosition::Constant,
                 AttributePosition::Struct,
+                AttributePosition::Enum,
                 AttributePosition::Function,
             ])
         });
@@ -245,6 +248,7 @@ impl DiagnosticAttribute {
                 AttributePosition::Module,
                 AttributePosition::Constant,
                 AttributePosition::Struct,
+                AttributePosition::Enum,
                 AttributePosition::Function,
             ])
         });
@@ -330,6 +334,7 @@ impl fmt::Display for AttributePosition {
             Self::Friend => write!(f, "friend"),
             Self::Constant => write!(f, "constant"),
             Self::Struct => write!(f, "struct"),
+            Self::Enum => write!(f, "enum"),
             Self::Function => write!(f, "function"),
             Self::Spec => write!(f, "spec"),
         }

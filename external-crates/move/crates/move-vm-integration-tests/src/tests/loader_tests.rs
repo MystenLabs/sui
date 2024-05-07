@@ -395,6 +395,7 @@ fn get_relinker_tests_modules_with_deps<'s>(
     }
 
     let (_, units) = Compiler::from_files(
+        None,
         vec![fixture_string_path(module)],
         deps.into_iter().map(fixture_string_path).collect(),
         BTreeMap::<String, _>::new(),

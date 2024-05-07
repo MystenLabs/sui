@@ -10,26 +10,11 @@ module sui_system::validator {
     use sui_system::validator_cap::{Self, ValidatorOperationCap};
     use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
     use std::string::String;
-    use sui::transfer;
     use sui::url::Url;
     use sui::url;
     use sui::event;
     use sui::bag::Bag;
     use sui::bag;
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-    /* friend sui_system::validator_wrapper; */
-    /* friend sui_system::validator_set; */
-    /* friend sui_system::voting_power; */
-
-    /* #[test_only] */
-    /* friend sui_system::validator_tests; */
-    /* #[test_only] */
-    /* friend sui_system::validator_set_tests; */
-    /* #[test_only] */
-    /* friend sui_system::sui_system_tests; */
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
 
     /// Invalid proof_of_possession field in ValidatorMetadata
     const EInvalidProofOfPossession: u64 = 0;

@@ -5,7 +5,7 @@
 	"publisher": "mysten",
 	"icon": "images/move.png",
 	"license": "Apache-2.0",
-	"version": "1.0.0",
+	"version": "0.0.3",
 	"preview": true,
 	"repository": {
 		"url": "https://github.com/MystenLabs/sui.git",
@@ -22,7 +22,8 @@
 	],
 	"keywords": [
 		"move",
-		"Sui"
+		"Sui",
+		"Mysten"
 	],
 	"main": "./out/src/main.js",
 	"activationEvents": [
@@ -35,18 +36,33 @@
 				"command": "move.serverVersion",
 				"title": "Show Server Version",
 				"category": "Move"
+			},
+			{
+				"command": "move.build",
+				"title": "Build a Move package",
+				"category": "Move"
+			},
+			{
+				"command": "move.test",
+				"title": "Test a Move package",
+				"category": "Move"
 			}
 		],
 		"configuration": {
 			"type": "object",
 			"title": "Move",
 			"properties": {
-				"move.lint": {
-                    "type": "boolean",
-                    "default": true,
-                    "markdownDescription": "Enable Move source code linting."
+                "move.lint": {
+                    "type": "string",
+                    "enum": [
+                        "default",
+                        "all",
+                        "none"
+                    ],
+                    "default": "default",
+                    "markdownDescription": "Move source code linting level."
                 },
-				"move.server.path": {
+                "move.server.path": {
                     "type": [
                         "null",
                         "string"
@@ -54,6 +70,15 @@
                     "scope": "machine-overridable",
                     "default": null,
                     "markdownDescription": "Path to rust-analyzer executable (points to `~/.sui/bin/move-analyzer` by default)."
+				},
+				"move.sui.path": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "scope": "machine-overridable",
+                    "default": null,
+                    "markdownDescription": "Path to Sui executable (by default assumes that `sui` is on the systems path)."
 				},
 				"move.trace.server": {
 					"type": "string",
@@ -89,7 +114,13 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "move.serverVersion"
+					"command": "sui.serverVersion"
+				},
+				{
+					"command": "sui.build"
+				},
+				{
+					"command": "sui.test"
 				}
 			]
 		}

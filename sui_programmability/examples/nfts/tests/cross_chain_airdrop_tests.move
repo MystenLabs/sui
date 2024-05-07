@@ -4,7 +4,6 @@
 #[test_only]
 module nfts::cross_chain_airdrop_tests {
     use nfts::cross_chain_airdrop::{Self, CrossChainAirdropOracle, ERC721};
-    use sui::object::{UID};
     use sui::test_scenario::{Self, Scenario};
 
     // Error codes
@@ -19,13 +18,13 @@ module nfts::cross_chain_airdrop_tests {
     const NAME: vector<u8> = b"BoredApeYachtClub";
     const TOKEN_URI: vector<u8> = b"ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
 
-    struct Object has key {
+    public struct Object has key {
         id: UID,
     }
 
     #[test]
     fun test_claim_airdrop() {
-        let (scenario, oracle_address) = init_scenario();
+        let (mut scenario, oracle_address) = init_scenario();
 
         // claim a token
         claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
@@ -38,7 +37,7 @@ module nfts::cross_chain_airdrop_tests {
     #[test]
     #[expected_failure(abort_code = cross_chain_airdrop::ETokenIDClaimed)]
     fun test_double_claim() {
-        let (scenario, oracle_address) = init_scenario();
+        let (mut scenario, oracle_address) = init_scenario();
 
         // claim a token
         claim_token(&mut scenario, oracle_address, SOURCE_TOKEN_ID);
@@ -49,7 +48,7 @@ module nfts::cross_chain_airdrop_tests {
     }
 
     fun init_scenario(): (Scenario, address) {
-        let scenario = test_scenario::begin(ORACLE_ADDRESS);
+        let mut scenario = test_scenario::begin(ORACLE_ADDRESS);
         {
             let ctx = test_scenario::ctx(&mut scenario);
             cross_chain_airdrop::test_init(ctx);
@@ -60,7 +59,7 @@ module nfts::cross_chain_airdrop_tests {
     fun claim_token(scenario: &mut Scenario, oracle_address: address, token_id: u64) {
         test_scenario::next_tx(scenario, oracle_address);
         {
-            let oracle = test_scenario::take_from_sender<CrossChainAirdropOracle>(scenario);
+            let mut oracle = test_scenario::take_from_sender<CrossChainAirdropOracle>(scenario);
             let ctx = test_scenario::ctx(scenario);
             cross_chain_airdrop::claim(
                 &mut oracle,

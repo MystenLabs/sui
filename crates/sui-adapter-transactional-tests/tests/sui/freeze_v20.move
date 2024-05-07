@@ -9,9 +9,6 @@
 
 module test::object_basics {
     use sui::event;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
 
     public struct Object has key, store {
         id: UID,

@@ -16,8 +16,8 @@ chrono.workspace = true
 serde_with.workspace = true
 clap.workspace = true
 tap.workspace = true
-diesel.workspace = true
-diesel-derive-enum.workspace = true
+diesel = { workspace = true, optional = true }
+diesel-derive-enum = { workspace = true, optional = true }
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
@@ -26,13 +26,16 @@ serde.workspace = true
 serde_json.workspace = true
 rayon.workspace = true
 regex.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
 url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-json.workspace = true
 sui-json-rpc.workspace = true
 sui-json-rpc-api.workspace = true
@@ -52,9 +55,14 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
+secrecy = "0.8.0"
+downcast = "0.11.0"
 
 [features]
 pg_integration = []
+default = ["postgres-feature"]
+postgres-feature = ["diesel/postgres", "diesel/postgres_backend", "diesel-derive-enum/postgres"]
+mysql-feature = ["diesel/mysql", "diesel/mysql_backend", "diesel-derive-enum/mysql"]
 
 [dev-dependencies]
 sui-keys.workspace = true

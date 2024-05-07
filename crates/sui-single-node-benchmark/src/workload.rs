@@ -40,6 +40,10 @@ impl Workload {
                 use_native_transfer,
                 num_dynamic_fields,
                 computation,
+                num_shared_objects,
+                num_mints,
+                nft_size,
+                use_batch_mint,
             } => {
                 let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 path.extend(["move_package"]);
@@ -47,12 +51,19 @@ impl Workload {
                 let root_objects = ctx
                     .preparing_dynamic_fields(move_package.0, *num_dynamic_fields)
                     .await;
+                let shared_objects = ctx
+                    .prepare_shared_objects(move_package.0, *num_shared_objects)
+                    .await;
                 Arc::new(MoveTxGenerator::new(
                     move_package.0,
                     *num_transfers,
                     *use_native_transfer,
                     *computation,
                     root_objects,
+                    shared_objects,
+                    *num_mints,
+                    *nft_size,
+                    *use_batch_mint,
                 ))
             }
             WorkloadKind::Publish {

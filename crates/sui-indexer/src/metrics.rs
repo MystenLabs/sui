@@ -93,6 +93,10 @@ pub struct IndexerMetrics {
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     pub latest_object_snapshot_sequence_number: IntGauge,
+    // lag starting from the timestamp of the latest checkpoint to the current time
+    pub download_lag_ms: IntGauge,
+    pub index_lag_ms: IntGauge,
+    pub db_commit_lag_ms: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
     pub checkpoint_download_bytes_size: IntGauge,
@@ -101,6 +105,7 @@ pub struct IndexerMetrics {
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
+    pub indexing_batch_size: IntGauge,
     pub indexing_tx_object_changes_latency: Histogram,
     pub indexing_objects_latency: Histogram,
     pub indexing_get_object_in_mem_hit: IntCounter,
@@ -115,8 +120,10 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_transactions_chunks: Histogram,
     pub checkpoint_db_commit_latency_transactions_chunks_transformation: Histogram,
     pub checkpoint_db_commit_latency_objects: Histogram,
+    pub checkpoint_db_commit_latency_objects_snapshot: Histogram,
     pub checkpoint_db_commit_latency_objects_history: Histogram,
     pub checkpoint_db_commit_latency_objects_chunks: Histogram,
+    pub checkpoint_db_commit_latency_objects_snapshot_chunks: Histogram,
     pub checkpoint_db_commit_latency_objects_history_chunks: Histogram,
     pub checkpoint_db_commit_latency_events: Histogram,
     pub checkpoint_db_commit_latency_events_chunks: Histogram,
@@ -242,6 +249,21 @@ impl IndexerMetrics {
                 "Latest object snapshot sequence number from the Indexer",
                 registry,
             ).unwrap(),
+            download_lag_ms: register_int_gauge_with_registry!(
+                "download_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            index_lag_ms: register_int_gauge_with_registry!(
+                "index_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            db_commit_lag_ms: register_int_gauge_with_registry!(
+                "db_commit_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
             checkpoint_download_bytes_size: register_int_gauge_with_registry!(
                 "checkpoint_download_bytes_size",
                 "Size of the downloaded checkpoint in bytes",
@@ -283,6 +305,11 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            indexing_batch_size: register_int_gauge_with_registry!(
+                "indexing_batch_size",
+                "Size of the indexing batch",
+                registry,
+            ).unwrap(),
             indexing_tx_object_changes_latency: register_histogram_with_registry!(
                 "indexing_tx_object_changes_latency",
                 "Time spent in indexing object changes for a transaction",
@@ -378,6 +405,13 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_db_commit_latency_objects_snapshot: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_snapshot",
+                "Time spent commiting objects snapshots",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
             checkpoint_db_commit_latency_objects_history: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_objects_history",
                 "Time spent commiting objects history",
@@ -387,6 +421,13 @@ impl IndexerMetrics {
             checkpoint_db_commit_latency_objects_chunks: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_objects_chunks",
                 "Time spent commiting objects chunks",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_objects_snapshot_chunks: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_snapshot_chunks",
+                "Time spent commiting objects snapshot chunks",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )

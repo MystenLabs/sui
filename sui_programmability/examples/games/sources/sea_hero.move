@@ -9,16 +9,13 @@
 /// Note that this mod does not require special permissions from `Hero` module;
 /// anyone is free to create a mod like this.
 module games::sea_hero {
-    use games::hero::{Self, Hero};
+    use games::hero::Hero;
 
     use sui::balance::{Self, Balance, Supply};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
-    struct SeaHeroAdmin has key {
+    public struct SeaHeroAdmin has key {
         id: UID,
         /// Permission to mint RUM
         supply: Supply<RUM>,
@@ -31,14 +28,14 @@ module games::sea_hero {
     }
 
     /// A new kind of monster for the hero to fight
-    struct SeaMonster has key, store {
+    public struct SeaMonster has key, store {
         id: UID,
         /// Tokens that the user will earn for slaying this monster
         reward: Balance<RUM>
     }
 
     /// Type of the sea game token
-    struct RUM has drop {}
+    public struct RUM has drop {}
 
     // TODO: proper error codes
     /// Hero is not strong enough to defeat the monster. Try healing with a
@@ -62,7 +59,7 @@ module games::sea_hero {
                 token_supply_max: 1000000,
                 monster_max: 10,
             },
-            tx_context::sender(ctx)
+            ctx.sender()
         )
     }
 
@@ -77,7 +74,7 @@ module games::sea_hero {
         // Hero needs strength greater than the reward value to defeat the
         // monster
         assert!(
-            hero::hero_strength(hero) >= balance::value(&reward),
+            hero.strength() >= reward.value(),
             EHERO_NOT_STRONG_ENOUGH
         );
 
@@ -94,7 +91,7 @@ module games::sea_hero {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let current_coin_supply = balance::supply_value(&admin.supply);
+        let current_coin_supply = admin.supply.supply_value();
         let token_supply_max = admin.token_supply_max;
         // TODO: create error codes
         // ensure token supply cap is respected
@@ -105,7 +102,7 @@ module games::sea_hero {
 
         let monster = SeaMonster {
             id: object::new(ctx),
-            reward: balance::increase_supply(&mut admin.supply, reward_amount),
+            reward: admin.supply.increase_supply(reward_amount),
         };
         admin.monsters_created = admin.monsters_created + 1;
 
@@ -114,6 +111,6 @@ module games::sea_hero {
 
     /// Reward a hero will reap from slaying this monster
     public fun monster_reward(monster: &SeaMonster): u64 {
-        balance::value(&monster.reward)
+        monster.reward.value()
     }
 }

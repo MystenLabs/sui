@@ -67,6 +67,9 @@ describe('Multisig scenarios', () => {
 		expect(await k3.getPublicKey().verifyTransactionBlock(bytes, signature)).toEqual(true);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey2 = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// multisig (sig3 weight 3 >= threshold ) verifies ok
@@ -132,6 +135,9 @@ describe('Multisig scenarios', () => {
 		).toThrowError(new Error('Received signature from unknown public key'));
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		await expect(publicKey.verifyPersonalMessage(signData, multisig)).rejects.toThrow(
@@ -194,6 +200,9 @@ describe('Multisig scenarios', () => {
 		).toThrowError(new Error('Received multiple signatures from the same public key'));
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		await expect(publicKey.verifyPersonalMessage(signData, multisig)).rejects.toThrow(
@@ -265,6 +274,9 @@ describe('Multisig scenarios', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig2.signature, sig1.signature]);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Invalid order can't be verified.
@@ -301,6 +313,9 @@ describe('Multisig scenarios', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Invalid intentScope.
@@ -337,6 +352,9 @@ describe('Multisig scenarios', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([]);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Rejects verification.

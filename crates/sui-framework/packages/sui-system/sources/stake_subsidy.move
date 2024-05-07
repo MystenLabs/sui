@@ -8,12 +8,6 @@ module sui_system::stake_subsidy {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
-
     public struct StakeSubsidy has store {
         /// Balance of SUI set aside for stake subsidies that will be drawn down over time.
         balance: Balance<SUI>,
@@ -49,7 +43,7 @@ module sui_system::stake_subsidy {
     ): StakeSubsidy {
         // Rate can't be higher than 100%.
         assert!(
-            stake_subsidy_decrease_rate <= (BASIS_POINT_DENOMINATOR as u16),
+            stake_subsidy_decrease_rate <= BASIS_POINT_DENOMINATOR as u16,
             ESubsidyDecreaseRateTooLarge,
         );
 
@@ -77,7 +71,7 @@ module sui_system::stake_subsidy {
 
         // Decrease the subsidy amount only when the current period ends.
         if (self.distribution_counter % self.stake_subsidy_period_length == 0) {
-            let decrease_amount = (self.current_distribution_amount as u128)
+            let decrease_amount = self.current_distribution_amount as u128
                 * (self.stake_subsidy_decrease_rate as u128) / BASIS_POINT_DENOMINATOR;
             self.current_distribution_amount = self.current_distribution_amount - (decrease_amount as u64)
         };

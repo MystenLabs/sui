@@ -4,9 +4,6 @@
 /// The Safe standard is a minimalistic shared wrapper around a coin. It provides a way for users to provide third-party dApps with
 /// the capability to transfer coins away from their wallets, if they are provided with the correct permission.
 module utils::safe {
-    use sui::object::{Self, ID, UID};
-    use sui::tx_context::{TxContext, sender};
-    use sui::transfer;
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
     use sui::vec_set::{Self, VecSet};
@@ -23,13 +20,13 @@ module utils::safe {
     ///
     /// @ownership: Shared
     ///
-    struct Safe<phantom T> has key {
+    public struct Safe<phantom T> has key {
         id: UID,
         balance: Balance<T>,
         allowed_safes: VecSet<ID>,
     }
 
-    struct OwnerCapability<phantom T> has key, store {
+    public struct OwnerCapability<phantom T> has key, store {
         id: UID,
         safe_id: ID,
     }
@@ -39,7 +36,7 @@ module utils::safe {
     ///
     /// @ownership: Owned
     ///
-    struct TransferCapability<phantom T> has store, key {
+    public struct TransferCapability<phantom T> has store, key {
         id: UID,
         safe_id: ID,
         // The amount that the user is able to transfer.
@@ -103,13 +100,13 @@ module utils::safe {
     public entry fun create<T>(coin: Coin<T>, ctx: &mut TxContext) {
         let balance = coin::into_balance(coin);
         let cap = create_<T>(balance, ctx);
-        transfer::public_transfer(cap, sender(ctx));
+        transfer::public_transfer(cap, ctx.sender());
     }
 
     public entry fun create_empty<T>(ctx: &mut TxContext) {
         let empty_balance = balance::zero<T>();
         let cap = create_(empty_balance, ctx);
-        transfer::public_transfer(cap, sender(ctx));
+        transfer::public_transfer(cap, ctx.sender());
     }
 
     /// Deposit funds to the safe
@@ -134,7 +131,7 @@ module utils::safe {
     public entry fun withdraw<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, withdraw_amount: u64, ctx: &mut TxContext) {
         let balance = withdraw_(safe, capability, withdraw_amount);
         let coin = coin::from_balance(balance, ctx);
-        transfer::public_transfer(coin, sender(ctx));
+        transfer::public_transfer(coin, ctx.sender());
     }
 
     /// Withdraw coins from the safe as a `TransferCapability` holder.

@@ -3,9 +3,6 @@ title: Asset Tokenization
 description: Learn how to tokenize assets on the Sui blockchain. Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network.
 ---
 
-import TabItem from '@theme/TabItem';
-import Tabs from '@theme/Tabs';
-
 Asset tokenization refers to the process of representing real-world assets, such as real estate, art, commodities, stocks, or other valuable assets, as digital tokens on the blockchain network. This involves converting the ownership or rights of an asset into digital tokens, which are then recorded and managed on the blockchain.
 
 ## High-level overview
@@ -804,12 +801,10 @@ Before proceeding to how to make these edits, it's important to understand how t
 xxd -c 0 -p build/template/bytecode_modules/template.mv | head -n 1 
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show response
+  Toggle response
   </summary>
-```
 
 The response you should receive looks similar to the following:
 
@@ -837,9 +832,8 @@ a6563740f7075626c69635f7472616e736665720673656e64657204736f6d6506737472696e
 050a0138020c040c030b0438030b030b012e110838040200
 ```
 
-```mdx-code-block
 </details>
-```
+
 
 Copy the output you receive and paste it in the return instruction of the `getBytecode` method, which is located inside the [bytecode-template.ts](https://github.com/MystenLabs/asset-tokenization/blob/main/setup/src/utils/bytecode-template.ts) file.
 

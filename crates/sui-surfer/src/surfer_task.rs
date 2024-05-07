@@ -29,6 +29,7 @@ impl SurferTask {
         cluster: Arc<TestCluster>,
         seed: u64,
         exit_rcv: watch::Receiver<()>,
+        skip_accounts: usize,
     ) -> Vec<SurferTask> {
         let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
@@ -37,16 +38,16 @@ impl SurferTask {
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
             .get_addresses()
             .iter()
+            .skip(skip_accounts)
             .map(|address| (*address, (None, HashMap::new())))
             .collect();
-        let validator = cluster
+        let node = cluster
             .swarm
-            .validator_nodes()
+            .all_nodes()
+            .flat_map(|node| node.get_node_handle())
             .next()
-            .unwrap()
-            .get_node_handle()
             .unwrap();
-        let all_live_objects: Vec<_> = validator.with(|node| {
+        let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
                 .get_execution_cache()
                 .iter_live_object_set(false)
@@ -100,10 +101,12 @@ impl SurferTask {
         let entry_functions = Arc::new(RwLock::new(vec![]));
         accounts
             .into_iter()
-            .map(|(address, (gas_object, owned_objects))| {
+            .enumerate()
+            .map(|(id, (address, (gas_object, owned_objects)))| {
                 let seed = rng.gen::<u64>();
                 let state_rng = StdRng::seed_from_u64(seed);
                 let state = SurferState::new(
+                    id,
                     cluster.clone(),
                     state_rng,
                     address,

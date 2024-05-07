@@ -103,7 +103,12 @@ impl Fetchers {
 
     pub fn into_remote(self) -> RemoteFetcher {
         match self {
-            Fetchers::Remote(q) => q,
+            Fetchers::Remote(q) => {
+                // Since `into_remote` is called when we use this fetcher to create a new fetcher,
+                // we should clear the cache to avoid using stale data.
+                q.clear_cache_for_new_task();
+                q
+            }
             Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
         }
     }
@@ -315,6 +320,12 @@ impl RemoteFetcher {
         }
 
         (cached, to_fetch)
+    }
+
+    pub fn clear_cache_for_new_task(&self) {
+        // Only the latest object cache cannot be reused across tasks.
+        // All other caches should be valid as long as the network doesn't change.
+        self.latest_object_cache.write().clear();
     }
 }
 

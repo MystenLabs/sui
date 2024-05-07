@@ -6,19 +6,24 @@ use crate::{
     db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand},
     download_db_snapshot, download_formal_snapshot, dump_checkpoints_from_archive,
     get_latest_available_epoch, get_object, get_transaction_block, make_clients, pkg_dump,
-    restore_from_db_checkpoint, state_sync_from_archive, verify_archive,
-    verify_archive_by_checksum, ConciseObjectOutput, GroupedObjectOutput, VerboseObjectOutput,
+    restore_from_db_checkpoint, verify_archive, verify_archive_by_checksum, ConciseObjectOutput,
+    GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
-use std::env;
+use futures::{future::join_all, StreamExt};
 use std::path::PathBuf;
+use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
+use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
 use telemetry_subscribers::TracingHandle;
 
-use sui_types::{base_types::*, object::Owner};
+use sui_types::{
+    base_types::*, crypto::AuthorityPublicKeyBytes, messages_grpc::TransactionInfoRequest,
+    object::Owner,
+};
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
@@ -37,32 +42,28 @@ pub enum Verbosity {
     Concise,
     Verbose,
 }
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
-    }
-};
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 #[derive(Parser)]
-#[command(
-    name = "sui-tool",
-    about = "Debugging utilities for sui",
-    rename_all = "kebab-case",
-    author,
-    version = VERSION,
-)]
 pub enum ToolCommand {
+    /// Inspect if a specific object is or all gas objects owned by an address are locked by validators
+    #[command(name = "locked-object")]
+    LockedObject {
+        /// Either id or address must be provided
+        /// The object to check
+        #[arg(long, help = "The object ID to fetch")]
+        id: Option<ObjectID>,
+        /// Either id or address must be provided
+        /// If provided, check all gas objects owned by this account
+        #[arg(long = "address")]
+        address: Option<SuiAddress>,
+        /// RPC address to provide the up-to-date committee info
+        #[arg(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: String,
+        /// Should attempt to rescue the object if it's locked but not fully locked
+        #[arg(long = "rescue")]
+        rescue: bool,
+    },
+
     /// Fetch the same object from all validators
     #[command(name = "fetch-object")]
     FetchObject {
@@ -78,14 +79,9 @@ pub enum ToolCommand {
         )]
         validator: Option<AuthorityName>,
 
-        // At least one of genesis or fullnode_rpc_url must be provided
-        #[arg(long = "genesis")]
-        genesis: Option<PathBuf>,
-
-        // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
-        fullnode_rpc_url: Option<String>,
+        fullnode_rpc_url: String,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -113,14 +109,9 @@ pub enum ToolCommand {
     /// Fetch the effects association with transaction `digest`
     #[command(name = "fetch-transaction")]
     FetchTransaction {
-        // At least one of genesis or fullnode_rpc_url must be provided
-        #[arg(long = "genesis")]
-        genesis: Option<PathBuf>,
-
-        // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
-        fullnode_rpc_url: Option<String>,
+        fullnode_rpc_url: String,
 
         #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -138,19 +129,6 @@ pub enum ToolCommand {
         db_path: String,
         #[command(subcommand)]
         cmd: Option<DbToolCommand>,
-    },
-
-    /// Tool to sync the node from archive store
-    #[command(name = "sync-from-archive")]
-    SyncFromArchive {
-        #[arg(long = "genesis")]
-        genesis: PathBuf,
-        #[arg(long = "db-path")]
-        db_path: PathBuf,
-        #[command(flatten)]
-        object_store_config: ObjectStoreConfig,
-        #[arg(default_value_t = 5)]
-        download_concurrency: usize,
     },
 
     /// Tool to verify the archive store
@@ -242,14 +220,9 @@ pub enum ToolCommand {
     /// If sequence number is not specified, get the latest authenticated checkpoint.
     #[command(name = "fetch-checkpoint")]
     FetchCheckpoint {
-        // At least one of genesis or fullnode_rpc_url must be provided
-        #[arg(long = "genesis")]
-        genesis: Option<PathBuf>,
-
-        // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
-        fullnode_rpc_url: Option<String>,
+        fullnode_rpc_url: String,
 
         #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -274,9 +247,12 @@ pub enum ToolCommand {
         about = "Downloads the legacy database snapshot via cloud object store, outputs to local disk"
     )]
     DownloadDBSnapshot {
-        #[clap(long = "epoch")]
+        #[clap(long = "epoch", conflicts_with = "latest")]
         epoch: Option<u64>,
-        #[clap(long = "path", default_value = "/tmp")]
+        #[clap(
+            long = "path",
+            help = "the path to write the downloaded snapshot files"
+        )]
         path: PathBuf,
         /// skip downloading indexes dir
         #[clap(long = "skip-indexes")]
@@ -292,11 +268,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket")]
+        #[clap(long = "snapshot-bucket", group = "auth")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
+            group = "auth",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -310,12 +287,17 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+            conflicts_with = "auth",
+            help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
         /// Download snapshot of the latest available epoch.
         /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(long = "latest")]
+        #[clap(
+            long = "latest",
+            conflicts_with = "epoch",
+            help = "defaults to latest available snapshot in chosen bucket"
+        )]
         latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -331,11 +313,11 @@ pub enum ToolCommand {
         about = "Downloads formal database snapshot via cloud object store, outputs to local disk"
     )]
     DownloadFormalSnapshot {
-        #[clap(long = "epoch")]
+        #[clap(long = "epoch", conflicts_with = "latest")]
         epoch: Option<u64>,
         #[clap(long = "genesis")]
         genesis: PathBuf,
-        #[clap(long = "path", default_value = "/tmp")]
+        #[clap(long = "path")]
         path: PathBuf,
         /// Number of parallel downloads to perform. Defaults to a reasonable
         /// value based on number of available logical cores.
@@ -352,11 +334,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket")]
+        #[clap(long = "snapshot-bucket", group = "auth")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
+            group = "auth",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -373,12 +356,17 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            help = "if set, --snapshot-bucket and --snapshot-bucket-type are ignored"
+            conflicts_with = "auth",
+            help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
         /// Download snapshot of the latest available epoch.
         /// If `--epoch` is specified, then this flag gets ignored.
-        #[clap(long = "latest")]
+        #[clap(
+            long = "latest",
+            conflicts_with = "epoch",
+            help = "defaults to latest available snapshot in chosen bucket"
+        )]
         latest: bool,
         /// If false (default), log level will be overridden to "off",
         /// and output will be reduced to necessary status information.
@@ -394,8 +382,20 @@ pub enum ToolCommand {
         safety_checks: bool,
         #[arg(long = "authority")]
         use_authority: bool,
-        #[arg(long = "cfg-path", short)]
+        #[arg(
+            long = "cfg-path",
+            short,
+            help = "Path to the network config file. This should be specified when rpc_url is not present. \
+            If not specified we will use the default network config file at ~/.sui-replay/network-config.yaml"
+        )]
         cfg_path: Option<PathBuf>,
+        #[arg(
+            long,
+            help = "The name of the chain to replay from, could be one of: mainnet, testnet, devnet.\
+            When rpc_url is not specified, this is used to load the corresponding config from the network config file.\
+            If not specified, mainnet will be used by default"
+        )]
+        chain: Option<String>,
         #[command(subcommand)]
         cmd: ReplayToolCommand,
     },
@@ -467,24 +467,142 @@ impl std::fmt::Display for OwnerOutput {
     }
 }
 
+async fn check_locked_object(
+    sui_client: &Arc<SuiClient>,
+    committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
+    id: ObjectID,
+    rescue: bool,
+) -> anyhow::Result<()> {
+    let clients = Arc::new(make_clients(sui_client).await?);
+    let output = get_object(id, None, None, clients.clone()).await?;
+    let output = GroupedObjectOutput::new(output, committee);
+    if output.fully_locked {
+        println!("Object {} is fully locked.", id);
+        return Ok(());
+    }
+    let top_record = output.voting_power.first().unwrap();
+    let top_record_stake = top_record.1;
+    let top_record = top_record.0.unwrap();
+    if top_record.4.is_none() {
+        println!(
+            "Object {} does not seem to be locked by majority of validators (unlocked stake: {})",
+            id, top_record_stake
+        );
+        return Ok(());
+    }
+
+    let tx_digest = top_record.2;
+    if !rescue {
+        println!("Object {} is rescueable, top tx: {:?}", id, tx_digest);
+        return Ok(());
+    }
+    println!("Object {} is rescueable, trying tx {}", id, tx_digest);
+    let validator = output
+        .grouped_results
+        .get(&Some(top_record))
+        .unwrap()
+        .first()
+        .unwrap();
+    let client = &clients.get(validator).unwrap().1;
+    let tx = client
+        .handle_transaction_info_request(TransactionInfoRequest {
+            transaction_digest: tx_digest,
+        })
+        .await?
+        .transaction;
+    let res = sui_client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            Transaction::new(tx),
+            SuiTransactionBlockResponseOptions::full_content(),
+            None,
+        )
+        .await;
+    match res {
+        Ok(_) => {
+            println!("Transaction executed successfully ({:?})", tx_digest);
+        }
+        Err(e) => {
+            println!("Failed to execute transaction ({:?}): {:?}", tx_digest, e);
+        }
+    }
+    Ok(())
+}
+
 impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
     pub async fn execute(self, tracing_handle: TracingHandle) -> Result<(), anyhow::Error> {
         match self {
+            ToolCommand::LockedObject {
+                id,
+                fullnode_rpc_url,
+                rescue,
+                address,
+            } => {
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let committee = Arc::new(
+                    sui_client
+                        .governance_api()
+                        .get_committee_info(None)
+                        .await?
+                        .validators
+                        .into_iter()
+                        .collect::<BTreeMap<_, _>>(),
+                );
+                let object_ids = match id {
+                    Some(id) => vec![id],
+                    None => {
+                        let address = address.expect("Either id or address must be provided");
+                        sui_client
+                            .coin_read_api()
+                            .get_coins_stream(address, None)
+                            .map(|c| c.coin_object_id)
+                            .collect()
+                            .await
+                    }
+                };
+                for ids in object_ids.chunks(30) {
+                    let mut tasks = vec![];
+                    for id in ids {
+                        tasks.push(check_locked_object(
+                            &sui_client,
+                            committee.clone(),
+                            *id,
+                            rescue,
+                        ))
+                    }
+                    join_all(tasks)
+                        .await
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?;
+                }
+            }
             ToolCommand::FetchObject {
                 id,
                 validator,
-                genesis,
                 version,
                 fullnode_rpc_url,
                 verbosity,
                 concise_no_header,
             } => {
-                let output = get_object(id, version, validator, genesis, fullnode_rpc_url).await?;
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let clients = Arc::new(make_clients(&sui_client).await?);
+                let output = get_object(id, version, validator, clients).await?;
 
                 match verbosity {
                     Verbosity::Grouped => {
-                        println!("{}", GroupedObjectOutput(output));
+                        let committee = Arc::new(
+                            sui_client
+                                .governance_api()
+                                .get_committee_info(None)
+                                .await?
+                                .validators
+                                .into_iter()
+                                .collect::<BTreeMap<_, _>>(),
+                        );
+                        println!("{}", GroupedObjectOutput::new(output, committee));
                     }
                     Verbosity::Verbose => {
                         println!("{}", VerboseObjectOutput(output));
@@ -498,14 +616,13 @@ impl ToolCommand {
                 }
             }
             ToolCommand::FetchTransaction {
-                genesis,
                 digest,
                 show_input_tx,
                 fullnode_rpc_url,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, genesis, show_input_tx, fullnode_rpc_url).await?
+                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -551,11 +668,12 @@ impl ToolCommand {
                 println!("{:#?}", genesis);
             }
             ToolCommand::FetchCheckpoint {
-                genesis,
                 sequence_number,
                 fullnode_rpc_url,
             } => {
-                let clients = make_clients(genesis, fullnode_rpc_url).await?;
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let clients = make_clients(&sui_client).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client
@@ -646,7 +764,7 @@ impl ToolCommand {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
-                        .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
+                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
                 };
                 let snapshot_store_config = match snapshot_bucket_type {
                     ObjectStoreType::S3 => ObjectStoreConfig {
@@ -828,7 +946,7 @@ impl ToolCommand {
                     ObjectStoreType::S3
                 } else {
                     snapshot_bucket_type
-                        .expect("--snapshot-bucket-type must be set if not using --no-sign-request")
+                        .expect("You must set either --snapshot-bucket-type or --no-sign-request")
                 };
                 let snapshot_store_config = if no_sign_request {
                     let aws_endpoint = env::var("AWS_SNAPSHOT_ENDPOINT").ok().or_else(|| {
@@ -879,6 +997,8 @@ impl ToolCommand {
                                 "GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH",
                             )
                             .ok(),
+                            google_project_id: env::var("GCS_SNAPSHOT_SERVICE_ACCOUNT_PROJECT_ID")
+                                .ok(),
                             object_store_connection_limit: 200,
                             no_sign_request,
                             ..Default::default()
@@ -938,23 +1058,10 @@ impl ToolCommand {
                 cmd,
                 use_authority,
                 cfg_path,
+                chain,
             } => {
-                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, cmd)
+                execute_replay_command(rpc_url, safety_checks, use_authority, cfg_path, chain, cmd)
                     .await?;
-            }
-            ToolCommand::SyncFromArchive {
-                genesis,
-                db_path,
-                object_store_config,
-                download_concurrency,
-            } => {
-                state_sync_from_archive(
-                    &db_path,
-                    &genesis,
-                    object_store_config,
-                    download_concurrency,
-                )
-                .await?;
             }
             ToolCommand::VerifyArchive {
                 genesis,
@@ -1002,7 +1109,7 @@ impl ToolCommand {
                 let (agg, _) = AuthorityAggregatorBuilder::from_genesis(&genesis)
                     .build()
                     .unwrap();
-                let result = agg.process_transaction(transaction).await;
+                let result = agg.process_transaction(transaction, None).await;
                 println!("{:?}", result);
             }
         };

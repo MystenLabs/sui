@@ -19,12 +19,6 @@ module sui_system::sui_system_state_inner {
     use sui::bag::Bag;
     use sui::bag;
 
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system; */
-
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
-
     // same as in validator_set
     const ACTIVE_VALIDATOR_ONLY: u8 = 1;
     const ACTIVE_OR_PENDING_VALIDATOR: u8 = 2;
@@ -346,7 +340,7 @@ module sui_system::sui_system_state_inner {
         }
     }
 
-    // ==== public(friend) functions ====
+    // ==== public(package) functions ====
 
     /// Can be called by anyone who wishes to become a validator candidate and starts accuring delegated
     /// stakes in their staking pool. Once they have at least `MIN_VALIDATOR_JOINING_STAKE` amount of stake they
@@ -831,7 +825,7 @@ module sui_system::sui_system_state_inner {
         let prev_epoch_start_timestamp = self.epoch_start_timestamp_ms;
         self.epoch_start_timestamp_ms = epoch_start_timestamp_ms;
 
-        let bps_denominator_u64 = (BASIS_POINT_DENOMINATOR as u64);
+        let bps_denominator_u64 = BASIS_POINT_DENOMINATOR as u64;
         // Rates can't be higher than 100%.
         assert!(
             storage_fund_reinvest_rate <= bps_denominator_u64
@@ -876,15 +870,15 @@ module sui_system::sui_system_state_inner {
         let stake_subsidy_amount = stake_subsidy.value();
         computation_reward.join(stake_subsidy);
 
-        let total_stake_u128 = (total_stake as u128);
-        let computation_charge_u128 = (computation_charge as u128);
+        let total_stake_u128 = total_stake as u128;
+        let computation_charge_u128 = computation_charge as u128;
 
-        let storage_fund_reward_amount = (storage_fund_balance as u128) * computation_charge_u128 / total_stake_u128;
-        let mut storage_fund_reward = computation_reward.split((storage_fund_reward_amount as u64));
+        let storage_fund_reward_amount = storage_fund_balance as u128 * computation_charge_u128 / total_stake_u128;
+        let mut storage_fund_reward = computation_reward.split(storage_fund_reward_amount as u64);
         let storage_fund_reinvestment_amount =
             storage_fund_reward_amount * (storage_fund_reinvest_rate as u128) / BASIS_POINT_DENOMINATOR;
         let storage_fund_reinvestment = storage_fund_reward.split(
-            (storage_fund_reinvestment_amount as u64),
+            storage_fund_reinvestment_amount as u64,
         );
 
         self.epoch = self.epoch + 1;
@@ -939,7 +933,7 @@ module sui_system::sui_system_state_inner {
                 reference_gas_price: self.reference_gas_price,
                 total_stake: new_total_stake,
                 storage_charge,
-                storage_fund_reinvestment: (storage_fund_reinvestment_amount as u64),
+                storage_fund_reinvestment: storage_fund_reinvestment_amount as u64,
                 storage_rebate: storage_rebate_amount,
                 storage_fund_balance: self.storage_fund.total_balance(),
                 stake_subsidy_amount,

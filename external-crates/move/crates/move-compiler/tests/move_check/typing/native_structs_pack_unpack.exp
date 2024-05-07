@@ -34,7 +34,7 @@ error[E04001]: restricted visibility
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18
    │
 15 │         let _f = c.f;
-   │                  ^^^ Invalid access of field 'f' on '0x42::C::T'. Fields can only be accessed inside the struct's module
+   │                  ^^^ Invalid access of field 'f' on the struct '0x42::C::T'. The field 'f' can only be accessed within the module '0x42::C' since it defines 'T'
 
 error[E03010]: unbound field
    ┌─ tests/move_check/typing/native_structs_pack_unpack.move:15:18

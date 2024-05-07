@@ -3,30 +3,13 @@
 
 use clap::*;
 use colored::Colorize;
-use sui::client_commands::SuiClientCommands::{ProfileTransaction, ReplayTransaction};
+use sui::client_commands::SuiClientCommands::{ProfileTransaction, ReplayBatch, ReplayTransaction};
 use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-        version
-    }
-};
-
-const VERSION: &str = {
-    if GIT_REVISION.is_empty() {
-        env!("CARGO_PKG_VERSION")
-    } else {
-        const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION)
-    }
-};
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[derive(Parser)]
 #[clap(
@@ -57,6 +40,14 @@ async fn main() {
         }
 
         SuiCommand::Client {
+            cmd: Some(ReplayBatch { .. }),
+            ..
+        } => telemetry_subscribers::TelemetryConfig::new()
+            .with_log_level("info")
+            .with_env()
+            .init(),
+
+        SuiCommand::Client {
             cmd: Some(ReplayTransaction {
                 gas_info, ptb_info, ..
             }),
@@ -73,6 +64,7 @@ async fn main() {
             }
             config.init()
         }
+
         SuiCommand::Client {
             cmd: Some(ProfileTransaction { .. }),
             ..

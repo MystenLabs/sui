@@ -11,14 +11,14 @@ use crate::{
     entry_points_verifier, global_storage_access_verifier, id_leak_verifier,
     one_time_witness_verifier, private_generics, struct_with_key_verifier,
 };
-use move_bytecode_verifier::meter::DummyMeter;
-use move_bytecode_verifier::meter::Meter;
+use move_bytecode_verifier_meter::dummy::DummyMeter;
+use move_bytecode_verifier_meter::Meter;
 
 /// Helper for a "canonical" verification of a module.
 pub fn sui_verify_module_metered(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     struct_with_key_verifier::verify_module(module)?;
@@ -35,7 +35,7 @@ pub fn sui_verify_module_metered(
 pub fn sui_verify_module_metered_check_timeout_only(
     module: &CompiledModule,
     fn_info_map: &FnInfoMap,
-    meter: &mut impl Meter,
+    meter: &mut (impl Meter + ?Sized),
     verifier_config: &VerifierConfig,
 ) -> Result<(), ExecutionError> {
     // Checks if the error counts as a Sui verifier timeout

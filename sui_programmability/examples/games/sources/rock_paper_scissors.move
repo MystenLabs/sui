@@ -26,10 +26,6 @@
 // - If game owner never took or revealed the results (incentives?)
 
 module games::rock_paper_scissors {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-    use std::vector;
     use std::hash;
 
     // -- Gestures and additional consts -- //
@@ -54,7 +50,7 @@ module games::rock_paper_scissors {
 
     /// The Prize that's being held inside the [`Game`] object. Should be
     /// eventually replaced with some generic T inside the [`Game`].
-    struct ThePrize has key, store {
+    public struct ThePrize has key, store {
         id: UID
     }
 
@@ -63,7 +59,7 @@ module games::rock_paper_scissors {
     /// contains empty values and fills as the game progresses.
     /// Being destroyed in the end, once [`select_winner`] is called and the game
     /// has reached its final state by that time.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         prize: ThePrize,
         player_one: address,
@@ -77,7 +73,7 @@ module games::rock_paper_scissors {
     /// Hashed gesture. It is not reveal-able until both players have
     /// submitted their moves to the Game. The turn is passed to the
     /// game owner who then adds a hash to the Game object.
-    struct PlayerTurn has key {
+    public struct PlayerTurn has key {
         id: UID,
         hash: vector<u8>,
         player: address,
@@ -85,7 +81,7 @@ module games::rock_paper_scissors {
 
     /// Secret object which is used to reveal the move. Just like [`PlayerTurn`]
     /// it is used to reveal the actual gesture a player has submitted.
-    struct Secret has key {
+    public struct Secret has key {
         id: UID,
         salt: vector<u8>,
         player: address,
@@ -95,8 +91,8 @@ module games::rock_paper_scissors {
     /// entry point and limits the ability to select a winner, if one of the secrets hasn't
     /// been revealed yet.
     public fun status(game: &Game): u8 {
-        let h1_len = vector::length(&game.hash_one);
-        let h2_len = vector::length(&game.hash_two);
+        let h1_len = game.hash_one.length();
+        let h2_len = game.hash_two.length();
 
         if (game.gesture_one != NONE && game.gesture_two != NONE) {
             STATUS_REVEALED
@@ -127,7 +123,7 @@ module games::rock_paper_scissors {
             hash_two: vector[],
             gesture_one: NONE,
             gesture_two: NONE,
-        }, tx_context::sender(ctx));
+        }, ctx.sender());
     }
 
     /// Transfer [`PlayerTurn`] to the game owner. Nobody at this point knows what move
@@ -138,7 +134,7 @@ module games::rock_paper_scissors {
         transfer::transfer(PlayerTurn {
             hash,
             id: object::new(ctx),
-            player: tx_context::sender(ctx),
+            player: ctx.sender(),
         }, at);
     }
 
@@ -151,9 +147,9 @@ module games::rock_paper_scissors {
         assert!(status == STATUS_HASH_SUBMISSION || status == STATUS_READY, 0);
         assert!(game.player_one == player || game.player_two == player, 0);
 
-        if (player == game.player_one && vector::length(&game.hash_one) == 0) {
+        if (player == game.player_one && game.hash_one.length() == 0) {
             game.hash_one = hash;
-        } else if (player == game.player_two && vector::length(&game.hash_two) == 0) {
+        } else if (player == game.player_two && game.hash_two.length() == 0) {
             game.hash_two = hash;
         } else {
             abort 0 // unreachable!()
@@ -168,7 +164,7 @@ module games::rock_paper_scissors {
         transfer::transfer(Secret {
             id: object::new(ctx),
             salt,
-            player: tx_context::sender(ctx),
+            player: ctx.sender(),
         }, at);
     }
 
@@ -217,7 +213,7 @@ module games::rock_paper_scissors {
         } else if (p2_wins) {
             transfer::public_transfer(prize, player_two)
         } else {
-            transfer::public_transfer(prize, tx_context::sender(ctx))
+            transfer::public_transfer(prize, ctx.sender())
         };
     }
 
@@ -250,8 +246,8 @@ module games::rock_paper_scissors {
     /// - `salt` argument here is a secret that is only known to the sender. That way we ensure
     /// that nobody knows the gesture until the end, but at the same time each player commits
     /// to the result with his hash;
-    fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
-        vector::push_back(&mut salt, gesture);
+    fun hash(gesture: u8, mut salt: vector<u8>): vector<u8> {
+        salt.push_back(gesture);
         hash::sha2_256(salt)
     }
 }

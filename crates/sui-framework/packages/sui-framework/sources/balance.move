@@ -9,8 +9,6 @@ module sui::balance {
     /// Allows calling `.into_coin()` on a `Balance` to turn it into a coin.
     public use fun sui::coin::from_balance as Balance.into_coin;
 
-    /* friend sui::sui; */
-
     /// For when trying to destroy a non-zero balance.
     const ENonZero: u64 = 0;
     /// For when an overflow is happening on Supply operations.

@@ -3,9 +3,7 @@
 
 #[test_only]
 module deepbook::order_query_tests {
-    use std::option;
-    use std::option::{none, some, Option};
-    use std::vector;
+    use std::option::{none, some};
     use sui::clock;
     use deepbook::order_query;
     use deepbook::order_query::iter_bids;
@@ -22,7 +20,7 @@ module deepbook::order_query_tests {
     const CLIENT_ID_ALICE: u64 = 0;
     const FLOAT_SCALING: u64 = 1000000000;
     const CANCEL_OLDEST: u8 = 0;
-    const TIMESTAMP_INF: u64 = ((1u128 << 64 - 1) as u64);
+    const TIMESTAMP_INF: u64 = (1u128 << 64 - 1) as u64;
 
     const OWNER: address = @0xf;
     const ALICE: address = @0xBEEF;
@@ -308,10 +306,10 @@ module deepbook::order_query_tests {
         let account_cap = test_scenario::take_from_sender<AccountCap>(&scenario);
         let account_cap_user = account_owner(&account_cap);
         let (base_custodian, quote_custodian) = clob_v2::borrow_mut_custodian(&mut pool);
-        custodian_v2::deposit(base_custodian, mint_for_testing<SUI>(1000000, ctx(&mut scenario)), account_cap_user);
+        custodian_v2::deposit(base_custodian, mint_for_testing<SUI>(10000000, ctx(&mut scenario)), account_cap_user);
         custodian_v2::deposit(
             quote_custodian,
-            mint_for_testing<USD>(10000000, ctx(&mut scenario)),
+            mint_for_testing<USD>(100000000, ctx(&mut scenario)),
             account_cap_user
         );
         test_scenario::return_shared(pool);
@@ -336,7 +334,7 @@ module deepbook::order_query_tests {
                 &mut pool,
                 CLIENT_ID_ALICE,
                 price,
-                200,
+                2000,
                 CANCEL_OLDEST,
                 true,
                 timestamp,

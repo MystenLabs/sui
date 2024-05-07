@@ -363,17 +363,29 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx_digest = *tx.digest();
         let mut retry_cnt = 0;
         while retry_cnt < 3 {
-            let ticket = self.qd.submit_transaction(tx.clone()).await?;
+            let ticket = self
+                .qd
+                .submit_transaction(
+                    sui_types::quorum_driver_types::ExecuteTransactionRequestV3 {
+                        transaction: tx.clone(),
+                        include_events: true,
+                        include_input_objects: false,
+                        include_output_objects: false,
+                        include_auxiliary_data: false,
+                    },
+                )
+                .await?;
             // The ticket only times out when QuorumDriver exceeds the retry times
             match ticket.await {
                 Ok(resp) => {
                     let QuorumDriverResponse {
                         effects_cert,
                         events,
+                        ..
                     } = resp;
                     return Ok(ExecutionEffects::CertifiedTransactionEffects(
                         effects_cert.into(),
-                        events,
+                        events.unwrap_or_default(),
                     ));
                 }
                 Err(QuorumDriverError::NonRecoverableTransactionError { errors }) => {
@@ -405,7 +417,9 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
         let tx_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_transactions);
         let mut futures = FuturesUnordered::new();
         for (name, client) in self.clients.iter() {
-            let fut = client.handle_transaction(tx.clone()).map(|r| (r, *name));
+            let fut = client
+                .handle_transaction(tx.clone(), None)
+                .map(|r| (r, *name));
             futures.push(fut);
         }
         auth_agg
@@ -519,7 +533,7 @@ impl ValidatorProxy for LocalValidatorAggregatorProxy {
             let name = *name;
             futures.push(async move {
                 client
-                    .handle_certificate_v2(certificate)
+                    .handle_certificate_v2(certificate, None)
                     .map(move |r| (r, name))
                     .await
             });

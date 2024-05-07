@@ -9,14 +9,11 @@
 /// Anyone can play the game by betting on X SUI. They win X with probability 49% and lose the X SUI otherwise.
 ///
 module games::slot_machine {
-    use sui::balance::{Self, Balance};
+    use sui::balance::Balance;
     use sui::coin::{Self, Coin};
     use sui::math;
-    use sui::object::{Self, UID};
-    use sui::random::{Self, Random, new_generator};
+    use sui::random::{Random, new_generator};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Error codes
     const EInvalidAmount: u64 = 0;
@@ -24,7 +21,7 @@ module games::slot_machine {
     const EInvalidEpoch: u64 = 2;
 
     /// Game for a specific epoch.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         creator: address,
         epoch: u64,
@@ -36,53 +33,53 @@ module games::slot_machine {
         reward: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        let amount = coin::value(&reward);
+        let amount = reward.value();
         assert!(amount > 0, EInvalidAmount);
         transfer::share_object(Game {
             id: object::new(ctx),
-            creator: tx_context::sender(ctx),
-            epoch: tx_context::epoch(ctx),
-            balance: coin::into_balance(reward),
+            creator: ctx.sender(),
+            epoch: ctx.epoch(),
+            balance: reward.into_balance(),
         });
     }
 
     /// Creator can withdraw remaining balance if the game is over.
     public fun close(game: Game, ctx: &mut TxContext): Coin<SUI> {
-        assert!(tx_context::epoch(ctx) > game.epoch, EInvalidEpoch);
-        assert!(tx_context::sender(ctx) == game.creator, EInvalidSender);
+        assert!(ctx.epoch() > game.epoch, EInvalidEpoch);
+        assert!(ctx.sender() == game.creator, EInvalidSender);
         let Game { id, creator: _, epoch: _, balance } = game;
         object::delete(id);
-        coin::from_balance(balance, ctx)
+        balance.into_coin(ctx)
     }
 
     /// Play one turn of the game.
     ///
     /// The function consumes the same amount of gas independently of the random outcome.
     entry fun play(game: &mut Game, r: &Random, coin: &mut Coin<SUI>, ctx: &mut TxContext) {
-        assert!(tx_context::epoch(ctx) == game.epoch, EInvalidEpoch);
-        assert!(coin::value(coin) > 0, EInvalidAmount);
+        assert!(ctx.epoch() == game.epoch, EInvalidEpoch);
+        assert!(coin.value() > 0, EInvalidAmount);
 
         // play the game
-        let generator = new_generator(r, ctx);
-        let bet = random::generate_u8_in_range(&mut generator, 1, 100);
+        let mut generator = new_generator(r, ctx);
+        let bet = generator.generate_u8_in_range(1, 100);
         let lost = bet / 50; // 0 with probability 49%, and 1 or 2 with probability 51%
         let won = (2 - lost) / 2; // 1 with probability 49%, and 0 with probability 51%
 
         // move the bet amount from the user's coin to the game's balance
-        let coin_value = coin::value(coin);
-        let bet_amount = math::min(coin_value, balance::value(&game.balance));
-        coin::put(&mut game.balance, coin::split(coin, bet_amount, ctx));
+        let coin_value = coin.value();
+        let bet_amount = math::min(coin_value, game.balance.value());
+        coin::put(&mut game.balance, coin.split(bet_amount, ctx));
 
         // move the reward to the user's coin
         let reward = 2 * (won as u64) * bet_amount;
         // the assumption here is that the next line does not consumes more gas when called with zero reward than with
         // non-zero reward
-        coin::join(coin, coin::take(&mut game.balance, reward, ctx));
+        coin.join(coin::take(&mut game.balance, reward, ctx));
     }
 
     #[test_only]
     public fun get_balance(game: &Game): u64 {
-        balance::value(&game.balance)
+        game.balance.value()
     }
 
     #[test_only]

@@ -33,7 +33,6 @@ feature_flags:
   loaded_child_object_format_type: true
   receive_objects: true
   random_beacon: true
-  bridge: true
   enable_effects_v2: true
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
@@ -47,6 +46,7 @@ feature_flags:
   enable_group_ops_native_functions: true
   enable_group_ops_native_function_msm: true
   reject_mutable_random_on_entry_functions: true
+  zklogin_max_epoch_upper_bound_delta: 30
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -110,6 +110,7 @@ max_back_edges_per_function: 10000
 max_back_edges_per_module: 10000
 max_verifier_meter_ticks_per_function: 16000000
 max_meter_ticks_per_module: 16000000
+max_meter_ticks_per_package: 16000000
 object_runtime_max_num_cached_objects: 1000
 object_runtime_max_num_cached_objects_system_tx: 16000
 object_runtime_max_num_store_entries: 1000
@@ -266,7 +267,8 @@ max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
 random_beacon_reduction_lower_bound: 1600
-random_beacon_dkg_timeout_round: 200
+random_beacon_dkg_timeout_round: 3000
+random_beacon_min_round_interval_ms: 150
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 

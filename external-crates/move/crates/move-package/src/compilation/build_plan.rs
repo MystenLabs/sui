@@ -27,8 +27,8 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
-
 use toml_edit::{value, Document};
+use vfs::VfsPath;
 
 use super::{
     compiled_package::{DependencyInfo, ModuleFormat},
@@ -40,6 +40,7 @@ pub struct BuildPlan {
     root: PackageName,
     sorted_deps: Vec<PackageName>,
     resolution_graph: ResolvedGraph,
+    compiler_vfs_root: Option<VfsPath>,
 }
 
 pub struct CompilationDependencies<'a> {
@@ -68,7 +69,14 @@ impl BuildPlan {
             root: resolution_graph.root_package(),
             sorted_deps,
             resolution_graph,
+            compiler_vfs_root: None,
         })
+    }
+
+    pub fn set_compiler_vfs_root(mut self, vfs_root: VfsPath) -> Self {
+        assert!(self.compiler_vfs_root.is_none());
+        self.compiler_vfs_root = Some(vfs_root);
+        self
     }
 
     pub fn root_crate_edition_defined(&self) -> bool {
@@ -94,6 +102,7 @@ impl BuildPlan {
 
         let (files, res) = CompiledPackage::build_for_result(
             writer,
+            self.compiler_vfs_root.clone(),
             root_package,
             transitive_dependencies,
             &self.resolution_graph,
@@ -226,6 +235,7 @@ impl BuildPlan {
 
         let compiled = CompiledPackage::build_all(
             writer,
+            self.compiler_vfs_root.clone(),
             &project_root,
             root_package,
             transitive_dependencies,

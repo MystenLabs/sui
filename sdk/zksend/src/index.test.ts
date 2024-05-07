@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { getFullnodeUrl, SuiClient, SuiObjectChange } from '@mysten/sui.js/client';
-import { decodeSuiPrivateKey } from '@mysten/sui.js/cryptography';
-// import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
+import { decodeSuiPrivateKey, Keypair } from '@mysten/sui.js/cryptography';
+import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { toB64 } from '@mysten/sui.js/utils';
 import { describe } from 'node:test';
-import { expect, test } from 'vitest';
+import { beforeAll, expect, test } from 'vitest';
 
-import { ZkSendLink, ZkSendLinkBuilder } from './index.js';
-import { listCreatedLinks } from './links/list-created-links.js';
+import { getSentTransactionBlocksWithLinks, ZkSendLink, ZkSendLinkBuilder } from './index.js';
 
 export const DEMO_BEAR_CONFIG = {
 	packageId: '0xab8ed19f16874f9b8b66b0b6e325ee064848b1a7fdcb1c2f0478b17ad8574e65',
@@ -27,30 +26,29 @@ export const ZK_BAG_CONFIG = {
 const client = new SuiClient({
 	url: getFullnodeUrl('testnet'),
 });
-
-// 0x6e43d0e58341db532a87a16aaa079ae6eb1ed3ae8b77fdfa4870a268ea5d5db8
-const keypair = Ed25519Keypair.fromSecretKey(
-	decodeSuiPrivateKey('suiprivkey1qrlgsqryjmmt59nw7a76myeeadxrs3esp8ap2074qz8xaq5kens32f7e3u7')
-		.secretKey,
-);
+const keypair = new Ed25519Keypair();
 
 // Automatically get gas from testnet is not working reliably, manually request gas via discord,
 // or uncomment the beforeAll and gas function below
-// beforeAll(async () => {
-// 	await getSuiFromFaucet(keypair);
-// });
+beforeAll(async () => {
+	await getSuiFromFaucet(keypair);
+});
 
-// async function getSuiFromFaucet(keypair: Keypair) {
-// 	const faucetHost = getFaucetHost('testnet');
-// 	const result = await requestSuiFromFaucetV0({
-// 		host: faucetHost,
-// 		recipient: keypair.toSuiAddress(),
-// 	});
+async function getSuiFromFaucet(keypair: Keypair) {
+	const faucetHost = getFaucetHost('testnet');
+	const result = await requestSuiFromFaucetV0({
+		host: faucetHost,
+		recipient: keypair.toSuiAddress(),
+	});
 
-// 	if (result.error) {
-// 		throw new Error(result.error);
-// 	}
-// }
+	if (result.error) {
+		throw new Error(result.error);
+	}
+
+	await client.waitForTransactionBlock({
+		digest: result.transferredGasObjects[0].transferTxDigest,
+	});
+}
 
 describe('Contract links', () => {
 	test(
@@ -132,6 +130,7 @@ describe('Contract links', () => {
 		'regenerate links',
 		async () => {
 			const linkKp = new Ed25519Keypair();
+
 			const link = new ZkSendLinkBuilder({
 				keypair: linkKp,
 				client,
@@ -147,20 +146,26 @@ describe('Contract links', () => {
 
 			link.addClaimableMist(100n);
 
-			await link.create({
+			const { digest } = await link.create({
 				signer: keypair,
 				waitForTransactionBlock: true,
 			});
 
+			await client.waitForTransactionBlock({ digest });
+
 			const {
-				links: [lostLink],
-			} = await listCreatedLinks({
+				data: [
+					{
+						links: [lostLink],
+					},
+				],
+			} = await getSentTransactionBlocksWithLinks({
 				address: keypair.toSuiAddress(),
 				network: 'testnet',
 				contract: ZK_BAG_CONFIG,
 			});
 
-			const { url, transactionBlock } = await lostLink.link.createRegenerateTransaction(
+			const { url, transactionBlock } = await lostLink.createRegenerateTransaction(
 				keypair.toSuiAddress(),
 			);
 
@@ -427,6 +432,49 @@ describe('Non contract links', () => {
 				claimLink.assets?.nfts.map((nft) => nft.objectId),
 			);
 			expect(link2.claimed).toEqual(true);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
+
+	test(
+		'Send to address',
+		async () => {
+			const link = new ZkSendLinkBuilder({
+				client,
+				sender: keypair.toSuiAddress(),
+				contract: null,
+			});
+
+			const bears = await createBears(3);
+
+			for (const bear of bears) {
+				link.addClaimableObject(bear.objectId);
+			}
+
+			link.addClaimableMist(100n);
+
+			const receiver = new Ed25519Keypair();
+
+			const txb = await link.createSendToAddressTransaction({
+				address: receiver.toSuiAddress(),
+			});
+
+			const { digest } = await client.signAndExecuteTransactionBlock({
+				transactionBlock: txb,
+				signer: keypair,
+			});
+
+			await client.waitForTransactionBlock({
+				digest,
+			});
+
+			const objects = await client.getOwnedObjects({
+				owner: receiver.toSuiAddress(),
+			});
+
+			expect(objects.data.length).toEqual(4);
 		},
 		{
 			timeout: 30_000,

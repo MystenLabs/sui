@@ -32,4 +32,3 @@
 # Std lib types
 --make-move-vec <std::option::Option<vector<u256>>> [vector[]]
 
---gas-budget 1

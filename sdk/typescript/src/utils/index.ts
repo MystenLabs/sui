@@ -29,6 +29,8 @@ export {
 	SUI_ADDRESS_LENGTH,
 };
 
+export { isValidSuiNSName, normalizeSuiNSName } from './suins.js';
+
 export const SUI_DECIMALS = 9;
 export const MIST_PER_SUI = BigInt(1000000000);
 

@@ -3,12 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the abstract state for the type and memory safety analysis.
-use crate::{
-    absint::{AbstractDomain, JoinResult},
-    meter::{Meter, Scope},
-};
+use crate::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
-    binary_views::FunctionView,
     errors::{PartialVMError, PartialVMResult},
     file_format::{
         CodeOffset, FieldHandleIndex, FunctionDefinitionIndex, LocalIndex, Signature,
@@ -17,6 +13,7 @@ use move_binary_format::{
     safe_unwrap,
 };
 use move_borrow_graph::references::RefID;
+use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::vm_status::StatusCode;
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -97,19 +94,19 @@ pub(crate) struct AbstractState {
 
 impl AbstractState {
     /// create a new abstract state
-    pub fn new(function_view: &FunctionView) -> Self {
-        let num_locals = function_view.parameters().len() + function_view.locals().len();
+    pub fn new(function_context: &FunctionContext) -> Self {
+        let num_locals = function_context.parameters().len() + function_context.locals().len();
         // ids in [0, num_locals) are reserved for constructing canonical state
         // id at num_locals is reserved for the frame root
         let next_id = num_locals + 1;
         let mut state = AbstractState {
-            current_function: function_view.index(),
+            current_function: function_context.index(),
             locals: vec![AbstractValue::NonReference; num_locals],
             borrow_graph: BorrowGraph::new(),
             next_id,
         };
 
-        for (param_idx, param_ty) in function_view.parameters().0.iter().enumerate() {
+        for (param_idx, param_ty) in function_context.parameters().0.iter().enumerate() {
             if param_ty.is_reference() {
                 let id = RefID::new(param_idx);
                 state
@@ -521,7 +518,7 @@ impl AbstractState {
         arguments: Vec<AbstractValue>,
         acquired_resources: &BTreeSet<StructDefinitionIndex>,
         return_: &Signature,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<Vec<AbstractValue>> {
         meter.add_items(
             Scope::Function,
@@ -716,7 +713,7 @@ impl AbstractDomain for AbstractState {
     fn join(
         &mut self,
         state: &AbstractState,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
     ) -> PartialVMResult<JoinResult> {
         let joined = Self::join_(self, state);
         assert!(joined.is_canonical());

@@ -18,10 +18,6 @@
 
 //# publish
 module Test::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-
     public struct Object has key, store {
         id: UID,
         value: u64,
@@ -223,6 +219,7 @@ module Test::M1 {
 //# create-checkpoint
 
 //# run-graphql
+# Querying objects by version doesn't require it to be in the snapshot table.
 {
   object_within_available_range: object(
     address: "@{obj_2_0}"

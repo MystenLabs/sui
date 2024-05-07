@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::kiosk`
 ---
@@ -277,7 +276,7 @@ A capability which locks an item and gives a permission to
 purchase it from a <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code> for any price no less than <code>min_price</code>.
 
 Allows exclusive listing: only bearer of the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> can
-purchase the asset. However, the capablity should be used
+purchase the asset. However, the capability should be used
 carefully as losing it would lock the asset in the <code><a href="kiosk.md#0x2_kiosk_Kiosk">Kiosk</a></code>.
 
 The main application for the <code><a href="kiosk.md#0x2_kiosk_PurchaseCap">PurchaseCap</a></code> is building extensions
@@ -603,7 +602,7 @@ Trying to withdraw profits and sender is not owner.
 
 <a name="0x2_kiosk_EAlreadyListed"></a>
 
-Tryng to exclusively list an already listed item.
+Trying to exclusively list an already listed item.
 
 
 <pre><code><b>const</b> <a href="kiosk.md#0x2_kiosk_EAlreadyListed">EAlreadyListed</a>: u64 = 6;

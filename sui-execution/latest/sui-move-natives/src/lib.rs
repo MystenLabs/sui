@@ -49,7 +49,7 @@ use move_core_types::{
     runtime_value as R,
     vm_status::StatusCode,
 };
-use move_stdlib::natives::{GasParameters, NurseryGasParameters};
+use move_stdlib_natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -67,7 +67,8 @@ mod dynamic_field;
 mod event;
 mod object;
 pub mod object_runtime;
-mod test_scenario;
+mod random;
+pub mod test_scenario;
 mod test_utils;
 mod transfer;
 mod tx_context;
@@ -811,6 +812,16 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             make_native!(test_scenario::ids_for_address),
         ),
         (
+            "test_scenario",
+            "allocate_receiving_ticket_for_object",
+            make_native!(test_scenario::allocate_receiving_ticket_for_object),
+        ),
+        (
+            "test_scenario",
+            "deallocate_receiving_ticket_for_object",
+            make_native!(test_scenario::deallocate_receiving_ticket_for_object),
+        ),
+        (
             "transfer",
             "transfer_impl",
             make_native!(transfer::transfer_internal),
@@ -845,6 +856,11 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             "test_utils",
             "create_one_time_witness",
             make_native!(test_utils::create_one_time_witness),
+        ),
+        (
+            "random",
+            "generate_rand_seed_for_testing",
+            make_native!(random::generate_rand_seed_for_testing),
         ),
         (
             "zklogin_verified_id",
@@ -891,12 +907,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             )
         })
         .chain(sui_framework_natives_iter)
-        .chain(move_stdlib::natives::all_natives(
+        .chain(move_stdlib_natives::all_natives(
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             GasParameters::zeros(),
         ))
-        .chain(move_stdlib::natives::nursery_natives(
+        .chain(move_stdlib_natives::nursery_natives(
             silent,
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params

@@ -25,6 +25,7 @@ use sui_types::bridge::{
     BridgeChainId, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM, APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI,
     BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
+use sui_types::base_types::SUI_ADDRESS_LENGTH;
 use sui_types::bridge::{
     APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
     APPROVAL_THRESHOLD_EMERGENCY_PAUSE, APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
@@ -36,6 +37,7 @@ use sui_types::committee::EpochId;
 use sui_types::committee::StakeUnit;
 use sui_types::digests::{Digest, TransactionDigest};
 use sui_types::error::SuiResult;
+use sui_types::dynamic_field::Field;
 use sui_types::message_envelope::{Envelope, Message, VerifiedEnvelope};
 use sui_types::TypeTag;
 
@@ -447,14 +449,6 @@ impl Message for BridgeAction {
     fn digest(&self) -> Self::DigestType {
         unreachable!("BridgeEventDigest is not used today")
     }
-
-    fn verify_user_input(&self) -> SuiResult {
-        Ok(())
-    }
-
-    fn verify_epoch(&self, _epoch: EpochId) -> SuiResult {
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -625,7 +619,7 @@ mod tests {
 
     #[test]
     fn test_bridge_committee_filter_blocklisted_authorities() -> anyhow::Result<()> {
-        // Note: today BridgeCommitte does not shuffle authorities
+        // Note: today BridgeCommittee does not shuffle authorities
         let (authority1, _, _) = get_test_authority_and_key(5000, 9999);
         let (mut authority2, _, _) = get_test_authority_and_key(3000, 9999);
         authority2.is_blocklisted = true;

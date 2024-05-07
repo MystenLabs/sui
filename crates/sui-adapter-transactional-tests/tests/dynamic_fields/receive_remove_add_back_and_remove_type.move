@@ -10,9 +10,7 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::transfer::{Self, Receiving};
-    use sui::tx_context::{Self, TxContext};
+    use sui::transfer::Receiving;
 
     public struct Object has key, store {
         id: UID,
@@ -27,7 +25,7 @@ module test::m1 {
     }
 
     public struct Wrapper<T: store> has key, store {
-        id: UID, 
+        id: UID,
         value: T,
     }
 

@@ -15,3 +15,12 @@ error[E01002]: unexpected token
   │ Unexpected '}'
   │ Expected one of: ',' or ';'
 
+error[E01002]: unexpected token
+  ┌─ tests/move_check/parser/ability_modifier_postfix_no_semi.move:8:1
+  │
+8 │ 
+  │ ^
+  │ 
+  │ Unexpected end-of-file
+  │ Expected a module member: 'spec', 'use', 'friend', 'const', 'fun', or 'struct'
+

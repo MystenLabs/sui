@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::system_package_task::SystemPackageTask;
+use super::watermark_task::{Watermark, WatermarkLock, WatermarkTask};
 use crate::config::{
     ConnectionConfig, ServiceConfig, Version, MAX_CONCURRENT_REQUESTS,
     RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD,
 };
-use crate::consistency::CheckpointViewedAt;
-use crate::context_data::package_cache::DbPackageStore;
-use crate::data::Db;
+use crate::data::package_resolver::{DbPackageStore, PackageResolver};
+use crate::data::{DataLoader, Db};
 use crate::metrics::Metrics;
 use crate::mutation::Mutation;
-use crate::types::checkpoint::Checkpoint;
 use crate::types::move_object::IMoveObject;
 use crate::types::object::IObject;
 use crate::types::owner::IOwner;
@@ -27,11 +27,10 @@ use crate::{
     server::version::{check_version_middleware, set_version_middleware},
     types::query::{Query, SuiGraphQLSchema},
 };
-use async_graphql::dataloader::DataLoader;
 use async_graphql::extensions::ApolloTracing;
 use async_graphql::extensions::Tracing;
+use async_graphql::EmptySubscription;
 use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
-use async_graphql::{EmptySubscription, ServerError};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
@@ -48,7 +47,6 @@ use mysten_metrics::spawn_monitored_task;
 use mysten_network::callback::{CallbackLayer, MakeCallbackHandler, ResponseHandler};
 use std::convert::Infallible;
 use std::net::TcpStream;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::sync::Arc;
 use std::{any::Any, net::SocketAddr, time::Instant};
 use sui_graphql_rpc_headers::{LIMITS_HEADER, VERSION_HEADER};
@@ -59,40 +57,36 @@ use tokio::sync::OnceCell;
 use tokio_util::sync::CancellationToken;
 use tower::{Layer, Service};
 use tower_http::cors::{AllowOrigin, CorsLayer};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 pub(crate) struct Server {
     pub server: HyperServer<HyperAddrIncoming, IntoMakeServiceWithConnectInfo<Router, SocketAddr>>,
-    /// The following fields are internally used for background tasks
-    checkpoint_watermark: CheckpointWatermark,
+    watermark_task: WatermarkTask,
+    system_package_task: SystemPackageTask,
     state: AppState,
-    db_reader: Db,
 }
 
 impl Server {
     /// Start the GraphQL service and any background tasks it is dependent on. When a cancellation
     /// signal is received, the method waits for all tasks to complete before returning.
-    pub async fn run(self) -> Result<(), Error> {
+    pub async fn run(mut self) -> Result<(), Error> {
         get_or_init_server_start_time().await;
 
-        // A handle that spawns a background task to periodically update the `CheckpointViewedAt`,
-        // which is the u64 high watermark of checkpoints that the service is guaranteed to produce
-        // a consistent result for.
+        // A handle that spawns a background task to periodically update the `Watermark`, which
+        // consists of the checkpoint upper bound and current epoch.
         let watermark_task = {
-            let metrics = self.state.metrics.clone();
-            let sleep_ms = self.state.service.background_tasks.watermark_update_ms;
-            let cancellation_token = self.state.cancellation_token.clone();
             info!("Starting watermark update task");
             spawn_monitored_task!(async move {
-                update_watermark(
-                    &self.db_reader,
-                    self.checkpoint_watermark,
-                    metrics,
-                    tokio::time::Duration::from_millis(sleep_ms),
-                    cancellation_token,
-                )
-                .await;
+                self.watermark_task.run().await;
+            })
+        };
+
+        // A handle that spawns a background task to evict system packages on epoch changes.
+        let system_package_task = {
+            info!("Starting system package task");
+            spawn_monitored_task!(async move {
+                self.system_package_task.run().await;
             })
         };
 
@@ -110,9 +104,9 @@ impl Server {
             })
         };
 
-        // Wait for both tasks to complete. This ensures that the service doesn't fully shut down
-        // until both the background task and the server have completed their shutdown processes.
-        let _ = join!(watermark_task, server_task);
+        // Wait for all tasks to complete. This ensures that the service doesn't fully shut down
+        // until all tasks and the server have completed their shutdown processes.
+        let _ = join!(watermark_task, system_package_task, server_task);
 
         Ok(())
     }
@@ -123,6 +117,7 @@ pub(crate) struct ServerBuilder {
     schema: SchemaBuilder<Query, Mutation, EmptySubscription>,
     router: Option<Router>,
     db_reader: Option<Db>,
+    resolver: Option<PackageResolver>,
 }
 
 #[derive(Clone)]
@@ -133,11 +128,6 @@ pub(crate) struct AppState {
     cancellation_token: CancellationToken,
     pub version: Version,
 }
-
-/// The high checkpoint watermark stamped on each GraphQL request. This is used to ensure
-/// cross-query consistency.
-#[derive(Clone)]
-pub(crate) struct CheckpointWatermark(pub Arc<AtomicU64>);
 
 impl AppState {
     pub(crate) fn new(
@@ -176,6 +166,7 @@ impl ServerBuilder {
             schema: schema_builder(),
             router: None,
             db_reader: None,
+            resolver: None,
         }
     }
 
@@ -208,19 +199,22 @@ impl ServerBuilder {
         String,
         Schema<Query, Mutation, EmptySubscription>,
         Db,
+        PackageResolver,
         Router,
     ) {
         let address = self.address();
         let ServerBuilder {
+            state: _,
             schema,
             db_reader,
+            resolver,
             router,
-            ..
         } = self;
         (
             address,
             schema.finish(),
             db_reader.expect("DB reader not initialized"),
+            resolver.expect("Package resolver not initialized"),
             router.expect("Router not initialized"),
         )
     }
@@ -229,17 +223,11 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
+                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
+                .route("/graphql/:version", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
                 .with_state(self.state.clone())
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    set_version_middleware,
-                ))
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    check_version_middleware,
-                ))
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
                 }));
@@ -300,14 +288,33 @@ impl ServerBuilder {
     /// Consumes the `ServerBuilder` to create a `Server` that can be run.
     pub fn build(self) -> Result<Server, Error> {
         let state = self.state.clone();
-        let (address, schema, db_reader, router) = self.build_components();
+        let (address, schema, db_reader, resolver, router) = self.build_components();
 
-        // Initialize the checkpoint watermark for the background task to update.
-        let checkpoint_watermark = CheckpointWatermark(Arc::new(AtomicU64::new(0)));
+        // Initialize the watermark background task struct.
+        let watermark_task = WatermarkTask::new(
+            db_reader.clone(),
+            state.metrics.clone(),
+            std::time::Duration::from_millis(state.service.background_tasks.watermark_update_ms),
+            state.cancellation_token.clone(),
+        );
+
+        let system_package_task = SystemPackageTask::new(
+            resolver,
+            watermark_task.epoch_receiver(),
+            state.cancellation_token.clone(),
+        );
 
         let app = router
+            .route_layer(middleware::from_fn_with_state(
+                state.version,
+                set_version_middleware,
+            ))
+            .route_layer(middleware::from_fn_with_state(
+                state.version,
+                check_version_middleware,
+            ))
             .layer(axum::extract::Extension(schema))
-            .layer(axum::extract::Extension(checkpoint_watermark.clone()))
+            .layer(axum::extract::Extension(watermark_task.lock()))
             .layer(Self::cors()?);
 
         Ok(Server {
@@ -317,9 +324,9 @@ impl ServerBuilder {
                     .map_err(|_| Error::Internal(format!("Failed to parse address {}", address)))?,
             )
             .serve(app.into_make_service_with_connect_info::<SocketAddr>()),
-            checkpoint_watermark,
+            watermark_task,
+            system_package_task,
             state,
-            db_reader,
         })
     }
 
@@ -379,10 +386,16 @@ impl ServerBuilder {
 
         // DB
         let db = Db::new(reader.clone(), config.service.limits, metrics.clone());
+        let loader = DataLoader::new(db.clone());
         let pg_conn_pool = PgManager::new(reader.clone());
-        let package_store = DbPackageStore(reader.clone());
-        let package_cache = PackageStoreWithLruCache::new(package_store);
+        let package_store = DbPackageStore::new(loader.clone());
+        let resolver = Arc::new(Resolver::new_with_limits(
+            PackageStoreWithLruCache::new(package_store),
+            config.service.limits.package_resolver_limits(),
+        ));
+
         builder.db_reader = Some(db.clone());
+        builder.resolver = Some(resolver.clone());
 
         // SDK for talking to fullnode. Used for executing transactions only
         // TODO: fail fast if no url, once we enable mutations fully
@@ -402,13 +415,10 @@ impl ServerBuilder {
 
         builder = builder
             .context_data(config.service.clone())
-            .context_data(DataLoader::new(db.clone(), tokio::spawn))
+            .context_data(loader)
             .context_data(db)
             .context_data(pg_conn_pool)
-            .context_data(Resolver::new_with_limits(
-                package_cache,
-                config.service.limits.package_resolver_limits(),
-            ))
+            .context_data(resolver)
             .context_data(sui_sdk_client)
             .context_data(name_service_config)
             .context_data(zklogin_config)
@@ -454,11 +464,11 @@ pub fn export_schema() -> String {
 }
 
 /// Entry point for graphql requests. Each request is stamped with a unique ID, a `ShowUsage` flag
-/// if set in the request headers, and the high checkpoint watermark as set by the background task.
+/// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
     schema: axum::Extension<SuiGraphQLSchema>,
-    watermark: axum::Extension<CheckpointWatermark>,
+    axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
     headers: HeaderMap,
     req: GraphQLRequest,
 ) -> (axum::http::Extensions, GraphQLResponse) {
@@ -471,10 +481,7 @@ async fn graphql_handler(
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);
 
-    let checkpoint_viewed_at = watermark.0 .0.load(Relaxed);
-
-    // This wrapping is done to delineate the watermark from potentially other u64 types.
-    req.data.insert(CheckpointViewedAt(checkpoint_viewed_at));
+    req.data.insert(Watermark::new(watermark_lock).await);
 
     let result = schema.execute(req).await;
 
@@ -565,39 +572,6 @@ async fn get_or_init_server_start_time() -> &'static Instant {
     ONCE.get_or_init(|| async move { Instant::now() }).await
 }
 
-/// Starts an infinite loop that periodically updates the `checkpoint_viewed_at` high watermark.
-pub(crate) async fn update_watermark(
-    db: &Db,
-    checkpoint_viewed_at: CheckpointWatermark,
-    metrics: Metrics,
-    sleep_ms: tokio::time::Duration,
-    cancellation_token: CancellationToken,
-) {
-    loop {
-        tokio::select! {
-                    _ = cancellation_token.cancelled() => {
-                        info!("Shutdown signal received, terminating watermark update task");
-                        return;
-                    },
-                    _ = tokio::time::sleep(sleep_ms) => {
-                        let new_checkpoint_viewed_at =
-                    match Checkpoint::query_latest_checkpoint_sequence_number(db).await {
-                        Ok(checkpoint) => Some(checkpoint),
-                        Err(e) => {
-                            error!("{}", e);
-                            metrics.inc_errors(&[ServerError::new(e.to_string(), None)]);
-                            None
-                        }
-                    };
-
-                if let Some(checkpoint) = new_checkpoint_viewed_at {
-                    checkpoint_viewed_at.0.store(checkpoint, Relaxed);
-                }
-            }
-        }
-    }
-}
-
 pub mod tests {
     use super::*;
     use crate::{
@@ -631,7 +605,10 @@ pub mod tests {
         let db = Db::new(reader.clone(), service_config.limits, metrics.clone());
         let pg_conn_pool = PgManager::new(reader);
         let cancellation_token = CancellationToken::new();
-        let watermark = CheckpointViewedAt(1);
+        let watermark = Watermark {
+            checkpoint: 1,
+            epoch: 0,
+        };
         let state = AppState::new(
             connection_config.clone(),
             service_config.clone(),

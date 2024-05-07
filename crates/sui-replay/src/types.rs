@@ -32,8 +32,8 @@ pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 pub(crate) const EPOCH_CHANGE_STRUCT_TAG: &str =
     "0x3::sui_system_state_inner::SystemEpochInfoEvent";
 
-pub(crate) const ONE_DAY_MS: u64 = 24 * 60 * 60 * 1000;
-
+// TODO: A lot of the information in OnChainTransactionInfo is redundant from what's already in
+// SenderSignedData. We should consider removing them.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OnChainTransactionInfo {
     pub tx_digest: TransactionDigest,
@@ -132,8 +132,15 @@ pub enum ReplayEngineError {
         local: Box<SuiTransactionBlockEffects>,
     },
 
-    #[error("Genesis replay not supported digest {:#?}", digest)]
-    GenesisReplayNotSupported { digest: TransactionDigest },
+    #[error(
+        "Transaction {:#?} not supported by replay. Reason: {:?}",
+        digest,
+        reason
+    )]
+    TransactionNotSupported {
+        digest: TransactionDigest,
+        reason: String,
+    },
 
     #[error(
         "Fatal! No framework versions for protocol version {protocol_version}. Make sure version tables are populated"
@@ -169,9 +176,6 @@ pub enum ReplayEngineError {
 
     #[error("Error getting dynamic fields loaded objects: {}", rpc_err)]
     UnableToGetDynamicFieldLoadedObjects { rpc_err: String },
-
-    #[error("Unsupported epoch in replay engine: {epoch}")]
-    EpochNotSupported { epoch: u64 },
 
     #[error("Unable to open yaml cfg file at {}: {}", path, err)]
     UnableToOpenYamlFile { path: String, err: String },

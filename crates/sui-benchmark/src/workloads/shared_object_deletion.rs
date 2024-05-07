@@ -23,7 +23,7 @@ use sui_types::{
     base_types::{ObjectDigest, ObjectID, SequenceNumber},
     transaction::Transaction,
 };
-use tracing::{debug, error, info};
+use tracing::{debug, info, warn};
 
 /// The max amount of gas units needed for a payload.
 pub const MAX_GAS_IN_UNIT: u64 = 1_000_000_000;
@@ -50,7 +50,7 @@ impl Payload for SharedCounterDeletionTestPayload {
     fn make_new_payload(&mut self, effects: &ExecutionEffects) {
         if !effects.is_ok() && !self.is_counter_deleted {
             effects.print_gas_summary();
-            error!("Shared counter deletion tx failed...");
+            warn!("Shared counter deletion tx failed: {}", effects.status());
         }
 
         self.gas.0 = effects.gas_object().0;

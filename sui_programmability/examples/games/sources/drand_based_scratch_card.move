@@ -26,14 +26,10 @@
 module games::drand_based_scratch_card {
     use games::drand_lib;
     use sui::balance::Balance;
-    use sui::balance::{Self};
     use sui::coin::{Self, Coin};
     use sui::hmac::hmac_sha3_256;
-    use sui::object::{Self, ID, UID};
 
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Error codes
     const EInvalidDeposit: u64 = 0;
@@ -44,7 +40,7 @@ module games::drand_based_scratch_card {
     const EInvalidGame: u64 = 6;
 
     /// Game represents a set of parameters of a single game.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         creator: address,
         reward_amount: u64,
@@ -54,7 +50,7 @@ module games::drand_based_scratch_card {
     }
 
     /// Reward that is attached to a specific game. Can be withdrawn once.
-    struct Reward has key {
+    public struct Reward has key {
         id: UID,
         game_id: ID,
         balance: Balance<SUI>,
@@ -62,14 +58,14 @@ module games::drand_based_scratch_card {
 
     /// Ticket represents a participant in a single game.
     /// Can be deconstructed only by the owner.
-    struct Ticket has key, store {
+    public struct Ticket has key, store {
         id: UID,
         game_id: ID,
     }
 
     /// Winner represents a participant that won in a specific game.
     /// Can be consumed by the take_reward.
-    struct Winner has key, store {
+    public struct Winner has key, store {
         id: UID,
         game_id: ID,
     }
@@ -84,21 +80,21 @@ module games::drand_based_scratch_card {
         base_drand_round: u64,
         ctx: &mut TxContext
     ) {
-        let amount = coin::value(&reward);
+        let amount = reward.value();
         assert!(amount > 0 && amount % reward_factor == 0 , EInvalidReward);
 
         let game = Game {
             id: object::new(ctx),
-            reward_amount: coin::value(&reward),
-            creator: tx_context::sender(ctx),
+            reward_amount: reward.value(),
+            creator: ctx.sender(),
             reward_factor,
-            base_epoch: tx_context::epoch(ctx),
+            base_epoch: ctx.epoch(),
             base_drand_round,
         };
         let reward = Reward {
             id: object::new(ctx),
             game_id: object::id(&game),
-            balance: coin::into_balance(reward),
+            balance: reward.into_balance(),
         };
         transfer::freeze_object(game);
         transfer::share_object(reward);
@@ -108,14 +104,14 @@ module games::drand_based_scratch_card {
     /// the game was created.
     /// Note that the reward might have been withdrawn already. It's the user's responsibility to verify that.
     public entry fun buy_ticket(coin: Coin<SUI>, game: &Game, ctx: &mut TxContext) {
-        assert!(coin::value(&coin) * game.reward_factor == game.reward_amount, EInvalidDeposit);
-        assert!(tx_context::epoch(ctx) == game.base_epoch, EInvalidEpoch);
+        assert!(coin.value() * game.reward_factor == game.reward_amount, EInvalidDeposit);
+        assert!(ctx.epoch() == game.base_epoch, EInvalidEpoch);
         let ticket = Ticket {
             id: object::new(ctx),
             game_id: object::id(game),
         };
         transfer::public_transfer(coin, game.creator);
-        transfer::public_transfer(ticket, tx_context::sender(ctx));
+        transfer::public_transfer(ticket, ctx.sender());
     }
 
     public entry fun evaluate(
@@ -131,7 +127,7 @@ module games::drand_based_scratch_card {
         // as the adversary can control the values of ticket id. (For this particular game this attack is not
         // devastating, but for similar games it might be.)
         let random_key = drand_lib::derive_randomness(drand_sig);
-        let randomness = hmac_sha3_256(&random_key, &object::id_to_bytes(&object::id(&ticket)));
+        let randomness = hmac_sha3_256(&random_key, &object::id(&ticket).to_bytes());
         let is_winner = (drand_lib::safe_selection(game.reward_factor, &randomness) == 0);
 
         if (is_winner) {
@@ -139,7 +135,7 @@ module games::drand_based_scratch_card {
                 id: object::new(ctx),
                 game_id: object::id(game),
             };
-            transfer::public_transfer(winner, tx_context::sender(ctx));
+            transfer::public_transfer(winner, ctx.sender());
         };
         // Delete the ticket.
         let Ticket { id, game_id:  _} = ticket;
@@ -148,9 +144,9 @@ module games::drand_based_scratch_card {
 
     public entry fun take_reward(winner: Winner, reward: &mut Reward, ctx: &mut TxContext) {
         assert!(winner.game_id == reward.game_id, EInvalidTicket);
-        let full_balance = balance::value(&reward.balance);
+        let full_balance = reward.balance.value();
         if (full_balance > 0) {
-            transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), tx_context::sender(ctx));
+            transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), ctx.sender());
         };
         let Winner { id, game_id:  _} = winner;
         object::delete(id);
@@ -158,12 +154,12 @@ module games::drand_based_scratch_card {
 
     /// Can be called in case the reward was not withdrawn, to return the coins to the creator.
     public entry fun redeem(reward: &mut Reward, game: &Game, ctx: &mut TxContext) {
-        assert!(balance::value(&reward.balance) > 0, EInvalidReward);
+        assert!(reward.balance.value() > 0, EInvalidReward);
         assert!(object::id(game) == reward.game_id, EInvalidGame);
         // Since we define the game to take 24h+25h, a game that is created in epoch x may be completed in epochs
         // x+2 or x+3.
-        assert!(game.base_epoch + 3 < tx_context::epoch(ctx), ETooSoonToRedeem);
-        let full_balance = balance::value(&reward.balance);
+        assert!(game.base_epoch + 3 < ctx.epoch(), ETooSoonToRedeem);
+        let full_balance = reward.balance.value();
         transfer::public_transfer(coin::take(&mut reward.balance, full_balance, ctx), game.creator);
     }
 

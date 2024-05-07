@@ -21,13 +21,14 @@ use crate::test_utils::{
     init_local_authorities, init_local_authorities_with_overload_thresholds,
     make_transfer_object_move_transaction,
 };
-use crate::transaction_manager::MAX_PER_OBJECT_QUEUE_LENGTH;
 use sui_types::error::SuiError;
 
 use std::collections::BTreeSet;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use std::time::Duration;
 
+use crate::traffic_controller::metrics::TrafficControllerMetrics;
 use itertools::Itertools;
 use sui_config::node::AuthorityOverloadConfig;
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -249,7 +250,7 @@ async fn execute_owned_on_first_three_authorities(
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify_authenticated(committee, &Default::default())
+        .try_into_verified(committee, &Default::default())
         .unwrap();
     do_cert(&authority_clients[0], &cert).await;
     do_cert(&authority_clients[1], &cert).await;
@@ -281,7 +282,7 @@ async fn execute_shared_on_first_three_authorities(
     do_transaction(&authority_clients[2], txn).await;
     let cert = extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify_authenticated(committee, &Default::default())
+        .try_into_verified(committee, &Default::default())
         .unwrap();
     do_cert_with_shared_objects(&authority_clients[0].authority_client().state, &cert).await;
     do_cert_with_shared_objects(&authority_clients[1].authority_client().state, &cert).await;
@@ -448,17 +449,23 @@ async fn test_execution_with_dependencies() {
         .unwrap();
 }
 
+fn make_socket_addr() -> std::net::SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0)
+}
+
 async fn try_sign_on_first_three_authorities(
     authority_clients: &[Arc<SafeClient<LocalAuthorityClient>>],
     committee: &Committee,
     txn: &Transaction,
 ) -> SuiResult<VerifiedCertificate> {
     for client in authority_clients.iter().take(3) {
-        client.handle_transaction(txn.clone()).await?;
+        client
+            .handle_transaction(txn.clone(), Some(make_socket_addr()))
+            .await?;
     }
     extract_cert(authority_clients, committee, txn.digest())
         .await
-        .verify_authenticated(committee, &Default::default())
+        .try_into_verified(committee, &Default::default())
 }
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -510,7 +517,7 @@ async fn test_per_object_overload() {
 
     // Signing and executing this transaction on the last authority should succeed.
     authority_clients[3]
-        .handle_transaction(create_counter_txn.clone())
+        .handle_transaction(create_counter_txn.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
@@ -537,7 +544,10 @@ async fn test_per_object_overload() {
     // Sign and try execute 1000 txns on the first three authorities. And enqueue them on the last authority.
     // First shared counter txn has input object available on authority 3. So to overload authority 3, 1 more
     // txn is needed.
-    let num_txns = MAX_PER_OBJECT_QUEUE_LENGTH + 1;
+    let num_txns = authorities[3]
+        .overload_config()
+        .max_transaction_manager_per_object_queue_length
+        + 1;
     for gas_object in gas_objects.iter().take(num_txns) {
         let gas_ref = get_latest_ref(authority_clients[0].clone(), gas_object.id()).await;
         let shared_txn = TestTransactionBuilder::new(addr, gas_ref, rgp)
@@ -571,7 +581,7 @@ async fn test_per_object_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+        .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooManyTransactionsPendingOnObject"),
@@ -636,7 +646,7 @@ async fn test_txn_age_overload() {
 
     // Signing and executing this transaction on the last authority should succeed.
     authority_clients[3]
-        .handle_transaction(create_counter_txn.clone())
+        .handle_transaction(create_counter_txn.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
@@ -699,7 +709,7 @@ async fn test_txn_age_overload() {
         .build_and_sign(&key);
     let res = authorities[3]
         .transaction_manager()
-        .check_execution_overload(authorities[3].max_txn_age_in_queue(), shared_txn.data());
+        .check_execution_overload(authorities[3].overload_config(), shared_txn.data());
     let message = format!("{res:?}");
     assert!(
         message.contains("TooOldTransactionPendingOnObject"),
@@ -752,6 +762,9 @@ async fn test_authority_txn_signing_pushback() {
         authority_state.clone(),
         consensus_adapter,
         Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        TrafficControllerMetrics::new_for_tests(),
+        None,
+        None,
     ));
 
     // Manually make the authority into overload state and reject 100% of traffic.
@@ -770,7 +783,7 @@ async fn test_authority_txn_signing_pushback() {
 
     // Txn shouldn't get signed with ValidatorOverloadedRetryAfter error.
     let response = validator_service
-        .handle_transaction_for_testing(tx.clone())
+        .handle_transaction_for_benchmarking(tx.clone())
         .await;
     assert!(matches!(
         SuiError::from(response.err().unwrap()),
@@ -789,7 +802,7 @@ async fn test_authority_txn_signing_pushback() {
     // it should still pushback the transaction.
     assert!(matches!(
         validator_service
-            .handle_transaction_for_testing(tx.clone())
+            .handle_transaction_for_benchmarking(tx.clone())
             .await
             .err()
             .unwrap()
@@ -810,7 +823,7 @@ async fn test_authority_txn_signing_pushback() {
     );
     assert!(matches!(
         validator_service
-            .handle_transaction_for_testing(tx2)
+            .handle_transaction_for_benchmarking(tx2)
             .await
             .err()
             .unwrap()
@@ -823,7 +836,7 @@ async fn test_authority_txn_signing_pushback() {
 
     // Re-send the first transaction, now the transaction can be successfully signed.
     let response = validator_service
-        .handle_transaction_for_testing(tx.clone())
+        .handle_transaction_for_benchmarking(tx.clone())
         .await;
     assert!(response.is_ok());
     assert_eq!(
@@ -881,6 +894,9 @@ async fn test_authority_txn_execution_pushback() {
         authority_state.clone(),
         consensus_adapter,
         Arc::new(ValidatorServiceMetrics::new_for_tests()),
+        TrafficControllerMetrics::new_for_tests(),
+        None,
+        None,
     ));
 
     // Manually make the authority into overload state and reject 100% of traffic.
@@ -899,7 +915,7 @@ async fn test_authority_txn_execution_pushback() {
 
     // Ask validator to sign the transaction and then create a certificate.
     let response = validator_service
-        .handle_transaction_for_testing(tx.clone())
+        .handle_transaction_for_benchmarking(tx.clone())
         .await
         .unwrap()
         .into_inner();

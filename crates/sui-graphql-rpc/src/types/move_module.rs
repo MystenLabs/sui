@@ -3,20 +3,17 @@
 
 use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
-use move_binary_format::access::ModuleAccess;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_disassembler::disassembler::Disassembler;
 use move_ir_types::location::Loc;
 
 use crate::consistency::{ConsistentIndexCursor, ConsistentNamedCursor};
-use crate::data::Db;
 use crate::error::Error;
 use sui_package_resolver::Module as ParsedMoveModule;
 
 use super::cursor::{JsonCursor, Page};
 use super::move_function::MoveFunction;
 use super::move_struct::MoveStruct;
-use super::object::ObjectLookupKey;
+use super::object::Object;
 use super::{base64::Base64, move_package::MovePackage, sui_address::SuiAddress};
 
 #[derive(Clone)]
@@ -39,9 +36,9 @@ impl MoveModule {
     /// The package that this Move module was defined in
     async fn package(&self, ctx: &Context<'_>) -> Result<MovePackage> {
         MovePackage::query(
-            ctx.data_unchecked(),
+            ctx,
             self.storage_id,
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()?
@@ -90,9 +87,9 @@ impl MoveModule {
 
         let runtime_id = *bytecode.self_id().address();
         let Some(package) = MovePackage::query(
-            ctx.data_unchecked(),
+            ctx,
             self.storage_id,
-            ObjectLookupKey::LatestAt(checkpoint_viewed_at),
+            Object::latest_at(checkpoint_viewed_at),
         )
         .await
         .extend()?
@@ -273,9 +270,8 @@ impl MoveModule {
 
     /// Textual representation of the module's bytecode.
     async fn disassembly(&self) -> Result<Option<String>> {
-        let view = BinaryIndexedView::Module(self.parsed.bytecode());
         Ok(Some(
-            Disassembler::from_view(view, Loc::invalid())
+            Disassembler::from_module(self.parsed.bytecode(), Loc::invalid())
                 .map_err(|e| Error::Internal(format!("Error creating disassembler: {e}")))
                 .extend()?
                 .disassemble()
@@ -318,14 +314,13 @@ impl MoveModule {
     }
 
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         address: SuiAddress,
         name: &str,
         checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
         let Some(package) =
-            MovePackage::query(db, address, ObjectLookupKey::LatestAt(checkpoint_viewed_at))
-                .await?
+            MovePackage::query(ctx, address, Object::latest_at(checkpoint_viewed_at)).await?
         else {
             return Ok(None);
         };

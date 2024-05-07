@@ -20,7 +20,7 @@ module utils::immutable_external_resource_tests {
 
         let url = url::new_unsafe(url_str);
         let digest = sha3_256(hash);
-        let resource = immutable_external_resource::new(url, digest);
+        let mut resource = immutable_external_resource::new(url, digest);
 
         assert!(immutable_external_resource::url(&resource) == url, EUrlStringMisMatch);
         assert!(immutable_external_resource::digest(&resource) == digest, EHashStringMisMatch);

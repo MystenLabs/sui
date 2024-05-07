@@ -106,7 +106,7 @@ module sui::bcs {
 
         let (mut value, mut i) = (0u64, 0u8);
         while (i < 64) {
-            let byte = (bcs.bytes.pop_back() as u64);
+            let byte = bcs.bytes.pop_back() as u64;
             value = value + (byte << i);
             i = i + 8;
         };
@@ -120,7 +120,7 @@ module sui::bcs {
 
         let (mut value, mut i) = (0u128, 0u8);
         while (i < 128) {
-            let byte = (bcs.bytes.pop_back() as u128);
+            let byte = bcs.bytes.pop_back() as u128;
             value = value + (byte << i);
             i = i + 8;
         };
@@ -134,7 +134,7 @@ module sui::bcs {
 
         let (mut value, mut i) = (0u256, 0u16);
         while (i < 256) {
-            let byte = (bcs.bytes.pop_back() as u256);
+            let byte = bcs.bytes.pop_back() as u256;
             value = value + (byte << (i as u8));
             i = i + 8;
         };
@@ -153,7 +153,7 @@ module sui::bcs {
         let (mut total, mut shift, mut len) = (0u64, 0, 0);
         while (true) {
             assert!(len <= 4, ELenOutOfRange);
-            let byte = (bcs.bytes.pop_back() as u64);
+            let byte = bcs.bytes.pop_back() as u64;
             len = len + 1;
             total = total | ((byte & 0x7f) << shift);
             if ((byte & 0x80) == 0) {

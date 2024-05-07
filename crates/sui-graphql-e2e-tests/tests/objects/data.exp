@@ -3,20 +3,20 @@ processed 5 tasks
 init:
 A: object(0,0)
 
-task 1 'publish'. lines 6-41:
+task 1 'publish'. lines 6-39:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 7622800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'programmable'. lines 43-45:
+task 2 'programmable'. lines 41-43:
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2910800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'create-checkpoint'. lines 47-47:
+task 3 'create-checkpoint'. lines 45-45:
 Checkpoint created: 1
 
-task 4 'run-graphql'. lines 49-70:
+task 4 'run-graphql'. lines 47-68:
 Response: {
   "data": {
     "transactionBlocks": {

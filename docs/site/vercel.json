@@ -34,7 +34,6 @@
       { "source": "/explore/tutorials", "destination": "/guides", "permanent": true },
       { "source": "/explore/index", "destination": "/concepts", "permanent": true },
       { "source": "/explore", "destination": "/concepts", "permanent": true },
-      { "source": "/explore/sui-explorer", "destination": "https://docs.mystenlabs.com/explorer", "permanent": true },
       { "source": "/build/sui-gas-charges", "destination": "/concepts/tokenomics/gas-pricing", "permanent": true },
       { "source": "/build/sui-json", "destination": "/references/sui-api", "permanent": true },
       { "source": "/build/event_api", "destination": "/guides/developer/sui-101/using-events", "permanent": true },
@@ -75,7 +74,7 @@
       { "source": "/build/programming-with-objects/ch2-using-objects", "destination": "/concepts/object-ownership", "permanent": true },
       { "source": "/build/programming-with-objects/index", "destination": "/concepts/object-model", "permanent": true },
       { "source": "/build/programming-with-objects/ch3-immutable-objects", "destination": "/concepts/object-ownership/immutable", "permanent": true },
-      { "source": "/build/programming-with-objects/ch5-dynamic-fields", "destination": "/concepts/dynamic-fields", "permanent": true },     
+      { "source": "/build/programming-with-objects/ch5-dynamic-fields", "destination": "/concepts/dynamic-fields", "permanent": true },
       { "source": "/reference/sui-json", "destination": "/sui-api-ref", "permanent": true },
       { "source": "/reference/index", "destination": "/references", "permanent": true },
       { "source": "/reference", "destination": "/references", "permanent": true },
@@ -90,8 +89,10 @@
       { "source": "/standards/closed-loop-token/overview", "destination": "/standards/closed-loop-token", "permanent": true},
       { "source": "/concepts/dynamic-fields/transfers/custom-rules", "destination": "/concepts/transfers/custom-rules", "permanent": true},
       { "source": "/concepts/dynamic-fields/transfers/transfer-to-object", "destination": "/concepts/transfers/transfer-to-object", "permanent": true},
-      { "source": "/references/sui-graphql/:path*", "destination": "/references/sui-api/sui-graphql/:path*", "permanent": true},
       { "source": "/references/research-papers", "destination": "/concepts/research-papers", "permanent": true},
-      { "source": "/guides/developer/app-examples/trading/:path*", "destination": "/guides/developer/app-examples/trustless-token-swap/:path*", "permanent": true}
+      { "source": "/guides/developer/app-examples/trading/:path*", "destination": "/guides/developer/app-examples/trustless-swap/:path*", "permanent": true},
+      { "source": "/guides/developer/app-examples/trustless-token-swap/:path*", "destination": "/guides/developer/app-examples/trustless-swap/:path*", "permanent": true},
+      { "source": "/concepts/cryptography/zklogin/zklogin-example", "destination": "/guides/developer/cryptography/zklogin-integration/zklogin-example", "permanent": true},
+      { "source": "/guides/developer/getting-started/sui-environment", "destination": "/references/contribute/sui-environment", "permanent": true}
     ]
   }

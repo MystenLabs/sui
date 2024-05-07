@@ -7,6 +7,8 @@ use crate::epoch::committee_store::CommitteeStore;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
@@ -14,8 +16,9 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
-    TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+    ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest, TransactionInfoRequest,
+    TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
@@ -306,12 +309,13 @@ where
     pub async fn handle_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone())
+            .handle_transaction(transaction.clone(), client_addr)
             .await?;
         let response = check_error!(
             self.address,
@@ -340,17 +344,131 @@ where
     pub async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
-            .handle_certificate_v2(certificate)
+            .handle_certificate_v2(certificate, client_addr)
             .await?;
 
         let verified = check_error!(
             self.address,
             self.verify_certificate_response_v2(&digest, response),
+            "Client error in handle_certificate"
+        )?;
+        Ok(verified)
+    }
+
+    fn verify_certificate_response_v3(
+        &self,
+        digest: &TransactionDigest,
+        HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        }: HandleCertificateResponseV3,
+    ) -> SuiResult<HandleCertificateResponseV3> {
+        let effects = self.check_signed_effects_plain(digest, effects, None)?;
+
+        // Check Events
+        match (&events, effects.events_digest()) {
+            (None, None) | (None, Some(_)) => {}
+            (Some(events), None) => {
+                if !events.data.is_empty() {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events but no event digest present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+            (Some(events), Some(events_digest)) => {
+                fp_ensure!(
+                    &events.digest() == events_digest,
+                    SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned events don't match events digest in the signed effects"
+                            .to_string()
+                    }
+                );
+            }
+        }
+
+        // Check Input Objects
+        if let Some(input_objects) = &input_objects {
+            let expected: HashMap<_, _> = effects
+                .old_object_metadata()
+                .into_iter()
+                .map(|(object_ref, _owner)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in input_objects {
+                let object_ref = object.compute_object_reference();
+                if !expected
+                    .get(&object_ref.0)
+                    .is_some_and(|expect| &object_ref == expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned input object that wasn't present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // Check Output Objects
+        if let Some(output_objects) = &output_objects {
+            let expected: HashMap<_, _> = effects
+                .all_changed_objects()
+                .into_iter()
+                .map(|(object_ref, _, _)| (object_ref.0, object_ref))
+                .collect();
+
+            for object in output_objects {
+                let object_ref = object.compute_object_reference();
+                if !expected
+                    .get(&object_ref.0)
+                    .is_some_and(|expect| &object_ref == expect)
+                {
+                    return Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                        reason: "Returned output object that wasn't present in the signed effects"
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(HandleCertificateResponseV3 {
+            effects,
+            events,
+            input_objects,
+            output_objects,
+            auxiliary_data,
+        })
+    }
+
+    /// Execute a certificate.
+    pub async fn handle_certificate_v3(
+        &self,
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        let digest = *request.certificate.digest();
+        let _timer = self.metrics.handle_certificate_latency.start_timer();
+        let response = self
+            .authority_client
+            .handle_certificate_v3(request, client_addr)
+            .await?;
+
+        let verified = check_error!(
+            self.address,
+            self.verify_certificate_response_v3(&digest, response),
             "Client error in handle_certificate"
         )?;
         Ok(verified)
