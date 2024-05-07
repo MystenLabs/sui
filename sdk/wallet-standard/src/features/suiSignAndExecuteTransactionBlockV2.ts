@@ -23,7 +23,7 @@ export type SuiSignAndExecuteTransactionBlockV2Feature = {
 	};
 };
 
-export type SuiSignAndExecuteTransactionBlockV2Method = () => (
+export type SuiSignAndExecuteTransactionBlockV2Method = (
 	input: SuiSignAndExecuteTransactionBlockV2Input,
 ) => Promise<SuiSignAndExecuteTransactionBlockV2Output>;
 

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionBlock } from '@mysten/sui.js/transactions';
+import type { TransactionBlock } from '@mysten/sui/transactions';
 import type {
 	SuiSignTransactionBlockV2Input,
 	SuiSignTransactionBlockV2Output,
@@ -81,15 +81,18 @@ export function useSignTransactionBlock({
 				);
 			}
 
-			return await walletFeature.signTransactionBlock()({
+			return await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
-				transactionBlock:
-					typeof transactionBlock === 'string'
-						? transactionBlock
-						: await transactionBlock.toJSON({
-								supportedIntents: [],
-								client,
-						  }),
+				transactionBlock: {
+					toJSON: async () => {
+						return typeof transactionBlock === 'string'
+							? transactionBlock
+							: await transactionBlock.toJSON({
+									supportedIntents: [],
+									client,
+							  });
+					},
+				},
 				account: signerAccount,
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});

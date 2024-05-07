@@ -19,13 +19,13 @@ export type SuiSignTransactionBlockV2Feature = {
 	};
 };
 
-export type SuiSignTransactionBlockV2Method = () => (
+export type SuiSignTransactionBlockV2Method = (
 	input: SuiSignTransactionBlockV2Input,
 ) => Promise<SuiSignTransactionBlockV2Output>;
 
 /** Input for signing transactions. */
 export interface SuiSignTransactionBlockV2Input {
-	transactionBlock: string;
+	transactionBlock: { toJSON: () => Promise<string> };
 	account: WalletAccount;
 	chain: IdentifierString;
 	signal?: AbortSignal;

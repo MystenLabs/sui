@@ -270,26 +270,28 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
-	#signTransactionBlockV2: SuiSignTransactionBlockV2Method =
-		() =>
-		async ({ transactionBlock, account, ...input }) => {
-			return mapToPromise(
-				this.#send<SignTransactionRequest, SignTransactionResponse>({
-					type: 'sign-transaction-request',
-					transaction: {
-						...input,
-						// account might be undefined if previous version of adapters is used
-						// in that case use the first account address
-						account: account?.address || this.#accounts[0]?.address || '',
-						transaction: transactionBlock,
-					},
-				}),
-				({ result: { signature, transactionBlockBytes: bytes } }) => ({
-					signature,
-					bytes,
-				}),
-			);
-		};
+	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
+		transactionBlock,
+		account,
+		...input
+	}) => {
+		return mapToPromise(
+			this.#send<SignTransactionRequest, SignTransactionResponse>({
+				type: 'sign-transaction-request',
+				transaction: {
+					...input,
+					// account might be undefined if previous version of adapters is used
+					// in that case use the first account address
+					account: account?.address || this.#accounts[0]?.address || '',
+					transaction: await transactionBlock.toJSON(),
+				},
+			}),
+			({ result: { signature, transactionBlockBytes: bytes } }) => ({
+				signature,
+				bytes,
+			}),
+		);
+	};
 
 	#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (input) => {
 		if (!isTransactionBlock(input.transactionBlock)) {
@@ -314,55 +316,54 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
-	#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method =
-		() => async (input) => {
-			return mapToPromise(
-				this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
-					type: 'execute-transaction-request',
-					transaction: {
-						type: 'transaction',
-						data: input.transactionBlock,
-						options: {
-							showBalanceChanges: true,
-							showRawEffects: true,
-							showRawInput: true,
-						},
-						// account might be undefined if previous version of adapters is used
-						// in that case use the first account address
-						account: input.account?.address || this.#accounts[0]?.address || '',
+	#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method = async (input) => {
+		return mapToPromise(
+			this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
+				type: 'execute-transaction-request',
+				transaction: {
+					type: 'transaction',
+					data: await input.transactionBlock.toJSON(),
+					options: {
+						showBalanceChanges: true,
+						showRawEffects: true,
+						showRawInput: true,
 					},
-				}),
-				({ result: { rawEffects, rawTransaction, balanceChanges, digest } }) => {
-					const [
-						{
-							txSignatures: [signature],
-							intentMessage: { value: bcsTransaction },
-						},
-					] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
-
-					const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
-
-					return {
-						digest,
-						signature,
-						bytes,
-						effects: toB64(new Uint8Array(rawEffects!)),
-						balanceChanges:
-							balanceChanges?.map(({ coinType, amount, owner }) => {
-								const address =
-									(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
-									(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
-
-								return {
-									coinType,
-									amount,
-									address,
-								};
-							}) ?? null,
-					};
+					// account might be undefined if previous version of adapters is used
+					// in that case use the first account address
+					account: input.account?.address || this.#accounts[0]?.address || '',
 				},
-			);
-		};
+			}),
+			({ result: { rawEffects, rawTransaction, balanceChanges, digest } }) => {
+				const [
+					{
+						txSignatures: [signature],
+						intentMessage: { value: bcsTransaction },
+					},
+				] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+
+				const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
+
+				return {
+					digest,
+					signature,
+					bytes,
+					effects: toB64(new Uint8Array(rawEffects!)),
+					balanceChanges:
+						balanceChanges?.map(({ coinType, amount, owner }) => {
+							const address =
+								(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
+								(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
+
+							return {
+								coinType,
+								amount,
+								address,
+							};
+						}) ?? null,
+				};
+			},
+		);
+	};
 
 	#signMessage: SuiSignMessageMethod = async ({ message, account }) => {
 		return mapToPromise(

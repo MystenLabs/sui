@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui/bcs';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { fromB64, toB64 } from '@mysten/sui/utils';
 import type { Wallet, WalletWithFeatures } from '@wallet-standard/core';
 import { getWallets } from '@wallet-standard/core';
 
@@ -54,8 +54,8 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 		const { signTransactionBlock } = wallet.features['sui:signTransactionBlock'];
 		features['sui:signTransactionBlock:v2'] = {
 			version: '2.0.0',
-			signTransactionBlock: () => async (input) => {
-				const transactionBlock = TransactionBlock.from(input.transactionBlock);
+			signTransactionBlock: async (input) => {
+				const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
 				const { transactionBlockBytes, signature } = await signTransactionBlock({
 					...input,
 					transactionBlock,
@@ -74,8 +74,8 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 			wallet.features['sui:signAndExecuteTransactionBlock'];
 		features['sui:signAndExecuteTransactionBlock:v2'] = {
 			version: '2.0.0',
-			signAndExecuteTransactionBlock: () => async (input) => {
-				const transactionBlock = TransactionBlock.from(input.transactionBlock);
+			signAndExecuteTransactionBlock: async (input) => {
+				const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
 				const { digest, rawEffects, balanceChanges, rawTransaction } =
 					await signAndExecuteTransactionBlock({
 						...input,

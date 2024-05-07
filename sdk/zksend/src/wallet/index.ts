@@ -135,28 +135,29 @@ export class StashedWallet implements Wallet {
 		};
 	};
 
-	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = () => {
+	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
+		transactionBlock,
+		account,
+	}) => {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
 			type: 'sign-transaction-block',
 		});
 
-		return async ({ transactionBlock, account }) => {
-			const txb = TransactionBlock.from(transactionBlock);
-			txb.setSenderIfNotSet(account.address);
+		const txb = TransactionBlock.from(await transactionBlock.toJSON());
+		txb.setSenderIfNotSet(account.address);
 
-			const data = txb.serialize();
+		const data = txb.serialize();
 
-			const response = await popup.send({
-				data,
-				address: account.address,
-			});
+		const response = await popup.send({
+			data,
+			address: account.address,
+		});
 
-			return {
-				bytes: response.bytes,
-				signature: response.signature,
-			};
+		return {
+			bytes: response.bytes,
+			signature: response.signature,
 		};
 	};
 

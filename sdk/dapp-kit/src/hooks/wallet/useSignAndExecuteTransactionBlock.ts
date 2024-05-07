@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionBlock } from '@mysten/sui.js/transactions';
-import { toB64 } from '@mysten/sui.js/utils';
+import type { TransactionBlock } from '@mysten/sui/transactions';
+import { toB64 } from '@mysten/sui/utils';
 import type {
 	SuiSignAndExecuteTransactionBlockV2Input,
 	SuiSignAndExecuteTransactionBlockV2Output,
@@ -26,7 +26,6 @@ type UseSignAndExecuteTransactionBlockArgs = PartialBy<
 	'account' | 'chain'
 > & {
 	transactionBlock: TransactionBlock | string;
-	waitForIndexing?: boolean;
 };
 
 type UseSignAndExecuteTransactionBlockResult = SuiSignAndExecuteTransactionBlockV2Output;
@@ -64,7 +63,7 @@ export function useSignAndExecuteTransactionBlock({
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signAndExecuteTransactionBlock(mutationKey),
-		mutationFn: async ({ transactionBlock, waitForIndexing, ...signTransactionBlockArgs }) => {
+		mutationFn: async ({ transactionBlock, ...signTransactionBlockArgs }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
@@ -87,22 +86,21 @@ export function useSignAndExecuteTransactionBlock({
 					);
 				}
 
-				const result = await walletFeature.signAndExecuteTransactionBlock()({
+				const result = await walletFeature.signAndExecuteTransactionBlock({
 					...signTransactionBlockArgs,
-					transactionBlock:
-						typeof transactionBlock === 'string'
-							? transactionBlock
-							: await transactionBlock.toJSON({
-									supportedIntents,
-									client,
-							  }),
+					transactionBlock: {
+						async toJSON() {
+							return typeof transactionBlock === 'string'
+								? transactionBlock
+								: await transactionBlock.toJSON({
+										supportedIntents,
+										client,
+								  });
+						},
+					},
 					account: signerAccount,
 					chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 				});
-
-				if (waitForIndexing) {
-					await client.waitForTransactionBlock({ digest: result.digest });
-				}
 
 				return result;
 			}
@@ -114,15 +112,18 @@ export function useSignAndExecuteTransactionBlock({
 				);
 			}
 
-			const { signature, bytes } = await walletFeature.signTransactionBlock()({
+			const { signature, bytes } = await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
-				transactionBlock:
-					typeof transactionBlock === 'string'
-						? transactionBlock
-						: await transactionBlock.toJSON({
-								supportedIntents,
-								client,
-						  }),
+				transactionBlock: {
+					async toJSON() {
+						return typeof transactionBlock === 'string'
+							? transactionBlock
+							: await transactionBlock.toJSON({
+									supportedIntents,
+									client,
+							  });
+					},
+				},
 				account: signerAccount,
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
@@ -135,10 +136,6 @@ export function useSignAndExecuteTransactionBlock({
 					showBalanceChanges: true,
 				},
 			});
-
-			if (waitForIndexing) {
-				await client.waitForTransactionBlock({ digest });
-			}
 
 			return {
 				digest,
