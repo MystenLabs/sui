@@ -27,7 +27,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    type_abilities, LinterDiagCategory, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    type_abilities, LinterDiagCategory, LinterDiagCode, INVALID_LOC, LINT_WARNING_PREFIX,
     PUBLIC_TRANSFER_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
@@ -39,8 +39,8 @@ const TRANSFER_FUNCTIONS: &[(&str, &str, &str)] = &[
 const SELF_TRANSFER_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::SelfTransfer as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagCategory::Sui as u8,
+    LinterDiagCode::SelfTransfer as u8,
     "non-composable transfer to sender",
 );
 

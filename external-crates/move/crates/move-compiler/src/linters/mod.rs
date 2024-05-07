@@ -15,6 +15,17 @@ pub enum LintLevel {
     All,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum LinterDiagCategory {
+    Correctness,
+    Complexity,
+    Suspicious,
+    Deprecated,
+    Style,
+    Sui = 99,
+}
+
 pub const ALLOW_ATTR_CATEGORY: &str = "lint";
 pub const LINT_WARNING_PREFIX: &str = "Lint ";
 

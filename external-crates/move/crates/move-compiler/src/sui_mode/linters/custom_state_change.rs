@@ -33,8 +33,8 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    LinterDiagCategory, FREEZE_FUN, INVALID_LOC, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
-    RECEIVE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
+    LinterDiagCategory, LinterDiagCode, FREEZE_FUN, INVALID_LOC, LINT_WARNING_PREFIX, RECEIVE_FUN,
+    SHARE_FUN, SUI_PKG_NAME, TRANSFER_FUN, TRANSFER_MOD_NAME,
 };
 
 const PRIVATE_OBJ_FUNCTIONS: &[(&str, &str, &str)] = &[
@@ -47,8 +47,8 @@ const PRIVATE_OBJ_FUNCTIONS: &[(&str, &str, &str)] = &[
 const CUSTOM_STATE_CHANGE_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::CustomStateChange as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagCategory::Sui as u8,
+    LinterDiagCode::CustomStateChange as u8,
     "potentially unenforceable custom transfer/share/freeze policy",
 );
 

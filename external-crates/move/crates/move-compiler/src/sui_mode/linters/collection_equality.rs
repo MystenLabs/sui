@@ -21,8 +21,8 @@ use crate::{
 };
 
 use super::{
-    base_type, LinterDiagCategory, BAG_MOD_NAME, BAG_STRUCT_NAME, LINKED_TABLE_MOD_NAME,
-    LINKED_TABLE_STRUCT_NAME, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX, OBJECT_BAG_MOD_NAME,
+    base_type, LinterDiagCategory, LinterDiagCode, BAG_MOD_NAME, BAG_STRUCT_NAME,
+    LINKED_TABLE_MOD_NAME, LINKED_TABLE_STRUCT_NAME, LINT_WARNING_PREFIX, OBJECT_BAG_MOD_NAME,
     OBJECT_BAG_STRUCT_NAME, OBJECT_TABLE_MOD_NAME, OBJECT_TABLE_STRUCT_NAME, SUI_PKG_NAME,
     TABLE_MOD_NAME, TABLE_STRUCT_NAME, TABLE_VEC_MOD_NAME, TABLE_VEC_STRUCT_NAME, VEC_MAP_MOD_NAME,
     VEC_MAP_STRUCT_NAME, VEC_SET_MOD_NAME, VEC_SET_STRUCT_NAME,
@@ -31,8 +31,8 @@ use super::{
 const COLLECTIONS_EQUALITY_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::CollectionEquality as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagCategory::Sui as u8,
+    LinterDiagCode::CollectionEquality as u8,
     "possibly useless collections compare",
 );
 

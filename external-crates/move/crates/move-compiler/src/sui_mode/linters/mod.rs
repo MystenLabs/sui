@@ -7,7 +7,7 @@ use crate::{
     diagnostics::codes::WarningFilter,
     expansion::ast as E,
     hlir::ast::{BaseType_, SingleType, SingleType_},
-    linters::{LintLevel, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
+    linters::{LintLevel, LinterDiagCategory, ALLOW_ATTR_CATEGORY, LINT_WARNING_PREFIX},
     naming::ast as N,
     typing::visitor::TypingVisitor,
 };
@@ -75,7 +75,8 @@ pub const RANDOM_GENERATOR_STRUCT_NAME: &str = "RandomGenerator";
 
 pub const INVALID_LOC: Loc = Loc::invalid();
 
-pub enum LinterDiagCategory {
+#[repr(u8)]
+pub enum LinterDiagCode {
     ShareOwned,
     SelfTransfer,
     CustomStateChange,
@@ -85,53 +86,49 @@ pub enum LinterDiagCategory {
     PublicRandom,
 }
 
-/// A default code for each linter category (as long as only one code per category is used, no other
-/// codes are needed, otherwise they should be defined to be unique per-category).
-pub const LINTER_DEFAULT_DIAG_CODE: u8 = 1;
-
 pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
     let filters = vec![
         WarningFilter::All(Some(LINT_WARNING_PREFIX)),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::ShareOwned as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::ShareOwned as u8,
             Some(SHARE_OWNED_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::SelfTransfer as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::SelfTransfer as u8,
             Some(SELF_TRANSFER_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::CustomStateChange as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::CustomStateChange as u8,
             Some(CUSTOM_STATE_CHANGE_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::CoinField as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::CoinField as u8,
             Some(COIN_FIELD_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::FreezeWrapped as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::FreezeWrapped as u8,
             Some(FREEZE_WRAPPED_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::CollectionEquality as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::CollectionEquality as u8,
             Some(COLLECTION_EQUALITY_FILTER_NAME),
         ),
         WarningFilter::code(
             Some(LINT_WARNING_PREFIX),
-            LinterDiagCategory::PublicRandom as u8,
-            LINTER_DEFAULT_DIAG_CODE,
+            LinterDiagCategory::Sui as u8,
+            LinterDiagCode::PublicRandom as u8,
             Some(PUBLIC_RANDOM_FILTER_NAME),
         ),
     ];

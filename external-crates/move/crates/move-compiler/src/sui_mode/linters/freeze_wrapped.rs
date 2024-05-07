@@ -26,15 +26,15 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
 use super::{
-    base_type, LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    base_type, LinterDiagCategory, LinterDiagCode, FREEZE_FUN, LINT_WARNING_PREFIX,
     PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
 const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::FreezeWrapped as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagCategory::Sui as u8,
+    LinterDiagCode::FreezeWrapped as u8,
     "attempting to freeze wrapped objects",
 );
 
