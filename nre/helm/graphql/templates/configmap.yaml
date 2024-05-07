@@ -3,5 +3,4 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.configMapName }}
 data:
-  myconfig.conf: |-
-    {{ .Files.Get "files/config/graphql.toml" | indent 4 }}
+{{ (.Files.Glob "graphql.toml").AsConfig }}
