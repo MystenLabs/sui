@@ -480,6 +480,89 @@ describe('Non contract links', () => {
 			timeout: 30_000,
 		},
 	);
+
+	test(
+		'create link with minted assets',
+		async () => {
+			const link = new ZkSendLinkBuilder({
+				client,
+				contract: ZK_BAG_CONFIG,
+				sender: keypair.toSuiAddress(),
+			});
+
+			const txb = new TransactionBlock();
+
+			for (let i = 0; i < 3; i++) {
+				const bear = txb.moveCall({
+					target: `${DEMO_BEAR_CONFIG.packageId}::demo_bear::new`,
+					arguments: [
+						txb.pure.string(`A happy bear - ${Math.floor(Math.random() * 1_000_000_000)}`),
+					],
+				});
+
+				link.addClaimableObjectRef(bear, DEMO_BEAR_CONFIG.type);
+			}
+
+			link.addClaimableMist(100n);
+
+			const linkUrl = link.getLink();
+
+			await link.create({
+				transactionBlock: txb,
+				signer: keypair,
+				waitForTransactionBlock: true,
+			});
+
+			const claimLink = await ZkSendLink.fromUrl(linkUrl, {
+				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
+				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+			});
+
+			const claimableAssets = claimLink.assets!;
+
+			expect(claimLink.claimed).toEqual(false);
+			expect(claimableAssets.nfts.length).toEqual(3);
+			expect(claimableAssets.balances).toMatchInlineSnapshot(`
+				[
+				  {
+				    "amount": 100n,
+				    "coinType": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI",
+				  },
+				]
+			`);
+
+			const claim = await claimLink.claimAssets(keypair.toSuiAddress());
+
+			const res = await client.waitForTransactionBlock({
+				digest: claim.digest,
+				options: {
+					showObjectChanges: true,
+				},
+			});
+
+			expect(res.objectChanges?.length).toEqual(
+				3 + // bears,
+					1 + // coin
+					1 + // gas
+					1, // bag
+			);
+
+			const link2 = await ZkSendLink.fromUrl(linkUrl, {
+				contract: ZK_BAG_CONFIG,
+				network: 'testnet',
+				claimApi: 'https://zksend-git-mh-contract-claims-mysten-labs.vercel.app/api',
+			});
+			expect(link2.assets?.balances).toEqual(claimLink.assets?.balances);
+			expect(link2.assets?.nfts.map((nft) => nft.objectId).sort()).toEqual(
+				claimLink.assets?.nfts.map((nft) => nft.objectId).sort(),
+			);
+			expect(link2.claimed).toEqual(true);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
 });
 
 async function createBears(totalBears: number) {
