@@ -4965,7 +4965,7 @@ pub mod framework_injection {
             .iter()
             .map(|m| {
                 let mut buf = Vec::new();
-                m.serialize(&mut buf).unwrap();
+                m.serialize_with_version(m.version, &mut buf).unwrap();
                 buf
             })
             .collect()

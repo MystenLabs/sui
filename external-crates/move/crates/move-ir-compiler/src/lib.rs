@@ -36,7 +36,7 @@ impl<'a> Compiler<'a> {
         let compiled_module = self.compile_mod(code)?.0;
 
         let mut serialized_module = Vec::<u8>::new();
-        compiled_module.serialize(&mut serialized_module)?;
+        compiled_module.serialize_with_version(compiled_module.version, &mut serialized_module)?;
         Ok(serialized_module)
     }
 

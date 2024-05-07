@@ -389,7 +389,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes).unwrap();
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)
+                    .unwrap();
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<_>>()?;
@@ -750,7 +752,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                                     .iter()
                                     .map(|m| {
                                         let mut buf = vec![];
-                                        m.module.serialize(&mut buf).unwrap();
+                                        m.module
+                                            .serialize_with_version(m.module.version, &mut buf)
+                                            .unwrap();
                                         buf
                                     })
                                     .collect();
@@ -942,7 +946,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .iter()
                     .map(|m| {
                         let mut buf = vec![];
-                        m.module.serialize(&mut buf).unwrap();
+                        m.module
+                            .serialize_with_version(m.module.version, &mut buf)
+                            .unwrap();
                         buf
                     })
                     .collect::<Vec<_>>();
@@ -1256,7 +1262,8 @@ impl<'a> SuiTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes)?;
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;

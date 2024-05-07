@@ -2184,6 +2184,7 @@ impl ProtocolConfig {
             allow_receiving_object_id: self.allow_receiving_object_id(),
             reject_mutable_random_on_entry_functions: self
                 .reject_mutable_random_on_entry_functions(),
+            bytecode_version: self.move_binary_format_version(),
         }
     }
 

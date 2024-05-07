@@ -987,7 +987,7 @@ fn process_package(
         .iter()
         .map(|m| {
             let mut buf = vec![];
-            m.serialize(&mut buf).unwrap();
+            m.serialize_with_version(m.version, &mut buf).unwrap();
             buf
         })
         .collect();
