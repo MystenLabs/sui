@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClientContext } from '@mysten/dapp-kit';
-import { DryRunTransactionBlockResponse, GasCostSummary } from '@mysten/sui.js/src/client';
+import { DryRunTransactionBlockResponse, GasCostSummary } from '@mysten/sui/src/client';
 import { ReactNode } from 'react';
 
 import { ObjectLink } from '../ObjectLink';

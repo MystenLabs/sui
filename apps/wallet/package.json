@@ -120,7 +120,7 @@
 		"@mysten/icons": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
 		"@mysten/ledgerjs-hw-app-sui": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zklogin": "workspace:*",
 		"@noble/hashes": "^1.3.1",

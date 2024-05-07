@@ -7,8 +7,8 @@ import { TxnIcon } from '_src/ui/app/components/transactions-card/TxnIcon';
 import { useGetQredoTransaction } from '_src/ui/app/hooks/useGetQredoTransaction';
 import { Text } from '_src/ui/app/shared/text';
 import { formatDate, useOnScreen } from '@mysten/core';
-import { bcs } from '@mysten/sui.js/bcs';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { bcs } from '@mysten/sui/bcs';
+import { fromB64 } from '@mysten/sui/utils';
 import { useMemo, useRef } from 'react';
 
 export type QredoTransactionProps = {

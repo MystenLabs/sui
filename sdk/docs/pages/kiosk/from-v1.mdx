@@ -21,7 +21,7 @@ The following example is from the original Kiosk SDK V1 documentation.
 
 ```typescript
 import { placeAndList } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 const placeAndListToKiosk = async () => {
 	const kiosk = 'SomeKioskId';
@@ -79,7 +79,7 @@ The following example is from the original Kiosk SDK V1 documentation.
 
 ```typescript
 import { createKioskAndShare } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 const createKiosk = async () => {
 	const accountAddress = '0xSomeSuiAddress';
@@ -126,7 +126,7 @@ The following example is from the original Kiosk SDK V1 documentation.
 
 ```typescript
 import { queryTransferPolicy, purchaseAndResolvePolicies, place, testnetEnvironment } from '@mysten/kiosk';
-import { SuiClient } from '@mysten/sui.js/client';
+import { SuiClient } from '@mysten/sui/client';
 
 const client = new SuiClient(
   url: 'https://fullnode.testnet.sui.io:443',
@@ -245,7 +245,7 @@ import {
 	percentageToBasisPoints,
 	testnetEnvironment,
 } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 // Attaches a royalty rule of 1% or 0.1 SUI (whichever is bigger)
 // as well as a kiosk lock, making the objects trade-able only from/to a kiosk.

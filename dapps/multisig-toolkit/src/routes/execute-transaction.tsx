@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { parseSerializedSignature } from '@mysten/sui.js/cryptography';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import { parseSerializedSignature } from '@mysten/sui/cryptography';
 import { useMutation } from '@tanstack/react-query';
 import { AlertCircle } from 'lucide-react';
 import { useState } from 'react';

@@ -6,7 +6,7 @@ import {
 	SuiCallArg,
 	SuiTransaction,
 	TransactionBlockData,
-} from '@mysten/sui.js/src/client';
+} from '@mysten/sui/src/client';
 import { ReactNode } from 'react';
 
 import { ObjectLink } from '../ObjectLink';

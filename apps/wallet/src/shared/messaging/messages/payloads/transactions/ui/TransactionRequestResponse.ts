@@ -4,7 +4,7 @@
 import { isBasePayload } from '_payloads';
 import type { BasePayload, Payload } from '_payloads';
 import { type SignedTransaction } from '_src/ui/app/WalletSigner';
-import type { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
+import type { SuiTransactionBlockResponse } from '@mysten/sui/client';
 import { type SuiSignMessageOutput } from '@mysten/wallet-standard';
 
 export interface TransactionRequestResponse extends BasePayload {

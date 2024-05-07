@@ -47,7 +47,7 @@ Set up and configure several providers at the root of your React.js tree to ensu
 
 ```ts title='src/main.tsx'
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl } from '@mysten/sui.js/client';
+import { getFullnodeUrl } from '@mysten/sui/client';
 import { Theme } from '@radix-ui/themes';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider } from 'react-router-dom';
@@ -150,8 +150,8 @@ In the frontend, you might need to execute a transaction block in multiple place
 
 ```ts title='src/hooks/useTransactionExecution.ts'
 import { useSignTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
-import { SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiTransactionBlockResponse } from '@mysten/sui/client';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import toast from 'react-hot-toast';
 
 export function useTransactionExecution() {
@@ -202,7 +202,7 @@ You need a utility function to create a dummy object representing a real world a
 
 ```ts title='src/mutations/demo.ts'
 import { useCurrentAccount } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { CONSTANTS } from '@/constants';

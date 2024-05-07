@@ -24,7 +24,7 @@ See https://sdk.mystenlabs.com/typescript for full documentation
 To use the Sui dApp Kit in your project, run the following command in your project root:
 
 ```sh npm2yarn
-npm i --save @mysten/dapp-kit @mysten/sui.js @tanstack/react-query
+npm i --save @mysten/dapp-kit @mysten/sui @tanstack/react-query
 ```
 
 ## Setting up providers
@@ -35,7 +35,7 @@ pages.
 
 ```tsx
 import { createNetworkConfig, SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
-import { getFullnodeUrl, type SuiClientOptions } from '@mysten/sui.js/client';
+import { getFullnodeUrl, type SuiClientOptions } from '@mysten/sui/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Config options for the networks you want to connect to

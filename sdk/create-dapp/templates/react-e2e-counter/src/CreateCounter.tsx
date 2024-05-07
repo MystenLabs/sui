@@ -1,4 +1,4 @@
-import { TransactionBlock } from "@mysten/sui.js/transactions";
+import { TransactionBlock } from "@mysten/sui/transactions";
 import { Button, Container } from "@radix-ui/themes";
 import {
   useSignAndExecuteTransactionBlock,

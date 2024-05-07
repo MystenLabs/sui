@@ -8,9 +8,9 @@ import {
 	type QredoAPI,
 	type TransactionInfoResponse,
 } from '_src/shared/qredo-api';
-import { type SuiClient } from '@mysten/sui.js/client';
-import { messageWithIntent } from '@mysten/sui.js/cryptography';
-import { toB64 } from '@mysten/sui.js/utils';
+import { type SuiClient } from '@mysten/sui/client';
+import { messageWithIntent } from '@mysten/sui/cryptography';
+import { toB64 } from '@mysten/sui/utils';
 import mitt from 'mitt';
 
 import { WalletSigner } from './WalletSigner';
