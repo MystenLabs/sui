@@ -4,7 +4,7 @@
 import type { BcsType, BcsTypeOptions } from '@mysten/bcs';
 import { bcs, fromB58, fromB64, fromHEX, toB58, toB64, toHEX } from '@mysten/bcs';
 
-import { normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
+import { isValidSuiAddress, normalizeSuiAddress, SUI_ADDRESS_LENGTH } from '../utils/sui-types.js';
 import { TypeTagSerializer } from './type-tag-serializer.js';
 import type { TypeTag as TypeTagType } from './types.js';
 
@@ -28,6 +28,12 @@ function optionEnum<T extends BcsType<any, any>>(type: T) {
 }
 
 export const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
+	validate: (val) => {
+		const address = normalizeSuiAddress(typeof val === 'string' ? val : toHEX(val));
+		if (!isValidSuiAddress(address)) {
+			throw new Error(`Invalid Sui address ${address}`);
+		}
+	},
 	input: (val: string | Uint8Array) =>
 		typeof val === 'string' ? fromHEX(normalizeSuiAddress(val)) : val,
 	output: (val) => normalizeSuiAddress(toHEX(val)),
