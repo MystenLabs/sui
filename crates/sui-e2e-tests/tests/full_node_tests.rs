@@ -71,7 +71,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
@@ -117,7 +117,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     handle
         .sui_node
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
@@ -510,7 +510,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
@@ -631,7 +631,7 @@ async fn do_test_full_node_sync_flood() {
         .collect();
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
         .await
         .unwrap();
@@ -667,7 +667,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 
     let (sender, object_id, digest) = create_devnet_nft(context, package_id).await;
     node.state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
@@ -916,7 +916,7 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
     assert!(!is_executed_locally);
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
@@ -1215,7 +1215,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
         .sui_node;
 
     node.state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();
@@ -1235,7 +1235,7 @@ async fn test_full_node_bootstrap_from_snapshot() -> Result<(), anyhow::Error> {
     let (_transferred_object, _, _, digest_after_restore, ..) =
         transfer_coin(&test_cluster.wallet).await?;
     node.state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest_after_restore])
         .await
         .unwrap();

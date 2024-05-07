@@ -27,11 +27,10 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
-use crate::authority::AuthorityMetrics;
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    execution_cache::ExecutionCacheRead,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, execution_cache::ObjectCacheRead,
 };
+use crate::{authority::AuthorityMetrics, execution_cache::TransactionCacheRead};
 use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
@@ -51,7 +50,8 @@ const MIN_HASHMAP_CAPACITY: usize = 1000;
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
-    cache_read: Arc<dyn ExecutionCacheRead>,
+    object_cache_read: Arc<dyn ObjectCacheRead>,
+    transaction_cache_read: Arc<dyn TransactionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
     // inner is a doubly nested lock so that we can enforce that an outer lock (for read) is held
@@ -338,13 +338,15 @@ impl TransactionManager {
     /// Transactions from other sources, e.g. checkpoint executor, have own persistent storage to
     /// retry transactions.
     pub(crate) fn new(
-        cache_read: Arc<dyn ExecutionCacheRead>,
+        object_cache_read: Arc<dyn ObjectCacheRead>,
+        transaction_cache_read: Arc<dyn TransactionCacheRead>,
         epoch_store: &AuthorityPerEpochStore,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
-            cache_read,
+            object_cache_read,
+            transaction_cache_read,
             metrics: metrics.clone(),
             inner: RwLock::new(RwLock::new(Inner::new(epoch_store.epoch(), metrics))),
             tx_ready_certificates,
@@ -411,7 +413,7 @@ impl TransactionManager {
                 let digest = *cert.digest();
                 // skip already executed txes
                 if self
-                    .cache_read
+                    .transaction_cache_read
                     .is_tx_already_executed(&digest)
                     .unwrap_or_else(|err| {
                         panic!("Failed to check if tx is already executed: {:?}", err)
@@ -494,7 +496,7 @@ impl TransactionManager {
         // But input objects can become available before TM lock is acquired.
         // So missing objects' availability are checked again after acquiring TM lock.
         let cache_miss_availability = self
-            .cache_read
+            .object_cache_read
             .multi_input_objects_available(
                 &input_object_cache_misses,
                 receiving_objects,
@@ -588,7 +590,7 @@ impl TransactionManager {
             }
             // skip already executed txes
             let is_tx_already_executed = self
-                .cache_read
+                .transaction_cache_read
                 .is_tx_already_executed(&digest)
                 .expect("Check if tx is already executed should not fail");
             if is_tx_already_executed {

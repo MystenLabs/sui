@@ -14,7 +14,7 @@ pub use crate::checkpoints::checkpoint_output::{
     LogCheckpointOutput, SendCheckpointToStateSync, SubmitCheckpointToConsensus,
 };
 pub use crate::checkpoints::metrics::CheckpointMetrics;
-use crate::execution_cache::ExecutionCacheRead;
+use crate::execution_cache::TransactionCacheRead;
 use crate::stake_aggregator::{InsertResult, MultiStakeAggregator};
 use crate::state_accumulator::StateAccumulator;
 use diffy::create_patch;
@@ -778,7 +778,7 @@ impl CheckpointStore {
                 panic!("checkpoint contents not found for locally computed checkpoint {:?} (digest: {:?})", seq, checkpoint.content_digest);
             };
 
-            let cache = state.get_cache_reader();
+            let cache = state.get_transaction_cache_reader();
 
             let tx_digests: Vec<_> = contents.iter().map(|digests| digests.transaction).collect();
             let fx_digests: Vec<_> = contents.iter().map(|digests| digests.effects).collect();
@@ -858,7 +858,7 @@ pub struct CheckpointBuilder {
     epoch_store: Arc<AuthorityPerEpochStore>,
     notify: Arc<Notify>,
     notify_aggregator: Arc<Notify>,
-    effects_store: Arc<dyn ExecutionCacheRead>,
+    effects_store: Arc<dyn TransactionCacheRead>,
     accumulator: Arc<StateAccumulator>,
     output: Box<dyn CheckpointOutput>,
     exit: watch::Receiver<()>,
@@ -896,7 +896,7 @@ impl CheckpointBuilder {
         tables: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
         notify: Arc<Notify>,
-        effects_store: Arc<dyn ExecutionCacheRead>,
+        effects_store: Arc<dyn TransactionCacheRead>,
         accumulator: Arc<StateAccumulator>,
         output: Box<dyn CheckpointOutput>,
         exit: watch::Receiver<()>,
@@ -1162,7 +1162,7 @@ impl CheckpointBuilder {
             .collect();
         let transactions_and_sizes = self
             .state
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_transactions_and_serialized_sizes(&all_digests)?;
         let mut all_effects_and_transaction_sizes = Vec::with_capacity(all_effects.len());
         let mut transactions = Vec::with_capacity(all_effects.len());
@@ -1921,7 +1921,7 @@ impl CheckpointService {
         state: Arc<AuthorityState>,
         checkpoint_store: Arc<CheckpointStore>,
         epoch_store: Arc<AuthorityPerEpochStore>,
-        effects_store: Arc<dyn ExecutionCacheRead>,
+        effects_store: Arc<dyn TransactionCacheRead>,
         accumulator: Arc<StateAccumulator>,
         checkpoint_output: Box<dyn CheckpointOutput>,
         certified_checkpoint_output: Box<dyn CertifiedCheckpointOutput>,
@@ -2084,21 +2084,19 @@ impl From<PendingCheckpoint> for PendingCheckpointV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::authority::authority_store::SuiLockResult;
     use crate::authority::test_authority_builder::TestAuthorityBuilder;
     use futures::future::BoxFuture;
     use shared_crypto::intent::{Intent, IntentScope};
     use std::collections::{BTreeMap, HashMap};
     use std::ops::Deref;
     use sui_macros::sim_test;
-    use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, TransactionEffectsDigest};
+    use sui_types::base_types::{ObjectID, SequenceNumber, TransactionEffectsDigest};
     use sui_types::crypto::{AuthoritySignInfo, Signature};
     use sui_types::digests::TransactionEventsDigest;
     use sui_types::effects::{TransactionEffects, TransactionEvents};
     use sui_types::messages_checkpoint::SignedCheckpointSummary;
     use sui_types::move_package::MovePackage;
-    use sui_types::object::{self, Object};
-    use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, PackageObject};
+    use sui_types::object;
     use sui_types::transaction::{GenesisObject, VerifiedTransaction};
     use tokio::sync::mpsc;
 
@@ -2307,7 +2305,7 @@ mod tests {
         assert_eq!(c2sc.sequence_number, 1);
     }
 
-    impl ExecutionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
+    impl TransactionCacheRead for HashMap<TransactionDigest, TransactionEffects> {
         fn notify_read_executed_effects(
             &self,
             digests: &[TransactionDigest],
@@ -2346,65 +2344,6 @@ mod tests {
         // complication in non-test code. (e.g. had to implement EFfectsNotifyRead for all
         // ExecutionCacheRead implementors).
 
-        fn get_package_object(&self, _: &ObjectID) -> SuiResult<Option<PackageObject>> {
-            unimplemented!()
-        }
-
-        fn force_reload_system_packages(&self, _: &[ObjectID]) {
-            unimplemented!()
-        }
-
-        fn get_object(&self, _: &ObjectID) -> SuiResult<Option<Object>> {
-            unimplemented!()
-        }
-
-        fn get_latest_object_ref_or_tombstone(&self, _: ObjectID) -> SuiResult<Option<ObjectRef>> {
-            unimplemented!()
-        }
-
-        fn get_latest_object_or_tombstone(
-            &self,
-            _: ObjectID,
-        ) -> SuiResult<Option<(ObjectKey, ObjectOrTombstone)>> {
-            unimplemented!()
-        }
-
-        fn get_object_by_key(&self, _: &ObjectID, _: SequenceNumber) -> SuiResult<Option<Object>> {
-            unimplemented!()
-        }
-
-        fn multi_get_objects_by_key(&self, _: &[ObjectKey]) -> SuiResult<Vec<Option<Object>>> {
-            unimplemented!()
-        }
-
-        fn object_exists_by_key(&self, _: &ObjectID, _: SequenceNumber) -> SuiResult<bool> {
-            unimplemented!()
-        }
-
-        fn multi_object_exists_by_key(&self, _: &[ObjectKey]) -> SuiResult<Vec<bool>> {
-            unimplemented!()
-        }
-
-        fn find_object_lt_or_eq_version(
-            &self,
-            _: ObjectID,
-            _: SequenceNumber,
-        ) -> SuiResult<Option<Object>> {
-            unimplemented!()
-        }
-
-        fn get_lock(&self, _: ObjectRef, _: &AuthorityPerEpochStore) -> SuiLockResult {
-            unimplemented!()
-        }
-
-        fn _get_live_objref(&self, _: ObjectID) -> SuiResult<ObjectRef> {
-            unimplemented!()
-        }
-
-        fn check_owned_objects_are_live(&self, _: &[ObjectRef]) -> SuiResult {
-            unimplemented!()
-        }
-
         fn multi_get_transaction_blocks(
             &self,
             _: &[TransactionDigest],
@@ -2430,27 +2369,6 @@ mod tests {
             &self,
             _: &[TransactionEventsDigest],
         ) -> SuiResult<Vec<Option<TransactionEvents>>> {
-            unimplemented!()
-        }
-
-        fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
-            unimplemented!()
-        }
-
-        fn get_marker_value(
-            &self,
-            _: &ObjectID,
-            _: SequenceNumber,
-            _: EpochId,
-        ) -> SuiResult<Option<MarkerValue>> {
-            unimplemented!()
-        }
-
-        fn get_latest_marker(
-            &self,
-            _: &ObjectID,
-            _: EpochId,
-        ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
             unimplemented!()
         }
     }

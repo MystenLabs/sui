@@ -42,7 +42,7 @@ use crate::{
     consensus_types::{
         committee_api::CommitteeAPI, consensus_output_api::ConsensusOutputAPI, AuthorityIndex,
     },
-    execution_cache::ExecutionCacheRead,
+    execution_cache::ObjectCacheRead,
     scoring_decision::update_low_scoring_authorities,
     transaction_manager::TransactionManager,
 };
@@ -95,7 +95,7 @@ impl ConsensusHandlerInitializer {
             self.epoch_store.clone(),
             self.checkpoint_service.clone(),
             self.state.transaction_manager().clone(),
-            self.state.get_cache_reader().clone(),
+            self.state.get_object_cache_reader().clone(),
             self.low_scoring_authorities.clone(),
             committee,
             self.state.metrics.clone(),
@@ -114,7 +114,7 @@ pub struct ConsensusHandler<C> {
     last_consensus_stats: ExecutionIndicesWithStats,
     checkpoint_service: Arc<C>,
     /// cache reader is needed when determining the next version to assign for shared objects.
-    cache_reader: Arc<dyn ExecutionCacheRead>,
+    cache_reader: Arc<dyn ObjectCacheRead>,
     /// Reputation scores used by consensus adapter that we update, forwarded from consensus
     low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
     /// The narwhal committee used to do stake computations for deciding set of low scoring authorities
@@ -136,7 +136,7 @@ impl<C> ConsensusHandler<C> {
         epoch_store: Arc<AuthorityPerEpochStore>,
         checkpoint_service: Arc<C>,
         transaction_manager: Arc<TransactionManager>,
-        cache_reader: Arc<dyn ExecutionCacheRead>,
+        cache_reader: Arc<dyn ObjectCacheRead>,
         low_scoring_authorities: Arc<ArcSwap<HashMap<AuthorityName, u64>>>,
         committee: Committee,
         metrics: Arc<AuthorityMetrics>,
@@ -908,7 +908,7 @@ mod tests {
             epoch_store,
             Arc::new(CheckpointServiceNoop {}),
             state.transaction_manager().clone(),
-            state.get_cache_reader().clone(),
+            state.get_object_cache_reader().clone(),
             Arc::new(ArcSwap::default()),
             committee.clone(),
             metrics,

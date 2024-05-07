@@ -38,7 +38,8 @@ use typed_store::Map;
 
 use super::{
     implement_passthrough_traits, CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics,
-    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, StateSyncAPI, TestingAPI,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI,
+    TransactionCacheRead,
 };
 
 pub struct PassthroughCache {
@@ -81,7 +82,7 @@ impl PassthroughCache {
     }
 }
 
-impl ExecutionCacheRead for PassthroughCache {
+impl ObjectCacheRead for PassthroughCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         self.package_cache
             .get_package_object(package_id, &*self.store)
@@ -157,6 +158,33 @@ impl ExecutionCacheRead for PassthroughCache {
         self.store.check_owned_objects_are_live(owned_object_refs)
     }
 
+    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
+        get_sui_system_state(self)
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        get_bridge(self)
+    }
+
+    fn get_marker_value(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<MarkerValue>> {
+        self.store.get_marker_value(object_id, &version, epoch_id)
+    }
+
+    fn get_latest_marker(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+        self.store.get_latest_marker(object_id, epoch_id)
+    }
+}
+
+impl TransactionCacheRead for PassthroughCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
@@ -213,31 +241,6 @@ impl ExecutionCacheRead for PassthroughCache {
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         self.store.multi_get_events(event_digests)
-    }
-
-    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
-        get_sui_system_state(self)
-    }
-
-    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
-        get_bridge(self)
-    }
-
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
-        self.store.get_marker_value(object_id, &version, epoch_id)
-    }
-
-    fn get_latest_marker(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        self.store.get_latest_marker(object_id, epoch_id)
     }
 }
 

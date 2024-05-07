@@ -69,7 +69,7 @@ use crate::consensus_handler::{
 use crate::epoch::epoch_metrics::EpochMetrics;
 use crate::epoch::randomness::{DkgStatus, RandomnessManager, RandomnessReporter};
 use crate::epoch::reconfiguration::ReconfigState;
-use crate::execution_cache::ExecutionCacheRead;
+use crate::execution_cache::ObjectCacheRead;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::post_consensus_tx_reorder::PostConsensusTxReorder;
 use crate::signature_verifier::*;
@@ -1366,7 +1366,7 @@ impl AuthorityPerEpochStore {
     pub(crate) async fn get_or_init_next_object_versions(
         &self,
         objects_to_init: &[(ObjectID, SequenceNumber)],
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult<HashMap<ObjectID, SequenceNumber>> {
         let mut ret: HashMap<_, _>;
         // Since this can be called from consensus task, we must retry forever - the only other
@@ -1461,7 +1461,7 @@ impl AuthorityPerEpochStore {
     /// versions outside of consensus and do not want to taint the next_shared_object_versions table.
     pub async fn assign_shared_object_versions_idempotent(
         &self,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
         certificates: &[VerifiedExecutableTransaction],
     ) -> SuiResult {
         let mut db_batch = self.tables()?.assigned_shared_object_versions.batch();
@@ -1668,7 +1668,7 @@ impl AuthorityPerEpochStore {
         &self,
         certificate: &VerifiedExecutableTransaction,
         effects: &TransactionEffects,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
     ) -> SuiResult {
         let versions = SharedObjVerManager::assign_versions_from_effects(
             &[(certificate, effects)],
@@ -2360,7 +2360,7 @@ impl AuthorityPerEpochStore {
         transactions: Vec<SequencedConsensusTransaction>,
         consensus_stats: &ExecutionIndicesWithStats,
         checkpoint_service: &Arc<C>,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
         authority_metrics: &Arc<AuthorityMetrics>,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
@@ -2688,7 +2688,7 @@ impl AuthorityPerEpochStore {
     // cause the transactions to be cancelled in execution engine.
     async fn process_consensus_transaction_shared_object_versions(
         &self,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
         transactions: &[VerifiedExecutableTransaction],
         randomness_round: Option<RandomnessRound>,
         cancelled_txns: &BTreeMap<TransactionDigest, CancelConsensusCertificateReason>,
@@ -2746,7 +2746,7 @@ impl AuthorityPerEpochStore {
         self: &Arc<Self>,
         transactions: Vec<SequencedConsensusTransaction>,
         checkpoint_service: &Arc<C>,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
         authority_metrics: &Arc<AuthorityMetrics>,
         skip_consensus_commit_prologue_in_test: bool,
     ) -> SuiResult<Vec<VerifiedExecutableTransaction>> {
@@ -2791,7 +2791,7 @@ impl AuthorityPerEpochStore {
         transactions: &[VerifiedSequencedConsensusTransaction],
         end_of_publish_transactions: &[VerifiedSequencedConsensusTransaction],
         checkpoint_service: &Arc<C>,
-        cache_reader: &dyn ExecutionCacheRead,
+        cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
         randomness_roots: &mut BTreeSet<TransactionKey>,

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::execution_cache::ExecutionCacheTraitPointers;
+use crate::execution_cache::TransactionCacheRead;
 use crate::transaction_outputs::TransactionOutputs;
 use crate::verify_indexes::verify_indexes;
 use anyhow::anyhow;
@@ -138,8 +139,8 @@ use crate::checkpoints::CheckpointStore;
 use crate::consensus_adapter::ConsensusAdapter;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::execution_cache::{
-    CheckpointCache, ExecutionCacheCommit, ExecutionCacheRead, ExecutionCacheReconfigAPI,
-    ExecutionCacheWrite, StateSyncAPI,
+    CheckpointCache, ExecutionCacheCommit, ExecutionCacheReconfigAPI, ExecutionCacheWrite,
+    ObjectCacheRead, StateSyncAPI,
 };
 use crate::execution_driver::execution_process;
 use crate::metrics::LatencyObserver;
@@ -1004,7 +1005,7 @@ impl AuthorityState {
                 .acquire_shared_locks_from_effects(
                     transaction,
                     effects.data(),
-                    self.get_cache_reader().as_ref(),
+                    self.get_object_cache_reader().as_ref(),
                 )
                 .await?;
         }
@@ -1015,7 +1016,7 @@ impl AuthorityState {
             .enqueue(vec![transaction.clone()], epoch_store);
 
         let observed_effects = self
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[digest])
             .instrument(tracing::debug_span!(
                 "notify_read_effects_in_execute_certificate_with_effects"
@@ -1152,14 +1153,14 @@ impl AuthorityState {
         &self,
         certificate: &VerifiedCertificate,
     ) -> SuiResult<TransactionEffects> {
-        self.get_cache_reader()
+        self.get_transaction_cache_reader()
             .notify_read_executed_effects(&[*certificate.digest()])
             .await
             .map(|mut r| r.pop().expect("must return correct number of effects"))
     }
 
     fn check_owned_locks(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        self.get_cache_reader()
+        self.get_object_cache_reader()
             .check_owned_objects_are_live(owned_object_refs)
     }
 
@@ -1216,7 +1217,10 @@ impl AuthorityState {
 
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
-        if let Some(effects) = self.get_cache_reader().get_executed_effects(&digest)? {
+        if let Some(effects) = self
+            .get_transaction_cache_reader()
+            .get_executed_effects(&digest)?
+        {
             tx_guard.release();
             return Ok((effects, None));
         }
@@ -1421,7 +1425,7 @@ impl AuthorityState {
         if certificate.transaction_data().is_end_of_epoch_tx() {
             // At the end of epoch, since system packages may have been upgraded, force
             // reload them in the cache.
-            self.get_cache_reader()
+            self.get_object_cache_reader()
                 .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         }
 
@@ -2005,7 +2009,8 @@ impl AuthorityState {
     }
 
     pub fn is_tx_already_executed(&self, digest: &TransactionDigest) -> SuiResult<bool> {
-        self.get_cache_reader().is_tx_already_executed(digest)
+        self.get_transaction_cache_reader()
+            .is_tx_already_executed(digest)
     }
 
     #[instrument(level = "debug", skip_all, err)]
@@ -2573,7 +2578,10 @@ impl AuthorityState {
         let metrics = Arc::new(AuthorityMetrics::new(prometheus_registry));
         let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
         let transaction_manager = Arc::new(TransactionManager::new(
-            execution_cache_trait_pointers.cache_reader.clone(),
+            execution_cache_trait_pointers.object_cache_reader.clone(),
+            execution_cache_trait_pointers
+                .transaction_cache_reader
+                .clone(),
             &epoch_store,
             tx_ready_certificates,
             metrics.clone(),
@@ -2596,7 +2604,7 @@ impl AuthorityState {
             archive_readers,
         );
         let input_loader =
-            TransactionInputLoader::new(execution_cache_trait_pointers.cache_reader.clone());
+            TransactionInputLoader::new(execution_cache_trait_pointers.object_cache_reader.clone());
         let epoch = epoch_store.epoch();
         let state = Arc::new(AuthorityState {
             name,
@@ -2636,8 +2644,12 @@ impl AuthorityState {
     }
 
     // TODO: Consolidate our traits to reduce the number of methods here.
-    pub fn get_cache_reader(&self) -> &Arc<dyn ExecutionCacheRead> {
-        &self.execution_cache_trait_pointers.cache_reader
+    pub fn get_object_cache_reader(&self) -> &Arc<dyn ObjectCacheRead> {
+        &self.execution_cache_trait_pointers.object_cache_reader
+    }
+
+    pub fn get_transaction_cache_reader(&self) -> &Arc<dyn TransactionCacheRead> {
+        &self.execution_cache_trait_pointers.transaction_cache_reader
     }
 
     pub fn get_cache_writer(&self) -> &Arc<dyn ExecutionCacheWrite> {
@@ -3071,7 +3083,8 @@ impl AuthorityState {
 
     // This function is only used for testing.
     pub fn get_sui_system_state_object_for_testing(&self) -> SuiResult<SuiSystemState> {
-        self.get_cache_reader().get_sui_system_state_object_unsafe()
+        self.get_object_cache_reader()
+            .get_sui_system_state_object_unsafe()
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -3113,7 +3126,7 @@ impl AuthorityState {
     pub fn get_object_read(&self, object_id: &ObjectID) -> SuiResult<ObjectRead> {
         Ok(
             match self
-                .get_cache_reader()
+                .get_object_cache_reader()
                 .get_latest_object_or_tombstone(*object_id)?
             {
                 Some((_, ObjectOrTombstone::Object(object))) => {
@@ -3174,7 +3187,7 @@ impl AuthorityState {
     ) -> SuiResult<PastObjectRead> {
         // Firstly we see if the object ever existed by getting its latest data
         let Some(obj_ref) = self
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(*object_id)?
         else {
             return Ok(PastObjectRead::ObjectNotExists(*object_id));
@@ -3227,7 +3240,7 @@ impl AuthorityState {
         version: SequenceNumber,
     ) -> SuiResult<Option<(Object, Option<MoveStructLayout>)>> {
         let Some(object) = self
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_object_by_key(object_id, version)?
         else {
             return Ok(None);
@@ -3431,7 +3444,7 @@ impl AuthorityState {
         &self,
         digest: &TransactionEventsDigest,
     ) -> SuiResult<TransactionEvents> {
-        self.get_cache_reader()
+        self.get_transaction_cache_reader()
             .get_events(digest)?
             .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
     }
@@ -3868,7 +3881,7 @@ impl AuthorityState {
             self.get_signed_effects_and_maybe_resign(transaction_digest, epoch_store)?
         {
             if let Some(transaction) = self
-                .get_cache_reader()
+                .get_transaction_cache_reader()
                 .get_transaction_block(transaction_digest)?
             {
                 let cert_sig = epoch_store.get_transaction_cert_sig(transaction_digest)?;
@@ -3907,7 +3920,7 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult<Option<VerifiedSignedTransactionEffects>> {
         let effects = self
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .get_executed_effects(transaction_digest)?;
         match effects {
             Some(effects) => Ok(Some(self.sign_effects(effects, epoch_store)?)),
@@ -4022,7 +4035,7 @@ impl AuthorityState {
         epoch_store: &AuthorityPerEpochStore,
     ) -> SuiResult<Option<VerifiedSignedTransaction>> {
         let lock_info = self
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_lock(*object_ref, epoch_store)
             .map_err(SuiError::from)?;
         let lock_info = match lock_info {
@@ -4043,14 +4056,14 @@ impl AuthorityState {
     }
 
     pub async fn get_objects(&self, objects: &[ObjectID]) -> SuiResult<Vec<Option<Object>>> {
-        self.get_cache_reader().get_objects(objects)
+        self.get_object_cache_reader().get_objects(objects)
     }
 
     pub async fn get_object_or_tombstone(
         &self,
         object_id: ObjectID,
     ) -> SuiResult<Option<ObjectRef>> {
-        self.get_cache_reader()
+        self.get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
     }
 
@@ -4573,7 +4586,7 @@ impl AuthorityState {
         // The tx could have been executed by state sync already - if so simply return an error.
         // The checkpoint builder will shortly be terminated by reconfiguration anyway.
         if self
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .is_tx_already_executed(tx_digest)
             .expect("read cannot fail")
         {
@@ -4591,7 +4604,7 @@ impl AuthorityState {
         // This is because we do not sequence end-of-epoch transactions through consensus.
         epoch_store
             .assign_shared_object_versions_idempotent(
-                self.get_cache_reader().as_ref(),
+                self.get_object_cache_reader().as_ref(),
                 &[executable_tx.clone()],
             )
             .await?;
@@ -4742,7 +4755,7 @@ impl AuthorityState {
     pub async fn insert_objects_unsafe_for_testing_only(&self, objects: &[Object]) -> SuiResult {
         self.get_reconfig_api()
             .bulk_insert_genesis_objects(objects)?;
-        self.get_cache_reader()
+        self.get_object_cache_reader()
             .force_reload_system_packages(&BuiltInFramework::all_package_ids());
         Ok(())
     }
@@ -4826,7 +4839,7 @@ impl RandomnessRoundReceiver {
             let Ok(mut effects) = tokio::time::timeout(
                 RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
                 authority_state
-                    .get_cache_reader()
+                    .get_transaction_cache_reader()
                     .notify_read_executed_effects(&[digest]),
             )
             .await
@@ -4856,7 +4869,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         Vec<Option<TransactionEvents>>,
     )> {
         let txns = if !transactions.is_empty() {
-            self.get_cache_reader()
+            self.get_transaction_cache_reader()
                 .multi_get_transaction_blocks(transactions)?
                 .into_iter()
                 .map(|t| t.map(|t| (*t).clone().into_inner()))
@@ -4866,14 +4879,15 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         };
 
         let fx = if !effects.is_empty() {
-            self.get_cache_reader()
+            self.get_transaction_cache_reader()
                 .multi_get_executed_effects(effects)?
         } else {
             vec![]
         };
 
         let evts = if !events.is_empty() {
-            self.get_cache_reader().multi_get_events(events)?
+            self.get_transaction_cache_reader()
+                .multi_get_events(events)?
         } else {
             vec![]
         };
@@ -4947,7 +4961,7 @@ impl TransactionKeyValueStoreTrait for AuthorityState {
         object_id: ObjectID,
         version: VersionNumber,
     ) -> SuiResult<Option<Object>> {
-        self.get_cache_reader()
+        self.get_object_cache_reader()
             .get_object_by_key(&object_id, version)
             .map_err(Into::into)
     }

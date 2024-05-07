@@ -56,7 +56,7 @@ impl RocksDbStore {
 
     pub fn get_objects(&self, object_keys: &[ObjectKey]) -> Result<Vec<Option<Object>>, SuiError> {
         self.cache_traits
-            .cache_reader
+            .object_cache_reader
             .multi_get_objects_by_key(object_keys)
     }
 
@@ -153,7 +153,7 @@ impl ReadStore for RocksDbStore {
                     if let (Some(t), Some(e)) = (
                         self.get_transaction(&tx.transaction)?,
                         self.cache_traits
-                            .cache_reader
+                            .transaction_cache_reader
                             .get_effects(&tx.effects)
                             .map_err(sui_types::storage::error::Error::custom)?,
                     ) {
@@ -192,7 +192,7 @@ impl ReadStore for RocksDbStore {
         digest: &TransactionDigest,
     ) -> Result<Option<Arc<VerifiedTransaction>>, StorageError> {
         self.cache_traits
-            .cache_reader
+            .transaction_cache_reader
             .get_transaction_block(digest)
             .map_err(StorageError::custom)
     }
@@ -202,7 +202,7 @@ impl ReadStore for RocksDbStore {
         digest: &TransactionDigest,
     ) -> Result<Option<TransactionEffects>, StorageError> {
         self.cache_traits
-            .cache_reader
+            .transaction_cache_reader
             .get_executed_effects(digest)
             .map_err(StorageError::custom)
     }
@@ -212,7 +212,7 @@ impl ReadStore for RocksDbStore {
         digest: &TransactionEventsDigest,
     ) -> Result<Option<TransactionEvents>, StorageError> {
         self.cache_traits
-            .cache_reader
+            .transaction_cache_reader
             .get_events(digest)
             .map_err(StorageError::custom)
     }

@@ -312,7 +312,7 @@ impl SingleValidator {
             .collect();
         self.epoch_store
             .assign_shared_object_versions_idempotent(
-                self.get_validator().get_cache_reader().as_ref(),
+                self.get_validator().get_object_cache_reader().as_ref(),
                 &transactions,
             )
             .await
