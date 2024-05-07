@@ -65,16 +65,14 @@ impl MockConsensusClient {
                         )
                         .await
                         .unwrap();
-                    let tx = match tx.kind {
-                        ConsensusTransactionKind::UserTransaction(tx) => tx,
-                        _ => unreachable!("Only user transactions are supported in benchmark"),
-                    };
-                    if tx.contains_shared_object() {
-                        validator.enqueue_certificates_for_execution(
-                            vec![VerifiedCertificate::new_unchecked(*tx)],
-                            &epoch_store,
-                        );
-                    }
+                }
+            }
+            if let ConsensusTransactionKind::UserTransaction(tx) = tx.kind {
+                if tx.contains_shared_object() {
+                    validator.enqueue_certificates_for_execution(
+                        vec![VerifiedCertificate::new_unchecked(*tx)],
+                        &epoch_store,
+                    );
                 }
             }
         }

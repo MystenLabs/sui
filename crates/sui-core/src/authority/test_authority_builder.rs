@@ -294,20 +294,22 @@ impl<'a> TestAuthorityBuilder<'a> {
         .await;
 
         // Set up randomness with no-op consensus (DKG will not complete).
-        let consensus_client =
-            Box::new(MockConsensusClient::new(state.clone(), ConsensusMode::Noop));
-        let randomness_manager = RandomnessManager::try_new(
-            Arc::downgrade(&epoch_store),
-            consensus_client,
-            randomness::Handle::new_stub(),
-            config.protocol_key_pair(),
-        )
-        .await
-        .unwrap();
-        epoch_store
-            .set_randomness_manager(randomness_manager)
+        if epoch_store.randomness_state_enabled() {
+            let consensus_client =
+                Box::new(MockConsensusClient::new(state.clone(), ConsensusMode::Noop));
+            let randomness_manager = RandomnessManager::try_new(
+                Arc::downgrade(&epoch_store),
+                consensus_client,
+                randomness::Handle::new_stub(),
+                config.protocol_key_pair(),
+            )
             .await
             .unwrap();
+            epoch_store
+                .set_randomness_manager(randomness_manager)
+                .await
+                .unwrap();
+        }
 
         // For any type of local testing that does not actually spawn a node, the checkpoint executor
         // won't be started, which means we won't actually execute the genesis transaction. In that case,
