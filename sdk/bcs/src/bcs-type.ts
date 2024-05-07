@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB58 } from './b58.js';
-import { toB64 } from './b64.js';
-import { toHEX } from './hex.js';
+import { fromB58, toB58 } from './b58.js';
+import { fromB64, toB64 } from './b64.js';
+import { fromHEX, toHEX } from './hex.js';
 import { BcsReader } from './reader.js';
 import { ulebEncode } from './uleb.js';
 import type { BcsWriterOptions } from './writer.js';
@@ -65,6 +65,18 @@ export class BcsType<T, Input = T> {
 	parse(bytes: Uint8Array): T {
 		const reader = new BcsReader(bytes);
 		return this.read(reader);
+	}
+
+	fromHex(hex: string) {
+		return this.parse(fromHEX(hex));
+	}
+
+	fromBase58(b64: string) {
+		return this.parse(fromB58(b64));
+	}
+
+	fromBase64(b64: string) {
+		return this.parse(fromB64(b64));
 	}
 
 	transform<T2, Input2>({

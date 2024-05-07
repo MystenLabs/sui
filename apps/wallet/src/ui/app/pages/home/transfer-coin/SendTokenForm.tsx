@@ -21,8 +21,8 @@ import {
 } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
-import { type CoinStruct } from '@mysten/sui.js/client';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
+import { type CoinStruct } from '@mysten/sui/client';
+import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 import { useQuery } from '@tanstack/react-query';
 import { Field, Form, Formik, useFormikContext } from 'formik';
 import { useEffect, useMemo } from 'react';

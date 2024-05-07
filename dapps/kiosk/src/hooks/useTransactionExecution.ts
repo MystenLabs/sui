@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSignTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
-import { SuiTransactionBlockResponseOptions } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiTransactionBlockResponseOptions } from '@mysten/sui/client';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 // A helper to execute transactions by:
 // 1. Signing them using the wallet

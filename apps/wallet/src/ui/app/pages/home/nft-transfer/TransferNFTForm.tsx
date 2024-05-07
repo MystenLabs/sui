@@ -15,7 +15,7 @@ import { QredoActionIgnoredByUser } from '_src/ui/app/QredoSigner';
 import { isSuiNSName, useGetKioskContents, useSuiNSEnabled } from '@mysten/core';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { ArrowRight16 } from '@mysten/icons';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Field, Form, Formik } from 'formik';
 import { toast } from 'react-hot-toast';

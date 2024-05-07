@@ -3,7 +3,7 @@
 
 import { useTransactionData } from '_src/ui/app/hooks';
 import { Tab as HeadlessTab, type TabProps } from '@headlessui/react';
-import { type TransactionBlock } from '@mysten/sui.js/transactions';
+import { type TransactionBlock } from '@mysten/sui/transactions';
 
 import { SummaryCard } from '../SummaryCard';
 import { Command } from './Command';

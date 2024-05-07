@@ -2,6 +2,7 @@ packages:
   - 'sdk/**'
   - 'apps/**'
   - 'dapps/**'
+  - 'examples/**'
   - '!**/dist/**'
   - '!**/.next/**'
   - '!sdk/create-dapp/templates'

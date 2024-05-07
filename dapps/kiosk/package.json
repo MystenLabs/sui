@@ -19,7 +19,7 @@
 		"@headlessui/react": "^1.7.15",
 		"@mysten/dapp-kit": "workspace:*",
 		"@mysten/kiosk": "workspace:*",
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@tanstack/react-query": "^5.0.0",
 		"clsx": "^2.0.0",
 		"react": "^18.2.0",

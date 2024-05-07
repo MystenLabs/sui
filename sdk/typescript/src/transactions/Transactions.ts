@@ -11,7 +11,9 @@ import { Argument } from './blockData/internal.js';
 import type { CallArg } from './blockData/internal.js';
 import type { TransactionBlock } from './TransactionBlock.js';
 
-export type TransactionArgument = Argument | ((txb: TransactionBlock) => Argument);
+export type TransactionArgument =
+	| Input<typeof Argument>
+	| ((txb: TransactionBlock) => Input<typeof Argument>);
 export type TransactionBlockInput = CallArg;
 
 // Keep in sync with constants in

@@ -30,13 +30,13 @@ import {
   isValidSuiAddress,
   isValidSuiObjectId,
   MIST_PER_SUI,
-} from '@mysten/sui.js/utils';
-import { bcs } from '@mysten/sui.js/bcs';
+} from '@mysten/sui/utils';
+import { bcs } from '@mysten/sui/bcs';
 import { program } from 'commander';
 import { KIOSK_LISTING, KioskClient, KioskTransaction, Network } from '@mysten/kiosk';
-import { SuiClient, getFullnodeUrl } from '@mysten/sui.js/client';
-import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiClient, getFullnodeUrl } from '@mysten/sui/client';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 /**
  * List of known types for shorthand search in the `search` command.

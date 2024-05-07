@@ -1,22 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
-import type { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
-import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type {
-	TransactionArgument,
-	TransactionObjectInput,
-	TransactionResult,
-} from '@mysten/sui.js/transactions';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { bcs } from '@mysten/sui/bcs';
+import type { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
+import type { Argument, TransactionObjectInput, TransactionResult } from '@mysten/sui/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import {
 	normalizeStructTag,
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 	parseStructTag,
 	SUI_CLOCK_OBJECT_ID,
-} from '@mysten/sui.js/utils';
+} from '@mysten/sui/utils';
 
 import { BcsOrder } from './types/bcs.js';
 import type {
@@ -291,7 +287,7 @@ export class DeepBookClient {
 	 * @param txb
 	 */
 	async placeMarketOrder(
-		accountCap: string | Extract<TransactionArgument, { $kind: 'NestedResult' }>,
+		accountCap: string | Extract<Argument, { $kind: 'NestedResult' }>,
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',

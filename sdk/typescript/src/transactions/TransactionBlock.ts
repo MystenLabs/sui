@@ -32,19 +32,27 @@ import { Transactions } from './Transactions.js';
 import { getIdFromCallArg } from './utils.js';
 
 export type TransactionObjectArgument =
-	| Exclude<Argument, { Input: unknown; type?: 'pure' }>
-	| ((txb: TransactionBlock) => Exclude<Argument, { Input: unknown; type?: 'pure' }>);
+	| Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>
+	| ((txb: TransactionBlock) => Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>);
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
 
-function createTransactionResult(index: number): TransactionResult {
-	const baseResult: TransactionArgument = { $kind: 'Result', Result: index };
+function createTransactionResult(index: number) {
+	const baseResult = { $kind: 'Result' as const, Result: index };
 
-	const nestedResults: TransactionArgument[] = [];
-	const nestedResultFor = (resultIndex: number): TransactionArgument =>
+	const nestedResults: {
+		$kind: 'NestedResult';
+		NestedResult: [number, number];
+	}[] = [];
+	const nestedResultFor = (
+		resultIndex: number,
+	): {
+		$kind: 'NestedResult';
+		NestedResult: [number, number];
+	} =>
 		(nestedResults[resultIndex] ??= {
-			$kind: 'NestedResult',
+			$kind: 'NestedResult' as const,
 			NestedResult: [index, resultIndex],
 		});
 
@@ -314,10 +322,10 @@ export class TransactionBlock {
 
 	#resolveArgument(arg: TransactionArgument): Argument {
 		if (typeof arg === 'function') {
-			return arg(this);
+			return parse(Argument, arg(this));
 		}
 
-		return arg;
+		return parse(Argument, arg);
 	}
 
 	// Method shorthands:

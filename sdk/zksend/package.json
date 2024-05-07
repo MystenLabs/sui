@@ -45,7 +45,7 @@
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"mitt": "^3.0.1",
 		"nanostores": "^0.9.3",

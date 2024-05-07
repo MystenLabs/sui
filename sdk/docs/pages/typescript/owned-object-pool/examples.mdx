@@ -28,9 +28,9 @@ Here is the code that creates the coins by splitting a single coin 20 times and 
 coins to your address:
 
 ```ts
-import { SuiClient } from '@mysten/sui.js/client/';
-import type { SuiObjectRef, SuiObjectResponse } from '@mysten/sui.js/client/';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { SuiClient } from '@mysten/sui/client/';
+import type { SuiObjectRef, SuiObjectResponse } from '@mysten/sui/client/';
+import { TransactionBlock } from '@mysten/sui/transactions';
 
 const client = new SuiClient({
 	url: 'https://fullnode.testnet.sui.io:443',

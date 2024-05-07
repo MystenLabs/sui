@@ -78,7 +78,7 @@
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {
-		"@mysten/sui.js": "workspace:*",
+		"@mysten/sui": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
 		"@mysten/zksend": "workspace:*",
 		"@radix-ui/react-dialog": "^1.0.4",
