@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-// import "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "../contracts/BridgeCommittee.sol";
