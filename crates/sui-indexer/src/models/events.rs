@@ -53,7 +53,7 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::Text)]
     pub event_type: String,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub event_type_package: Vec<u8>,
 
     #[diesel(sql_type = diesel::sql_types::Text)]

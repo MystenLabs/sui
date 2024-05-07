@@ -353,6 +353,9 @@ jobs:
       - name: cargo clippy
         run: cargo xclippy -D warnings
 
+      - name: cargo mysql-clippy
+        run: cargo mysql-clippy -D warnings
+
   rustfmt:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
