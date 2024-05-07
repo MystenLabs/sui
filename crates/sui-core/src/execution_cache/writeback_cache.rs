@@ -638,11 +638,6 @@ impl WritebackCache {
                 .get(tx)
                 .map(|o| o.clone())
             else {
-                // this case can only happen when a node is running with PassthroughCache, and
-                // then restarts with WritebackCache.
-                if self.is_tx_already_executed(tx).unwrap() {
-                    continue;
-                }
                 panic!("Attempt to commit unknown transaction {:?}", tx);
             };
             all_outputs.push(outputs);
