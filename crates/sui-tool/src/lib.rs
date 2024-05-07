@@ -138,7 +138,7 @@ where
 
 struct OwnerOutput(Owner);
 
-// grep/awk-friendly output for Owner test
+// grep/awk-friendly output for Owner
 impl std::fmt::Display for OwnerOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
