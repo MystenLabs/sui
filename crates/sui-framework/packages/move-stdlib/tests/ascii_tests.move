@@ -130,50 +130,53 @@ module std::ascii_tests {
     }
 
     #[test]
-    fun test_is_alphanumeric() {
-        assert!(b"ahelloz".to_ascii_string().is_alphanumeric(), 0);
-        assert!(b"AHELLOZ".to_ascii_string().is_alphanumeric(), 3);
-        assert!(b"0123".to_ascii_string().is_alphanumeric(), 4);
-        assert!(!b"!".to_ascii_string().is_alphanumeric(), 2);
-        assert!(!b" ".to_ascii_string().is_alphanumeric(), 1);
+    fun test_to_uppercase() {
+        let str = b"hello_world_!".to_ascii_string();
+        assert!(str.to_uppercase() == b"HELLO_WORLD_!".to_ascii_string(), 0);
     }
 
     #[test]
-    fun test_sub_string() {
-        let str = b"hello world".to_ascii_string();
-        assert!(str.sub_string(0, 5) == b"hello".to_ascii_string(), 0);
-        assert!(str.sub_string(6, 11) == b"world".to_ascii_string(), 1);
+    fun test_to_lowercase() {
+        let str = b"HELLO_WORLD_!".to_ascii_string();
+        assert!(str.to_lowercase() == b"hello_world_!".to_ascii_string(), 0);
     }
 
     #[test]
-    fun test_sub_string_len_one() {
+    fun test_substring() {
         let str = b"hello world".to_ascii_string();
-        assert!(str.sub_string(0, 1) == b"h".to_ascii_string(), 0);
-        assert!(str.sub_string(6, 7) == b"w".to_ascii_string(), 1);
+        assert!(str.substring(0, 5) == b"hello".to_ascii_string(), 0);
+        assert!(str.substring(6, 11) == b"world".to_ascii_string(), 1);
     }
 
     #[test]
-    fun test_sub_string_len_zero() {
+    fun test_substring_len_one() {
         let str = b"hello world".to_ascii_string();
-        assert!(str.sub_string(0, 0).is_empty(), 0);
+        assert!(str.substring(0, 1) == b"h".to_ascii_string(), 0);
+        assert!(str.substring(6, 7) == b"w".to_ascii_string(), 1);
+    }
+
+    #[test]
+    fun test_substring_len_zero() {
+        let str = b"hello world".to_ascii_string();
+        assert!(str.substring(0, 0).is_empty(), 0);
     }
 
     #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
-    fun test_sub_string_i_out_of_bounds_fail() {
+    fun test_substring_i_out_of_bounds_fail() {
         let str = b"hello world".to_ascii_string();
-        str.sub_string(12, 13);
+        str.substring(12, 13);
     }
 
     #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
-    fun test_sub_string_j_lt_i_fail() {
+    fun test_substring_j_lt_i_fail() {
         let str = b"hello world".to_ascii_string();
-        str.sub_string(9, 8);
+        str.substring(9, 8);
     }
 
     #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
-    fun test_sub_string_j_out_of_bounds_fail() {
+    fun test_substring_j_out_of_bounds_fail() {
         let str = b"hello world".to_ascii_string();
-        str.sub_string(9, 13);
+        str.substring(9, 13);
     }
 
     #[test]

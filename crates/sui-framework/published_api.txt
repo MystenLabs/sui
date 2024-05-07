@@ -3724,7 +3724,7 @@ append
 insert
 	public fun
 	0x1::ascii
-sub_string
+substring
 	public fun
 	0x1::ascii
 as_bytes
@@ -3745,8 +3745,20 @@ is_printable_char
 is_empty
 	public fun
 	0x1::ascii
-is_alphanumeric
+to_uppercase
 	public fun
+	0x1::ascii
+to_lowercase
+	public fun
+	0x1::ascii
+index_of
+	public fun
+	0x1::ascii
+char_to_uppercase
+	fun
+	0x1::ascii
+char_to_lowercase
+	fun
 	0x1::ascii
 BitVector
 	public struct

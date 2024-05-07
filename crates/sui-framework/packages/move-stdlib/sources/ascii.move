@@ -91,15 +91,15 @@ module std::ascii {
     public fun insert(s: &mut String, at: u64, o: String) {
         assert!(at <= s.length(), EInvalidIndex);
         let l = s.length();
-        let mut front = s.sub_string(0, at);
-        let end = s.sub_string(at, l);
+        let mut front = s.substring(0, at);
+        let end = s.substring(at, l);
         front.append(o);
         front.append(end);
         *s = front;
     }
 
     /// Copy the slice of the `string` from `i` to `j` into a new `String`.
-    public fun sub_string(string: &String, mut i: u64, j: u64): String {
+    public fun substring(string: &String, mut i: u64, j: u64): String {
         assert!(i <= j && j <= string.length(), EInvalidIndex);
         let mut bytes = vector[];
         while (i < j) {
@@ -144,20 +144,60 @@ module std::ascii {
         string.bytes.is_empty()
     }
 
-    /// Returns `true` if `string` is an alphanumeric ASCII string.
-    /// Returns `false` otherwise.
-    public fun is_alphanumeric(string: &String): bool {
-        let (mut i, len) = (0, string.length());
-        while (i < len) {
-            let byte = string.bytes[i];
-            let is_alphanumeric =
-                (0x41 <= byte && byte <= 0x5A) || // A-Z
-                (0x61 <= byte && byte <= 0x7A) || // a-z
-                (0x30 <= byte && byte <= 0x39); // 0-9
-            if (!is_alphanumeric) return false;
+    /// Convert a `string` to its uppercase equivalent.
+    public fun to_uppercase(string: &String): String {
+        let (mut i, mut bytes) = (0, vector[]);
+        while (i < string.length()) {
+            bytes.push_back(char_to_uppercase(string.bytes[i]));
             i = i + 1;
         };
+        String { bytes }
+    }
 
-        true
+    /// Convert a `string` to its lowercase equivalent.
+    public fun to_lowercase(string: &String): String {
+        let (mut i, mut bytes) = (0, vector[]);
+        while (i < string.length()) {
+            bytes.push_back(char_to_lowercase(string.bytes[i]));
+            i = i + 1;
+        };
+        String { bytes }
+    }
+
+    /// Computes the index of the first occurrence of the `substr` in the `string`.
+    /// Returns the length of the `string` if the `substr` is not found.
+    public fun index_of(string: &String, substr: &String): u64 {
+        let (mut i, mut j) = (0, 0);
+        let (n, m) = (string.length(), substr.length());
+        while (i < n) {
+            if (string.bytes[i] == substr.bytes[j]) {
+                j = j + 1;
+                if (j == m) {
+                    return i - m + 1
+                }
+            } else {
+                j = 0;
+            };
+            i = i + 1;
+        };
+        n
+    }
+
+    /// Convert a `char` to its lowercase equivalent.
+    fun char_to_uppercase(byte: u8): u8 {
+        if (byte >= 0x61 && byte <= 0x7A) {
+            byte - 0x20
+        } else {
+            byte
+        }
+    }
+
+    /// Convert a `char` to its lowercase equivalent.
+    fun char_to_lowercase(byte: u8): u8 {
+        if (byte >= 0x41 && byte <= 0x5A) {
+            byte + 0x20
+        } else {
+            byte
+        }
     }
 }

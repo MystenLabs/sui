@@ -84,7 +84,7 @@ module std::type_name {
 
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
-        self.name.sub_string(0, len)
+        self.name.substring(0, len)
     }
 
     /// Get name of the module.

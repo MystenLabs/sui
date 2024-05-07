@@ -282,7 +282,7 @@ Aborts if given a primitive type.
 
     // Base16 (<a href="../move-stdlib/string.md#0x1_string">string</a>) representation of an <b>address</b> <b>has</b> 2 symbols per byte.
     <b>let</b> len = <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>() * 2;
-    self.name.sub_string(0, len)
+    self.name.substring(0, len)
 }
 </code></pre>
 

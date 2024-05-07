@@ -46,6 +46,9 @@ module std::string {
         }
     }
 
+    /// Alias to align the API with `ASCII`.
+    public use fun bytes as String.as_bytes;
+
     /// Returns a reference to the underlying byte vector.
     public fun bytes(s: &String): &vector<u8> {
         &s.bytes
@@ -92,6 +95,9 @@ module std::string {
         front.append(end);
         *s = front;
     }
+
+    /// Alias to align the API with `ASCII` and standardize naming.
+    public use fun sub_string as String.substring;
 
     /// Returns a sub-string using the given byte indices, where `i` is the first
     /// byte position and `j` is the start of the first byte not included (or the

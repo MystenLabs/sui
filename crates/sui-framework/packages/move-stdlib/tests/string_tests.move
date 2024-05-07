@@ -23,31 +23,31 @@ module std::string_tests {
     }
 
     #[test]
-    fun test_sub_string() {
+    fun test_substring() {
         let s = b"abcd".to_string();
-        let sub = s.sub_string(2, 4);
+        let sub = s.substring(2, 4);
         assert!(sub == b"cd".to_string(), 22)
     }
 
     #[test]
     #[expected_failure(abort_code = string::EInvalidIndex)]
-    fun test_sub_string_invalid_boundary() {
+    fun test_substring_invalid_boundary() {
         let sparkle_heart = vector[240, 159, 146, 150];
         let s = sparkle_heart.to_string();
-        let _sub = s.sub_string(1, 4);
+        let _sub = s.substring(1, 4);
     }
 
     #[test]
     #[expected_failure(abort_code = string::EInvalidIndex)]
-    fun test_sub_string_invalid_index() {
+    fun test_substring_invalid_index() {
         let s = b"abcd".to_string();
-        let _sub = s.sub_string(4, 5);
+        let _sub = s.substring(4, 5);
     }
 
     #[test]
-    fun test_sub_string_empty() {
+    fun test_substring_empty() {
         let s = b"abcd".to_string();
-        let sub = s.sub_string(4, 4);
+        let sub = s.substring(4, 4);
         assert!(sub.is_empty(), 22)
     }
 
