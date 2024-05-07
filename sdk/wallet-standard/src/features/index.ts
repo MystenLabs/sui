@@ -9,10 +9,10 @@ import type {
 	WalletWithFeatures,
 } from '@wallet-standard/core';
 
-import type { SuiSignAndExecuteTransactionBlockFeature } from './suiSignAndExecuteTransactionBlock';
-import { SuiSignMessageFeature } from './suiSignMessage';
-import { SuiSignPersonalMessageFeature } from './suiSignPersonalMessage';
-import type { SuiSignTransactionBlockFeature } from './suiSignTransactionBlock';
+import type { SuiSignAndExecuteTransactionBlockFeature } from './suiSignAndExecuteTransactionBlock.js';
+import type { SuiSignMessageFeature } from './suiSignMessage.js';
+import type { SuiSignPersonalMessageFeature } from './suiSignPersonalMessage.js';
+import type { SuiSignTransactionBlockFeature } from './suiSignTransactionBlock.js';
 
 /**
  * Wallet Standard features that are unique to Sui, and that all Sui wallets are expected to implement.
@@ -43,7 +43,7 @@ export type WalletWithRequiredFeatures = WalletWithFeatures<
 
 export type MinimallyRequiredFeatures = StandardConnectFeature & StandardEventsFeature;
 
-export * from './suiSignMessage';
-export * from './suiSignTransactionBlock';
-export * from './suiSignAndExecuteTransactionBlock';
-export * from './suiSignPersonalMessage';
+export * from './suiSignMessage.js';
+export * from './suiSignTransactionBlock.js';
+export * from './suiSignAndExecuteTransactionBlock.js';
+export * from './suiSignPersonalMessage.js';

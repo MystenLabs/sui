@@ -6,9 +6,10 @@ use rand::rngs::OsRng;
 use std::collections::{BTreeSet, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
-use sui_macros::sim_test;
+use sui_macros::{register_fail_point_arg, sim_test};
 use sui_node::SuiNodeHandle;
 use sui_protocol_config::ProtocolConfig;
 use sui_swarm_config::genesis_config::{ValidatorGenesisConfig, ValidatorGenesisConfigBuilder};
@@ -100,7 +101,7 @@ async fn test_transaction_expiration() {
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
             let state = node.state();
-            let expired_transaction = state.verify_transaction(expired_transaction).unwrap();
+            let expired_transaction = epoch_store.verify_transaction(expired_transaction).unwrap();
             state
                 .handle_transaction(&epoch_store, expired_transaction)
                 .await
@@ -115,7 +116,7 @@ async fn test_transaction_expiration() {
         .with_async(|node| async {
             let epoch_store = node.state().epoch_store_for_testing();
             let state = node.state();
-            let transaction = state.verify_transaction(transaction).unwrap();
+            let transaction = epoch_store.verify_transaction(transaction).unwrap();
             state.handle_transaction(&epoch_store, transaction).await
         })
         .await
@@ -153,7 +154,7 @@ async fn reconfig_with_revert_end_to_end_test() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let cert = net
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), None)
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -179,7 +180,10 @@ async fn reconfig_with_revert_end_to_end_test() {
     let client = net
         .get_client(&authorities[reverting_authority_idx].with(|node| node.state().name))
         .unwrap();
-    client.handle_certificate(cert.clone()).await.unwrap();
+    client
+        .handle_certificate_v2(cert.clone(), None)
+        .await
+        .unwrap();
 
     authorities[reverting_authority_idx]
         .with_async(|node| async {
@@ -257,6 +261,15 @@ async fn reconfig_with_revert_end_to_end_test() {
 // This test just starts up a cluster that reconfigures itself under 0 load.
 #[sim_test]
 async fn test_passive_reconfig() {
+    do_test_passive_reconfig().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_passive_reconfig_determinism() {
+    do_test_passive_reconfig().await;
+}
+
+async fn do_test_passive_reconfig() {
     telemetry_subscribers::init_for_testing();
     let _commit_root_state_digest = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
         config.set_commit_root_state_digest_supported(true);
@@ -291,6 +304,75 @@ async fn test_passive_reconfig() {
                 .unwrap();
             assert_eq!(commitments.len(), 1);
         });
+}
+
+// Test for syncing a node to an authority that already has many txes.
+#[sim_test]
+async fn test_expired_locks() {
+    do_test_lock_table_upgrade().await
+}
+
+#[sim_test]
+async fn test_expired_locks_with_lock_table_upgrade() {
+    register_fail_point_arg("initial_epoch_flags", || {
+        Some(vec![
+            EpochFlag::InMemoryCheckpointRoots,
+            EpochFlag::PerEpochFinalizedTransactions,
+        ])
+    });
+    do_test_lock_table_upgrade().await
+}
+
+async fn do_test_lock_table_upgrade() {
+    let test_cluster = TestClusterBuilder::new()
+        .with_epoch_duration_ms(10000)
+        .build()
+        .await;
+
+    let gas_price = test_cluster.wallet.get_reference_gas_price().await.unwrap();
+    let accounts_and_objs = test_cluster
+        .wallet
+        .get_all_accounts_and_gas_objects()
+        .await
+        .unwrap();
+    let sender = accounts_and_objs[0].0;
+    let receiver = accounts_and_objs[1].0;
+    let gas_object = accounts_and_objs[0].1[0];
+
+    let transfer_sui = |amount| {
+        test_cluster.wallet.sign_transaction(
+            &TestTransactionBuilder::new(sender, gas_object, gas_price)
+                .transfer_sui(Some(amount), receiver)
+                .build(),
+        )
+    };
+
+    let t1 = transfer_sui(1);
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap();
+
+    // attempt to equivocate
+    let t2 = transfer_sui(2);
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap_err();
+
+    test_cluster.wait_for_epoch_all_nodes(1).await;
+
+    // old locks can be overridden in new epoch
+    test_cluster
+        .create_certificate(t2.clone(), None)
+        .await
+        .unwrap();
+
+    // attempt to equivocate
+    test_cluster
+        .create_certificate(t1.clone(), None)
+        .await
+        .unwrap_err();
 }
 
 // This test just starts up a cluster that reconfigures itself under 0 load.
@@ -415,7 +497,7 @@ async fn test_validator_resign_effects() {
         .sui_node
         .with(|node| node.clone_authority_aggregator().unwrap());
     let effects1 = net
-        .process_transaction(tx)
+        .process_transaction(tx, None)
         .await
         .unwrap()
         .into_effects_for_testing();
@@ -440,14 +522,14 @@ async fn test_validator_candidate_pool_read() {
             .unwrap();
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let staking_pool_id = get_validator_from_table(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             system_state_summary.validator_candidates_id,
             &address,
         )
         .unwrap()
         .staking_pool_id;
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -485,7 +567,7 @@ async fn test_inactive_validator_pool_read() {
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         // Validator is active. Check that we can find its summary by staking pool id.
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -520,7 +602,7 @@ async fn test_inactive_validator_pool_read() {
         );
         let system_state_summary = system_state.clone().into_sui_system_state_summary();
         let validator = get_validator_by_pool_id(
-            node.state().db().as_ref(),
+            node.state().get_object_store().as_ref(),
             &system_state,
             &system_state_summary,
             staking_pool_id,
@@ -580,6 +662,15 @@ async fn test_reconfig_with_committee_change_basic() {
 
 #[sim_test]
 async fn test_reconfig_with_committee_change_stress() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+#[sim_test(check_determinism)]
+async fn test_reconfig_with_committee_change_stress_determinism() {
+    do_test_reconfig_with_committee_change_stress().await;
+}
+
+async fn do_test_reconfig_with_committee_change_stress() {
     let mut candidates = (0..6)
         .map(|_| ValidatorGenesisConfigBuilder::new().build(&mut OsRng))
         .collect::<Vec<_>>();
@@ -768,7 +859,7 @@ async fn execute_add_validator_transactions(
             .get_sui_system_state_object_for_testing()
             .unwrap();
         system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
             .unwrap()
             .len()
     });
@@ -813,7 +904,7 @@ async fn execute_add_validator_transactions(
             .get_sui_system_state_object_for_testing()
             .unwrap();
         let pending_active_validators = system_state
-            .get_pending_active_validators(node.state().db().as_ref())
+            .get_pending_active_validators(node.state().get_object_store().as_ref())
             .unwrap();
         assert_eq!(pending_active_validators.len(), pending_active_count + 1);
         assert_eq!(

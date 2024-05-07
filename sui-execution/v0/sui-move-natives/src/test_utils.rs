@@ -3,7 +3,7 @@
 
 use crate::{legacy_test_cost, types::is_otw_struct};
 use move_binary_format::errors::PartialVMResult;
-use move_core_types::{gas_algebra::InternalGas, value::MoveTypeLayout};
+use move_core_types::{gas_algebra::InternalGas, runtime_value::MoveTypeLayout};
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,

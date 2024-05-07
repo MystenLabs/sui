@@ -224,9 +224,7 @@ impl HistogramCollector {
         const MAX_POINTS: usize = 500_000;
         loop {
             tokio::select! {
-             _ = &mut timeout => {
-                break;
-            },
+                _ = &mut timeout => break,
                 point = self.channel.recv() => {
                     count += 1;
                     if count > MAX_POINTS {
@@ -239,8 +237,8 @@ impl HistogramCollector {
                         // Histogram no longer exists
                         return Err(());
                     }
-                }
-                }
+                },
+            }
         }
         if count > MAX_POINTS {
             error!(

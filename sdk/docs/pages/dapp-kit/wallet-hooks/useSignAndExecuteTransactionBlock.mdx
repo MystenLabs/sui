@@ -1,9 +1,9 @@
 import { UseSignAndExecuteTransactionBlockExample } from '../../../examples/wallet-hooks';
 
-# `useSignAndExecuteTransactionBlock`
+# useSignAndExecuteTransactionBlock
 
-The `useSignAndExecuteTransactionBlock` hook can be used to prompt the user to sign and execute a
-transaction block with their wallet
+Use the `useSignAndExecuteTransactionBlock` hook to prompt the user to sign and execute a
+transaction block with their wallet.
 
 ```ts
 import {
@@ -57,9 +57,9 @@ function MyComponent() {
 
 ## Arguments
 
-- `transactionBlock`: The transaction block to sign and execute
-- `chain`: (optional) The chain identifier the transaction block should be signed for
+- `transactionBlock`: The transaction block to sign and execute.
+- `chain`: (optional) The chain identifier the transaction block should be signed for.
 
-In addition to these options, you can also pass any options that are accepted by the
+In addition to these options, you can also pass any options that the
 [SuiClient.signAndExecuteTransactionBlock](http://localhost:3000/typescript/sui-client#signandexecutetransactionblock)
-method.
+method accepts.

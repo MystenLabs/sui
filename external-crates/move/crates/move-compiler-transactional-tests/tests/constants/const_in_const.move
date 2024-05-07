@@ -10,6 +10,7 @@ const C_TWO: u64 = 2;
 const C_VEC: vector<u64> = vector[C_ZERO, C_ONE, C_TWO];
 const C_FIVE: u64 = 5;
 const C_V2: vector<u64> = vector[C_ZERO, C_FIVE];
+const C_VS: vector<vector<u64>> = vector[C_VEC, C_V2];
 
 public fun test() {
     assert!(C_ZERO == 0, 0);
@@ -18,6 +19,7 @@ public fun test() {
     assert!(C_VEC == vector[0, 1, 2], 3);
     assert!(C_FIVE == 5, 5);
     assert!(C_V2 == vector[0, 5], 6);
+    assert!(C_VS == vector[vector[0, 1, 2], vector[0, 5]], 6);
 }
 
 }

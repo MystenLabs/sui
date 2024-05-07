@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
 label b0:
     assert(0u256 + 0u256 == 0u256, 1000);
     assert(0u256 + 1u256 == 1u256, 1001);
@@ -14,24 +16,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
 label b0:
     _ = 1u256 + 115792089237316195423570985008687907853269984665640564039457584007913129639935u256;
     return;
 }
 
+}
 //# run
-main() {
+module 0x3.m {
+
+entry foo() {
 label b0:
     _ = 115792089237316195423570985008687907853269984665640564039457584007913129639932u256 + 115792089237316195423570985008687907853269984665640564039457584007913129639931u256;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x4.m {
+
+entry foo() {
 label b0:
     assert(0u256 - 0u256 == 0u256, 2000);
     assert(1u256 - 0u256 == 1u256, 2001);
@@ -45,24 +56,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x5.m {
+
+entry foo() {
 label b0:
     _ = 0u256 - 1u256;
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 54u256 - 100u256;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x6.m {
+
+entry foo() {
 label b0:
     assert(0u256 * 0u256 == 0u256, 3000);
     assert(1u256 * 0u256 == 0u256, 3001);
@@ -75,24 +95,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x7.m {
+
+entry foo() {
 label b0:
     _ = 57896044618658097711785492504343953926634992332820282019728792003956564819967u256 * 57896044618658097711785492504343953926634992332820282019728792003956564819967u256;
     return;
 }
 
+}
 //# run
-main() {
+module 0x8.m {
+
+entry foo() {
 label b0:
     _ = 57896044618658097711785492504343953926634992332820282019728792003956564819968u256 * 2u256;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x9.m {
+
+entry foo() {
 label b0:
     assert(0u256 / 1u256 == 0u256, 4000);
     assert(1u256 / 1u256 == 1u256, 4001);
@@ -106,32 +135,44 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x10.m {
+
+entry foo() {
 label b0:
     _ = 0u256 / 0u256;
     return;
 }
 
+}
 //# run
-main() {
+module 0x11.m {
+
+entry foo() {
 label b0:
     _ = 1u256 / 0u256;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x12.m {
+
+entry foo() {
 label b0:
     _ = 115792089237316195423570985008687907853269984665640564039457584007913129639935u256 / 0u256;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x13.m {
+
+entry foo() {
 label b0:
     assert(0u256 % 1u256 == 0u256, 5000);
     assert(1u256 % 1u256 == 0u256, 5001);
@@ -145,23 +186,34 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x14.m {
+
+entry foo() {
 label b0:
     _ = 0u256 % 0u256;
     return;
 }
 
+}
 //# run
-main() {
+module 0x15.m {
+
+entry foo() {
 label b0:
     _ = 1u256 % 0u256;
     return;
 }
 
+}
 //# run
-main() {
+module 0x16.m {
+
+entry foo() {
 label b0:
     _ = 115792089237316195423570985008687907853269984665640564039457584007913129639935u256 % 0u256;
     return;
+}
+
 }

@@ -112,6 +112,12 @@ impl Offset {
     }
 }
 
+impl Default for TrieNode {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TrieNode {
     pub fn new() -> Self {
         Self {
@@ -173,6 +179,12 @@ impl TrieNode {
     }
 }
 
+impl Default for ReadWriteSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ReadWriteSet {
     pub fn new() -> Self {
         Self(BTreeMap::new())
@@ -196,9 +208,9 @@ impl ReadWriteSet {
     }
 
     pub fn add_access_path(&mut self, access_path: AccessPath, access: Access) {
-        let mut node = self.0.entry(access_path.root).or_insert_with(TrieNode::new);
+        let mut node = self.0.entry(access_path.root).or_default();
         for offset in access_path.offsets {
-            node = node.children.entry(offset).or_insert_with(TrieNode::new);
+            node = node.children.entry(offset).or_default();
         }
         node.data = Some(access);
     }

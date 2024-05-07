@@ -26,10 +26,16 @@ mod test {
     use sui_core::authority::AuthorityState;
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
-    use sui_macros::{clear_fail_point, register_fail_point_async, register_fail_points, sim_test};
+    use sui_macros::{
+        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_point_if,
+        register_fail_points, sim_test,
+    };
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+    use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
+    use sui_storage::blob::Blob;
     use sui_types::base_types::{ObjectRef, SuiAddress};
+    use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_cluster::{TestCluster, TestClusterBuilder};
     use tracing::{error, info};
@@ -70,6 +76,18 @@ mod test {
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_with_reconfig_and_correlated_crashes() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_if("correlated-crash-after-consensus-commit-boundary", || true);
+        // TODO: enable this - right now it causes rocksdb errors when re-opening DBs
+        //register_fail_point_if("correlated-crash-process-certificate", || true);
+
+        let test_cluster = build_test_cluster(4, 10000).await;
         test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
     }
 
@@ -264,6 +282,7 @@ mod test {
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
+        register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
 
         test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
     }
@@ -299,6 +318,34 @@ mod test {
             .unwrap()
             .0;
         assert!(pruned > 0);
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_data_ingestion_pipeline() {
+        let path = nondeterministic!(TempDir::new().unwrap()).into_path();
+        let test_cluster = init_test_cluster_builder(4, 1000)
+            .with_data_ingestion_dir(path.clone())
+            .build()
+            .await;
+        test_simulated_load(TestInitData::new(&test_cluster).await, 10).await;
+
+        let checkpoint_files = std::fs::read_dir(path)
+            .map(|entries| {
+                entries
+                    .filter_map(Result::ok)
+                    .filter(|entry| {
+                        entry.path().is_file()
+                            && entry.path().extension() == Some(std::ffi::OsStr::new("chk"))
+                    })
+                    .map(|entry| entry.path())
+                    .collect()
+            })
+            .unwrap_or_else(|_| vec![]);
+        assert!(checkpoint_files.len() > 0);
+        let bytes = std::fs::read(checkpoint_files.first().unwrap()).unwrap();
+
+        let _checkpoint: CheckpointData =
+            Blob::from_bytes(&bytes).expect("failed to load checkpoint");
     }
 
     // TODO add this back once flakiness is resolved
@@ -356,7 +403,7 @@ mod test {
 
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
-        let mut test_cluster = init_test_cluster_builder(7, 5000)
+        let mut test_cluster = init_test_cluster_builder(4, 15000)
             .with_protocol_version(ProtocolVersion::new(starting_version))
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
                 starting_version,
@@ -376,50 +423,51 @@ mod test {
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
         let _handle = tokio::task::spawn(async move {
+            info!("Running from version {starting_version} to version {max_ver}");
             for version in starting_version..=max_ver {
-                info!("Targeting protocol version: {}", version);
+                info!("Targeting protocol version: {version}");
                 test_cluster.wait_for_all_nodes_upgrade_to(version).await;
-                info!("All nodes are at protocol version: {}", version);
+                info!("All nodes are at protocol version: {version}");
                 // Let all nodes run for a few epochs at this version.
-                tokio::time::sleep(Duration::from_secs(50)).await;
+                tokio::time::sleep(Duration::from_secs(30)).await;
                 if version == max_ver {
-                    let stake_subsidy_start_epoch = test_cluster
-                        .sui_client()
-                        .governance_api()
-                        .get_latest_sui_system_state()
-                        .await
-                        .unwrap()
-                        .stake_subsidy_start_epoch;
-                    assert_eq!(stake_subsidy_start_epoch, 20);
                     break;
                 }
                 let next_version = version + 1;
                 let new_framework = sui_framework_snapshot::load_bytecode_snapshot(next_version);
-                let new_framework_ref: Vec<_> = match &new_framework {
-                    Ok(f) => f.iter().collect(),
+                let new_framework_ref = match &new_framework {
+                    Ok(f) => Some(f.iter().collect::<Vec<_>>()),
                     Err(_) => {
-                        // The only time where we could not load an existing snapshot is when
-                        // it's the next version to be pushed out, and hence we don't have a
-                        // snapshot yet. This must be the current max version.
-                        assert_eq!(next_version, max_ver);
-                        BuiltInFramework::iter_system_packages().collect()
+                        if next_version == max_ver {
+                            Some(BuiltInFramework::iter_system_packages().collect::<Vec<_>>())
+                        } else {
+                            // Often we want to be able to create multiple protocol config versions
+                            // on main that none have shipped to any production network. In this case,
+                            // some of the protocol versions may not have a framework snapshot.
+                            None
+                        }
                     }
                 };
-                for package in new_framework_ref {
-                    framework_injection::set_override(*package.id(), package.modules().clone());
+                if let Some(new_framework_ref) = new_framework_ref {
+                    for package in new_framework_ref {
+                        framework_injection::set_override(*package.id(), package.modules().clone());
+                    }
+                    info!("Framework injected for next_version {next_version}");
+                } else {
+                    info!("No framework snapshot to inject for next_version {next_version}");
                 }
-                info!("Framework injected");
                 test_cluster
                     .update_validator_supported_versions(
                         SupportedProtocolVersions::new_for_testing(starting_version, next_version),
                     )
                     .await;
+                info!("Updated validator supported versions to include next_version {next_version}")
             }
             finished_clone.store(true, Ordering::SeqCst);
         });
 
-        test_simulated_load(test_init_data_clone, 120).await;
-        for _ in 0..120 {
+        test_simulated_load(test_init_data_clone, 150).await;
+        for _ in 0..150 {
             if finished.load(Ordering::Relaxed) {
                 break;
             }
@@ -427,6 +475,64 @@ mod test {
         }
 
         assert!(finished.load(Ordering::SeqCst));
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_partial_sig_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as f+1 nodes (in this case 3/6) are sending partial signatures.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(3)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-send-partial-signatures", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_dkg_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as nodes are participating in DKG representing
+        // stake equal to 2f+1 PLUS proprotion of stake represented by the
+        // `random_beacon_reduction_allowed_delta` ProtocolConfig option.
+        // In this case we make sure it still works with 5/6 validators.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(1)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-dkg", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await
+    }
+
+    fn handle_bool_failpoint(
+        eligible_nodes: &HashSet<sui_simulator::task::NodeId>, // only given eligible nodes may fail
+        probability: f64,
+    ) -> bool {
+        if !eligible_nodes.contains(&sui_simulator::current_simnode_id()) {
+            return false; // don't fail ineligible nodes
+        }
+        let mut rng = thread_rng();
+        if rng.gen_range(0.0..1.0) < probability {
+            true
+        } else {
+            false
+        }
     }
 
     async fn build_test_cluster(

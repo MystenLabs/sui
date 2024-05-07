@@ -10,24 +10,22 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::transfer::{Self, Receiving};
-    use sui::tx_context::{Self, TxContext};
+    use sui::transfer::Receiving;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
     }
 
-    struct C1 has key, store {
+    public struct C1 has key, store {
         id: UID,
     }
 
-    struct C2 has key, store {
+    public struct C2 has key, store {
         id: UID,
     }
 
-    struct Wrapper<T: store> has key, store {
-        id: UID, 
+    public struct Wrapper<T: store> has key, store {
+        id: UID,
         value: T,
     }
 

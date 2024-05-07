@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_cli::base::test::UnitTestResult;
+use move_package::LintFlag;
 use move_unit_test::UnitTestingConfig;
 use std::{fs, io, path::PathBuf};
 use sui_move::unit_test::run_move_unit_tests;
 use sui_move_build::BuildConfig;
+
+const FILTER_ENV: &str = "FILTER";
 
 #[test]
 #[cfg_attr(msim, ignore)]
@@ -42,8 +45,9 @@ fn run_deepbook_tests() {
 fn run_examples_move_unit_tests() {
     for example in [
         "basics",
-        "defi",
         "capy",
+        "crypto",
+        "defi",
         "fungible_tokens",
         "games",
         "move_tutorial",
@@ -72,26 +76,13 @@ fn run_docs_examples_move_unit_tests() -> io::Result<()> {
 
     for entry in fs::read_dir(examples)? {
         let entry = entry?;
-        if entry.file_type()?.is_dir() {
+        if entry.file_type()?.is_dir() && entry.path().join("Move.toml").exists() {
             check_package_builds(entry.path());
             check_move_unit_tests(entry.path());
         }
     }
 
     Ok(())
-}
-
-#[test]
-#[cfg_attr(msim, ignore)]
-fn run_book_examples_move_unit_tests() {
-    let path = {
-        let mut buf = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        buf.extend(["..", "..", "doc", "book", "examples"]);
-        buf
-    };
-
-    check_package_builds(path.clone());
-    check_move_unit_tests(path);
 }
 
 /// Ensure packages build outside of test mode.
@@ -102,7 +93,7 @@ fn check_package_builds(path: PathBuf) {
     config.print_diags_to_stderr = true;
     config.config.warnings_are_errors = true;
     config.config.silence_warnings = false;
-
+    config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
     config
         .build(path.clone())
         .unwrap_or_else(|e| panic!("Building package {}.\nWith error {e}", path.display()));
@@ -117,13 +108,10 @@ fn check_move_unit_tests(path: PathBuf) {
     config.print_diags_to_stderr = true;
     config.config.warnings_are_errors = true;
     config.config.silence_warnings = false;
+    config.config.lint_flag = LintFlag::LEVEL_DEFAULT;
     let move_config = config.config.clone();
-    let testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
-
-    // build tests first to enable Sui-specific test code verification
-    config
-        .build(path.clone())
-        .unwrap_or_else(|e| panic!("Building tests at {}.\nWith error {e}", path.display()));
+    let mut testing_config = UnitTestingConfig::default_with_bound(Some(3_000_000));
+    testing_config.filter = std::env::var(FILTER_ENV).ok().map(|s| s.to_string());
 
     assert_eq!(
         run_move_unit_tests(path, move_config, Some(testing_config), false).unwrap(),

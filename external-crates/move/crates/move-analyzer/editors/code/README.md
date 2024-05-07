@@ -1,80 +1,83 @@
-# move-analyzer
+# Move
 
-Provides language support for the Move programming language.
+Provides language support for the Move programming language. For information about Move visit the
+language [documentation](https://docs.sui.io/concepts/sui-move-concepts).
 
-Currently, this means a basic grammar and language configuration for Move (`.move`) that enables
-syntax highlighting, commenting/uncommenting, simple context-unaware completion suggestions while
-typing, and other basic language features in Move files.
+# How to Install
 
-For information about Move visit [the Move repository](https://github.com/move-language/move).
-
-## How to Install
-
-The move-analyzer Visual Studio Code extension works via two components: the extension itself and
-the `move-analyzer` language server.
-
-### 1. Installing the `move-analyzer` language server<span id="Step1">
-
-The `move-analyzer` language server is a Rust program that is part of the
-[Move repository](https://github.com/move-language/move). It may be installed in one of two ways:
-
-* Clone [the Move repository](https://github.com/move-language/move) yourself and build
-   `move-analyzer` from its source code, which is especially useful if you will work on core Move.
-   To do so, follow the instructions in the Move tutorial's
-   [Step 0: Installation](https://github.com/move-language/move/tree/main/language/documentation/tutorial#step-0-installation).
-* Use Rust's package manager `cargo` to install `move-analyzer` in your user's PATH. This
-   is recommended for people who do not work on core Move.
-   1. If you don't already have a Rust toolchain installed, you should install
-      [Rustup](https://rustup.rs/), which will install the latest stable Rust toolchain.
-   2. Invoke `cargo install --git https://github.com/move-language/move move-analyzer` to install the
-      `move-analyzer` language server in your Cargo binary directory. On macOS and Linux, this is
-      usually `~/.cargo/bin`. You'll want to make sure this location is in your `PATH` environment
-      variable. If you plan to use the language server with Move language flavors different from core Move,
-      you should specify an additional option to `cargo install` command as different Move flavors
-      may enforce different max length of the Move address type: `--features "address20"` option for Move
-      flavors requiring 20-byte long addresses (e.g., Sui Move) and `--features "address32"` option
-      for Move flavors requiring 32-byte long addresses (e.g., Aptos Move).
-
-To confirm that you've installed the language server program successfully, execute
-`move-analyzer --version` on the command line. You should see the output `move-analyzer 1.0.0`.
-
-### 2. Installing the move-analyzer Visual Studio Code extension
-
-1. Open a new window in any Visual Studio Code application version 1.55.2 or greater.
-2. Open the command palette (`⇧⌘P` on macOS, or use the menu item *View > Command Palette...*) and
+1. Open a new window in any Visual Studio Code application version 1.61.0 or greater.
+2. Open the command palette (`⇧` + `⌘` + `P` on macOS, or use the menu item *View > Command Palette...*) and
    type **Extensions: Install Extensions**. This will open a panel named *Extensions* in the
    sidebar of your Visual Studio Code window.
-3. In the search bar labeled *Search Extensions in Marketplace*, type **move-analyzer**. The
-   move-analyzer extension should appear in the list below the search bar. Click **Install**.
-4. Open any file that ends in `.move`. Or to create a new file, click **Select a language**, and
-   choose the **Move** language. As you type, you should see that keywords and types appear in
-   different colors.
+3. In the search bar labeled *Search Extensions in Marketplace*, type **Mysten**. The Move extension 
+   should appear as one of the option in the list below the search bar. Click **Install**.
+4. Open any file that ends in `.move`.
 
-### Troubleshooting
+Installation of the extension will also install a platform-specific pre-built move-analyzer binary in
+the default directory (see [here](#what-if-i-want-to-use-a-move-analyzer-binary-in-a-different-location)
+for information on the location of this directory), overwriting the existing binary if it already exists.
+The move-analyzer binary is responsible for the advanced features of this VSCode extension (e.g., go to
+definition, type on hover). Please see [Troubleshooting](#troubleshooting) for situations when
+the pre-built move-analyzer binary is not available for your platform or if you want to use move-analyzer
+binary stored in a different location.
 
-If you see an error message *language server executable 'move-analyzer' could not be found* in the
-bottom-right of your Visual Studio Code screen when opening a Move file, it means that the
-`move-analyzer` executable could not be found in your `PATH`. You may try the following:
+If you want to build and test Move code using the extension, you must install the `sui` binary on
+your machine - see [here](https://docs.sui.io/guides/developer/getting-started/sui-install) for
+instructions. The extension assumes that the `sui` binary is in your system path, but you can set
+its custom location location using VSCode's settings (`⌘` + `,` on macOS, or use the menu item *Code >
+Preferences > Settings*). Search for the `move.sui.path` user setting, set it to the new location of
+the `sui` binary, and restart VSCode.
 
-1. Confirm that invoking `move-analyzer --version` in a command line terminal prints out
-   `move-analyzer 1.0.0`. If it doesn't, then retry the instructions in [step 1](./Step1). If it
-   does successfully print this output, try closing and re-opening the Visual Studio Code
-   application, as it may not have picked up the update to your `PATH`.
-2. If you installed the `move-analyzer` executable to a different location that is outside of your
-   `PATH`, then you may have the extension look at this location by using the the Visual Studio Code
-   settings (`⌘,` on macOS, or use the menu item *Code > Preferences > Settings*). Search for the
-   `move-analyzer.server.path` setting, and set it to the location of the `move-analyzer` language
-   server you installed.
-3. If the above steps don't work, then report
-   [a GitHub issue to the Move repository](https://github.com/move-language/move/issues) to get help.
+# Troubleshooting
 
-## Features
+## What if the pre-built move-analyzer binary is not available for my platform?
 
-Here are some of the features of the move-analyzer Visual Studio Code extension. To see them, open a
+If you are on Windows, the following answer assumes that your Windows user name is `USER`.
+
+The `move-analyzer` language server is a Rust program which you can install manually provided
+that you have Rust development already [installed](https://www.rust-lang.org/tools/install).
+This can be done in two steps:
+
+1. Install the move-analyzer installation prerequisites for your platform. They are the same
+as prerequisites for Sui installation - for Linux, macOS and Windows these prerequisites and
+their installation instructions can be found
+[here](https://docs.sui.io/guides/developer/getting-started/sui-install#additional-prerequisites-by-operating-system)
+2. Invoke `cargo install --git https://github.com/MystenLabs/sui move-analyzer` to install the
+`move-analyzer` language server in your Cargo binary directory, which is typically located
+in the `~/.cargo/bin` (macOS/Linux) or `C:\Users\USER\.cargo\bin` (Windows) directory.
+3. Copy the move-analyzer binary to `~/.sui/bin` (macOS/Linux) or `C:\Users\USER\.sui\bin`
+(Windows), which is its default location (create this directory if it does not exist).
+
+## What if I want to use a move-analyzer binary in a different location?
+
+If you are on Windows, the following answer assumes that your Windows user name is `USER`.
+
+If your `move-analyzer` binary is in a different directory than the default one (`~/.sui/bin`
+on macOS or Linux, or `C:\Users\USER\.sui\bin` on Windows), you may have the extension look
+for the binary at this new location using VSCode's settings (`⌘` + `,` on macOS, or use the menu
+item *Code > Preferences > Settings*). Search for the `move.server.path` user setting,
+set it to the new location of the `move-analyzer` binary, and restart VSCode.
+
+## What if advanced features (e.g., go to def) do not work, particularly after re-install or upgrade
+
+Assuming you did not specify a different location for the move-analyzer binary and that the
+move-analyzer binary already exists in the default location (`~/.sui/bin` on macOS or Linux, or
+`C:\Users\USER\.sui\bin` on Windows), delete the existing move-analyzer binary and reinstall the
+extension.
+
+
+## What if everything else fails?
+
+Check [Sui Developer Forum](https://forums.sui.io/c/technical-support) to see if the problem
+has already been reported and, if not, report it there.
+
+# Features
+
+Here are some of the features of the Move Visual Studio Code extension. To see them, open a
 Move source file (a file with a `.move` file extension) and:
 
 - See Move keywords and types highlighted in appropriate colors.
-- Comment and un-comment lines of code using the `⌘/` shortcut on macOS (or the menu command *Edit >
+- Comment and un-comment lines of code (`⌘` + `/` on macOS or the menu item *Edit >
   Toggle Line Comment*).
 - Place your cursor on a delimiter, such as `<`, `(`, or `{`, and its corresponding delimiter --
   `>`, `)`, or `}` -- will be highlighted.
@@ -87,3 +90,6 @@ Move source file (a file with a `.move` file extension) and:
   - go to references
   - type on hover
   - outline view showing symbol tree for Move source files
+- If the opened Move source file is located within a buildable project you can build and (locally)
+  test this project using `Move: Build a Move package` and `Move: Test a Move package` commands from
+  VSCode's command palette

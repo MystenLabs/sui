@@ -1,73 +1,73 @@
 processed 9 tasks
 
-task 1 'run'. lines 17-22:
-Error: Script execution failed with VMError: {
+task 1 'run'. lines 17-24:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 2 'run'. lines 24-29:
-Error: Script execution failed with VMError: {
+task 2 'run'. lines 26-33:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 3 'run'. lines 31-36:
-Error: Script execution failed with VMError: {
+task 3 'run'. lines 35-42:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 4 'run'. lines 38-43:
-Error: Script execution failed with VMError: {
+task 4 'run'. lines 44-51:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 5 'run'. lines 45-50:
-Error: Script execution failed with VMError: {
+task 5 'run'. lines 53-60:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 6 'run'. lines 52-57:
-Error: Script execution failed with VMError: {
+task 6 'run'. lines 62-69:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 7 'run'. lines 59-64:
-Error: Script execution failed with VMError: {
+task 7 'run'. lines 71-78:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }
 
-task 8 'run'. lines 66-71:
-Error: Script execution failed with VMError: {
+task 8 'run'. lines 80-87:
+Error: Unable to publish module '0000000000000000000000000000000000000000000000000000000000000042::m'. Got VMError: {
     major_status: CONSTRAINT_NOT_SATISFIED,
     sub_status: None,
-    location: script,
-    indices: [],
+    location: 0x42::m,
+    indices: [(Signature, 0), (FunctionHandle, 0)],
     offsets: [],
 }

@@ -4,6 +4,7 @@
 
 use crate::{
     cfgir::cfg::MutForwardCFG,
+    expansion::ast::Mutability,
     hlir::ast::{
         BaseType, BaseType_, Command, Command_, Exp, FunctionSignature, SingleType, TypeName,
         TypeName_, UnannotatedExp_, Value, Value_, Var,
@@ -13,12 +14,13 @@ use crate::{
     shared::unique_map::UniqueMap,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use std::convert::TryFrom;
 
 /// returns true if anything changed
 pub fn optimize(
     _signature: &FunctionSignature,
-    _locals: &UniqueMap<Var, SingleType>,
+    _locals: &UniqueMap<Var, (Mutability, SingleType)>,
     constants: &UniqueMap<ConstantName, Value>,
     cfg: &mut MutForwardCFG,
 ) -> bool {
@@ -48,21 +50,23 @@ pub fn optimize(
 
 // Some(changed) to keep
 // None to remove the cmd
+#[growing_stack]
 fn optimize_cmd(
     consts: &UniqueMap<ConstantName, Value>,
     sp!(_, cmd_): &mut Command,
 ) -> Option<bool> {
     use Command_ as C;
     Some(match cmd_ {
-        C::Assign(_ls, e) => optimize_exp(consts, e),
+        C::Assign(_, _ls, e) => optimize_exp(consts, e),
         C::Mutate(el, er) => {
             let c1 = optimize_exp(consts, er);
             let c2 = optimize_exp(consts, el);
             c1 || c2
         }
-        C::Return { exp: e, .. } | C::Abort(e) | C::JumpIf { cond: e, .. } => {
-            optimize_exp(consts, e)
-        }
+        C::Return { exp: e, .. }
+        | C::Abort(e)
+        | C::JumpIf { cond: e, .. }
+        | C::VariantSwitch { subject: e, .. } => optimize_exp(consts, e),
         C::IgnoreAndPop { exp: e, .. } => {
             let c = optimize_exp(consts, e);
             if ignorable_exp(e) {
@@ -74,10 +78,11 @@ fn optimize_cmd(
         }
 
         C::Jump { .. } => false,
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     })
 }
 
+#[growing_stack]
 fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
     use UnannotatedExp_ as E;
     let optimize_exp = |e| optimize_exp(consts, e);
@@ -88,10 +93,10 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         E::Unit { .. }
         | E::Value(_)
         | E::UnresolvedError
-        | E::Spec(_, _)
         | E::BorrowLocal(_, _)
         | E::Move { .. }
         | E::Copy { .. }
+        | E::ErrorConstant(_)
         | E::Unreachable => false,
 
         e_ @ E::Constant(_) => {
@@ -111,6 +116,11 @@ fn optimize_exp(consts: &UniqueMap<ConstantName, Value>, e: &mut Exp) -> bool {
         E::Freeze(e) | E::Dereference(e) | E::Borrow(_, e, _, _) => optimize_exp(e),
 
         E::Pack(_, _, fields) => fields
+            .iter_mut()
+            .map(|(_, _, e)| optimize_exp(e))
+            .any(|changed| changed),
+
+        E::PackVariant(_, _, _, fields) => fields
             .iter_mut()
             .map(|(_, _, e)| optimize_exp(e))
             .any(|changed| changed),

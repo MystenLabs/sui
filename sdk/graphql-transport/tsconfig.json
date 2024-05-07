@@ -1,0 +1,15 @@
+{
+	"extends": "../build-scripts/tsconfig.shared.json",
+	"include": ["src"],
+	"compilerOptions": {
+		"module": "CommonJS",
+		"outDir": "dist/cjs",
+		"isolatedModules": true,
+		"rootDir": "src",
+		"paths": {
+			"@mysten/sui.js/client": ["../../typescrupt/src/client"],
+			"@mysten/sui.js/transactions": ["../../typescript/src/transactions"]
+		}
+	},
+	"references": [{ "path": "../wallet-standard" }, { "path": "../typescript" }]
+}

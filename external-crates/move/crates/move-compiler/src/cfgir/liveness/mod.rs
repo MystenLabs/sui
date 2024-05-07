@@ -11,10 +11,12 @@ use super::{
 };
 use crate::{
     diagnostics::Diagnostics,
+    expansion::ast::Mutability,
     hlir::ast::{self as H, *},
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use state::*;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -79,10 +81,11 @@ fn analyze(
     (final_invariants, liveness.states)
 }
 
+#[growing_stack]
 fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             lvalues(state, ls);
             exp(state, e);
         }
@@ -93,10 +96,11 @@ fn command(state: &mut LivenessState, sp!(_, cmd_): &Command) {
         C::Return { exp: e, .. }
         | C::Abort(e)
         | C::IgnoreAndPop { exp: e, .. }
-        | C::JumpIf { cond: e, .. } => exp(state, e),
+        | C::JumpIf { cond: e, .. }
+        | C::VariantSwitch { subject: e, .. } => exp(state, e),
 
         C::Jump { .. } => (),
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
 
@@ -108,25 +112,29 @@ fn lvalue(state: &mut LivenessState, sp!(_, l_): &LValue) {
     use LValue_ as L;
     match l_ {
         L::Ignore => (),
-        L::Var(v, _) => {
-            state.0.remove(v);
+        L::Var { var, .. } => {
+            state.0.remove(var);
         }
         L::Unpack(_, _, fields) => fields.iter().for_each(|(_, l)| lvalue(state, l)),
+        L::UnpackVariant(_, _, _, _, _, fields) => {
+            fields.iter().for_each(|(_, l)| lvalue(state, l))
+        }
     }
 }
 
+#[growing_stack]
 fn exp(state: &mut LivenessState, parent_e: &Exp) {
     use UnannotatedExp_ as E;
     match &parent_e.exp.value {
-        E::Unit { .. } | E::Value(_) | E::Constant(_) | E::UnresolvedError => (),
+        E::Unit { .. }
+        | E::Value(_)
+        | E::Constant(_)
+        | E::UnresolvedError
+        | E::ErrorConstant(_) => (),
 
         E::BorrowLocal(_, var) | E::Copy { var, .. } | E::Move { var, .. } => {
             state.0.insert(*var);
         }
-
-        E::Spec(_, used_locals) => used_locals.keys().for_each(|v| {
-            state.0.insert(*v);
-        }),
 
         E::ModuleCall(mcall) => mcall.arguments.iter().for_each(|e| exp(state, e)),
         E::Vector(_, _, _, args) => args.iter().for_each(|e| exp(state, e)),
@@ -142,6 +150,7 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
         }
 
         E::Pack(_, _, fields) => fields.iter().for_each(|(_, _, e)| exp(state, e)),
+        E::PackVariant(_, _, _, fields) => fields.iter().for_each(|(_, _, e)| exp(state, e)),
 
         E::Multiple(es) => es.iter().for_each(|e| exp(state, e)),
 
@@ -165,7 +174,6 @@ pub fn last_usage(
     cfg: &mut MutForwardCFG,
 ) {
     let super::CFGContext {
-        locals,
         infinite_loop_starts,
         ..
     } = context;
@@ -175,17 +183,13 @@ pub fn last_usage(
             .get(lbl)
             .unwrap_or_else(|| panic!("ICE no liveness states for {}", lbl));
         let command_states = per_command_states.get(lbl).unwrap();
-        last_usage::block(
-            compilation_env,
-            locals,
-            final_invariant,
-            command_states,
-            block,
-        )
+        last_usage::block(compilation_env, final_invariant, command_states, block)
     }
 }
 
 mod last_usage {
+    use move_proc_macros::growing_stack;
+
     use crate::{
         cfgir::liveness::state::LivenessState,
         diag,
@@ -193,14 +197,12 @@ mod last_usage {
             ast::*,
             translate::{display_var, DisplayVar},
         },
-        parser::ast::Ability_,
-        shared::{unique_map::*, *},
+        shared::*,
     };
     use std::collections::{BTreeSet, VecDeque};
 
     struct Context<'a, 'b> {
         env: &'a mut CompilationEnv,
-        locals: &'a UniqueMap<Var, SingleType>,
         next_live: &'b BTreeSet<Var>,
         dropped_live: BTreeSet<Var>,
     }
@@ -208,27 +210,19 @@ mod last_usage {
     impl<'a, 'b> Context<'a, 'b> {
         fn new(
             env: &'a mut CompilationEnv,
-            locals: &'a UniqueMap<Var, SingleType>,
             next_live: &'b BTreeSet<Var>,
             dropped_live: BTreeSet<Var>,
         ) -> Self {
             Context {
                 env,
-                locals,
                 next_live,
                 dropped_live,
             }
-        }
-
-        fn has_drop(&self, local: &Var) -> bool {
-            let ty = self.locals.get(local).unwrap();
-            ty.value.abilities(ty.loc).has_ability_(Ability_::Drop)
         }
     }
 
     pub fn block(
         compilation_env: &mut CompilationEnv,
-        locals: &UniqueMap<Var, SingleType>,
         final_invariant: &LivenessState,
         command_states: &VecDeque<LivenessState>,
         block: &mut BasicBlock,
@@ -252,16 +246,17 @@ mod last_usage {
                 .cloned()
                 .collect::<BTreeSet<_>>();
             command(
-                &mut Context::new(compilation_env, locals, next_data, dropped_live),
+                &mut Context::new(compilation_env, next_data, dropped_live),
                 cmd,
             )
         }
     }
 
+    #[growing_stack]
     fn command(context: &mut Context, sp!(_, cmd_): &mut Command) {
         use Command_ as C;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 lvalues(context, ls);
                 exp(context, e);
             }
@@ -272,10 +267,11 @@ mod last_usage {
             C::Return { exp: e, .. }
             | C::Abort(e)
             | C::IgnoreAndPop { exp: e, .. }
-            | C::JumpIf { cond: e, .. } => exp(context, e),
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => exp(context, e),
 
             C::Jump { .. } => (),
-            C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
     }
 
@@ -287,49 +283,51 @@ mod last_usage {
         use LValue_ as L;
         match &mut l.value {
             L::Ignore => (),
-            L::Var(v, _) => {
+            L::Var {
+                var: v,
+                unused_assignment,
+                ..
+            } => {
                 context.dropped_live.insert(*v);
-                if !context.next_live.contains(v) {
+                if !*unused_assignment && !context.next_live.contains(v) {
                     match display_var(v.value()) {
                         DisplayVar::Tmp => (),
-                        DisplayVar::Orig(v_str) => {
+                        DisplayVar::Orig(vstr) | DisplayVar::MatchTmp(vstr) => {
                             if !v.starts_with_underscore() {
                                 let msg = format!(
-                                    "Unused assignment for variable '{}'. Consider \
+                                    "Unused assignment for variable '{vstr}'. Consider \
                                      removing, replacing with '_', or prefixing with '_' (e.g., \
-                                     '_{}')",
-                                    v_str, v_str
+                                     '_{vstr}')",
                                 );
                                 context
                                     .env
                                     .add_diag(diag!(UnusedItem::Assignment, (l.loc, msg)));
                             }
-                            if context.has_drop(v) {
-                                l.value = L::Ignore
-                            }
+                            *unused_assignment = true;
                         }
                     }
                 }
             }
             L::Unpack(_, _, fields) => fields.iter_mut().for_each(|(_, l)| lvalue(context, l)),
+            L::UnpackVariant(_, _, _, _, _, fields) => {
+                fields.iter_mut().for_each(|(_, l)| lvalue(context, l))
+            }
         }
     }
 
+    #[growing_stack]
     fn exp(context: &mut Context, parent_e: &mut Exp) {
         use UnannotatedExp_ as E;
         match &mut parent_e.exp.value {
-            E::Unit { .. } | E::Value(_) | E::Constant(_) | E::UnresolvedError => (),
+            E::Unit { .. }
+            | E::Value(_)
+            | E::Constant(_)
+            | E::UnresolvedError
+            | E::ErrorConstant(_) => (),
 
             E::BorrowLocal(_, var) | E::Move { var, .. } => {
                 // remove it from context to prevent accidental dropping in previous usages
                 context.dropped_live.remove(var);
-            }
-
-            E::Spec(_, used_locals) => {
-                // remove it from context to prevent accidental dropping in previous usages
-                used_locals.keys().for_each(|var| {
-                    context.dropped_live.remove(var);
-                })
             }
 
             E::Copy { var, from_user } => {
@@ -364,6 +362,11 @@ mod last_usage {
             }
 
             E::Pack(_, _, fields) => fields
+                .iter_mut()
+                .rev()
+                .for_each(|(_, _, e)| exp(context, e)),
+
+            E::PackVariant(_, _, _, fields) => fields
                 .iter_mut()
                 .rev()
                 .for_each(|(_, _, e)| exp(context, e)),
@@ -444,7 +447,7 @@ fn build_forward_intersections(
 }
 
 fn release_dead_refs_block(
-    locals: &UniqueMap<Var, SingleType>,
+    locals: &UniqueMap<Var, (Mutability, SingleType)>,
     locals_pre_state: &locals::state::LocalStates,
     liveness_pre_state: &LivenessState,
     forward_intersection: &BTreeSet<Var>,
@@ -454,7 +457,7 @@ fn release_dead_refs_block(
         return;
     }
 
-    let cmd_loc = block.get(0).unwrap().loc;
+    let cmd_loc = block.front().unwrap().loc;
     let cur_state = {
         let mut s = liveness_pre_state.clone();
         for cmd in block.iter().rev() {
@@ -469,12 +472,12 @@ fn release_dead_refs_block(
         .filter(|var| locals_pre_state.get_state(var).is_available())
         .map(|var| (var, locals.get(var).unwrap()))
         .filter(is_ref);
-    for (dead_ref, ty) in dead_refs {
+    for (dead_ref, (_, ty)) in dead_refs {
         block.push_front(pop_ref(cmd_loc, *dead_ref, ty.clone()));
     }
 }
 
-fn is_ref((_local, sp!(_, local_ty_)): &(&Var, &SingleType)) -> bool {
+fn is_ref((_local, (_, sp!(_, local_ty_))): &(&Var, &(Mutability, SingleType))) -> bool {
     match local_ty_ {
         SingleType_::Ref(_, _) => true,
         SingleType_::Base(_) => false,

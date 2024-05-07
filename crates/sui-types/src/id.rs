@@ -6,10 +6,10 @@ use crate::{base_types::ObjectID, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::TypeTag;
 use move_core_types::{
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     ident_str,
     identifier::IdentStr,
     language_storage::StructTag,
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -59,7 +59,7 @@ impl UID {
     }
 
     pub fn layout() -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(),
             fields: vec![MoveFieldLayout::new(
                 ident_str!("id").to_owned(),
@@ -84,7 +84,7 @@ impl ID {
     }
 
     pub fn layout() -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(),
             fields: vec![MoveFieldLayout::new(
                 ident_str!("bytes").to_owned(),

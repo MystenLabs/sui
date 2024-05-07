@@ -19,7 +19,6 @@ import type {
 	ExecuteTransactionResponse,
 	SignTransactionRequest,
 	SignTransactionResponse,
-	StakeRequest,
 } from '_payloads/transactions';
 import { API_ENV } from '_src/shared/api-env';
 import type { NetworkEnvType } from '_src/shared/api-env';
@@ -62,13 +61,6 @@ type WalletEventsMap = {
 // NOTE: Because this runs in a content script, we can't fetch the manifest.
 const name = process.env.APP_NAME || 'Sui Wallet';
 
-type StakeInput = { validatorAddress: string };
-type SuiWalletStakeFeature = {
-	'suiWallet:stake': {
-		version: '0.0.1';
-		stake: (input: StakeInput) => Promise<void>;
-	};
-};
 export type QredoConnectInput = {
 	service: string;
 	apiUrl: string;
@@ -125,7 +117,6 @@ export class SuiWallet implements Wallet {
 	get features(): StandardConnectFeature &
 		StandardEventsFeature &
 		SuiFeatures &
-		SuiWalletStakeFeature &
 		QredoConnectFeature {
 		return {
 			'standard:connect': {
@@ -143,10 +134,6 @@ export class SuiWallet implements Wallet {
 			'sui:signAndExecuteTransactionBlock': {
 				version: '1.0.0',
 				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
-			},
-			'suiWallet:stake': {
-				version: '0.0.1',
-				stake: this.#stake,
 			},
 			'sui:signMessage': {
 				version: '1.0.0',
@@ -293,13 +280,6 @@ export class SuiWallet implements Wallet {
 			}),
 			(response) => response.result,
 		);
-	};
-
-	#stake = async (input: StakeInput) => {
-		this.#send<StakeRequest, void>({
-			type: 'stake-request',
-			validatorAddress: input.validatorAddress,
-		});
 	};
 
 	#signMessage: SuiSignMessageMethod = async ({ message, account }) => {

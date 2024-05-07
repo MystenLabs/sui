@@ -4,8 +4,10 @@
 use futures::future::join_all;
 use futures::join;
 use rand::distributions::Distribution;
+use std::net::SocketAddr;
 use std::ops::Deref;
 use std::time::{Duration, SystemTime};
+use sui_config::node::AuthorityOverloadConfig;
 use sui_core::authority::EffectsNotifyRead;
 use sui_core::consensus_adapter::position_submit_certificate;
 use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
@@ -17,7 +19,7 @@ use sui_test_transaction_builder::{
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::event::Event;
 use sui_types::execution_status::{CommandArgumentError, ExecutionFailureStatus, ExecutionStatus};
-use sui_types::messages_grpc::ObjectInfoRequest;
+use sui_types::messages_grpc::{LayoutGenerationOption, ObjectInfoRequest};
 use sui_types::transaction::{CallArg, ObjectArg};
 use test_cluster::TestClusterBuilder;
 use tokio::time::sleep;
@@ -109,8 +111,9 @@ async fn shared_object_deletion_multiple_times() {
             .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
             .build();
         let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone())
+            .create_certificate(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         txs.push(signed);
@@ -132,7 +135,7 @@ async fn shared_object_deletion_multiple_times() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(digests)
         .await
         .unwrap();
@@ -172,8 +175,9 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
             .call_counter_delete(package_id, counter_id, counter_initial_shared_version)
             .build();
         let signed = test_cluster.sign_transaction(&transaction);
+        let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
         test_cluster
-            .create_certificate(signed.clone())
+            .create_certificate(signed.clone(), Some(client_ip))
             .await
             .unwrap();
         test_cluster
@@ -188,7 +192,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(digests)
         .await
         .unwrap();
@@ -259,17 +263,18 @@ async fn shared_object_deletion_multi_certs() {
         .build();
     let inc_tx_b = test_cluster.sign_transaction(&inc_tx_b);
     let inc_tx_b_digest = *inc_tx_b.digest();
+    let client_ip = SocketAddr::new([127, 0, 0, 1].into(), 0);
 
     let _ = test_cluster
-        .create_certificate(delete_tx.clone())
+        .create_certificate(delete_tx.clone(), Some(client_ip))
         .await
         .unwrap();
     let _ = test_cluster
-        .create_certificate(inc_tx_a.clone())
+        .create_certificate(inc_tx_a.clone(), Some(client_ip))
         .await
         .unwrap();
     let _ = test_cluster
-        .create_certificate(inc_tx_b.clone())
+        .create_certificate(inc_tx_b.clone(), Some(client_ip))
         .await
         .unwrap();
 
@@ -301,7 +306,7 @@ async fn shared_object_deletion_multi_certs() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .db()
+        .get_effects_notify_read()
         .notify_read_executed_effects(vec![inc_tx_a_digest, inc_tx_b_digest])
         .await
         .unwrap();
@@ -484,7 +489,7 @@ async fn access_clock_object_test() {
     assert!(matches!(effects.status(), ExecutionStatus::Success { .. }));
 
     assert_eq!(1, events.data.len());
-    let event = events.data.get(0).unwrap();
+    let event = events.data.first().unwrap();
     let Event { contents, .. } = event;
 
     use serde::{Deserialize, Serialize};
@@ -506,7 +511,10 @@ async fn access_clock_object_test() {
             .sui_node
             .with_async(|node| async {
                 node.state()
-                    .get_transaction_checkpoint(&digest, &node.state().epoch_store_for_testing())
+                    .get_transaction_checkpoint_for_tests(
+                        &digest,
+                        &node.state().epoch_store_for_testing(),
+                    )
                     .unwrap()
             })
             .await;
@@ -528,7 +536,14 @@ async fn access_clock_object_test() {
 
 #[sim_test]
 async fn shared_object_sync() {
-    let test_cluster = TestClusterBuilder::new().build().await;
+    let test_cluster = TestClusterBuilder::new()
+        // Set the threshold high enough so it won't be triggered.
+        .with_authority_overload_config(AuthorityOverloadConfig {
+            max_txn_age_in_queue: Duration::from_secs(60),
+            ..Default::default()
+        })
+        .build()
+        .await;
     let package_id = publish_basics_package(&test_cluster.wallet).await.0;
 
     // Since we use submit_transaction_to_validators in this test, which does not go through fullnode,
@@ -562,7 +577,8 @@ async fn shared_object_sync() {
             assert!(validator
                 .state()
                 .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id, None,
+                    counter_id,
+                    LayoutGenerationOption::None,
                 ))
                 .await
                 .is_ok());
@@ -575,7 +591,8 @@ async fn shared_object_sync() {
             assert!(validator
                 .state()
                 .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-                    counter_id, None,
+                    counter_id,
+                    LayoutGenerationOption::None,
                 ))
                 .await
                 .is_err());

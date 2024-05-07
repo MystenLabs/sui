@@ -12,7 +12,10 @@
 
 # Move build directory
 build
+!crates/sui-single-node-benchmark/tests/data/package_publish_from_bytecode/package_a/build
+!crates/sui-single-node-benchmark/tests/data/package_publish_from_bytecode/package_b/build
 storage
+!consensus/core/src/storage
 !crates/sui-types/src/storage
 !narwhal/storage
 
@@ -21,6 +24,7 @@ Move.lock
 !crates/sui-framework/packages/move-stdlib/Move.lock
 !crates/sui-framework/packages/sui-framework/Move.lock
 !crates/sui-framework/packages/sui-system/Move.lock
+!crates/sui-framework/packages/deepbook/Move.lock
 .trace
 .coverage_map.mvcov
 
@@ -64,3 +68,9 @@ yarn-error.log*
 # misc
 *.key
 .env
+checkpoints_dir/*
+light_client.yaml
+docs/content/references/sui-api/sui-graphql/*
+docs/content/references/framework/**
+
+lcov.info

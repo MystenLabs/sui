@@ -29,20 +29,23 @@ shellexpand.workspace = true
 tempfile.workspace = true
 http.workspace = true
 
+move-vm-config.workspace = true
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 tokio.workspace = true
-typed-store.workspace = true
+tokio-util.workspace = true
+tabled.workspace = true
 
+shared-crypto.workspace = true
 sui-config.workspace = true
 sui-core.workspace = true
 sui-execution.workspace = true
 sui-framework.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true

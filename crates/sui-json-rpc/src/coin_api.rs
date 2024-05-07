@@ -16,6 +16,7 @@ use tracing::{debug, info, instrument};
 
 use mysten_metrics::spawn_monitored_task;
 use sui_core::authority::AuthorityState;
+use sui_json_rpc_api::{cap_page_limit, CoinReadApiOpenRpc, CoinReadApiServer, JsonRpcMetrics};
 use sui_json_rpc_types::Balance;
 use sui_json_rpc_types::{CoinPage, SuiCoinMetadata};
 use sui_open_rpc::Module;
@@ -24,14 +25,13 @@ use sui_types::balance::Supply;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::coin::{CoinMetadata, TreasuryCap};
 use sui_types::effects::TransactionEffectsAPI;
-use sui_types::gas_coin::GAS;
+use sui_types::gas_coin::{GAS, TOTAL_SUPPLY_MIST};
 use sui_types::object::Object;
 use sui_types::parse_sui_struct_tag;
 
 #[cfg(test)]
 use mockall::automock;
 
-use crate::api::{cap_page_limit, CoinReadApiServer, JsonRpcMetrics};
 use crate::authority_state::StateRead;
 use crate::error::{Error, RpcInterimResult, SuiRpcInputError};
 use crate::{with_tracing, SuiRpcModule};
@@ -75,7 +75,7 @@ impl SuiRpcModule for CoinReadApi {
     }
 
     fn rpc_doc_module() -> Module {
-        crate::api::CoinReadApiOpenRpc::module_doc()
+        CoinReadApiOpenRpc::module_doc()
     }
 }
 
@@ -219,7 +219,9 @@ impl CoinReadApiServer for CoinReadApi {
         with_tracing!(async move {
             let coin_struct = parse_to_struct_tag(&coin_type)?;
             Ok(if GAS::is_gas(&coin_struct) {
-                Supply { value: 0 }
+                Supply {
+                    value: TOTAL_SUPPLY_MIST,
+                }
             } else {
                 let treasury_cap_object = self
                     .internal
@@ -423,7 +425,6 @@ mod tests {
     use sui_types::object::Object;
     use sui_types::utils::create_fake_transaction;
     use sui_types::{parse_sui_struct_tag, TypeTag};
-    use typed_store::TypedStoreError;
 
     mock! {
         pub KeyValueStore {}
@@ -788,10 +789,7 @@ mod tests {
             mock_state
                 .expect_get_owned_coins()
                 .returning(move |_, _, _, _| {
-                    Err(SuiError::StorageError(TypedStoreError::RocksDBError(
-                        "mock rocksdb error".to_string(),
-                    ))
-                    .into())
+                    Err(SuiError::Storage("mock rocksdb error".to_string()).into())
                 });
             let coin_read_api = CoinReadApi::new_for_tests(Arc::new(mock_state), None);
             let response = coin_read_api
@@ -805,7 +803,7 @@ mod tests {
                 error_object.code(),
                 jsonrpsee::types::error::INTERNAL_ERROR_CODE
             );
-            let expected = expect!["Storage error"];
+            let expected = expect!["Storage error: mock rocksdb error"];
             expected.assert_eq(error_object.message());
         }
     }
@@ -1296,7 +1294,7 @@ mod tests {
             let response = coin_read_api.get_total_supply(coin_type.to_string()).await;
 
             let supply = response.unwrap();
-            let expected = expect!["0"];
+            let expected = expect!["10000000000000000000"];
             expected.assert_eq(&supply.value.to_string());
         }
 

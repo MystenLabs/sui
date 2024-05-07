@@ -21,7 +21,6 @@ use sui_types::object::Owner;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 
-use shared_crypto::intent::Intent;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -153,7 +152,7 @@ impl TestContext {
             .get_fullnode_client()
             .quorum_driver_api()
             .execute_transaction_block(
-                Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature]),
+                Transaction::from_data(txn_data, vec![signature]),
                 SuiTransactionBlockResponseOptions::new()
                     .with_object_changes()
                     .with_balance_changes()

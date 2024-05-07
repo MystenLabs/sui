@@ -12,7 +12,6 @@ serde.workspace = true
 serde_json.workspace = true
 bcs.workspace = true
 versions.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true
@@ -20,8 +19,8 @@ clap.workspace = true
 pretty_assertions.workspace = true
 tokio = { workspace = true, features = ["full"] }
 fastcrypto = { workspace = true }
-sui-core.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-json.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }

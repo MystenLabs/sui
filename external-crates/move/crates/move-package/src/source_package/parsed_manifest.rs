@@ -37,7 +37,6 @@ pub struct SourceManifest {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PackageInfo {
     pub name: PackageName,
-    pub version: Version,
     pub authors: Vec<Symbol>,
     pub license: Option<Symbol>,
     pub edition: Option<Edition>,
@@ -56,7 +55,6 @@ pub enum Dependency {
 pub struct InternalDependency {
     pub kind: DependencyKind,
     pub subst: Option<Substitution>,
-    pub version: Option<Version>,
     pub digest: Option<PackageDigest>,
     pub dep_override: DepOverride,
 }

@@ -1,14 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
+import type {
 	PaginatedObjectsResponse,
 	SuiObjectData,
 	SuiObjectDataOptions,
 } from '@mysten/sui.js/client';
-import { TransactionArgument } from '@mysten/sui.js/transactions';
+import type { TransactionArgument } from '@mysten/sui.js/transactions';
 
-import { ObjectArgument } from '.';
+import type { ObjectArgument } from './index.js';
 
 /** The Kiosk module. */
 export const KIOSK_MODULE = '0x2::kiosk';

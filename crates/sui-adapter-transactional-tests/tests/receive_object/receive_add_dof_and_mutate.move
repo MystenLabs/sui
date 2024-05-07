@@ -5,14 +5,12 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
     use sui::dynamic_object_field as dof;
 
     const KEY: u64 = 0;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
         value: u64,
     }
@@ -26,7 +24,7 @@ module tto::M1 {
     }
 
     public entry fun receive(parent: &mut A, x: Receiving<A>, ctx: &mut TxContext) {
-        let b = transfer::receive(&mut parent.id, x);
+        let mut b = transfer::receive(&mut parent.id, x);
         let x = A { id: object::new(ctx), value: 0 };
         dof::add(&mut b.id, KEY, x);
         dof::add(&mut parent.id, KEY, b);

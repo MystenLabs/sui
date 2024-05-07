@@ -1,13 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::diag;
 use crate::expansion::ast::{self as E, ModuleIdent};
 use crate::naming::ast as N;
 use crate::parser::ast::{FunctionName, Visibility};
 use crate::shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *};
 use crate::typing::core;
+use crate::{diag, ice};
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 //**************************************************************************************************
 // Entry
@@ -16,15 +17,19 @@ use move_ir_types::location::*;
 struct Context<'env, 'info> {
     env: &'env mut CompilationEnv,
     info: &'info NamingProgramInfo,
-    current_module: Option<ModuleIdent>,
+    current_module: ModuleIdent,
 }
 
 impl<'env, 'info> Context<'env, 'info> {
-    fn new(env: &'env mut CompilationEnv, info: &'info NamingProgramInfo) -> Self {
+    fn new(
+        env: &'env mut CompilationEnv,
+        info: &'info NamingProgramInfo,
+        current_module: ModuleIdent,
+    ) -> Self {
         Self {
             env,
             info,
-            current_module: None,
+            current_module,
         }
     }
 }
@@ -34,13 +39,9 @@ impl<'env, 'info> Context<'env, 'info> {
 //**************************************************************************************************
 
 pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &mut N::Program_) {
-    let mut context = Context::new(env, info);
-    let N::Program_ { modules, scripts } = inner;
+    let N::Program_ { modules } = inner;
     for (mident, mdef) in modules.key_cloned_iter_mut() {
-        module(&mut context, mident, mdef);
-    }
-    for s in scripts.values_mut() {
-        script(&mut context, s);
+        module(env, info, mident, mdef);
     }
     let module_use_funs = modules
         .key_cloned_iter()
@@ -48,6 +49,7 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
             let N::UseFuns {
                 resolved,
                 implicit_candidates,
+                color: _,
             } = &mdef.use_funs;
             assert!(implicit_candidates.is_empty());
             (mident, resolved.clone())
@@ -56,8 +58,13 @@ pub fn program(env: &mut CompilationEnv, info: &mut NamingProgramInfo, inner: &m
     info.set_use_funs(module_use_funs);
 }
 
-fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefinition) {
-    context.current_module = Some(mident);
+fn module(
+    env: &mut CompilationEnv,
+    info: &mut NamingProgramInfo,
+    mident: ModuleIdent,
+    mdef: &mut N::ModuleDefinition,
+) {
+    let context = &mut Context::new(env, info, mident);
     context
         .env
         .add_warning_filter_scope(mdef.warning_filter.clone());
@@ -68,19 +75,6 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &mut N::ModuleDefini
     for (_, _, f) in &mut mdef.functions {
         function(context, f);
     }
-    context.env.pop_warning_filter_scope();
-}
-
-fn script(context: &mut Context, s: &mut N::Script) {
-    context.current_module = None;
-    context
-        .env
-        .add_warning_filter_scope(s.warning_filter.clone());
-    use_funs(context, &mut s.use_funs);
-    for (_, _, c) in &mut s.constants {
-        constant(context, c);
-    }
-    function(context, &mut s.function);
     context.env.pop_warning_filter_scope();
 }
 
@@ -110,6 +104,7 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
     let N::UseFuns {
         resolved,
         implicit_candidates,
+        color: _,
     } = uf;
     // remove any incorrect resolved functions
     for (tn, methods) in &mut *resolved {
@@ -132,11 +127,17 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             if is_valid {
                 if let Some(public_loc) = nuf.is_public {
                     let defining_module = match &tn.value {
-                        N::TypeName_::Multiple(_) => panic!("ICE unexpected tuple type"),
+                        N::TypeName_::Multiple(_) => {
+                            context.env.add_diag(ice!((
+                                tn.loc,
+                                "ICE tuple type should not be reachable from use fun"
+                            )));
+                            return None;
+                        }
                         N::TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
                         N::TypeName_::ModuleType(m, _) => Some(m),
                     };
-                    if context.current_module.as_ref() != defining_module {
+                    if Some(&context.current_module) != defining_module {
                         let msg = "Invalid visibility for 'use fun' declaration";
                         let vis_msg = format!(
                             "Module level 'use fun' declarations can be '{}' for the \
@@ -204,19 +205,24 @@ fn use_funs(context: &mut Context, uf: &mut N::UseFuns) {
             }
             continue;
         };
-        let kind = match ekind {
-            E::ImplicitUseFunKind::FunctionDeclaration => N::UseFunKind::FunctionDeclaration,
+        let (kind, used) = match ekind {
+            E::ImplicitUseFunKind::FunctionDeclaration => (
+                N::UseFunKind::FunctionDeclaration,
+                /* silences unused warning */ true,
+            ),
             E::ImplicitUseFunKind::UseAlias { used } => {
                 assert!(is_public.is_none());
-                N::UseFunKind::UseAlias { used }
+                (N::UseFunKind::UseAlias, used)
             }
         };
         let nuf = N::UseFun {
             loc,
             attributes,
             is_public,
+            tname: tn.clone(),
             target_function: (target_m, target_f),
             kind,
+            used,
         };
         let nuf_loc = nuf.loc;
         let methods = resolved.entry(tn.clone()).or_insert_with(UniqueMap::new);
@@ -303,36 +309,55 @@ fn sequence(context: &mut Context, (uf, seq): &mut N::Sequence) {
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
     match e_ {
         N::Exp_::Value(_)
-        | N::Exp_::Move(_)
-        | N::Exp_::Copy(_)
-        | N::Exp_::Use(_)
+        | N::Exp_::Var(_)
         | N::Exp_::Constant(_, _)
-        | N::Exp_::Break
-        | N::Exp_::Continue
+        | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
-        | N::Exp_::Spec(_, _)
+        | N::Exp_::ErrorConstant
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
+        | N::Exp_::Give(_, _, e)
         | N::Exp_::Dereference(e)
         | N::Exp_::UnaryExp(_, e)
         | N::Exp_::Cast(e, _)
         | N::Exp_::Assign(_, e)
-        | N::Exp_::Loop(e)
-        | N::Exp_::Annotate(e, _) => exp(context, e),
+        | N::Exp_::Loop(_, e)
+        | N::Exp_::Annotate(e, _)
+        | N::Exp_::Lambda(N::Lambda {
+            parameters: _,
+            return_type: _,
+            return_label: _,
+            use_fun_color: _,
+            body: e,
+        }) => exp(context, e),
         N::Exp_::IfElse(econd, et, ef) => {
             exp(context, econd);
             exp(context, et);
             exp(context, ef);
         }
-        N::Exp_::While(econd, ebody) => {
+        N::Exp_::Match(esubject, arms) => {
+            exp(context, esubject);
+            for arm in &mut arms.value {
+                if let Some(guard) = arm.value.guard.as_mut() {
+                    exp(context, guard)
+                }
+                exp(context, &mut arm.value.rhs);
+            }
+        }
+        N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
         }
-        N::Exp_::Block(s) => sequence(context, s),
+        N::Exp_::Block(N::Block {
+            name: _,
+            from_macro_argument: _,
+            seq,
+        }) => sequence(context, seq),
         N::Exp_::FieldMutate(ed, e) => {
             exp_dotted(context, ed);
             exp(context, e)
@@ -346,28 +371,41 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
                 exp(context, e)
             }
         }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
-        | N::Exp_::ModuleCall(_, _, _, sp!(_, es))
+        | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
+        | N::Exp_::VarCall(_, sp!(_, es))
         | N::Exp_::ExpList(es) => {
             for e in es {
                 exp(context, e)
             }
         }
-        N::Exp_::MethodCall(ed, _, _, sp!(_, es)) => {
+        N::Exp_::MethodCall(ed, _, _, _, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {
                 exp(context, e)
             }
         }
 
-        N::Exp_::DerefBorrow(ed) | N::Exp_::Borrow(_, ed) => exp_dotted(context, ed),
+        N::Exp_::ExpDotted(_, ed) => exp_dotted(context, ed),
     }
 }
 
+#[growing_stack]
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotUnresolved(_, ed) => exp_dotted(context, ed),
+        N::ExpDotted_::Index(ed, sp!(_, es)) => {
+            exp_dotted(context, ed);
+            for e in es {
+                exp(context, e)
+            }
+        }
     }
 }

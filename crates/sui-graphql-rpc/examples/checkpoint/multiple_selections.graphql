@@ -1,13 +1,12 @@
 # Get the checkpoint at sequence 9769 and show
-# the new committe authority and stake units
+# its transactions
 {
   checkpoint(id: { sequenceNumber: 9769 }) {
     digest
     sequenceNumber
     timestamp
-    validatorSignature
+    validatorSignatures
     previousCheckpointDigest
-    liveObjectSetDigest
     networkTotalTransactions
     rollingGasSummary {
       computationCost
@@ -17,20 +16,14 @@
     }
     epoch {
       epochId
+      liveObjectSetDigest
     }
-    endOfEpoch {
-      newCommittee {
-        authorityName
-        stakeUnit
-      }
-      nextProtocolVersion
-    }
-    transactionBlockConnection {
+    transactionBlocks {
       edges {
         node {
           digest
           sender {
-            location
+            address
           }
           expiration {
             epochId

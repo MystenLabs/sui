@@ -1,0 +1,3 @@
+# Should result in an error complaining that three arguments were found
+--move-call std::option::is_none <u64> "'a (this is an unmatched paren in a string'" "\"b)\"" c
+--gas-budget 111111

@@ -6,18 +6,12 @@ module regulated_token::reg {
     use sui::tx_context::{sender, TxContext};
     use sui::transfer;
     use sui::coin::{Self, TreasuryCap};
+    use sui::token::{Self, Token, TokenPolicy};
 
-    // TODO: uncomment this when `token` is landed on one of the environments.
-    //       ...or when tooling is set up for local network development.
-    // use sui::token::{Self, Token, TokenPolicy};
-
-    // WARNING: we're using local dependency only for demonstration purposes
-    //          until `token` is landed on one of the environments.
-    use regulated_token::token::{Self, Token, TokenPolicy};
     use regulated_token::denylist_rule::{Self as denylist, Denylist};
 
     /// The OTW and the type for the Token
-    struct REG has drop {}
+    public struct REG has drop {}
 
     // Create a TreasuryCap in the module initializer.
     // Also create a `TokenPolicy` (while this action can be performed offchain).
@@ -27,7 +21,7 @@ module regulated_token::reg {
             otw, 6, b"REG", b"Regulated Token", b"Example of a regulated token",
             option::none(), ctx
         );
-        let (policy, policy_cap) = token::new(&treasury_cap, ctx);
+        let (mut policy, policy_cap) = token::new_policy(&treasury_cap, ctx);
 
         // Allow transfer and spend by default
         token::allow(&mut policy, &policy_cap, token::transfer_action(), ctx);
@@ -41,8 +35,8 @@ module regulated_token::reg {
             &mut policy, &policy_cap, token::spend_action(), ctx
         );
 
-        transfer::public_transfer(treasury_cap, sender(ctx));
-        transfer::public_transfer(policy_cap, sender(ctx));
+        transfer::public_transfer(treasury_cap, ctx.sender());
+        transfer::public_transfer(policy_cap, ctx.sender());
         transfer::public_freeze_object(coin_metadata);
         token::share_policy(policy);
     }
@@ -72,7 +66,7 @@ module regulated_token::reg {
         ctx: &mut TxContext
     ) {
         let to_send = token::split(token, amount, ctx);
-        let request = token::transfer(to_send, recipient, ctx);
+        let mut request = token::transfer(to_send, recipient, ctx);
         denylist::verify(self, &mut request, ctx);
         token::confirm_request(self, request, ctx);
     }
@@ -84,7 +78,7 @@ module regulated_token::reg {
         recipient: address,
         ctx: &mut TxContext
     ) {
-        let request = token::transfer(token, recipient, ctx);
+        let mut request = token::transfer(token, recipient, ctx);
         denylist::verify(self, &mut request, ctx);
         token::confirm_request(self, request, ctx);
     }
@@ -97,7 +91,7 @@ module regulated_token::reg {
         ctx: &mut TxContext
     ) {
         let to_spend = token::split(token, amount, ctx);
-        let request = token::spend(to_spend, ctx);
+        let mut request = token::spend(to_spend, ctx);
         denylist::verify(self, &mut request, ctx);
         token::confirm_request_mut(self, request, ctx);
     }

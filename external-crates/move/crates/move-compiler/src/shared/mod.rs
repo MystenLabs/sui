@@ -6,19 +6,20 @@ use crate::{
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
-        codes::{Category, Declarations, DiagnosticsID, Severity, UnusedItem, WarningFilter},
-        Diagnostic, Diagnostics, WarningFilters,
+        codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
+        Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters,
     },
     editions::{
-        check_feature as edition_check_feature, Edition, FeatureGate, Flavor, SyntaxEdition,
+        check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
+        FeatureGate, Flavor,
     },
     expansion::ast as E,
     naming::ast as N,
-    naming::ast::ModuleDefinition,
     sui_mode,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
 use clap::*;
+use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
@@ -28,14 +29,21 @@ use std::{
     fmt,
     hash::Hash,
     rc::Rc,
-    sync::atomic::{AtomicUsize, Ordering as AtomicOrdering},
+    sync::{
+        atomic::{AtomicUsize, Ordering as AtomicOrdering},
+        Arc,
+    },
 };
+use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod known_attributes;
 pub mod program_info;
 pub mod remembering_unique_map;
 pub mod unique_map;
 pub mod unique_set;
+
+pub use ast_debug::AstDebug;
 
 //**************************************************************************************************
 // Numbers
@@ -160,6 +168,8 @@ pub const FILTER_DEAD_CODE: &str = "dead_code";
 pub const FILTER_UNUSED_LET_MUT: &str = "unused_let_mut";
 pub const FILTER_UNUSED_MUT_REF: &str = "unused_mut_ref";
 pub const FILTER_UNUSED_MUT_PARAM: &str = "unused_mut_parameter";
+pub const FILTER_IMPLICIT_CONST_COPY: &str = "implicit_const_copy";
+pub const FILTER_DUPLICATE_ALIAS: &str = "duplicate_alias";
 
 pub type NamedAddressMap = BTreeMap<Symbol, NumericalAddress>;
 
@@ -168,6 +178,12 @@ pub struct NamedAddressMapIndex(usize);
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct NamedAddressMaps(Vec<NamedAddressMap>);
+
+impl Default for NamedAddressMaps {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl NamedAddressMaps {
     pub fn new() -> Self {
@@ -196,32 +212,10 @@ pub struct PackagePaths<Path: Into<Symbol> = Symbol, NamedAddress: Into<Symbol> 
     pub named_address_map: BTreeMap<NamedAddress, NumericalAddress>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct IndexedPackagePath {
-    pub package: Option<Symbol>,
-    pub path: Symbol,
-    pub named_address_map: NamedAddressMapIndex,
-}
-
-pub type AttributeDeriver = dyn Fn(&mut CompilationEnv, &mut ModuleDefinition);
-
-/// Filter info for example filter #[allow(unused_function)] would have `name` to be
-/// `unused_function` and `attribute_name` to be `allow`
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct KnownFilterInfo {
-    name: Symbol,
-    attribute_name: E::AttributeName_,
-}
-
-impl KnownFilterInfo {
-    pub fn new(n: impl Into<Symbol>, attribute_name: E::AttributeName_) -> Self {
-        let name = n.into();
-        KnownFilterInfo {
-            name,
-            attribute_name,
-        }
-    }
-}
+/// None for the default 'allow'.
+/// Some(prefix) for a custom set of warnings, e.g. 'allow(lint(_))'.
+pub type FilterPrefix = Option<Symbol>;
+pub type FilterName = Symbol;
 
 pub struct CompilationEnv {
     flags: Flags,
@@ -233,21 +227,20 @@ pub struct CompilationEnv {
     /// Config for any package not found in `package_configs`, or for inputs without a package.
     default_config: PackageConfig,
     /// Maps warning filter key (filter name and filter attribute name) to the filter itself.
-    known_filters: BTreeMap<KnownFilterInfo, BTreeSet<WarningFilter>>,
+    known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>>,
     /// Maps a diagnostics ID to a known filter name.
-    known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo>,
-    /// Attribute names (including externally provided ones) identifying known warning filters.
-    known_filter_attributes: BTreeSet<E::AttributeName_>,
+    known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)>,
     prim_definers:
         BTreeMap<crate::naming::ast::BuiltinTypeName_, crate::expansion::ast::ModuleIdent>,
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
+    mapped_files: MappedFiles,
 }
 
 macro_rules! known_code_filter {
-    ($name:ident, $category:ident::$code:ident, $attr_name:ident) => {
+    ($name:ident, $category:ident::$code:ident) => {
         (
-            KnownFilterInfo::new($name, $attr_name),
+            Symbol::from($name),
             BTreeSet::from([WarningFilter::Code {
                 prefix: None,
                 category: Category::$category as u8,
@@ -265,66 +258,34 @@ impl CompilationEnv {
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
+        use crate::diagnostics::codes::{TypeSafety, UnusedItem};
         visitors.extend([
             sui_mode::id_leak::IDLeakVerifier.visitor(),
             sui_mode::typing::SuiTypeChecks.visitor(),
         ]);
-        let filter_attr_name =
-            E::AttributeName_::Known(known_attributes::KnownAttribute::Diagnostic(
-                known_attributes::DiagnosticAttribute::Allow,
-            ));
-        let filter_attributes = BTreeSet::from([filter_attr_name]);
-        let known_filters = BTreeMap::from([
+        let known_filters_: BTreeMap<FilterName, BTreeSet<WarningFilter>> = BTreeMap::from([
             (
-                KnownFilterInfo::new(FILTER_ALL, filter_attr_name),
+                FILTER_ALL.into(),
                 BTreeSet::from([WarningFilter::All(None)]),
             ),
             (
-                KnownFilterInfo::new(FILTER_UNUSED, filter_attr_name),
+                FILTER_UNUSED.into(),
                 BTreeSet::from([WarningFilter::Category {
                     prefix: None,
                     category: Category::UnusedItem as u8,
                     name: Some(FILTER_UNUSED),
                 }]),
             ),
-            known_code_filter!(
-                FILTER_MISSING_PHANTOM,
-                Declarations::InvalidNonPhantomUse,
-                filter_attr_name
-            ),
-            known_code_filter!(FILTER_UNUSED_USE, UnusedItem::Alias, filter_attr_name),
-            known_code_filter!(
-                FILTER_UNUSED_VARIABLE,
-                UnusedItem::Variable,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_ASSIGNMENT,
-                UnusedItem::Assignment,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_TRAILING_SEMI,
-                UnusedItem::TrailingSemi,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_ATTRIBUTE,
-                UnusedItem::Attribute,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_FUNCTION,
-                UnusedItem::Function,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_STRUCT_FIELD,
-                UnusedItem::StructField,
-                filter_attr_name
-            ),
+            known_code_filter!(FILTER_MISSING_PHANTOM, Declarations::InvalidNonPhantomUse),
+            known_code_filter!(FILTER_UNUSED_USE, UnusedItem::Alias),
+            known_code_filter!(FILTER_UNUSED_VARIABLE, UnusedItem::Variable),
+            known_code_filter!(FILTER_UNUSED_ASSIGNMENT, UnusedItem::Assignment),
+            known_code_filter!(FILTER_UNUSED_TRAILING_SEMI, UnusedItem::TrailingSemi),
+            known_code_filter!(FILTER_UNUSED_ATTRIBUTE, UnusedItem::Attribute),
+            known_code_filter!(FILTER_UNUSED_FUNCTION, UnusedItem::Function),
+            known_code_filter!(FILTER_UNUSED_STRUCT_FIELD, UnusedItem::StructField),
             (
-                KnownFilterInfo::new(FILTER_UNUSED_TYPE_PARAMETER, filter_attr_name),
+                FILTER_UNUSED_TYPE_PARAMETER.into(),
                 BTreeSet::from([
                     WarningFilter::Code {
                         prefix: None,
@@ -340,40 +301,34 @@ impl CompilationEnv {
                     },
                 ]),
             ),
-            known_code_filter!(FILTER_UNUSED_CONST, UnusedItem::Constant, filter_attr_name),
-            known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode, filter_attr_name),
-            known_code_filter!(
-                FILTER_UNUSED_LET_MUT,
-                UnusedItem::MutModifier,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_MUT_REF,
-                UnusedItem::MutReference,
-                filter_attr_name
-            ),
-            known_code_filter!(
-                FILTER_UNUSED_MUT_PARAM,
-                UnusedItem::MutParam,
-                filter_attr_name
-            ),
+            known_code_filter!(FILTER_UNUSED_CONST, UnusedItem::Constant),
+            known_code_filter!(FILTER_DEAD_CODE, UnusedItem::DeadCode),
+            known_code_filter!(FILTER_UNUSED_LET_MUT, UnusedItem::MutModifier),
+            known_code_filter!(FILTER_UNUSED_MUT_REF, UnusedItem::MutReference),
+            known_code_filter!(FILTER_UNUSED_MUT_PARAM, UnusedItem::MutParam),
+            known_code_filter!(FILTER_IMPLICIT_CONST_COPY, TypeSafety::ImplicitConstantCopy),
+            known_code_filter!(FILTER_DUPLICATE_ALIAS, Declarations::DuplicateAlias),
         ]);
+        let known_filters: BTreeMap<FilterPrefix, BTreeMap<FilterName, BTreeSet<WarningFilter>>> =
+            BTreeMap::from([(None, known_filters_)]);
 
-        let known_filter_names: BTreeMap<DiagnosticsID, KnownFilterInfo> = known_filters
+        let known_filter_names: BTreeMap<DiagnosticsID, (FilterPrefix, FilterName)> = known_filters
             .iter()
-            .flat_map(|(known_filter_info, filters)| {
-                filters.iter().filter_map(|v| {
-                    if let WarningFilter::Code {
-                        prefix,
-                        category,
-                        code,
-                        ..
-                    } = v
-                    {
-                        Some(((*prefix, *category, *code), known_filter_info.clone()))
-                    } else {
-                        None
-                    }
+            .flat_map(|(attr, all_filters)| {
+                all_filters.iter().flat_map(|(name, filters)| {
+                    filters.iter().filter_map(|v| {
+                        if let WarningFilter::Code {
+                            prefix,
+                            category,
+                            code,
+                            ..
+                        } = v
+                        {
+                            Some(((*prefix, *category, *code), (*attr, *name)))
+                        } else {
+                            None
+                        }
+                    })
                 })
             })
             .collect();
@@ -394,35 +349,57 @@ impl CompilationEnv {
             default_config: default_config.unwrap_or_default(),
             known_filters,
             known_filter_names,
-            known_filter_attributes: filter_attributes,
             prim_definers: BTreeMap::new(),
+            mapped_files: MappedFiles::empty(),
         }
     }
 
+    pub fn add_source_file(
+        &mut self,
+        file_hash: FileHash,
+        file_name: FileName,
+        source_text: Arc<str>,
+    ) {
+        self.mapped_files.add(file_hash, file_name, source_text)
+    }
+
+    pub fn file_mapping(&self) -> &MappedFiles {
+        &self.mapped_files
+    }
+
     pub fn add_diag(&mut self, mut diag: Diagnostic) {
-        let filter = self.warning_filter.last();
-        let is_filtered = filter
-            .map(|filter| filter.is_filtered(&diag))
-            .unwrap_or(false);
-        if !is_filtered {
+        if diag.info().severity() <= Severity::NonblockingError
+            && self
+                .diags
+                .any_syntax_error_with_primary_loc(diag.primary_loc())
+        {
+            // do not report multiple diags for the same location (unless they are blocking) to
+            // avoid noise that is likely to confuse the developer trying to localize the problem
+            //
+            // TODO: this check is O(n^2) for n diags - shouldn't be a huge problem but fix if it
+            // becomes one
+            return;
+        }
+
+        if !self.is_filtered(&diag) {
             // add help to suppress warning, if applicable
             // TODO do we want a centralized place for tips like this?
             if diag.info().severity() == Severity::Warning {
-                if let Some(filter_info) = self.known_filter_names.get(&diag.info().id()) {
+                if let Some((prefix, name)) = self.known_filter_names.get(&diag.info().id()) {
                     let help = format!(
                         "This warning can be suppressed with '#[{}({})]' \
                          applied to the 'module' or module member ('const', 'fun', or 'struct')",
-                        filter_info.attribute_name.name(),
-                        filter_info.name.as_str()
+                        known_attributes::DiagnosticAttribute::ALLOW,
+                        format_allow_attr(*prefix, *name),
                     );
                     diag.add_note(help)
                 }
-                if self.flags().warnings_are_errors() {
+                if self.flags.warnings_are_errors() {
                     diag = diag.set_severity(Severity::NonblockingError)
                 }
             }
             self.diags.add(diag)
-        } else if !filter.unwrap().for_dependency() {
+        } else if !self.filter_for_dependency() {
             // unwrap above is safe as the filter has been used (thus it must exist)
             self.diags.add_source_filtered(diag)
         }
@@ -447,6 +424,10 @@ impl CompilationEnv {
         self.diags.len()
     }
 
+    pub fn count_diags_at_or_above_severity(&self, threshold: Severity) -> usize {
+        self.diags.count_diags_at_or_above_severity(threshold)
+    }
+
     pub fn has_diags_at_or_above_severity(&self, threshold: Severity) -> bool {
         match self.diags.max_severity() {
             Some(max) if max >= threshold => true,
@@ -466,8 +447,13 @@ impl CompilationEnv {
     }
 
     /// Should only be called after compilation is finished
+    pub fn take_final_diags(&mut self) -> Diagnostics {
+        std::mem::take(&mut self.diags)
+    }
+
+    /// Should only be called after compilation is finished
     pub fn take_final_warning_diags(&mut self) -> Diagnostics {
-        let final_diags = std::mem::take(&mut self.diags);
+        let final_diags = self.take_final_diags();
         debug_assert!(final_diags
             .max_severity()
             .map(|s| s == Severity::Warning)
@@ -476,17 +462,7 @@ impl CompilationEnv {
     }
 
     /// Add a new filter for warnings
-    pub fn add_warning_filter_scope(&mut self, mut filter: WarningFilters) {
-        // This essentially "clones" the current filter into the next scope. This should be
-        // efficient enough since the diag_filter vec should be only about 2 or 3 elements deep
-        // and the size of the filter should only be relatively small (at most 10 or so elements)
-        debug_assert!(
-            self.warning_filter.len() <= 3,
-            "TODO If triggered this TODO you might want to make this more efficient"
-        );
-        if let Some(cur_filter) = self.warning_filter.last() {
-            filter.union(cur_filter)
-        }
+    pub fn add_warning_filter_scope(&mut self, filter: WarningFilters) {
         self.warning_filter.push(filter)
     }
 
@@ -494,43 +470,49 @@ impl CompilationEnv {
         self.warning_filter.pop().unwrap();
     }
 
-    pub fn filter_from_str(
-        &self,
-        name: impl Into<Symbol>,
-        attribute_name: E::AttributeName_,
-    ) -> BTreeSet<WarningFilter> {
-        self.known_filters
-            .get(&KnownFilterInfo::new(name, attribute_name))
-            .cloned()
-            .unwrap_or_default()
+    fn is_filtered(&self, diag: &Diagnostic) -> bool {
+        self.warning_filter
+            .iter()
+            .rev()
+            .any(|filter| filter.is_filtered(diag))
     }
 
-    pub fn filter_attributes(&self) -> &BTreeSet<E::AttributeName_> {
-        &self.known_filter_attributes
+    fn filter_for_dependency(&self) -> bool {
+        self.warning_filter
+            .iter()
+            .rev()
+            .any(|filter| filter.for_dependency())
+    }
+
+    pub fn known_filter_names(&self) -> impl IntoIterator<Item = FilterPrefix> + '_ {
+        self.known_filters.keys().copied()
+    }
+
+    pub fn filter_from_str(
+        &self,
+        prefix: Option<impl Into<Symbol>>,
+        name: impl Into<Symbol>,
+    ) -> BTreeSet<WarningFilter> {
+        self.known_filters
+            .get(&prefix.map(|p| p.into()))
+            .and_then(|filters| filters.get(&name.into()).cloned())
+            .unwrap_or_default()
     }
 
     pub fn add_custom_known_filters(
         &mut self,
+        attr_name: FilterPrefix,
         filters: Vec<WarningFilter>,
-        filter_attr_name: E::AttributeName_,
     ) -> anyhow::Result<()> {
-        self.known_filter_attributes.insert(filter_attr_name);
+        let filter_attr = self.known_filters.entry(attr_name).or_default();
         for filter in filters {
-            match filter {
-                WarningFilter::All(_) => {
-                    self.known_filters
-                        .entry(KnownFilterInfo::new(FILTER_ALL, filter_attr_name))
-                        .or_default()
-                        .insert(filter);
-                }
-                WarningFilter::Category { name, .. } => {
+            let (prefix, n) = match filter {
+                WarningFilter::All(prefix) => (prefix, Symbol::from(FILTER_ALL)),
+                WarningFilter::Category { name, prefix, .. } => {
                     let Some(n) = name else {
                         anyhow::bail!("A known Category warning filter must have a name specified");
                     };
-                    self.known_filters
-                        .entry(KnownFilterInfo::new(n, filter_attr_name))
-                        .or_default()
-                        .insert(filter);
+                    (prefix, Symbol::from(n))
                 }
                 WarningFilter::Code {
                     prefix,
@@ -541,15 +523,18 @@ impl CompilationEnv {
                     let Some(n) = name else {
                         anyhow::bail!("A known Code warning filter must have a name specified");
                     };
-                    let known_filter_info = KnownFilterInfo::new(n, filter_attr_name);
-                    self.known_filters
-                        .entry(known_filter_info.clone())
-                        .or_default()
-                        .insert(filter);
+                    let n = Symbol::from(n);
                     self.known_filter_names
-                        .insert((prefix, category, code), known_filter_info);
+                        .insert((prefix, category, code), (attr_name, n));
+                    (prefix, n)
                 }
-            }
+            };
+            anyhow::ensure!(
+                attr_name.is_some() == prefix.is_some(),
+                "If the attribute name is specified, e.g. Some(_), the external prefix must also \
+                be specified. attribute name: {attr_name:?}, external prefix: {prefix:?}",
+            );
+            filter_attr.entry(n).or_default().insert(filter);
         }
         Ok(())
     }
@@ -566,19 +551,28 @@ impl CompilationEnv {
     // supported, and `true` otherwise.
     pub fn check_feature(
         &mut self,
-        feature: FeatureGate,
         package: Option<Symbol>,
+        feature: FeatureGate,
         loc: Loc,
     ) -> bool {
         edition_check_feature(self, self.package_config(package).edition, feature, loc)
+    }
+
+    // Returns an error string if if the feature isn't supported, or None otherwise.
+    pub fn feature_edition_error_msg(
+        &mut self,
+        feature: FeatureGate,
+        package: Option<Symbol>,
+    ) -> Option<String> {
+        feature_edition_error_msg(self.package_config(package).edition, feature)
     }
 
     pub fn supports_feature(&self, package: Option<Symbol>, feature: FeatureGate) -> bool {
         self.package_config(package).edition.supports(feature)
     }
 
-    pub fn syntax_edition(&self, package: Option<Symbol>) -> SyntaxEdition {
-        self.package_config(package).edition.syntax()
+    pub fn edition(&self, package: Option<Symbol>) -> Edition {
+        self.package_config(package).edition
     }
 
     pub fn package_config(&self, package: Option<Symbol>) -> &PackageConfig {
@@ -596,6 +590,13 @@ impl CompilationEnv {
 
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
+    }
+}
+
+pub fn format_allow_attr(attr_name: FilterPrefix, filter: FilterName) -> String {
+    match attr_name {
+        None => filter.to_string(),
+        Some(attr_name) => format!("{attr_name}({filter})"),
     }
 }
 
@@ -643,13 +644,6 @@ pub struct Flags {
     )]
     test: bool,
 
-    /// Compile in verification mode
-    #[clap(
-        short = cli::VERIFY_SHORT,
-        long = cli::VERIFY,
-    )]
-    verify: bool,
-
     /// If set, warnings become errors.
     #[clap(
         long = cli::WARNINGS_ARE_ERRORS,
@@ -688,7 +682,6 @@ impl Flags {
     pub fn empty() -> Self {
         Self {
             test: false,
-            verify: false,
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
@@ -700,20 +693,7 @@ impl Flags {
     pub fn testing() -> Self {
         Self {
             test: true,
-            verify: false,
             shadow: false,
-            bytecode_version: None,
-            warnings_are_errors: false,
-            silence_warnings: false,
-            keep_testing_functions: false,
-        }
-    }
-
-    pub fn verification() -> Self {
-        Self {
-            test: false,
-            verify: true,
-            shadow: true, // allows overlapping between sources and deps
             bytecode_version: None,
             warnings_are_errors: false,
             silence_warnings: false,
@@ -759,10 +739,6 @@ impl Flags {
 
     pub fn keep_testing_functions(&self) -> bool {
         self.test || self.keep_testing_functions
-    }
-
-    pub fn is_verification(&self) -> bool {
-        self.verify
     }
 
     pub fn sources_shadow_deps(&self) -> bool {
@@ -832,259 +808,279 @@ impl Visitors {
 }
 
 //**************************************************************************************************
-// Attributes
+// Binop Processing Macro
 //**************************************************************************************************
 
-pub mod known_attributes {
-    use once_cell::sync::Lazy;
-    use std::{collections::BTreeSet, fmt};
+/// A macro to handle binop processing without recursion in various passes. This macro proceeds by:
+///
+/// 1. unravelling nested binops into a work queue;
+/// 2. processing that work queue to create a Polish notation expression stack consisting of `Op`
+///    (operator) and `Val` (value) entries;
+/// 3. processing the expression stack in reverse (RPN-style) alongside a value stack to reassemble
+///    the binary operation expressions;
+/// 4. and, finally, returning the final value left on the value stack.
+///
+/// The macro takes the following arguments:
+///
+///  Type arguments:
+///
+/// * `$optype` - The type contained in the Op entries on the expression stack.
+/// * `$valtype` - The type contained in the Val entries on the expression stack.
+///
+/// Work Queue Arguments:
+///
+/// * `$e` - The initial expression to start processing.
+/// * `$work_pat` - The pattern used to disassemble entries in the work queue. Note that the work
+///    queue may contain any arbitrary type (such as a tuple of a block and expression), so the
+///    work pattern is used to disassemble and bind component parts.
+/// * `$work_exp` - The actual expression to match on, as defined in the `$work_pat`.
+/// * `$binop_pat` - This is a pattern matched against the `$work_exp` that matches if and only if
+///    the `$work_exp` is in fact a binary operation expression.
+/// * `$bind_rhs` - This block is executed when `$work_exp` matches `$binop_pat`, with any pattern
+///   binders from `$binop_pat` in scope. This block must return a 3-tuple consisting of the
+///   left-hand side work queue entry, the `$optype` entry for the operand, and the right-hand side
+///   work queue entry (as `(lhs, op, rhs)`). Note that `lhs` and `rhs` here should have the same
+///   type as the initial `$e`.
+/// * `$default` - This block processes a work queue entry when the pattern match fails, and is
+///   expected to yield a `$valtype` entry. Note this should be the value you would like on your
+///   value stack (i.e., the type of the final result).
+///
+/// Value Stack Arguments:
+///
+/// * `$value_stack` - An identifier that names the value stack.
+/// * `$op_pat` - When the expression stack finds an `Op`, it will match its contents with this.
+/// * `$op_rhs` - This block is executed when an Op is found on the expression stack. Any pattern
+///   binders from `$op_pat` will be in scope. This block must return value for the `$value_stack`,
+///   and can do so by popping the left-hand side and right-hand side results from the
+///   `$value_stack` (in that order). These values should always be available as per the contract
+///   of the macro and how it disassembles and pushes values across its computation.
+///
+/// Examples of usage can be found in `expansion/`, `naming/`, `typing/`, and `hlir/`, in their
+/// respective `translation.rs` implementations.
 
-    use crate::diagnostics::codes::WARNING_FILTER_ATTR;
+macro_rules! process_binops {
+    ($optype:ty,
+     $valtype:ty,
+     $e:expr,
+     $work_pat:pat,
+     $work_exp:expr,
+     $binop_pat:pat => $binop_rhs:block,
+     $default:block,
+     $value_stack:ident,
+     $op_pat:pat => $op_rhs:block
+    ) => {{
+        enum Pn {
+            Op($optype),
+            Val($valtype),
+        }
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum AttributePosition {
-        AddressBlock,
-        Module,
-        Script,
-        Use,
-        Friend,
-        Constant,
-        Struct,
-        Function,
-        Spec,
-    }
+        let mut pn_stack: Vec<Pn> = vec![];
+        let mut work_queue = vec![$e];
 
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum KnownAttribute {
-        Testing(TestingAttribute),
-        Verification(VerificationAttribute),
-        Native(NativeAttribute),
-        Diagnostic(DiagnosticAttribute),
-        DefinesPrimitive(DefinesPrimitive),
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum TestingAttribute {
-        // Can be called by other testing code, and included in compilation in test mode
-        TestOnly,
-        // Is a test that will be run
-        Test,
-        // This test is expected to fail
-        ExpectedFailure,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum VerificationAttribute {
-        // The associated AST node will be included in the compilation in prove mode
-        VerifyOnly,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum NativeAttribute {
-        // It is a fake native function that actually compiles to a bytecode instruction
-        BytecodeInstruction,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub enum DiagnosticAttribute {
-        Allow,
-    }
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct DefinesPrimitive;
-
-    impl fmt::Display for AttributePosition {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self {
-                Self::AddressBlock => write!(f, "address block"),
-                Self::Module => write!(f, "module"),
-                Self::Script => write!(f, "script"),
-                Self::Use => write!(f, "use"),
-                Self::Friend => write!(f, "friend"),
-                Self::Constant => write!(f, "constant"),
-                Self::Struct => write!(f, "struct"),
-                Self::Function => write!(f, "function"),
-                Self::Spec => write!(f, "spec"),
+        while let Some($work_pat) = work_queue.pop() {
+            if let $binop_pat = $work_exp {
+                let (lhs, op, rhs) = $binop_rhs;
+                pn_stack.push(Pn::Op(op));
+                work_queue.push(rhs);
+                work_queue.push(lhs);
+            } else {
+                let result = $default;
+                pn_stack.push(Pn::Val(result));
             }
         }
-    }
 
-    impl KnownAttribute {
-        pub fn resolve(attribute_str: impl AsRef<str>) -> Option<Self> {
-            Some(match attribute_str.as_ref() {
-                TestingAttribute::TEST => Self::Testing(TestingAttribute::Test),
-                TestingAttribute::TEST_ONLY => Self::Testing(TestingAttribute::TestOnly),
-                TestingAttribute::EXPECTED_FAILURE => {
-                    Self::Testing(TestingAttribute::ExpectedFailure)
+        let mut $value_stack = vec![];
+        for entry in pn_stack.into_iter().rev() {
+            match entry {
+                Pn::Op($op_pat) => {
+                    let op_result = $op_rhs;
+                    $value_stack.push(op_result);
                 }
-                VerificationAttribute::VERIFY_ONLY => {
-                    Self::Verification(VerificationAttribute::VerifyOnly)
+                Pn::Val(v) => $value_stack.push(v),
+            }
+        }
+        let result = $value_stack.pop().unwrap();
+        assert!($value_stack.is_empty());
+        result
+    }};
+}
+
+pub(crate) use process_binops;
+
+//**************************************************************************************************
+// Virtual file system support
+//**************************************************************************************************
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexedPackagePath<P> {
+    pub package: Option<Symbol>,
+    pub path: P,
+    pub named_address_map: NamedAddressMapIndex,
+}
+
+pub type IndexedPhysicalPackagePath = IndexedPackagePath<Symbol>;
+
+pub type IndexedVfsPackagePath = IndexedPackagePath<VfsPath>;
+
+pub fn vfs_path_from_str(path: String, vfs_path: &VfsPath) -> Result<VfsPath, VfsError> {
+    // we need to canonicalized paths for virtual file systems as some of them (e.g., implementation
+    // of the physical one) cannot handle relative paths
+    fn canonicalize(p: String) -> String {
+        // dunce's version of canonicalize does a better job on Windows
+        match dunce::canonicalize(&p) {
+            Ok(s) => s.to_string_lossy().to_string(),
+            Err(_) => p,
+        }
+    }
+
+    vfs_path.join(canonicalize(path))
+}
+
+impl IndexedPhysicalPackagePath {
+    pub fn to_vfs_path(self, vfs_root: &VfsPath) -> Result<IndexedVfsPackagePath, VfsError> {
+        let IndexedPhysicalPackagePath {
+            package,
+            path,
+            named_address_map,
+        } = self;
+
+        Ok(IndexedVfsPackagePath {
+            package,
+            path: vfs_path_from_str(path.to_string(), vfs_root)?,
+            named_address_map,
+        })
+    }
+}
+
+//**************************************************************************************************
+// String Construction Helpers
+//**************************************************************************************************
+
+macro_rules! format_oxford_list {
+    ($sep:expr, $format_str:expr, $e:expr) => {{
+        let entries = $e;
+        match entries.len() {
+            0 => String::new(),
+            1 => format!($format_str, entries[0]),
+            2 => format!(
+                "{} {} {}",
+                format!($format_str, entries[0]),
+                $sep,
+                format!($format_str, entries[1])
+            ),
+            _ => {
+                let entries = entries
+                    .iter()
+                    .map(|entry| format!($format_str, entry))
+                    .collect::<Vec<_>>();
+                if let Some((last, init)) = entries.split_last() {
+                    let mut result = init.join(", ");
+                    result.push_str(&format!(", {} {}", $sep, last));
+                    result
+                } else {
+                    String::new()
                 }
-                NativeAttribute::BYTECODE_INSTRUCTION => {
-                    Self::Native(NativeAttribute::BytecodeInstruction)
-                }
-                DiagnosticAttribute::ALLOW => Self::Diagnostic(DiagnosticAttribute::Allow),
-                DefinesPrimitive::DEFINES_PRIM => Self::DefinesPrimitive(DefinesPrimitive),
-                _ => return None,
-            })
-        }
-
-        pub const fn name(&self) -> &str {
-            match self {
-                Self::Testing(a) => a.name(),
-                Self::Verification(a) => a.name(),
-                Self::Native(a) => a.name(),
-                Self::Diagnostic(a) => a.name(),
-                Self::DefinesPrimitive(a) => a.name(),
             }
         }
+    }};
+}
 
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            match self {
-                Self::Testing(a) => a.expected_positions(),
-                Self::Verification(a) => a.expected_positions(),
-                Self::Native(a) => a.expected_positions(),
-                Self::Diagnostic(a) => a.expected_positions(),
-                Self::DefinesPrimitive(a) => a.expected_positions(),
-            }
+pub(crate) use format_oxford_list;
+
+//**************************************************************************************************
+// Debug Printing
+//**************************************************************************************************
+
+/// Debug formatter based on provided `fmt` option:
+///
+/// - None: calls `val.print()`
+/// - `verbose`: calls `val.print_verbose()`
+/// - `fmt`: calls `println!("{}", val)`
+/// - `dbg`: calls `println!("{:?}", val)`
+/// - `sdbg`: calls `println!("{:#?}", val)`
+macro_rules! debug_print_format {
+    ($val:expr) => {{
+        $val.print();
+    }};
+    ($val:expr ; verbose) => {{
+        $val.print_verbose();
+    }};
+    ($val:expr ; fmt) => {{
+        println!("{}", $val);
+    }};
+    ($val:expr ; dbg) => {{
+        println!("{:?}", $val);
+    }};
+    ($val:expr ; sdbg) => {{
+        println!("{:#?}", $val);
+    }};
+}
+
+pub(crate) use debug_print_format;
+
+/// Print formatter for debugging. Allows a few different forms:
+///
+/// `(msg `s`)`                        as println!(s);
+/// `(name => val [; fmt])`            as "name: " + debug_fprint_ormat!(vall fmt)
+/// `(opt name => val [; fmt])`        as "name: " + "Some " debug_print_format!(val; fmt) or "None"
+/// `(lines name => val [; fmt]) ` as "name: " + for n in val { debug_print_format!(n; fmt) }
+///
+/// See `debug_print_format` for different `fmt` options.
+macro_rules! debug_print_internal {
+    () => {};
+    (($name:expr => $val:expr $(; $fmt:ident)?)) => {
+        {
+        print!("{}: ", $name);
+        crate::shared::debug_print_format!($val $(; $fmt)*);
+        }
+    };
+    ((opt $name:expr => $val:expr $(; $fmt:ident)?)) => {
+        {
+        print!("{}: ", $name);
+        match $val {
+            Some(value) => { print!("Some "); crate::shared::debug_print_format!(value $(; $fmt)*); }
+            None => { print!("None"); }
+        }
+        }
+    };
+    ((lines $name:expr => $val:expr $(; $fmt:ident)?)) => { {
+        println!("\n{}: ", $name);
+        for n in $val {
+            crate::shared::debug_print_format!(n $(; $fmt)*);
         }
     }
-
-    impl TestingAttribute {
-        pub const TEST: &'static str = "test";
-        pub const EXPECTED_FAILURE: &'static str = "expected_failure";
-        pub const TEST_ONLY: &'static str = "test_only";
-        pub const ABORT_CODE_NAME: &'static str = "abort_code";
-        pub const ARITHMETIC_ERROR_NAME: &'static str = "arithmetic_error";
-        pub const VECTOR_ERROR_NAME: &'static str = "vector_error";
-        pub const OUT_OF_GAS_NAME: &'static str = "out_of_gas";
-        pub const MAJOR_STATUS_NAME: &'static str = "major_status";
-        pub const MINOR_STATUS_NAME: &'static str = "minor_status";
-        pub const ERROR_LOCATION: &'static str = "location";
-
-        pub const fn name(&self) -> &str {
-            match self {
-                Self::Test => Self::TEST,
-                Self::TestOnly => Self::TEST_ONLY,
-                Self::ExpectedFailure => Self::EXPECTED_FAILURE,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static TEST_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                BTreeSet::from([
-                    AttributePosition::AddressBlock,
-                    AttributePosition::Module,
-                    AttributePosition::Use,
-                    AttributePosition::Friend,
-                    AttributePosition::Constant,
-                    AttributePosition::Struct,
-                    AttributePosition::Function,
-                ])
-            });
-            static TEST_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
-            static EXPECTED_FAILURE_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| BTreeSet::from([AttributePosition::Function]));
-            match self {
-                TestingAttribute::TestOnly => &TEST_ONLY_POSITIONS,
-                TestingAttribute::Test => &TEST_POSITIONS,
-                TestingAttribute::ExpectedFailure => &EXPECTED_FAILURE_POSITIONS,
-            }
-        }
-
-        pub fn expected_failure_cases() -> &'static [&'static str] {
-            &[
-                Self::ABORT_CODE_NAME,
-                Self::ARITHMETIC_ERROR_NAME,
-                Self::VECTOR_ERROR_NAME,
-                Self::OUT_OF_GAS_NAME,
-                Self::MAJOR_STATUS_NAME,
-            ]
-        }
+    };
+    ($fst:tt, $($rest:tt),+) => { {
+        crate::shared::debug_print_internal!($fst);
+        crate::shared::debug_print_internal!($($rest),+);
     }
+    };
+}
 
-    impl VerificationAttribute {
-        pub const VERIFY_ONLY: &'static str = "verify_only";
+pub(crate) use debug_print_internal;
 
-        pub const fn name(&self) -> &str {
-            match self {
-                Self::VerifyOnly => Self::VERIFY_ONLY,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static VERIFY_ONLY_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                BTreeSet::from([
-                    AttributePosition::AddressBlock,
-                    AttributePosition::Module,
-                    AttributePosition::Use,
-                    AttributePosition::Friend,
-                    AttributePosition::Constant,
-                    AttributePosition::Struct,
-                    AttributePosition::Function,
-                ])
-            });
-            match self {
-                Self::VerifyOnly => &VERIFY_ONLY_POSITIONS,
-            }
-        }
-    }
-
-    impl NativeAttribute {
-        pub const BYTECODE_INSTRUCTION: &'static str = "bytecode_instruction";
-
-        pub const fn name(&self) -> &str {
-            match self {
-                NativeAttribute::BytecodeInstruction => Self::BYTECODE_INSTRUCTION,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static BYTECODE_INSTRUCTION_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Function]).collect());
-            match self {
-                NativeAttribute::BytecodeInstruction => &BYTECODE_INSTRUCTION_POSITIONS,
-            }
-        }
-    }
-
-    impl DiagnosticAttribute {
-        pub const ALLOW: &'static str = WARNING_FILTER_ATTR;
-
-        pub const fn name(&self) -> &str {
-            match self {
-                DiagnosticAttribute::Allow => Self::ALLOW,
-            }
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static ALLOW_WARNING_POSITIONS: Lazy<BTreeSet<AttributePosition>> = Lazy::new(|| {
-                BTreeSet::from([
-                    AttributePosition::Module,
-                    AttributePosition::Script,
-                    AttributePosition::Constant,
-                    AttributePosition::Struct,
-                    AttributePosition::Function,
-                ])
-            });
-            match self {
-                DiagnosticAttribute::Allow => &ALLOW_WARNING_POSITIONS,
-            }
-        }
-    }
-
-    impl DefinesPrimitive {
-        pub const DEFINES_PRIM: &'static str = "defines_primitive";
-
-        pub const fn name(&self) -> &str {
-            Self::DEFINES_PRIM
-        }
-
-        pub fn expected_positions(&self) -> &'static BTreeSet<AttributePosition> {
-            static DEFINES_PRIM_POSITIONS: Lazy<BTreeSet<AttributePosition>> =
-                Lazy::new(|| IntoIterator::into_iter([AttributePosition::Module]).collect());
-            &DEFINES_PRIM_POSITIONS
+/// Macro for a small DSL for compactling printing debug information based on the provided flag.
+///
+///  ```
+///  debug_print!(
+///      context.debug_flags.match_compilation,
+///      ("subject" => subject),
+///      (opt "flag" => flag; dbg)
+///      (lines "arms" => &arms.value; verbose)
+///  );
+///  ```
+///
+/// See `debug_print_internal` for the available syntax.
+///
+/// Feature gates the print and check against the `debug_assertions` feature.
+macro_rules! debug_print {
+    ($flag:expr, $($arg:tt),+) => {
+        #[cfg(debug_assertions)]
+        if $flag {
+            println!("\n------------------");
+            crate::shared::debug_print_internal!($($arg),+)
         }
     }
 }
+
+pub(crate) use debug_print;

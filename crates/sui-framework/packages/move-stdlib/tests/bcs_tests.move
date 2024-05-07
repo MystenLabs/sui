@@ -7,13 +7,13 @@
 module std::bcs_tests {
     use std::bcs;
 
-    struct Box<T> has copy, drop, store { x: T }
-    struct Box3<T> has copy, drop, store { x: Box<Box<T>> }
-    struct Box7<T> has copy, drop, store { x: Box3<Box3<T>> }
-    struct Box15<T> has copy, drop, store { x: Box7<Box7<T>> }
-    struct Box31<T> has copy, drop, store { x: Box15<Box15<T>> }
-    struct Box63<T> has copy, drop, store { x: Box31<Box31<T>> }
-    struct Box127<T> has copy, drop, store { x: Box63<Box63<T>> }
+    public struct Box<T> has copy, drop, store { x: T }
+    public struct Box3<T> has copy, drop, store { x: Box<Box<T>> }
+    public struct Box7<T> has copy, drop, store { x: Box3<Box3<T>> }
+    public struct Box15<T> has copy, drop, store { x: Box7<Box7<T>> }
+    public struct Box31<T> has copy, drop, store { x: Box15<Box15<T>> }
+    public struct Box63<T> has copy, drop, store { x: Box31<Box31<T>> }
+    public struct Box127<T> has copy, drop, store { x: Box63<Box63<T>> }
 
     #[test]
     fun bcs_address() {
@@ -101,7 +101,8 @@ module std::bcs_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 453, location = std::bcs)]
+    #[expected_failure]
+    // failes due to VM max value depth
     fun encode_129() {
         bcs::to_bytes(&Box { x: box127(true) });
     }

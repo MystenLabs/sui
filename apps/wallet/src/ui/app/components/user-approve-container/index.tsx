@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
-import cn from 'classnames';
+import cn from 'clsx';
 import { useCallback, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 

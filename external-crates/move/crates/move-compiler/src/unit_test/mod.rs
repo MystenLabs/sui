@@ -3,13 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    compiled_unit::{AnnotatedCompiledUnit, NamedCompiledModule},
-    diagnostics::FilesSourceText,
-    shared::NumericalAddress,
+    compiled_unit::NamedCompiledModule, diagnostics::FilesSourceText, shared::NumericalAddress,
 };
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    value::MoveValue, vm_status::StatusCode,
+    runtime_value::MoveValue, vm_status::StatusCode,
 };
 use std::{collections::BTreeMap, fmt};
 
@@ -43,15 +41,21 @@ pub enum ExpectedFailure {
     // expected failure, but codes are not checked
     Expected,
     // expected failure, abort code checked but without the module specified
-    ExpectedWithCodeDEPRECATED(u64),
+    ExpectedWithCodeDEPRECATED(MoveErrorType),
     // expected failure, abort code with the module specified
     ExpectedWithError(ExpectedMoveError),
 }
 
 #[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
+pub enum MoveErrorType {
+    Code(u64),
+    ConstantName(String),
+}
+
+#[derive(Debug, Clone, Ord, PartialOrd, PartialEq, Eq)]
 pub struct ExpectedMoveError(
     pub StatusCode,
-    pub Option<u64>,
+    pub Option<MoveErrorType>,
     pub move_binary_format::errors::Location,
 );
 
@@ -77,7 +81,7 @@ impl TestPlan {
     pub fn new(
         tests: Vec<ModuleTestPlan>,
         files: FilesSourceText,
-        units: Vec<AnnotatedCompiledUnit>,
+        units: Vec<NamedCompiledModule>,
     ) -> Self {
         let module_tests: BTreeMap<_, _> = tests
             .into_iter()
@@ -86,16 +90,7 @@ impl TestPlan {
 
         let module_info = units
             .into_iter()
-            .filter_map(|unit| {
-                if let AnnotatedCompiledUnit::Module(annot_module) = unit {
-                    Some((
-                        annot_module.named_module.module.self_id(),
-                        annot_module.named_module,
-                    ))
-                } else {
-                    None
-                }
-            })
+            .map(|unit| (unit.module.self_id(), unit))
             .collect();
 
         Self {
@@ -111,6 +106,15 @@ impl ExpectedMoveError {
         ExpectedMoveErrorDisplay {
             error: self,
             is_past_tense,
+        }
+    }
+}
+
+impl fmt::Display for MoveErrorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MoveErrorType::Code(code) => write!(f, "{}", code),
+            MoveErrorType::ConstantName(name) => write!(f, "'{}'", name),
         }
     }
 }
@@ -143,7 +147,13 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
             };
         }
         if status == &StatusCode::ABORTED {
-            write!(f, " with code {}", sub_status.unwrap())?
+            match sub_status {
+                Some(MoveErrorType::Code(code)) => write!(f, " with code {}", code)?,
+                Some(MoveErrorType::ConstantName(name)) => {
+                    write!(f, " with error constant '{}'", name)?
+                }
+                None => (),
+            }
         } else if let Some(code) = sub_status {
             write!(f, " with sub-status {code}")?
         };
@@ -152,7 +162,6 @@ impl<'a> fmt::Display for ExpectedMoveErrorDisplay<'a> {
         }
         match location {
             Location::Undefined => write!(f, " in an unknown location"),
-            Location::Script => write!(f, " in the script"),
             Location::Module(id) => write!(f, " in the module {id}"),
         }
     }

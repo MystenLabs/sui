@@ -10,7 +10,6 @@ use std::{
     sync::Arc,
 };
 use sui_core::authority::AuthorityState;
-use sui_core::authority::AuthorityStore;
 use sui_macros::*;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
 use sui_test_transaction_builder::TestTransactionBuilder;
@@ -158,12 +157,13 @@ impl StressTestRunner {
         let state = self.state();
 
         let epoch_store = state.load_epoch_store_one_call_per_task();
+        let backing_package_store = state.get_backing_package_store();
         let mut layout_resolver = epoch_store
             .executor()
-            .type_layout_resolver(Box::new(state.database.as_ref()));
+            .type_layout_resolver(Box::new(backing_package_store.as_ref()));
         for (obj_ref, _) in effects.created() {
             let object_opt = state
-                .database
+                .get_object_store()
                 .get_object_by_key(&obj_ref.0, obj_ref.1)
                 .unwrap();
             let Some(object) = object_opt else { continue };
@@ -176,7 +176,7 @@ impl StressTestRunner {
         println!("MUTATED:");
         for (obj_ref, _) in effects.mutated() {
             let object = state
-                .database
+                .get_object_store()
                 .get_object_by_key(&obj_ref.0, obj_ref.1)
                 .unwrap()
                 .unwrap();
@@ -190,7 +190,7 @@ impl StressTestRunner {
         for kind in effects.input_shared_objects() {
             let (obj_id, version) = kind.id_and_version();
             let object = state
-                .database
+                .get_object_store()
                 .get_object_by_key(&obj_id, version)
                 .unwrap()
                 .unwrap();
@@ -201,9 +201,10 @@ impl StressTestRunner {
         }
     }
 
+    /*
     pub fn db(&self) -> Arc<AuthorityStore> {
         self.state().db()
-    }
+    }*/
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.test_cluster.fullnode_handle.sui_node.state()
@@ -242,7 +243,7 @@ impl StressTestRunner {
     }
 
     async fn get_from_effects(&self, effects: &[(ObjectRef, Owner)], name: &str) -> Option<Object> {
-        let db = self.db();
+        let db = self.state().get_object_store().clone();
         let found: Vec<_> = effects
             .iter()
             .filter_map(|(obj_ref, _)| {
@@ -259,7 +260,7 @@ impl StressTestRunner {
             })
             .collect();
         assert!(found.len() <= 1, "Multiple objects of type {name} found");
-        found.get(0).cloned()
+        found.first().cloned()
     }
 }
 
@@ -322,12 +323,12 @@ mod add_stake {
                 .get_created_object_of_type_name(effects, "StakedSui")
                 .await
                 .unwrap();
-            let store = runner.db();
             let state = runner.state();
+            let cache = state.get_backing_package_store();
             let epoch_store = state.load_epoch_store_one_call_per_task();
             let mut layout_resolver = epoch_store
                 .executor()
-                .type_layout_resolver(Box::new(store.as_ref()));
+                .type_layout_resolver(Box::new(cache.as_ref()));
             let staked_amount =
                 object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
             assert_eq!(staked_amount, self.stake_amount);

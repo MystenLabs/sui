@@ -273,7 +273,7 @@ impl SuiCommand {
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config, false).await?;
-                let context = WalletContext::new(&config, None, None).await?;
+                let context = WalletContext::new(&config, None, None)?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client {
@@ -284,7 +284,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None).await?;
+                let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -303,7 +303,7 @@ impl SuiCommand {
             } => {
                 let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config_path, accept_defaults).await?;
-                let mut context = WalletContext::new(&config_path, None, None).await?;
+                let mut context = WalletContext::new(&config_path, None, None)?;
                 if let Some(cmd) = cmd {
                     cmd.execute(&mut context).await?.print(!json);
                 } else {
@@ -404,7 +404,7 @@ async fn genesis(
                 let path = sui_config_dir.join(SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME);
                 let mut keystore = FileBasedKeystore::new(&path)?;
                 for gas_key in GenesisConfig::benchmark_gas_keys(ips.len()) {
-                    keystore.add_key(gas_key)?;
+                    keystore.add_key(None, gas_key)?;
                 }
                 keystore.save()?;
 
@@ -452,7 +452,7 @@ async fn genesis(
 
     let mut keystore = FileBasedKeystore::new(&keystore_path)?;
     for key in &network_config.account_keys {
-        keystore.add_key(SuiKeyPair::Ed25519(key.copy()))?;
+        keystore.add_key(None, SuiKeyPair::Ed25519(key.copy()))?;
     }
     let active_address = keystore.addresses().pop();
 
@@ -587,12 +587,12 @@ async fn prompt_if_no_config(
                         String::new()
                     } else {
                         print!(
-                            "Sui Full node server URL (Defaults to Sui Devnet if not specified) : "
+                            "Sui Full node server URL (Defaults to Sui Testnet if not specified) : "
                         );
                         read_line()?
                     };
                     Some(if url.trim().is_empty() {
-                        SuiEnv::devnet()
+                        SuiEnv::testnet()
                     } else {
                         print!("Environment alias for [{url}] : ");
                         let alias = read_line()?;
@@ -629,9 +629,10 @@ async fn prompt_if_no_config(
                 }
             };
             let (new_address, phrase, scheme) =
-                keystore.generate_and_add_new_key(key_scheme, None, None)?;
+                keystore.generate_and_add_new_key(key_scheme, None, None, None)?;
+            let alias = keystore.get_alias_by_address(&new_address)?;
             println!(
-                "Generated new keypair for address with scheme {:?} [{new_address}]",
+                "Generated new keypair and alias for address with scheme {:?} [{alias}: {new_address}]",
                 scheme.to_string()
             );
             println!("Secret Recovery Phrase : [{phrase}]");

@@ -1,7 +1,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use crate::{
     diag,
@@ -15,13 +15,13 @@ use crate::{
     FullyCompiledProgram,
 };
 
-use super::ast::{AttributeName_, Attribute_};
+use super::ast::Attribute_;
 
 /// Gather primitive defines from module declarations, erroring on duplicates for a given base
 /// type or for unknown base types.
 pub fn modules(
     env: &mut CompilationEnv,
-    pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
+    pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
     modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
 ) {
     let mut definers = BTreeMap::new();
@@ -55,11 +55,9 @@ fn check_prim_definer(
     mident: ModuleIdent,
     m: &ModuleDefinition,
 ) {
-    let defines_prim_attr =
-        m.attributes
-            .get_(&AttributeName_::Known(KnownAttribute::DefinesPrimitive(
-                DefinesPrimitive,
-            )));
+    let defines_prim_attr = m
+        .attributes
+        .get_(&KnownAttribute::DefinesPrimitive(DefinesPrimitive));
     let Some(sp!(attr_loc, attr_)) = defines_prim_attr else {
         return;
     };

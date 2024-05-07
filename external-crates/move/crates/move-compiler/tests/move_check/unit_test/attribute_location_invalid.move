@@ -1,8 +1,3 @@
-#[test_only]
-script {
-    fun main() {}
-}
-
 #[test]
 module 0x42::M {}
 

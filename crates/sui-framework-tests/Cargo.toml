@@ -20,9 +20,9 @@ move-bytecode-verifier = { path = "../../external-crates/move/crates/move-byteco
 sui-adapter = { path = "../../sui-execution/latest/sui-adapter", package = "sui-adapter-latest" }
 sui-verifier = { path = "../../sui-execution/latest/sui-verifier", package = "sui-verifier-latest" }
 
+move-bytecode-verifier-meter.workspace = true
 move-cli.workspace = true
 move-package.workspace = true
 move-unit-test.workspace = true
 
 [dependencies]
-workspace-hack.workspace = true

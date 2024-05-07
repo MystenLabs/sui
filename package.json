@@ -1,69 +1,65 @@
 {
-    "name": "sui-monorepo",
-    "private": true,
-    "license": "Apache-2.0",
-    "scripts": {
-        "turbo": "turbo",
-        "core": "pnpm --filter ./apps/core",
-        "ui": "pnpm --filter ./apps/ui",
-        "icons": "pnpm --filter ./apps/icons",
-        "explorer": "pnpm --filter ./apps/explorer",
-        "wallet": "pnpm --filter ./apps/wallet",
-        "sdk": "pnpm --filter ./sdk/typescript",
-        "bcs": "pnpm --filter ./sdk/bcs",
-        "kiosk": "pnpm --filter ./sdk/kiosk",
-        "suins": "pnpm --filter ./sdk/suins-toolkit",
-        "deepbook": "pnpm --filter ./sdk/deepbook",
-        "mbf": "pnpm --filter ./sdk/move-binary-format-wasm",
-        "multisig": "pnpm --filter ./dapps/multisig-toolkit",
-        "changeset-version": "pnpm changeset version && pnpm sdk codegen:version",
-        "prettier:check": "prettier -c --ignore-unknown .",
-        "prettier:fix": "prettier -w --ignore-unknown .",
-        "prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
-        "eslint:check": "eslint --max-warnings=0 .",
-        "eslint:fix": "pnpm run eslint:check --fix",
-        "lint": "pnpm run eslint:check && pnpm run prettier:check",
-        "lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
-    },
-    "pnpm": {
-        "overrides": {
-            "node-notifier": "10.0.0",
-            "async": "3.2.2",
-            "nth-check": "2.0.1",
-            "yaml@<2.2.2": ">=2.2.2",
-            "semver@<7.5.2": ">=7.5.2",
-            "postcss@<8.4.31": ">=8.4.31"
-        }
-    },
-    "engines": {
-        "pnpm": ">=8.6.5"
-    },
-    "manypkg": {
-        "ignoredRules": [
-            "INTERNAL_MISMATCH",
-            "ROOT_HAS_DEV_DEPENDENCIES"
-        ]
-    },
-    "devDependencies": {
-        "@changesets/cli": "^2.26.2",
-        "@ianvs/prettier-plugin-sort-imports": "^4.1.0",
-        "@manypkg/cli": "^0.21.0",
-        "@tanstack/eslint-plugin-query": "^5.0.0",
-        "@typescript-eslint/eslint-plugin": "^6.1.0",
-        "@typescript-eslint/parser": "^6.1.0",
-        "eslint": "^8.45.0",
-        "eslint-config-prettier": "^8.8.0",
-        "eslint-config-react-app": "^7.0.1",
-        "eslint-import-resolver-typescript": "^3.5.5",
-        "eslint-plugin-header": "^3.1.1",
-        "eslint-plugin-import": "^2.27.5",
-        "eslint-plugin-prettier": "^5.0.0",
-        "eslint-plugin-require-extensions": "^0.1.3",
-        "eslint-plugin-tsdoc": "^0.2.17",
-        "eslint-plugin-unused-imports": "^3.0.0",
-        "prettier": "^3.0.0",
-        "prettier-plugin-tailwindcss": "^0.4.1",
-        "turbo": "^1.10.8",
-        "typescript": "^5.1.6"
-    }
+	"name": "sui-monorepo",
+	"private": true,
+	"license": "Apache-2.0",
+	"scripts": {
+		"test": "turbo run test",
+		"test:dev": "turbo run test -- --run",
+		"icons": "pnpm --filter ./apps/icons",
+		"wallet": "turbo --filter ./apps/wallet",
+		"sdk": "turbo --filter ./sdk/typescript",
+		"bcs": "turbo --filter ./sdk/bcs",
+		"changeset-version": "pnpm changeset version && pnpm --filter @mysten/sui.js codegen:version",
+		"prettier:check": "prettier -c --ignore-unknown .",
+		"prettier:fix": "prettier -w --ignore-unknown .",
+		"prettier:fix:watch": "onchange '**' -i -f add -f change -j 5 -- prettier -w --ignore-unknown {{file}}",
+		"eslint:check": "eslint --max-warnings=0 .",
+		"eslint:fix": "pnpm run eslint:check --fix",
+		"lint": "pnpm run eslint:check && pnpm run prettier:check",
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+	},
+	"pnpm": {
+		"overrides": {
+			"node-notifier": "10.0.0",
+			"async": "3.2.2",
+			"nth-check": "2.0.1",
+			"yaml@<2.2.2": ">=2.2.2",
+			"semver@<7.5.2": ">=7.5.2",
+			"postcss@<8.4.31": ">=8.4.31"
+		}
+	},
+	"engines": {
+		"pnpm": ">=8.6.5"
+	},
+	"manypkg": {
+		"ignoredRules": [
+			"INTERNAL_MISMATCH",
+			"ROOT_HAS_DEV_DEPENDENCIES"
+		]
+	},
+	"devDependencies": {
+		"@changesets/cli": "^2.26.2",
+		"@ianvs/prettier-plugin-sort-imports": "^4.1.0",
+		"@manypkg/cli": "^0.21.0",
+		"@tanstack/eslint-plugin-query": "^5.0.0",
+		"@typescript-eslint/eslint-plugin": "^6.1.0",
+		"@typescript-eslint/parser": "^6.1.0",
+		"concurrently": "^8.2.0",
+		"eslint": "^8.45.0",
+		"eslint-config-prettier": "^8.8.0",
+		"eslint-config-react-app": "^7.0.1",
+		"eslint-import-resolver-typescript": "^3.5.5",
+		"eslint-plugin-header": "^3.1.1",
+		"eslint-plugin-import": "^2.27.5",
+		"eslint-plugin-prettier": "^5.0.0",
+		"eslint-plugin-require-extensions": "^0.1.3",
+		"eslint-plugin-tsdoc": "^0.2.17",
+		"eslint-plugin-unused-imports": "^3.0.0",
+		"graphql-config": "^5.0.3",
+		"prettier": "^3.0.0",
+		"prettier-plugin-tailwindcss": "^0.4.1",
+		"tsx": "^3.12.7",
+		"turbo": "^1.10.8",
+		"typescript": "^5.3.3"
+	}
 }

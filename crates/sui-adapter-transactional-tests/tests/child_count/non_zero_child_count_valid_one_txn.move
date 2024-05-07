@@ -10,20 +10,19 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::TxContext;
     use sui::dynamic_object_field as ofield;
 
-    struct S has key, store {
+    public struct S has key, store {
         id: sui::object::UID,
     }
 
-    struct R has key, store {
+    public struct R has key, store {
         id: sui::object::UID,
         s: S,
     }
 
     public entry fun share(ctx: &mut TxContext) {
-        let id = sui::object::new(ctx);
+        let mut id = sui::object::new(ctx);
         let child = S { id: sui::object::new(ctx) };
         ofield::add(&mut id, 0, child);
         sui::transfer::public_share_object(S { id })

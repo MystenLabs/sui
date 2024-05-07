@@ -18,7 +18,7 @@ use crate::tables::TransactionEntry;
 use crate::FileType;
 
 pub struct TransactionHandler {
-    transactions: Vec<TransactionEntry>,
+    pub(crate) transactions: Vec<TransactionEntry>,
 }
 
 #[async_trait::async_trait]
@@ -39,7 +39,7 @@ impl Handler for TransactionHandler {
                 checkpoint_summary.timestamp_ms,
                 checkpoint_transaction,
                 &checkpoint_transaction.effects,
-            );
+            )?;
         }
         Ok(())
     }
@@ -71,7 +71,7 @@ impl TransactionHandler {
         timestamp_ms: u64,
         checkpoint_transaction: &CheckpointTransaction,
         effects: &TransactionEffects,
-    ) {
+    ) -> Result<()> {
         let transaction = &checkpoint_transaction.transaction;
         let txn_data = transaction.transaction_data();
         let gas_object = effects.gas_object();
@@ -120,7 +120,8 @@ impl TransactionHandler {
                 error!("Mismatch in move calls count: commands {move_calls_count} != {move_calls} calls");
             }
         }
-
+        let transaction_json = serde_json::to_string(&transaction)?;
+        let effects_json = serde_json::to_string(&checkpoint_transaction.effects)?;
         let entry = TransactionEntry {
             transaction_digest,
             checkpoint,
@@ -169,7 +170,55 @@ impl TransactionHandler {
 
             has_zklogin_sig: transaction.has_zklogin_sig(),
             has_upgraded_multisig: transaction.has_upgraded_multisig(),
+            transaction_json: Some(transaction_json),
+            effects_json: Some(effects_json),
         };
         self.transactions.push(entry);
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::handlers::transaction_handler::TransactionHandler;
+    use fastcrypto::encoding::{Base64, Encoding};
+    use simulacrum::Simulacrum;
+    use sui_indexer::framework::Handler;
+    use sui_types::base_types::SuiAddress;
+    use sui_types::storage::ReadStore;
+
+    #[tokio::test]
+    pub async fn test_transaction_handler() -> anyhow::Result<()> {
+        let mut sim = Simulacrum::new();
+
+        // Execute a simple transaction.
+        let transfer_recipient = SuiAddress::random_for_testing_only();
+        let (transaction, _) = sim.transfer_txn(transfer_recipient);
+        let (_effects, err) = sim.execute_transaction(transaction.clone()).unwrap();
+        assert!(err.is_none());
+
+        // Create a checkpoint which should include the transaction we executed.
+        let checkpoint = sim.create_checkpoint();
+        let checkpoint_data = sim.get_checkpoint_data(
+            checkpoint.clone(),
+            sim.get_checkpoint_contents_by_digest(&checkpoint.content_digest)?
+                .unwrap(),
+        )?;
+        let mut txn_handler = TransactionHandler::new();
+        txn_handler.process_checkpoint(&checkpoint_data).await?;
+        let transaction_entries = txn_handler.transactions;
+        assert_eq!(transaction_entries.len(), 1);
+        let db_txn = transaction_entries.first().unwrap();
+
+        // Check that the transaction was stored correctly.
+        assert_eq!(db_txn.transaction_digest, transaction.digest().to_string());
+        assert_eq!(
+            db_txn.raw_transaction,
+            Base64::encode(bcs::to_bytes(&transaction.transaction_data()).unwrap())
+        );
+        assert_eq!(db_txn.epoch, checkpoint.epoch);
+        assert_eq!(db_txn.timestamp_ms, checkpoint.timestamp_ms);
+        assert_eq!(db_txn.checkpoint, checkpoint.sequence_number);
+        Ok(())
     }
 }

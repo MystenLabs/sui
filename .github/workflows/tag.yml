@@ -32,11 +32,11 @@ env:
 jobs:
   tag:
     name: Tag
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: ubuntu-latest
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
 
     - name: Tag
       uses: julbme/gh-action-manage-tag@v1

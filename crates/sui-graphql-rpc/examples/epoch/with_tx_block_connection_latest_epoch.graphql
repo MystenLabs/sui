@@ -1,8 +1,6 @@
-# the last checkpoint of epoch 97 is 8097645
-# last tx number of the checkpoint is 261225985
 {
   epoch {
-    transactionBlockConnection(first: 20, after: "261225985") {
+    transactionBlocks(first: 20, after: "eyJjIjoyNjkzMzMyNCwidCI6MTEwMTYxMDQ4MywidGMiOjI2ODUxMjQ4fQ") {
       pageInfo {
         hasNextPage
         endCursor
@@ -11,12 +9,12 @@
         cursor
         node {
           sender {
-            location
+            address
           }
           effects {
             gasEffects {
               gasObject {
-                location
+                address
               }
             }
           }

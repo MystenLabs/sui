@@ -4,25 +4,18 @@
 
 use crate::{
     annotations::Annotations,
-    borrow_analysis, livevar_analysis, reaching_def_analysis, read_write_set_analysis,
     stackless_bytecode::{AttrId, Bytecode, Label},
 };
 use itertools::Itertools;
 use move_binary_format::file_format::CodeOffset;
 use move_model::{
-    ast::Spec,
-    model::{
-        FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, QualifiedId, StructId,
-    },
+    model::{FunId, FunctionEnv, FunctionVisibility, GlobalEnv, Loc, ModuleEnv, StructId},
     symbol::{Symbol, SymbolPool},
     ty::{Type, TypeDisplayContext},
 };
 
 use crate::function_target_pipeline::FunctionVariant;
-use move_model::{
-    ast::{Exp, ExpData, TempIndex},
-    model::QualifiedInstId,
-};
+use move_model::ast::TempIndex;
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
@@ -85,8 +78,6 @@ pub struct FunctionData {
     pub annotations: Annotations,
     /// A mapping from symbolic names to temporaries.
     pub name_to_index: BTreeMap<Symbol, usize>,
-    /// A cache of targets modified by this function.
-    pub modify_targets: BTreeMap<QualifiedId<StructId>, Vec<Exp>>,
     /// The number of ghost type parameters introduced in order to instantiate related invariants
     pub ghost_type_param_count: usize,
 }
@@ -150,11 +141,6 @@ impl<'env> FunctionTarget<'env> {
     /// Returns the verification condition message, if any, associated with the given attribute.
     pub fn get_vc_info(&self, attr_id: AttrId) -> Option<&String> {
         self.data.vc_infos.get(&attr_id)
-    }
-
-    /// Returns true if this function is opaque.
-    pub fn is_opaque(&self) -> bool {
-        self.func_env.is_opaque()
     }
 
     /// Returns true if this function has public, friend, or script visibility.
@@ -253,18 +239,6 @@ impl<'env> FunctionTarget<'env> {
         &self.data.local_types[idx]
     }
 
-    /// Returns specification associated with this function.
-    pub fn get_spec(&'env self) -> &'env Spec {
-        self.func_env.get_spec()
-    }
-
-    /// Returns the value of a boolean pragma for this function. This first looks up a
-    /// pragma in this function, then the enclosing module, and finally uses the provided default.
-    /// property
-    pub fn is_pragma_true(&self, name: &str, default: impl FnOnce() -> bool) -> bool {
-        self.func_env.is_pragma_true(name, default)
-    }
-
     /// Gets the bytecode.
     pub fn get_bytecode(&self) -> &[Bytecode] {
         &self.data.code
@@ -296,50 +270,6 @@ impl<'env> FunctionTarget<'env> {
             if self.get_local_type(idx).is_mutable_reference() {
                 res.insert(idx, ret_index);
                 ret_index = usize::saturating_add(ret_index, 1);
-            }
-        }
-        res
-    }
-
-    /// Gets modify targets for a type
-    pub fn get_modify_targets_for_type(&self, ty: &QualifiedId<StructId>) -> Option<&Vec<Exp>> {
-        self.get_modify_targets().get(ty)
-    }
-
-    /// Gets all modify targets
-    pub fn get_modify_targets(&self) -> &BTreeMap<QualifiedId<StructId>, Vec<Exp>> {
-        &self.data.modify_targets
-    }
-
-    /// Get all modifies targets, as instantiated struct ids.
-    pub fn get_modify_ids(&self) -> BTreeSet<QualifiedInstId<StructId>> {
-        self.data
-            .modify_targets
-            .iter()
-            .flat_map(|(qid, exps)| {
-                exps.iter().map(move |e| {
-                    let env = self.global_env();
-                    let rty = &env.get_node_instantiation(e.node_id())[0];
-                    let (_, _, inst) = rty.require_struct();
-                    qid.instantiate(inst.to_owned())
-                })
-            })
-            .collect()
-    }
-
-    pub fn get_modify_ids_and_exps(&self) -> BTreeMap<QualifiedInstId<StructId>, Vec<&Exp>> {
-        // TODO: for now we compute this from the legacy representation, but if this
-        //   viewpoint becomes the major use case, we should store it instead directly.
-        let mut res = BTreeMap::new();
-        for (qid, exps) in &self.data.modify_targets {
-            for target in exps {
-                let env = self.global_env();
-                let rty = &env.get_node_instantiation(target.node_id())[0];
-                let (_, _, inst) = rty.require_struct();
-                let qinstid = qid.instantiate(inst.to_owned());
-                res.entry(qinstid)
-                    .or_insert_with(Vec::new)
-                    .push(&target.call_args()[0]);
             }
         }
         res
@@ -412,7 +342,6 @@ impl FunctionData {
         let name_to_index = (0..func_env.get_local_count())
             .map(|idx| (func_env.get_local_name(idx), idx))
             .collect();
-        let modify_targets = func_env.get_modify_targets();
         FunctionData {
             variant: FunctionVariant::Baseline,
             type_args: vec![],
@@ -426,7 +355,6 @@ impl FunctionData {
             vc_infos: Default::default(),
             annotations: Default::default(),
             name_to_index,
-            modify_targets,
             ghost_type_param_count: 0,
         }
     }
@@ -498,21 +426,6 @@ impl FunctionData {
             .iter()
             .map(|bc| bc.instantiate(env, inst))
             .collect();
-        let modify_targets = self
-            .modify_targets
-            .iter()
-            .map(|(key, val)| {
-                let new_val = val
-                    .iter()
-                    .map(|exp| {
-                        ExpData::rewrite_node_id(exp.clone(), &mut |id| {
-                            ExpData::instantiate_node(env, id, inst)
-                        })
-                    })
-                    .collect();
-                (*key, new_val)
-            })
-            .collect();
 
         // construct the new data
         Self {
@@ -521,7 +434,7 @@ impl FunctionData {
             code,
             local_types,
             return_types,
-            modify_targets,
+
             ..self.clone()
         }
     }
@@ -551,24 +464,13 @@ impl<'env> FunctionTarget<'env> {
 
     /// Tests use this function to register all relevant annotation formatters. Extend this with
     /// new formatters relevant for tests.
-    pub fn register_annotation_formatters_for_test(&self) {
-        self.register_annotation_formatter(Box::new(livevar_analysis::format_livevar_annotation));
-        self.register_annotation_formatter(Box::new(borrow_analysis::format_borrow_annotation));
-        self.register_annotation_formatter(Box::new(
-            reaching_def_analysis::format_reaching_def_annotation,
-        ));
-        self.register_annotation_formatter(Box::new(
-            read_write_set_analysis::format_read_write_set_annotation,
-        ));
-    }
+    pub fn register_annotation_formatters_for_test(&self) {}
 }
 
 impl<'env> fmt::Display for FunctionTarget<'env> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let modifier = if self.func_env.is_native() {
             "native "
-        } else if self.func_env.is_intrinsic() {
-            "intrinsic "
         } else {
             ""
         };
@@ -640,7 +542,7 @@ impl<'env> fmt::Display for FunctionTarget<'env> {
                 write!(f, ")")?;
             }
         }
-        if self.func_env.is_native_or_intrinsic() {
+        if self.func_env.is_native() {
             writeln!(f, ";")?;
         } else {
             writeln!(f, " {{")?;

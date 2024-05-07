@@ -2,13 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    location::*,
-    spec_language_ast::{Condition, Invariant, SyntheticDefinition},
-};
+use crate::location::*;
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::ModuleId,
-    value::MoveValue,
+    runtime_value::MoveValue,
 };
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
@@ -27,42 +24,6 @@ use std::{
 pub struct Program {
     /// The modules to publish
     pub modules: Vec<ModuleDefinition>,
-    /// The transaction script to execute
-    pub script: Script,
-}
-
-//**************************************************************************************************
-// ScriptOrModule
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-/// A script or a module, used to represent the two types of transactions.
-pub enum ScriptOrModule {
-    /// The script to execute.
-    Script(Script),
-    /// The module to publish.
-    Module(ModuleDefinition),
-}
-
-//**************************************************************************************************
-// Script
-//**************************************************************************************************
-
-#[derive(Debug, Clone)]
-/// The Move transaction script to be executed
-pub struct Script {
-    /// The source location for this script
-    pub loc: Loc,
-    /// The dependencies of `main`, i.e. of the transaction script
-    pub imports: Vec<ImportDefinition>,
-    /// Explicit declaration of dependencies. If not provided, will be inferred based on given
-    /// dependencies to the IR compiler
-    pub explicit_dependency_declarations: Vec<ModuleDependency>,
-    /// the constants that the module defines. Only a utility, the identifiers are not carried into
-    /// the Move bytecode
-    pub constants: Vec<Constant>,
-    /// The transaction script's `main` procedure
-    pub main: Function,
 }
 
 //**************************************************************************************************
@@ -104,8 +65,6 @@ pub struct ModuleDefinition {
     pub constants: Vec<Constant>,
     /// the procedure that the module defines
     pub functions: Vec<(FunctionName, Function)>,
-    /// the synthetic, specification variables the module defines.
-    pub synthetics: Vec<SyntheticDefinition>,
 }
 
 /// Explicitly given dependency
@@ -265,8 +224,6 @@ pub struct StructDefinition_ {
     pub type_formals: Vec<StructTypeParameter>,
     /// the fields each instance has
     pub fields: StructDefinitionFields,
-    /// the invariants for this struct
-    pub invariants: Vec<Invariant>,
 }
 /// The type of a StructDefinition along with its source location information
 pub type StructDefinition = Spanned<StructDefinition_>;
@@ -308,6 +265,8 @@ pub struct Constant {
     pub signature: Type,
     /// The constant's value
     pub value: MoveValue,
+    /// Whether this constant appears as an error constant in the source code.
+    pub is_error_constant: bool,
 }
 
 //**************************************************************************************************
@@ -379,8 +338,6 @@ pub struct Function_ {
     pub is_entry: bool,
     /// The type signature
     pub signature: FunctionSignature,
-    /// List of specifications for the Move prover (experimental)
-    pub specifications: Vec<Condition>,
     /// The code for the procedure
     pub body: FunctionBody,
 }
@@ -704,6 +661,10 @@ pub enum Bytecode_ {
     VecPopBack(Type),
     VecUnpack(Type, u64),
     VecSwap(Type),
+    ErrorConstant {
+        line_number: u16,
+        constant: Option<ConstantName>,
+    },
 }
 pub type Bytecode = Spanned<Bytecode_>;
 
@@ -722,41 +683,8 @@ fn get_external_deps(imports: &[ImportDefinition]) -> Vec<ModuleId> {
 
 impl Program {
     /// Create a new `Program` from modules and transaction script
-    pub fn new(modules: Vec<ModuleDefinition>, script: Script) -> Self {
-        Program { modules, script }
-    }
-}
-
-impl Script {
-    /// Create a new `Script` from the imports and the main function
-    pub fn new(
-        loc: Loc,
-        imports: Vec<ImportDefinition>,
-        explicit_dependency_declarations: Vec<ModuleDependency>,
-        constants: Vec<Constant>,
-        main: Function,
-    ) -> Self {
-        Script {
-            loc,
-            imports,
-            explicit_dependency_declarations,
-            constants,
-            main,
-        }
-    }
-
-    /// Accessor for the body of the 'main' procedure
-    pub fn body(&self) -> &[Block] {
-        match self.main.value.body {
-            FunctionBody::Move { ref code, .. } => code,
-            FunctionBody::Bytecode { .. } => panic!("Invalid body access on bytecode main()"),
-            FunctionBody::Native => panic!("main() cannot be native"),
-        }
-    }
-
-    /// Return a vector of `ModuleId` for the external dependencies.
-    pub fn get_external_deps(&self) -> Vec<ModuleId> {
-        get_external_deps(self.imports.as_slice())
+    pub fn new(modules: Vec<ModuleDefinition>) -> Self {
+        Program { modules }
     }
 }
 
@@ -805,7 +733,6 @@ impl ModuleDefinition {
         structs: Vec<StructDefinition>,
         constants: Vec<Constant>,
         functions: Vec<(FunctionName, Function)>,
-        synthetics: Vec<SyntheticDefinition>,
     ) -> Self {
         ModuleDefinition {
             loc,
@@ -816,7 +743,6 @@ impl ModuleDefinition {
             structs,
             constants,
             functions,
-            synthetics,
         }
     }
 
@@ -899,14 +825,12 @@ impl StructDefinition_ {
         name: Symbol,
         type_formals: Vec<StructTypeParameter>,
         fields: Fields<Type>,
-        invariants: Vec<Invariant>,
     ) -> Self {
         StructDefinition_ {
             abilities,
             name: StructName(name),
             type_formals,
             fields: StructDefinitionFields::Move { fields },
-            invariants,
         }
     }
 
@@ -922,7 +846,6 @@ impl StructDefinition_ {
             name: StructName(name),
             type_formals,
             fields: StructDefinitionFields::Native,
-            invariants: vec![],
         }
     }
 }
@@ -951,7 +874,6 @@ impl Function_ {
         formals: Vec<(Var, Type)>,
         return_type: Vec<Type>,
         type_parameters: Vec<(TypeVar, BTreeSet<Ability>)>,
-        specifications: Vec<Condition>,
         body: FunctionBody,
     ) -> Self {
         let signature = FunctionSignature::new(formals, return_type, type_parameters);
@@ -959,7 +881,6 @@ impl Function_ {
             visibility,
             is_entry,
             signature,
-            specifications,
             body,
         }
     }
@@ -1089,12 +1010,6 @@ impl Exp_ {
 // Trait impls
 //**************************************************************************************************
 
-impl PartialEq for Script {
-    fn eq(&self, other: &Script) -> bool {
-        self.imports == other.imports && self.main.value.body == other.main.value.body
-    }
-}
-
 impl Iterator for Block_ {
     type Item = Statement;
 
@@ -1133,43 +1048,6 @@ fn format_constraints(set: &BTreeSet<Ability>) -> String {
         .map(|a| format!("{}", a))
         .collect::<Vec<_>>()
         .join(" + ")
-}
-
-impl fmt::Display for ScriptOrModule {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ScriptOrModule::*;
-        match self {
-            Module(module_def) => write!(f, "{}", module_def),
-            Script(script) => write!(f, "{}", script),
-        }
-    }
-}
-
-impl fmt::Display for Script {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Script(")?;
-
-        write!(f, "Imports(")?;
-        write!(f, "{}", intersperse(&self.imports, ", "))?;
-        writeln!(f, ")")?;
-
-        writeln!(f, "Dependency(")?;
-        for dependency in &self.explicit_dependency_declarations {
-            writeln!(f, "{},", dependency)?;
-        }
-        writeln!(f, ")")?;
-
-        writeln!(f, "Constants(")?;
-        for constant in &self.constants {
-            writeln!(f, "{};", constant)?;
-        }
-        writeln!(f, ")")?;
-
-        write!(f, "Main(")?;
-        write!(f, "{}", self.main)?;
-        write!(f, ")")?;
-        write!(f, ")")
-    }
 }
 
 impl fmt::Display for ModuleName {
@@ -1750,6 +1628,20 @@ impl fmt::Display for Bytecode_ {
             Bytecode_::VecPopBack(ty) => write!(f, "VecPopBack {}", ty),
             Bytecode_::VecUnpack(ty, n) => write!(f, "VecUnpack {} {}", ty, n),
             Bytecode_::VecSwap(ty) => write!(f, "VecSwap {}", ty),
+            Bytecode_::ErrorConstant {
+                line_number,
+                constant,
+            } => {
+                write!(
+                    f,
+                    "ErrorConstant {}:{}",
+                    line_number,
+                    constant
+                        .as_ref()
+                        .map(|s| s.0.to_string())
+                        .unwrap_or("<NONE>".to_owned())
+                )
+            }
         }
     }
 }

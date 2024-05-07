@@ -15,7 +15,9 @@ CHANGELOG.md
 /crates/sui-framework/src/natives/ @oxade
 
 # GraphQL RPC working group
-/crates/sui-graphql-rpc/ @oxade @amnn @wlmyng @stefan-mysten
+/crates/sui-graphql-rpc/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
+/crates/sui-graphql-e2e-tests/ @oxade @amnn @wlmyng @stefan-mysten @emmazzz @suiwombat
+
 
 # Notify Narwhal changes to interested folks.
 /narwhal/crypto/ @joyqvq @kchalkias

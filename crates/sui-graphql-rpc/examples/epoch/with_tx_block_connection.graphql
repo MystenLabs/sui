@@ -1,7 +1,8 @@
-# Fetch the first 20 transactions after 231220100 for epoch 97
+# Fetch the first 20 transactions after tx 231220153 (encoded as a
+# cursor) in epoch 97.
 {
-  epoch(id:97) {
-    transactionBlockConnection(first: 20, after:"231220100") {
+  epoch(id: 97) {
+    transactionBlocks(first: 20, after:"eyJjIjoyNjkzMzc3OCwidCI6MjMxMjIwMTUzLCJ0YyI6ODAxMDg4NH0") {
       pageInfo {
         hasNextPage
         endCursor
@@ -11,12 +12,12 @@
         node {
           digest
           sender {
-            location
+            address
           }
           effects {
             gasEffects {
               gasObject {
-                location
+                address
               }
             }
           }

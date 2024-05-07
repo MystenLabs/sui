@@ -10,7 +10,7 @@ use sui_types::{
     move_package::UpgradePolicy,
     object::{Object, Owner},
     programmable_transaction_builder::ProgrammableTransactionBuilder,
-    storage::{BackingPackageStore, ObjectStore},
+    storage::ObjectStore,
     transaction::{Argument, ObjectArg, ProgrammableTransaction, TEST_ONLY_GAS_UNIT_FOR_PUBLISH},
     MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID,
 };
@@ -18,6 +18,7 @@ use sui_types::{
 use std::{collections::BTreeSet, path::PathBuf, str::FromStr, sync::Arc};
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
 use sui_types::error::{SuiError, UserInputError};
+use sui_types::execution_config_utils::to_binary_config;
 use sui_types::execution_status::{
     CommandArgumentError, ExecutionFailureStatus, ExecutionStatus, PackageUpgradeError,
 };
@@ -264,18 +265,13 @@ async fn test_upgrade_package_happy_path() {
 
     let package = runner
         .authority_state
-        .database
+        .get_cache_reader()
         .get_package_object(&runner.package.0)
         .unwrap()
         .unwrap();
     let config = ProtocolConfig::get_for_max_version_UNSAFE();
-    let normalized_modules = package
-        .move_package()
-        .normalize(
-            config.move_binary_format_version(),
-            config.no_extraneous_module_bytes(),
-        )
-        .unwrap();
+    let binary_config = to_binary_config(&config);
+    let normalized_modules = package.move_package().normalize(&binary_config).unwrap();
     assert!(normalized_modules.contains_key("new_module"));
     assert!(normalized_modules["new_module"]
         .functions
@@ -352,7 +348,7 @@ async fn test_upgrade_introduces_type_then_uses_it() {
 
     let b = runner
         .authority_state
-        .database
+        .get_object_store()
         .get_object_by_key(&created.0, created.1)
         .unwrap()
         .unwrap();
@@ -838,7 +834,7 @@ async fn test_publish_override_happy_path() {
 
     let package = runner
         .authority_state
-        .database
+        .get_cache_reader()
         .get_package_object(&new_package.0)
         .unwrap()
         .unwrap();
@@ -891,7 +887,7 @@ async fn test_publish_transitive_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .database
+        .get_cache_reader()
         .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
@@ -982,7 +978,7 @@ async fn test_publish_transitive_override_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .database
+        .get_cache_reader()
         .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use axum::{extract::Extension, routing::get, Router};
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use mysten_metrics::RegistryService;
-use prometheus::Registry;
+use prometheus::{Registry, TextEncoder};
 use std::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::trace::{DefaultOnResponse, TraceLayer};
@@ -20,7 +20,7 @@ pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
     let registry_service = RegistryService::new(registry);
 
     let app = Router::new()
-        .route(METRICS_ROUTE, get(mysten_metrics::metrics))
+        .route(METRICS_ROUTE, get(metrics))
         .layer(Extension(registry_service.clone()))
         .layer(
             ServiceBuilder::new().layer(
@@ -41,4 +41,17 @@ pub fn start_prometheus_server(addr: TcpListener) -> RegistryService {
     });
 
     registry_service
+}
+
+// DO NOT remove this handler, it is not compatible with the mysten_metrics::metric equivalent
+async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
+    let mut metric_families = registry_service.gather_all();
+    metric_families.extend(prometheus::gather());
+    match TextEncoder.encode_to_string(&metric_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
 }

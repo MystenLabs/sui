@@ -1,4 +1,4 @@
-//# print-bytecode --input=module
+//# print-bytecode
 module 0x1d12.M {
     struct T { b: bool }
 
@@ -28,7 +28,7 @@ module 0x2d12.M {
 }
 
 
-//# print-bytecode --input=module
+//# print-bytecode
 // An unpack expression cannot reference a struct type defined in a separate module.
 module 0x2d12.N {
     import 0x2d12.M;

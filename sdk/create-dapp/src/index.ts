@@ -111,8 +111,7 @@ async function collectFiles(template: string, dAppName: string) {
 async function writeFiles(files: Array<{ path: string; content: Buffer }>, outDir: string) {
 	for (const file of files) {
 		const filePath = resolve(outDir, file.path);
-		const dirPath = filePath.split('/').slice(0, -1).join('/');
-
+		const dirPath = resolve(filePath, '..');
 		if (!existsSync(dirPath)) {
 			await mkdir(dirPath, { recursive: true });
 		}

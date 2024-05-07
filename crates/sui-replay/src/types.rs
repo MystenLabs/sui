@@ -10,7 +10,7 @@ use serde::Serialize;
 use std::fmt::Debug;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiTransactionBlockEffects;
-use sui_protocol_config::ProtocolVersion;
+use sui_protocol_config::{Chain, ProtocolVersion};
 use sui_sdk::error::Error as SuiRpcError;
 use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress, VersionNumber};
 use sui_types::digests::{ObjectDigest, TransactionDigest};
@@ -19,13 +19,13 @@ use sui_types::object::Object;
 use sui_types::transaction::{InputObjectKind, SenderSignedData, TransactionKind};
 use thiserror::Error;
 use tokio::time::Duration;
-use tracing::error;
+use tracing::{error, warn};
 
 use crate::config::ReplayableNetworkConfigSet;
 
 // TODO: make these configurable
-pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
-pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 2;
+pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(100_000);
+pub(crate) const RPC_TIMEOUT_ERR_NUM_RETRIES: u32 = 3;
 pub(crate) const MAX_CONCURRENT_REQUESTS: usize = 1_000;
 
 // Struct tag used in system epoch change events
@@ -52,6 +52,13 @@ pub struct OnChainTransactionInfo {
     pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
     pub reference_gas_price: u64,
+    #[serde(default = "unspecified_chain")]
+    pub chain: Chain,
+}
+
+fn unspecified_chain() -> Chain {
+    warn!("Unable to determine chain id. Defaulting to unknown");
+    Chain::Unknown
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -180,6 +187,9 @@ pub enum ReplayEngineError {
         cfgs
     )]
     UnableToExecuteWithNetworkConfigs { cfgs: ReplayableNetworkConfigSet },
+
+    #[error("Unable to get chain id: {}", err)]
+    UnableToGetChainId { err: String },
 }
 
 impl From<SuiObjectResponseError> for ReplayEngineError {

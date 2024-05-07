@@ -86,7 +86,7 @@ bcs.registerStructType("PoolCreated", {
 });
 
 // Create a client connected to the Sui network
-const client = new SuiClient({url: "https://explorer-rpc.mainnet.sui.io:443"});
+const client = new SuiClient({url: "https://sui-mainnet.mystenlabs.com/json-rpc"});
 
 // Retrieve all DeepBook pools using the PoolCreated events
 let allPools = await retrieveAllPools();

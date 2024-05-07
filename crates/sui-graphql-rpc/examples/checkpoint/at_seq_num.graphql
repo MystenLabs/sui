@@ -3,7 +3,7 @@
   checkpoint(id: { sequenceNumber: 10 }) {
     digest
     sequenceNumber
-    validatorSignature
+    validatorSignatures
     previousCheckpointDigest
     networkTotalTransactions
     rollingGasSummary {
@@ -17,9 +17,6 @@
       referenceGasPrice
       startTimestamp
       endTimestamp
-    }
-    endOfEpoch {
-      nextProtocolVersion
     }
   }
 }

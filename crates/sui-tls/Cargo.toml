@@ -27,7 +27,6 @@ axum-server.workspace = true
 tokio-rustls.workspace = true
 tower-layer.workspace = true
 tokio.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 rand.workspace = true

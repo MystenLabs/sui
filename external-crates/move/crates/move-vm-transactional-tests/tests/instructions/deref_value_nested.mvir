@@ -39,9 +39,10 @@ module 0x1.A {
 }
 
 //# run
+module 0x42.m {
 import 0x1.A;
 import 0x1.B;
-main() {
+entry foo() {
     let b: B.T;
     let x: A.T;
     let x_ref: &A.T;
@@ -51,4 +52,5 @@ label b0:
     x_ref = &x;
     A.t(move(x_ref));
     return;
+}
 }

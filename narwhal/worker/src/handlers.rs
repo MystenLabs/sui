@@ -46,7 +46,6 @@ impl<V: TransactionValidator> WorkerToWorker for WorkerReceiverHandler<V> {
         if let Err(err) = self
             .validator
             .validate_batch(&message.batch, &self.protocol_config)
-            .await
         {
             return Err(anemo::rpc::Status::new_with_message(
                 StatusCode::BadRequest,
@@ -219,11 +218,7 @@ impl<V: TransactionValidator> PrimaryToWorker for PrimaryReceiverHandler<V> {
 
             if !message.is_certified {
                 // This batch is not part of a certificate, so we need to validate it.
-                if let Err(err) = self
-                    .validator
-                    .validate_batch(batch, &self.protocol_config)
-                    .await
-                {
+                if let Err(err) = self.validator.validate_batch(batch, &self.protocol_config) {
                     return Err(anemo::rpc::Status::new_with_message(
                         StatusCode::BadRequest,
                         format!("Invalid batch: {err}"),

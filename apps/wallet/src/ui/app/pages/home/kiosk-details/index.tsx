@@ -51,7 +51,6 @@ function KioskDetailsPage() {
 										<NFTDisplayCard
 											objectId={item.data?.objectId!}
 											size="md"
-											showLabel
 											animateHover
 											borderRadius="xl"
 											isLocked={item?.isLocked}

@@ -2,67 +2,52 @@
 // SPDX-License-Identifier: Apache-2.0
 import { Text } from '_app/shared/text';
 import { DescriptionItem } from '_pages/approval-request/transaction-request/DescriptionList';
-import { SUI_USDC_AVERAGE_CONVERSION_RATE, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
-import { getBalanceConversion, getUSDCurrency } from '_pages/swap/utils';
+import { DEFAULT_WALLET_FEE_ADDRESS, WALLET_FEES_PERCENTAGE } from '_pages/swap/constants';
+import { getUSDCurrency } from '_pages/swap/utils';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
-import { useCoinMetadata, useFormatCoin } from '@mysten/core';
-import { SUI_TYPE_ARG } from '@mysten/sui.js/utils';
-import BigNumber from 'bignumber.js';
-import { useMemo } from 'react';
+import { FEATURES } from '_shared/experimentation/features';
+import { useFeatureValue } from '@growthbook/growthbook-react';
+import { useBalanceInUSD, useFormatCoin } from '@mysten/core';
+import { type BalanceChange } from '@mysten/sui.js/client';
 
 export function GasFeeSection({
 	activeCoinType,
 	totalGas,
-	amount,
 	isValid,
-	averages,
+	balanceChanges,
 }: {
 	activeCoinType: string | null;
-	amount: string;
 	isValid: boolean;
 	totalGas: string;
-	averages: {
-		averageBaseToQuote: string;
-		averageQuoteToBase: string;
-	};
+	balanceChanges: BalanceChange[];
 }) {
-	const { data: activeCoinData } = useCoinMetadata(activeCoinType);
-	const isAsk = activeCoinType === SUI_TYPE_ARG;
-
-	const estimatedFees = useMemo(() => {
-		if (!amount || !isValid) {
-			return null;
-		}
-
-		return new BigNumber(amount).times(WALLET_FEES_PERCENTAGE / 100);
-	}, [amount, isValid]);
-
-	const rawValue = getBalanceConversion({
-		balance: estimatedFees,
-		isAsk,
-		averages,
-	});
-
-	const convertedRawValue = new BigNumber(rawValue)
-		.shiftedBy(isAsk ? SUI_USDC_AVERAGE_CONVERSION_RATE : -SUI_USDC_AVERAGE_CONVERSION_RATE)
-		.toNumber();
-
+	const walletFeeAddress = useFeatureValue(FEATURES.WALLET_FEE_ADDRESS, DEFAULT_WALLET_FEE_ADDRESS);
+	const estimatedAccessFeesBalance = balanceChanges.find(
+		(change) =>
+			'owner' in change &&
+			typeof change.owner === 'object' &&
+			'AddressOwner' in change.owner &&
+			change.owner.AddressOwner === walletFeeAddress,
+	)?.amount;
+	const [formattedEstimatedFees, balanceSymbol] = useFormatCoin(
+		estimatedAccessFeesBalance,
+		activeCoinType,
+	);
+	const usdValue = useBalanceInUSD(activeCoinType || '', estimatedAccessFeesBalance || '');
 	const [gas, symbol] = useFormatCoin(totalGas, GAS_TYPE_ARG);
-
-	const formattedEstimatedFees = getUSDCurrency(convertedRawValue);
 
 	return (
 		<div className="flex flex-col border border-hero-darkest/20 rounded-xl px-5 py-3 gap-2 border-solid">
 			<DescriptionItem
 				title={
 					<Text variant="bodySmall" weight="medium" color="steel-dark">
-						Fees ({WALLET_FEES_PERCENTAGE}%)
+						Access Fees ({WALLET_FEES_PERCENTAGE}%)
 					</Text>
 				}
 			>
 				<Text variant="bodySmall" weight="medium" color="steel-darker">
-					{estimatedFees
-						? `${estimatedFees.toLocaleString()} ${activeCoinData?.symbol} (${formattedEstimatedFees})`
+					{formattedEstimatedFees
+						? `${formattedEstimatedFees} ${balanceSymbol} (${getUSDCurrency(usdValue)})`
 						: '--'}
 				</Text>
 			</DescriptionItem>

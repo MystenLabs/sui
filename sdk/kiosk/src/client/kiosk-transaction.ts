@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
+import type {
+	TransactionArgument,
+	TransactionBlock,
 	TransactionObjectArgument,
-	type TransactionArgument,
-	type TransactionBlock,
 } from '@mysten/sui.js/transactions';
 
-import * as kioskTx from '../tx/kiosk';
-import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk';
-import { confirmRequest } from '../tx/transfer-policy';
-import {
+import * as kioskTx from '../tx/kiosk.js';
+import { convertToPersonalTx, transferPersonalCapTx } from '../tx/personal-kiosk.js';
+import { confirmRequest } from '../tx/transfer-policy.js';
+import type {
 	ItemId,
 	ItemReference,
 	ItemValue,
@@ -18,9 +18,9 @@ import {
 	ObjectArgument,
 	Price,
 	PurchaseOptions,
-} from '../types';
-import { getNormalizedRuleType, objArg } from '../utils';
-import { type KioskClient } from './kiosk-client';
+} from '../types/index.js';
+import { getNormalizedRuleType } from '../utils.js';
+import type { KioskClient } from './kiosk-client.js';
 
 export type KioskTransactionParams = {
 	/** The TransactionBlock for this run */
@@ -285,12 +285,25 @@ export class KioskTransaction {
 	 * A function to take lock an item in the kiosk.
 
 	 * @param itemType The type `T` of the item
-	 * @param itemId The ID of the item
+	 * @param item The ID or Transaction Argument of the item
+	 * @param itemId The ID of the item - Deprecated: Use `item` instead.
 	 * @param policy The Policy ID or Transaction Argument for item T
 	 */
-	lock({ itemType, itemId, policy }: ItemId & { policy: ObjectArgument }) {
+	lock({
+		itemType,
+		item,
+		itemId,
+		policy,
+	}: ItemReference & { policy: ObjectArgument; itemId?: string }) {
 		this.#validateKioskIsSet();
-		kioskTx.lock(this.transactionBlock, itemType, this.kiosk!, this.kioskCap!, policy, itemId);
+		kioskTx.lock(
+			this.transactionBlock,
+			itemType,
+			this.kiosk!,
+			this.kioskCap!,
+			policy,
+			itemId ?? item,
+		);
 		return this;
 	}
 
@@ -396,9 +409,9 @@ export class KioskTransaction {
 	 */
 	setCap(cap: KioskOwnerCap) {
 		this.#validateFinalizedStatus();
-		this.kiosk = objArg(this.transactionBlock, cap.kioskId);
+		this.kiosk = this.transactionBlock.object(cap.kioskId);
 		if (!cap.isPersonal) {
-			this.kioskCap = objArg(this.transactionBlock, cap.objectId);
+			this.kioskCap = this.transactionBlock.object(cap.objectId);
 			return;
 		}
 
@@ -433,7 +446,7 @@ export class KioskTransaction {
 				target: `${packageId}::personal_kiosk::return_val`,
 				arguments: [
 					this.#personalCap,
-					objArg(this.transactionBlock, this.kioskCap!),
+					this.transactionBlock.object(this.kioskCap!),
 					this.#promise!,
 				],
 			});
@@ -487,11 +500,11 @@ export class KioskTransaction {
 			target: `${this.kioskClient.getRulePackageId(
 				'personalKioskRulePackageId',
 			)}::personal_kiosk::borrow_val`,
-			arguments: [objArg(this.transactionBlock, personalCap)],
+			arguments: [this.transactionBlock.object(personalCap)],
 		});
 
 		this.kioskCap = kioskCap;
-		this.#personalCap = objArg(this.transactionBlock, personalCap);
+		this.#personalCap = this.transactionBlock.object(personalCap);
 		this.#promise = promise;
 
 		return this;

@@ -1,5 +1,4 @@
 name = "name"
-version = "0.1.2"
 license = "license"
 authors = ["some author"]
 
@@ -18,10 +17,10 @@ language_version = "0.0.0"
 
 [dependencies]
 A = { local = "../a" }
-B = { local = "../b", addr_subst = { "a" = "0xDEADBEEF" }, version = "0.0.1" }
-C = { local = "../some_path", addr_subst = { "a" = "0xCAFE", d = "0x4" }, version = "0.0.2" }
-D = { local = "../some_path", addr_subst = { "a" = "0xCAFE", C = "B" }, version = "0.0.2" }
-E = { local = "../some_path", addr_subst = { "a" = "0xCAFE", C = "B", "OtherD" = "d" }, version = "0.0.2" }
+B = { local = "../b", addr_subst = { "a" = "0xDEADBEEF" } }
+C = { local = "../some_path", addr_subst = { "a" = "0xCAFE", d = "0x4" } }
+D = { local = "../some_path", addr_subst = { "a" = "0xCAFE", C = "B" } }
+E = { local = "../some_path", addr_subst = { "a" = "0xCAFE", C = "B", "OtherD" = "d" } }
 
 [dev-dependencies]
-F = { local = "../some_path", addr_subst = { "a" = "0xCAFE" }, version = "0.0.2" }
+F = { local = "../some_path", addr_subst = { "a" = "0xCAFE" } }

@@ -1,0 +1,170 @@
+name: Narwhal
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'devnet'
+      - 'testnet'
+      - 'mainnet'
+      - 'releases/sui-*-release'
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      sui_repo_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: false
+        default: ''
+  # Triggers the workflow every day at 05:00 UTC.
+  schedule:
+    - cron: '0 5 * * *'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  # Test Narwhal consensus as long as Narwhal runs in mainnet.
+  CONSENSUS: "narwhal"
+
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+  # RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+      isMove: ${{ steps.diff.outputs.isMove }}
+      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ubuntu-ghcloud]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: cargo test
+        run: |
+          cargo nextest run --profile ci
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
+  test-extra:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    env:
+      # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
+      # causes #[sim_test] to only run under the deterministic `simtest` job, and not the
+      # non-deterministic `test` job.
+      SUI_SKIP_SIMTESTS: 1
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - [ubuntu-ghcloud]
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: benchmark (smoke)
+        run: |
+          cargo run --package sui-benchmark --bin stress -- --log-path /tmp/stress.log --num-client-threads 10 --num-server-threads 24 --num-transfer-accounts 2 bench --target-qps 100 --num-workers 10  --transfer-object 50 --shared-counter 50 --run-duration 10s --stress-stat-collection
+      - name: doctests
+        run: |
+          cargo test --doc
+      - name: rustdoc
+        run: |
+          cargo doc --workspace --no-deps
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+        with:
+          crate: cargo-hakari
+          locked: true
+      - name: Install rustfmt
+        run: rustup component add rustfmt
+      - name: sui-execution
+        run: |
+          ./scripts/execution_layer.py generate-lib
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
+        shell: bash
+
+  simtest:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: [ubuntu-ghcloud]
+    env:
+      MSIM_WATCHDOG_TIMEOUT_MS: 60000
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+        with:
+          ref: ${{ github.event.inputs.sui_repo_ref || github.ref }}
+      - uses: taiki-e/install-action@nextest
+      - name: Set Swap Space
+        uses: pierotofy/set-swap-space@master
+        with:
+          swap-size-gb: 256
+      - name: cargo simtest
+        # Use a different seed per commit to avoid unrelated changes stuck on a flaky test.
+        run: |
+          MSIM_TEST_SEED="$(printf "%lu\n" 0x$(git rev-parse HEAD | cut -c1-16))" scripts/simtest/cargo-simtest simtest --no-fail-fast
+      - name: check new tests for flakiness
+        run: |
+          scripts/simtest/stress-new-tests.sh

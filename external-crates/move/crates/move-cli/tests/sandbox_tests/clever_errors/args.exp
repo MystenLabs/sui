@@ -1,0 +1,79 @@
+Command `test -t 1`:
+INCLUDING DEPENDENCY MoveStdlib
+BUILDING PackageBasics
+Running Move unit tests
+[ PASS    ] 0x1::AModule::double_three
+[ PASS    ] 0x1::AModule::double_two
+[ PASS    ] 0x1::AModuleTests::double_one_one
+[ PASS    ] 0x1::AModuleTests::double_three
+[ PASS    ] 0x1::AModuleTests::double_three_location_based_valid
+[ PASS    ] 0x1::AModuleTests::double_zero_zero
+[ FAIL    ] 0x1::AModuleTestsShouldAllFail::double_three_const_based_different_module_fail
+[ FAIL    ] 0x1::AModuleTestsShouldAllFail::double_three_location_based_invalid
+[ FAIL    ] 0x1::AModuleTestsShouldAllFail::double_three_should_fail
+[ FAIL    ] 0x1::AModuleTestsShouldAllFail::double_three_should_fail_named_const
+
+Test failures:
+
+Failures in 0x1::AModuleTestsShouldAllFail:
+
+┌── double_three_const_based_different_module_fail ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in 0x1::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'EIsThree' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::BModule but instead it aborted with error constant 'EIsThree' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_location_based_invalid ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in 0x1::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'EIsThree' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::AModuleTestsShouldAllFail but instead it aborted with error constant 'EIsThree' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_should_fail ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in 0x1::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not abort with expected code. Expected test to abort with code 0, but instead it aborted with error constant 'EIsThree' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+
+┌── double_three_should_fail_named_const ──────
+│ error[E11001]: test failure
+│    ┌─ ./sources/AModule.move:10:9
+│    │
+│  9 │     public fun double_except_three(x: u64): u64 {
+│    │                ------------------- In this function in 0x1::AModule
+│ 10 │         assert!(x != 3, EIsThree);
+│    │         ^^^^^^^^^^^^^^^^^^^^^^^^^ Test did not error as expected. Expected test to abort with error constant 'ENotFound' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::AModule but instead it aborted with error constant 'EIsThree' originating in the module 0000000000000000000000000000000000000000000000000000000000000001::AModule rooted here
+│ 
+│ 
+└──────────────────
+
+Test result: FAILED. Total tests: 10; passed: 6; failed: 4
+warning[W10007]: issue with attribute value
+  ┌─ ./tests/AModuleTestsShouldAllFail.move:8:24
+  │
+8 │     #[expected_failure(abort_code = 0)]
+  │                        ^^^^^^^^^^   - Replace value with constant from expected module or add `location=...` attribute.
+  │                        │             
+  │                        WARNING: passes for an abort from any module.
+

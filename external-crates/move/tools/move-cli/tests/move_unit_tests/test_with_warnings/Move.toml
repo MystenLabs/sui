@@ -1,9 +1,0 @@
-[package]
-name = "Test"
-version = "0.0.0"
-
-[dev-addresses]
-std = "0x1"
-
-[dev-dependencies]
-MoveStdlib = { local = "../../../../../move-stdlib" }

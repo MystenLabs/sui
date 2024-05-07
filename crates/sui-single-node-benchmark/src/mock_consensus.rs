@@ -1,22 +1,21 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use prometheus::IntCounter;
-use std::mem;
+use prometheus::Registry;
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
-use sui_core::authority::AuthorityState;
+use sui_core::authority::{AuthorityMetrics, AuthorityState};
 use sui_core::checkpoints::CheckpointServiceNoop;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_handler::SequencedConsensusTransaction;
 use sui_types::error::SuiResult;
-use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_consensus::{ConsensusTransaction, ConsensusTransactionKind};
+use sui_types::transaction::VerifiedCertificate;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 pub(crate) struct MockConsensusClient {
     tx_sender: mpsc::Sender<ConsensusTransaction>,
-    // TODO: May want to make sure we flush all pending transactions before benchmark ends.
     _consensus_handle: JoinHandle<()>,
 }
 
@@ -24,8 +23,7 @@ pub(crate) enum ConsensusMode {
     // ConsensusClient does absolutely nothing when receiving a transaction
     Noop,
     // ConsensusClient directly sequences the transaction into the store.
-    // u64 is the consensus commit size.
-    DirectSequencing(usize),
+    DirectSequencing,
 }
 
 impl MockConsensusClient {
@@ -51,31 +49,33 @@ impl MockConsensusClient {
         mut tx_receiver: mpsc::Receiver<ConsensusTransaction>,
         consensus_mode: ConsensusMode,
     ) {
-        let epoch_store = validator.epoch_store_for_testing().clone();
         let checkpoint_service = Arc::new(CheckpointServiceNoop {});
-        let counter = IntCounter::new(
-            "skipped_consensus_txns",
-            "Total number of consensus transactions skipped",
-        )
-        .unwrap();
-        let mut transactions = vec![];
+        let epoch_store = validator.epoch_store_for_testing();
+        let authority_metrics = Arc::new(AuthorityMetrics::new(&Registry::new()));
         while let Some(tx) = tx_receiver.recv().await {
             match consensus_mode {
                 ConsensusMode::Noop => {}
-                ConsensusMode::DirectSequencing(checkpoint_size) => {
-                    transactions.push(SequencedConsensusTransaction::new_test(tx));
-                    if transactions.len() == checkpoint_size {
-                        epoch_store
-                            .process_consensus_transactions_for_tests(
-                                mem::take(&mut transactions),
-                                &checkpoint_service,
-                                &validator.database,
-                                &counter,
-                            )
-                            .await
-                            .unwrap();
-                    }
+                ConsensusMode::DirectSequencing => {
+                    epoch_store
+                        .process_consensus_transactions_for_tests(
+                            vec![SequencedConsensusTransaction::new_test(tx.clone())],
+                            &checkpoint_service,
+                            validator.get_cache_reader().as_ref(),
+                            &authority_metrics,
+                        )
+                        .await
+                        .unwrap();
                 }
+            }
+            let tx = match tx.kind {
+                ConsensusTransactionKind::UserTransaction(tx) => tx,
+                _ => unreachable!("Only user transactions are supported in benchmark"),
+            };
+            if tx.contains_shared_object() {
+                validator.enqueue_certificates_for_execution(
+                    vec![VerifiedCertificate::new_unchecked(*tx)],
+                    &epoch_store,
+                );
             }
         }
     }

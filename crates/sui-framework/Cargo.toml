@@ -17,13 +17,14 @@ sui-types.workspace = true
 
 move-binary-format.workspace = true
 move-core-types.workspace = true
-workspace-hack.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true
 bcs.workspace = true
+regex.workspace = true
 
 sui-move-build.workspace = true
 
 move-binary-format.workspace = true
+move-compiler.workspace = true
 move-package.workspace = true

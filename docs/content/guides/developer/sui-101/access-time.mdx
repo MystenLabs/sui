@@ -1,11 +1,11 @@
 ---
 title: Access On-Chain Time
-description: Access network-based time for your transactions. Sui provides a Clock module to capture near-real time or epoch time in your Sui packages.  
+description: Access network-based time for your transactions. Sui provides a Clock module to capture near-real time or epoch time in your Sui packages.
 ---
 
 You have options when needing to access network-based time for your transactions. If you need a near real-time measurement (within a few seconds), use the immutable reference of time provided by the `Clock` module in Move. The reference value from this module updates with every network checkpoint. If you don't need as current a time slice, use the `epoch_timestamp_ms` function to capture the precise moment the current epoch started.
 
-## The sui::clock::Clock module 
+## The sui::clock::Clock module
 
 To access a prompt timestamp, you must pass a read-only reference of `sui::clock::Clock` as an entry function parameter in your transactions. An instance of `Clock` is provided at address `0x6`, no new instances can be created.
 
@@ -19,7 +19,7 @@ module sui::clock {
 
 The example below demonstrates an entry function that emits an event containing a timestamp from the `Clock`:
 
-```rust
+```move
 module example::clock {
     use sui::clock::{Self, Clock};
     use sui::event;
@@ -38,7 +38,7 @@ module example::clock {
 
 A call to the previous entry function takes the following form, passing `0x6` as the address for the `Clock` parameter:
 
-```rust
+```shell
 sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
 ```
 
@@ -50,48 +50,55 @@ Any transaction that requires access to a `Clock` must go through consensus beca
 
 Transactions that use the clock must accept it as an **immutable reference** (not a mutable reference or value). This prevents contention, as transactions that access the `Clock` can only read it, so do not need to be sequenced relative to each other. Validators refuse to sign transactions that do not meet this requirement and packages that include entry functions that accept a `Clock` or `&mut Clock` fail to publish.
 
-The following functions test `Clock`-dependent code by manually creating (and sharing) a `Clock` object and incrementing its timestamp. This is possible only in test code:
+The following functions test `Clock`-dependent code by manually creating a `Clock` object and manipulating its timestamp. This is possible only in test code:
 
-```rust
+```move
 module sui::clock {
     #[test_only]
     public fun create_for_testing(ctx: &mut TxContext);
 
     #[test_only]
+    public fun share_for_testing(clock: Clock);
+
+    #[test_only]
     public fun increment_for_testing(clock: &mut Clock, tick: u64);
+
+    #[test_only]
+    public fun set_for_testing(clock: &mut Clock, timestamp_ms: u64);
+
+    #[test_only]
+    public fun destroy_for_testing(clock: Clock);
 }
 ```
 
 The next example presents a simple test that creates a Clock, increments it, and then checks its value:
 
-```rust
+```move
 module example::clock_tests {
     use sui::clock::{Self, Clock};
-    use sui::test_scenario as ts;
+    use sui::tx_context;
 
     #[test]
     fun creating_a_clock_and_incrementing_it() {
-        let ts = ts::begin(@0x1);
-        let ctx = ts::ctx(&mut ts);
+        let ctx = tx_context::dummy();
+        let clock = clock::create_for_testing(&mut ctx);
 
-        clock::create_for_testing(ctx);
+        clock::increment_for_testing(&mut clock, 42);
+        assert!(clock::timestamp_ms(&clock) == 42, 1);
 
-        let clock = ts::take_shared<Clock>(&ts);
-        clock::increment_for_testing(&mut clock, 20);
-        clock::increment_for_testing(&mut clock, 22);
-        assert!(clock::timestamp_ms(&clock) == 42, 0);
+        clock::set_for_testing(&mut clock, 50);
+        assert!(clock::timestamp_ms(&clock) == 50, 1);
 
-        ts::return_shared(clock);
-        ts::end(ts);
+        clock::destroy_for_testing(clock);
     }
 }
 ```
 
-## Epoch timestamps 
+## Epoch timestamps
 
 You can use the following function to access the timestamp for the start of the current epoch for all transactions (including ones that do not go through consensus):
 
-```rust
+```move
 module sui::tx_context {
     public fun epoch_timestamp_ms(ctx: &TxContext): u64;
 }
@@ -101,7 +108,7 @@ The preceding function returns the point in time when the current epoch started,
 
 Tests based on `sui::test_scenario` can use `later_epoch` (following code), to exercise time-sensitive code that uses `epoch_timestamp_ms` (previous code):
 
-```rust
+```move
 module sui::test_scenario {
     public fun later_epoch(
         scenario: &mut Scenario,

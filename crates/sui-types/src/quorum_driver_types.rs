@@ -48,7 +48,7 @@ pub enum QuorumDriverError {
     #[error("Transaction timed out before reaching finality")]
     TimeoutBeforeFinality,
     #[error("Transaction failed to reach finality with transient error after {total_attempts} attempts.")]
-    FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u8 },
+    FailedWithTransientErrorAfterMaximumAttempts { total_attempts: u32 },
     #[error("{NON_RECOVERABLE_ERROR_MSG}: {errors:?}.")]
     NonRecoverableTransactionError { errors: GroupedErrors },
     #[error("Transaction is not processed because {overloaded_stake} of validators by stake are overloaded with certificates pending execution.")]
@@ -58,6 +58,12 @@ pub enum QuorumDriverError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSignatures,
+    #[error("Transaction is not processed because {overload_stake} of validators are overloaded and asked client to retry after {retry_after_secs}.")]
+    SystemOverloadRetryAfter {
+        overload_stake: StakeUnit,
+        errors: GroupedErrors,
+        retry_after_secs: u64,
+    },
 }
 
 pub type GroupedErrors = Vec<(SuiError, StakeUnit, Vec<ConciseAuthorityPublicKeyBytes>)>;

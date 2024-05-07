@@ -11,7 +11,7 @@ use crate::{
     session::{LoadedFunctionInstantiation, SerializedReturnValues, Session},
 };
 use move_binary_format::{
-    access::ModuleAccess,
+    binary_config::BinaryConfig,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{AbilitySet, LocalIndex},
     CompiledModule, IndexKind,
@@ -19,15 +19,14 @@ use move_binary_format::{
 use move_bytecode_verifier::script_signature;
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
-    value::MoveTypeLayout,
+    runtime_value::MoveTypeLayout,
     vm_status::StatusCode,
 };
 use move_vm_config::runtime::VMConfig;
-#[cfg(debug_assertions)]
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -82,10 +81,12 @@ impl VMRuntime {
             .map(|blob| {
                 CompiledModule::deserialize_with_config(
                     blob,
-                    self.loader.vm_config().max_binary_format_version,
-                    self.loader
-                        .vm_config()
-                        .check_no_extraneous_bytes_during_deserialization,
+                    &BinaryConfig::legacy(
+                        self.loader.vm_config().max_binary_format_version,
+                        self.loader
+                            .vm_config()
+                            .check_no_extraneous_bytes_during_deserialization,
+                    ),
                 )
             })
             .collect::<PartialVMResult<Vec<_>>>()
@@ -388,9 +389,9 @@ impl VMRuntime {
         extensions: &mut NativeContextExtensions,
         bypass_declared_entry_check: bool,
     ) -> VMResult<SerializedReturnValues> {
-        use move_binary_format::{binary_views::BinaryIndexedView, file_format::SignatureIndex};
+        use move_binary_format::file_format::SignatureIndex;
         fn check_is_entry(
-            _resolver: &BinaryIndexedView,
+            _resolver: &CompiledModule,
             is_entry: bool,
             _parameters_idx: SignatureIndex,
             _return_idx: Option<SignatureIndex>,
@@ -428,44 +429,6 @@ impl VMRuntime {
             additional_signature_checks,
         )?;
 
-        // execute the function
-        self.execute_function_impl(
-            func,
-            type_arguments,
-            parameters,
-            return_,
-            serialized_args,
-            data_store,
-            gas_meter,
-            extensions,
-        )
-    }
-
-    // See Session::execute_script for what contracts to follow.
-    pub(crate) fn execute_script(
-        &self,
-        script: impl Borrow<[u8]>,
-        type_arguments: Vec<Type>,
-        serialized_args: Vec<impl Borrow<[u8]>>,
-        data_store: &mut impl DataStore,
-        gas_meter: &mut impl GasMeter,
-        extensions: &mut NativeContextExtensions,
-    ) -> VMResult<SerializedReturnValues> {
-        // load the script, perform verification
-        let (
-            func,
-            LoadedFunctionInstantiation {
-                parameters,
-                return_,
-            },
-        ) = self
-            .loader
-            .load_script(script.borrow(), &type_arguments, data_store)?;
-        #[cfg(debug_assertions)]
-        {
-            let rem = gas_meter.remaining_gas().into();
-            gas_meter.set_profiler(GasProfiler::init_default_cfg(func.pretty_string(), rem));
-        }
         // execute the function
         self.execute_function_impl(
             func,
@@ -525,8 +488,8 @@ impl VMRuntime {
         gas_meter: &mut impl GasMeter,
         extensions: &mut NativeContextExtensions,
     ) -> VMResult<SerializedReturnValues> {
-        #[cfg(debug_assertions)]
-        {
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(
                     function_name.to_string(),
@@ -548,7 +511,7 @@ impl VMRuntime {
         )
     }
 
-    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<A::MoveTypeLayout> {
         self.loader
             .type_to_fully_annotated_layout(ty)
             .map_err(|e| e.finish(Location::Undefined))

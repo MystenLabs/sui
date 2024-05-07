@@ -6,21 +6,18 @@
 //# publish
 
 module test::m {
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID};
-    use sui::transfer;
     use sui::dynamic_object_field as ofield;
 
-    struct Outer has key {
+    public struct Outer has key {
         id: UID,
         inner: Inner,
     }
 
-    struct Inner has key, store {
+    public struct Inner has key, store {
         id: UID,
     }
 
-    struct Child has key, store {
+    public struct Child has key, store {
         id: UID,
         value: u64,
     }
@@ -44,7 +41,7 @@ module test::m {
     }
 
     public fun buy(parent: &mut Outer, ctx: &mut TxContext) {
-        let new_parent = new_parent(ctx);
+        let mut new_parent = new_parent(ctx);
         swap(parent, &mut new_parent);
         give(&mut new_parent, tx_context::sender(ctx));
         transfer::share_object(new_parent)

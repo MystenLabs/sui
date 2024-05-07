@@ -1,19 +1,18 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { type SharedObjectRef } from '@mysten/sui.js/bcs';
-import { type SuiClient, type SuiObjectRef } from '@mysten/sui.js/client';
-import { TransactionObjectArgument } from '@mysten/sui.js/transactions';
+import type { SuiClient } from '@mysten/sui.js/client';
+import type { TransactionObjectArgument } from '@mysten/sui.js/transactions';
 
-import { BaseRulePackageIds } from '../constants';
+import type { BaseRulePackageIds } from '../constants.js';
 
-export * from './kiosk';
-export * from './transfer-policy';
+export * from './kiosk.js';
+export * from './transfer-policy.js';
 
 /**
  * A valid argument for any of the Kiosk functions.
  */
-export type ObjectArgument = string | TransactionObjectArgument | SharedObjectRef | SuiObjectRef;
+export type ObjectArgument = string | TransactionObjectArgument;
 
 /**
  * A Network selector.

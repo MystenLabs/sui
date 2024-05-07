@@ -1,8 +1,12 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let x: u64;
 label b0:
     x = 5;
     assert(*&mut x == 5, 42);
     return;
+}
+
 }

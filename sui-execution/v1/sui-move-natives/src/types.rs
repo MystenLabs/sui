@@ -5,7 +5,7 @@ use move_binary_format::errors::PartialVMResult;
 use move_core_types::{
     gas_algebra::InternalGas,
     language_storage::TypeTag,
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
+    runtime_value::{MoveStructLayout, MoveTypeLayout},
 };
 use move_vm_runtime::{native_charge_gas_early_exit, native_functions::NativeContext};
 use move_vm_types::{
@@ -17,23 +17,7 @@ use std::collections::VecDeque;
 use crate::NativesCostTable;
 
 pub(crate) fn is_otw_struct(struct_layout: &MoveStructLayout, type_tag: &TypeTag) -> bool {
-    let has_one_bool_field = match struct_layout {
-        MoveStructLayout::Runtime(vec) => matches!(vec.as_slice(), [MoveTypeLayout::Bool]),
-        MoveStructLayout::WithFields(vec) => matches!(
-            vec.as_slice(),
-            [MoveFieldLayout {
-                name: _,
-                layout: MoveTypeLayout::Bool
-            }]
-        ),
-        MoveStructLayout::WithTypes { type_: _, fields } => matches!(
-            fields.as_slice(),
-            [MoveFieldLayout {
-                name: _,
-                layout: MoveTypeLayout::Bool
-            }]
-        ),
-    };
+    let has_one_bool_field = matches!(struct_layout.0.as_slice(), [MoveTypeLayout::Bool]);
 
     // If a struct type has the same name as the module that defines it but capitalized, and it has
     // a single field of type bool, it means that it's a one-time witness type. The remaining

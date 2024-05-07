@@ -131,7 +131,9 @@ pub fn handle_lint_results_exclude_external_crate_checks(
     let mut errs = false;
     for (source, message) in &results.messages {
         if let LintKind::Content(path) = source.kind() {
-            if (path.starts_with(EXTERNAL_CRATE_DIR) || path.starts_with(CREATE_DAPP_TEMPLATE_DIR))
+            if (path.starts_with(EXTERNAL_CRATE_DIR)
+                || path.starts_with(CREATE_DAPP_TEMPLATE_DIR)
+                || path.to_string().contains("/generated/"))
                 && source.name() == "license-header"
             {
                 continue;

@@ -3,8 +3,8 @@
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
 import { SuiTransactionBlockResponse } from '../../src/client';
+import { TransactionBlock } from '../../src/transactions';
 import { executePaySuiNTimes, setup, TestToolbox } from './utils/setup';
 
 describe('Transaction Reading API', () => {
@@ -25,8 +25,8 @@ describe('Transaction Reading API', () => {
 	describe('waitForTransactionBlock', () => {
 		async function setupTransaction() {
 			const tx = new TransactionBlock();
-			const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
-			tx.transferObjects([coin], tx.pure(toolbox.address()));
+			const [coin] = tx.splitCoins(tx.gas, [1]);
+			tx.transferObjects([coin], toolbox.address());
 			return toolbox.client.signAndExecuteTransactionBlock({
 				signer: toolbox.keypair,
 				transactionBlock: tx,
@@ -117,13 +117,14 @@ describe('Transaction Reading API', () => {
 		};
 		const {
 			// comparing checkpoint causes a race condition resulting in flaky tests
-			data: [{ checkpoint: _, ...response1 }],
+			// timestamp is only available after indexing, causing flaky tests
+			data: [{ checkpoint: _, timestampMs: __, ...response1 }],
 		} = await toolbox.client.queryTransactionBlocks({
 			options,
 			limit: 1,
 		});
 
-		const { checkpoint, ...response2 } = await toolbox.client.getTransactionBlock({
+		const { checkpoint, timestampMs, ...response2 } = await toolbox.client.getTransactionBlock({
 			digest: response1.digest,
 			options,
 		});

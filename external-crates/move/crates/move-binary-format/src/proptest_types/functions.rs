@@ -494,11 +494,6 @@ enum BytecodeGen {
 
     Pack(PropIndex),
     Unpack(PropIndex),
-    Exists(PropIndex),
-    MutBorrowGlobal(PropIndex),
-    ImmBorrowGlobal(PropIndex),
-    MoveFrom(PropIndex),
-    MoveTo(PropIndex),
     BrTrue(PropIndex),
     BrFalse(PropIndex),
     Branch(PropIndex),
@@ -532,11 +527,6 @@ impl BytecodeGen {
             any::<PropIndex>().prop_map(Call),
             any::<PropIndex>().prop_map(Pack),
             any::<PropIndex>().prop_map(Unpack),
-            any::<PropIndex>().prop_map(Exists),
-            any::<PropIndex>().prop_map(ImmBorrowGlobal),
-            any::<PropIndex>().prop_map(MutBorrowGlobal),
-            any::<PropIndex>().prop_map(MoveFrom),
-            any::<PropIndex>().prop_map(MoveTo),
             any::<PropIndex>().prop_map(BrTrue),
             any::<PropIndex>().prop_map(BrFalse),
             any::<PropIndex>().prop_map(Branch),
@@ -662,76 +652,6 @@ impl BytecodeGen {
                     Bytecode::Unpack(StructDefinitionIndex(sd_idx as TableIndex))
                 } else {
                     Bytecode::UnpackGeneric(state.get_type_instantiation(sd_idx))
-                }
-            }
-            BytecodeGen::Exists(idx) => {
-                let struct_defs_len = state.struct_defs.len();
-                let sd_idx = idx.index(struct_defs_len);
-
-                let sd = &state.struct_defs[sd_idx];
-                if state.struct_handles[sd.struct_handle.0 as usize]
-                    .type_parameters
-                    .is_empty()
-                {
-                    Bytecode::Exists(StructDefinitionIndex(sd_idx as TableIndex))
-                } else {
-                    Bytecode::ExistsGeneric(state.get_type_instantiation(sd_idx))
-                }
-            }
-            BytecodeGen::ImmBorrowGlobal(idx) => {
-                let struct_defs_len = state.struct_defs.len();
-                let sd_idx = idx.index(struct_defs_len);
-
-                let sd = &state.struct_defs[sd_idx];
-                if state.struct_handles[sd.struct_handle.0 as usize]
-                    .type_parameters
-                    .is_empty()
-                {
-                    Bytecode::ImmBorrowGlobal(StructDefinitionIndex(sd_idx as TableIndex))
-                } else {
-                    Bytecode::ImmBorrowGlobalGeneric(state.get_type_instantiation(sd_idx))
-                }
-            }
-            BytecodeGen::MutBorrowGlobal(idx) => {
-                let struct_defs_len = state.struct_defs.len();
-                let sd_idx = idx.index(struct_defs_len);
-
-                let sd = &state.struct_defs[sd_idx];
-                if state.struct_handles[sd.struct_handle.0 as usize]
-                    .type_parameters
-                    .is_empty()
-                {
-                    Bytecode::MutBorrowGlobal(StructDefinitionIndex(sd_idx as TableIndex))
-                } else {
-                    Bytecode::MutBorrowGlobalGeneric(state.get_type_instantiation(sd_idx))
-                }
-            }
-            BytecodeGen::MoveFrom(idx) => {
-                let struct_defs_len = state.struct_defs.len();
-                let sd_idx = idx.index(struct_defs_len);
-
-                let sd = &state.struct_defs[sd_idx];
-                if state.struct_handles[sd.struct_handle.0 as usize]
-                    .type_parameters
-                    .is_empty()
-                {
-                    Bytecode::MoveFrom(StructDefinitionIndex(sd_idx as TableIndex))
-                } else {
-                    Bytecode::MoveFromGeneric(state.get_type_instantiation(sd_idx))
-                }
-            }
-            BytecodeGen::MoveTo(idx) => {
-                let struct_defs_len = state.struct_defs.len();
-                let sd_idx = idx.index(struct_defs_len);
-
-                let sd = &state.struct_defs[sd_idx];
-                if state.struct_handles[sd.struct_handle.0 as usize]
-                    .type_parameters
-                    .is_empty()
-                {
-                    Bytecode::MoveTo(StructDefinitionIndex(sd_idx as TableIndex))
-                } else {
-                    Bytecode::MoveToGeneric(state.get_type_instantiation(sd_idx))
                 }
             }
             BytecodeGen::BrTrue(idx) => {
@@ -897,9 +817,12 @@ impl BytecodeGen {
             U8 | U16 | U32 | U64 | U128 | U256 | Bool | Address | Signer | Struct(_)
             | TypeParameter(_) => true,
             Vector(element_token) => BytecodeGen::check_signature_token(element_token),
-            StructInstantiation(_, type_arguments) => type_arguments
-                .iter()
-                .all(BytecodeGen::check_signature_token),
+            StructInstantiation(struct_inst) => {
+                let (_, type_arguments) = &**struct_inst;
+                type_arguments
+                    .iter()
+                    .all(BytecodeGen::check_signature_token)
+            }
             Reference(_) | MutableReference(_) => false,
         }
     }
@@ -917,10 +840,10 @@ impl BytecodeGen {
         9 => Self::just_bytecode_strategy(),
         1 => any::<u64>().prop_map(Bytecode::LdU64),
         1 => any::<u8>().prop_map(Bytecode::LdU8),
-        1 => any::<u128>().prop_map(Bytecode::LdU128),
+        1 => any::<Box<u128>>().prop_map(Bytecode::LdU128),
         1 => any::<u16>().prop_map(Bytecode::LdU16),
         1 => any::<u32>().prop_map(Bytecode::LdU32),
-        1 => any::<U256>().prop_map(Bytecode::LdU256),
+        1 => any::<Box<U256>>().prop_map(Bytecode::LdU256),
         ]
     }
 

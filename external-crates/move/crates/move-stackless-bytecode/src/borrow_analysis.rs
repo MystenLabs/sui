@@ -12,7 +12,6 @@ use move_binary_format::file_format::CodeOffset;
 use move_model::{
     ast::TempIndex,
     model::{FunctionEnv, GlobalEnv, QualifiedInstId},
-    pragmas::INTRINSIC_FUN_MAP_BORROW_MUT,
     ty::Type,
     well_known::VECTOR_BORROW_MUT,
 };
@@ -55,15 +54,15 @@ impl BorrowInfo {
     fn get_children(&self, node: &BorrowNode) -> Vec<&BorrowNode> {
         self.borrowed_by
             .get(node)
-            .map(|s| s.iter().map(|(n, _)| n).collect_vec())
+            .map(|s| s.iter().map(|(n, _)| n).collect())
             .unwrap_or_default()
     }
 
     /// Gets the parents (together with the edges) of this node.
-    fn get_incoming(&self, node: &BorrowNode) -> Vec<(&BorrowNode, &BorrowEdge)> {
+    fn get_incoming(&self, node: &BorrowNode) -> Vec<&(BorrowNode, BorrowEdge)> {
         self.borrows_from
             .get(node)
-            .map(|s| s.iter().map(|(n, e)| (n, e)).collect_vec())
+            .map(|s| s.iter().collect())
             .unwrap_or_default()
     }
 
@@ -506,9 +505,7 @@ fn get_custom_annotation_or_none(
             // check whether this borrow has known special semantics
             if fun_env.is_well_known(VECTOR_BORROW_MUT) {
                 Some(summarize_custom_borrow(IndexEdgeKind::Vector, &[0], &[0]))
-            } else if fun_env.is_intrinsic_of(INTRINSIC_FUN_MAP_BORROW_MUT) {
-                Some(summarize_custom_borrow(IndexEdgeKind::Table, &[0], &[0]))
-            } else if fun_env.is_native_or_intrinsic() {
+            } else if fun_env.is_native() {
                 // non-borrow related native/intrinsic has no borrow semantics
                 Some(BorrowAnnotation::default())
             } else {

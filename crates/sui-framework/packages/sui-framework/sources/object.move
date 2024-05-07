@@ -5,16 +5,24 @@
 module sui::object {
     use std::bcs;
     use sui::address;
-    use sui::tx_context::{Self, TxContext};
 
-    friend sui::clock;
-    friend sui::dynamic_field;
-    friend sui::dynamic_object_field;
-    friend sui::transfer;
-    friend sui::authenticator_state;
+    /// Allows calling `.to_address` on an `ID` to get an `address`.
+    public use fun id_to_address as ID.to_address;
 
-    #[test_only]
-    friend sui::test_scenario;
+    /// Allows calling `.to_bytes` on an `ID` to get a `vector<u8>`.
+    public use fun id_to_bytes as ID.to_bytes;
+
+    /// Allows calling `.as_inner` on a `UID` to get an `&ID`.
+    public use fun uid_as_inner as UID.as_inner;
+
+    /// Allows calling `.to_inner` on a `UID` to get an `ID`.
+    public use fun uid_to_inner as UID.to_inner;
+
+    /// Allows calling `.to_address` on a `UID` to get an `address`.
+    public use fun uid_to_address as UID.to_address;
+
+    /// Allows calling `.to_bytes` on a `UID` to get a `vector<u8>`.
+    public use fun uid_to_bytes as UID.to_bytes;
 
     /// The hardcoded ID for the singleton Sui System State Object.
     const SUI_SYSTEM_STATE_OBJECT_ID: address = @0x5;
@@ -25,6 +33,12 @@ module sui::object {
     /// The hardcoded ID for the singleton AuthenticatorState Object.
     const SUI_AUTHENTICATOR_STATE_ID: address = @0x7;
 
+    /// The hardcoded ID for the singleton Random Object.
+    const SUI_RANDOM_ID: address = @0x8;
+
+    /// The hardcoded ID for the singleton DenyList.
+    const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
+
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
 
@@ -34,7 +48,7 @@ module sui::object {
     /// Here, the values are not globally unique because there can be multiple values of type `ID`
     /// with the same underlying bytes. For example, `object::id(&obj)` can be called as many times
     /// as you want for a given `obj`, and each `ID` value will be identical.
-    struct ID has copy, drop, store {
+    public struct ID has copy, drop, store {
         // We use `address` instead of `vector<u8>` here because `address` has a more
         // compact serialization. `address` is serialized as a BCS fixed-length sequence,
         // which saves us the length prefix we would pay for if this were `vector<u8>`.
@@ -48,7 +62,7 @@ module sui::object {
     /// other words for any two values `id1: UID` and `id2: UID`, `id1` != `id2`.
     /// This is a privileged type that can only be derived from a `TxContext`.
     /// `UID` doesn't have the `drop` ability, so deleting a `UID` requires a call to `delete`.
-    struct UID has store {
+    public struct UID has store {
         id: ID,
     }
 
@@ -66,7 +80,7 @@ module sui::object {
 
     /// Make an `ID` from raw bytes.
     public fun id_from_bytes(bytes: vector<u8>): ID {
-        id_from_address(address::from_bytes(bytes))
+        address::from_bytes(bytes).to_id()
     }
 
     /// Make an `ID` from an address.
@@ -80,7 +94,7 @@ module sui::object {
     /// Create the `UID` for the singleton `SuiSystemState` object.
     /// This should only be called once from `sui_system`.
     fun sui_system_state(ctx: &TxContext): UID {
-        assert!(tx_context::sender(ctx) == @0x0, ENotSystemAddress);
+        assert!(ctx.sender() == @0x0, ENotSystemAddress);
         UID {
             id: ID { bytes: SUI_SYSTEM_STATE_OBJECT_ID },
         }
@@ -88,7 +102,7 @@ module sui::object {
 
     /// Create the `UID` for the singleton `Clock` object.
     /// This should only be called once from `clock`.
-    public(friend) fun clock(): UID {
+    public(package) fun clock(): UID {
         UID {
             id: ID { bytes: SUI_CLOCK_OBJECT_ID }
         }
@@ -96,9 +110,25 @@ module sui::object {
 
     /// Create the `UID` for the singleton `AuthenticatorState` object.
     /// This should only be called once from `authenticator_state`.
-    public(friend) fun authenticator_state(): UID {
+    public(package) fun authenticator_state(): UID {
         UID {
             id: ID { bytes: SUI_AUTHENTICATOR_STATE_ID }
+        }
+    }
+
+    /// Create the `UID` for the singleton `Random` object.
+    /// This should only be called once from `random`.
+    public(package) fun randomness_state(): UID {
+        UID {
+            id: ID { bytes: SUI_RANDOM_ID }
+        }
+    }
+
+    /// Create the `UID` for the singleton `DenyList` object.
+    /// This should only be called once from `deny_list`.
+    public(package) fun sui_deny_list_object_id(): UID {
+        UID {
+            id: ID { bytes: SUI_DENY_LIST_OBJECT_ID }
         }
     }
 
@@ -128,7 +158,7 @@ module sui::object {
     /// This is the only way to create `UID`s.
     public fun new(ctx: &mut TxContext): UID {
         UID {
-            id: ID { bytes: tx_context::fresh_object_address(ctx) },
+            id: ID { bytes: ctx.fresh_object_address() },
         }
     }
 
@@ -170,7 +200,7 @@ module sui::object {
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
     /// Generate a new UID specifically used for creating a UID from a hash
-    public(friend) fun new_uid_from_hash(bytes: address): UID {
+    public(package) fun new_uid_from_hash(bytes: address): UID {
         record_new_uid(bytes);
         UID { id: ID { bytes } }
     }
@@ -180,44 +210,13 @@ module sui::object {
     // helper for delete
     native fun delete_impl(id: address);
 
-    spec delete_impl {
-        pragma opaque;
-        aborts_if [abstract] false;
-        ensures [abstract] !exists<Ownership>(id);
-    }
-
     // marks newly created UIDs from hash
     native fun record_new_uid(id: address);
-
-    spec record_new_uid {
-        pragma opaque;
-        // TODO: stub to be replaced by actual abort conditions if any
-        aborts_if [abstract] true;
-        // TODO: specify actual function behavior
-     }
 
     #[test_only]
     /// Return the most recent created object ID.
     public fun last_created(ctx: &TxContext): ID {
-        ID { bytes: tx_context::last_created_object_id(ctx) }
+        ID { bytes: ctx.last_created_object_id() }
     }
-
-
-    // === Prover support (to avoid circular dependency ===
-
-    #[verify_only]
-    /// Ownership information for a given object (stored at the object's address)
-    struct Ownership has key {
-        owner: address, // only matters if status == OWNED
-        status: u64,
-    }
-
-    #[verify_only]
-    /// List of fields with a given name type of an object containing fields (stored at the
-    /// containing object's address)
-    struct DynamicFields<K: copy + drop + store> has key {
-        names: vector<K>,
-    }
-
 
 }

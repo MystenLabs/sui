@@ -1,0 +1,365 @@
+processed 17 tasks
+
+init:
+A: object(0,0), B: object(0,1)
+
+task 1 'publish'. lines 14-81:
+created: object(1,0)
+mutated: object(0,2)
+gas summary: computation_cost: 1000000, storage_cost: 11263200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 83-83:
+created: object(2,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 85-85:
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [0, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 4 'run'. lines 87-87:
+events: Event { package_id: Test, transaction_module: Identifier("M1"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M1"), name: Identifier("Object"), type_params: [] })] }, contents: [1, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(2,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5 'run'. lines 89-89:
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6 'run'. lines 91-91:
+events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 7 'run'. lines 93-93:
+events: Event { package_id: Test, transaction_module: Identifier("M2"), sender: A, type_: StructTag { address: Test, module: Identifier("M2"), name: Identifier("EventB"), type_params: [Struct(StructTag { address: Test, module: Identifier("M2"), name: Identifier("Object"), type_params: [] })] }, contents: [3, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0), object(5,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 8 'create-checkpoint'. lines 95-95:
+Checkpoint created: 1
+
+task 9 'run-graphql'. lines 97-117:
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "0"
+            },
+            "bcs": "AAAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventA"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "2"
+            },
+            "bcs": "AgAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::Object>"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "3"
+            },
+            "bcs": "AwAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 10 'run-graphql'. lines 119-139:
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "0"
+            },
+            "bcs": "AAAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NiwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventA"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "2"
+            },
+            "bcs": "AgAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M2"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M2::Object>"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "3"
+            },
+            "bcs": "AwAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 11 'run-graphql'. lines 141-161:
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "0"
+            },
+            "bcs": "AAAAAAAAAAA="
+          }
+        },
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 12 'run-graphql'. lines 163-183:
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6MywiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventA"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "0"
+            },
+            "bcs": "AAAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 13 'run-graphql'. lines 185-205:
+Response: {
+  "data": {
+    "events": {
+      "edges": [
+        {
+          "cursor": "eyJ0eCI6NCwiZSI6MCwiYyI6MX0",
+          "node": {
+            "sendingModule": {
+              "name": "M1"
+            },
+            "type": {
+              "repr": "0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::EventB<0xda3e223f686c0a007cf06cb6ba6aa2d1011ec0f86058bf5e01f00dad3cad1e6f::M1::Object>"
+            },
+            "sender": {
+              "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+            },
+            "json": {
+              "new_value": "1"
+            },
+            "bcs": "AQAAAAAAAAA="
+          }
+        }
+      ]
+    }
+  }
+}
+
+task 14 'run-graphql'. lines 207-227:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"EventFilter\")",
+      "locations": [
+        {
+          "line": 2,
+          "column": 18
+        }
+      ],
+      "path": [
+        "events"
+      ]
+    }
+  ]
+}
+
+task 15 'run-graphql'. lines 229-249:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"EventFilter\")",
+      "locations": [
+        {
+          "line": 2,
+          "column": 18
+        }
+      ],
+      "path": [
+        "events"
+      ]
+    }
+  ]
+}
+
+task 16 'run-graphql'. lines 251-271:
+Response: {
+  "data": null,
+  "errors": [
+    {
+      "message": "Failed to parse \"String\": Invalid filter, expected: package[::module[::type[<type_params>]]] or primitive type (occurred while parsing \"EventFilter\")",
+      "locations": [
+        {
+          "line": 2,
+          "column": 18
+        }
+      ],
+      "path": [
+        "events"
+      ]
+    }
+  ]
+}

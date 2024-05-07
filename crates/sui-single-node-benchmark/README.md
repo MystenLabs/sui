@@ -6,33 +6,28 @@ executable transactions to it in parallel. We then measure the time it takes for
 executing all the transactions.
 
 ## Usage
-There are two modes to benchmark: `move` and `no-move`. `move` mode benchmarks the performance
-of executing Move transactions, while `no-move` mode benchmarks the performance of executing
-non-Move transactions.
-
 To run the benchmark, you can simply run the following command:
 ```
-cargo run --release --bin sui-single-node-benchmark -- move
+cargo run --release --bin sui-single-node-benchmark -- ptb
 ```
-or
-```
-cargo run --release --bin sui-single-node-benchmark -- no-move
+By default, it generates 50,0000 transactions, which can be changed using `--tx-count`. Each transaction will contain an empty PTB without any command (i.e. essentially a nop transaction).
 
-```
-By default, it generates 50,0000 transactions, which can be changed using --tx-count.
-
-### Move benchmark workloads
-When running the Move benchmark, one can adjust the workload to stress test different parts
+### PTB benchmark workloads
+When running the PTB benchmark, one can adjust the workload to stress test different parts
 of the execution engine:
-- `--num-input-objects`: this specifies number of address owned input objects read/mutated by each transaction. Default to 2.
+- `--num-transfers`: this specifies number of transfers made per transaction. Default to 0.
+- `--use-native-transfer`: this is false by default, which means we use Move call to transfer objects. When specified, we will use the native TransferObject command without invoking Move to transfer objects.
 - `--num-dynamic-fields`: this specifies number of dynamic fields read by each transaction. Default to 0.
 - `--computation`: this specifies computation intensity. An increase by 1 means 100 more loop iterations in Fibonacci computation. Default to 0.
+
+### Publish benchmark workloads
+WIP (please refer to smoke_tests to see how its setup)
 
 ### Components
 By default, the benchmark will use the `AuthorityState::try_execute_immediately` entry function,
 which includes the execution layer as well as the interaction with the DB. This is equivalent to running:
 ```
-cargo run --release --bin sui-single-node-benchmark -- --component baseline <move/no-move>
+cargo run --release --bin sui-single-node-benchmark -- --component baseline ptb
 ```
 The benchmark supports various component:
 - `baseline`: this is the default component, which includes the execution layer as well as the interaction with the DB.

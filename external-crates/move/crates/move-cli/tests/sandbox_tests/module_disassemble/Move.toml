@@ -1,6 +1,5 @@
 [package]
 name = "module_publish_view"
-version = "0.0.0"
 
 [addresses]
 std = "0x1"

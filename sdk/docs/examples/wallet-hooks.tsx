@@ -5,7 +5,7 @@ import {
 	ConnectButton,
 	SuiClientProvider,
 	useAccounts,
-	useAutoConnectionStatus,
+	useAutoConnectWallet,
 	useConnectWallet,
 	useCurrentAccount,
 	useCurrentWallet,
@@ -20,7 +20,8 @@ import {
 import { getFullnodeUrl } from '@mysten/sui.js/client';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ComponentProps, useEffect, useState } from 'react';
+import type { ComponentProps } from 'react';
+import { useEffect, useState } from 'react';
 
 import '@mysten/dapp-kit/dist/index.css';
 
@@ -102,7 +103,7 @@ export const UseCurrentAccountExample = withProviders(() => {
 
 export const UseAutoConnectionStatusExample = withProviders(
 	() => {
-		const autoConnectionStatus = useAutoConnectionStatus();
+		const autoConnectionStatus = useAutoConnectWallet();
 
 		return (
 			<div style={{ padding: 20 }}>

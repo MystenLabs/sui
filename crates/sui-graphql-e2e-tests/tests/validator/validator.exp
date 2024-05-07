@@ -1,0 +1,161 @@
+processed 29 tasks
+
+init:
+A: object(0,0)
+
+task 1 'advance-epoch'. lines 8-8:
+Epoch advanced: 0
+
+task 2 'create-checkpoint'. lines 10-10:
+Checkpoint created: 2
+
+task 3 'publish'. lines 12-37:
+created: object(3,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 5920400,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 4 'run'. lines 39-39:
+created: object(4,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 5 'run'. lines 41-41:
+created: object(5,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 6 'run'. lines 43-43:
+created: object(6,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 7 'run'. lines 45-45:
+created: object(7,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 8 'create-checkpoint'. lines 47-47:
+Checkpoint created: 3
+
+task 9 'advance-epoch'. lines 49-49:
+Epoch advanced: 1
+
+task 10 'run-graphql'. lines 51-63:
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "activeValidators": {
+          "nodes": [
+            {
+              "apy": 1,
+              "name": "validator-0"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
+
+task 11 'run'. lines 65-65:
+created: object(11,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 12 'run'. lines 67-67:
+created: object(12,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 13 'run'. lines 69-69:
+created: object(13,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 14 'run'. lines 71-71:
+created: object(14,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 15 'run'. lines 73-73:
+created: object(15,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 16 'run'. lines 75-75:
+created: object(16,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 17 'run'. lines 77-77:
+created: object(17,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 18 'run'. lines 79-79:
+created: object(18,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 19 'run'. lines 81-81:
+created: object(19,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 20 'run'. lines 83-83:
+created: object(20,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 21 'run'. lines 85-85:
+created: object(21,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 22 'run'. lines 87-87:
+created: object(22,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 23 'run'. lines 89-89:
+created: object(23,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 24 'run'. lines 91-91:
+created: object(24,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 25 'run'. lines 93-93:
+created: object(25,0)
+mutated: object(0,0)
+gas summary: computation_cost: 1441000000, storage_cost: 1932269600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 26 'create-checkpoint'. lines 95-95:
+Checkpoint created: 5
+
+task 27 'advance-epoch'. lines 97-99:
+Epoch advanced: 2
+
+task 28 'run-graphql'. lines 101-118:
+Response: {
+  "data": {
+    "epoch": {
+      "validatorSet": {
+        "activeValidators": {
+          "nodes": [
+            {
+              "apy": 2,
+              "name": "validator-0",
+              "reportRecords": {
+                "nodes": []
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

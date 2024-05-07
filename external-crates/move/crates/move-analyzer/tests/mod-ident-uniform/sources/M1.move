@@ -1,0 +1,2 @@
+module ModIdentUniform::M1 {
+}

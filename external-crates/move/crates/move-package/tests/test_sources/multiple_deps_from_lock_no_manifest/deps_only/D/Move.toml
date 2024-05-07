@@ -3,7 +3,6 @@
 
 [package]
 name = "D"
-version = "0.0.0"
 
 [addresses]
 D = "0x0"

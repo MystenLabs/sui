@@ -17,9 +17,10 @@ module 0x1.M {
 }
 
 //# run
+module 0x42.m {
 import 0x1.M;
 
-main() {
+entry foo() {
     let x: M.T;
     let x_ref: &M.T;
 label b0:
@@ -27,4 +28,5 @@ label b0:
     x_ref = &x;
     M.t(move(x_ref));
     return;
+}
 }

@@ -8,16 +8,12 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, AttributeName_, Fields, ModuleIdent, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
-    parser::ast::{Ability_, FunctionName, Mutability, StructName},
-    shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        program_info::TypingProgramInfo,
-        CompilationEnv, Identifier,
-    },
+    parser::ast::{Ability_, DatatypeName, FunctionName},
+    shared::{program_info::TypingProgramInfo, CompilationEnv, Identifier},
     sui_mode::*,
     typing::{
         ast::{self as T, ModuleCall},
@@ -54,7 +50,7 @@ pub struct Context<'a> {
     sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
     otw_name: Option<Symbol>,
-    one_time_witness: Option<Result<StructName, ()>>,
+    one_time_witness: Option<Result<DatatypeName, ()>>,
     in_test: bool,
 }
 
@@ -112,39 +108,21 @@ impl<'a> TypingVisitorContext for Context<'a> {
         self.env.pop_warning_filter_scope()
     }
 
-    fn visit_script_custom(&mut self, _name: Symbol, script: &mut T::Script) -> bool {
-        let config = self.env.package_config(script.package_name);
-        if config.flavor == Flavor::Sui {
-            // TODO point to PTB docs?
-            let msg = "'scripts' are not supported on Sui. \
-                        Consider removing or refactoring into a 'module'";
-            self.env.add_diag(diag!(SCRIPT_DIAG, (script.loc, msg)));
-        }
-        // skip scripts
-        true
-    }
-
     fn visit_module_custom(&mut self, ident: ModuleIdent, mdef: &mut T::ModuleDefinition) -> bool {
         let config = self.env.package_config(mdef.package_name);
         if config.flavor != Flavor::Sui {
-            // skip if not sui
+            // Skip if not sui
             return true;
         }
-
-        if !mdef.is_source_module {
+        if config.is_dependency || !mdef.is_source_module {
             // Skip non-source, dependency modules
             return true;
         }
 
         self.set_module(ident);
-        self.in_test = mdef.attributes.iter().any(|(_, attr_, _)| {
-            matches!(
-                attr_,
-                AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly))
-            )
-        });
+        self.in_test = mdef.attributes.is_test_or_test_only();
         if let Some(sdef) = mdef.structs.get_(&self.otw_name()) {
-            let valid_fields = if let N::StructFields::Defined(fields) = &sdef.fields {
+            let valid_fields = if let N::StructFields::Defined(_, fields) = &sdef.fields {
                 invalid_otw_field_loc(fields).is_none()
             } else {
                 true
@@ -164,17 +142,21 @@ impl<'a> TypingVisitorContext for Context<'a> {
             struct_def(self, name, sdef)
         }
 
+        for (name, edef) in mdef.enums.key_cloned_iter() {
+            enum_def(self, name, edef)
+        }
+
         // do not skip module
         false
     }
 
     fn visit_function_custom(
         &mut self,
-        module: Option<ModuleIdent>,
+        module: ModuleIdent,
         name: FunctionName,
         fdef: &mut T::Function,
     ) -> bool {
-        debug_assert!(self.current_module == module);
+        debug_assert!(self.current_module.as_ref() == Some(&module));
         function(self, name, fdef);
         // skip since we have already visited the body
         true
@@ -191,7 +173,7 @@ impl<'a> TypingVisitorContext for Context<'a> {
 // Structs
 //**************************************************************************************************
 
-fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinition) {
+fn struct_def(context: &mut Context, name: DatatypeName, sdef: &N::StructDefinition) {
     let N::StructDefinition {
         warning_filter: _,
         index: _,
@@ -205,7 +187,7 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
         return;
     };
 
-    let StructFields::Defined(fields) = fields else {
+    let StructFields::Defined(_, fields) = fields else {
         return;
     };
     let invalid_first_field = if fields.is_empty() {
@@ -241,7 +223,7 @@ fn struct_def(context: &mut Context, name: StructName, sdef: &N::StructDefinitio
     }
 }
 
-fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Diagnostic {
+fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: DatatypeName) -> Diagnostic {
     const KEY_MSG: &str = "The 'key' ability is used to declare objects in Sui";
 
     let msg = format!(
@@ -258,28 +240,44 @@ fn invalid_object_id_field_diag(key_loc: Loc, loc: Loc, name: StructName) -> Dia
 }
 
 //**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+fn enum_def(context: &mut Context, name: DatatypeName, edef: &N::EnumDefinition) {
+    let N::EnumDefinition {
+        warning_filter: _,
+        index: _,
+        attributes: _,
+        abilities,
+        type_parameters: _,
+        variants: _,
+    } = edef;
+    if let Some(key_loc) = abilities.ability_loc_(Ability_::Key) {
+        let msg = format!("Invalid object '{name}'");
+        let key_msg = format!("Enums cannot have the '{}' ability.", Ability_::Key);
+        let diag = diag!(OBJECT_DECL_DIAG, (name.loc(), msg), (key_loc, key_msg));
+        context.env.add_diag(diag);
+    };
+}
+
+//**************************************************************************************************
 // Functions
 //**********************************************************************************************
 
 fn function(context: &mut Context, name: FunctionName, fdef: &mut T::Function) {
     let T::Function {
+        compiled_visibility: _,
         visibility,
         signature,
         body,
         warning_filter: _,
         index: _,
+        macro_: _,
         attributes,
         entry,
     } = fdef;
     let prev_in_test = context.in_test;
-    if attributes.iter().any(|(_, attr_, _)| {
-        matches!(
-            attr_,
-            AttributeName_::Known(KnownAttribute::Testing(
-                TestingAttribute::Test | TestingAttribute::TestOnly
-            ))
-        )
-    }) {
+    if attributes.is_test_or_test_only() {
         context.in_test = true;
     }
     if name.0.value == INIT_FUNCTION_NAME {
@@ -451,7 +449,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
 // when trying to write an 'init' function.
 fn check_otw_type(
     context: &mut Context,
-    name: StructName,
+    name: DatatypeName,
     sdef: &N::StructDefinition,
     usage_loc: Option<Loc>,
 ) {
@@ -478,7 +476,7 @@ fn check_otw_type(
         valid = false;
     }
 
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         let invalid_otw_opt = invalid_otw_field_loc(fields);
         if let Some(invalid_otw_opt) = invalid_otw_opt {
             let msg_base = format!(
@@ -653,6 +651,8 @@ fn entry_param_ty(
     param_ty: &Type,
 ) {
     let is_mut_clock = is_mut_clock(param_ty);
+    let is_mut_random = is_mut_random(param_ty);
+
     // TODO better error message for cases such as `MyObject<InnerTypeWithoutStore>`
     // which should give a contextual error about `MyObject` having `key`, but the instantiation
     // `MyObject<InnerTypeWithoutStore>` not having `key` due to `InnerTypeWithoutStore` not having
@@ -660,7 +660,7 @@ fn entry_param_ty(
     let is_valid = is_entry_primitive_ty(param_ty)
         || is_entry_object_ty(param_ty)
         || is_entry_receiving_ty(param_ty);
-    if is_mut_clock || !is_valid {
+    if is_mut_clock || is_mut_random || !is_valid {
         let pmsg = format!(
             "Invalid 'entry' parameter type for parameter '{}'",
             param.value.name
@@ -671,6 +671,13 @@ fn entry_param_ty(
                 a = SUI_ADDR_NAME,
                 m = CLOCK_MODULE_NAME,
                 n = CLOCK_TYPE_NAME,
+            )
+        } else if is_mut_random {
+            format!(
+                "{a}::{m}::{n} must be passed by immutable reference, e.g. '&{a}::{m}::{n}'",
+                a = SUI_ADDR_NAME,
+                m = RANDOMNESS_MODULE_NAME,
+                n = RANDOMNESS_STATE_TYPE_NAME,
             )
         } else {
             "'entry' parameters must be primitives (by-value), vectors of primitives, objects \
@@ -696,7 +703,26 @@ fn is_mut_clock(param_ty: &Type) -> bool {
         | Type_::Param(_)
         | Type_::Var(_)
         | Type_::Anything
-        | Type_::UnresolvedError => false,
+        | Type_::UnresolvedError
+        | Type_::Fun(_, _) => false,
+    }
+}
+
+fn is_mut_random(param_ty: &Type) -> bool {
+    match &param_ty.value {
+        Type_::Ref(/* mut */ false, _) => false,
+        Type_::Ref(/* mut */ true, t) => is_mut_random(t),
+        Type_::Apply(_, sp!(_, n_), _) => n_.is(
+            SUI_ADDR_NAME,
+            RANDOMNESS_MODULE_NAME,
+            RANDOMNESS_STATE_TYPE_NAME,
+        ),
+        Type_::Unit
+        | Type_::Param(_)
+        | Type_::Var(_)
+        | Type_::Anything
+        | Type_::UnresolvedError
+        | Type_::Fun(_, _) => false,
     }
 }
 
@@ -759,7 +785,7 @@ fn is_entry_primitive_ty(param_ty: &Type) -> bool {
         Type_::Unit => false,
 
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) => true,
+        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Fun(_, _) => true,
     }
 }
 
@@ -789,7 +815,11 @@ fn is_entry_object_ty_inner(param_ty: &Type) -> bool {
         Type_::Apply(Some(abilities), _, _) => abilities.has_ability_(Ability_::Key),
 
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Unit => true,
+        Type_::UnresolvedError
+        | Type_::Anything
+        | Type_::Var(_)
+        | Type_::Unit
+        | Type_::Fun(_, _) => true,
         // Unreachable cases
         Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }
@@ -850,7 +880,7 @@ fn entry_return(
             }
         }
         // Error case nothing to do
-        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) => (),
+        Type_::UnresolvedError | Type_::Anything | Type_::Var(_) | Type_::Fun(_, _) => (),
         // Unreachable cases
         Type_::Apply(None, _, _) => unreachable!("ICE abilities should have been expanded"),
     }
@@ -919,10 +949,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         T::UnannotatedExp_::Pack(m, s, _, _) => {
             if !context.in_test
-                && !context
-                    .current_module()
-                    .value
-                    .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
+                && !otw_special_cases(context)
                 && context.one_time_witness.as_ref().is_some_and(|otw| {
                     otw.as_ref()
                         .is_ok_and(|o| m == context.current_module() && o == s)
@@ -937,6 +964,16 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         _ => (),
     }
+}
+
+fn otw_special_cases(context: &Context) -> bool {
+    BRIDGE_SUPPORTED_ASSET
+        .iter()
+        .any(|token| context.current_module().value.is(BRIDGE_ADDR_NAME, token))
+        || context
+            .current_module()
+            .value
+            .is(SUI_ADDR_NAME, SUI_MODULE_NAME)
 }
 
 fn check_event_emit(context: &mut Context, loc: Loc, mcall: &ModuleCall) {

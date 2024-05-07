@@ -26,10 +26,6 @@
 // - If game owner never took or revealed the results (incentives?)
 
 module games::rock_paper_scissors {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-    use std::vector;
     use std::hash;
 
     // -- Gestures and additional consts -- //
@@ -54,7 +50,7 @@ module games::rock_paper_scissors {
 
     /// The Prize that's being held inside the [`Game`] object. Should be
     /// eventually replaced with some generic T inside the [`Game`].
-    struct ThePrize has key, store {
+    public struct ThePrize has key, store {
         id: UID
     }
 
@@ -63,7 +59,7 @@ module games::rock_paper_scissors {
     /// contains empty values and fills as the game progresses.
     /// Being destroyed in the end, once [`select_winner`] is called and the game
     /// has reached its final state by that time.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         prize: ThePrize,
         player_one: address,
@@ -77,7 +73,7 @@ module games::rock_paper_scissors {
     /// Hashed gesture. It is not reveal-able until both players have
     /// submitted their moves to the Game. The turn is passed to the
     /// game owner who then adds a hash to the Game object.
-    struct PlayerTurn has key {
+    public struct PlayerTurn has key {
         id: UID,
         hash: vector<u8>,
         player: address,
@@ -85,7 +81,7 @@ module games::rock_paper_scissors {
 
     /// Secret object which is used to reveal the move. Just like [`PlayerTurn`]
     /// it is used to reveal the actual gesture a player has submitted.
-    struct Secret has key {
+    public struct Secret has key {
         id: UID,
         salt: vector<u8>,
         player: address,
@@ -250,7 +246,7 @@ module games::rock_paper_scissors {
     /// - `salt` argument here is a secret that is only known to the sender. That way we ensure
     /// that nobody knows the gesture until the end, but at the same time each player commits
     /// to the result with his hash;
-    fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
+    fun hash(gesture: u8, mut salt: vector<u8>): vector<u8> {
         vector::push_back(&mut salt, gesture);
         hash::sha2_256(salt)
     }

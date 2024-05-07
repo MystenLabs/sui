@@ -12,6 +12,7 @@ async-trait.workspace = true
 futures.workspace = true
 num_enum.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["full", "tracing"] }
 rocksdb.workspace = true
 tracing.workspace = true
@@ -44,6 +45,7 @@ mysten-metrics.workspace = true
 move-core-types.workspace = true
 sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
+sui-config.workspace = true
 typed-store.workspace = true
 typed-store-derive.workspace = true
 eyre.workspace = true
@@ -51,7 +53,6 @@ lru.workspace = true
 
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 anyhow.workspace = true

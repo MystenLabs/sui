@@ -17,9 +17,10 @@ module 0x1.M {
 
 
 //# run
+module 0x42.m {
 import 0x1.M;
 
-main() {
+entry foo() {
     let x: M.T;
     let y: &mut M.T;
     let z: u64;
@@ -29,4 +30,5 @@ label b0:
     z = M.value(move(y));
     assert(move(z) == 5, 42);
     return;
+}
 }

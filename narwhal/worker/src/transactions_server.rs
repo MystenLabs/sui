@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
 use mysten_metrics::metered_channel::Sender;
-use mysten_metrics::spawn_logged_monitored_task;
+use mysten_metrics::{monitored_scope, spawn_logged_monitored_task};
 use mysten_network::server::Server;
 use mysten_network::Multiaddr;
 use std::sync::Arc;
@@ -26,7 +26,7 @@ pub struct TxServer<V: TransactionValidator> {
     address: Multiaddr,
     rx_shutdown: ConditionalBroadcastReceiver,
     endpoint_metrics: WorkerEndpointMetrics,
-    tx_batch_maker: Sender<(Transaction, TxResponse)>,
+    local_client: Arc<LocalNarwhalClient>,
     validator: V,
 }
 
@@ -39,13 +39,17 @@ impl<V: TransactionValidator> TxServer<V> {
         tx_batch_maker: Sender<(Transaction, TxResponse)>,
         validator: V,
     ) -> JoinHandle<()> {
+        // create and initialize local Narwhal client.
+        let local_client = LocalNarwhalClient::new(tx_batch_maker);
+        LocalNarwhalClient::set_global(address.clone(), local_client.clone());
+
         spawn_logged_monitored_task!(
             Self {
                 address,
-                tx_batch_maker,
+                rx_shutdown,
                 endpoint_metrics,
+                local_client,
                 validator,
-                rx_shutdown
             }
             .run(),
             "TxServer"
@@ -57,13 +61,9 @@ impl<V: TransactionValidator> TxServer<V> {
         const RETRY_BACKOFF: Duration = Duration::from_millis(1_000);
         const GRACEFUL_SHUTDOWN_DURATION: Duration = Duration::from_millis(2_000);
 
-        // create and initialize local Narwhal client
-        let local_client = LocalNarwhalClient::new(self.tx_batch_maker.clone());
-        LocalNarwhalClient::set_global(self.address.clone(), local_client.clone());
-
         // create the handler
         let tx_handler = TxReceiverHandler {
-            local_client,
+            local_client: self.local_client.clone(),
             validator: self.validator,
         };
 
@@ -110,7 +110,7 @@ impl<V: TransactionValidator> TxServer<V> {
         // wait to receive a shutdown signal
         let _ = self.rx_shutdown.receiver.recv().await;
 
-        // once do just gracefully shutdown the node
+        // once do just gracefully signal the node to shutdown
         shutdown_handle.send(()).unwrap();
 
         // now wait until the handle completes or timeout if it takes long time
@@ -141,15 +141,22 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
         &self,
         request: Request<TransactionProto>,
     ) -> Result<Response<Empty>, Status> {
+        let _scope = monitored_scope("SubmitTransaction");
         let transaction = request.into_inner().transaction;
+
+        let validate_scope = monitored_scope("SubmitTransaction_ValidateTx");
         if self.validator.validate(transaction.as_ref()).is_err() {
             return Err(Status::invalid_argument("Invalid transaction"));
         }
+        drop(validate_scope);
+
         // Send the transaction to Narwhal via the local client.
+        let submit_scope = monitored_scope("SubmitTransaction_SubmitTx");
         self.local_client
             .submit_transaction(transaction.to_vec())
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
+        drop(submit_scope);
         Ok(Response::new(Empty {}))
     }
 
@@ -158,26 +165,31 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
         request: Request<tonic::Streaming<types::TransactionProto>>,
     ) -> Result<Response<types::Empty>, Status> {
         let mut transactions = request.into_inner();
-        let mut reqeusts = FuturesUnordered::new();
+        let mut requests = FuturesUnordered::new();
 
+        let _scope = monitored_scope("SubmitTransactionStream");
         while let Some(Ok(txn)) = transactions.next().await {
+            let validate_scope = monitored_scope("SubmitTransactionStream_ValidateTx");
             if let Err(err) = self.validator.validate(txn.transaction.as_ref()) {
                 // If the transaction is invalid (often cryptographically), better to drop the client
                 return Err(Status::invalid_argument(format!(
                     "Stream contains an invalid transaction {err}"
                 )));
             }
+            drop(validate_scope);
             // Send the transaction to Narwhal via the local client.
             // Note that here we do not wait for a response because this would
             // mean that we process only a single message from this stream at a
             // time. Instead we gather them and resolve them once the stream is over.
-            reqeusts.push(
+            let submit_scope = monitored_scope("SubmitTransactionStream_SubmitTx");
+            requests.push(
                 self.local_client
                     .submit_transaction(txn.transaction.to_vec()),
             );
+            drop(submit_scope);
         }
 
-        while let Some(result) = reqeusts.next().await {
+        while let Some(result) = requests.next().await {
             if let Err(e) = result {
                 return Err(Status::internal(e.to_string()));
             }

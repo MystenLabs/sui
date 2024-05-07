@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     file_format::{
         Bytecode, FunctionDefinition, FunctionHandle, FunctionInstantiation, ModuleHandle,
         SignatureToken,
@@ -53,10 +51,9 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
         // transactional execution and needs to allow test code to bypass private generics
         return Ok(());
     }
-    let view = &BinaryIndexedView::Module(module);
     // do not need to check the sui::transfer module itself
     for func_def in &module.function_defs {
-        verify_function(view, func_def).map_err(|error| {
+        verify_function(module, func_def).map_err(|error| {
             verification_failure(format!(
                 "{}::{}. {}",
                 module.self_id(),
@@ -68,7 +65,7 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     Ok(())
 }
 
-fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Result<(), String> {
+fn verify_function(view: &CompiledModule, fdef: &FunctionDefinition) -> Result<(), String> {
     let code = match &fdef.code {
         None => return Ok(()),
         Some(code) => code,
@@ -96,11 +93,11 @@ fn verify_function(view: &BinaryIndexedView, fdef: &FunctionDefinition) -> Resul
 }
 
 fn verify_private_transfer(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
-    let self_handle = view.module_handle_at(view.self_handle_idx().unwrap());
+    let self_handle = view.module_handle_at(view.self_handle_idx());
     if addr_module(view, self_handle) == (SUI_FRAMEWORK_ADDRESS, TRANSFER_MODULE) {
         return Ok(());
     }
@@ -137,7 +134,7 @@ fn verify_private_transfer(
 }
 
 fn verify_private_event_emit(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     fhandle: &FunctionHandle,
     type_arguments: &[SignatureToken],
 ) -> Result<(), String> {
@@ -166,11 +163,16 @@ fn verify_private_event_emit(
     Ok(())
 }
 
-fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureToken) -> bool {
+fn is_defined_in_current_module(view: &CompiledModule, type_arg: &SignatureToken) -> bool {
     match type_arg {
-        SignatureToken::Struct(idx) | SignatureToken::StructInstantiation(idx, _) => {
-            let shandle = view.struct_handle_at(*idx);
-            view.self_handle_idx() == Some(shandle.module)
+        SignatureToken::Struct(_) | SignatureToken::StructInstantiation(_) => {
+            let idx = match type_arg {
+                SignatureToken::Struct(idx) => *idx,
+                SignatureToken::StructInstantiation(s) => s.0,
+                _ => unreachable!(),
+            };
+            let shandle = view.struct_handle_at(idx);
+            view.self_handle_idx() == shandle.module
         }
         SignatureToken::TypeParameter(_)
         | SignatureToken::Bool
@@ -189,7 +191,7 @@ fn is_defined_in_current_module(view: &BinaryIndexedView, type_arg: &SignatureTo
 }
 
 fn addr_module<'a>(
-    view: &'a BinaryIndexedView,
+    view: &'a CompiledModule,
     mhandle: &ModuleHandle,
 ) -> (AccountAddress, &'a IdentStr) {
     let maddr = view.address_identifier_at(mhandle.address);

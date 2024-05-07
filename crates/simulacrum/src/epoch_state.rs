@@ -10,6 +10,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::{
     committee::{Committee, EpochId},
     effects::TransactionEffects,
+    gas::SuiGasStatus,
     inner_temporary_store::InnerTemporaryStore,
     metrics::BytecodeVerifierMetrics,
     metrics::LimitsMetrics,
@@ -20,7 +21,7 @@ use sui_types::{
     transaction::{TransactionDataAPI, VerifiedTransaction},
 };
 
-use crate::store::InMemoryStore;
+use crate::SimulatorStore;
 
 pub struct EpochState {
     epoch_start_state: EpochStartSystemState,
@@ -43,7 +44,7 @@ impl EpochState {
         let registry = prometheus::Registry::new();
         let limits_metrics = Arc::new(LimitsMetrics::new(&registry));
         let bytecode_verifier_metrics = Arc::new(BytecodeVerifierMetrics::new(&registry));
-        let executor = sui_execution::executor(&protocol_config, false, true).unwrap();
+        let executor = sui_execution::executor(&protocol_config, true, None).unwrap();
 
         Self {
             epoch_start_state,
@@ -74,6 +75,10 @@ impl EpochState {
         &self.committee
     }
 
+    pub fn epoch_start_state(&self) -> &EpochStartSystemState {
+        &self.epoch_start_state
+    }
+
     pub fn protocol_version(&self) -> ProtocolVersion {
         self.protocol_config().version
     }
@@ -84,11 +89,12 @@ impl EpochState {
 
     pub fn execute_transaction(
         &self,
-        store: &InMemoryStore,
+        store: &dyn SimulatorStore,
         deny_config: &TransactionDenyConfig,
         transaction: &VerifiedTransaction,
     ) -> Result<(
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), sui_types::error::ExecutionError>,
     )> {
@@ -103,7 +109,7 @@ impl EpochState {
             &input_object_kinds,
             &receiving_object_refs,
             deny_config,
-            store,
+            &store,
         )?;
 
         let (input_objects, receiving_objects) = store.read_objects_for_synchronous_execution(
@@ -119,14 +125,14 @@ impl EpochState {
             self.epoch_start_state.reference_gas_price(),
             transaction.data().transaction_data(),
             input_objects,
-            receiving_objects,
+            &receiving_objects,
             &self.bytecode_verifier_metrics,
         )?;
 
         let transaction_data = transaction.data().transaction_data();
         let (kind, signer, gas) = transaction_data.execution_parts();
         Ok(self.executor.execute_transaction_to_effects(
-            store,
+            store.backing_store(),
             &self.protocol_config,
             self.limits_metrics.clone(),
             false,           // enable_expensive_checks

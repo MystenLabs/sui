@@ -1,13 +1,18 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
 label b0:
     v = vec_pack_0<bool>();
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
     let v_mut: &mut vector<bool>;
 label b0:
@@ -17,8 +22,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
     let v_imm: &vector<u8>;
     let v_len: u8;
@@ -30,8 +38,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
     let v_mut: &mut vector<u8>;
     let e: u64;
@@ -44,8 +55,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
     let v_mut: &mut vector<u8>;
     let e: u64;
@@ -58,8 +72,11 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
     let v_mut: &mut vector<u8>;
     let i1: u8;
@@ -74,18 +91,24 @@ label b0:
     return;
 }
 
+}
 // push int on the stack, then try to pack into vector of the wrong type
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<bool>;
 label b0:
     v = vec_pack_1<bool>(28u8);
     return;
 }
 
+}
 // create vector<T>, try to unpack into different type
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let v: vector<u8>;
     let x: bool;
     let y: bool;
@@ -93,4 +116,6 @@ label b0:
     v = vec_pack_2<u8>(1u8, 0u8);
     x, y = vec_unpack_2<bool>(move(v));
     return;
+}
+
 }

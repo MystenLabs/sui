@@ -1,0 +1,38 @@
+# Sui Owned Object Pools Quick Start
+
+import { Callout } from 'nextra/components';
+
+<Callout type="info">
+	Sui Owned Object Pools (SuiOOP) is a beta library. Enhancements and changes are likely during
+	development.
+</Callout>
+
+SuiOOP is a TypeScript library that provides a set of tools for managing multiple concurrent
+transactions on the Sui network to help avoid object equivocation and locking.
+
+## Installation
+
+```sh npm2yarn
+npm i suioop
+```
+
+## Usage
+
+At a high level, this is how you implement the library:
+
+```ts
+// Initialize the ExecutorServiceHandler.
+const eshandler = await ExecutorServiceHandler.initialize(
+adminKeypair,
+suiClient,
+);
+
+/// And then for each incoming request...
+/// ...get the incoming transactionBlock
+const myTransactionBlock;
+
+/// and send it for execution
+const promise = eshandler.execute(myTransactionBlock, suiClient, splitStrategy);
+```
+
+See [End-to-End Examples](/typescript/owned-object-pool/examples) for sample code you can run.

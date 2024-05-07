@@ -4,4 +4,5 @@
 pub mod committee_store;
 pub mod data_removal;
 pub mod epoch_metrics;
+pub mod randomness;
 pub mod reconfiguration;

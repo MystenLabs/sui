@@ -10,15 +10,13 @@
 module a::m {
 
 use sui::dynamic_field::{add, borrow};
-use sui::object;
-use sui::tx_context::TxContext;
 
-struct Obj has key {
+public struct Obj has key {
     id: object::UID,
 }
 
 entry fun add_then_freeze(ctx: &mut TxContext) {
-    let id = object::new(ctx);
+    let mut id = object::new(ctx);
     add<u64, u64>(&mut id, 0, 0);
     sui::transfer::freeze_object(Obj { id })
 }

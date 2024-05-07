@@ -1,0 +1,11 @@
+{
+  "committeeMemberStake": [0],
+  "committeeMembers": ["0x000"],
+  "minCommitteeStakeRequired": 10000,
+  "sourceChainId": 0,
+  "supportedChainIDs": [1],
+  "supportedChainLimitsInDollars": [1000000],
+  "supportedTokens": ["0x000", "0x000", "0x000", "0x000"],
+  "tokenPrices": [12800, 432518900, 25969600, 10000],
+  "wETHAddress": "0x000"
+}

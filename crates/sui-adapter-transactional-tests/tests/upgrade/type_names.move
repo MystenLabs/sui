@@ -5,54 +5,47 @@
 
 //# publish --upgradeable --sender A
 module A0::m {
-    use sui::object::UID;
-
-    struct Canary has key {
+    public struct Canary has key {
         id: UID,
         addr: vector<u8>,
     }
 
-    struct A {}
+    public struct A {}
 
 }
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::m {
-    use sui::object::UID;
-
-    struct Canary has key {
+    public struct Canary has key {
         id: UID,
         addr: vector<u8>,
     }
 
-    struct A {}
-    struct B {}
+    public struct A {}
+    public struct B {}
 }
 
 //# upgrade --package A1 --upgrade-capability 1,1 --sender A
 module A2::m {
     use std::ascii;
     use std::type_name;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
-    struct Canary has key {
+    public struct Canary has key {
         id: UID,
         addr: vector<u8>,
     }
 
-    struct A {}
-    struct B {}
+    public struct A {}
+    public struct B {}
 
     entry fun canary<T>(use_original: bool, ctx: &mut TxContext) {
-        let type = if (use_original) {
+        let type_ = if (use_original) {
             type_name::get_with_original_ids<T>()
         } else {
             type_name::get<T>()
         };
 
-        let addr = ascii::into_bytes(type_name::get_address(&type));
+        let addr = ascii::into_bytes(type_name::get_address(&type_));
 
         transfer::transfer(
             Canary { id: object::new(ctx), addr },

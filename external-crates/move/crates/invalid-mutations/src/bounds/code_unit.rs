@@ -297,86 +297,6 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
                         StructDefInstantiationIndex,
                         UnpackGeneric
                     ),
-                    Exists(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        Exists
-                    ),
-                    ExistsGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        ExistsGeneric
-                    ),
-                    MutBorrowGlobal(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        MutBorrowGlobal
-                    ),
-                    MutBorrowGlobalGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        MutBorrowGlobalGeneric
-                    ),
-                    ImmBorrowGlobal(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        ImmBorrowGlobal
-                    ),
-                    ImmBorrowGlobalGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        ImmBorrowGlobalGeneric
-                    ),
-                    MoveFrom(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        MoveFrom
-                    ),
-                    MoveFromGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        MoveFromGeneric
-                    ),
-                    MoveTo(_) => struct_bytecode!(
-                        struct_defs_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefinitionIndex,
-                        MoveTo
-                    ),
-                    MoveToGeneric(_) => struct_bytecode!(
-                        struct_inst_len,
-                        current_fdef,
-                        bytecode_idx,
-                        offset,
-                        StructDefInstantiationIndex,
-                        MoveToGeneric
-                    ),
                     BrTrue(_) => {
                         code_bytecode!(code_len, current_fdef, bytecode_idx, offset, BrTrue)
                     }
@@ -478,6 +398,18 @@ impl<'a> ApplyCodeUnitBoundsContext<'a> {
 
                     // List out the other options explicitly so there's a compile error if a new
                     // bytecode gets added.
+                    ExistsDeprecated(_)
+                    | ExistsGenericDeprecated(_)
+                    | MutBorrowGlobalDeprecated(_)
+                    | MutBorrowGlobalGenericDeprecated(_)
+                    | ImmBorrowGlobalDeprecated(_)
+                    | ImmBorrowGlobalGenericDeprecated(_)
+                    | MoveFromDeprecated(_)
+                    | MoveFromGenericDeprecated(_)
+                    | MoveToDeprecated(_)
+                    | MoveToGenericDeprecated(_) => {
+                        panic!("Bytecode deprecated: {:?}", code[bytecode_idx])
+                    }
                     FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_)
                     | LdU128(_) | LdU256(_) | CastU8 | CastU16 | CastU32 | CastU64 | CastU128
                     | CastU256 | LdTrue | LdFalse | ReadRef | WriteRef | Add | Sub | Mul | Mod
@@ -510,16 +442,6 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | PackGeneric(_)
         | Unpack(_)
         | UnpackGeneric(_)
-        | Exists(_)
-        | ExistsGeneric(_)
-        | MutBorrowGlobal(_)
-        | MutBorrowGlobalGeneric(_)
-        | ImmBorrowGlobal(_)
-        | ImmBorrowGlobalGeneric(_)
-        | MoveFrom(_)
-        | MoveFromGeneric(_)
-        | MoveTo(_)
-        | MoveToGeneric(_)
         | BrTrue(_)
         | BrFalse(_)
         | Branch(_)
@@ -536,7 +458,17 @@ fn is_interesting(bytecode: &Bytecode) -> bool {
         | VecPopBack(_)
         | VecUnpack(..)
         | VecSwap(_) => true,
-
+        // Deprecated bytecodes
+        ExistsDeprecated(_)
+        | ExistsGenericDeprecated(_)
+        | MutBorrowGlobalDeprecated(_)
+        | MutBorrowGlobalGenericDeprecated(_)
+        | ImmBorrowGlobalDeprecated(_)
+        | ImmBorrowGlobalGenericDeprecated(_)
+        | MoveFromDeprecated(_)
+        | MoveFromGenericDeprecated(_)
+        | MoveToDeprecated(_)
+        | MoveToGenericDeprecated(_) => false,
         // List out the other options explicitly so there's a compile error if a new
         // bytecode gets added.
         FreezeRef | Pop | Ret | LdU8(_) | LdU16(_) | LdU32(_) | LdU64(_) | LdU128(_)

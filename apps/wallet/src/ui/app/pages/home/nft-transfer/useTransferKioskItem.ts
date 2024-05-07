@@ -86,13 +86,13 @@ export function useTransferKioskItem({
 					tx.moveCall({
 						target: `${obPackageId}::ob_kiosk::p2p_transfer`,
 						typeArguments: [objectType],
-						arguments: [tx.object(kioskId), tx.object(recipientKioskId), tx.pure(objectId)],
+						arguments: [tx.object(kioskId), tx.object(recipientKioskId), tx.pure.id(objectId)],
 					});
 				} else {
 					tx.moveCall({
 						target: `${obPackageId}::ob_kiosk::p2p_transfer_and_create_target_kiosk`,
 						typeArguments: [objectType],
-						arguments: [tx.object(kioskId), tx.pure(to), tx.pure(objectId)],
+						arguments: [tx.object(kioskId), tx.pure.address(to), tx.pure.id(objectId)],
 					});
 				}
 				return signer.signAndExecuteTransactionBlock(

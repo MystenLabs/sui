@@ -778,7 +778,7 @@ pub(crate) async fn sign_and_execute(
     let transaction_response = match client
         .quorum_driver_api()
         .execute_transaction_block(
-            Transaction::from_data(txn_data, Intent::sui_transaction(), vec![signature]),
+            Transaction::from_data(txn_data, vec![signature]),
             SuiTransactionBlockResponseOptions::new().with_effects(),
             Some(request_type),
         )

@@ -1,5 +1,5 @@
 // Addresses are at most 16 bytes long.
-script {
+module 0x42::m {
     fun main() {
         let x = @3402823669209384634633746074317682114568097213470921387019238740912836510928347019247; x;
     }

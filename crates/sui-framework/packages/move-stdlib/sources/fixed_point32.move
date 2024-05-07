@@ -15,7 +15,7 @@ module std::fixed_point32 {
     /// floating-point has less than 16 decimal digits of precision, so
     /// be careful about using floating-point to convert these values to
     /// decimal.
-    struct FixedPoint32 has copy, drop, store { value: u64 }
+    public struct FixedPoint32 has copy, drop, store { value: u64 }
 
     ///> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
     const MAX_U64: u128 = 18446744073709551615;
@@ -38,26 +38,13 @@ module std::fixed_point32 {
         // The product of two 64 bit values has 128 bits, so perform the
         // multiplication with u128 types and keep the full 128 bit product
         // to avoid losing accuracy.
-        let unscaled_product = (val as u128) * (multiplier.value as u128);
+        let unscaled_product = val as u128 * (multiplier.value as u128);
         // The unscaled product has 32 fractional bits (from the multiplier)
         // so rescale it by shifting away the low bits.
         let product = unscaled_product >> 32;
         // Check whether the value is too large.
         assert!(product <= MAX_U64, EMULTIPLICATION);
-        (product as u64)
-    }
-    spec multiply_u64 {
-        pragma opaque;
-        include MultiplyAbortsIf;
-        ensures result == spec_multiply_u64(val, multiplier);
-    }
-    spec schema MultiplyAbortsIf {
-        val: num;
-        multiplier: FixedPoint32;
-        aborts_if spec_multiply_u64(val, multiplier) > MAX_U64 with EMULTIPLICATION;
-    }
-    spec fun spec_multiply_u64(val: num, multiplier: FixedPoint32): num {
-        (val * multiplier.value) >> 32
+        product as u64
     }
 
     /// Divide a u64 integer by a fixed-point number, truncating any
@@ -68,27 +55,13 @@ module std::fixed_point32 {
         assert!(divisor.value != 0, EDIVISION_BY_ZERO);
         // First convert to 128 bits and then shift left to
         // add 32 fractional zero bits to the dividend.
-        let scaled_value = (val as u128) << 32;
+        let scaled_value = val as u128 << 32;
         let quotient = scaled_value / (divisor.value as u128);
         // Check whether the value is too large.
         assert!(quotient <= MAX_U64, EDIVISION);
         // the value may be too large, which will cause the cast to fail
         // with an arithmetic error.
-        (quotient as u64)
-    }
-    spec divide_u64 {
-        pragma opaque;
-        include DivideAbortsIf;
-        ensures result == spec_divide_u64(val, divisor);
-    }
-    spec schema DivideAbortsIf {
-        val: num;
-        divisor: FixedPoint32;
-        aborts_if divisor.value == 0 with EDIVISION_BY_ZERO;
-        aborts_if spec_divide_u64(val, divisor) > MAX_U64 with EDIVISION;
-    }
-    spec fun spec_divide_u64(val: num, divisor: FixedPoint32): num {
-        (val << 32) / divisor.value
+        quotient as u64
     }
 
     /// Create a fixed-point value from a rational number specified by its
@@ -106,43 +79,20 @@ module std::fixed_point32 {
         // Scale the numerator to have 64 fractional bits and the denominator
         // to have 32 fractional bits, so that the quotient will have 32
         // fractional bits.
-        let scaled_numerator = (numerator as u128) << 64;
-        let scaled_denominator = (denominator as u128) << 32;
+        let scaled_numerator = numerator as u128 << 64;
+        let scaled_denominator = denominator as u128 << 32;
         assert!(scaled_denominator != 0, EDENOMINATOR);
         let quotient = scaled_numerator / scaled_denominator;
         assert!(quotient != 0 || numerator == 0, ERATIO_OUT_OF_RANGE);
         // Return the quotient as a fixed-point number. We first need to check whether the cast
         // can succeed.
         assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
-        FixedPoint32 { value: (quotient as u64) }
-    }
-    spec create_from_rational {
-        pragma opaque;
-        include CreateFromRationalAbortsIf;
-        ensures result == spec_create_from_rational(numerator, denominator);
-    }
-    spec schema CreateFromRationalAbortsIf {
-        numerator: u64;
-        denominator: u64;
-        let scaled_numerator = numerator << 64;
-        let scaled_denominator = denominator << 32;
-        let quotient = scaled_numerator / scaled_denominator;
-        aborts_if scaled_denominator == 0 with EDENOMINATOR;
-        aborts_if quotient == 0 && scaled_numerator != 0 with ERATIO_OUT_OF_RANGE;
-        aborts_if quotient > MAX_U64 with ERATIO_OUT_OF_RANGE;
-    }
-    spec fun spec_create_from_rational(numerator: num, denominator: num): FixedPoint32 {
-        FixedPoint32{value: (numerator << 64) / (denominator << 32)}
+        FixedPoint32 { value: quotient as u64 }
     }
 
     /// Create a fixedpoint value from a raw value.
     public fun create_from_raw_value(value: u64): FixedPoint32 {
         FixedPoint32 { value }
-    }
-    spec create_from_raw_value {
-        pragma opaque;
-        aborts_if false;
-        ensures result.value == value;
     }
 
     /// Accessor for the raw u64 value. Other less common operations, such as
@@ -155,13 +105,5 @@ module std::fixed_point32 {
     /// Returns true if the ratio is zero.
     public fun is_zero(num: FixedPoint32): bool {
         num.value == 0
-    }
-
-    // **************** SPECIFICATIONS ****************
-
-    spec module {} // switch documentation context to module level
-
-    spec module {
-        pragma aborts_if_is_strict;
     }
 }

@@ -1,0 +1,27 @@
+# Direct dependencies of the root package (A and B) both depend on the same version of C
+# and refer to it in different locations, but since package C at the second location
+# does not depend on D, this causes a conflict.
+#
+#                                                             
+#                            v2                                
+#            +---+       +---------+                           
+#   +------->| A |------>| C-loc-1 |---------+                 
+#   |        +---+       +---------+         |                 
+#   |                                        v                 
+# +----+                                   +---+               
+# |Root|                                   | D |               
+# +----+                                   +---+               
+#   |                        v2                               
+#   |        +---+       +---------+                          
+#   +------->| B |------>| C-loc-2 |
+#            +---+       +---------+                           
+#                                                             
+     
+
+[package]
+name = "Root"
+version = "1"
+
+[dependencies]
+A = { local = "./deps_only/A" }
+B = { local = "./deps_only/B" }

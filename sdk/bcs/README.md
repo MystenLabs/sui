@@ -51,8 +51,8 @@ built-in primitives, such as `string` or `u64`). There are no type hints in the 
 what they mean, so the schema used for decoding must match the schema used to encode the data.
 
 The `@mysten/bcs` library can be used to define schemas that can serialize and deserialize BCS
-encoded data, and and can infer the correct TypeScript for the schema from the definitions
-themselves rather than having to define them manually.
+encoded data, and can infer the correct TypeScript for the schema from the definitions themselves
+rather than having to define them manually.
 
 ## Basic types
 
@@ -183,20 +183,19 @@ const parsedMap = bcs.map(bcs.u8(), bcs.string()).parse(map);
 
 ## Generics
 
-To define a generic struct or an enum, you can use `bcs.generic` to create a generic type helper
+To define a generic struct or an enum, you can define a generic typescript function helper
 
 ```ts
 // Example: Generics
-import { bcs } from '@mysten/bcs';
+import { bcs, BcsType } from '@mysten/bcs';
 
-// Container -> the name of the type
-// [T] -> A list of names for the generic types
-// The second argument is a function that takes the generic types as arguments and returns a bcs type
-const Container = bcs.generic(['T'], (T) =>
-	bcs.struct('Container<T>', {
+// The T typescript generic is a placeholder for the typescript type of the generic value
+// The T argument will be the bcs type passed in when creating a concrete instance of the Container type
+function Container<T>(T: BcsType<T>) {
+	return bcs.struct('Container<T>', {
 		contents: T,
 	}),
-);
+}
 
 // When serializing, we have to pass the type to use for `T`
 const bytes = Container(bcs.u8()).serialize({ contents: 100 }).toBytes();
@@ -206,13 +205,17 @@ const U8Container = Container(bcs.u8());
 const bytes = U8Container.serialize({ contents: 100 }).toBytes();
 
 // Using multiple generics
-
-const VecMap = bcs.generic(['K', 'V'], (K, V) =>
-	bcs.struct('VecMap<K, V>', {
-		keys: bcs.vector(K),
-		values: bcs.vector(V),
-	}),
-);
+function VecMap<K, V>, (K: BcsType<K>, V: BcsType<V>) {
+	// You can use the names of the generic params in the type name to
+	return bcs.struct(
+		// You can use the names of the generic params to give your type a more useful name
+		`VecMap<${K.name}, ${V.name}>`,
+		{
+			keys: bcs.vector(K),
+			values: bcs.vector(V),
+		}
+	)
+}
 
 // To serialize VecMap, we can use:
 VecMap(bcs.string(), bcs.string())

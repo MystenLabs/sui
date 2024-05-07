@@ -2,9 +2,9 @@
 title: Create a Non-Fungible Token
 ---
 
-In Sui, everything is an object. Moreover, in Sui, everything is a non-fungible token (NFT) as its objects are unique, non-fungible, and owned. So technically, a basic type publishing is enough to create a specific NFT. 
+On Sui, everything is an object. Moreover, in Sui, everything is a non-fungible token (NFT) as its objects are unique, non-fungible, and owned. So technically, a basic type publishing is enough to create a specific NFT.
 
-```rust
+```move
 module examples::devnet_nft {
     use sui::url::{Self, Url};
     use std::string;
@@ -56,7 +56,7 @@ module examples::devnet_nft {
     // ===== Entrypoints =====
 
     /// Create a new devnet_nft
-    public entry fun mint_to_sender(
+    public fun mint_to_sender(
         name: vector<u8>,
         description: vector<u8>,
         url: vector<u8>,
@@ -80,14 +80,14 @@ module examples::devnet_nft {
     }
 
     /// Transfer `nft` to `recipient`
-    public entry fun transfer(
+    public fun transfer(
         nft: DevNetNFT, recipient: address, _: &mut TxContext
     ) {
         transfer::public_transfer(nft, recipient)
     }
 
     /// Update the `description` of `nft` to `new_description`
-    public entry fun update_description(
+    public fun update_description(
         nft: &mut DevNetNFT,
         new_description: vector<u8>,
         _: &mut TxContext
@@ -96,7 +96,7 @@ module examples::devnet_nft {
     }
 
     /// Permanently delete `nft`
-    public entry fun burn(nft: DevNetNFT, _: &mut TxContext) {
+    public fun burn(nft: DevNetNFT, _: &mut TxContext) {
         let DevNetNFT { id, name: _, description: _, url: _ } = nft;
         object::delete(id)
     }

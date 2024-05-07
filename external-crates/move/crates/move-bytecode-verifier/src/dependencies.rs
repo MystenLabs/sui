@@ -4,11 +4,9 @@
 
 //! This module contains verification of usage of dependencies for modules and scripts.
 use move_binary_format::{
-    access::{ModuleAccess, ScriptAccess},
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
-        AbilitySet, Bytecode, CodeOffset, CompiledModule, CompiledScript, FunctionDefinitionIndex,
+        AbilitySet, Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex,
         FunctionHandleIndex, ModuleHandleIndex, SignatureToken, StructHandleIndex,
         StructTypeParameter, TableIndex, Visibility,
     },
@@ -19,7 +17,7 @@ use move_core_types::{identifier::Identifier, language_storage::ModuleId, vm_sta
 use std::collections::{BTreeMap, BTreeSet};
 
 struct Context<'a, 'b> {
-    resolver: BinaryIndexedView<'a>,
+    module: &'a CompiledModule,
     // (Module -> CompiledModule) for (at least) all immediate dependencies
     dependency_map: BTreeMap<ModuleId, &'b CompiledModule>,
     // (Module::StructName -> handle) for all types of all dependencies
@@ -39,40 +37,29 @@ impl<'a, 'b> Context<'a, 'b> {
         module: &'a CompiledModule,
         dependencies: impl IntoIterator<Item = &'b CompiledModule>,
     ) -> Self {
-        Self::new(BinaryIndexedView::Module(module), dependencies)
-    }
-
-    fn script(
-        script: &'a CompiledScript,
-        dependencies: impl IntoIterator<Item = &'b CompiledModule>,
-    ) -> Self {
-        Self::new(BinaryIndexedView::Script(script), dependencies)
+        Self::new(module, dependencies)
     }
 
     fn new(
-        resolver: BinaryIndexedView<'a>,
+        module: &'a CompiledModule,
         dependencies: impl IntoIterator<Item = &'b CompiledModule>,
     ) -> Self {
-        let self_module = resolver.self_id();
-        let self_module_idx = resolver.self_handle_idx();
-        let empty_defs = &vec![];
-        let self_function_defs = match &resolver {
-            BinaryIndexedView::Module(m) => m.function_defs(),
-            BinaryIndexedView::Script(_) => empty_defs,
-        };
+        let self_module = module.self_id();
+        let self_module_idx = module.self_handle_idx();
+        let self_function_defs = module.function_defs();
         let dependency_map = dependencies
             .into_iter()
-            .filter(|d| Some(d.self_id()) != self_module)
+            .filter(|d| d.self_id() != self_module)
             .map(|d| (d.self_id(), d))
             .collect();
 
-        let script_functions = if resolver.version() < VERSION_5 {
+        let script_functions = if module.version() < VERSION_5 {
             Some(BTreeSet::new())
         } else {
             None
         };
         let mut context = Self {
-            resolver,
+            module,
             dependency_map,
             struct_id_to_handle_map: BTreeMap::new(),
             func_id_to_handle_map: BTreeMap::new(),
@@ -103,9 +90,7 @@ impl<'a, 'b> Context<'a, 'b> {
                 );
                 let may_be_called = match func_def.visibility {
                     Visibility::Public => true,
-                    Visibility::Friend => self_module
-                        .as_ref()
-                        .map_or(false, |self_id| friend_module_ids.contains(self_id)),
+                    Visibility::Friend => friend_module_ids.contains(&self_module),
                     Visibility::Private => false,
                 };
                 if may_be_called {
@@ -127,14 +112,14 @@ impl<'a, 'b> Context<'a, 'b> {
                     .map(|s| s.insert(function_def.function));
             }
         }
-        for (idx, function_handle) in context.resolver.function_handles().iter().enumerate() {
-            if Some(function_handle.module) == self_module_idx {
+        for (idx, function_handle) in context.module.function_handles().iter().enumerate() {
+            if function_handle.module == self_module_idx {
                 continue;
             }
             let dep_module_id = context
-                .resolver
-                .module_id_for_handle(context.resolver.module_handle_at(function_handle.module));
-            let function_name = context.resolver.identifier_at(function_handle.name);
+                .module
+                .module_id_for_handle(context.module.module_handle_at(function_handle.module));
+            let function_name = context.module.identifier_at(function_handle.name);
             let dep_file_format_version =
                 context.dependency_map.get(&dep_module_id).unwrap().version;
             let dep_function = (dep_module_id, function_name.to_owned());
@@ -180,30 +165,11 @@ fn verify_module_impl<'a>(
     verify_all_script_visibility_usage(context)
 }
 
-pub fn verify_script<'a>(
-    script: &CompiledScript,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> VMResult<()> {
-    verify_script_impl(script, dependencies).map_err(|e| e.finish(Location::Script))
-}
-
-pub fn verify_script_impl<'a>(
-    script: &CompiledScript,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> PartialVMResult<()> {
-    let context = &Context::script(script, dependencies);
-
-    verify_imported_modules(context)?;
-    verify_imported_structs(context)?;
-    verify_imported_functions(context)?;
-    verify_all_script_visibility_usage(context)
-}
-
 fn verify_imported_modules(context: &Context) -> PartialVMResult<()> {
-    let self_module = context.resolver.self_handle_idx();
-    for (idx, module_handle) in context.resolver.module_handles().iter().enumerate() {
-        let module_id = context.resolver.module_id_for_handle(module_handle);
-        if Some(ModuleHandleIndex(idx as u16)) != self_module
+    let self_module = context.module.self_handle_idx();
+    for (idx, module_handle) in context.module.module_handles().iter().enumerate() {
+        let module_id = context.module.module_id_for_handle(module_handle);
+        if ModuleHandleIndex(idx as u16) != self_module
             && !context.dependency_map.contains_key(&module_id)
         {
             return Err(verification_error(
@@ -217,17 +183,17 @@ fn verify_imported_modules(context: &Context) -> PartialVMResult<()> {
 }
 
 fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
-    let self_module = context.resolver.self_handle_idx();
-    for (idx, struct_handle) in context.resolver.struct_handles().iter().enumerate() {
-        if Some(struct_handle.module) == self_module {
+    let self_module = context.module.self_handle_idx();
+    for (idx, struct_handle) in context.module.struct_handles().iter().enumerate() {
+        if struct_handle.module == self_module {
             continue;
         }
         let owner_module_id = context
-            .resolver
-            .module_id_for_handle(context.resolver.module_handle_at(struct_handle.module));
+            .module
+            .module_id_for_handle(context.module.module_handle_at(struct_handle.module));
         // TODO: remove unwrap
         let owner_module = safe_unwrap!(context.dependency_map.get(&owner_module_id));
-        let struct_name = context.resolver.identifier_at(struct_handle.name);
+        let struct_name = context.module.identifier_at(struct_handle.name);
         match context
             .struct_id_to_handle_map
             .get(&(owner_module_id, struct_name.to_owned()))
@@ -260,15 +226,15 @@ fn verify_imported_structs(context: &Context) -> PartialVMResult<()> {
 }
 
 fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
-    let self_module = context.resolver.self_handle_idx();
-    for (idx, function_handle) in context.resolver.function_handles().iter().enumerate() {
-        if Some(function_handle.module) == self_module {
+    let self_module = context.module.self_handle_idx();
+    for (idx, function_handle) in context.module.function_handles().iter().enumerate() {
+        if function_handle.module == self_module {
             continue;
         }
         let owner_module_id = context
-            .resolver
-            .module_id_for_handle(context.resolver.module_handle_at(function_handle.module));
-        let function_name = context.resolver.identifier_at(function_handle.name);
+            .module
+            .module_id_for_handle(context.module.module_handle_at(function_handle.module));
+        let function_name = context.module.identifier_at(function_handle.name);
         let owner_module = safe_unwrap!(context.dependency_map.get(&owner_module_id));
         match context
             .func_id_to_handle_map
@@ -288,7 +254,7 @@ fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
                     ));
                 }
                 // same parameters
-                let handle_params = context.resolver.signature_at(function_handle.parameters);
+                let handle_params = context.module.signature_at(function_handle.parameters);
                 let def_params = match context.dependency_map.get(&owner_module_id) {
                     Some(module) => module.signature_at(def_handle.parameters),
                     None => {
@@ -309,7 +275,7 @@ fn verify_imported_functions(context: &Context) -> PartialVMResult<()> {
                 .map_err(|e| e.at_index(IndexKind::FunctionHandle, idx as TableIndex))?;
 
                 // same return_
-                let handle_return = context.resolver.signature_at(function_handle.return_);
+                let handle_return = context.module.signature_at(function_handle.return_);
                 let def_return = match context.dependency_map.get(&owner_module_id) {
                     Some(module) => module.signature_at(def_handle.return_),
                     None => {
@@ -457,9 +423,11 @@ fn compare_types(
             compare_structs(context, *idx1, *idx2, def_module)
         }
         (
-            SignatureToken::StructInstantiation(idx1, inst1),
-            SignatureToken::StructInstantiation(idx2, inst2),
+            SignatureToken::StructInstantiation(struct_inst1),
+            SignatureToken::StructInstantiation(struct_inst2),
         ) => {
+            let (idx1, inst1) = &**struct_inst1;
+            let (idx2, inst2) = &**struct_inst2;
             compare_structs(context, *idx1, *idx2, def_module)?;
             compare_cross_module_signatures(context, inst1, inst2, def_module)
         }
@@ -482,7 +450,7 @@ fn compare_types(
         | (SignatureToken::Signer, _)
         | (SignatureToken::Vector(_), _)
         | (SignatureToken::Struct(_), _)
-        | (SignatureToken::StructInstantiation(_, _), _)
+        | (SignatureToken::StructInstantiation(_), _)
         | (SignatureToken::Reference(_), _)
         | (SignatureToken::MutableReference(_), _)
         | (SignatureToken::TypeParameter(_), _)
@@ -499,10 +467,10 @@ fn compare_structs(
     def_module: &CompiledModule,
 ) -> PartialVMResult<()> {
     // grab ModuleId and struct name for the module being verified
-    let struct_handle = context.resolver.struct_handle_at(idx1);
-    let module_handle = context.resolver.module_handle_at(struct_handle.module);
-    let module_id = context.resolver.module_id_for_handle(module_handle);
-    let struct_name = context.resolver.identifier_at(struct_handle.name);
+    let struct_handle = context.module.struct_handle_at(idx1);
+    let module_handle = context.module.module_handle_at(struct_handle.module);
+    let module_id = context.module.module_id_for_handle(module_handle);
+    let struct_name = context.module.identifier_at(struct_handle.name);
 
     // grab ModuleId and struct name for the definition
     let def_struct_handle = def_module.struct_handle_at(idx2);
@@ -523,16 +491,17 @@ fn verify_all_script_visibility_usage(context: &Context) -> PartialVMResult<()> 
         None => return Ok(()),
         Some(s) => s,
     };
-    debug_assert!(context.resolver.version() < VERSION_5);
-    match &context.resolver {
-        BinaryIndexedView::Module(m) => {
+    debug_assert!(context.module.version() < VERSION_5);
+    let m = context.module;
+    {
+        {
             for (idx, fdef) in m.function_defs().iter().enumerate() {
                 let code = match &fdef.code {
                     None => continue,
                     Some(code) => &code.code,
                 };
                 verify_script_visibility_usage(
-                    &context.resolver,
+                    context.module,
                     script_functions,
                     fdef.is_entry,
                     FunctionDefinitionIndex(idx as TableIndex),
@@ -541,18 +510,11 @@ fn verify_all_script_visibility_usage(context: &Context) -> PartialVMResult<()> 
             }
             Ok(())
         }
-        BinaryIndexedView::Script(s) => verify_script_visibility_usage(
-            &context.resolver,
-            script_functions,
-            true,
-            FunctionDefinitionIndex(0),
-            &s.code().code,
-        ),
     }
 }
 
 fn verify_script_visibility_usage(
-    resolver: &BinaryIndexedView,
+    module: &CompiledModule,
     script_functions: &BTreeSet<FunctionHandleIndex>,
     current_is_entry: bool,
     fdef_idx: FunctionDefinitionIndex,
@@ -563,7 +525,7 @@ fn verify_script_visibility_usage(
         let fhandle_idx = match instr {
             Bytecode::Call(fhandle_idx) => fhandle_idx,
             Bytecode::CallGeneric(finst_idx) => {
-                &resolver.function_instantiation_at(*finst_idx).handle
+                &module.function_instantiation_at(*finst_idx).handle
             }
             _ => continue,
         };

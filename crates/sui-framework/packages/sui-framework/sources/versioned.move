@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::versioned {
-    use sui::object::{UID, ID};
-    use sui::tx_context::TxContext;
-    use sui::object;
     use sui::dynamic_field;
 
     /// Failed to upgrade the inner object due to invalid capability or new version.
@@ -16,21 +13,21 @@ module sui::versioned {
     /// You can also upgrade the inner object to a new type version.
     /// If you want to support lazy upgrade of the inner type, one caveat is that all APIs would have
     /// to use mutable reference even if it's a read-only API.
-    struct Versioned has key, store {
+    public struct Versioned has key, store {
         id: UID,
         version: u64,
     }
 
     /// Represents a hot potato object generated when we take out the dynamic field.
     /// This is to make sure that we always put a new value back.
-    struct VersionChangeCap {
+    public struct VersionChangeCap {
         versioned_id: ID,
         old_version: u64,
     }
 
     /// Create a new Versioned object that contains a initial value of type `T` with an initial version.
     public fun create<T: store>(init_version: u64, init_value: T, ctx: &mut TxContext): Versioned {
-        let self = Versioned {
+        let mut self = Versioned {
             id: object::new(ctx),
             version: init_version,
         };
@@ -78,9 +75,9 @@ module sui::versioned {
 
     /// Destroy this Versioned container, and return the inner object.
     public fun destroy<T: store>(self: Versioned): T {
-        let Versioned { id, version } = self;
+        let Versioned { mut id, version } = self;
         let ret = dynamic_field::remove(&mut id, version);
-        object::delete(id);
+        id.delete();
         ret
     }
 }

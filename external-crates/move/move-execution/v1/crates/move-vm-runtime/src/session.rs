@@ -12,14 +12,13 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
+    annotated_value as A,
     effects::{ChangeSet, Event},
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
     resolver::MoveResolver,
-    value::MoveTypeLayout,
+    runtime_value::MoveTypeLayout,
 };
-#[cfg(debug_assertions)]
-use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     data_store::DataStore,
     gas::GasMeter,
@@ -100,8 +99,8 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         args: Vec<impl Borrow<[u8]>>,
         gas_meter: &mut impl GasMeter,
     ) -> VMResult<SerializedReturnValues> {
-        #[cfg(debug_assertions)]
-        {
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
             if gas_meter.get_profiler_mut().is_none() {
                 gas_meter.set_profiler(GasProfiler::init_default_cfg(
                     function_name.to_string(),
@@ -120,39 +119,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             gas_meter,
             &mut self.native_extensions,
             bypass_declared_entry_check,
-        )
-    }
-
-    /// Execute a transaction script.
-    ///
-    /// The Move VM MUST return a user error (in other words, an error that's not an invariant
-    /// violation) if
-    ///   - The script fails to deserialize or verify. Not all expressible signatures are valid.
-    ///     See `move_bytecode_verifier::script_signature` for the rules.
-    ///   - Type arguments refer to a non-existent type.
-    ///   - Arguments (senders included) fail to deserialize or fail to match the signature of the
-    ///     script function.
-    ///
-    /// If any other error occurs during execution, the Move VM MUST propagate that error back to
-    /// the caller.
-    /// Besides, no user input should cause the Move VM to return an invariant violation.
-    ///
-    /// In case an invariant violation occurs, the whole Session should be considered corrupted and
-    /// one shall not proceed with effect generation.
-    pub fn execute_script(
-        &mut self,
-        script: impl Borrow<[u8]>,
-        ty_args: Vec<Type>,
-        args: Vec<impl Borrow<[u8]>>,
-        gas_meter: &mut impl GasMeter,
-    ) -> VMResult<SerializedReturnValues> {
-        self.runtime.execute_script(
-            script,
-            ty_args,
-            args,
-            &mut self.data_cache,
-            gas_meter,
-            &mut self.native_extensions,
         )
     }
 
@@ -236,19 +202,6 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
         )
     }
 
-    /// Load a script and all of its types into cache
-    pub fn load_script(
-        &self,
-        script: impl Borrow<[u8]>,
-        ty_args: &[Type],
-    ) -> VMResult<LoadedFunctionInstantiation> {
-        let (_, instantiation) =
-            self.runtime
-                .loader()
-                .load_script(script.borrow(), ty_args, &self.data_cache)?;
-        Ok(instantiation)
-    }
-
     /// Load a module, a function, and all of its types into cache
     pub fn load_function(
         &self,
@@ -288,7 +241,10 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .get_type_layout(type_tag, &self.data_cache)
     }
 
-    pub fn get_fully_annotated_type_layout(&self, type_tag: &TypeTag) -> VMResult<MoveTypeLayout> {
+    pub fn get_fully_annotated_type_layout(
+        &self,
+        type_tag: &TypeTag,
+    ) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .get_fully_annotated_type_layout(type_tag, &self.data_cache)
@@ -301,7 +257,7 @@ impl<'r, 'l, S: MoveResolver> Session<'r, 'l, S> {
             .map_err(|e| e.finish(Location::Undefined))
     }
 
-    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<MoveTypeLayout> {
+    pub fn type_to_fully_annotated_layout(&self, ty: &Type) -> VMResult<A::MoveTypeLayout> {
         self.runtime
             .loader()
             .type_to_fully_annotated_layout(ty)

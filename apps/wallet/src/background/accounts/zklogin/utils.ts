@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { API_ENV, type NetworkEnvType } from '_src/shared/api-env';
 import { fetchWithSentry } from '_src/shared/utils';
 import { type PublicKey } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
@@ -82,7 +83,8 @@ export async function zkLoginAuthenticate({
 	if (!nonce) {
 		nonce = base64url.encode(randomBytes(20));
 	}
-	const { clientID, url, extraParams, buildExtraParams } = zkLoginProviderDataMap[provider];
+	const { clientID, url, extraParams, buildExtraParams, extractJWT } =
+		zkLoginProviderDataMap[provider];
 	const params = new URLSearchParams(extraParams);
 	params.append('client_id', clientID);
 	params.append('redirect_uri', Browser.identity.getRedirectURL());
@@ -103,8 +105,13 @@ export async function zkLoginAuthenticate({
 			}),
 		);
 	}
-	const responseParams = new URLSearchParams(responseURL.hash.replace('#', ''));
-	const jwt = responseParams.get('id_token');
+	let jwt;
+	if (extractJWT) {
+		jwt = await extractJWT(responseURL);
+	} else {
+		const responseParams = new URLSearchParams(responseURL.hash.replace('#', ''));
+		jwt = responseParams.get('id_token');
+	}
 	if (!jwt) {
 		throw new Error('JWT is missing');
 	}
@@ -132,6 +139,7 @@ type WalletInputs = {
 	jwtRandomness: bigint;
 	userSalt: bigint;
 	keyClaimName?: 'sub' | 'email';
+	network: NetworkEnvType;
 };
 
 export type PartialZkLoginSignature = Omit<
@@ -139,7 +147,8 @@ export type PartialZkLoginSignature = Omit<
 	'addressSeed'
 >;
 
-const zkLoginProofsServerUrl = 'https://prover.mystenlabs.com/v1';
+const zkLoginProofsServerUrlDev = 'https://prover-dev.mystenlabs.com/v1';
+const zkLoginProofsServerUrlProd = 'https://prover.mystenlabs.com/v1';
 
 export async function createPartialZkLoginSignature({
 	jwt,
@@ -148,7 +157,11 @@ export async function createPartialZkLoginSignature({
 	maxEpoch,
 	userSalt,
 	keyClaimName = 'sub',
+	network,
 }: WalletInputs): Promise<PartialZkLoginSignature> {
+	const zkLoginProofsServerUrl = [API_ENV.mainnet, API_ENV.testNet].includes(network.env)
+		? zkLoginProofsServerUrlProd
+		: zkLoginProofsServerUrlDev;
 	const response = await fetchWithSentry('createZkLoginProofs', zkLoginProofsServerUrl, {
 		method: 'POST',
 		headers: {

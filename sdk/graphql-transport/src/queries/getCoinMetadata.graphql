@@ -1,0 +1,13 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getCoinMetadata($coinType: String!) {
+	coinMetadata(coinType: $coinType) {
+		decimals
+		name
+		symbol
+		description
+		iconUrl
+		address
+	}
+}

@@ -1,0 +1,82 @@
+name: Simulator Tests with Mysticeti
+
+concurrency:
+  group: ${{ github.workflow }}
+
+on:
+  schedule:
+    - cron: '0 17 * * *' # UTC timing is every day at 9am PST
+  workflow_dispatch:
+    inputs:
+      sui_ref:
+        description: "Branch / commit to test"
+        type: string
+        required: true
+        default: main
+      test_num:
+        description: "MSIM_TEST_NUM (test iterations)"
+        type: string
+        required: false
+        default: "30"
+
+env:
+  # Test Mysticeti consensus before it becomes the default.
+  CONSENSUS: "mysticeti"
+
+  SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
+  TEST_NUM: "${{ github.event.inputs.test_num || '30' }}"
+
+jobs:
+  simtest:
+    timeout-minutes: 240
+    permissions:
+      # The "id-token: write" permission is required or Machine ID will not be
+      # able to authenticate with the cluster.
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install Teleport
+        uses: teleport-actions/setup@176c25dfcd19cd31a252f275d579822b243e7b9c # pin@v1.0.6
+        with:
+          version: 11.3.1
+      - name: Authorize against Teleport
+        id: auth
+        uses: teleport-actions/auth@9091dad16a564f3c5b9c2ec520b234a4872b6879 # pin@v1
+        with:
+          # Specify the publically accessible address of your Teleport proxy.
+          proxy: proxy.mysten-int.com:443
+          # Specify the name of the join token for your bot.
+          token: sui-simtest-token
+          # Specify the length of time that the generated credentials should be
+          # valid for. This is optional and defaults to "1h"
+          certificate-ttl: 2h
+
+      # Cargo clean and git restore on any left over files from git checkout, and deletes all remote tracking branches
+      - name: Environment clean
+        run: | 
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && rm -rf ~/sui"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/ && git clone git@github.com:MystenLabs/sui.git"
+ 
+      # Deleting files in tmpfs that usually fill up pretty quickly after each run. Cargo clean to free up space as well.
+      - name: Tmpfs and cargo clean
+        run: |  
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "sudo rm -rf /tmp/*"
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 5 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && cargo clean"
+
+      # Checkout out the latest sui repo
+      - name: Checkout sui repo
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && git fetch origin && git checkout ${{ env.SUI_REF }}"
+
+      # Setting up cargo and simtest
+      - name: Install simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 10 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && ./scripts/simtest/install.sh"
+
+      # Run simulator tests
+      - name: Run simtest
+        run: |
+          tsh -i ${{ steps.auth.outputs.identity-file }} --ttl 120 ssh ubuntu@simtest-01 "source ~/.bashrc && source ~/.cargo/env && cd ~/sui && RUSTUP_MAX_RETRIES=10 CARGO_TERM_COLOR=always CARGO_INCREMENTAL=0 CARGO_NET_RETRY=10 RUST_BACKTRACE=short RUST_LOG=off NUM_CPUS=24 TEST_NUM=${{ env.TEST_NUM }} ./scripts/simtest/simtest-run.sh"
+

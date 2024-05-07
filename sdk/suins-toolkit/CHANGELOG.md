@@ -1,5 +1,107 @@
 # @mysten/suins-toolkit
 
+## 0.4.6
+
+### Patch Changes
+
+- Updated dependencies [b4ecdb5860]
+  - @mysten/sui.js@0.51.2
+
+## 0.4.5
+
+### Patch Changes
+
+- Updated dependencies [6984dd1e38]
+  - @mysten/sui.js@0.51.1
+
+## 0.4.4
+
+### Patch Changes
+
+- Updated dependencies [0cafa94027]
+  - @mysten/sui.js@0.51.0
+
+## 0.4.3
+
+### Patch Changes
+
+- 4830361fa4: Updated typescript version
+- Updated dependencies [4830361fa4]
+  - @mysten/sui.js@0.50.1
+
+## 0.4.2
+
+### Patch Changes
+
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [c08e3569ef]
+- Updated dependencies [9a14e61db4]
+- Updated dependencies [13e922d9b1]
+- Updated dependencies [a34f1cb67d]
+- Updated dependencies [220a766d86]
+  - @mysten/sui.js@0.50.0
+
+## 0.4.1
+
+### Patch Changes
+
+- 9ac0a4ec01: Add extensions to all sdk import paths
+- Updated dependencies [9ac0a4ec01]
+  - @mysten/sui.js@0.49.1
+
+## 0.4.0
+
+### Minor Changes
+
+- e5f9e3ba21: Replace tsup based build to fix issues with esm/cjs dual publishing
+
+### Patch Changes
+
+- Updated dependencies [e5f9e3ba21]
+  - @mysten/sui.js@0.49.0
+
+## 0.3.18
+
+### Patch Changes
+
+- Updated dependencies [dd362ec1d6]
+  - @mysten/sui.js@0.48.1
+
+## 0.3.17
+
+### Patch Changes
+
+- Updated dependencies [cdcfa76c43]
+  - @mysten/sui.js@0.48.0
+
+## 0.3.16
+
+### Patch Changes
+
+- Updated dependencies [194c980cb]
+- Updated dependencies [9ac7e2f3d]
+- Updated dependencies [0259aec82]
+- Updated dependencies [64d45ba27]
+  - @mysten/sui.js@0.47.0
+
+## 0.3.15
+
+### Patch Changes
+
+- Updated dependencies [652bcdd92]
+  - @mysten/sui.js@0.46.1
+
+## 0.3.14
+
+### Patch Changes
+
+- Updated dependencies [28c2c3330]
+- Updated dependencies [43444c58f]
+- Updated dependencies [8d1e74e52]
+- Updated dependencies [093554a0d]
+- Updated dependencies [3718a230b]
+  - @mysten/sui.js@0.46.0
+
 ## 0.3.13
 
 ### Patch Changes

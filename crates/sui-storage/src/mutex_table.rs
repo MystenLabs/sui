@@ -329,19 +329,49 @@ async fn test_mutex_table() {
     let jane = mutex_table.try_acquire_lock("jane".to_string());
     assert!(jane.is_ok());
     MutexTable::cleanup(mutex_table.lock_table.clone());
-    let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
+    let map = mutex_table.lock_table.first().as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert_eq!(map.unwrap().len(), 2);
     drop(john2);
     MutexTable::cleanup(mutex_table.lock_table.clone());
-    let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
+    let map = mutex_table.lock_table.first().as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert_eq!(map.unwrap().len(), 1);
     drop(jane);
     MutexTable::cleanup(mutex_table.lock_table.clone());
-    let map = mutex_table.lock_table.get(0).as_ref().unwrap().try_read();
+    let map = mutex_table.lock_table.first().as_ref().unwrap().try_read();
     assert!(map.is_ok());
     assert!(map.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_acquire_locks() {
+    let mutex_table =
+        RwLockTable::<String>::new_with_cleanup(1, Duration::from_secs(10), Duration::MAX, 1000);
+    let object_1 = "object 1".to_string();
+    let object_2 = "object 2".to_string();
+    let object_3 = "object 3".to_string();
+
+    // ensure even with duplicate objects we succeed acquiring their locks
+    let objects = vec![
+        object_1.clone(),
+        object_2.clone(),
+        object_2,
+        object_1.clone(),
+        object_3,
+        object_1,
+    ];
+
+    let locks = mutex_table.acquire_locks(objects.clone().into_iter()).await;
+    assert_eq!(locks.len(), 3);
+
+    for object in objects.clone() {
+        assert!(mutex_table.try_acquire_lock(object).is_err());
+    }
+
+    drop(locks);
+    let locks = mutex_table.acquire_locks(objects.into_iter()).await;
+    assert_eq!(locks.len(), 3);
 }
 
 #[tokio::test]

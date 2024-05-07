@@ -41,7 +41,6 @@ typed-store.workspace = true
 typed-store-derive.workspace = true
 shared-crypto.workspace = true
 async-recursion.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 test-cluster.workspace = true

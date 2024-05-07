@@ -23,7 +23,11 @@ impl Build {
             return Ok(());
         }
 
-        config.compile_package(&rerooted_path, &mut std::io::stdout())?;
+        config.clone().cli_compile_package(
+            &rerooted_path,
+            &mut std::io::stdout(),
+            &mut std::io::stdin().lock(),
+        )?;
         Ok(())
     }
 }

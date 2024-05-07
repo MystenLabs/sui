@@ -181,11 +181,7 @@ pub enum Opcodes {
     GE                          = 0x26,
     ABORT                       = 0x27,
     NOP                         = 0x28,
-    EXISTS                      = 0x29,
-    MUT_BORROW_GLOBAL           = 0x2A,
-    IMM_BORROW_GLOBAL           = 0x2B,
-    MOVE_FROM                   = 0x2C,
-    MOVE_TO                     = 0x2D,
+    // gap for deprecated bytecodes, see bottom of enum
     FREEZE_REF                  = 0x2E,
     SHL                         = 0x2F,
     SHR                         = 0x30,
@@ -199,11 +195,6 @@ pub enum Opcodes {
     CALL_GENERIC                = 0x38,
     PACK_GENERIC                = 0x39,
     UNPACK_GENERIC              = 0x3A,
-    EXISTS_GENERIC              = 0x3B,
-    MUT_BORROW_GLOBAL_GENERIC   = 0x3C,
-    IMM_BORROW_GLOBAL_GENERIC   = 0x3D,
-    MOVE_FROM_GENERIC           = 0x3E,
-    MOVE_TO_GENERIC             = 0x3F,
     VEC_PACK                    = 0x40,
     VEC_LEN                     = 0x41,
     VEC_IMM_BORROW              = 0x42,
@@ -218,6 +209,19 @@ pub enum Opcodes {
     CAST_U16                    = 0x4B,
     CAST_U32                    = 0x4C,
     CAST_U256                   = 0x4D,
+
+    // ******** DEPRECATED BYTECODES ********
+    // global storage opcodes are unused and deprecated
+    EXISTS_DEPRECATED                       = 0x29,
+    MUT_BORROW_GLOBAL_DEPRECATED            = 0x2A,
+    IMM_BORROW_GLOBAL_DEPRECATED            = 0x2B,
+    MOVE_FROM_DEPRECATED                    = 0x2C,
+    MOVE_TO_DEPRECATED                      = 0x2D,
+    EXISTS_GENERIC_DEPRECATED               = 0x3B,
+    MUT_BORROW_GLOBAL_GENERIC_DEPRECATED    = 0x3C,
+    IMM_BORROW_GLOBAL_GENERIC_DEPRECATED    = 0x3D,
+    MOVE_FROM_GENERIC_DEPRECATED            = 0x3E,
+    MOVE_TO_GENERIC_DEPRECATED              = 0x3F,
 }
 
 /// Upper limit on the binary size
@@ -412,167 +416,6 @@ pub const VERSION_MAX: u32 = VERSION_6;
 // TODO(#145): finish v4 compatibility; as of now, only metadata is implemented
 pub const VERSION_MIN: u32 = VERSION_5;
 
-pub(crate) mod versioned_data {
-    use crate::{errors::*, file_format_common::*};
-    use move_core_types::vm_status::StatusCode;
-    use std::io::{Cursor, Read};
-    pub struct VersionedBinary<'a> {
-        version: u32,
-        binary: &'a [u8],
-        check_no_extraneous_bytes: bool,
-    }
-
-    pub struct VersionedCursor<'a> {
-        version: u32,
-        cursor: Cursor<&'a [u8]>,
-        check_no_extraneous_bytes: bool,
-    }
-
-    impl<'a> VersionedBinary<'a> {
-        fn new(
-            binary: &'a [u8],
-            max_version: u32,
-            check_no_extraneous_bytes: bool,
-        ) -> BinaryLoaderResult<(Self, Cursor<&'a [u8]>)> {
-            let mut cursor = Cursor::<&'a [u8]>::new(binary);
-            let mut magic = [0u8; BinaryConstants::MOVE_MAGIC_SIZE];
-            if let Ok(count) = cursor.read(&mut magic) {
-                if count != BinaryConstants::MOVE_MAGIC_SIZE || magic != BinaryConstants::MOVE_MAGIC
-                {
-                    return Err(PartialVMError::new(StatusCode::BAD_MAGIC));
-                }
-            } else {
-                return Err(PartialVMError::new(StatusCode::MALFORMED)
-                    .with_message("Bad binary header".to_string()));
-            }
-            let version = match read_u32(&mut cursor) {
-                Ok(v) => v,
-                Err(_) => {
-                    return Err(PartialVMError::new(StatusCode::MALFORMED)
-                        .with_message("Bad binary header".to_string()));
-                }
-            };
-            if version == 0 || version > u32::min(max_version, VERSION_MAX) {
-                return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
-            }
-            Ok((
-                Self {
-                    version,
-                    binary,
-                    check_no_extraneous_bytes,
-                },
-                cursor,
-            ))
-        }
-
-        #[allow(dead_code)]
-        pub fn version(&self) -> u32 {
-            self.version
-        }
-
-        pub fn new_cursor(&self, start: usize, end: usize) -> VersionedCursor<'a> {
-            VersionedCursor {
-                version: self.version,
-                cursor: Cursor::new(&self.binary[start..end]),
-                check_no_extraneous_bytes: self.check_no_extraneous_bytes,
-            }
-        }
-
-        pub fn slice(&self, start: usize, end: usize) -> &'a [u8] {
-            &self.binary[start..end]
-        }
-
-        pub(crate) fn check_no_extraneous_bytes(&self) -> bool {
-            self.check_no_extraneous_bytes
-        }
-    }
-
-    impl<'a> VersionedCursor<'a> {
-        /// Verifies the correctness of the "static" part of the binary's header.
-        /// If valid, returns a cursor to the binary
-        pub fn new(
-            binary: &'a [u8],
-            max_version: u32,
-            check_no_extraneous_bytes: bool,
-        ) -> BinaryLoaderResult<Self> {
-            let (binary, cursor) =
-                VersionedBinary::new(binary, max_version, check_no_extraneous_bytes)?;
-            Ok(VersionedCursor {
-                version: binary.version,
-                cursor,
-                check_no_extraneous_bytes,
-            })
-        }
-
-        #[allow(dead_code)]
-        pub fn version(&self) -> u32 {
-            self.version
-        }
-
-        pub fn position(&self) -> u64 {
-            self.cursor.position()
-        }
-
-        #[allow(dead_code)]
-        pub fn binary(&self) -> VersionedBinary<'a> {
-            VersionedBinary {
-                version: self.version,
-                binary: self.cursor.get_ref(),
-                check_no_extraneous_bytes: self.check_no_extraneous_bytes,
-            }
-        }
-
-        pub fn read_u8(&mut self) -> Result<u8> {
-            read_u8(&mut self.cursor)
-        }
-
-        #[allow(dead_code)]
-        pub fn read_u32(&mut self) -> Result<u32> {
-            read_u32(&mut self.cursor)
-        }
-
-        pub fn read_uleb128_as_u64(&mut self) -> Result<u64> {
-            read_uleb128_as_u64(&mut self.cursor)
-        }
-
-        pub fn read_new_binary<'b>(
-            &mut self,
-            buffer: &'b mut Vec<u8>,
-            n: usize,
-        ) -> BinaryLoaderResult<VersionedBinary<'b>> {
-            debug_assert!(buffer.is_empty());
-            let mut tmp_buffer = vec![0; n];
-            match self.cursor.read_exact(&mut tmp_buffer) {
-                Err(_) => Err(PartialVMError::new(StatusCode::MALFORMED)),
-                Ok(()) => {
-                    *buffer = tmp_buffer;
-                    Ok(VersionedBinary {
-                        version: self.version,
-                        binary: buffer,
-                        check_no_extraneous_bytes: self.check_no_extraneous_bytes,
-                    })
-                }
-            }
-        }
-
-        #[cfg(test)]
-        pub fn new_for_test(version: u32, cursor: Cursor<&'a [u8]>) -> Self {
-            Self {
-                version,
-                cursor,
-                check_no_extraneous_bytes: true,
-            }
-        }
-    }
-
-    impl<'a> Read for VersionedCursor<'a> {
-        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-            self.cursor.read(buf)
-        }
-    }
-}
-pub(crate) use versioned_data::{VersionedBinary, VersionedCursor};
-
 /// The encoding of the instruction is the serialized form of it, but disregarding the
 /// serialization of the instruction's argument(s).
 pub fn instruction_key(instruction: &Bytecode) -> u8 {
@@ -610,10 +453,6 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         MutBorrowFieldGeneric(_) => Opcodes::MUT_BORROW_FIELD_GENERIC,
         ImmBorrowField(_) => Opcodes::IMM_BORROW_FIELD,
         ImmBorrowFieldGeneric(_) => Opcodes::IMM_BORROW_FIELD_GENERIC,
-        MutBorrowGlobal(_) => Opcodes::MUT_BORROW_GLOBAL,
-        MutBorrowGlobalGeneric(_) => Opcodes::MUT_BORROW_GLOBAL_GENERIC,
-        ImmBorrowGlobal(_) => Opcodes::IMM_BORROW_GLOBAL,
-        ImmBorrowGlobalGeneric(_) => Opcodes::IMM_BORROW_GLOBAL_GENERIC,
         Add => Opcodes::ADD,
         Sub => Opcodes::SUB,
         Mul => Opcodes::MUL,
@@ -635,12 +474,6 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         Ge => Opcodes::GE,
         Abort => Opcodes::ABORT,
         Nop => Opcodes::NOP,
-        Exists(_) => Opcodes::EXISTS,
-        ExistsGeneric(_) => Opcodes::EXISTS_GENERIC,
-        MoveFrom(_) => Opcodes::MOVE_FROM,
-        MoveFromGeneric(_) => Opcodes::MOVE_FROM_GENERIC,
-        MoveTo(_) => Opcodes::MOVE_TO,
-        MoveToGeneric(_) => Opcodes::MOVE_TO_GENERIC,
         VecPack(..) => Opcodes::VEC_PACK,
         VecLen(_) => Opcodes::VEC_LEN,
         VecImmBorrow(_) => Opcodes::VEC_IMM_BORROW,
@@ -655,6 +488,17 @@ pub fn instruction_key(instruction: &Bytecode) -> u8 {
         CastU16 => Opcodes::CAST_U16,
         CastU32 => Opcodes::CAST_U32,
         CastU256 => Opcodes::CAST_U256,
+        // ******** DEPRECATED BYTECODES ********
+        ExistsDeprecated(_) => Opcodes::EXISTS_DEPRECATED,
+        ExistsGenericDeprecated(_) => Opcodes::EXISTS_GENERIC_DEPRECATED,
+        MoveFromDeprecated(_) => Opcodes::MOVE_FROM_DEPRECATED,
+        MoveFromGenericDeprecated(_) => Opcodes::MOVE_FROM_GENERIC_DEPRECATED,
+        MoveToDeprecated(_) => Opcodes::MOVE_TO_DEPRECATED,
+        MoveToGenericDeprecated(_) => Opcodes::MOVE_TO_GENERIC_DEPRECATED,
+        MutBorrowGlobalDeprecated(_) => Opcodes::MUT_BORROW_GLOBAL_DEPRECATED,
+        MutBorrowGlobalGenericDeprecated(_) => Opcodes::MUT_BORROW_GLOBAL_GENERIC_DEPRECATED,
+        ImmBorrowGlobalDeprecated(_) => Opcodes::IMM_BORROW_GLOBAL_DEPRECATED,
+        ImmBorrowGlobalGenericDeprecated(_) => Opcodes::IMM_BORROW_GLOBAL_GENERIC_DEPRECATED,
     };
     opcode as u8
 }

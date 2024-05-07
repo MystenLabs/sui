@@ -9,15 +9,208 @@
   position: relative;
   overflow: hidden;
 }
+.heroText {
+  display: flex;
+  flex-direction: column;
+  row-gap: 2.5rem;
+  margin: 0 auto;
+  text-align: center;
+  width: 43.375rem;
+  max-width: 95%;
+  margin: 10rem auto;
+}
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
-  }
+.card, .cardCTA {
+  background-color: rgba(247, 247, 248, .05);
+  border: 1px solid;
+  border-color: var(--sui-line);
+  display: flex;
+  flex-direction: column;
+  padding: 1.875rem;
+  justify-content: space-between;
+  border-radius: 30px;
+  height: 20.3125rem;
+}
+.cardCTA {
+  height: 100%;
+  justify-content: center;
+}
+
+.cardLinksContainer {
+  display: flex;
+  flex-direction: column;
+  justify-self: flex-end;
+}
+
+.cardLink {
+  display: flex;
+  justify-content: flex-start;
+  border-top: solid 1px var(--sui-line);
+  border-bottom: solid 1px var(--sui-line);
+  padding: .5rem 0;
+  color: var(--sui-gray);
+  position: relative;
+}
+
+.cardLink:first-child {
+  border-top: none;
+}
+.cardLink:last-child {
+  border-bottom: none;
+}
+
+.cardLink:after {
+  position: absolute;
+  right: 0;
+  content: url("data:image/svg+xml,%3Csvg width='18' height='19' viewBox='0 0 18 19' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M5 5.5H14V14.5' stroke='%23ABBDCC' stroke-width='2'/%3E%3Cpath d='M14 5.5L3 16.5' stroke='%23ABBDCC' stroke-width='2'/%3E%3C/svg%3E");
+  width: 18px;
+  height: 18px;
+}
+.cardLink:after:hover svg path {
+  stroke: var(--sui-primary);
+}
+
+.cardLink:hover {
+  text-decoration: none;
+}
+
+.cardCTALink {
+  display: flex;
+  padding: .5rem 0;
+  column-gap: .5rem;
+  height: 100%;
+  justify-content: center;
+  align-items: center;
 }
 
 .buttons {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.cardsB {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  row-gap: .5rem;
+  column-gap: .5rem;
+  max-width: 772px;
+}
+
+.cardB {
+  background-color: rgba(247, 247, 248, .05);
+  padding: 1.7rem;
+  font-family: var(--headerFont);
+  font-size: 1.5rem;
+  font-weight: 400;
+  line-height: 1.75rem;
+  letter-spacing: -0.04em;
+  text-align: left;
+  color: var(--sui-white);
+  border-radius: 36px;
+  display: flex;
+  flex-direction: column;
+  row-gap: 1.5rem;
+}
+.cardB svg {
+  width: 32px;
+  height: 32px;
+}
+.cardB span {
+  max-width: 19rem;
+}
+
+.sectionHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  row-gap: 2.5rem;
+  margin: 10rem auto 4.5rem auto;
+  padding: 0 1rem;
+}
+
+.why {
+  display: grid;
+  width: 100%;
+  max-width: var(--sui-max-width-desktop);
+  grid-template-columns: 2fr 4fr;
+  column-gap: .5rem;
+  margin: 0 auto;
+  padding: 0 1rem;
+  row-gap: 1rem;
+}
+
+.TwoColParagraph {
+  display: flex;
+  flex-direction: column;
+  max-width: var(--sui-max-width-desktop);
+  margin: 5rem auto;
+  padding: 0 1rem;
+}
+
+.TwoColItem {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  padding: 2.5rem 0;
+  border-bottom: solid 1px var(--sui-line);
+}
+
+.TwoColItem:last-child {
+  border-bottom: none;
+}
+
+.TwoColItem span {
+  flex: 4;
+  color: var(--sui-white);
+  font-family: var(--headerFont);
+  font-size: 2rem;
+  font-weight: 400;
+  line-height: 2.125rem;
+  letter-spacing: -0.04em;
+  text-align: left;
+
+}
+
+.TwoColItem p {
+  flex: 8;
+  color: var(--sui-gray);
+  font-family: Inter;
+  font-size: 1.125rem;
+  font-weight: 500;
+  line-height: 1.6875rem;
+  letter-spacing: -0.02em;
+  text-align: left;
+  margin: 0;
+}
+
+
+@media screen and (max-width: 996px) {
+  .sectionHeader {
+    margin: 5rem auto 2.5rem auto;
+  }
+  .why {
+    grid-template-columns: 1fr;
+    max-width: 382px;
+  }
+  .card {
+    height: 100%;
+  }
+  .cardsB {
+    grid-template-columns: 1fr;
+  }
+  .TwoColItem {
+    flex-direction: column;
+    row-gap: 2rem;
+    padding: 2.5rem 1.5rem;
+  }
+  .heroBanner {
+    padding: 2rem;
+  }
+}
+
+@media screen and (max-width: 799px) {
+  .heroText { 
+    margin: 2rem 0;
+  }
 }

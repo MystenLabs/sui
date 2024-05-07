@@ -16,10 +16,12 @@ module 0x1.Token {
 }
 
 //# run
+module 0x42.m {
 import 0x1.Token;
 
-main() {
+entry foo() {
 label b0:
     Token.test();
     return;
+}
 }

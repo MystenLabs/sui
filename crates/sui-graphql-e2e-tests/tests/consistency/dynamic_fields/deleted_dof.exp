@@ -1,0 +1,219 @@
+processed 13 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 14-58:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7949600,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 60-62:
+created: object(2,0), object(2,1)
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 3610000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'run'. lines 64-64:
+created: object(3,0)
+mutated: object(0,0), object(2,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 6064800,  storage_rebate: 3573900, non_refundable_storage_fee: 36100
+
+task 4 'run'. lines 66-66:
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 5 'create-checkpoint'. lines 68-68:
+Checkpoint created: 1
+
+task 6 'run-graphql'. lines 70-127:
+Response: {
+  "data": {
+    "latest": {
+      "version": 4,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IJurL/y33trO2ZsPz+KjL5rGkUVFWqzOQse//9eeD7vrAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "owner_view": {
+      "version": 4,
+      "dynamicFields": {
+        "edges": [
+          {
+            "cursor": "IJurL/y33trO2ZsPz+KjL5rGkUVFWqzOQse//9eeD7vrAQAAAAAAAAA=",
+            "node": {
+              "name": {
+                "bcs": "KgAAAAAAAAA="
+              },
+              "value": {
+                "contents": {
+                  "json": {
+                    "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+                    "count": "0"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "dof_added": {
+      "version": 3,
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+              "count": "0"
+            }
+          }
+        }
+      }
+    },
+    "before_dof_added": {
+      "version": 2,
+      "dynamicObjectField": null
+    }
+  }
+}
+
+task 7 'run'. lines 129-129:
+mutated: object(0,0), object(2,1)
+deleted: object(2,0), object(3,0)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 6004152, non_refundable_storage_fee: 60648
+
+task 8 'create-checkpoint'. lines 131-131:
+Checkpoint created: 2
+
+task 9 'run-graphql'. lines 133-184:
+Response: {
+  "data": {
+    "latest": {
+      "version": 5,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "owner_view": {
+      "version": 5,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "before_delete_dof": {
+      "version": 4,
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+              "count": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+task 10 'run'. lines 186-186:
+mutated: object(0,0), object(2,1)
+gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 2279772, non_refundable_storage_fee: 23028
+
+task 11 'create-checkpoint'. lines 188-188:
+Checkpoint created: 3
+
+task 12 'run-graphql'. lines 190-253:
+Response: {
+  "data": {
+    "latest": {
+      "version": 6,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "owner_view": {
+      "version": 6,
+      "dynamicFields": {
+        "edges": []
+      },
+      "dynamicObjectField": null
+    },
+    "parent_version_6": {
+      "version": 6,
+      "dynamicObjectField": null
+    },
+    "parent_version_5": {
+      "version": 5,
+      "dynamicObjectField": null
+    },
+    "parent_version_4": {
+      "version": 4,
+      "dynamicObjectField": {
+        "name": {
+          "bcs": "KgAAAAAAAAA="
+        },
+        "value": {
+          "contents": {
+            "json": {
+              "id": "0x478d39b6d9986a336f8b29605b5f76be20c867640c2e71048e2d5df5b8c92dd6",
+              "count": "0"
+            }
+          }
+        }
+      }
+    }
+  }
+}

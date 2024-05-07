@@ -4,7 +4,7 @@
 import { type PermissionType } from '_src/shared/messaging/messages/payloads/permissions';
 import { getValidDAppUrl } from '_src/shared/utils';
 import { CheckFill16 } from '@mysten/icons';
-import cn from 'classnames';
+import cn from 'clsx';
 
 import { useAccountByAddress } from '../hooks/useAccountByAddress';
 import { Heading } from '../shared/heading';

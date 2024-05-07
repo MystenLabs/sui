@@ -2,6 +2,7 @@
 name = "SuiSystem"
 version = "0.0.1"
 published-at = "0x3"
+edition = "2024.beta"
 
 [dependencies]
 MoveStdlib = { local = "../move-stdlib" }

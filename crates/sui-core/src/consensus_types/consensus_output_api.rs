@@ -1,11 +1,12 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use std::fmt::Display;
 
 use crate::consensus_types::AuthorityIndex;
+use consensus_core::BlockAPI;
 use fastcrypto::hash::Hash;
-use narwhal_types::{BatchAPI, CertificateAPI, HeaderAPI};
-use std::fmt::Display;
-use sui_types::messages_consensus::ConsensusTransaction;
+use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
+use sui_types::{digests::ConsensusCommitDigest, messages_consensus::ConsensusTransaction};
 
 /// A list of tuples of:
 /// (certificate origin authority index, all transactions corresponding to the certificate).
@@ -25,6 +26,9 @@ pub(crate) trait ConsensusOutputAPI: Display {
 
     /// Returns all transactions in the commit.
     fn transactions(&self) -> ConsensusOutputTransactions<'_>;
+
+    /// Returns the digest of consensus output.
+    fn consensus_digest(&self) -> ConsensusCommitDigest;
 }
 
 impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
@@ -37,7 +41,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
                 .reputation_score
                 .authorities_by_score_desc()
                 .into_iter()
-                .map(|(id, score)| (id.0, score))
+                .map(|(id, score)| (id.0 as AuthorityIndex, score))
                 .collect(),
         )
     }
@@ -47,7 +51,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
     }
 
     fn leader_author_index(&self) -> AuthorityIndex {
-        self.sub_dag.leader.origin().0
+        self.sub_dag.leader.origin().0 as AuthorityIndex
     }
 
     fn commit_timestamp_ms(&self) -> u64 {
@@ -59,48 +63,57 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
+        assert!(self.sub_dag.certificates.len() == self.batches.len());
         self.sub_dag
             .certificates
             .iter()
             .zip(&self.batches)
             .map(|(cert, batches)| {
                 assert_eq!(cert.header().payload().len(), batches.len());
-                let transactions: Vec<(&[u8], ConsensusTransaction)> = batches.iter().flat_map(|batch| {
-                    let digest = batch.digest();
-                    assert!(cert.header().payload().contains_key(&digest));
-                    batch.transactions().iter().map(move |serialized_transaction| {
-                        let transaction = match bcs::from_bytes::<ConsensusTransaction>(
-                            serialized_transaction,
-                        ) {
-                            Ok(transaction) => transaction,
-                            Err(err) => {
-                                // This should have been prevented by Narwhal batch verification.
-                                panic!(
-                                    "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
-                                    err, cert, digest, serialized_transaction
-                                );
-                            }
-                        };
-                        (serialized_transaction.as_ref(), transaction)
-                    })
-                }).collect();
-                (cert.origin().0, transactions)
+                let transactions: Vec<(&[u8], ConsensusTransaction)> =
+                    batches.iter().flat_map(|batch| {
+                        let digest = batch.digest();
+                        assert!(cert.header().payload().contains_key(&digest));
+                        batch.transactions().iter().map(move |serialized_transaction| {
+                            let transaction = match bcs::from_bytes::<ConsensusTransaction>(
+                                serialized_transaction,
+                            ) {
+                                Ok(transaction) => transaction,
+                                Err(err) => {
+                                    // This should have been prevented by Narwhal batch verification.
+                                    panic!(
+                                        "Unexpected malformed transaction (failed to deserialize): {}\nCertificate={:?} BatchDigest={:?} Transaction={:?}",
+                                        err, cert, digest, serialized_transaction
+                                    );
+                                }
+                            };
+                            (serialized_transaction.as_ref(), transaction)
+                        })
+                    }).collect();
+                (cert.origin().0 as AuthorityIndex, transactions)
             }).collect()
+    }
+
+    fn consensus_digest(&self) -> ConsensusCommitDigest {
+        // We port ConsensusOutputDigest, a narwhal space object, into ConsensusCommitDigest, a sui-core space object.
+        // We assume they always have the same format.
+        static_assertions::assert_eq_size!(ConsensusCommitDigest, ConsensusOutputDigest);
+        ConsensusCommitDigest::new(self.digest().into_inner())
     }
 }
 
-impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubDag {
+impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
         // TODO: Implement this in Mysticeti.
         None
     }
 
     fn leader_round(&self) -> u64 {
-        self.anchor.round
+        self.leader.round as u64
     }
 
     fn leader_author_index(&self) -> AuthorityIndex {
-        self.anchor.authority as AuthorityIndex
+        self.leader.author.value() as AuthorityIndex
     }
 
     fn commit_timestamp_ms(&self) -> u64 {
@@ -109,7 +122,7 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        self.height
+        self.commit_index.into()
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
@@ -117,10 +130,11 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
             .iter()
             .map(|block| {
                 let round = block.round();
-                let author = block.author() as AuthorityIndex;
+                let author = block.author().value() as AuthorityIndex;
                 let transactions: Vec<_> = block
-                    .shared_transactions()
-                    .flat_map(|(_loc, tx)| {
+                    .transactions()
+                    .iter()
+                    .flat_map(|tx| {
                         let transaction = bcs::from_bytes::<ConsensusTransaction>(tx.data());
                         match transaction {
                             Ok(transaction) => Some((
@@ -137,5 +151,10 @@ impl ConsensusOutputAPI for mysticeti_core::consensus::linearizer::CommittedSubD
                 (author, transactions)
             })
             .collect()
+    }
+
+    fn consensus_digest(&self) -> ConsensusCommitDigest {
+        // TODO(mysticeti): implement consensus output digest.
+        ConsensusCommitDigest::default()
     }
 }

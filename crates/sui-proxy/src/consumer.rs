@@ -148,8 +148,7 @@ fn encode_compress(request: &WriteRequest) -> Result<Vec<u8>, (StatusCode, &'sta
             timer.observe_duration();
         }
     }();
-    let mut buf = Vec::new();
-    buf.reserve(request.encoded_len());
+    let mut buf = Vec::with_capacity(request.encoded_len());
     if request.encode(&mut buf).is_err() {
         observe();
         CONSUMER_OPS
@@ -197,7 +196,6 @@ async fn check_response(
             Ok(())
         }
         reqwest::StatusCode::BAD_REQUEST => {
-            error!("TRIED: {:?}", request);
             let body = response
                 .text()
                 .await
@@ -225,7 +223,6 @@ async fn check_response(
             ))
         }
         code => {
-            error!("TRIED: {:?}", request);
             let body = response
                 .text()
                 .await

@@ -75,12 +75,12 @@ impl TransactionKeyValueStore {
 
         self.metrics
             .key_value_store_num_fetches_latency_ms
-            .with_label_values(&[self.store_name])
-            .observe(elapsed.as_millis() as u64);
+            .with_label_values(&[self.store_name, "tx"])
+            .observe(elapsed.as_millis() as f64);
         self.metrics
             .key_value_store_num_fetches_batch_size
-            .with_label_values(&[self.store_name])
-            .observe(total_keys);
+            .with_label_values(&[self.store_name, "tx"])
+            .observe(total_keys as f64);
 
         if let Ok(res) = &res {
             let txns_not_found = res.0.iter().filter(|v| v.is_none()).count() as u64;
@@ -173,12 +173,16 @@ impl TransactionKeyValueStore {
 
         self.metrics
             .key_value_store_num_fetches_latency_ms
-            .with_label_values(&[self.store_name])
-            .observe(elapsed.as_millis() as u64);
+            .with_label_values(&[self.store_name, "checkpoint"])
+            .observe(elapsed.as_millis() as f64);
         self.metrics
             .key_value_store_num_fetches_batch_size
-            .with_label_values(&[self.store_name])
-            .observe(num_summaries + num_contents);
+            .with_label_values(&[self.store_name, "checkpoint_summary"])
+            .observe(num_summaries as f64);
+        self.metrics
+            .key_value_store_num_fetches_batch_size
+            .with_label_values(&[self.store_name, "checkpoint_content"])
+            .observe(num_contents as f64);
 
         if let Ok(res) = &res {
             let summaries_not_found = res.0.iter().filter(|v| v.is_none()).count() as u64

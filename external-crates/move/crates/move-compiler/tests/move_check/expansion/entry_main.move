@@ -1,4 +1,0 @@
-script {
-entry fun main() {
-}
-}

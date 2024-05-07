@@ -3,15 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 extern crate test_generation;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{
-        empty_module, Ability, AbilitySet, Bytecode, CompiledModule, FieldDefinition, FieldHandle,
-        FieldHandleIndex, IdentifierIndex, ModuleHandleIndex, SignatureToken, StructDefinition,
-        StructDefinitionIndex, StructFieldInformation, StructHandle, StructHandleIndex, TableIndex,
-        TypeSignature,
-    },
-    views::{StructDefinitionView, ViewInternals},
+use move_binary_format::file_format::{
+    empty_module, Ability, AbilitySet, Bytecode, CompiledModule, FieldDefinition, FieldHandle,
+    FieldHandleIndex, IdentifierIndex, ModuleHandleIndex, SignatureToken, StructDefinition,
+    StructDefinitionIndex, StructFieldInformation, StructHandle, StructHandleIndex, TableIndex,
+    TypeSignature,
 };
 use move_core_types::identifier::Identifier;
 use std::collections::HashMap;
@@ -61,14 +57,14 @@ fn generate_module_with_struct(resource: bool) -> CompiledModule {
 
 fn create_struct_value(module: &CompiledModule) -> (AbstractValue, Vec<SignatureToken>) {
     let struct_def = module.struct_def_at(StructDefinitionIndex::new(0));
-    let struct_def_view = StructDefinitionView::new(module, struct_def);
-    let tokens: Vec<SignatureToken> = struct_def_view
+    let tokens: Vec<SignatureToken> = struct_def
         .fields()
         .into_iter()
         .flatten()
-        .map(|field| field.type_signature().token().as_inner().clone())
+        .map(|field| field.signature.0.clone())
         .collect();
-    let struct_abilities = struct_def_view.abilities();
+    let shandle = module.struct_handle_at(struct_def.struct_handle);
+    let struct_abilities = shandle.abilities;
 
     let type_argument_abilities = tokens.iter().map(|arg| abilities(module, arg, &[]));
     let declared_phantom_parameters = [false].repeat(type_argument_abilities.len());
@@ -146,126 +142,6 @@ fn bytecode_unpack() {
         tokens.len(),
         "stack type postcondition not met"
     );
-}
-
-#[test]
-fn bytecode_exists() {
-    let module = generate_module_with_struct(true);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_primitive(SignatureToken::Address));
-    let (state2, _) =
-        common::run_instruction(Bytecode::Exists(StructDefinitionIndex::new(0)), state1);
-    assert_eq!(
-        state2.stack_peek(0),
-        Some(AbstractValue::new_primitive(SignatureToken::Bool)),
-        "stack type postcondition not met"
-    );
-}
-
-#[test]
-#[should_panic]
-fn bytecode_exists_struct_is_not_resource() {
-    let module = generate_module_with_struct(false);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_primitive(SignatureToken::Address));
-    common::run_instruction(Bytecode::Exists(StructDefinitionIndex::new(0)), state1);
-}
-
-#[test]
-#[should_panic]
-fn bytecode_exists_no_address_on_stack() {
-    let module = generate_module_with_struct(true);
-    let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    common::run_instruction(Bytecode::Exists(StructDefinitionIndex::new(0)), state1);
-}
-
-#[test]
-fn bytecode_movefrom() {
-    let module = generate_module_with_struct(true);
-    let mut state1 = AbstractState::from_locals(
-        module,
-        HashMap::new(),
-        vec![],
-        vec![StructDefinitionIndex::new(0)],
-        CallGraph::new(0),
-    );
-    let state1_copy = state1.clone();
-    let struct_def = state1_copy
-        .module
-        .module
-        .struct_def_at(StructDefinitionIndex::new(0));
-    state1.stack_push(AbstractValue::new_primitive(SignatureToken::Address));
-    let (state2, _) =
-        common::run_instruction(Bytecode::MoveFrom(StructDefinitionIndex::new(0)), state1);
-    let struct_value = state2.stack_peek(0).expect("struct not added to stack");
-    assert!(
-        matches!(struct_value.token, SignatureToken::Struct(struct_handle) if struct_handle == struct_def.struct_handle),
-        "stack type postcondition not met"
-    );
-}
-
-#[test]
-#[should_panic]
-fn bytecode_movefrom_struct_is_not_resource() {
-    let module = generate_module_with_struct(false);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_primitive(SignatureToken::Address));
-    common::run_instruction(Bytecode::MoveFrom(StructDefinitionIndex::new(0)), state1);
-}
-
-#[test]
-#[should_panic]
-fn bytecode_movefrom_no_address_on_stack() {
-    let module = generate_module_with_struct(true);
-    let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    common::run_instruction(Bytecode::MoveFrom(StructDefinitionIndex::new(0)), state1);
-}
-
-#[test]
-fn bytecode_moveto() {
-    let module = generate_module_with_struct(true);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_reference(
-        SignatureToken::Reference(Box::new(SignatureToken::Signer)),
-        AbilitySet::EMPTY | Ability::Drop,
-    ));
-    state1.stack_push(create_struct_value(&state1.module.module).0);
-    let (state2, _) =
-        common::run_instruction(Bytecode::MoveTo(StructDefinitionIndex::new(0)), state1);
-    assert_eq!(state2.stack_len(), 0, "stack type postcondition not met");
-}
-
-#[test]
-#[should_panic]
-fn bytecode_moveto_struct_is_not_resource() {
-    let module = generate_module_with_struct(false);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_reference(
-        SignatureToken::Reference(Box::new(SignatureToken::Signer)),
-        AbilitySet::EMPTY | Ability::Drop,
-    ));
-    state1.stack_push(create_struct_value(&state1.module.module).0);
-    common::run_instruction(Bytecode::MoveTo(StructDefinitionIndex::new(0)), state1);
-}
-
-#[test]
-#[should_panic]
-fn bytecode_moveto_no_struct_on_stack() {
-    let module = generate_module_with_struct(true);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_reference(
-        SignatureToken::Reference(Box::new(SignatureToken::Signer)),
-        AbilitySet::EMPTY | Ability::Drop,
-    ));
-    common::run_instruction(Bytecode::MoveTo(StructDefinitionIndex::new(0)), state1);
 }
 
 #[test]
@@ -402,50 +278,4 @@ fn bytecode_immborrowfield_ref_is_mutable() {
         abilities: struct_value.abilities,
     });
     common::run_instruction(Bytecode::ImmBorrowField(field_handle_idx), state1);
-}
-
-#[test]
-fn bytecode_borrowglobal() {
-    let module = generate_module_with_struct(true);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    let struct_value = create_struct_value(&state1.module.module).0;
-    state1.stack_push(AbstractValue::new_primitive(SignatureToken::Address));
-    let (state2, _) = common::run_instruction(
-        Bytecode::MutBorrowGlobal(StructDefinitionIndex::new(0)),
-        state1,
-    );
-    assert_eq!(
-        state2.stack_peek(0),
-        Some(AbstractValue {
-            token: SignatureToken::MutableReference(Box::new(struct_value.token)),
-            abilities: struct_value.abilities,
-        }),
-        "stack type postcondition not met"
-    );
-}
-
-#[test]
-#[should_panic]
-fn bytecode_borrowglobal_struct_is_not_resource() {
-    let module = generate_module_with_struct(false);
-    let mut state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    state1.stack_push(AbstractValue::new_primitive(SignatureToken::Address));
-    common::run_instruction(
-        Bytecode::MutBorrowGlobal(StructDefinitionIndex::new(0)),
-        state1,
-    );
-}
-
-#[test]
-#[should_panic]
-fn bytecode_borrowglobal_no_address_on_stack() {
-    let module = generate_module_with_struct(true);
-    let state1 =
-        AbstractState::from_locals(module, HashMap::new(), vec![], vec![], CallGraph::new(0));
-    common::run_instruction(
-        Bytecode::MutBorrowGlobal(StructDefinitionIndex::new(0)),
-        state1,
-    );
 }

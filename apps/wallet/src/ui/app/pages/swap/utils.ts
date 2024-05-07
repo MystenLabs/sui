@@ -61,7 +61,7 @@ export function getUSDCurrency(amount?: number | null) {
 		return null;
 	}
 
-	return roundFloat(amount).toLocaleString('en', {
+	return roundFloat(amount, 4).toLocaleString('en', {
 		style: 'currency',
 		currency: 'USD',
 	});

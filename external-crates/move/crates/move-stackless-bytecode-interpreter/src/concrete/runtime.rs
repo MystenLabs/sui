@@ -10,7 +10,7 @@
 use move_binary_format::errors::{Location, PartialVMError, PartialVMResult, VMResult};
 use move_core_types::{
     language_storage::{StructTag, TypeTag},
-    value::MoveValue,
+    runtime_value::MoveValue,
     vm_status::StatusCode,
 };
 use move_model::{

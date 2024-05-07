@@ -21,7 +21,6 @@ async fn propose_empty() {
     let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
-    let (_tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
 
@@ -41,7 +40,6 @@ async fn propose_empty() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
-        rx_system_messages,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,
@@ -68,7 +66,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
-    let (_tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
@@ -93,7 +90,6 @@ async fn propose_payload_and_repropose_after_n_seconds() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
-        rx_system_messages,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,
@@ -196,7 +192,6 @@ async fn equivocation_protection() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
-    let (_tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
@@ -218,7 +213,6 @@ async fn equivocation_protection() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
-        rx_system_messages,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,
@@ -272,7 +266,6 @@ async fn equivocation_protection() {
     let mut tx_shutdown = PreSubscribedBroadcastSender::new(NUM_SHUTDOWN_RECEIVERS);
     let (tx_parents, rx_parents) = test_utils::test_channel!(1);
     let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
-    let (_tx_system_messages, rx_system_messages) = test_utils::test_channel!(1);
     let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
     let (tx_narwhal_round_updates, _rx_narwhal_round_updates) = watch::channel(0u64);
     let (_tx_committed_own_headers, rx_committed_own_headers) = test_utils::test_channel!(1);
@@ -293,7 +286,6 @@ async fn equivocation_protection() {
         tx_shutdown.subscribe(),
         /* rx_core */ rx_parents,
         /* rx_workers */ rx_our_digests,
-        rx_system_messages,
         /* tx_core */ tx_headers,
         tx_narwhal_round_updates,
         rx_committed_own_headers,

@@ -10,7 +10,7 @@
  * /crates/sui-open-rpc/spec/openrpc.json
  */
 
-import type { TransactionBlock } from '../../builder/index.js';
+import type { TransactionBlock } from '../../transactions/index.js';
 import type * as RpcTypes from './generated.js';
 
 /**
@@ -26,6 +26,8 @@ export interface DevInspectTransactionBlockParams {
 	gasPrice?: bigint | number | null | undefined;
 	/** The epoch to perform the call. Will be set from the system state object if not provided */
 	epoch?: string | null | undefined;
+	/** Additional arguments including gas_budget, gas_objects, gas_sponsor and skip_checks. */
+	additionalArgs?: RpcTypes.DevInspectArgs | null | undefined;
 }
 /**
  * Return transaction execution effects including the gas cost summary, while the effects are not

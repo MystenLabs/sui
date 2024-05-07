@@ -4,7 +4,7 @@
 import { useMenuIsOpen } from '_components/menu/hooks';
 import { useAppSelector } from '_hooks';
 import { getNavIsVisible } from '_redux/slices/app';
-import cl from 'classnames';
+import cl from 'clsx';
 import { Toaster as ToasterLib } from 'react-hot-toast';
 import { useLocation } from 'react-router-dom';
 

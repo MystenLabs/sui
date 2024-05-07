@@ -4,8 +4,9 @@
 use eyre::{eyre, Result};
 use std::{
     borrow::Cow,
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
 };
+use tracing::error;
 
 pub use ::multiaddr::Error;
 pub use ::multiaddr::Protocol;
@@ -23,7 +24,7 @@ impl Multiaddr {
         Self(inner)
     }
 
-    pub(crate) fn iter(&self) -> ::multiaddr::Iter<'_> {
+    pub fn iter(&self) -> ::multiaddr::Iter<'_> {
         self.0.iter()
     }
 
@@ -102,14 +103,56 @@ impl Multiaddr {
 
     /// Set the ip address to `0.0.0.0`. For instance, it converts the following address
     /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/0.0.0.0/tcp/1500/http`.
-    pub fn zero_ip_multi_address(&self) -> Self {
-        let mut new_address = ::multiaddr::Multiaddr::empty();
-        for component in &self.0 {
-            match component {
-                multiaddr::Protocol::Ip4(_) => new_address.push(multiaddr::Protocol::Ip4(
-                    std::net::Ipv4Addr::new(0, 0, 0, 0),
-                )),
-                c => new_address.push(c),
+    /// This is useful when starting a server and you want to listen on all interfaces.
+    pub fn with_zero_ip(&self) -> Self {
+        let mut new_address = self.0.clone();
+        let Some(protocol) = new_address.iter().next() else {
+            error!("Multiaddr is empty");
+            return Self(new_address);
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(_)
+            | multiaddr::Protocol::Dns(_)
+            | multiaddr::Protocol::Dns4(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
+                    .unwrap();
+            }
+            multiaddr::Protocol::Ip6(_) | multiaddr::Protocol::Dns6(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip6(Ipv6Addr::UNSPECIFIED)))
+                    .unwrap();
+            }
+            p => {
+                error!("Unsupported protocol {} in Multiaddr {}!", p, new_address);
+            }
+        }
+        Self(new_address)
+    }
+
+    /// Set the ip address to `127.0.0.1`. For instance, it converts the following address
+    /// `/ip4/155.138.174.208/tcp/1500/http` into `/ip4/127.0.0.1/tcp/1500/http`.
+    pub fn with_localhost_ip(&self) -> Self {
+        let mut new_address = self.0.clone();
+        let Some(protocol) = new_address.iter().next() else {
+            error!("Multiaddr is empty");
+            return Self(new_address);
+        };
+        match protocol {
+            multiaddr::Protocol::Ip4(_)
+            | multiaddr::Protocol::Dns(_)
+            | multiaddr::Protocol::Dns4(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip4(Ipv4Addr::LOCALHOST)))
+                    .unwrap();
+            }
+            multiaddr::Protocol::Ip6(_) | multiaddr::Protocol::Dns6(_) => {
+                new_address = new_address
+                    .replace(0, |_| Some(multiaddr::Protocol::Ip6(Ipv6Addr::LOCALHOST)))
+                    .unwrap();
+            }
+            p => {
+                error!("Unsupported protocol {} in Multiaddr {}!", p, new_address);
             }
         }
         Self(new_address)
@@ -330,6 +373,72 @@ mod test {
 
         let multi_addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16)));
         assert_eq!(Some("mysten.sui".to_string()), multi_addr_dns.hostname());
+        assert_eq!(Some(10501u16), multi_addr_dns.port());
+    }
+
+    #[test]
+    fn test_to_anemo_address() {
+        let addr_ip4 = Multiaddr(multiaddr!(Ip4([15, 15, 15, 1]), Udp(10500u16)))
+            .to_anemo_address()
+            .unwrap();
+        assert_eq!("15.15.15.1:10500".to_string(), addr_ip4.to_string());
+
+        let addr_ip6 = Multiaddr(multiaddr!(
+            Ip6([15, 15, 15, 15, 15, 15, 15, 1]),
+            Udp(10500u16)
+        ))
+        .to_anemo_address()
+        .unwrap();
+        assert_eq!("[f:f:f:f:f:f:f:1]:10500".to_string(), addr_ip6.to_string());
+
+        let addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Udp(10501u16)))
+            .to_anemo_address()
+            .unwrap();
+        assert_eq!("mysten.sui:10501".to_string(), addr_dns.to_string());
+
+        let addr_invalid =
+            Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).to_anemo_address();
+        assert!(addr_invalid.is_err());
+    }
+
+    #[test]
+    fn test_with_zero_ip() {
+        let multi_addr_ip4 =
+            Multiaddr(multiaddr!(Ip4([15, 15, 15, 1]), Tcp(10500u16))).with_zero_ip();
+        assert_eq!(Some("0.0.0.0".to_string()), multi_addr_ip4.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_ip6 = Multiaddr(multiaddr!(
+            Ip6([15, 15, 15, 15, 15, 15, 15, 1]),
+            Tcp(10500u16)
+        ))
+        .with_zero_ip();
+        assert_eq!(Some("::".to_string()), multi_addr_ip6.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_dns = Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_zero_ip();
+        assert_eq!(Some("0.0.0.0".to_string()), multi_addr_dns.hostname());
+        assert_eq!(Some(10501u16), multi_addr_dns.port());
+    }
+
+    #[test]
+    fn test_with_localhost_ip() {
+        let multi_addr_ip4 =
+            Multiaddr(multiaddr!(Ip4([15, 15, 15, 1]), Tcp(10500u16))).with_localhost_ip();
+        assert_eq!(Some("127.0.0.1".to_string()), multi_addr_ip4.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_ip6 = Multiaddr(multiaddr!(
+            Ip6([15, 15, 15, 15, 15, 15, 15, 1]),
+            Tcp(10500u16)
+        ))
+        .with_localhost_ip();
+        assert_eq!(Some("::1".to_string()), multi_addr_ip6.hostname());
+        assert_eq!(Some(10500u16), multi_addr_ip4.port());
+
+        let multi_addr_dns =
+            Multiaddr(multiaddr!(Dns("mysten.sui"), Tcp(10501u16))).with_localhost_ip();
+        assert_eq!(Some("127.0.0.1".to_string()), multi_addr_dns.hostname());
         assert_eq!(Some(10501u16), multi_addr_dns.port());
     }
 }

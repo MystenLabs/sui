@@ -4,14 +4,14 @@
 import { TransactionBlock } from '@mysten/sui.js/transactions';
 import { expect } from 'vitest';
 
+import type { KioskClient, KioskOwnerCap } from '../../src/index.js';
 import {
-	KioskClient,
-	KioskOwnerCap,
 	KioskTransaction,
 	percentageToBasisPoints,
 	TransferPolicyTransaction,
-} from '../../src';
-import { executeTransactionBlock, getPublisherObject, TestToolbox } from './setup';
+} from '../../src/index.js';
+import type { TestToolbox } from './setup.js';
+import { executeTransactionBlock, getPublisherObject } from './setup.js';
 
 // Creates a fresh transfer policy for Heroes and attaches all the rules.
 export async function prepareHeroRuleset({
@@ -83,7 +83,7 @@ export async function testLockItemFlow(
 	kioskTx
 		.lock({
 			itemType,
-			itemId,
+			item: itemId,
 			policy: policies[0].id,
 		})
 		.finalize();

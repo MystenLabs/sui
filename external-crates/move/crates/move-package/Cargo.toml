@@ -9,6 +9,7 @@ edition = "2021"
 
 [dependencies]
 toml.workspace = true
+toml_edit.workspace = true
 serde.workspace = true
 petgraph.workspace = true
 anyhow.workspace = true
@@ -22,11 +23,12 @@ regex.workspace = true
 treeline.workspace = true
 once_cell.workspace = true
 named-lock.workspace = true
+itertools.workspace = true
+vfs.workspace = true
 
 move-binary-format.workspace = true
 move-compiler.workspace = true
 move-bytecode-source-map.workspace = true
-move-abigen.workspace = true
 move-docgen.workspace = true
 move-core-types.workspace = true
 move-symbol-pool.workspace = true
@@ -38,6 +40,7 @@ whoami.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true
+expect-test = "1.4.0"
 
 [[test]]
 name = "test_runner"

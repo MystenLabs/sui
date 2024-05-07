@@ -70,7 +70,6 @@ fn get_registry() -> Result<Registry> {
     let authority = committee.authority_by_key(kp.public()).unwrap();
 
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
-    // TODO: Update to HeaderV2Builder. Add example SystemMessages.
     let header_builder = HeaderV1Builder::default();
     let header = header_builder
         .author(authority.id())

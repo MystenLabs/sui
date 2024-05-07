@@ -4,7 +4,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { DeepBookClient } from '../../src';
-import { PoolSummary } from '../../src/types';
+import { Level2BookStatusPoint, PoolSummary } from '../../src/types';
 import {
 	DEFAULT_LOT_SIZE,
 	DEFAULT_TICK_SIZE,
@@ -60,7 +60,7 @@ describe('Interacting with the pool', () => {
 		const baseCoin = resp.data[0].coinObjectId;
 
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId2);
-		const txb = await deepbook.deposit(pool.poolId, baseCoin, DEPOSIT_AMOUNT);
+		const txb = await deepbook.deposit(pool.poolId, baseCoin, 5n * DEPOSIT_AMOUNT);
 		await executeTransactionBlock(toolbox, txb);
 	});
 
@@ -113,14 +113,14 @@ describe('Interacting with the pool', () => {
 		expect(price.bestBidPrice).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
 	});
 
-	it('test getting Level 2 Book status', async () => {
+	it('test getting Level 2 Book status, bid side', async () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
-		const status = await deepbook.getLevel2BookStatus(
+		const status = (await deepbook.getLevel2BookStatus(
 			pool.poolId,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			'bid',
-		);
+		)) as Level2BookStatusPoint[];
 		expect(status.length).toBe(1);
 		expect(status[0].price).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
 		expect(status[0].depth).toBe(LIMIT_ORDER_QUANTITY);
@@ -143,7 +143,13 @@ describe('Interacting with the pool', () => {
 			).totalBalance,
 		);
 
-		const txb = await deepbook.placeMarketOrder(pool.poolId, LIMIT_ORDER_QUANTITY, 'ask', baseCoin);
+		const txb = await deepbook.placeMarketOrder(
+			accountCapId2,
+			pool.poolId,
+			LIMIT_ORDER_QUANTITY,
+			'ask',
+			baseCoin,
+		);
 		await executeTransactionBlock(toolbox, txb);
 
 		// the limit order should be cleared out after matching with the market order
@@ -180,5 +186,65 @@ describe('Interacting with the pool', () => {
 
 		const openOrdersAfter = await deepbook.listOpenOrders(pool.poolId);
 		expect(openOrdersAfter.length).toBe(0);
+	});
+
+	it('Test parsing sui coin id', async () => {
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
+		const resp = await toolbox.client.getCoins({
+			owner: toolbox.keypair.getPublicKey().toSuiAddress(),
+			coinType: pool.baseAsset,
+		});
+		const baseCoin = resp.data[0].coinObjectId;
+		const type = await deepbook.getCoinType(baseCoin);
+		expect(type).toBe(resp.data[0].coinType);
+	});
+
+	it('Test parsing complex coin id', async () => {
+		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
+		const resp = await toolbox.client.getCoins({
+			owner: toolbox.address(),
+			coinType: pool.baseAsset,
+		});
+		const baseCoin = resp.data[0].coinObjectId;
+		const type = await deepbook.getCoinType(baseCoin);
+		expect(type).toBe(resp.data[0].coinType);
+	});
+
+	it('Test getting level 2 book status, both sides', async () => {
+		const deepbook1 = new DeepBookClient(toolbox.client, accountCapId);
+		const deepbook2 = new DeepBookClient(toolbox.client, accountCapId2);
+		const txb1 = await deepbook1.placeLimitOrder(
+			pool.poolId,
+			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			LIMIT_ORDER_QUANTITY,
+			'bid',
+		);
+		await executeTransactionBlock(toolbox, txb1);
+		const txb2 = await deepbook2.placeLimitOrder(
+			pool.poolId,
+			2n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			LIMIT_ORDER_QUANTITY,
+			'ask',
+		);
+		await executeTransactionBlock(toolbox, txb2);
+		const txb3 = await deepbook2.placeLimitOrder(
+			pool.poolId,
+			3n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			LIMIT_ORDER_QUANTITY,
+			'ask',
+		);
+		await executeTransactionBlock(toolbox, txb3);
+		const status = (await deepbook2.getLevel2BookStatus(
+			pool.poolId,
+			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			3n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
+			'both',
+		)) as Level2BookStatusPoint[][];
+		expect(status.length).toBe(2);
+		expect(status[0].length).toBe(1);
+		expect(status[1].length).toBe(2);
+		expect(status[0][0].price).toBe(LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
+		expect(status[1][0].price).toBe(2n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
+		expect(status[1][1].price).toBe(3n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE);
 	});
 });

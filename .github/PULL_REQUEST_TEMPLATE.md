@@ -2,21 +2,22 @@
 
 Describe the changes or additions included in this PR.
 
-## Test Plan 
+## Test plan 
 
 How did you test the new or updated feature?
 
 ---
-If your changes are not user-facing and not a breaking change, you can skip the following section. Otherwise, please indicate what changed, and then add to the Release Notes section as highlighted during the release process.
 
-### Type of Change (Check all that apply)
+## Release notes
 
-- [ ] protocol change
-- [ ] user-visible impact
-- [ ] breaking change for a client SDKs
-- [ ] breaking change for FNs (FN binary must upgrade)
-- [ ] breaking change for validators or node operators (must upgrade binaries)
-- [ ] breaking change for on-chain data layout
-- [ ] necessitate either a data wipe or data migration
+Check each box that your changes affect. If none of the boxes relate to your changes, release notes aren't required.
 
-### Release notes
+For each box you select, include information after the relevant heading that describes the impact of your changes that a user might notice and any actions they must take to implement updates. 
+
+- [ ] Protocol: 
+- [ ] Nodes (Validators and Full nodes): 
+- [ ] Indexer: 
+- [ ] JSON-RPC: 
+- [ ] GraphQL: 
+- [ ] CLI: 
+- [ ] Rust SDK: 

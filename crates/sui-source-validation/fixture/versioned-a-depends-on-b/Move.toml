@@ -1,0 +1,10 @@
+[package]
+name = "a"
+version = "0.0.1"
+published-at = "$STORAGE_ID"
+
+[dependencies]
+b = { local = "../versioned-b" }
+
+[addresses]
+a = "$RUNTIME_ID"

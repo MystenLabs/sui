@@ -14,7 +14,6 @@ mod checked {
 
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
-        access::ModuleAccess,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
@@ -34,7 +33,8 @@ mod checked {
     use serde::{de::DeserializeSeed, Deserialize};
     use sui_move_natives::object_runtime::ObjectRuntime;
     use sui_protocol_config::ProtocolConfig;
-    use sui_types::storage::{get_package_objects, PackageObjectArc};
+    use sui_types::execution_config_utils::to_binary_config;
+    use sui_types::storage::{get_package_objects, PackageObject};
     use sui_types::{
         base_types::{
             MoveObjectType, ObjectID, SuiAddress, TxContext, TxContextKind, RESOLVED_ASCII_STR,
@@ -687,10 +687,8 @@ mod checked {
             ));
         };
 
-        let Ok(current_normalized) = existing_package.normalize(
-            context.protocol_config.move_binary_format_version(),
-            context.protocol_config.no_extraneous_module_bytes(),
-        ) else {
+        let binary_config = to_binary_config(context.protocol_config);
+        let Ok(current_normalized) = existing_package.normalize(&binary_config) else {
             invariant_violation!("Tried to normalize modules in existing package but failed")
         };
 
@@ -754,7 +752,7 @@ mod checked {
     fn fetch_package(
         context: &ExecutionContext<'_, '_, '_>,
         package_id: &ObjectID,
-    ) -> Result<PackageObjectArc, ExecutionError> {
+    ) -> Result<PackageObject, ExecutionError> {
         let mut fetched_packages = fetch_packages(context, vec![package_id])?;
         assert_invariant!(
             fetched_packages.len() == 1,
@@ -771,7 +769,7 @@ mod checked {
     fn fetch_packages<'ctx, 'vm, 'state, 'a>(
         context: &'ctx ExecutionContext<'vm, 'state, 'a>,
         package_ids: impl IntoIterator<Item = &'ctx ObjectID>,
-    ) -> Result<Vec<PackageObjectArc>, ExecutionError> {
+    ) -> Result<Vec<PackageObject>, ExecutionError> {
         let package_ids: BTreeSet<_> = package_ids.into_iter().collect();
         match get_package_objects(&context.state_view, package_ids) {
             Err(e) => Err(ExecutionError::new_with_source(
@@ -852,15 +850,12 @@ mod checked {
         context: &mut ExecutionContext<'_, '_, '_>,
         module_bytes: &[Vec<u8>],
     ) -> Result<Vec<CompiledModule>, ExecutionError> {
+        let binary_config = to_binary_config(context.protocol_config);
         let modules = module_bytes
             .iter()
             .map(|b| {
-                CompiledModule::deserialize_with_config(
-                    b,
-                    context.protocol_config.move_binary_format_version(),
-                    context.protocol_config.no_extraneous_module_bytes(),
-                )
-                .map_err(|e| e.finish(Location::Undefined))
+                CompiledModule::deserialize_with_config(b, &binary_config)
+                    .map_err(|e| e.finish(Location::Undefined))
             })
             .collect::<VMResult<Vec<CompiledModule>>>()
             .map_err(|e| context.convert_vm_error(e))?;
@@ -1152,7 +1147,7 @@ mod checked {
                     Type::TyParam(_) => {
                         invariant_violation!("TyParam should have been substituted")
                     }
-                    Type::Struct(_) | Type::StructInstantiation(_, _) if abilities.has_key() => {
+                    Type::Struct(_) | Type::StructInstantiation(_) if abilities.has_key() => {
                         let type_tag = context
                             .session
                             .get_type_tag(return_type)
@@ -1166,7 +1161,7 @@ mod checked {
                         }
                     }
                     Type::Struct(_)
-                    | Type::StructInstantiation(_, _)
+                    | Type::StructInstantiation(_)
                     | Type::Bool
                     | Type::U8
                     | Type::U64
@@ -1452,7 +1447,8 @@ mod checked {
                 let info_opt = primitive_serialization_layout(context, inner)?;
                 info_opt.map(|layout| PrimitiveArgumentLayout::Vector(Box::new(layout)))
             }
-            Type::StructInstantiation(idx, targs) => {
+            Type::StructInstantiation(struct_inst) => {
+                let (idx, targs) = &**struct_inst;
                 let Some(s) = context.session.get_struct_type(*idx) else {
                     invariant_violation!("Loaded struct not found")
                 };

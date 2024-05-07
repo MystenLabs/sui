@@ -122,9 +122,7 @@ fun TestLiveVars::test3($t0|n: u64, $t1|r_ref: &TestLiveVars::R): u64 {
 [variant baseline]
 fun TestLiveVars::test1($t0|r_ref: TestLiveVars::R): u64 {
      var $t1: u64
-     # live vars: r_ref
   0: $t1 := get_field<TestLiveVars::R>.x($t0)
-     # live vars: $t1
   1: return $t1
 }
 
@@ -139,27 +137,16 @@ fun TestLiveVars::test2($t0|b: bool): u64 {
      var $t6: u64
      var $t7: TestLiveVars::R
      var $t8: u64
-     # live vars: b
   0: $t4 := 3
-     # live vars: b, $t4
   1: $t5 := pack TestLiveVars::R($t4)
-     # live vars: b, $t5
   2: $t6 := 4
-     # live vars: b, $t5, $t6
   3: $t7 := pack TestLiveVars::R($t6)
-     # live vars: b, $t5, $t7
   4: $t3 := $t5
-     # live vars: b, r_ref#1#0, $t7
   5: if ($t0) goto 6 else goto 8
-     # live vars: $t7
   6: label L1
-     # live vars: $t7
   7: $t3 := $t7
-     # live vars: r_ref#1#0
   8: label L0
-     # live vars: r_ref#1#0
   9: $t8 := TestLiveVars::test1($t3)
-     # live vars: $t8
  10: return $t8
 }
 
@@ -180,58 +167,31 @@ fun TestLiveVars::test3($t0|n: u64, $t1|r_ref: TestLiveVars::R): u64 {
      var $t13: bool
      var $t14: u64
      var $t15: u64
-     # live vars: n, r_ref
   0: $t4 := 3
-     # live vars: n, r_ref, $t4
   1: $t5 := pack TestLiveVars::R($t4)
-     # live vars: n, r_ref, $t5
   2: $t6 := 4
-     # live vars: n, r_ref, $t5, $t6
   3: $t7 := pack TestLiveVars::R($t6)
-     # live vars: n, r_ref, $t5, $t7
   4: label L6
-     # live vars: n, r_ref, $t5, $t7
   5: $t8 := 0
-     # live vars: n, r_ref, $t5, $t7, $t8
   6: $t9 := <($t8, $t0)
-     # live vars: n, r_ref, $t5, $t7, $t9
   7: if ($t9) goto 8 else goto 24
-     # live vars: n, $t5, $t7
   8: label L1
-     # live vars: n, $t5, $t7
   9: label L2
-     # live vars: n, $t5, $t7
  10: $t10 := 2
-     # live vars: n, $t5, $t7, $t10
  11: $t11 := /($t0, $t10)
-     # live vars: n, $t5, $t7, $t11
  12: $t12 := 0
-     # live vars: n, $t5, $t7, $t11, $t12
  13: $t13 := ==($t11, $t12)
-     # live vars: n, $t5, $t7, $t13
  14: if ($t13) goto 15 else goto 18
-     # live vars: n, $t5, $t7
  15: label L4
-     # live vars: n, $t5, $t7
  16: $t1 := $t5
-     # live vars: n, r_ref, $t5, $t7
  17: goto 20
-     # live vars: n, $t5, $t7
  18: label L3
-     # live vars: n, $t5, $t7
  19: $t1 := $t7
-     # live vars: n, r_ref, $t5, $t7
  20: label L5
-     # live vars: n, r_ref, $t5, $t7
  21: $t14 := 1
-     # live vars: n, r_ref, $t5, $t7, $t14
  22: $t0 := -($t0, $t14)
-     # live vars: n, r_ref, $t5, $t7
  23: goto 4
-     # live vars: r_ref
  24: label L0
-     # live vars: r_ref
  25: $t15 := TestLiveVars::test1($t1)
-     # live vars: $t15
  26: return $t15
 }

@@ -18,6 +18,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::collections::BTreeMap;
 use sui_types::execution::DynamicallyLoadedObjectMetadata;
 use tokio::sync::OwnedMutexGuard;
+use typed_store::TypedStoreError;
 
 use crate::mutex_table::MutexTable;
 use crate::sharded_lru::ShardedLruCache;
@@ -278,7 +279,7 @@ fn coin_index_table_default_config() -> DBOptions {
 impl IndexStore {
     pub fn new(path: PathBuf, registry: &Registry, max_type_length: Option<u64>) -> Self {
         let tables =
-            IndexStoreTables::open_tables_read_write(path, MetricConf::default(), None, None);
+            IndexStoreTables::open_tables_read_write(path, MetricConf::new("index"), None, None);
         let metrics = IndexStoreMetrics::new(registry);
         let caches = IndexStoreCaches {
             per_coin_type_balance: ShardedLruCache::new(1_000_000, 1000),
@@ -1133,20 +1134,21 @@ impl IndexStore {
         &self,
         object: ObjectID,
         cursor: Option<ObjectID>,
-    ) -> SuiResult<impl Iterator<Item = (ObjectID, DynamicFieldInfo)> + '_> {
+    ) -> SuiResult<impl Iterator<Item = Result<(ObjectID, DynamicFieldInfo), TypedStoreError>> + '_>
+    {
         debug!(?object, "get_dynamic_fields");
         let iter_lower_bound = (object, ObjectID::ZERO);
         let iter_upper_bound = (object, ObjectID::MAX);
         Ok(self
             .tables
             .dynamic_field_index
-            .iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
+            .safe_iter_with_bounds(Some(iter_lower_bound), Some(iter_upper_bound))
             // The object id 0 is the smallest possible
             .skip_to(&(object, cursor.unwrap_or(ObjectID::ZERO)))?
             // skip an extra b/c the cursor is exclusive
             .skip(usize::from(cursor.is_some()))
-            .take_while(move |((object_owner, _), _)| (object_owner == &object))
-            .map(|((_, c), object_info)| (c, object_info)))
+            .take_while(move |result| result.is_err() || (result.as_ref().unwrap().0 .0 == object))
+            .map_ok(|((_, c), object_info)| (c, object_info)))
     }
 
     pub fn get_dynamic_field_object_id(
@@ -1320,7 +1322,7 @@ impl IndexStore {
         self.tables
             .transactions_from_addr
             .checkpoint_db(path)
-            .map_err(SuiError::StorageError)
+            .map_err(Into::into)
     }
 
     /// This method first gets the balance from `per_coin_type_balance` cache. On a cache miss, it
@@ -1464,7 +1466,6 @@ impl IndexStore {
         metrics.all_balance_lookup_from_db.inc();
         let mut balances: HashMap<TypeTag, TotalBalance> = HashMap::new();
         let coins = Self::get_owned_coins_iterator(&coin_index, owner, None)?
-            .map(|(coin_type, obj_id, coin)| (coin_type, obj_id, coin))
             .group_by(|(coin_type, _obj_id, _coin)| coin_type.clone());
         for (coin_type, coins) in &coins {
             let mut total_balance = 0i128;
@@ -1589,7 +1590,6 @@ mod tests {
     use prometheus::Registry;
     use std::collections::BTreeMap;
     use std::env::temp_dir;
-    use std::sync::Arc;
     use sui_types::base_types::{ObjectInfo, ObjectType, SuiAddress};
     use sui_types::digests::TransactionDigest;
     use sui_types::effects::TransactionEvents;
@@ -1625,7 +1625,7 @@ mod tests {
                     previous_transaction: object.previous_transaction,
                 },
             ));
-            object_map.insert(object.id(), Arc::new(object.clone()));
+            object_map.insert(object.id(), object.clone());
             written_objects.insert(object.data.id(), object);
         }
         let object_index_changes = ObjectIndexChanges {
@@ -1672,7 +1672,7 @@ mod tests {
         let mut deleted_objects = vec![];
         for (id, object) in object_map.iter().take(3) {
             deleted_objects.push((address, *id));
-            written_objects.insert(object.data.id(), (**object).clone());
+            written_objects.insert(object.data.id(), object.clone());
         }
         let object_index_changes = ObjectIndexChanges {
             deleted_owners: deleted_objects,

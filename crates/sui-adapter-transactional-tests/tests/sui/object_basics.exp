@@ -3,41 +3,55 @@ processed 9 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 8-70:
+task 1 'publish'. lines 8-67:
 created: object(1,0)
 mutated: object(0,2)
-gas summary: computation_cost: 1000000, storage_cost: 9241600,  storage_rebate: 0, non_refundable_storage_fee: 0
+gas summary: computation_cost: 1000000, storage_cost: 9317600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 72-72:
+task 2 'run'. lines 69-69:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 74-74:
+task 3 'view-object'. lines 71-71:
 Owner: Account Address ( A )
 Version: 2
-Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 10u64}
+Contents: test::object_basics::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 10u64,
+}
 
-task 4 'run'. lines 76-76:
+task 4 'run'. lines 73-73:
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 2362536, non_refundable_storage_fee: 23864
 
-task 5 'view-object'. lines 78-78:
+task 5 'view-object'. lines 75-75:
 Owner: Account Address ( B )
 Version: 3
-Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 10u64}
+Contents: test::object_basics::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 10u64,
+}
 
-task 6 'run'. lines 80-80:
+task 6 'run'. lines 77-77:
 created: object(6,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2386400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 7 'run'. lines 82-82:
+task 7 'run'. lines 79-79:
 events: Event { package_id: test, transaction_module: Identifier("object_basics"), sender: B, type_: StructTag { address: test, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
 mutated: object(0,1), object(2,0), object(6,0)
 gas summary: computation_cost: 1000000, storage_cost: 3784800,  storage_rebate: 3746952, non_refundable_storage_fee: 37848
 
-task 8 'run'. lines 84-84:
+task 8 'run'. lines 81-81:
 mutated: object(0,1)
 deleted: object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 2362536, non_refundable_storage_fee: 23864

@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[1:1]
+ 1 │ --gas-budget 1000
+   · ────────┬────────
+   ·         ╰── Multiple gas budgets found. Gas budget first set here.
+ 2 │ --gas-budget 110000
+   ╰────
+
+  × Error when processing PTB
+   ╭─[2:1]
+ 1 │ --gas-budget 1000
+ 2 │ --gas-budget 110000
+   · ─────────┬─────────
+   ·          ╰── Budget set again here.
+ 3 │ --assign X 1000 
+   ╰────
+  help: PTBs must have exactly one gas budget set.
+

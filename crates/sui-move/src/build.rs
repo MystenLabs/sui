@@ -3,6 +3,7 @@
 
 use clap::Parser;
 use move_cli::base;
+use move_package::source_package::layout::SourcePackageLayout;
 use move_package::BuildConfig as MoveBuildConfig;
 use serde_json::json;
 use std::{fs, path::PathBuf};
@@ -28,9 +29,6 @@ pub struct Build {
     /// and events.
     #[clap(long, global = true)]
     pub generate_struct_layouts: bool,
-    /// If `true`, disable linters
-    #[clap(long, global = true)]
-    pub no_lint: bool,
 }
 
 impl Build {
@@ -39,15 +37,14 @@ impl Build {
         path: Option<PathBuf>,
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
-        let rerooted_path = base::reroot_path(path.clone())?;
-        let build_config = resolve_lock_file_path(build_config, path)?;
+        let rerooted_path = base::reroot_path(path)?;
+        let build_config = resolve_lock_file_path(build_config, Some(rerooted_path.clone()))?;
         Self::execute_internal(
             rerooted_path,
             build_config,
             self.with_unpublished_dependencies,
             self.dump_bytecode_as_base64,
             self.generate_struct_layouts,
-            !self.no_lint,
         )
     }
 
@@ -57,15 +54,13 @@ impl Build {
         with_unpublished_deps: bool,
         dump_bytecode_as_base64: bool,
         generate_struct_layouts: bool,
-        lint: bool,
     ) -> anyhow::Result<()> {
         let pkg = BuildConfig {
             config,
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
-            lint,
         }
-        .build(rerooted_path)?;
+        .build(rerooted_path.clone())?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {
@@ -94,6 +89,11 @@ impl Build {
             fs::write(layout_filename, layout_str)?
         }
 
+        pkg.package
+            .compiled_package_info
+            .build_flags
+            .update_lock_file_toolchain_version(&rerooted_path, env!("CARGO_PKG_VERSION").into())?;
+
         Ok(())
     }
 }
@@ -105,7 +105,7 @@ pub fn resolve_lock_file_path(
 ) -> Result<MoveBuildConfig, anyhow::Error> {
     if build_config.lock_file.is_none() {
         let package_root = base::reroot_path(package_path)?;
-        let lock_file_path = package_root.join("Move.lock");
+        let lock_file_path = package_root.join(SourcePackageLayout::Lock.path());
         build_config.lock_file = Some(lock_file_path);
     }
     Ok(build_config)

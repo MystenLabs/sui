@@ -7,17 +7,18 @@ use std::ops::Range;
 use std::str::FromStr;
 
 use fastcrypto::traits::EncodeDecodeBase64;
+use move_core_types::annotated_value::MoveStructLayout;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::language_storage::{StructTag, TypeTag};
 use move_core_types::resolver::ModuleResolver;
-use move_core_types::value::MoveStructLayout;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use serde_json::json;
 
 use sui_json::SuiJsonValue;
 use sui_json_rpc::error::Error;
+use sui_json_rpc_types::DevInspectArgs;
 use sui_json_rpc_types::{
     Balance, Checkpoint, CheckpointId, CheckpointPage, Coin, CoinPage, DelegatedStake,
     DevInspectResults, DynamicFieldPage, EventFilter, EventPage, MoveCallParams,
@@ -286,6 +287,8 @@ impl RpcExampleProvider {
             events: SuiTransactionBlockEvents { data: vec![] },
             results: None,
             error: None,
+            raw_txn_data: vec![],
+            raw_effects: vec![],
         };
 
         Examples::new(
@@ -297,6 +300,7 @@ impl RpcExampleProvider {
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
                     ("gas_price", json!(1000)),
                     ("epoch", json!(8888)),
+                    ("additional_args", json!(None::<DevInspectArgs>)),
                 ],
                 json!(dev_inspect_results),
             )],
@@ -764,6 +768,7 @@ impl RpcExampleProvider {
             confirmed_local_execution: None,
             checkpoint: None,
             errors: vec![],
+            raw_effects: vec![],
         };
 
         (data2, signatures, recipient, obj_id, result)
@@ -1219,14 +1224,13 @@ impl RpcExampleProvider {
             value: serde_json::Value::String("some_value".to_string()),
         };
 
+        let struct_tag = parse_sui_struct_tag("0x9::test::TestField").unwrap();
         let resp = SuiObjectResponse::new_with_data(SuiObjectData {
             content: Some(
                 SuiParsedData::try_from_object(
                     unsafe {
                         MoveObject::new_from_execution_with_limit(
-                            MoveObjectType::from(
-                                parse_sui_struct_tag("0x9::test::TestField").unwrap(),
-                            ),
+                            MoveObjectType::from(struct_tag.clone()),
                             true,
                             SequenceNumber::from_u64(1),
                             Vec::new(),
@@ -1234,7 +1238,10 @@ impl RpcExampleProvider {
                         )
                         .unwrap()
                     },
-                    MoveStructLayout::WithFields(Vec::new()),
+                    MoveStructLayout {
+                        type_: struct_tag,
+                        fields: Vec::new(),
+                    },
                 )
                 .unwrap(),
             ),

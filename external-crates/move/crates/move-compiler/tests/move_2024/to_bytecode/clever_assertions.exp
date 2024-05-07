@@ -1,0 +1,48 @@
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_2024/to_bytecode/clever_assertions.move:4:7
+  │
+4 │     #[error]
+  │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_2024/to_bytecode/clever_assertions.move:7:7
+  │
+7 │     #[error]
+  │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are under development and should not be used right now.
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/to_bytecode/clever_assertions.move:10:7
+   │
+10 │     #[error]
+   │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/to_bytecode/clever_assertions.move:13:7
+   │
+13 │     #[error]
+   │       ^^^^^ Clever `assert!`, `abort`, and `#[error]` are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/to_bytecode/clever_assertions.move:29:9
+   │
+29 │         assert!(false);
+   │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E13001]: feature is not supported in specified edition
+   ┌─ tests/move_2024/to_bytecode/clever_assertions.move:33:9
+   │
+33 │         assert!(Lol);
+   │         ^^^^^^ Clever `assert!`, `abort`, and `#[error]` are under development and should not be used right now.
+   │
+   = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+

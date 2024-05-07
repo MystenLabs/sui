@@ -21,7 +21,6 @@ prometheus.workspace = true
 futures.workspace = true
 
 move-bytecode-utils.workspace = true
-narwhal-config.workspace = true
 shared-crypto.workspace = true
 sui-config.workspace = true
 sui-framework.workspace = true
@@ -33,4 +32,3 @@ sui-genesis-builder.workspace = true
 sui-execution.workspace = true
 sui-swarm-config.workspace = true
 sui-transaction-checks.workspace = true
-workspace-hack.workspace = true

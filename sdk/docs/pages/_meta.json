@@ -11,12 +11,17 @@
 		"title": "Kiosk SDK",
 		"type": "page"
 	},
+	"zksend": {
+		"title": "zkSend SDK",
+		"type": "page"
+	},
 	"bcs": {
 		"title": "BCS",
 		"type": "page"
 	},
-	"wallet-kit": {
-		"title": "Wallet Kit",
+	"api": {
+		"title": "TypeDoc",
+		"href": "/typedoc/index.html",
 		"type": "page"
 	}
 }

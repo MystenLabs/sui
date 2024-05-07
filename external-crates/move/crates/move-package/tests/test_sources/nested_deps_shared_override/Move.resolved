@@ -1,7 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/nested_deps_shared_override",
-        root_package: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -89,14 +90,13 @@ ResolvedGraph {
             "Root",
             "Shared",
         },
-        manifest_digest: "D2FFFC63D2AF7BF7028F583317C7ACF0EBB9E6B9F0DFC6D8FB46732AF7B552E4",
+        manifest_digest: "5005BF461ECC5281FE314371B38D8C163C5395D7455B91BEA0F63C1BCFD57551",
         deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
     },
     build_options: BuildConfig {
         dev_mode: true,
         test_mode: false,
         generate_docs: false,
-        generate_abis: false,
         install_dir: Some(
             "ELIDED_FOR_TEST",
         ),
@@ -104,7 +104,6 @@ ResolvedGraph {
         lock_file: Some(
             "ELIDED_FOR_TEST",
         ),
-        additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
@@ -112,17 +111,17 @@ ResolvedGraph {
         deps_as_root: false,
         silence_warnings: false,
         warnings_are_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
     },
     package_table: {
         "More": Package {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "More",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -139,7 +138,6 @@ ResolvedGraph {
                                 "../shared",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: true,
                         },
@@ -156,11 +154,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Nested",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -177,7 +170,6 @@ ResolvedGraph {
                                 "../more",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -188,7 +180,6 @@ ResolvedGraph {
                                 "../shared",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: true,
                         },
@@ -205,11 +196,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -226,7 +212,6 @@ ResolvedGraph {
                                 "deps_only/more",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -237,7 +222,6 @@ ResolvedGraph {
                                 "deps_only/nested",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -248,7 +232,6 @@ ResolvedGraph {
                                 "deps_only/shared",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: true,
                         },
@@ -265,11 +248,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Shared",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,

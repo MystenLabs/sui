@@ -3,9 +3,8 @@
 
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
-import { SuiObjectData } from '../../src/client';
-import { Coin, SUI_FRAMEWORK_ADDRESS } from '../../src/framework';
+import { TransactionBlock } from '../../src/transactions';
+import { SUI_FRAMEWORK_ADDRESS } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 describe('Test Move call with a vector of objects as input', () => {
@@ -16,7 +15,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		const tx = new TransactionBlock();
 		tx.moveCall({
 			target: `${packageId}::entry_point_vector::mint`,
-			arguments: [tx.pure(String(val))],
+			arguments: [tx.pure.u64(val)],
 		});
 		const result = await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,
@@ -73,8 +72,8 @@ describe('Test Move call with a vector of objects as input', () => {
 
 	it('Test regular arg mixed with object vector arg', async () => {
 		const coins = await toolbox.getGasObjectsOwnedByAddress();
-		const coin = coins[3].data as SuiObjectData;
-		const coinIDs = coins.map((coin) => Coin.getID(coin));
+		const coin = coins.data[3];
+		const coinIDs = coins.data.map((coin) => coin.coinObjectId);
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
 			objects: [coinIDs[1], tx.object(coinIDs[2])],
@@ -84,7 +83,7 @@ describe('Test Move call with a vector of objects as input', () => {
 			typeArguments: ['0x2::sui::SUI'],
 			arguments: [tx.object(coinIDs[0]), vec],
 		});
-		tx.setGasPayment([coin]);
+		tx.setGasPayment([{ objectId: coin.coinObjectId, digest: coin.digest, version: coin.version }]);
 		const result = await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,
 			transactionBlock: tx,

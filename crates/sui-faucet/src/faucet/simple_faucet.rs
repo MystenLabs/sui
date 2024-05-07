@@ -420,7 +420,7 @@ impl SimpleFaucet {
             .keystore
             .sign_secure(&self.active_address, &tx_data, Intent::sui_transaction())
             .map_err(FaucetError::internal)?;
-        let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
+        let tx = Transaction::from_data(tx_data, vec![signature]);
         let tx_digest = *tx.digest();
         info!(
             ?tx_digest,
@@ -1086,7 +1086,10 @@ pub async fn batch_transfer_gases(
 
 #[cfg(test)]
 mod tests {
-    use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+    use sui::{
+        client_commands::{SuiClientCommandResult, SuiClientCommands},
+        key_identity::KeyIdentity,
+    };
     use sui_json_rpc_types::SuiExecutionStatus;
     use sui_sdk::wallet_context::WalletContext;
     use test_cluster::TestClusterBuilder;
@@ -1110,6 +1113,7 @@ mod tests {
             amounts: None,
             gas_budget: 50000000,
             gas: None,
+            dry_run: false,
             count: Some(10),
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -1196,7 +1200,7 @@ mod tests {
 
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];
-        let _ = futures::future::join_all((0..30).map(|_| {
+        let _ = futures::future::join_all((0..number_of_coins).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
                 SuiAddress::random_for_testing_only(),
@@ -1238,6 +1242,7 @@ mod tests {
             amounts: None,
             gas_budget: 50000000,
             gas: None,
+            dry_run: false,
             count: Some(10),
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -1394,8 +1399,9 @@ mod tests {
         // Now we transfer one gas out
         let res = SuiClientCommands::PayAllSui {
             input_coins: vec![*bad_gas.id()],
-            recipient: SuiAddress::random_for_testing_only(),
+            recipient: KeyIdentity::Address(SuiAddress::random_for_testing_only()),
             gas_budget: 2_000_000,
+            dry_run: false,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
         }
@@ -1414,7 +1420,7 @@ mod tests {
 
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];
-        // We traverse the the list twice, which must trigger the transferred gas to be kicked out
+        // We traverse the list twice, which must trigger the transferred gas to be kicked out
         futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
@@ -1520,6 +1526,7 @@ mod tests {
             amounts: Some(vec![tiny_value]),
             gas_budget: 50000000,
             gas: None,
+            dry_run: false,
             count: None,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -1563,7 +1570,7 @@ mod tests {
         // Ask for a value higher than tiny coin + DEFAULT_GAS_COMPUTATION_BUCKET
         let number_of_coins = gases.len();
         let amounts = &vec![tiny_value + 1; number_of_coins];
-        // We traverse the the list ten times, which must trigger the tiny gas to be examined and then discarded
+        // We traverse the list ten times, which must trigger the tiny gas to be examined and then discarded
         futures::future::join_all((0..10).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
@@ -1605,6 +1612,7 @@ mod tests {
             amounts: Some(vec![reasonable_value]),
             gas_budget: 50000000,
             gas: None,
+            dry_run: false,
             count: None,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -1617,9 +1625,10 @@ mod tests {
         // Transfer all valid gases away except for 1
         for gas in gases.iter().take(gases.len() - 1) {
             SuiClientCommands::TransferSui {
-                to: destination_address,
+                to: KeyIdentity::Address(destination_address),
                 sui_coin_object_id: *gas.id(),
                 gas_budget: 50000000,
+                dry_run: false,
                 amount: None,
                 serialize_unsigned_transaction: false,
                 serialize_signed_transaction: false,
@@ -1645,7 +1654,7 @@ mod tests {
         .await
         .unwrap();
 
-        // We traverse the the list twice, which must trigger the split gas to be kicked out
+        // We traverse the list twice, which must trigger the split gas to be kicked out
         futures::future::join_all((0..2).map(|_| {
             faucet.send(
                 Uuid::new_v4(),
@@ -1678,6 +1687,7 @@ mod tests {
             amounts: Some(vec![tiny_value]),
             gas_budget: 50000000,
             gas: None,
+            dry_run: false,
             count: None,
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -1690,9 +1700,10 @@ mod tests {
         // Transfer all valid gases away
         for gas in gases {
             SuiClientCommands::TransferSui {
-                to: destination_address,
+                to: KeyIdentity::Address(destination_address),
                 sui_coin_object_id: *gas.id(),
                 gas_budget: 50000000,
+                dry_run: false,
                 amount: None,
                 serialize_unsigned_transaction: false,
                 serialize_signed_transaction: false,
@@ -1812,6 +1823,7 @@ mod tests {
             amounts: None,
             gas_budget: 50000000,
             gas: None,
+            dry_run: false,
             count: Some(10),
             serialize_unsigned_transaction: false,
             serialize_signed_transaction: false,
@@ -1923,7 +1935,7 @@ mod tests {
     async fn get_current_gases(address: SuiAddress, context: &mut WalletContext) -> Vec<GasCoin> {
         // Get the latest list of gas
         let results = SuiClientCommands::Gas {
-            address: Some(address),
+            address: Some(KeyIdentity::Address(address)),
         }
         .execute(context)
         .await

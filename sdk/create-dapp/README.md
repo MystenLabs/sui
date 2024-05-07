@@ -5,7 +5,7 @@
 You can get started quickly by running the following command:
 
 ```bash
-pnpm create @mysten/create-dapp
+pnpm create @mysten/dapp
 ```
 
 This will prompt you through creating a new dApp project. It will ask you for the name/directory and
@@ -15,7 +15,7 @@ ask you to select from one of the provided templates.
 
 The following templates are available:
 
-- `react-client-dapp`: A simple React dApp that fetches a list of objects owned by the connected
+- `react-client-dapp`: A basic React dApp that fetches a list of objects owned by the connected
   wallet
 - `react-e2e-counter`: An end to end Example with move code and UI for a simple counter app
 
@@ -27,7 +27,7 @@ you including:
 - [Vite](https://vitejs.dev/)
 - [Radix UI](https://www.radix-ui.com/)
 - [ESLint](https://eslint.org/)
-- [`@mysten/dapp-kit`](https://sui-typescript-docs.vercel.app/dapp-kit)
+- [`@mysten/dapp-kit`](https://sdk.mystenlabs.com/dapp-kit)
 
 These templates are still new, and would love to get feedback and suggestions for improvements or
 future templates. Please open an issue on GitHub if you have any feedback.

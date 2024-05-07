@@ -135,7 +135,11 @@ impl MockCheckpointBuilder {
 
         let summary = CheckpointSummary {
             epoch,
-            sequence_number: self.previous_checkpoint.sequence_number.saturating_add(1),
+            sequence_number: self
+                .previous_checkpoint
+                .sequence_number
+                .checked_add(1)
+                .unwrap(),
             network_total_transactions: self.previous_checkpoint.network_total_transactions
                 + contents.size() as u64,
             content_digest: *contents.digest(),

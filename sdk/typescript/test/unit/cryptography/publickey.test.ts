@@ -7,7 +7,6 @@ import { bytesToHex } from '@noble/hashes/utils';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../../src/bcs/index.js';
-import { IntentScope } from '../../../src/cryptography/intent';
 import { bytesEqual, PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
@@ -72,17 +71,14 @@ describe('Publickey', () => {
 		const sig1 = await k1.signPersonalMessage(data);
 		const sig2 = await k2.signTransactionBlock(data);
 
-		expect(await pk1.verifyWithIntent(data, sig1.signature, IntentScope.PersonalMessage)).toEqual(
-			false,
-		);
-		expect(await pk2.verifyWithIntent(data, sig2.signature, IntentScope.TransactionData)).toEqual(
-			true,
-		);
+		expect(await pk1.verifyWithIntent(data, sig1.signature, 'PersonalMessage')).toEqual(false);
+		expect(await pk2.verifyWithIntent(data, sig2.signature, 'TransactionData')).toEqual(true);
+
 		expect(
 			await pk1.verifyWithIntent(
-				bcs.ser(['vector', 'u8'], data).toBytes(),
+				bcs.vector(bcs.U8).serialize(data).toBytes(),
 				sig1.signature,
-				IntentScope.PersonalMessage,
+				'PersonalMessage',
 			),
 		).toEqual(true);
 	});

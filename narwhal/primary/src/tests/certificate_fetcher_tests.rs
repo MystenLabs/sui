@@ -26,12 +26,13 @@ use tokio::{
     },
     time::sleep,
 };
+use types::HeaderV1;
+use types::TimestampMs;
 use types::{
     BatchDigest, Certificate, CertificateAPI, CertificateDigest, FetchCertificatesRequest,
-    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, HeaderV2, Metadata,
-    PreSubscribedBroadcastSender, PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest,
-    RequestVoteResponse, Round, SendCertificateRequest, SendCertificateResponse,
-    SendRandomnessPartialSignaturesRequest, SignatureVerificationState, SystemMessage,
+    FetchCertificatesResponse, Header, HeaderAPI, HeaderDigest, PreSubscribedBroadcastSender,
+    PrimaryToPrimary, PrimaryToPrimaryServer, RequestVoteRequest, RequestVoteResponse, Round,
+    SendCertificateRequest, SendCertificateResponse, SignatureVerificationState,
 };
 
 pub struct NetworkProxy {
@@ -55,13 +56,6 @@ impl PrimaryToPrimary for NetworkProxy {
         &self,
         _request: anemo::Request<RequestVoteRequest>,
     ) -> Result<anemo::Response<RequestVoteResponse>, anemo::rpc::Status> {
-        unimplemented!()
-    }
-
-    async fn send_randomness_partial_signatures(
-        &self,
-        _request: anemo::Request<SendRandomnessPartialSignaturesRequest>,
-    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         unimplemented!()
     }
 
@@ -182,11 +176,10 @@ struct BadHeader {
     pub author: AuthorityIdentifier,
     pub round: Round,
     pub epoch: Epoch,
-    pub payload: IndexMap<BatchDigest, WorkerId>,
-    pub system_messages: Vec<SystemMessage>,
+    pub created_at: TimestampMs,
+    pub payload: IndexMap<BatchDigest, (WorkerId, TimestampMs)>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: OnceCell<HeaderDigest>,
-    pub metadata: Metadata,
 }
 
 // TODO: Remove after network has moved to CertificateV2
@@ -446,9 +439,9 @@ async fn fetch_certificates_v1_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header =
-        unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert.header().clone().unwrap_v2()) };
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().as_v1().clone()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(wrong_header) };
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
     cert.update_header(wolf_header.into());
     certs.push(cert);
     // Add cert without all parents in storage.
@@ -742,9 +735,9 @@ async fn fetch_certificates_v2_basic() {
     let mut cert = certificates[num_written].clone();
     // This is a bit tedious to craft
     let cert_header =
-        unsafe { std::mem::transmute::<HeaderV2, BadHeader>(cert.header().clone().unwrap_v2()) };
+        unsafe { std::mem::transmute::<HeaderV1, BadHeader>(cert.header().as_v1().clone()) };
     let wrong_header = BadHeader { ..cert_header };
-    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV2>(wrong_header) };
+    let wolf_header = unsafe { std::mem::transmute::<BadHeader, HeaderV1>(wrong_header) };
     cert.update_header(Header::from(wolf_header));
     certs.push(cert);
     // Add cert without all parents in storage.

@@ -2,14 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    loaded_data::runtime_types::Type,
-    values::{GlobalValue, Value},
-};
+use crate::{loaded_data::runtime_types::Type, values::GlobalValue};
 use move_binary_format::errors::{PartialVMResult, VMResult};
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::NumBytes, identifier::IdentStr,
-    language_storage::ModuleId, value::MoveTypeLayout,
+    language_storage::ModuleId,
 };
 
 /// Provide an implementation for bytecodes related to data with a given data store.
@@ -53,19 +50,4 @@ pub trait DataStore {
 
     /// Publish a module.
     fn publish_module(&mut self, module_id: &ModuleId, blob: Vec<u8>) -> VMResult<()>;
-
-    // ---
-    // EventStore operations
-    // ---
-
-    /// Emit an event to the EventStore
-    fn emit_event(
-        &mut self,
-        guid: Vec<u8>,
-        seq_num: u64,
-        ty: Type,
-        val: Value,
-    ) -> PartialVMResult<()>;
-
-    fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, Value)>;
 }

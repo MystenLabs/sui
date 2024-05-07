@@ -69,7 +69,7 @@ async fn send_transactions(
 
 pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<CheckpointService> {
     let (output, _result) = mpsc::channel::<(CheckpointContents, CheckpointSummary)>(10);
-    let accumulator = StateAccumulator::new(state.database.clone());
+    let accumulator = StateAccumulator::new(state.get_execution_cache());
     let (certified_output, _certified_result) = mpsc::channel::<CertifiedCheckpointSummary>(10);
 
     let epoch_store = state.epoch_store_for_testing();
@@ -78,7 +78,7 @@ pub fn checkpoint_service_for_testing(state: Arc<AuthorityState>) -> Arc<Checkpo
         state.clone(),
         state.get_checkpoint_store().clone(),
         epoch_store.clone(),
-        Box::new(state.db()),
+        Arc::new(state.get_effects_notify_read().clone()),
         Arc::new(accumulator),
         Box::new(output),
         Box::new(certified_output),
@@ -126,7 +126,7 @@ async fn test_narwhal_manager() {
             registry_service,
         };
 
-        let metrics = ConsensusManagerMetrics::new(&Registry::new());
+        let metrics = Arc::new(ConsensusManagerMetrics::new(&Registry::new()));
         let epoch_store = state.epoch_store_for_testing();
 
         let narwhal_manager = NarwhalManager::new(narwhal_config, metrics);

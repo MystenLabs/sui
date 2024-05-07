@@ -46,12 +46,6 @@ pub enum DagError {
     #[error("Invalid signature")]
     InvalidSignature,
 
-    #[error("Invalid randomness signature")]
-    InvalidRandomnessSignature,
-
-    #[error("Randomness not yet available")]
-    RandomnessUnavailable,
-
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
 

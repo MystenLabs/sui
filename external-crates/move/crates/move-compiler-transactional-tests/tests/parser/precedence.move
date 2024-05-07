@@ -1,5 +1,5 @@
 //# run
-script {
+module 0x42::m {
 
 fun main() {
     assert!(true || true && false, 99); // "&&" has precedence over "||"

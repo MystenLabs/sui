@@ -294,7 +294,7 @@ async fn test_loss_of_liveness_with_recovery() {
 
     // wait and fetch the latest commit round
     tokio::time::sleep(node_advance_delay).await;
-    let rounds_3 = cluster.assert_progress(4, 0).await;
+    let rounds_3 = cluster.assert_progress(4, 2).await;
 
     let round_2_max = rounds_2.values().max().unwrap();
     assert!(

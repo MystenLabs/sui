@@ -11,22 +11,18 @@ use crate::{
 };
 use anyhow::{anyhow, bail, Result};
 use move_binary_format::file_format::CompiledModule;
-use move_command_line_common::{env::get_bytecode_version_from_env, files::try_exists};
+use move_command_line_common::files::try_exists;
 use move_core_types::{
     account_address::AccountAddress,
     errmap::ErrorMapping,
     identifier::IdentStr,
     language_storage::TypeTag,
+    runtime_value::MoveValue,
     transaction_argument::{convert_txn_args, TransactionArgument},
-    value::MoveValue,
 };
 use move_package::compilation::compiled_package::CompiledPackage;
-#[cfg(debug_assertions)]
-use move_vm_profiler::GasProfiler;
 use move_vm_runtime::move_vm::MoveVM;
 use move_vm_test_utils::gas_schedule::CostTable;
-#[cfg(debug_assertions)]
-use move_vm_types::gas::GasMeter;
 use std::{fs, path::Path};
 
 pub fn run(
@@ -34,9 +30,9 @@ pub fn run(
     cost_table: &CostTable,
     error_descriptions: &ErrorMapping,
     state: &OnDiskStateView,
-    package: &CompiledPackage,
-    script_path: &Path,
-    script_name_opt: &Option<String>,
+    _package: &CompiledPackage,
+    module_file: &Path,
+    function_name: &str,
     signers: &[String],
     txn_args: &[TransactionArgument],
     vm_type_tags: Vec<TypeTag>,
@@ -44,32 +40,17 @@ pub fn run(
     _dry_run: bool,
     _verbose: bool,
 ) -> Result<()> {
-    if !try_exists(script_path)? {
-        bail!("Script file {:?} does not exist", script_path)
+    if !try_exists(module_file)? {
+        bail!("Module file {:?} does not exist", module_file)
     };
-    let bytecode_version = get_bytecode_version_from_env();
-
-    let bytecode = if is_bytecode_file(script_path) {
-        assert!(
-            state.is_module_path(script_path) || !contains_module(script_path),
-            "Attempting to run module {:?} outside of the `storage/` directory.
-move run` must be applied to a module inside `storage/`",
-            script_path
-        );
-        // script bytecode; read directly from file
-        fs::read(script_path)?
-    } else {
-        // TODO(tzakian): support calling scripts in transitive deps
-        let file_contents = std::fs::read_to_string(script_path)?;
-        let script_opt = package
-            .scripts()
-            .find(|unit| unit.unit.source_map().check(&file_contents));
-        // script source file; package is already compiled so load it up
-        match script_opt {
-            Some(unit) => unit.unit.serialize(bytecode_version),
-            None => bail!("Unable to find script in file {:?}", script_path),
-        }
-    };
+    assert!(
+        is_bytecode_file(module_file)
+            && (state.is_module_path(module_file) || !contains_module(module_file)),
+        "Attempting to run module {:?} outside of the `storage/` directory.
+        move run` must be applied to a module inside `storage/`",
+        module_file
+    );
+    let bytecode = fs::read(module_file)?;
 
     let signer_addresses = signers
         .iter()
@@ -100,35 +81,29 @@ move run` must be applied to a module inside `storage/`",
         })
         .chain(vm_args)
         .collect();
-    let res = match script_name_opt {
-        Some(script_name) => {
-            // script fun. parse module, extract script ID to pass to VM
-            let module = CompiledModule::deserialize_with_defaults(&bytecode)
-                .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
-            #[cfg(debug_assertions)]
-            {
-                let gas_rem: u64 = gas_status.remaining_gas().into();
-                gas_status.set_profiler(GasProfiler::init(
-                    &session.vm_config().profiler_config,
-                    script_name.clone(),
-                    gas_rem,
-                ));
-            }
+    let res = {
+        // script fun. parse module, extract script ID to pass to VM
+        let module = CompiledModule::deserialize_with_defaults(&bytecode)
+            .map_err(|e| anyhow!("Error deserializing module: {:?}", e))?;
+        move_vm_profiler::gas_profiler_feature_enabled! {
+            use move_vm_profiler::GasProfiler;
+            use move_vm_types::gas::GasMeter;
 
-            session.execute_entry_function(
-                &module.self_id(),
-                IdentStr::new(script_name)?,
-                script_type_arguments,
-                vm_args,
-                &mut gas_status,
-            )
+            let gas_rem: u64 = gas_status.remaining_gas().into();
+            gas_status.set_profiler(GasProfiler::init(
+                &session.vm_config().profiler_config,
+                function_name.to_owned(),
+                gas_rem,
+            ));
         }
-        None => session.execute_script(
-            bytecode.to_vec(),
+
+        session.execute_entry_function(
+            &module.self_id(),
+            IdentStr::new(function_name)?,
             script_type_arguments,
             vm_args,
             &mut gas_status,
-        ),
+        )
     };
 
     if let Err(err) = res {
@@ -143,7 +118,7 @@ move run` must be applied to a module inside `storage/`",
             txn_args,
         )
     } else {
-        let (_changeset, _events) = session.finish().0.map_err(|e| e.into_vm_status())?;
+        let (_changeset, _events) = session.finish().0?;
         Ok(())
     }
 }

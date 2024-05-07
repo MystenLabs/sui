@@ -1,0 +1,376 @@
+---
+source: crates/sui/src/client_ptb/lexer.rs
+expression: lex(funs)
+---
+[
+    Spanned {
+        span: Span {
+            start: 0,
+            end: 3,
+        },
+        value: Lexeme(
+            HexNumber,
+            "2",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 3,
+            end: 5,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 5,
+            end: 13,
+        },
+        value: Lexeme(
+            Ident,
+            "transfer",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 13,
+            end: 15,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 15,
+            end: 30,
+        },
+        value: Lexeme(
+            Ident,
+            "public_transfer",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 30,
+            end: 31,
+        },
+        value: Lexeme(
+            LAngle,
+            "<",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 31,
+            end: 35,
+        },
+        value: Lexeme(
+            HexNumber,
+            "42",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 35,
+            end: 37,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 37,
+            end: 40,
+        },
+        value: Lexeme(
+            Ident,
+            "foo",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 40,
+            end: 42,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 42,
+            end: 45,
+        },
+        value: Lexeme(
+            Ident,
+            "Bar",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 45,
+            end: 46,
+        },
+        value: Lexeme(
+            RAngle,
+            ">",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 47,
+            end: 50,
+        },
+        value: Lexeme(
+            Ident,
+            "std",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 50,
+            end: 52,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 52,
+            end: 58,
+        },
+        value: Lexeme(
+            Ident,
+            "option",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 58,
+            end: 60,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 60,
+            end: 67,
+        },
+        value: Lexeme(
+            Ident,
+            "is_none",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 67,
+            end: 68,
+        },
+        value: Lexeme(
+            LAngle,
+            "<",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 68,
+            end: 71,
+        },
+        value: Lexeme(
+            Ident,
+            "u64",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 71,
+            end: 72,
+        },
+        value: Lexeme(
+            RAngle,
+            ">",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 73,
+            end: 76,
+        },
+        value: Lexeme(
+            HexNumber,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 76,
+            end: 78,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 78,
+            end: 84,
+        },
+        value: Lexeme(
+            Ident,
+            "option",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 84,
+            end: 86,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 86,
+            end: 93,
+        },
+        value: Lexeme(
+            Ident,
+            "is_some",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 94,
+            end: 95,
+        },
+        value: Lexeme(
+            LAngle,
+            "<",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 95,
+            end: 98,
+        },
+        value: Lexeme(
+            Ident,
+            "u64",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 98,
+            end: 99,
+        },
+        value: Lexeme(
+            RAngle,
+            ">",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 100,
+            end: 103,
+        },
+        value: Lexeme(
+            HexNumber,
+            "1",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 103,
+            end: 105,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 105,
+            end: 111,
+        },
+        value: Lexeme(
+            Ident,
+            "option",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 111,
+            end: 113,
+        },
+        value: Lexeme(
+            ColonColon,
+            "::",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 113,
+            end: 120,
+        },
+        value: Lexeme(
+            Ident,
+            "is_none",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 121,
+            end: 122,
+        },
+        value: Lexeme(
+            LAngle,
+            "<",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 122,
+            end: 125,
+        },
+        value: Lexeme(
+            Ident,
+            "u64",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 125,
+            end: 126,
+        },
+        value: Lexeme(
+            RAngle,
+            ">",
+        ),
+    },
+    Spanned {
+        span: Span {
+            start: 126,
+            end: 126,
+        },
+        value: Lexeme(
+            Eof,
+            "",
+        ),
+    },
+]

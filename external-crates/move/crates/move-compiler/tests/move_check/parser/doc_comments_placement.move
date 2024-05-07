@@ -16,13 +16,6 @@ module 0x42::M {
         /// There can be no doc comment after last field.
     }
 
-    /// This is some spec.
-    spec module {
-        /// This is a pragma.
-        pragma verify = true;
-        /// There can be no doc comment after last block member.
-    }
-
     /// There can be no doc comment after last module item.
 }
 

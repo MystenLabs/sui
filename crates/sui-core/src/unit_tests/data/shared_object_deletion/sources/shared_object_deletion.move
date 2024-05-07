@@ -8,17 +8,17 @@ module shared_object_deletion::o2 {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID,
         flipped: bool
     }
 
-    struct Obj2 has key, store {
+    public struct Obj2 has key, store {
         id: UID,
         mutation_count: u64,
     }
 
-    struct Wrapper has key {
+    public struct Wrapper has key {
         id: UID,
         o2: Obj2
     }
@@ -94,7 +94,7 @@ module shared_object_deletion::o2 {
         transfer::transfer(Wrapper { id: object::new(ctx), o2}, tx_context::sender(ctx))
     }
 
-    public entry fun vec_delete(v: vector<Obj2>) {
+    public entry fun vec_delete(mut v: vector<Obj2>) {
         let Obj2 {id, mutation_count: _} = vector::pop_back(&mut v);
         object::delete(id);
         vector::destroy_empty(v);

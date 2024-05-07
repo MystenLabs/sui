@@ -450,6 +450,10 @@ impl Consensus {
                         // expected by primary.
                         let leader_commit_round = committed_certificates.iter().map(|c| c.round()).max().unwrap();
 
+                        // TODO: Certificates sent on this channel may be lost if not processed
+                        // by StateHandler before a crash. At worst, if this happens while DKG is
+                        // still underway, the node may not be able to participate in random beacon
+                        // until the next epoch.
                         self.tx_committed_certificates
                         .send((leader_commit_round, committed_certificates))
                         .await

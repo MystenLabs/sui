@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::num::NonZeroUsize;
 use std::str::FromStr;
 use sui_core::authority::NodeStateDump;
-use sui_json_rpc::api::QUERY_MAX_RESULT_LIMIT;
+use sui_json_rpc_api::QUERY_MAX_RESULT_LIMIT;
 use sui_json_rpc_types::EventFilter;
 use sui_json_rpc_types::SuiEvent;
 use sui_json_rpc_types::SuiGetPastObjectRequest;
@@ -83,6 +83,8 @@ pub(crate) trait DataFetcher {
         &self,
         reverse: bool,
     ) -> Result<Vec<SuiEvent>, ReplayEngineError>;
+
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError>;
 }
 
 #[derive(Clone)]
@@ -101,7 +103,12 @@ impl Fetchers {
 
     pub fn into_remote(self) -> RemoteFetcher {
         match self {
-            Fetchers::Remote(q) => q,
+            Fetchers::Remote(q) => {
+                // Since `into_remote` is called when we use this fetcher to create a new fetcher,
+                // we should clear the cache to avoid using stale data.
+                q.clear_cache_for_new_task();
+                q
+            }
             Fetchers::NodeStateDump(_) => panic!("not a remote fetcher"),
         }
     }
@@ -210,6 +217,12 @@ impl DataFetcher for Fetchers {
             Fetchers::NodeStateDump(q) => q.get_epoch_change_events(reverse).await,
         }
     }
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
+        match self {
+            Fetchers::Remote(q) => q.get_chain_id().await,
+            Fetchers::NodeStateDump(q) => q.get_chain_id().await,
+        }
+    }
 }
 
 const VERSIONED_OBJECT_CACHE_CAPACITY: Option<NonZeroUsize> = NonZeroUsize::new(1_000);
@@ -307,6 +320,12 @@ impl RemoteFetcher {
         }
 
         (cached, to_fetch)
+    }
+
+    pub fn clear_cache_for_new_task(&self) {
+        // Only the latest object cache cannot be reused across tasks.
+        // All other caches should be valid as long as the network doesn't change.
+        self.latest_object_cache.write().clear();
     }
 }
 
@@ -567,6 +586,16 @@ impl DataFetcher for RemoteFetcher {
 
         Ok(epoch_change_events)
     }
+
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
+        let chain_id = self
+            .rpc_client
+            .read_api()
+            .get_chain_identifier()
+            .await
+            .map_err(|e| ReplayEngineError::UnableToGetChainId { err: e.to_string() })?;
+        Ok(chain_id)
+    }
 }
 
 fn convert_past_obj_response(resp: SuiPastObjectResponse) -> Result<Object, ReplayEngineError> {
@@ -636,17 +665,17 @@ impl From<NodeStateDump> for NodeStateDumpFetcher {
             .for_each(|current_obj| {
                 // Dense storage
                 object_ref_pool.insert(
-                    (current_obj.id(), current_obj.version()),
-                    current_obj.clone(),
+                    (current_obj.id, current_obj.version),
+                    current_obj.object.clone(),
                 );
 
                 // Only most recent
-                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id()) {
-                    if current_obj.version() <= last_seen_obj.version() {
+                if let Some(last_seen_obj) = latest_object_version_pool.get(&current_obj.id) {
+                    if current_obj.version <= last_seen_obj.version() {
                         return;
                     }
                 };
-                latest_object_version_pool.insert(current_obj.id(), current_obj.clone());
+                latest_object_version_pool.insert(current_obj.id, current_obj.object.clone());
             });
         Self {
             node_state_dump,
@@ -739,7 +768,7 @@ impl DataFetcher for NodeStateDumpFetcher {
             .node_state_dump
             .loaded_child_objects
             .iter()
-            .map(|q| q.compute_object_reference())
+            .map(|q| (q.id, q.version, q.digest))
             .map(|w| (w.0, w.1))
             .collect())
     }
@@ -772,5 +801,9 @@ impl DataFetcher for NodeStateDumpFetcher {
         _reverse: bool,
     ) -> Result<Vec<SuiEvent>, ReplayEngineError> {
         unimplemented!("get_epoch_change_events for state dump is not implemented")
+    }
+
+    async fn get_chain_id(&self) -> Result<String, ReplayEngineError> {
+        unimplemented!("get_chain_id for state dump is not implemented")
     }
 }

@@ -2,7 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{account_address::AccountAddress, u256, value::MoveValue};
+use crate::{account_address::AccountAddress, runtime_value::MoveValue, u256};
 use anyhow::{anyhow, Error, Result};
 use move_proc_macros::test_variant_order;
 use serde::{Deserialize, Serialize};
@@ -125,8 +125,8 @@ mod tests {
     use std::convert::{From, TryInto};
 
     use crate::{
-        account_address::AccountAddress, transaction_argument::TransactionArgument, u256::U256,
-        value::MoveValue,
+        account_address::AccountAddress, runtime_value::MoveValue,
+        transaction_argument::TransactionArgument, u256::U256,
     };
 
     #[test]

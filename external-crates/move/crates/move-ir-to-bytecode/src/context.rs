@@ -4,7 +4,6 @@
 
 use anyhow::{bail, format_err, Result};
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         AbilitySet, AddressIdentifierIndex, CodeOffset, Constant, ConstantPoolIndex, FieldHandle,
         FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex, FunctionDefinitionIndex,
@@ -280,7 +279,7 @@ impl<'a> Context<'a> {
     pub fn new(
         decl_location: Loc,
         dependencies: CompiledDependencies<'a>,
-        current_module_opt: Option<ModuleIdent>,
+        current_module: ModuleIdent,
     ) -> Result<Self> {
         let context = Self {
             dependencies,
@@ -304,7 +303,7 @@ impl<'a> Context<'a> {
             address_identifiers: HashMap::new(),
             constant_pool: HashMap::new(),
             current_function_index: FunctionDefinitionIndex::new(0),
-            source_map: SourceMap::new(decl_location, current_module_opt),
+            source_map: SourceMap::new(decl_location, current_module),
         };
 
         Ok(context)
@@ -791,7 +790,8 @@ impl<'a> Context<'a> {
                 let correct_sh_idx = self.struct_handle_index(sident)?;
                 SignatureToken::Struct(correct_sh_idx)
             }
-            SignatureToken::StructInstantiation(orig_sh_idx, inners) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (orig_sh_idx, inners) = *struct_inst;
                 let dep_info = self.dependency(dep)?;
                 let (mident, sname) = dep_info
                     .source_struct_info(orig_sh_idx)
@@ -806,7 +806,7 @@ impl<'a> Context<'a> {
                     .into_iter()
                     .map(|t| self.reindex_signature_token(dep, t))
                     .collect::<Result<_>>()?;
-                SignatureToken::StructInstantiation(correct_sh_idx, correct_inners)
+                SignatureToken::StructInstantiation(Box::new((correct_sh_idx, correct_inners)))
             }
         })
     }

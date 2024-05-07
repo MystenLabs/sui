@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClient } from '@mysten/dapp-kit';
-import { DynamicFieldPage } from '@mysten/sui.js/src/client';
+import { DynamicFieldPage } from '@mysten/sui.js/client';
 import { normalizeSuiAddress } from '@mysten/sui.js/utils';
 import { useInfiniteQuery } from '@tanstack/react-query';
 

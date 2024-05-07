@@ -1,0 +1,23 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === PREVIEW === 
+╭──────────────────────────────────────────────────────╮
+│ PTB Preview                                          │
+├───────────────┬──────────────────────────────────────┤
+│ command       │ values                               │
+├───────────────┼──────────────────────────────────────┤
+│ make-move-vec │ <vector<address>> [@0x1, @0x2, @0x3] │
+│ make-move-vec │ <address> [true, false]              │
+├───────────────┼──────────────────────────────────────┤
+│ gas-budget    │ 10000                                │
+╰───────────────┴──────────────────────────────────────╯
+ === BUILT PTB === 
+Input 0: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1])
+Input 1: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2])
+Input 2: Pure([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3])
+Input 3: Pure([1])
+Input 4: Pure([0])
+Command 0: MakeMoveVec(Somevector<address>,[Input(0),Input(1),Input(2)])
+Command 1: MakeMoveVec(Someaddress,[Input(3),Input(4)])

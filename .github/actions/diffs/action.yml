@@ -16,25 +16,33 @@ outputs:
   isReleaseNotesEligible:
     description: True when changes happened in Release Notes eligible paths
     value: "${{ steps.diff.outputs.isReleaseNotesEligible }}"
+  isMoveAutoFormatter:
+    description: True when changes happened in MoveAutoFormatter code
+    value: "${{ steps.diff.outputs.isMoveAutoFormatter }}"
 
 runs:
   using: composite
   steps:
-  - uses: actions/checkout@v3
+  - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
   - name: Detect Changes
     uses: dorny/paths-filter@v2.10.2
     id: diff
     with:
       filters: |
         isRust:
+          - 'consensus/**'
           - 'crates/**'
           - 'external-crates/**'
           - 'narwhal/**'
           - 'sui-execution/**'
-          - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
           - '.github/workflows/external.yml'
+          - 'Cargo.lock'
+          - 'Cargo.toml'
+          - 'deny.toml'
+          - 'rust-toolchain.toml'
+          - 'rustfmt.toml'
         isDoc:
           - 'docs/content/**'
           - '*.mdx'
@@ -51,6 +59,7 @@ runs:
           - 'examples/**'
           - 'sui_programmability/**'
         isReleaseNotesEligible:
+          - 'consensus/**'
           - 'crates/**'
           - 'dashboards/**'
           - 'doc/**'
@@ -60,3 +69,5 @@ runs:
           - 'narwhal/**'
           - 'nre/**'
           - 'sui-execution/**'
+        isMoveAutoFormatter:
+          - 'external-crates/move/crates/move-analyzer/prettier-plugin/**'

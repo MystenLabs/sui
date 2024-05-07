@@ -24,7 +24,7 @@ use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 use sui_source_validation_service::{
     host_port, initialize, serve, start_prometheus_server, verify_packages, watch_for_upgrades,
-    AddressLookup, AppState, CloneCommand, Config, DirectorySource, ErrorResponse, Network,
+    AddressLookup, AppState, Branch, CloneCommand, Config, DirectorySource, ErrorResponse, Network,
     NetworkLookup, Package, PackageSource, RepositorySource, SourceInfo, SourceLookup,
     SourceResponse, SourceServiceMetrics, METRICS_HOST_PORT, SUI_SOURCE_VALIDATION_VERSION_HEADER,
 };
@@ -80,7 +80,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Set up source service config to watch the upgrade cap.
     let config = Config {
         packages: vec![PackageSource::Directory(DirectorySource {
-            packages: vec![Package {
+            paths: vec![Package {
                 path: "unused".into(),
                 watch: Some(cap.reference.object_id), // watch the upgrade cap
             }],
@@ -90,9 +90,13 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     // Start watching for upgrades.
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, AddressLookup::new());
+
+    let mut sources_list = NetworkLookup::new();
+    sources_list.insert(Network::Localnet, AddressLookup::new());
     let app_state = Arc::new(RwLock::new(AppState {
         sources,
         metrics: None,
+        sources_list,
     }));
     let app_state_ref = app_state.clone();
     let (tx, rx) = oneshot::channel();
@@ -128,10 +132,12 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     let config = Config {
         packages: vec![PackageSource::Repository(RepositorySource {
             repository: "https://github.com/mystenlabs/sui".into(),
-            branch: "main".into(),
-            packages: vec![Package {
-                path: "move-stdlib".into(),
-                watch: None,
+            branches: vec![Branch {
+                branch: "main".into(),
+                paths: vec![Package {
+                    path: "move-stdlib".into(),
+                    watch: None,
+                }],
             }],
             network: Some(Network::Localnet),
         })],
@@ -140,7 +146,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
     let fixtures = tempfile::tempdir()?;
     fs::create_dir(fixtures.path().join("localnet"))?;
     fs_extra::dir::copy(
-        PathBuf::from(TEST_FIXTURES_DIR).join("sui"),
+        PathBuf::from(TEST_FIXTURES_DIR).join("sui__main"),
         fixtures.path().join("localnet"),
         &fs_extra::dir::CopyOptions::default(),
     )?;
@@ -155,7 +161,7 @@ async fn test_end_to_end() -> anyhow::Result<()> {
         .join("\n");
     let expected = expect![
         r#"
-Multiple source verification errors found:
+Network localnet: Multiple source verification errors found:
 
 - Local dependency did not match its on-chain version at 0000000000000000000000000000000000000000000000000000000000000001::MoveStdlib::address"#
     ];
@@ -175,11 +181,11 @@ async fn run_publish(
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        dry_run: false,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -206,11 +212,11 @@ async fn run_upgrade(
         build_config,
         gas: Some(gas_obj_id),
         gas_budget: rgp * TEST_ONLY_GAS_UNIT_FOR_PUBLISH,
+        dry_run: false,
         skip_dependency_verification: false,
         with_unpublished_dependencies: false,
         serialize_unsigned_transaction: false,
         serialize_signed_transaction: false,
-        no_lint: true,
     }
     .execute(context)
     .await?;
@@ -269,7 +275,7 @@ async fn test_api_route() -> anyhow::Result<()> {
     // set up sample lookup to serve
     let fixtures = tempfile::tempdir()?;
     fs_extra::dir::copy(
-        PathBuf::from(TEST_FIXTURES_DIR).join("sui"),
+        PathBuf::from(TEST_FIXTURES_DIR).join("sui__main"),
         fixtures.path(),
         &fs_extra::dir::CopyOptions::default(),
     )?;
@@ -293,9 +299,12 @@ async fn test_api_route() -> anyhow::Result<()> {
     address_lookup.insert(account_address, source_lookup);
     let mut sources = NetworkLookup::new();
     sources.insert(Network::Localnet, address_lookup);
+    let mut sources_list = NetworkLookup::new();
+    sources_list.insert(Network::Localnet, AddressLookup::new());
     let app_state = Arc::new(RwLock::new(AppState {
         sources,
         metrics: None,
+        sources_list,
     }));
     tokio::spawn(serve(app_state).expect("Cannot start service."));
 
@@ -315,6 +324,17 @@ async fn test_api_route() -> anyhow::Result<()> {
 
     let expected = expect!["module address {...}"];
     expected.assert_eq(&json.source);
+
+    // check /list route
+    let response = client
+        .get(format!("http://{}/api/list", host_port()))
+        .send()
+        .await?
+        .text()
+        .await?;
+
+    let expected = expect![[r#"{"localnet":{}}"#]];
+    expected.assert_eq(response.as_str());
 
     // check server rejects bad version header
     let json = client
@@ -365,20 +385,24 @@ async fn test_metrics_route() -> anyhow::Result<()> {
 #[test]
 fn test_parse_package_config() -> anyhow::Result<()> {
     let config = r#"
-    [[packages]]
-    source = "Repository"
-    [packages.values]
-    repository = "https://github.com/mystenlabs/sui"
-    branch = "main"
-    packages = [
-        { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
-        { path = "immutable" },
-    ]
+[[packages]]
+source = "Repository"
+[packages.values]
+repository = "https://github.com/mystenlabs/sui"
+network = "mainnet"
+[[packages.values.branches]]
+branch = "framework/mainnet"
+paths = [
+  { path = "crates/sui-framework/packages/deepbook", watch = "0xdee9" },
+  { path = "crates/sui-framework/packages/move-stdlib", watch = "0x1" },
+  { path = "crates/sui-framework/packages/sui-framework", watch = "0x2" },
+  { path = "crates/sui-framework/packages/sui-system", watch = "0x3" }
+]
 
     [[packages]]
     source = "Directory"
     [packages.values]
-    packages = [
+    paths = [
         { path = "home/user/some/upgradeable-package", watch = "0x1234" },
         { path = "home/user/some/immutable-package" },
     ]
@@ -391,25 +415,45 @@ fn test_parse_package_config() -> anyhow::Result<()> {
                 Repository(
                     RepositorySource {
                         repository: "https://github.com/mystenlabs/sui",
-                        branch: "main",
-                        packages: [
-                            Package {
-                                path: "crates/sui-framework/packages/sui-framework",
-                                watch: Some(
-                                    0x0000000000000000000000000000000000000000000000000000000000000002,
-                                ),
-                            },
-                            Package {
-                                path: "immutable",
-                                watch: None,
+                        network: Some(
+                            Mainnet,
+                        ),
+                        branches: [
+                            Branch {
+                                branch: "framework/mainnet",
+                                paths: [
+                                    Package {
+                                        path: "crates/sui-framework/packages/deepbook",
+                                        watch: Some(
+                                            0x000000000000000000000000000000000000000000000000000000000000dee9,
+                                        ),
+                                    },
+                                    Package {
+                                        path: "crates/sui-framework/packages/move-stdlib",
+                                        watch: Some(
+                                            0x0000000000000000000000000000000000000000000000000000000000000001,
+                                        ),
+                                    },
+                                    Package {
+                                        path: "crates/sui-framework/packages/sui-framework",
+                                        watch: Some(
+                                            0x0000000000000000000000000000000000000000000000000000000000000002,
+                                        ),
+                                    },
+                                    Package {
+                                        path: "crates/sui-framework/packages/sui-system",
+                                        watch: Some(
+                                            0x0000000000000000000000000000000000000000000000000000000000000003,
+                                        ),
+                                    },
+                                ],
                             },
                         ],
-                        network: None,
                     },
                 ),
                 Directory(
                     DirectorySource {
-                        packages: [
+                        paths: [
                             Package {
                                 path: "home/user/some/upgradeable-package",
                                 watch: Some(
@@ -434,21 +478,27 @@ fn test_parse_package_config() -> anyhow::Result<()> {
 fn test_clone_command() -> anyhow::Result<()> {
     let source = RepositorySource {
         repository: "https://github.com/user/repo".into(),
-        branch: "main".into(),
-        packages: vec![
-            Package {
-                path: "a".into(),
-                watch: None,
-            },
-            Package {
-                path: "b".into(),
-                watch: None,
-            },
-        ],
+        branches: vec![Branch {
+            branch: "main".into(),
+            paths: vec![
+                Package {
+                    path: "a".into(),
+                    watch: None,
+                },
+                Package {
+                    path: "b".into(),
+                    watch: None,
+                },
+            ],
+        }],
         network: Some(Network::Localnet),
     };
 
-    let command = CloneCommand::new(&source, PathBuf::from("/foo").as_path())?;
+    let command = CloneCommand::new(
+        &source,
+        &source.branches[0],
+        PathBuf::from("/foo").as_path(),
+    )?;
     let expect = expect![
         r#"CloneCommand {
     args: [
@@ -459,11 +509,11 @@ fn test_clone_command() -> anyhow::Result<()> {
             "--filter=tree:0",
             "--branch=main",
             "https://github.com/user/repo",
-            "/foo/localnet/repo",
+            "/foo/localnet/repo__main",
         ],
         [
             "-C",
-            "/foo/localnet/repo",
+            "/foo/localnet/repo__main",
             "sparse-checkout",
             "set",
             "--no-cone",
@@ -472,7 +522,7 @@ fn test_clone_command() -> anyhow::Result<()> {
         ],
         [
             "-C",
-            "/foo/localnet/repo",
+            "/foo/localnet/repo__main",
             "checkout",
         ],
     ],

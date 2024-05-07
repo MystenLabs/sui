@@ -1,13 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::{
-    test_authority_builder::TestAuthorityBuilder, AuthorityState, EffectsNotifyRead,
-};
-use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
-use crate::epoch::committee_store::CommitteeStore;
-use crate::state_accumulator::StateAccumulator;
-use crate::test_authority_clients::LocalAuthorityClient;
 use fastcrypto::hash::MultisetHash;
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
@@ -21,9 +14,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_config::local_ip_utils;
-use sui_config::node::OverloadThresholdConfig;
+use sui_config::node::AuthorityOverloadConfig;
 use sui_framework::BuiltInFramework;
 use sui_genesis_builder::validator_info::ValidatorInfo;
+use sui_macros::nondeterministic;
 use sui_move_build::{BuildConfig, CompiledPackage, SuiPackageHooks};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::base_types::{random_object_ref, ObjectID};
@@ -32,7 +26,7 @@ use sui_types::crypto::{
     NetworkKeyPair, SuiKeyPair,
 };
 use sui_types::crypto::{AuthorityKeyPair, Signer};
-use sui_types::effects::{SignedTransactionEffects, TransactionEffects};
+use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
 use sui_types::error::SuiError;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
@@ -51,6 +45,12 @@ use sui_types::{
 use tokio::time::timeout;
 use tracing::{info, warn};
 
+use crate::authority::{test_authority_builder::TestAuthorityBuilder, AuthorityState};
+use crate::authority_aggregator::{AuthorityAggregator, TimeoutConfig};
+use crate::epoch::committee_store::CommitteeStore;
+use crate::state_accumulator::StateAccumulator;
+use crate::test_authority_clients::LocalAuthorityClient;
+
 const WAIT_FOR_TX_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub async fn send_and_confirm_transaction(
@@ -60,7 +60,7 @@ pub async fn send_and_confirm_transaction(
 ) -> Result<(CertifiedTransaction, SignedTransactionEffects), SuiError> {
     // Make the initial request
     let epoch_store = authority.load_epoch_store_one_call_per_task();
-    let transaction = authority.verify_transaction(transaction)?;
+    let transaction = epoch_store.verify_transaction(transaction)?;
     let response = authority
         .handle_transaction(&epoch_store, transaction.clone())
         .await?;
@@ -79,7 +79,7 @@ pub async fn send_and_confirm_transaction(
     //
     // We also check the incremental effects of the transaction on the live object set against StateAccumulator
     // for testing and regression detection
-    let state_acc = StateAccumulator::new(authority.database.clone());
+    let state_acc = StateAccumulator::new(authority.get_execution_cache().clone());
     let include_wrapped_tombstone = !authority
         .epoch_store_for_testing()
         .protocol_config()
@@ -108,7 +108,7 @@ pub(crate) fn init_state_parameters_from_rng<R>(rng: &mut R) -> (Genesis, Author
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    let dir = tempfile::TempDir::new().unwrap();
+    let dir = nondeterministic!(tempfile::TempDir::new().unwrap());
     let network_config = sui_swarm_config::network_config_builder::ConfigBuilder::new(&dir)
         .rng(rng)
         .build();
@@ -123,7 +123,9 @@ where
 pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_executed_effects(vec![digest]),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&[digest]),
     )
     .await
     {
@@ -138,7 +140,9 @@ pub async fn wait_for_tx(digest: TransactionDigest, state: Arc<AuthorityState>) 
 pub async fn wait_for_all_txes(digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
     match timeout(
         WAIT_FOR_TX_TIMEOUT,
-        state.database.notify_read_executed_effects(digests.clone()),
+        state
+            .get_cache_reader()
+            .notify_read_executed_effects(&digests),
     )
     .await
     {
@@ -176,15 +180,11 @@ pub fn create_fake_cert_and_effect_digest<'a>(
         committee,
     )
     .unwrap();
-    let effects = dummy_transaction_effects(&transaction);
+    let effects = TestEffectsBuilder::new(transaction.data()).build();
     (
         ExecutionDigests::new(*transaction.digest(), effects.digest()),
         cert,
     )
-}
-
-pub fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
-    TransactionEffects::new_with_tx(tx)
 }
 
 pub fn compile_basics_package() -> CompiledPackage {
@@ -216,7 +216,7 @@ async fn init_genesis(
     let genesis_move_packages: Vec<_> = BuiltInFramework::genesis_move_packages().collect();
     let pkg = Object::new_package(
         &modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
         &genesis_move_packages,
     )
@@ -283,7 +283,7 @@ pub async fn init_local_authorities(
 pub async fn init_local_authorities_with_overload_thresholds(
     committee_size: usize,
     genesis_objects: Vec<Object>,
-    overload_thresholds: OverloadThresholdConfig,
+    overload_thresholds: AuthorityOverloadConfig,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
@@ -294,7 +294,7 @@ pub async fn init_local_authorities_with_overload_thresholds(
     let authorities = join_all(key_pairs.iter().map(|(_, key_pair)| {
         TestAuthorityBuilder::new()
             .with_genesis_and_keypair(&genesis, key_pair)
-            .with_overload_threshold_config(overload_thresholds.clone())
+            .with_authority_overload_config(overload_thresholds.clone())
             .build()
     }))
     .await;
@@ -433,7 +433,6 @@ pub fn make_dummy_tx(
             TEST_ONLY_GAS_UNIT_FOR_TRANSFER * 10,
             10,
         ),
-        Intent::sui_transaction(),
         vec![sender_sec],
     )
 }

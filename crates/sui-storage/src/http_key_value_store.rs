@@ -68,7 +68,7 @@ where
     E: std::error::Error,
 {
     fn into_sui_result(self) -> SuiResult<T> {
-        self.map_err(|e| SuiError::GenericStorageError(e.to_string()))
+        self.map_err(|e| SuiError::Storage(e.to_string()))
     }
 }
 
@@ -127,7 +127,7 @@ impl HttpKVStore {
     pub fn new(base_url: &str) -> SuiResult<Self> {
         info!("creating HttpKVStore with base_url: {}", base_url);
         let http = HttpsConnectorBuilder::new()
-            .with_native_roots()
+            .with_webpki_roots()
             .https_or_http()
             .enable_http2()
             .build();

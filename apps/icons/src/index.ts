@@ -131,6 +131,7 @@ export { default as SocialDiscord24 } from './SocialDiscord24';
 export { default as SocialFacebook24 } from './SocialFacebook24';
 export { default as SocialGithub24 } from './SocialGithub24';
 export { default as SocialGoogle24 } from './SocialGoogle24';
+export { default as SocialKakao24 } from './SocialKakao24';
 export { default as SocialLinkedin24 } from './SocialLinkedin24';
 export { default as SocialMedium24 } from './SocialMedium24';
 export { default as SocialMicrosoft24 } from './SocialMicrosoft24';

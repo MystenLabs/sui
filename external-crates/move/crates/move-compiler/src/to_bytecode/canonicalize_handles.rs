@@ -4,12 +4,10 @@
 use std::collections::HashMap;
 
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
-        Bytecode, CodeUnit, CompiledScript, FunctionDefinition, FunctionDefinitionIndex,
-        FunctionHandleIndex, IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
-        TableIndex,
+        Bytecode, CodeUnit, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,
+        IdentifierIndex, ModuleHandleIndex, Signature, SignatureToken, StructDefinition,
+        StructDefinitionIndex, StructFieldInformation, StructHandleIndex, TableIndex,
     },
     internals::ModuleIndex,
     CompiledModule,
@@ -17,7 +15,7 @@ use move_binary_format::{
 use move_core_types::account_address::AccountAddress;
 use move_symbol_pool::Symbol;
 
-/// Pass to order handles in compiled modules and scripts stably and canonically.  Performs the
+/// Pass to order handles in compiled modules stably and canonically.  Performs the
 /// following canonicalizations:
 ///
 /// - Identifiers are sorted in lexicographic order.
@@ -139,7 +137,7 @@ pub fn in_module(
     // 2 (c). Update ordering for module handles.
     apply_permutation(&mut module.module_handles, modules);
 
-    // 3 (a). Choose ordering for struct handles.
+    // 3 (a). Choose ordering for datatype handles.
     let struct_defs = struct_definition_order(&module.struct_defs);
     let structs = permutation(&module.struct_handles, |ix, handle| {
         if handle.module == module.self_handle_idx() {
@@ -230,100 +228,6 @@ pub fn in_module(
     });
 }
 
-/// Apply canonicalization to a compiled script.
-pub fn in_script(
-    script: &mut CompiledScript,
-    address_names: &HashMap<(AccountAddress, &str), Symbol>,
-) {
-    // 1 (a). Choose ordering for identifiers.
-    let identifiers = permutation(&script.identifiers, |_ix, ident| ident);
-
-    // 1 (b). Update references to identifiers.
-    for module in &mut script.module_handles {
-        remap!(IdentifierIndex, module.name, identifiers);
-    }
-
-    for fun in &mut script.function_handles {
-        remap!(IdentifierIndex, fun.name, identifiers);
-    }
-
-    for struct_ in &mut script.struct_handles {
-        remap!(IdentifierIndex, struct_.name, identifiers);
-    }
-
-    // 1 (c). Update ordering for identifiers.  Note that updates need to happen before other
-    //        handles are re-ordered, so that they can continue referencing identifiers in their own
-    //        comparators.
-    apply_permutation(&mut script.identifiers, identifiers);
-
-    // 2 (a). Choose ordering for module handles.
-    let modules = permutation(&script.module_handles, |_ix, handle| {
-        // Preserve order between modules without a named address, pushing them to the end of the
-        // pool.
-        let Some(address_name) = address_names.get(&(
-            script.address_identifiers[handle.address.0 as usize],
-            script.identifiers[handle.name.0 as usize].as_str(),
-        )) else {
-            return ModuleKey::Unnamed;
-        };
-
-        // Layout remaining modules in lexicographical order of named address and module name.
-        ModuleKey::Named {
-            address: *address_name,
-            name: handle.name,
-        }
-    });
-
-    // 2 (b). Update references to module handles.
-    for fun in &mut script.function_handles {
-        remap!(ModuleHandleIndex, fun.module, modules);
-    }
-
-    for struct_ in &mut script.struct_handles {
-        remap!(ModuleHandleIndex, struct_.module, modules);
-    }
-
-    // 2 (c). Update ordering for module handles.
-    apply_permutation(&mut script.module_handles, modules);
-
-    // 3 (a). Choose ordering for struct handles.
-    let structs = permutation(&script.struct_handles, |_ix, handle| {
-        ReferenceKey::External {
-            module: handle.module,
-            name: handle.name,
-        }
-    });
-
-    // 3 (b). Update references to struct handles.
-    for Signature(tokens) in &mut script.signatures {
-        for token in tokens {
-            remap_signature_token(token, &structs);
-        }
-    }
-
-    // 3 (b). Update ordering for struct handles.
-    apply_permutation(&mut script.struct_handles, structs);
-
-    // 4 (a). Choose ordering for function handles.
-    let functions = permutation(&script.function_handles, |_ix, handle| {
-        // Order handles in lexicographical order of module, then function name.
-        ReferenceKey::External {
-            module: handle.module,
-            name: handle.name,
-        }
-    });
-
-    // 4 (b). Update references to function handles.
-    for inst in &mut script.function_instantiations {
-        remap!(FunctionHandleIndex, inst.handle, functions);
-    }
-
-    remap_code(&mut script.code, &functions);
-
-    // 4 (c). Update ordering for function handles.
-    apply_permutation(&mut script.function_handles, functions);
-}
-
 /// Reverses mapping from `StructDefinition(Index)` to `StructHandle`, so that handles for structs
 /// defined in a module can be arranged in definition order.
 fn struct_definition_order(
@@ -368,7 +272,8 @@ fn remap_signature_token(token: &mut SignatureToken, structs: &[TableIndex]) {
 
         T::Struct(handle) => remap!(StructHandleIndex, *handle, structs),
 
-        T::StructInstantiation(handle, tokens) => {
+        T::StructInstantiation(struct_inst) => {
+            let (handle, tokens) = Box::as_mut(struct_inst);
             remap!(StructHandleIndex, *handle, structs);
             for token in tokens {
                 remap_signature_token(token, structs)

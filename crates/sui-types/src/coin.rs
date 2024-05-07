@@ -10,10 +10,10 @@ use crate::{
 };
 use crate::{base_types::ObjectID, id::UID, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::{
+    annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     ident_str,
     identifier::IdentStr,
     language_storage::{StructTag, TypeTag},
-    value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,7 @@ impl Coin {
     }
 
     pub fn layout(type_param: TypeTag) -> MoveStructLayout {
-        MoveStructLayout::WithTypes {
+        MoveStructLayout {
             type_: Self::type_(type_param.clone()),
             fields: vec![
                 MoveFieldLayout::new(

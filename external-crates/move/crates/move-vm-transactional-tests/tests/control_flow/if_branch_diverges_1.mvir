@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let ret_if_val: bool;
 label b0:
     ret_if_val = true;
@@ -8,4 +10,6 @@ label b1:
     return;
 label b2:
     return;
+}
+
 }

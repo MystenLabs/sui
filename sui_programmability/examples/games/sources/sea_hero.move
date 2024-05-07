@@ -12,13 +12,10 @@ module games::sea_hero {
     use games::hero::{Self, Hero};
 
     use sui::balance::{Self, Balance, Supply};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Admin capability granting permission to mint RUM tokens and
     /// create monsters
-    struct SeaHeroAdmin has key {
+    public struct SeaHeroAdmin has key {
         id: UID,
         /// Permission to mint RUM
         supply: Supply<RUM>,
@@ -31,14 +28,14 @@ module games::sea_hero {
     }
 
     /// A new kind of monster for the hero to fight
-    struct SeaMonster has key, store {
+    public struct SeaMonster has key, store {
         id: UID,
         /// Tokens that the user will earn for slaying this monster
         reward: Balance<RUM>
     }
 
     /// Type of the sea game token
-    struct RUM has drop {}
+    public struct RUM has drop {}
 
     // TODO: proper error codes
     /// Hero is not strong enough to defeat the monster. Try healing with a

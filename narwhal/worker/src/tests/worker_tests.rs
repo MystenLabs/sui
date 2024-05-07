@@ -6,7 +6,6 @@ use crate::LocalNarwhalClient;
 use crate::{metrics::initialise_metrics, TrivialTransactionValidator};
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::ChainIdentifier;
 use fastcrypto::{
     encoding::{Encoding, Hex},
     hash::Hash,
@@ -40,7 +39,7 @@ impl TransactionValidator for NilTxValidator {
     fn validate(&self, _tx: &[u8]) -> Result<(), Self::Error> {
         eyre::bail!("Invalid transaction");
     }
-    async fn validate_batch(
+    fn validate_batch(
         &self,
         _txs: &Batch,
         _protocol_config: &ProtocolConfig,
@@ -409,7 +408,6 @@ async fn get_network_peers_from_admin_server() {
         authority_1.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
-        ChainIdentifier::unknown(),
         latest_protocol_version(),
         primary_1_parameters.clone(),
         client_1.clone(),
@@ -524,7 +522,6 @@ async fn get_network_peers_from_admin_server() {
         authority_2.network_keypair().copy(),
         committee.clone(),
         worker_cache.clone(),
-        ChainIdentifier::unknown(),
         latest_protocol_version(),
         primary_2_parameters.clone(),
         client_2.clone(),

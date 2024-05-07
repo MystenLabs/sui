@@ -62,11 +62,12 @@ mod sim_only_tests {
     use std::sync::Arc;
     use sui_core::authority::framework_injection;
     use sui_framework::BuiltInFramework;
-    use sui_json_rpc::api::WriteApiClient;
+    use sui_json_rpc_api::WriteApiClient;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
+    use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
     use sui_types::id::ID;
@@ -85,9 +86,12 @@ mod sim_only_tests {
         digests::TransactionDigest,
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
-        storage::ObjectStore,
         transaction::TransactionKind,
         MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+    };
+    use sui_types::{
+        SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
+        SUI_SYSTEM_STATE_OBJECT_ID,
     };
     use test_cluster::TestCluster;
     use tokio::time::{sleep, Duration};
@@ -174,8 +178,10 @@ mod sim_only_tests {
             .with_supported_protocol_version_callback(Arc::new(|idx, name| {
                 if name.is_some() && idx == 0 {
                     // first validator only does not support version FINISH.
+                    info!("node {name:?} supports protocol versions up to {START}");
                     SupportedProtocolVersions::new_for_testing(START, START)
                 } else {
+                    info!("node {name:?} supports protocol versions up to {FINISH}");
                     SupportedProtocolVersions::new_for_testing(START, FINISH)
                 }
             }))
@@ -425,7 +431,14 @@ mod sim_only_tests {
             .iter()
             .find_map(|(obj, owner)| {
                 if let Owner::Shared { .. } = owner {
-                    Some(obj.0)
+                    let is_framework_obj = [
+                        SUI_SYSTEM_STATE_OBJECT_ID,
+                        SUI_CLOCK_OBJECT_ID,
+                        SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                        SUI_RANDOMNESS_STATE_OBJECT_ID,
+                    ]
+                    .contains(&obj.0);
+                    (!is_framework_obj).then_some(obj.0)
                 } else {
                     None
                 }
@@ -558,6 +571,7 @@ mod sim_only_tests {
                 Base64::from_bytes(&bcs::to_bytes(&txn).unwrap()),
                 /* gas_price */ None,
                 /* epoch_id */ None,
+                /* additional_args */ None,
             )
             .await
             .unwrap();
@@ -637,10 +651,10 @@ mod sim_only_tests {
 
         node_handle
             .with_async(|node| async {
-                let db = node.state().db();
-                let framework = db.get_object(package);
+                let store = node.state().get_cache_reader().clone();
+                let framework = store.get_object(package);
                 let digest = framework.unwrap().unwrap().previous_transaction;
-                let effects = db.get_executed_effects(&digest);
+                let effects = store.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
             })
             .await
@@ -650,7 +664,13 @@ mod sim_only_tests {
         let node_handle = &cluster.fullnode_handle.sui_node;
 
         node_handle
-            .with_async(|node| async { node.state().db().get_object(object_id).unwrap().unwrap() })
+            .with_async(|node| async {
+                node.state()
+                    .get_cache_reader()
+                    .get_object(object_id)
+                    .unwrap()
+                    .unwrap()
+            })
             .await
     }
 
@@ -883,7 +903,12 @@ mod sim_only_tests {
             // Make sure we have 1 inactive validator for latter testing.
             assert_eq!(inner.validators.inactive_validators.size, 1);
             get_validator_from_table(
-                test_cluster.fullnode_handle.sui_node.state().db().as_ref(),
+                test_cluster
+                    .fullnode_handle
+                    .sui_node
+                    .state()
+                    .get_object_store()
+                    .as_ref(),
                 inner.validators.inactive_validators.id,
                 &ID::new(ObjectID::ZERO),
             )
@@ -903,7 +928,12 @@ mod sim_only_tests {
             // Make sure we have 1 inactive validator for latter testing.
             assert_eq!(inner.validators.inactive_validators.size, 1);
             get_validator_from_table(
-                test_cluster.fullnode_handle.sui_node.state().db().as_ref(),
+                test_cluster
+                    .fullnode_handle
+                    .sui_node
+                    .state()
+                    .get_object_store()
+                    .as_ref(),
                 inner.validators.inactive_validators.id,
                 &ID::new(ObjectID::ZERO),
             )
@@ -971,7 +1001,7 @@ mod sim_only_tests {
     fn sui_system_package_object(fixture: &str) -> Object {
         Object::new_package(
             &sui_system_modules(fixture),
-            TransactionDigest::genesis(),
+            TransactionDigest::genesis_marker(),
             u64::MAX,
             &[
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),

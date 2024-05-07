@@ -6,6 +6,7 @@ mod compatibility_tests {
     use sui_framework::{compare_system_package, BuiltInFramework};
     use sui_framework_snapshot::{load_bytecode_snapshot, load_bytecode_snapshot_manifest};
     use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
+    use sui_types::execution_config_utils::to_binary_config;
 
     #[tokio::test]
     async fn test_framework_compatibility() {
@@ -14,8 +15,7 @@ mod compatibility_tests {
         for (version, _snapshots) in load_bytecode_snapshot_manifest() {
             let config =
                 ProtocolConfig::get_for_version(ProtocolVersion::new(version), Chain::Unknown);
-            let max_binary_format_version = config.move_binary_format_version();
-            let no_extraneous_module_bytes = config.no_extraneous_module_bytes();
+            let binary_config = to_binary_config(&config);
             let framework = load_bytecode_snapshot(version).unwrap();
             let old_framework_store: BTreeMap<_, _> = framework
                 .into_iter()
@@ -27,8 +27,7 @@ mod compatibility_tests {
                     cur_package.id(),
                     &cur_package.modules(),
                     cur_package.dependencies().to_vec(),
-                    max_binary_format_version,
-                    no_extraneous_module_bytes,
+                    &binary_config,
                 )
                 .await
                 .is_none()
@@ -66,5 +65,16 @@ mod compatibility_tests {
                 current_framework,
                 "The current framework differs the latest bytecode snapshot. Did you forget to upgrade protocol version?"
             );
+    }
+
+    #[test]
+    fn check_no_dirty_manifest_commit() {
+        let snapshots = load_bytecode_snapshot_manifest();
+        for snapshot in snapshots.values() {
+            assert!(
+                !snapshot.git_revision().contains("dirty"),
+                "If you are trying to regenerate the bytecode snapshot after cherry-picking, please do so in a standalone PR after the cherry-pick is merged on the release branch.",
+            );
+        }
     }
 }

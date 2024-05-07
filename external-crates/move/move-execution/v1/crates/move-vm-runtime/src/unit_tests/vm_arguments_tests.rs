@@ -9,10 +9,10 @@ use move_binary_format::{
     errors::{VMError, VMResult},
     file_format::{
         empty_module, AbilitySet, AddressIdentifierIndex, Bytecode, CodeUnit, CompiledModule,
-        CompiledScript, FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex,
-        IdentifierIndex, ModuleHandle, ModuleHandleIndex, Signature, SignatureIndex,
-        SignatureToken, StructDefinition, StructFieldInformation, StructHandle, StructHandleIndex,
-        TableIndex, TypeSignature, Visibility,
+        FieldDefinition, FunctionDefinition, FunctionHandle, FunctionHandleIndex, IdentifierIndex,
+        ModuleHandle, ModuleHandleIndex, Signature, SignatureIndex, SignatureToken,
+        StructDefinition, StructFieldInformation, StructHandle, StructHandleIndex, TableIndex,
+        TypeSignature, Visibility,
     },
 };
 use move_core_types::{
@@ -20,117 +20,11 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{LinkageResolver, ModuleResolver, ResourceResolver},
+    runtime_value::{serialize_values, MoveValue},
     u256::U256,
-    value::{serialize_values, MoveValue},
     vm_status::{StatusCode, StatusType},
 };
 use move_vm_types::gas::UnmeteredGasMeter;
-
-// make a script with a given signature for main.
-fn make_script(parameters: Signature) -> Vec<u8> {
-    let mut blob = vec![];
-    let mut signatures = vec![Signature(vec![])];
-    let parameters_idx = match signatures
-        .iter()
-        .enumerate()
-        .find(|(_, s)| *s == &parameters)
-    {
-        Some((idx, _)) => SignatureIndex(idx as TableIndex),
-        None => {
-            signatures.push(parameters);
-            SignatureIndex((signatures.len() - 1) as TableIndex)
-        }
-    };
-    CompiledScript {
-        version: move_binary_format::file_format_common::VERSION_MAX,
-        module_handles: vec![],
-        struct_handles: vec![],
-        function_handles: vec![],
-
-        function_instantiations: vec![],
-
-        signatures,
-
-        identifiers: vec![],
-        address_identifiers: vec![],
-        constant_pool: vec![],
-        metadata: vec![],
-
-        type_parameters: vec![],
-        parameters: parameters_idx,
-        code: CodeUnit {
-            locals: SignatureIndex(0),
-            code: vec![Bytecode::LdU64(0), Bytecode::Abort],
-        },
-    }
-    .serialize(&mut blob)
-    .expect("script must serialize");
-    blob
-}
-
-// make a script with an external function that has the same signature as
-// the main. That allows us to pass resources and make the verifier happy that
-// they are consumed.
-// Dependencies check happens after main signature check, so we should expect
-// a signature check error.
-fn make_script_with_non_linking_structs(parameters: Signature) -> Vec<u8> {
-    let mut blob = vec![];
-    let mut signatures = vec![Signature(vec![])];
-    let parameters_idx = match signatures
-        .iter()
-        .enumerate()
-        .find(|(_, s)| *s == &parameters)
-    {
-        Some((idx, _)) => SignatureIndex(idx as TableIndex),
-        None => {
-            signatures.push(parameters);
-            SignatureIndex((signatures.len() - 1) as TableIndex)
-        }
-    };
-    CompiledScript {
-        version: move_binary_format::file_format_common::VERSION_MAX,
-        module_handles: vec![ModuleHandle {
-            address: AddressIdentifierIndex(0),
-            name: IdentifierIndex(0),
-        }],
-        struct_handles: vec![StructHandle {
-            module: ModuleHandleIndex(0),
-            name: IdentifierIndex(1),
-            abilities: AbilitySet::EMPTY,
-            type_parameters: vec![],
-        }],
-        function_handles: vec![FunctionHandle {
-            module: ModuleHandleIndex(0),
-            name: IdentifierIndex(2),
-            parameters: SignatureIndex(1),
-            return_: SignatureIndex(0),
-            type_parameters: vec![],
-        }],
-
-        function_instantiations: vec![],
-
-        signatures,
-
-        identifiers: vec![
-            Identifier::new("one").unwrap(),
-            Identifier::new("two").unwrap(),
-            Identifier::new("three").unwrap(),
-        ],
-        address_identifiers: vec![AccountAddress::random()],
-        constant_pool: vec![],
-        metadata: vec![],
-
-        type_parameters: vec![],
-        parameters: parameters_idx,
-        code: CodeUnit {
-            locals: SignatureIndex(0),
-            code: vec![Bytecode::LdU64(0), Bytecode::Abort],
-        },
-    }
-    .serialize(&mut blob)
-    .expect("script must serialize");
-    blob
-}
 
 fn make_module_with_function(
     visibility: Visibility,
@@ -280,35 +174,6 @@ fn combine_signers_and_args(
         .map(|s| MoveValue::Signer(s).simple_serialize().unwrap())
         .chain(non_signer_args)
         .collect()
-}
-
-fn call_script_with_args_ty_args_signers(
-    script: Vec<u8>,
-    non_signer_args: Vec<Vec<u8>>,
-    ty_arg_tags: Vec<TypeTag>,
-    signers: Vec<AccountAddress>,
-) -> VMResult<()> {
-    let move_vm = MoveVM::new(vec![]).unwrap();
-    let remote_view = RemoteStore::new();
-    let mut session = move_vm.new_session(&remote_view);
-
-    let ty_args = ty_arg_tags
-        .into_iter()
-        .map(|tag| session.load_type(&tag))
-        .collect::<VMResult<_>>()?;
-
-    session
-        .execute_script(
-            script,
-            ty_args,
-            combine_signers_and_args(signers, non_signer_args),
-            &mut UnmeteredGasMeter,
-        )
-        .map(|_| ())
-}
-
-fn call_script(script: Vec<u8>, args: Vec<Vec<u8>>) -> VMResult<()> {
-    call_script_with_args_ty_args_signers(script, args, vec![], vec![])
 }
 
 fn call_script_function_with_args_ty_args_signers(
@@ -632,66 +497,6 @@ fn general_cases() -> Vec<(
             None,
         ),
     ]
-}
-
-#[test]
-fn check_script() {
-    //
-    // Bad signatures
-    //
-    for signature in deprecated_bad_signatures() {
-        let num_args = signature.0.len();
-        let dummy_args = vec![MoveValue::Bool(false); num_args];
-        let script = make_script_with_non_linking_structs(signature);
-        let status = call_script(script, serialize_values(&dummy_args))
-            .err()
-            .unwrap()
-            .major_status();
-        assert_eq!(status, StatusCode::LINKER_ERROR);
-    }
-
-    //
-    // Good signatures
-    //
-    for (signature, args) in good_signatures_and_arguments() {
-        // Body of the script is just an abort, so `ABORTED` means the script was accepted and ran
-        let expected_status = StatusCode::ABORTED;
-        let script = make_script(signature);
-        assert_eq!(
-            call_script(script, serialize_values(&args))
-                .err()
-                .unwrap()
-                .major_status(),
-            expected_status
-        )
-    }
-
-    //
-    // Mismatched Cases
-    //
-    for (signature, args, error) in mismatched_cases() {
-        let script = make_script(signature);
-        assert_eq!(
-            call_script(script, serialize_values(&args))
-                .err()
-                .unwrap()
-                .major_status(),
-            error
-        );
-    }
-
-    for (signature, args, signers, expected_status_opt) in general_cases() {
-        // Body of the script is just an abort, so `ABORTED` means the script was accepted and ran
-        let expected_status = expected_status_opt.unwrap_or(StatusCode::ABORTED);
-        let script = make_script(signature);
-        assert_eq!(
-            call_script_with_args_ty_args_signers(script, serialize_values(&args), vec![], signers)
-                .err()
-                .unwrap()
-                .major_status(),
-            expected_status
-        );
-    }
 }
 
 #[test]

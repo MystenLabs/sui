@@ -3,31 +3,33 @@
   address(
     address: "0xc0a5b916d0e406ddde11a29558cd91b29c49e644eef597b7424a622955280e1e"
   ) {
-    location
+    address
     balance(type: "0x2::sui::SUI") {
       coinType {
         repr
       }
       totalBalance
     }
-    stakeConnection {
+    stakedSuis {
       nodes {
         status
         principal
         estimatedReward
-        activeEpoch {
+        activatedEpoch {
           epochId
           referenceGasPrice
           validatorSet {
             activeValidators {
-              name
-              description
-              exchangeRatesSize
+              nodes {
+                name
+                description
+                exchangeRatesSize
+              }
             }
             totalStake
           }
         }
-        requestEpoch {
+        requestedEpoch {
           epochId
         }
       }

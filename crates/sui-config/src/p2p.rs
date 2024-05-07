@@ -29,6 +29,8 @@ pub struct P2pConfig {
     pub state_sync: Option<StateSyncConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discovery: Option<DiscoveryConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub randomness: Option<RandomnessConfig>,
     /// Size in bytes above which network messages are considered excessively large. Excessively
     /// large messages will still be handled, but logged and reported in metrics for debugging.
     ///
@@ -50,6 +52,7 @@ impl Default for P2pConfig {
             anemo_config: Default::default(),
             state_sync: None,
             discovery: None,
+            randomness: None,
             excessive_message_size: None,
         }
     }
@@ -96,7 +99,7 @@ pub struct StateSyncConfig {
     /// - in case of a fork, to prevent the node from syncing to the wrong chain.
     /// - in case of a network stall, to force the node to proceed with a manually-injected
     ///   checkpoint.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub pinned_checkpoints: Vec<(CheckpointSequenceNumber, CheckpointDigest)>,
 
     /// Query peers for their latest checkpoint every interval period.
@@ -321,5 +324,78 @@ impl DiscoveryConfig {
     pub fn access_type(&self) -> AccessType {
         // defaults None to Public
         self.access_type.unwrap_or(AccessType::Public)
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct RandomnessConfig {
+    /// Maximum number of rounds ahead of our most recent completed round for which we should
+    /// accept partial signatures from other validators.
+    ///
+    /// If unspecified, this will default to 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_partial_sigs_rounds_ahead: Option<u64>,
+
+    /// Maximum number of rounds for which partial signatures should be concurrently sent.
+    ///
+    /// If unspecified, this will default to 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_partial_sigs_concurrent_sends: Option<usize>,
+
+    /// Interval at which to retry sending partial signatures until the round is complete.
+    ///
+    /// If unspecified, this will default to `5,000` milliseconds.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub partial_signature_retry_interval_ms: Option<u64>,
+
+    /// Size of the Randomness actor's mailbox. This should be set large enough to never
+    /// overflow unless a bug is encountered.
+    ///
+    /// If unspecified, this will default to `1,000,000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mailbox_capacity: Option<usize>,
+
+    /// Per-peer inflight limit for the SendPartialSignatures RPC.
+    ///
+    /// If unspecified, this will default to 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub send_partial_signatures_inflight_limit: Option<usize>,
+}
+
+impl RandomnessConfig {
+    pub fn max_partial_sigs_rounds_ahead(&self) -> u64 {
+        const MAX_PARTIAL_SIGS_ROUNDS_AHEAD: u64 = 10;
+
+        self.max_partial_sigs_rounds_ahead
+            .unwrap_or(MAX_PARTIAL_SIGS_ROUNDS_AHEAD)
+    }
+
+    pub fn max_partial_sigs_concurrent_sends(&self) -> usize {
+        const MAX_PARTIAL_SIGS_CONCURRENT_SENDS: usize = 10;
+
+        self.max_partial_sigs_concurrent_sends
+            .unwrap_or(MAX_PARTIAL_SIGS_CONCURRENT_SENDS)
+    }
+    pub fn partial_signature_retry_interval(&self) -> Duration {
+        const PARTIAL_SIGNATURE_RETRY_INTERVAL: u64 = 5_000; // 5 seconds
+
+        Duration::from_millis(
+            self.partial_signature_retry_interval_ms
+                .unwrap_or(PARTIAL_SIGNATURE_RETRY_INTERVAL),
+        )
+    }
+
+    pub fn mailbox_capacity(&self) -> usize {
+        const MAILBOX_CAPACITY: usize = 1_000_000;
+
+        self.mailbox_capacity.unwrap_or(MAILBOX_CAPACITY)
+    }
+
+    pub fn send_partial_signatures_inflight_limit(&self) -> usize {
+        const SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT: usize = 10;
+
+        self.send_partial_signatures_inflight_limit
+            .unwrap_or(SEND_PARTIAL_SIGNATURES_INFLIGHT_LIMIT)
     }
 }

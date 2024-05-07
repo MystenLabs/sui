@@ -1,0 +1,1521 @@
+processed 8 tasks
+
+task 1 'run-graphql'. lines 8-102:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "9SLZCBKg4MHsj4DzoLJZVErMdoLhjN9Ci3RaG1FFB3eu",
+          "sender": null,
+          "signatures": [
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+          ],
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1",
+            "gasBudget": "0"
+          },
+          "kind": {
+            "__typename": "GenesisTransaction",
+            "objects": {
+              "edges": [
+                {
+                  "cursor": "eyJpIjowLCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "eyJuIjoiYWRkcmVzcyIsImMiOjB9",
+                            "node": {
+                              "name": "address"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYXNjaWkiLCJjIjowfQ",
+                            "node": {
+                              "name": "ascii"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYmNzIiwiYyI6MH0",
+                            "node": {
+                              "name": "bcs"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYml0X3ZlY3RvciIsImMiOjB9",
+                            "node": {
+                              "name": "bit_vector"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZGVidWciLCJjIjowfQ",
+                            "node": {
+                              "name": "debug"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZml4ZWRfcG9pbnQzMiIsImMiOjB9",
+                            "node": {
+                              "name": "fixed_point32"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiaGFzaCIsImMiOjB9",
+                            "node": {
+                              "name": "hash"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoib3B0aW9uIiwiYyI6MH0",
+                            "node": {
+                              "name": "option"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoic3RyaW5nIiwiYyI6MH0",
+                            "node": {
+                              "name": "string"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidHlwZV9uYW1lIiwiYyI6MH0",
+                            "node": {
+                              "name": "type_name"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidmVjdG9yIiwiYyI6MH0",
+                            "node": {
+                              "name": "vector"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxLCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "eyJuIjoiYWRkcmVzcyIsImMiOjB9",
+                            "node": {
+                              "name": "address"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYXV0aGVudGljYXRvcl9zdGF0ZSIsImMiOjB9",
+                            "node": {
+                              "name": "authenticator_state"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYmFnIiwiYyI6MH0",
+                            "node": {
+                              "name": "bag"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYmFsYW5jZSIsImMiOjB9",
+                            "node": {
+                              "name": "balance"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYmNzIiwiYyI6MH0",
+                            "node": {
+                              "name": "bcs"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYmxzMTIzODEiLCJjIjowfQ",
+                            "node": {
+                              "name": "bls12381"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiYm9ycm93IiwiYyI6MH0",
+                            "node": {
+                              "name": "borrow"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiY2xvY2siLCJjIjowfQ",
+                            "node": {
+                              "name": "clock"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiY29pbiIsImMiOjB9",
+                            "node": {
+                              "name": "coin"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZGVueV9saXN0IiwiYyI6MH0",
+                            "node": {
+                              "name": "deny_list"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZGlzcGxheSIsImMiOjB9",
+                            "node": {
+                              "name": "display"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZHluYW1pY19maWVsZCIsImMiOjB9",
+                            "node": {
+                              "name": "dynamic_field"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZHluYW1pY19vYmplY3RfZmllbGQiLCJjIjowfQ",
+                            "node": {
+                              "name": "dynamic_object_field"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZWNkc2FfazEiLCJjIjowfQ",
+                            "node": {
+                              "name": "ecdsa_k1"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZWNkc2FfcjEiLCJjIjowfQ",
+                            "node": {
+                              "name": "ecdsa_r1"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZWN2cmYiLCJjIjowfQ",
+                            "node": {
+                              "name": "ecvrf"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZWQyNTUxOSIsImMiOjB9",
+                            "node": {
+                              "name": "ed25519"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZXZlbnQiLCJjIjowfQ",
+                            "node": {
+                              "name": "event"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZ3JvdGgxNiIsImMiOjB9",
+                            "node": {
+                              "name": "groth16"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiZ3JvdXBfb3BzIiwiYyI6MH0",
+                            "node": {
+                              "name": "group_ops"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoyLCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "eyJuIjoiZ2VuZXNpcyIsImMiOjB9",
+                            "node": {
+                              "name": "genesis"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoic3Rha2Vfc3Vic2lkeSIsImMiOjB9",
+                            "node": {
+                              "name": "stake_subsidy"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoic3Rha2luZ19wb29sIiwiYyI6MH0",
+                            "node": {
+                              "name": "staking_pool"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoic3RvcmFnZV9mdW5kIiwiYyI6MH0",
+                            "node": {
+                              "name": "storage_fund"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoic3VpX3N5c3RlbSIsImMiOjB9",
+                            "node": {
+                              "name": "sui_system"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoic3VpX3N5c3RlbV9zdGF0ZV9pbm5lciIsImMiOjB9",
+                            "node": {
+                              "name": "sui_system_state_inner"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidmFsaWRhdG9yIiwiYyI6MH0",
+                            "node": {
+                              "name": "validator"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidmFsaWRhdG9yX2NhcCIsImMiOjB9",
+                            "node": {
+                              "name": "validator_cap"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidmFsaWRhdG9yX3NldCIsImMiOjB9",
+                            "node": {
+                              "name": "validator_set"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidmFsaWRhdG9yX3dyYXBwZXIiLCJjIjowfQ",
+                            "node": {
+                              "name": "validator_wrapper"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoidm90aW5nX3Bvd2VyIiwiYyI6MH0",
+                            "node": {
+                              "name": "voting_power"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "cursor": "eyJpIjozLCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::sui_system::SuiSystemState"
+                        },
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                          "version": "1"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjo0LCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::clock::Clock"
+                        },
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                          "timestamp_ms": "0"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjo1LCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorState"
+                        },
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                          "version": "1"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjo2LCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::random::Random"
+                        },
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                          "inner": {
+                            "id": "0x42ad66c0c74708086ef0bf2cdda74b4b39a3d580e07f28321c3412f7e62b1dc8",
+                            "version": "1"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjo3LCJjIjowfQ",
+                  "node": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000403",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::deny_list::DenyList"
+                        },
+                        "json": {
+                          "id": "0x0000000000000000000000000000000000000000000000000000000000000403",
+                          "lists": {
+                            "id": "0x6082dd784359267ae6f1288bad1544e18c7110edc3cc49afdb3b34a5c0d5c572",
+                            "size": "1"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjo4LCJjIjowfQ",
+                  "node": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                    "asMoveObject": null,
+                    "asMovePackage": {
+                      "modules": {
+                        "edges": [
+                          {
+                            "cursor": "eyJuIjoiY2xvYiIsImMiOjB9",
+                            "node": {
+                              "name": "clob"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiY2xvYl92MiIsImMiOjB9",
+                            "node": {
+                              "name": "clob_v2"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiY3JpdGJpdCIsImMiOjB9",
+                            "node": {
+                              "name": "critbit"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiY3VzdG9kaWFuIiwiYyI6MH0",
+                            "node": {
+                              "name": "custodian"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoiY3VzdG9kaWFuX3YyIiwiYyI6MH0",
+                            "node": {
+                              "name": "custodian_v2"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoibWF0aCIsImMiOjB9",
+                            "node": {
+                              "name": "math"
+                            }
+                          },
+                          {
+                            "cursor": "eyJuIjoib3JkZXJfcXVlcnkiLCJjIjowfQ",
+                            "node": {
+                              "name": "order_query"
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  }
+                },
+                {
+                  "cursor": "eyJpIjo5LCJjIjowfQ",
+                  "node": {
+                    "address": "0x46351cb8f2dfbfc76b0476e3173ae20cd8ca1c3bbe442c7a0b61ce61a4a13568",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::validator_cap::UnverifiedValidatorOperationCap"
+                        },
+                        "json": {
+                          "id": "0x46351cb8f2dfbfc76b0476e3173ae20cd8ca1c3bbe442c7a0b61ce61a4a13568",
+                          "authorizer_validator_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxMCwiYyI6MH0",
+                  "node": {
+                    "address": "0x4750aa886c991cf107dcdfd71b83fa09c859ba8e4aebf9157a748af9c7263c38",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::StakedSui"
+                        },
+                        "json": {
+                          "id": "0x4750aa886c991cf107dcdfd71b83fa09c859ba8e4aebf9157a748af9c7263c38",
+                          "pool_id": "0x551af56bdfa15c8686e27c8334811a91251ea6c8c30bb07c8fa9b4d8f8f59ed9",
+                          "stake_activation_epoch": "0",
+                          "principal": {
+                            "value": "20000000000000000"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxMSwiYyI6MH0",
+                  "node": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::sui_system_state_inner::SuiSystemStateInner>"
+                        },
+                        "json": {
+                          "id": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                          "name": "1",
+                          "value": {
+                            "epoch": "0",
+                            "protocol_version": "39",
+                            "system_state_version": "1",
+                            "validators": {
+                              "total_stake": "20000000000000000",
+                              "active_validators": [
+                                {
+                                  "metadata": {
+                                    "sui_address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a",
+                                    "protocol_pubkey_bytes": [
+                                      168,
+                                      10,
+                                      113,
+                                      148,
+                                      146,
+                                      18,
+                                      4,
+                                      206,
+                                      160,
+                                      17,
+                                      65,
+                                      3,
+                                      192,
+                                      72,
+                                      69,
+                                      3,
+                                      34,
+                                      62,
+                                      177,
+                                      119,
+                                      149,
+                                      119,
+                                      28,
+                                      226,
+                                      120,
+                                      84,
+                                      208,
+                                      34,
+                                      33,
+                                      221,
+                                      215,
+                                      26,
+                                      19,
+                                      43,
+                                      135,
+                                      198,
+                                      111,
+                                      189,
+                                      25,
+                                      213,
+                                      111,
+                                      170,
+                                      66,
+                                      24,
+                                      110,
+                                      12,
+                                      78,
+                                      20,
+                                      10,
+                                      27,
+                                      128,
+                                      57,
+                                      246,
+                                      144,
+                                      114,
+                                      82,
+                                      79,
+                                      96,
+                                      215,
+                                      59,
+                                      240,
+                                      247,
+                                      211,
+                                      18,
+                                      143,
+                                      1,
+                                      109,
+                                      137,
+                                      179,
+                                      82,
+                                      215,
+                                      118,
+                                      63,
+                                      135,
+                                      18,
+                                      31,
+                                      123,
+                                      40,
+                                      235,
+                                      25,
+                                      153,
+                                      189,
+                                      81,
+                                      129,
+                                      128,
+                                      219,
+                                      99,
+                                      215,
+                                      146,
+                                      145,
+                                      113,
+                                      132,
+                                      99,
+                                      76,
+                                      126,
+                                      246
+                                    ],
+                                    "network_pubkey_bytes": [
+                                      222,
+                                      193,
+                                      56,
+                                      253,
+                                      223,
+                                      140,
+                                      108,
+                                      228,
+                                      161,
+                                      246,
+                                      151,
+                                      172,
+                                      42,
+                                      190,
+                                      219,
+                                      243,
+                                      212,
+                                      210,
+                                      59,
+                                      152,
+                                      5,
+                                      6,
+                                      236,
+                                      134,
+                                      82,
+                                      53,
+                                      90,
+                                      224,
+                                      105,
+                                      93,
+                                      152,
+                                      85
+                                    ],
+                                    "worker_pubkey_bytes": [
+                                      172,
+                                      116,
+                                      152,
+                                      220,
+                                      228,
+                                      127,
+                                      173,
+                                      148,
+                                      84,
+                                      44,
+                                      112,
+                                      162,
+                                      74,
+                                      125,
+                                      50,
+                                      95,
+                                      124,
+                                      147,
+                                      55,
+                                      36,
+                                      241,
+                                      143,
+                                      223,
+                                      60,
+                                      129,
+                                      224,
+                                      221,
+                                      102,
+                                      15,
+                                      35,
+                                      217,
+                                      101
+                                    ],
+                                    "proof_of_possession": [
+                                      128,
+                                      156,
+                                      67,
+                                      33,
+                                      58,
+                                      1,
+                                      39,
+                                      117,
+                                      201,
+                                      238,
+                                      255,
+                                      186,
+                                      75,
+                                      160,
+                                      126,
+                                      112,
+                                      202,
+                                      232,
+                                      153,
+                                      37,
+                                      253,
+                                      202,
+                                      71,
+                                      140,
+                                      94,
+                                      117,
+                                      125,
+                                      17,
+                                      181,
+                                      101,
+                                      235,
+                                      149,
+                                      12,
+                                      103,
+                                      135,
+                                      36,
+                                      124,
+                                      64,
+                                      40,
+                                      191,
+                                      203,
+                                      204,
+                                      20,
+                                      212,
+                                      46,
+                                      230,
+                                      32,
+                                      74
+                                    ],
+                                    "name": "validator-0",
+                                    "description": "",
+                                    "image_url": {
+                                      "url": ""
+                                    },
+                                    "project_url": {
+                                      "url": ""
+                                    },
+                                    "net_address": "/ip4/127.0.0.1/tcp/8000/http",
+                                    "p2p_address": "/ip4/127.0.0.1/udp/8001/http",
+                                    "primary_address": "/ip4/127.0.0.1/udp/8004/http",
+                                    "worker_address": "/ip4/127.0.0.1/udp/8005/http",
+                                    "next_epoch_protocol_pubkey_bytes": null,
+                                    "next_epoch_proof_of_possession": null,
+                                    "next_epoch_network_pubkey_bytes": null,
+                                    "next_epoch_worker_pubkey_bytes": null,
+                                    "next_epoch_net_address": null,
+                                    "next_epoch_p2p_address": null,
+                                    "next_epoch_primary_address": null,
+                                    "next_epoch_worker_address": null,
+                                    "extra_fields": {
+                                      "id": "0x55a65297b45ee948686aaf8823b13c5081fa1f130350025a6c880f1d33aa7ce6",
+                                      "size": "0"
+                                    }
+                                  },
+                                  "voting_power": "10000",
+                                  "operation_cap_id": "0x46351cb8f2dfbfc76b0476e3173ae20cd8ca1c3bbe442c7a0b61ce61a4a13568",
+                                  "gas_price": "1000",
+                                  "staking_pool": {
+                                    "id": "0x551af56bdfa15c8686e27c8334811a91251ea6c8c30bb07c8fa9b4d8f8f59ed9",
+                                    "activation_epoch": "0",
+                                    "deactivation_epoch": null,
+                                    "sui_balance": "20000000000000000",
+                                    "rewards_pool": {
+                                      "value": "0"
+                                    },
+                                    "pool_token_balance": "20000000000000000",
+                                    "exchange_rates": {
+                                      "id": "0xa734f919600de68defc5335642d5cbd7fdb94499ea928a50861adb4b03bc1b10",
+                                      "size": "1"
+                                    },
+                                    "pending_stake": "0",
+                                    "pending_total_sui_withdraw": "0",
+                                    "pending_pool_token_withdraw": "0",
+                                    "extra_fields": {
+                                      "id": "0x0fd833ba0511b8a6a809bcc1a0cab4be16d29b206e66416ec21a9512353fd4dc",
+                                      "size": "0"
+                                    }
+                                  },
+                                  "commission_rate": "200",
+                                  "next_epoch_stake": "20000000000000000",
+                                  "next_epoch_gas_price": "1000",
+                                  "next_epoch_commission_rate": "200",
+                                  "extra_fields": {
+                                    "id": "0x0a62f97b74fc2e323b85088a4c015c4f2d220a85059ad92bb7201c652a01e8e2",
+                                    "size": "0"
+                                  }
+                                }
+                              ],
+                              "pending_active_validators": {
+                                "contents": {
+                                  "id": "0x7e0eed6f54461638bba6c9754efa816b38d5f28090b6413fb4dd15fd5b589715",
+                                  "size": "0"
+                                }
+                              },
+                              "pending_removals": [],
+                              "staking_pool_mappings": {
+                                "id": "0x41f89e77ca7bf15d856250af2012c2ca1ffd3fbdd4a5e4f251a9e39b03342d81",
+                                "size": "1"
+                              },
+                              "inactive_validators": {
+                                "id": "0x143ac45dd9bb139332297612b938a6f7a9ce88e006f0e98776c4d10176ce8387",
+                                "size": "0"
+                              },
+                              "validator_candidates": {
+                                "id": "0x40472de01e9929c3eca49259851207ec66c264106404c16ea1ffb8a220ddd68b",
+                                "size": "0"
+                              },
+                              "at_risk_validators": {
+                                "contents": []
+                              },
+                              "extra_fields": {
+                                "id": "0xacd013628e20368645ed4eeb7f4479fae3210d2d4fc5df10c77a03c7fb5489fd",
+                                "size": "0"
+                              }
+                            },
+                            "storage_fund": {
+                              "total_object_storage_rebates": {
+                                "value": "0"
+                              },
+                              "non_refundable_balance": {
+                                "value": "0"
+                              }
+                            },
+                            "parameters": {
+                              "epoch_duration_ms": "86400000",
+                              "stake_subsidy_start_epoch": "0",
+                              "max_validator_count": "150",
+                              "min_validator_joining_stake": "30000000000000000",
+                              "validator_low_stake_threshold": "20000000000000000",
+                              "validator_very_low_stake_threshold": "15000000000000000",
+                              "validator_low_stake_grace_period": "7",
+                              "extra_fields": {
+                                "id": "0xe80c8ef3e252d4dad00009a4e9b554edadec813f4d8f8e544578fba5bab66c71",
+                                "size": "0"
+                              }
+                            },
+                            "reference_gas_price": "1000",
+                            "validator_report_records": {
+                              "contents": []
+                            },
+                            "stake_subsidy": {
+                              "balance": {
+                                "value": "9949700000000000000"
+                              },
+                              "distribution_counter": "0",
+                              "current_distribution_amount": "1000000000000000",
+                              "stake_subsidy_period_length": "10",
+                              "stake_subsidy_decrease_rate": 1000,
+                              "extra_fields": {
+                                "id": "0xa9d9a707568e5def918ad2e5a0b40d42110098fa75212cf11b70e7b5850cedb8",
+                                "size": "0"
+                              }
+                            },
+                            "safe_mode": false,
+                            "safe_mode_storage_rewards": {
+                              "value": "0"
+                            },
+                            "safe_mode_computation_rewards": {
+                              "value": "0"
+                            },
+                            "safe_mode_storage_rebates": "0",
+                            "safe_mode_non_refundable_storage_fee": "0",
+                            "epoch_start_timestamp_ms": "0",
+                            "extra_fields": {
+                              "id": "0x955f2807215ab29919f5c75cc506ba421b7ef27f1d86dab004af39362934f6ff",
+                              "size": "0"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxMiwiYyI6MH0",
+                  "node": {
+                    "address": "0x7633bb5b398c05b9f3cb8cc1b7ccc344aea9788d53f8081ee970d005f878bbcd",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::CoinMetadata<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "json": {
+                          "id": "0x7633bb5b398c05b9f3cb8cc1b7ccc344aea9788d53f8081ee970d005f878bbcd",
+                          "decimals": 9,
+                          "name": "Sui",
+                          "symbol": "SUI",
+                          "description": "",
+                          "icon_url": null
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxMywiYyI6MH0",
+                  "node": {
+                    "address": "0x8a28bf603a81bc5d825b18c6b02782ee38d5d3f02f8a2d63a1b3ce0033bf273f",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::deny_list::PerTypeList>"
+                        },
+                        "json": {
+                          "id": "0x8a28bf603a81bc5d825b18c6b02782ee38d5d3f02f8a2d63a1b3ce0033bf273f",
+                          "name": "0",
+                          "value": {
+                            "id": "0xecf87b7074939e1d7f6db9d61eed02969284fe784caba9e4c4ab53bc7a28d023",
+                            "denied_count": {
+                              "id": "0xb5a2c673ee3962d31d921ad373952fab02ea65a8008e0cd146e7af3c02a33be5",
+                              "size": "0"
+                            },
+                            "denied_addresses": {
+                              "id": "0xb22c4f212e76bf7712007d4c39c2940d2766c8e0727b41f24a09da1c7d1402a3",
+                              "size": "0"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxNCwiYyI6MH0",
+                  "node": {
+                    "address": "0xa28ed7ab1775cf6cfe48c43c4529f97ccb0cfce60c1df60e832ca37dd510cf02",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "json": {
+                          "id": "0xa28ed7ab1775cf6cfe48c43c4529f97ccb0cfce60c1df60e832ca37dd510cf02",
+                          "balance": {
+                            "value": "30000000000000000"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxNSwiYyI6MH0",
+                  "node": {
+                    "address": "0xa7355813f8fee03e2bd0a0c8a26132051725850ca73f5b47fe6141c8695a6e41",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000003::staking_pool::PoolTokenExchangeRate>"
+                        },
+                        "json": {
+                          "id": "0xa7355813f8fee03e2bd0a0c8a26132051725850ca73f5b47fe6141c8695a6e41",
+                          "name": "0",
+                          "value": {
+                            "sui_amount": "0",
+                            "pool_token_amount": "0"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxNiwiYyI6MH0",
+                  "node": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::authenticator_state::AuthenticatorStateInner>"
+                        },
+                        "json": {
+                          "id": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                          "name": "1",
+                          "value": {
+                            "version": "1",
+                            "active_jwks": []
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxNywiYyI6MH0",
+                  "node": {
+                    "address": "0xe22a535d62e43be69ad440c46864022ae9ae2b85182126a835eca161fa423f0c",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<u64,0x0000000000000000000000000000000000000000000000000000000000000002::random::RandomInner>"
+                        },
+                        "json": {
+                          "id": "0xe22a535d62e43be69ad440c46864022ae9ae2b85182126a835eca161fa423f0c",
+                          "name": "1",
+                          "value": {
+                            "version": "1",
+                            "epoch": "0",
+                            "randomness_round": "0",
+                            "random_bytes": []
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxOCwiYyI6MH0",
+                  "node": {
+                    "address": "0xf635297d23619d12f020a583197c9f9da38d908198367486045696d3544ee770",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::dynamic_field::Field<0x0000000000000000000000000000000000000000000000000000000000000002::object::ID,address>"
+                        },
+                        "json": {
+                          "id": "0xf635297d23619d12f020a583197c9f9da38d908198367486045696d3544ee770",
+                          "name": "0x551af56bdfa15c8686e27c8334811a91251ea6c8c30bb07c8fa9b4d8f8f59ed9",
+                          "value": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                },
+                {
+                  "cursor": "eyJpIjoxOSwiYyI6MH0",
+                  "node": {
+                    "address": "0xf6bda57832c0f4d6dea22862187bc6c3786744d36e7ca288fc67ddd5d37e1a91",
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "json": {
+                          "id": "0xf6bda57832c0f4d6dea22862187bc6c3786744d36e7ca288fc67ddd5d37e1a91",
+                          "balance": {
+                            "value": "300000000000000"
+                          }
+                        }
+                      }
+                    },
+                    "asMovePackage": null
+                  }
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "errors": null,
+            "lamportVersion": 1,
+            "dependencies": {
+              "nodes": []
+            },
+            "balanceChanges": {
+              "nodes": [
+                {
+                  "owner": {
+                    "address": "0xa7b032703878aa74c3126935789fd1d4d7e111d5911b09247d6963061c312b5a"
+                  },
+                  "amount": "30000000000000000",
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  }
+                },
+                {
+                  "owner": {
+                    "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+                  },
+                  "amount": "300000000000000",
+                  "coinType": {
+                    "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI"
+                  }
+                }
+              ]
+            },
+            "objectChanges": {
+              "nodes": [
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                    "digest": "J9EJ8HacHYmg6tzgqwe1EM9i9Fn25wSonDtFaXXAyrKD"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000002",
+                    "digest": "Hq6dNuxLz7oGbn5qdTrA9SFqzZFuFF9YhuC4n4iTyK7a"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000003",
+                    "digest": "2GPoWeJLNH1MjCGt1oBACdfTWhRjBwsSqnYjYSdpQ7tE"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "digest": "8FUpoe4p5JDK55h1t6opGudG39eviB8gwdpi4n3e7bT3"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "digest": "BtAu8dbiABBP5dnEwkA5L53QHfsEGzPvmqVxJw1aL5aP"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000007",
+                    "digest": "384zBZpELEXguVEvLGmT2aKqhmSgq3Yy3D7zrWygFSUe"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000008",
+                    "digest": "AcTuofVnbnVpv4YnBReFmnhboT3go8SD2Gvfw6g1LZKf"
+                  }
+                },
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000403",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000403",
+                    "digest": "TyKHGPXZ5pTcKqkmyDDDgxyRUpZ1CuAm3DXSa6KZDfP"
+                  }
+                },
+                {
+                  "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x000000000000000000000000000000000000000000000000000000000000dee9",
+                    "digest": "3Cx9vSSNcom8RRifpPP4GijkzicNANxbXtrGBgzZ6iVD"
+                  }
+                },
+                {
+                  "address": "0x46351cb8f2dfbfc76b0476e3173ae20cd8ca1c3bbe442c7a0b61ce61a4a13568",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x46351cb8f2dfbfc76b0476e3173ae20cd8ca1c3bbe442c7a0b61ce61a4a13568",
+                    "digest": "Hk2LNH3btedu7LAygic2V5k4f8SXsozpCEUb2zSyoNH1"
+                  }
+                },
+                {
+                  "address": "0x4750aa886c991cf107dcdfd71b83fa09c859ba8e4aebf9157a748af9c7263c38",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x4750aa886c991cf107dcdfd71b83fa09c859ba8e4aebf9157a748af9c7263c38",
+                    "digest": "HUd3U1RbAhT3gbmwv1FTeGKbjYqTLzc5438LxSoUw3HU"
+                  }
+                },
+                {
+                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                    "digest": "FF3Bui1MRM4aG4dHTZUWg9kyKYaM9zLdcHBUqgTzi1bE"
+                  }
+                },
+                {
+                  "address": "0x7633bb5b398c05b9f3cb8cc1b7ccc344aea9788d53f8081ee970d005f878bbcd",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x7633bb5b398c05b9f3cb8cc1b7ccc344aea9788d53f8081ee970d005f878bbcd",
+                    "digest": "3GQnVNZmjKJvFwBwkNftp2CxMuHVAmQK62ZBq3rU5uqK"
+                  }
+                },
+                {
+                  "address": "0x8a28bf603a81bc5d825b18c6b02782ee38d5d3f02f8a2d63a1b3ce0033bf273f",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x8a28bf603a81bc5d825b18c6b02782ee38d5d3f02f8a2d63a1b3ce0033bf273f",
+                    "digest": "CWRE3x2uX4Zua4V9GC2qxCY7gdhuhYm7sC6kyo7VaDwN"
+                  }
+                },
+                {
+                  "address": "0xa28ed7ab1775cf6cfe48c43c4529f97ccb0cfce60c1df60e832ca37dd510cf02",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xa28ed7ab1775cf6cfe48c43c4529f97ccb0cfce60c1df60e832ca37dd510cf02",
+                    "digest": "Gt63JDSt3hQxd3gH7CirQXsDhmQNKSg6TBqm9NibjQsX"
+                  }
+                },
+                {
+                  "address": "0xa7355813f8fee03e2bd0a0c8a26132051725850ca73f5b47fe6141c8695a6e41",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xa7355813f8fee03e2bd0a0c8a26132051725850ca73f5b47fe6141c8695a6e41",
+                    "digest": "842ueuQ7PrBJ2NzX31CNZcqB6E38Ctx1Mj7dCQYm82jv"
+                  }
+                },
+                {
+                  "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xcfecb053c69314e75f36561910f3535dd466b6e2e3593708f370e80424617ae7",
+                    "digest": "GegbDG7fzGUToKJskHc4BTeJXEK21qScG6YzcT5f9MQg"
+                  }
+                },
+                {
+                  "address": "0xe22a535d62e43be69ad440c46864022ae9ae2b85182126a835eca161fa423f0c",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xe22a535d62e43be69ad440c46864022ae9ae2b85182126a835eca161fa423f0c",
+                    "digest": "FX2EVj6kpnW88uiTvnPAyD1p3gi96cHcXjQH2kQAws7j"
+                  }
+                },
+                {
+                  "address": "0xf635297d23619d12f020a583197c9f9da38d908198367486045696d3544ee770",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xf635297d23619d12f020a583197c9f9da38d908198367486045696d3544ee770",
+                    "digest": "8NKLj82tNCSbH7ENucsehSJAQC95JYCMqADsfrbYDYrZ"
+                  }
+                },
+                {
+                  "address": "0xf6bda57832c0f4d6dea22862187bc6c3786744d36e7ca288fc67ddd5d37e1a91",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xf6bda57832c0f4d6dea22862187bc6c3786744d36e7ca288fc67ddd5d37e1a91",
+                    "digest": "Fog15chx3WQodLpLsTAP2oWgFzMd5XEc7HyB6iz2vF5H"
+                  }
+                }
+              ]
+            },
+            "gasEffects": {
+              "gasObject": null,
+              "gasSummary": {
+                "computationCost": "0",
+                "storageCost": "0",
+                "storageRebate": "0",
+                "nonRefundableStorageFee": "0"
+              }
+            },
+            "timestamp": "1970-01-01T00:00:00Z",
+            "epoch": {
+              "epochId": 0
+            },
+            "checkpoint": {
+              "sequenceNumber": 0
+            },
+            "transactionBlock": {
+              "digest": "9SLZCBKg4MHsj4DzoLJZVErMdoLhjN9Ci3RaG1FFB3eu"
+            }
+          },
+          "expiration": null
+        }
+      ]
+    }
+  }
+}
+
+task 3 'create-checkpoint'. lines 106-106:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 108-183:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn",
+          "sender": null,
+          "signatures": [
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+          ],
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1",
+            "gasBudget": "0"
+          },
+          "kind": {
+            "__typename": "ConsensusCommitPrologueTransaction",
+            "epoch": {
+              "epochId": 0
+            },
+            "round": 0,
+            "commitTimestamp": "1970-01-01T00:00:42Z",
+            "consensusCommitDigest": "11111111111111111111111111111111"
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "errors": null,
+            "lamportVersion": 2,
+            "dependencies": {
+              "nodes": [
+                {
+                  "digest": "9SLZCBKg4MHsj4DzoLJZVErMdoLhjN9Ci3RaG1FFB3eu"
+                }
+              ]
+            },
+            "balanceChanges": {
+              "nodes": []
+            },
+            "objectChanges": {
+              "nodes": [
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                  "idCreated": false,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000006",
+                    "digest": "28w3Mp2x4vt94bq4TejrbLcfMsMaevDyPz6h98sgcnw4"
+                  }
+                }
+              ]
+            },
+            "gasEffects": {
+              "gasObject": null,
+              "gasSummary": {
+                "computationCost": "0",
+                "storageCost": "0",
+                "storageRebate": "0",
+                "nonRefundableStorageFee": "0"
+              }
+            },
+            "timestamp": "1970-01-01T00:00:42Z",
+            "epoch": {
+              "epochId": 0
+            },
+            "checkpoint": {
+              "sequenceNumber": 1
+            },
+            "transactionBlock": {
+              "digest": "CHyKA8xirNCGtcDMLJcxBZsxGyAA7DNrzDEVodxZzNn"
+            }
+          },
+          "expiration": null
+        }
+      ]
+    }
+  }
+}
+
+task 6 'advance-epoch'. lines 187-187:
+Epoch advanced: 0
+
+task 7 'run-graphql'. lines 189-276:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "digest": "8PUop938pEDACrAdBtgdLXevScFcHBiUYiLKgQqikpvB",
+          "sender": null,
+          "signatures": [
+            "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=="
+          ],
+          "gasInput": {
+            "gasSponsor": {
+              "address": "0x0000000000000000000000000000000000000000000000000000000000000000"
+            },
+            "gasPayment": {
+              "nodes": []
+            },
+            "gasPrice": "1",
+            "gasBudget": "0"
+          },
+          "kind": {
+            "__typename": "EndOfEpochTransaction",
+            "transactions": {
+              "edges": [
+                {
+                  "cursor": "eyJpIjowLCJjIjoyfQ",
+                  "node": {
+                    "__typename": "ChangeEpochTransaction",
+                    "epoch": null,
+                    "protocolVersion": 39,
+                    "storageCharge": "0",
+                    "computationCharge": "0",
+                    "storageRebate": "0",
+                    "nonRefundableStorageFee": "0",
+                    "startTimestamp": "1970-01-01T00:01:25Z"
+                  }
+                }
+              ]
+            }
+          },
+          "effects": {
+            "status": "SUCCESS",
+            "errors": null,
+            "lamportVersion": 2,
+            "dependencies": {
+              "nodes": [
+                {
+                  "digest": "9SLZCBKg4MHsj4DzoLJZVErMdoLhjN9Ci3RaG1FFB3eu"
+                }
+              ]
+            },
+            "balanceChanges": {
+              "nodes": []
+            },
+            "objectChanges": {
+              "nodes": [
+                {
+                  "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                  "idCreated": false,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x0000000000000000000000000000000000000000000000000000000000000005",
+                    "digest": "C42LQdT4vVKnDoPW97kwv3TRTQpP48o6sGT4LWTLQ85N"
+                  }
+                },
+                {
+                  "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0x5b890eaf2abcfa2ab90b77b8e6f3d5d8609586c3e583baf3dccd5af17edf48d1",
+                    "digest": "H1Z42fzcBpXAUjtRAPW1vP8BAZ4VA4sgKXmg5orJTwZz"
+                  }
+                },
+                {
+                  "address": "0x6af2a2b7ca60bf76174adfd3e9c4957f8e937759603182f9b46c7f6c5f19c6d2",
+                  "idCreated": false,
+                  "idDeleted": true,
+                  "outputState": null
+                },
+                {
+                  "address": "0xe554ad7e809e0735d9861786aaaa28833cce4cfaf65c8334d21505d3dbb3a7ea",
+                  "idCreated": true,
+                  "idDeleted": false,
+                  "outputState": {
+                    "address": "0xe554ad7e809e0735d9861786aaaa28833cce4cfaf65c8334d21505d3dbb3a7ea",
+                    "digest": "2FKGk8QMz9qswJuDDgaRuBhsN6X7a3CpBS1KNZGijT93"
+                  }
+                }
+              ]
+            },
+            "gasEffects": {
+              "gasObject": null,
+              "gasSummary": {
+                "computationCost": "0",
+                "storageCost": "0",
+                "storageRebate": "0",
+                "nonRefundableStorageFee": "0"
+              }
+            },
+            "timestamp": "1970-01-01T00:01:25Z",
+            "epoch": {
+              "epochId": 0
+            },
+            "checkpoint": {
+              "sequenceNumber": 2
+            },
+            "transactionBlock": {
+              "digest": "8PUop938pEDACrAdBtgdLXevScFcHBiUYiLKgQqikpvB"
+            }
+          },
+          "expiration": null
+        }
+      ]
+    }
+  }
+}

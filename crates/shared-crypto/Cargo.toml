@@ -12,4 +12,3 @@ serde_repr.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 eyre.workspace = true
 bcs.workspace = true
-workspace-hack.workspace = true

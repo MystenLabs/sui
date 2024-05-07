@@ -35,12 +35,12 @@ module sui::math_tests {
 
     #[test]
     fun test_perfect_sqrt() {
-        let i = 0;
+        let mut i = 0;
         while (i < 1000) {
             assert!(math::sqrt(i * i) == i, 1);
             i = i + 1;
         };
-        let i = 0xFFFFFFFFFu128;
+        let mut i = 0xFFFFFFFFFu128;
         while (i < 0xFFFFFFFFFu128 + 1) {
             assert!(math::sqrt_u128(i * i) == i, 1);
             i = i + 1;
@@ -52,8 +52,8 @@ module sui::math_tests {
     // initial value OR whether it is equal to the nearest lower
     // number that does.
     fun test_imperfect_sqrt() {
-        let i = 1;
-        let prev = 1;
+        let mut i = 1;
+        let mut prev = 1;
         while (i <= 1000) {
             let root = math::sqrt(i);
 

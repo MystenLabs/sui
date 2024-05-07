@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x1.m {
+
+entry foo() {
 label b0:
     assert(0u32 + 0u32 == 0u32, 1000);
     assert(0u32 + 1u32 == 1u32, 1001);
@@ -14,24 +16,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x2.m {
+
+entry foo() {
 label b0:
     _ = 1u32 + 4294967295u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x3.m {
+
+entry foo() {
 label b0:
     _ = 4294000000u32 + 4294000000u32;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x4.m {
+
+entry foo() {
 label b0:
     assert(0u32 - 0u32 == 0u32, 2000);
     assert(1u32 - 0u32 == 1u32, 2001);
@@ -45,23 +56,32 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x5.m {
+
+entry foo() {
 label b0:
     _ = 0u32 - 1u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
 label b0:
     _ = 54u32 - 100u32;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x6.m {
+
+entry foo() {
 label b0:
     assert(0u32 * 0u32 == 0u32, 3000);
     assert(1u32 * 0u32 == 0u32, 3001);
@@ -74,24 +94,33 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x7.m {
+
+entry foo() {
 label b0:
     _ = 429496u32 * 429496u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x8.m {
+
+entry foo() {
 label b0:
     _ = 2147483648u32 * 2u32;
     return;
 }
 
+}
 
 
 //# run
-main() {
+module 0x9.m {
+
+entry foo() {
 label b0:
     assert(0u32 / 1u32 == 0u32, 4000);
     assert(1u32 / 1u32 == 1u32, 4001);
@@ -105,30 +134,42 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x10.m {
+
+entry foo() {
 label b0:
     _ = 0u32 / 0u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x11.m {
+
+entry foo() {
 label b0:
     _ = 1u32 / 0u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x12.m {
+
+entry foo() {
 label b0:
     _ = 4294967295u32 / 0u32;
     return;
 }
 
+}
 
 //# run
-main() {
+module 0x13.m {
+
+entry foo() {
 label b0:
     assert(0u32 % 1u32 == 0u32, 5000);
     assert(1u32 % 1u32 == 0u32, 5001);
@@ -142,23 +183,34 @@ label b0:
     return;
 }
 
+}
 //# run
-main() {
+module 0x14.m {
+
+entry foo() {
 label b0:
     _ = 0u32 % 0u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x15.m {
+
+entry foo() {
 label b0:
     _ = 1u32 % 0u32;
     return;
 }
 
+}
 //# run
-main() {
+module 0x16.m {
+
+entry foo() {
 label b0:
     _ = 4294967295u32 % 0u32;
     return;
+}
+
 }

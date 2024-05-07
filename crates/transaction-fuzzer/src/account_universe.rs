@@ -49,7 +49,7 @@ pub fn default_num_transactions() -> usize {
 /// Represents any sort of transaction that can be done in an account universe.
 pub trait AUTransactionGen: fmt::Debug {
     /// Applies this transaction onto the universe, updating balances within the universe as
-    /// necessary. Returns a signed transaction that can be run on the VM and the the execution status.
+    /// necessary. Returns a signed transaction that can be run on the VM and the execution status.
     fn apply(
         &self,
         universe: &mut AccountUniverse,
@@ -127,14 +127,15 @@ pub fn assert_accounts_match(
     executor: &Executor,
 ) -> Result<(), TestCaseError> {
     let state = executor.state.clone();
-    let store = state.db();
+    let backing_package_store = state.get_backing_package_store();
+    let object_store = state.get_object_store();
     let epoch_store = state.load_epoch_store_one_call_per_task();
     let mut layout_resolver = epoch_store
         .executor()
-        .type_layout_resolver(Box::new(store.as_ref()));
+        .type_layout_resolver(Box::new(backing_package_store.as_ref()));
     for (idx, account) in universe.accounts().iter().enumerate() {
         for (balance_idx, acc_object) in account.current_coins.iter().enumerate() {
-            let object = store.get_object(&acc_object.id()).unwrap().unwrap();
+            let object = object_store.get_object(&acc_object.id()).unwrap().unwrap();
             let total_sui_value =
                 object.get_total_sui(layout_resolver.as_mut()).unwrap() - object.storage_rebate;
             let account_balance_i = account.current_balances[balance_idx];

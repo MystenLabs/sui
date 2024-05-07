@@ -14,12 +14,12 @@ Failures in 0x42::m:
 
 ┌── t1 ──────
 │ error[E11001]: test failure
-│    ┌─ out_of_gas.move:10:10
+│    ┌─ out_of_gas.move:10:5
 │    │
 │  9 │ fun t1() {
 │    │     -- In this function in 0x42::m
 │ 10 │     loop {}
-│    │          ^^ Test did not error as expected. Expected test to give an arithmetic error originating in the module 0000000000000000000000000000000000000000000000000000000000000042::m but instead it ran out of gas in the module 0000000000000000000000000000000000000000000000000000000000000042::m rooted here
+│    │     ^^^^^^^ Test did not error as expected. Expected test to give an arithmetic error originating in the module 0000000000000000000000000000000000000000000000000000000000000042::m but instead it ran out of gas in the module 0000000000000000000000000000000000000000000000000000000000000042::m rooted here
 │ 
 │ 
 └──────────────────

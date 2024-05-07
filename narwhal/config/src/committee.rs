@@ -4,8 +4,7 @@
 
 use crate::{CommitteeUpdateError, ConfigError, Epoch, Stake};
 use crypto::{NetworkPublicKey, PublicKey, PublicKeyBytes};
-use fastcrypto::serde_helpers::ToFromByteArray;
-use fastcrypto::traits::{EncodeDecodeBase64, ToFromBytes};
+use fastcrypto::traits::EncodeDecodeBase64;
 use mysten_network::Multiaddr;
 use mysten_util_mem::MallocSizeOf;
 use rand::rngs::StdRng;
@@ -148,6 +147,8 @@ impl Display for AuthorityIdentifier {
 }
 
 impl Committee {
+    pub const DEFAULT_FILENAME: &'static str = "committee.json";
+
     /// Any committee should be created via the CommitteeBuilder - this is intentionally be marked as
     /// private method.
     fn new(authorities: BTreeMap<PublicKey, Authority>, epoch: Epoch) -> Self {
@@ -241,34 +242,6 @@ impl Committee {
     /// Returns the keys in the committee
     pub fn keys(&self) -> Vec<PublicKey> {
         self.authorities.keys().cloned().collect::<Vec<PublicKey>>()
-    }
-
-    /// Returns info from the committee needed for randomness DKG.
-    pub fn randomness_dkg_info(
-        &self,
-    ) -> Vec<(
-        AuthorityIdentifier,
-        fastcrypto_tbls::ecies::PublicKey<fastcrypto::groups::bls12381::G2Element>,
-        Stake,
-    )> {
-        self.authorities_by_id
-            .iter()
-            .map(|(id, authority)| {
-                let pk = fastcrypto::groups::bls12381::G2Element::from_byte_array(
-                    authority
-                        .protocol_key()
-                        .as_bytes()
-                        .try_into()
-                        .expect("key length should match"),
-                )
-                .expect("should work to convert BLS key to G2Element");
-                (
-                    *id,
-                    fastcrypto_tbls::ecies::PublicKey::from(pk),
-                    authority.stake(),
-                )
-            })
-            .collect()
     }
 
     pub fn authorities(&self) -> impl Iterator<Item = &Authority> {
@@ -529,6 +502,26 @@ impl CommitteeBuilder {
     }
 }
 
+impl std::fmt::Display for Committee {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Committee E{}: {:?}",
+            self.epoch(),
+            self.authorities
+                .keys()
+                .map(|x| {
+                    if let Some(k) = x.encode_base64().get(0..16) {
+                        k.to_owned()
+                    } else {
+                        format!("Invalid key: {}", x)
+                    }
+                })
+                .collect::<Vec<_>>()
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{Authority, Committee};
@@ -585,25 +578,5 @@ mod tests {
             assert_eq!(*id, authority_2.id());
             assert_eq!(&public_key, authority_1.protocol_key());
         }
-    }
-}
-
-impl std::fmt::Display for Committee {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Committee E{}: {:?}",
-            self.epoch(),
-            self.authorities
-                .keys()
-                .map(|x| {
-                    if let Some(k) = x.encode_base64().get(0..16) {
-                        k.to_owned()
-                    } else {
-                        format!("Invalid key: {}", x)
-                    }
-                })
-                .collect::<Vec<_>>()
-        )
     }
 }

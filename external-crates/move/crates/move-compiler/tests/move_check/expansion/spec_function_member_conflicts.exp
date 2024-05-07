@@ -1,45 +1,56 @@
-error[E02001]: duplicate declaration, item, or annotation
-  ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:7:12
-  │
-5 │         fun Foo(): bool { true }
-  │             --- Alias previously defined here
-6 │     }
-7 │     struct Foo {}
-  │            ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:4:5
+  │  
+4 │ ╭     spec module {
+5 │ │         fun Foo(): bool { true }
+6 │ │     }
+  │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:14:17
-   │
-12 │         fun Foo(): bool { true }
-   │             --- Alias previously defined here
-13 │     }
-14 │     spec schema Foo<T> {
-   │                 ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:11:5
+   │  
+11 │ ╭     spec module {
+12 │ │         fun Foo(): bool { true }
+13 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:23:9
-   │
-21 │         fun Foo(): bool { true }
-   │             --- Alias previously defined here
-22 │     }
-23 │     fun Foo() {}
-   │         ^^^ Duplicate module member or alias 'Foo'. Top level names in a namespace must be unique
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:14:5
+   │  
+14 │ ╭     spec schema Foo<T> {
+15 │ │         ensures true;
+16 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:30:9
-   │
-28 │         fun foo(): bool { true }
-   │             --- Alias previously defined here
-29 │     }
-30 │     fun foo() {}
-   │         ^^^ Duplicate module member or alias 'foo'. Top level names in a namespace must be unique
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:20:5
+   │  
+20 │ ╭     spec module {
+21 │ │         fun Foo(): bool { true }
+22 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 
-error[E02001]: duplicate declaration, item, or annotation
-   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:38:13
-   │
-35 │         fun foo(): bool { true }
-   │             --- Alias previously defined here
-   ·
-38 │         fun foo(): bool { true }
-   │             ^^^ Duplicate module member or alias 'foo'. Top level names in a namespace must be unique
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:27:5
+   │  
+27 │ ╭     spec module {
+28 │ │         fun foo(): bool { true }
+29 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:34:5
+   │  
+34 │ ╭     spec module {
+35 │ │         fun foo(): bool { true }
+36 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/expansion/spec_function_member_conflicts.move:37:5
+   │  
+37 │ ╭     spec module {
+38 │ │         fun foo(): bool { true }
+39 │ │     }
+   │ ╰─────^ Specification blocks are deprecated and are no longer used
 

@@ -10,8 +10,8 @@ projects.
 ## Before you begin
 
 You need an address on a Sui development network (Devnet, Testnet, local). If you don't already have
-an address, use the [Sui Client CLI](https://docs.sui.io/build/cli-client) or the
-[Sui Wallet browser extension](https://docs.mystenlabs.com/wallet) to create one.
+an address, use the [Sui Client CLI](https://docs.sui.io/references/cli/client) or the
+[Sui Wallet browser extension](https://docs.mystenlabs.com) to create one.
 
 You also need [Node.js](https://nodejs.org/en/download/current) and a package manager like
 [pnpm](https://pnpm.io/installation) to follow this example, so install them on your system if you
@@ -53,7 +53,7 @@ Create a new `index.js` file in the root of your project with the following code
 
 ```js
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui.js/faucet';
+import { getFaucetHost, requestSuiFromFaucetv1 } from '@mysten/sui.js/faucet';
 import { MIST_PER_SUI } from '@mysten/sui.js/utils';
 
 // replace <YOUR_SUI_ADDRESS> with your actual address, which is in the form 0x123...
@@ -72,7 +72,7 @@ const suiBefore = await suiClient.getBalance({
 	owner: MY_ADDRESS,
 });
 
-await requestSuiFromFaucetV0({
+await requestSuiFromFaucetv1({
 	// use getFaucetHost to make sure you're using correct faucet address
 	// you can also just use the address (see Sui TypeScript SDK Quick Start for values)
 	host: getFaucetHost('devnet'),
@@ -98,7 +98,7 @@ Save the file, then use Node.js to run it in your Console or Terminal:
 node index.js
 ```
 
-The code imports the `requestSuiFromFaucetV0` function from the SDK and calls it to mint SUI for the
+The code imports the `requestSuiFromFaucetv1` function from the SDK and calls it to mint SUI for the
 provided address. The code also imports `SuiClient` to create a new client on the Sui network that
 it uses to query the address and output the amount of SUI the address owns before and after using
 the faucet. You can check the total SUI for your address using the Sui Wallet or Sui Client CLI.
@@ -108,5 +108,5 @@ the faucet. You can check the total SUI for your address using the Sui Wallet or
 	the limit and must wait to successfully run it again.
 </Callout>
 
-You can also use the [Sui Client CLI](https://docs.sui.io/build/cli-client) to perform client calls
-on a Sui network.
+You can also use the [Sui Client CLI](https://docs.sui.io/references/cli/client) to perform client
+calls on a Sui network.

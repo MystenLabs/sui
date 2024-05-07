@@ -8,6 +8,7 @@ use crate::authority::{AuthorityState, AuthorityStore};
 use crate::checkpoints::CheckpointStore;
 use crate::epoch::committee_store::CommitteeStore;
 use crate::epoch::epoch_metrics::EpochMetrics;
+use crate::execution_cache::ExecutionCache;
 use crate::module_cache_metrics::ResolverMetrics;
 use crate::signature_verifier::SignatureVerifierMetrics;
 use fastcrypto::traits::KeyPair;
@@ -17,10 +18,10 @@ use std::sync::Arc;
 use sui_archival::reader::ArchiveReaderBalancer;
 use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
+use sui_config::node::{AuthorityOverloadConfig, StateDebugDumpConfig};
 use sui_config::node::{
     AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
 };
-use sui_config::node::{OverloadThresholdConfig, StateDebugDumpConfig};
 use sui_config::transaction_deny_config::TransactionDenyConfig;
 use sui_macros::nondeterministic;
 use sui_protocol_config::{ProtocolConfig, SupportedProtocolVersions};
@@ -52,7 +53,7 @@ pub struct TestAuthorityBuilder<'a> {
     accounts: Vec<AccountConfig>,
     /// By default, we don't insert the genesis checkpoint, which isn't needed by most tests.
     insert_genesis_checkpoint: bool,
-    overload_threshold_config: Option<OverloadThresholdConfig>,
+    authority_overload_config: Option<AuthorityOverloadConfig>,
 }
 
 impl<'a> TestAuthorityBuilder<'a> {
@@ -144,8 +145,8 @@ impl<'a> TestAuthorityBuilder<'a> {
         self
     }
 
-    pub fn with_overload_threshold_config(mut self, config: OverloadThresholdConfig) -> Self {
-        assert!(self.overload_threshold_config.replace(config).is_none());
+    pub fn with_authority_overload_config(mut self, config: AuthorityOverloadConfig) -> Self {
+        assert!(self.authority_overload_config.replace(config).is_none());
         self
     }
 
@@ -194,18 +195,32 @@ impl<'a> TestAuthorityBuilder<'a> {
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&registry);
         // `_guard` must be declared here so it is not dropped before
         // `AuthorityPerEpochStore::new` is called
-        let _guard = self
-            .protocol_config
-            .map(|config| ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone()));
+        // Force disable random beacon for tests using this builder, because it doesn't set up the
+        // RandomnessManager.
+        let _guard = if let Some(mut config) = self.protocol_config {
+            config.set_random_beacon_for_testing(false);
+            ProtocolConfig::apply_overrides_for_testing(move |_, _| config.clone())
+        } else {
+            ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+                config.set_random_beacon_for_testing(false);
+                config
+            })
+        };
         let epoch_start_configuration = EpochStartConfiguration::new(
             genesis.sui_system_object().into_epoch_start_state(),
             *genesis.checkpoint().digest(),
-            genesis.authenticator_state_obj_initial_shared_version(),
-        );
+            &genesis.objects(),
+            None,
+        )
+        .unwrap();
         let expensive_safety_checks = match self.expensive_safety_checks {
             None => ExpensiveSafetyCheckConfig::default(),
             Some(config) => config,
         };
+        let cache = Arc::new(ExecutionCache::new_for_tests(
+            authority_store.clone(),
+            &registry,
+        ));
         let epoch_store = AuthorityPerEpochStore::new(
             name,
             Arc::new(genesis_committee.clone()),
@@ -213,7 +228,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             None,
             EpochMetrics::new(&registry),
             epoch_start_configuration,
-            authority_store.clone(),
+            cache.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &expensive_safety_checks,
@@ -246,19 +261,21 @@ impl<'a> TestAuthorityBuilder<'a> {
         };
         let transaction_deny_config = self.transaction_deny_config.unwrap_or_default();
         let certificate_deny_config = self.certificate_deny_config.unwrap_or_default();
-        let overload_threshold_config = self.overload_threshold_config.unwrap_or_default();
+        let authority_overload_config = self.authority_overload_config.unwrap_or_default();
         let mut pruning_config = AuthorityStorePruningConfig::default();
         if !epoch_store
             .protocol_config()
             .simplified_unwrap_then_delete()
         {
-            pruning_config.set_enable_pruning_tombstones(false);
+            // We cannot prune tombstones if simplified_unwrap_then_delete is not enabled.
+            pruning_config.set_killswitch_tombstone_pruning(true);
         }
         let state = AuthorityState::new(
             name,
             secret,
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             authority_store,
+            cache,
             epoch_store,
             committee_store,
             index_store,
@@ -274,7 +291,7 @@ impl<'a> TestAuthorityBuilder<'a> {
             StateDebugDumpConfig {
                 dump_file_directory: Some(tempdir().unwrap().into_path()),
             },
-            overload_threshold_config,
+            authority_overload_config,
             ArchiveReaderBalancer::default(),
         )
         .await;
@@ -302,7 +319,6 @@ impl<'a> TestAuthorityBuilder<'a> {
         // TODO: we should probably have a better way to do this.
         if let Some(starting_objects) = self.starting_objects {
             state
-                .database
                 .insert_objects_unsafe_for_testing_only(starting_objects)
                 .await
                 .unwrap();

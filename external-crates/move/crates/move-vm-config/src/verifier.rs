@@ -21,9 +21,16 @@ pub struct VerifierConfig {
     pub max_back_edges_per_function: Option<usize>,
     pub max_back_edges_per_module: Option<usize>,
     pub max_basic_blocks_in_script: Option<usize>,
+    pub max_idenfitier_len: Option<u64>,
+    pub allow_receiving_object_id: bool,
+    pub reject_mutable_random_on_entry_functions: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct MeterConfig {
     pub max_per_fun_meter_units: Option<u128>,
     pub max_per_mod_meter_units: Option<u128>,
-    pub max_idenfitier_len: Option<u64>,
+    pub max_per_pkg_meter_units: Option<u128>,
 }
 
 impl Default for VerifierConfig {
@@ -55,23 +62,30 @@ impl Default for VerifierConfig {
             max_back_edges_per_function: None,
             max_back_edges_per_module: None,
             max_basic_blocks_in_script: None,
-            /// General metering for the verifier. This defaults to a bound which should align
-            /// with production, so all existing test cases apply it.
-            max_per_fun_meter_units: Some(1000 * 8000),
-            max_per_mod_meter_units: Some(1000 * 8000),
             max_constant_vector_len: Some(DEFAULT_MAX_CONSTANT_VECTOR_LEN),
             max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
+            allow_receiving_object_id: true,
+            reject_mutable_random_on_entry_functions: true,
         }
     }
 }
 
-impl VerifierConfig {
-    /// Returns truly unbounded config, even relaxing metering.
+impl Default for MeterConfig {
+    fn default() -> Self {
+        Self {
+            max_per_fun_meter_units: Some(1000 * 8000),
+            max_per_mod_meter_units: Some(1000 * 8000),
+            max_per_pkg_meter_units: Some(1000 * 8000),
+        }
+    }
+}
+
+impl MeterConfig {
     pub fn unbounded() -> Self {
         Self {
             max_per_fun_meter_units: None,
             max_per_mod_meter_units: None,
-            ..VerifierConfig::default()
+            max_per_pkg_meter_units: None,
         }
     }
 }

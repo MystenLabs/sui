@@ -12,4 +12,3 @@ publish = false
 anyhow.workspace = true
 prometheus.workspace = true
 protobuf.workspace = true
-workspace-hack.workspace = true

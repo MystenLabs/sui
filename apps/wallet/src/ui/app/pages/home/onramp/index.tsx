@@ -4,9 +4,11 @@
 import { ampli } from '_src/shared/analytics/ampli';
 import Alert from '_src/ui/app/components/alert';
 import Overlay from '_src/ui/app/components/overlay';
+import { SectionHeader } from '_src/ui/app/components/SectionHeader';
 import { useActiveAddress } from '_src/ui/app/hooks';
 import { useUnlockedGuard } from '_src/ui/app/hooks/useUnlockedGuard';
 import { Heading } from '_src/ui/app/shared/heading';
+import { Text } from '_src/ui/app/shared/text';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -50,14 +52,22 @@ export function Onramp() {
 				navigate('/tokens');
 			}}
 		>
-			<div className="w-full">
+			<div className="w-full flex flex-col gap-5">
+				{preferredProvider && (
+					<Text variant="body" weight="medium" color="steel-darker">
+						Continue checkout out with one of our partners:{' '}
+					</Text>
+				)}
 				<button
 					onClick={() => {
 						mutate();
 					}}
-					className="w-full p-6 bg-sui/10 rounded-2xl flex items-center gap-2.5 border-0 cursor-pointer"
+					className="w-full p-4 bg-sui/10 rounded-2xl flex flex-col gap-2.5 cursor-pointer border boder-solid border-hero/20 hover:border-hero/40"
 				>
-					<preferredProvider.icon />
+					<span className="flex w-full">
+						<preferredProvider.icon className="mr-auto w-10 h-10" />
+					</span>
+
 					<Heading variant="heading6" weight="semibold" color="hero-dark">
 						Continue with {preferredProvider.name}
 					</Heading>
@@ -68,17 +78,22 @@ export function Onramp() {
 						<Alert>An unexpected error occurred. Please try again later.</Alert>
 					</div>
 				)}
-
-				<div className="flex flex-col gap-4 mt-5">
-					{otherProviders.map((provider) => (
-						<button
-							key={provider.key}
-							className="block font-medium text-body text-center text-steel bg-transparent border-none cursor-pointer"
-							onClick={() => setPreferredProvider(provider.key)}
-						>
-							Already have a {provider.name} account?
-						</button>
-					))}
+				<SectionHeader title="Or" />
+				<div className="flex gap-2">
+					{otherProviders.map((provider) => {
+						return (
+							<button
+								key={provider.key}
+								className="flex gap-3 flex-1 items-center bg-transparent border border-solid border-gray-45 cursor-pointer rounded-4lg p-3.5 hover:border-gray-60"
+								onClick={() => setPreferredProvider(provider.key)}
+							>
+								<provider.icon className="w-8 h-8" />
+								<Text variant="body" weight="semibold" color="gray-90">
+									{provider.name}
+								</Text>
+							</button>
+						);
+					})}
 				</div>
 			</div>
 		</Overlay>

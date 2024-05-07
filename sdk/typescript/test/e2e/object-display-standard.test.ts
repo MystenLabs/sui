@@ -56,8 +56,8 @@ describe('Test Object Display Standard', () => {
 	});
 
 	it('Test getting Display fields for object that has no display object', async () => {
-		const coin = (await toolbox.getGasObjectsOwnedByAddress())[0].data as SuiObjectData;
-		const coinId = coin.objectId;
+		const coin = (await toolbox.getGasObjectsOwnedByAddress()).data[0];
+		const coinId = coin.coinObjectId;
 		const display = (
 			await toolbox.client.getObject({
 				id: coinId,

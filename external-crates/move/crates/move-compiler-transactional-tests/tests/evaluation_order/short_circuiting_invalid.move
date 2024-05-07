@@ -8,7 +8,7 @@ module 0x42::X {
 // all should abort
 
 //# run
-script {
+module 2::m {
 use 0x42::X;
 fun main() {
     false || X::error();
@@ -17,7 +17,7 @@ fun main() {
 
 
 //# run
-script {
+module 3::m {
 use 0x42::X;
 fun main() {
     true && X::error();
@@ -25,7 +25,7 @@ fun main() {
 }
 
 //# run
-script {
+module 4::m {
 use 0x42::X;
 fun main() {
     X::error() && false;
@@ -33,7 +33,7 @@ fun main() {
 }
 
 //# run
-script {
+module 5::m {
 use 0x42::X;
 fun main() {
     X::error() || true;
@@ -41,7 +41,7 @@ fun main() {
 }
 
 //# run
-script {
+module 6::m {
 fun main() {
     false || { abort 0 };
 }

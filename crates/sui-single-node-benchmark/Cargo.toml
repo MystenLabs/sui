@@ -9,8 +9,10 @@ license = "Apache-2.0"
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
+move-package.workspace = true
 sui-config.workspace = true
 sui-core = { workspace = true, features = ["test-utils"] }
+sui-move-build.workspace = true
 sui-test-transaction-builder.workspace = true
 sui-transaction-checks.workspace = true
 sui-types = { workspace = true, features = ["test-utils"] }
@@ -19,18 +21,19 @@ sui-storage.workspace = true
 async-trait.workspace = true
 bcs.workspace = true
 clap.workspace = true
+fs_extra.workspace = true
 futures.workspace = true
 prometheus.workspace = true
 once_cell.workspace = true
+serde = { version = "1.0.190", features = ["derive"] }
+serde_json.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
 telemetry-subscribers.workspace = true
 tokio = { workspace = true, features = ["full", "tracing", "test-util"] }
 tracing.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
-move-package.workspace = true
 sui-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-simulator.workspace = true

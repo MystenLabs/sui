@@ -38,13 +38,14 @@ use crate::crypto::zklogin::{CheckZkloginIdCostParams, CheckZkloginIssuerCostPar
 use better_any::{Tid, TidAble};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
+    annotated_value as A,
     gas_algebra::InternalGas,
     identifier::Identifier,
     language_storage::{StructTag, TypeTag},
-    value::MoveTypeLayout,
+    runtime_value as R,
     vm_status::StatusCode,
 };
-use move_stdlib::natives::{GasParameters, NurseryGasParameters};
+use move_stdlib_natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeContext, NativeFunction, NativeFunctionTable};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
@@ -735,12 +736,12 @@ pub fn all_natives(silent: bool) -> NativeFunctionTable {
             )
         })
         .chain(sui_framework_natives_iter)
-        .chain(move_stdlib::natives::all_natives(
+        .chain(move_stdlib_natives::all_natives(
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
             GasParameters::zeros(),
         ))
-        .chain(move_stdlib::natives::nursery_natives(
+        .chain(move_stdlib_natives::nursery_natives(
             silent,
             MOVE_STDLIB_ADDRESS,
             // TODO: tune gas params
@@ -779,7 +780,7 @@ pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError>
 pub(crate) fn get_tag_and_layouts(
     context: &NativeContext,
     ty: &Type,
-) -> PartialVMResult<Option<(StructTag, MoveTypeLayout, MoveTypeLayout)>> {
+) -> PartialVMResult<Option<(StructTag, R::MoveTypeLayout, A::MoveTypeLayout)>> {
     let tag = match context.type_to_type_tag(ty)? {
         TypeTag::Struct(s) => s,
         _ => {

@@ -26,8 +26,9 @@ module 0x42.M {
 }
 
 //# run --args 0 1 b"xyz"
+module 0x1.m {
 import 0x42.M;
-main(
+entry foo(
     u: &mut u64,
     s: &mut M.S,
     v: &mut vector<u8>,
@@ -37,6 +38,7 @@ main(
     M.set_f(move(s), 224);
     *(vec_mut_borrow<u8>(move(v), 1)) = 0u8;
     return;
+}
 }
 
 //# run 0x42::M::t --args 0 1 b"xyz"

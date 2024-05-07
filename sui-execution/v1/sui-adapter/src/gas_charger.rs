@@ -9,7 +9,6 @@ pub mod checked {
 
     use crate::sui_types::gas::SuiGasStatusAPI;
     use crate::temporary_store::TemporaryStore;
-    use std::ops::Deref;
     use sui_protocol_config::ProtocolConfig;
     use sui_types::gas::{deduct_gas, GasCostSummary, SuiGasStatus};
     use sui_types::gas_model::gas_predicates::{
@@ -38,7 +37,7 @@ pub mod checked {
         tx_digest: TransactionDigest,
         gas_model_version: u64,
         gas_coins: Vec<ObjectRef>,
-        // this is the the first gas coin in `gas_coins` and the one that all others will
+        // this is the first gas coin in `gas_coins` and the one that all others will
         // be smashed into. It can be None for system transactions when `gas_coins` is empty.
         smashed_gas_coin: Option<ObjectID>,
         gas_status: SuiGasStatus,
@@ -109,6 +108,10 @@ pub mod checked {
             self.gas_status.move_gas_status_mut()
         }
 
+        pub fn into_gas_status(self) -> SuiGasStatus {
+            self.gas_status
+        }
+
         pub fn summary(&self) -> GasCostSummary {
             self.gas_status.summary()
         }
@@ -172,7 +175,6 @@ pub mod checked {
                         self.tx_digest
                     )
                 })
-                .deref()
                 .clone();
             // delete all gas objects except the primary_gas_object
             for (id, _version, _digest) in &self.gas_coins[1..] {
@@ -197,9 +199,14 @@ pub mod checked {
         // Gas charging operations
         //
 
-        pub fn track_storage_mutation(&mut self, new_size: usize, storage_rebate: u64) -> u64 {
+        pub fn track_storage_mutation(
+            &mut self,
+            object_id: ObjectID,
+            new_size: usize,
+            storage_rebate: u64,
+        ) -> u64 {
             self.gas_status
-                .track_storage_mutation(new_size, storage_rebate)
+                .track_storage_mutation(object_id, new_size, storage_rebate)
         }
 
         pub fn reset_storage_cost_and_rebate(&mut self) {
@@ -281,6 +288,11 @@ pub mod checked {
             // compute and collect storage charges
             temporary_store.ensure_active_inputs_mutated();
             temporary_store.collect_storage_and_rebate(self);
+
+            if self.smashed_gas_coin.is_some() {
+                #[skip_checked_arithmetic]
+                trace!(target: "replay_gas_info", "Gas smashing has occurred for this transaction");
+            }
 
             // system transactions (None smashed_gas_coin)  do not have gas and so do not charge
             // for storage, however they track storage values to check for conservation rules

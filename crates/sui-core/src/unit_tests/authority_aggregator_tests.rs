@@ -9,18 +9,19 @@ use rand::SeedableRng;
 use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use sui_authority_aggregation::quorum_map_then_reduce_with_timeout;
+use sui_macros::sim_test;
 use sui_move_build::BuildConfig;
 use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair};
 use sui_types::crypto::{AuthoritySignature, Signer};
 use sui_types::crypto::{KeypairTraits, Signature};
-use sui_types::utils::create_fake_transaction;
-
-use sui_macros::sim_test;
 use sui_types::object::Object;
 use sui_types::transaction::*;
+use sui_types::utils::create_fake_transaction;
 
 use super::*;
 use crate::authority_client::AuthorityAPI;
@@ -35,11 +36,27 @@ use tokio::time::Instant;
 
 #[cfg(msim)]
 use sui_simulator::configs::constant_latency_ms;
-use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionEvents};
+use sui_types::effects::{
+    TestEffectsBuilder, TransactionEffects, TransactionEffectsAPI, TransactionEvents,
+};
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::messages_grpc::{
     HandleTransactionResponse, TransactionStatus, VerifiedObjectInfoResponse,
 };
+
+macro_rules! assert_matches {
+    ($expression:expr, $pattern:pat $(if $guard: expr)?) => {
+        match $expression {
+            $pattern $(if $guard)? => {}
+            ref e => panic!(
+                "assertion failed: `(left == right)` \
+                 (left: `{:?}`, right: `{:?}`)",
+                e,
+                stringify!($pattern $(if $guard)?)
+            ),
+        }
+    };
+}
 
 pub fn set_local_client_config(
     authorities: &mut AuthorityAggregator<LocalAuthorityClient>,
@@ -155,9 +172,13 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     authority
-        .handle_transaction(transaction.clone())
+        .handle_transaction(transaction.clone(), Some(make_socket_addr()))
         .await
         .unwrap();
+}
+
+fn make_socket_addr() -> std::net::SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 0)
 }
 
 pub async fn extract_cert<A>(
@@ -206,7 +227,7 @@ where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
     authority
-        .handle_certificate(cert.clone())
+        .handle_certificate_v2(cert.clone(), Some(make_socket_addr()))
         .await
         .unwrap()
         .signed_effects
@@ -217,7 +238,9 @@ pub async fn do_cert_configurable<A>(authority: &A, cert: &CertifiedTransaction)
 where
     A: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    let result = authority.handle_certificate(cert.clone()).await;
+    let result = authority
+        .handle_certificate_v2(cert.clone(), Some(make_socket_addr()))
+        .await;
     if result.is_err() {
         println!("Error in do cert {:?}", result.err());
     }
@@ -229,7 +252,8 @@ where
 {
     if let Ok(VerifiedObjectInfoResponse { object }) = authority
         .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
-            object_id, None,
+            object_id,
+            LayoutGenerationOption::None,
         ))
         .await
     {
@@ -264,7 +288,8 @@ async fn execute_transaction_with_fault_configs(
         addr2,
         rgp,
     );
-    let Ok(cert) = authorities.process_transaction(tx).await else {
+    let client_ip = make_socket_addr();
+    let Ok(cert) = authorities.process_transaction(tx, Some(client_ip)).await else {
         return false;
     };
 
@@ -281,7 +306,7 @@ async fn execute_transaction_with_fault_configs(
     }
 
     authorities
-        .process_certificate(cert.into_cert_for_testing())
+        .process_certificate(cert.into_cert_for_testing(), Some(client_ip))
         .await
         .is_ok()
 }
@@ -316,6 +341,7 @@ async fn test_quorum_map_and_reduce_timeout() {
     let build_config = BuildConfig::new_for_testing();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.extend(["src", "unit_tests", "data", "object_basics"]);
+    let client_ip = make_socket_addr();
     let modules: Vec<_> = build_config
         .build(path)
         .unwrap()
@@ -324,7 +350,7 @@ async fn test_quorum_map_and_reduce_timeout() {
         .collect();
     let pkg = Object::new_package_for_testing(
         &modules,
-        TransactionDigest::genesis(),
+        TransactionDigest::genesis_marker(),
         BuiltInFramework::genesis_move_packages(),
     )
     .unwrap();
@@ -337,13 +363,17 @@ async fn test_quorum_map_and_reduce_timeout() {
     let gas_object1 = genesis.object(gas_object1.id()).unwrap();
     let gas_ref_1 = gas_object1.compute_object_reference();
     let tx = create_object_move_transaction(addr1, &key1, addr1, 100, pkg.id(), gas_ref_1, rgp);
-    let certified_tx = authorities.process_transaction(tx.clone()).await;
+    let certified_tx = authorities
+        .process_transaction(tx.clone(), Some(client_ip))
+        .await;
     assert!(certified_tx.is_ok());
     let certificate = certified_tx.unwrap().into_cert_for_testing();
     // Send request with a very small timeout to trigger timeout error
     authorities.timeouts.pre_quorum_timeout = Duration::from_nanos(0);
     authorities.timeouts.post_quorum_timeout = Duration::from_nanos(0);
-    let certified_effects = authorities.process_certificate(certificate.clone()).await;
+    let certified_effects = authorities
+        .process_certificate(certificate.clone(), Some(client_ip))
+        .await;
     // Ensure it is an error
     assert!(certified_effects.is_err());
     assert!(matches!(
@@ -370,7 +400,7 @@ async fn test_map_reducer() {
     let (authorities, _, _, _) = init_local_authorities(4, vec![]).await;
 
     // Test: mapper errors do not get propagated up, reducer works
-    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+    let res = quorum_map_then_reduce_with_timeout::<_, _, _, _, _, (), _, _, _>(
         authorities.committee.clone(),
         authorities.authority_clients.clone(),
         0usize,
@@ -400,11 +430,11 @@ async fn test_map_reducer() {
     assert_eq!(4, res);
 
     // Test: early end
-    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout(
+    let res = quorum_map_then_reduce_with_timeout(
         authorities.committee.clone(),
         authorities.authority_clients.clone(),
         0usize,
-        |_name, _client| Box::pin(async move { Ok(()) }),
+        |_name, _client| Box::pin(async move { Ok::<(), anyhow::Error>(()) }),
         |mut accumulated_state, _authority_name, _authority_weight, _result| {
             Box::pin(async move {
                 if accumulated_state > 2 {
@@ -422,7 +452,7 @@ async fn test_map_reducer() {
     assert_eq!(3, res.0);
 
     // Test: Global timeout works
-    let res = AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
+    let res = quorum_map_then_reduce_with_timeout::<_, _, _, _, _, (), _, _, _>(
         authorities.committee.clone(),
         authorities.authority_clients.clone(),
         0usize,
@@ -430,7 +460,7 @@ async fn test_map_reducer() {
             Box::pin(async move {
                 // 10 mins
                 tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-                Ok(())
+                Ok::<(), anyhow::Error>(())
             })
         },
         |_accumulated_state, _authority_name, _authority_weight, _result| {
@@ -444,37 +474,33 @@ async fn test_map_reducer() {
 
     // Test: Local timeout works
     let bad_auth = *authorities.committee.sample();
-    let res: Result<_, _> =
-        AuthorityAggregator::quorum_map_then_reduce_with_timeout::<_, _, (), _, _>(
-            authorities.committee.clone(),
-            authorities.authority_clients.clone(),
-            HashSet::new(),
-            |_name, _client| {
-                Box::pin(async move {
-                    // 10 mins
-                    if _name == bad_auth {
-                        tokio::time::sleep(Duration::from_secs(10 * 60)).await;
-                    }
-                    Ok(())
-                })
-            },
-            |mut accumulated_state, authority_name, _authority_weight, _result| {
-                Box::pin(async move {
-                    accumulated_state.insert(authority_name);
-                    if accumulated_state.len() <= 3 {
-                        ReduceOutput::Continue(accumulated_state)
-                    } else {
-                        ReduceOutput::ContinueWithTimeout(
-                            accumulated_state,
-                            Duration::from_millis(10),
-                        )
-                    }
-                })
-            },
-            // large delay
-            Duration::from_millis(10 * 60),
-        )
-        .await;
+    let res = quorum_map_then_reduce_with_timeout::<_, _, _, _, _, (), _, _, _>(
+        authorities.committee.clone(),
+        authorities.authority_clients.clone(),
+        HashSet::new(),
+        |_name, _client| {
+            Box::pin(async move {
+                // 10 mins
+                if _name == bad_auth {
+                    tokio::time::sleep(Duration::from_secs(10 * 60)).await;
+                }
+                Ok::<(), anyhow::Error>(())
+            })
+        },
+        |mut accumulated_state, authority_name, _authority_weight, _result| {
+            Box::pin(async move {
+                accumulated_state.insert(authority_name);
+                if accumulated_state.len() <= 3 {
+                    ReduceOutput::Continue(accumulated_state)
+                } else {
+                    ReduceOutput::ContinueWithTimeout(accumulated_state, Duration::from_millis(10))
+                }
+            })
+        },
+        // large delay
+        Duration::from_millis(10 * 60),
+    )
+    .await;
     assert_eq!(res.as_ref().unwrap_err().len(), 3);
     assert!(!res.as_ref().unwrap_err().contains(&bad_auth));
 }
@@ -695,18 +721,8 @@ fn sign_tx_effects(
 }
 
 #[tokio::test]
-#[should_panic]
-async fn test_handle_transaction_panic() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+async fn test_handle_transaction_fork() {
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -729,11 +745,12 @@ async fn test_handle_transaction_panic() {
         &VerifiedTransaction::new_unchecked(tx.clone()),
         0,
     );
+    let client_ip = make_socket_addr();
 
     // Validators now gives valid signed tx and we get TxCert
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     let cert_epoch_0 = agg
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -749,13 +766,12 @@ async fn test_handle_transaction_panic() {
     );
 
     // Validator 0 and 1 return failed effects
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(2),
@@ -766,22 +782,81 @@ async fn test_handle_transaction_panic() {
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
 
     // We have forked, should panic
-    let _ = agg.process_transaction(tx.clone()).await;
+    let err = agg
+        .process_transaction(tx.clone(), Some(client_ip))
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        AggregatorProcessTransactionError::FatalTransaction { .. }
+    ));
+}
+#[tokio::test]
+async fn test_handle_certificate_response() {
+    telemetry_subscribers::init_for_testing();
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let tx = VerifiedTransaction::new_unchecked(make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    ));
+    // All Validators gives signed-tx
+    set_tx_info_response_with_signed_tx(&mut clients, &authority_keys, &tx, 0);
+    let client_ip = make_socket_addr();
+
+    // Validators now gives valid signed tx and we get TxCert
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let cert_epoch_0 = agg
+        .process_transaction(tx.clone().into(), Some(client_ip))
+        .await
+        .unwrap()
+        .into_cert_for_testing();
+
+    println!("Case 1 - RetryableExecuteCertificate (WrongEpoch Error)");
+    // Validators return cert with epoch 0, client expects 1
+    // Update client to epoch 1
+    let committee_1 =
+        Committee::new_for_testing_with_normalized_voting_power(1, authorities.clone());
+    agg.committee_store
+        .insert_new_committee(&committee_1)
+        .unwrap();
+    agg.committee = Arc::new(committee_1.clone());
+
+    assert_resp_err(&agg, tx.clone().into(), |e| matches!(e, AggregatorProcessTransactionError::RetryableTransaction { .. }),
+        |e| matches!(e, SuiError::WrongEpoch { expected_epoch, actual_epoch } if *expected_epoch == 1 && *actual_epoch == 0)
+    ).await;
+
+    set_cert_response_with_certified_tx(&mut clients, &authority_keys, &cert_epoch_0, 0);
+    let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
+    agg.committee_store
+        .insert_new_committee(&committee_1)
+        .unwrap();
+    agg.committee = Arc::new(committee_1);
+
+    let err = agg
+        .process_certificate(cert_epoch_0.clone(), Some(client_ip))
+        .await
+        .unwrap_err();
+    assert_matches!(
+        err,
+        AggregatorProcessCertificateError::RetryableExecuteCertificate {
+            retryable_errors, ..
+        } if retryable_errors.iter().any(|(error, _, _)| matches!(error, SuiError::WrongEpoch {
+            expected_epoch: 1, actual_epoch: 0
+        }))
+    );
 }
 
 #[tokio::test]
 async fn test_handle_transaction_response() {
     telemetry_subscribers::init_for_testing();
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -836,8 +911,9 @@ async fn test_handle_transaction_response() {
 
     // Validators now gives valid signed tx and we get TxCert
     let mut agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let client_ip = make_socket_addr();
     let cert_epoch_0 = agg
-        .process_transaction(tx.clone().into())
+        .process_transaction(tx.clone().into(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -879,7 +955,9 @@ async fn test_handle_transaction_response() {
     }
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     // We have a valid cert because val-0 has it. Note we can't form a cert based on what val-1 and val-2 give
-    agg.process_transaction(tx.clone().into()).await.unwrap();
+    agg.process_transaction(tx.clone().into(), Some(client_ip))
+        .await
+        .unwrap();
 
     println!("Case 4 - Retryable Transaction (MissingCommitteeAtEpoch Error)");
     // Validators return signed-tx with epoch 1, client expects 0
@@ -908,7 +986,7 @@ async fn test_handle_transaction_response() {
     agg.committee = Arc::new(committee_1.clone());
 
     let cert_epoch_1 = agg
-        .process_transaction(tx.clone().into())
+        .process_transaction(tx.clone().into(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -941,19 +1019,20 @@ async fn test_handle_transaction_response() {
     );
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
     // We have 2f+1 signed effects on epoch 1, so we are good.
-    agg.process_transaction(tx.clone().into()).await.unwrap();
+    agg.process_transaction(tx.clone().into(), Some(client_ip))
+        .await
+        .unwrap();
 
     println!("Case 6 - Retryable Transaction (most staked effects stake + retryable stake >= 2f+1 with QuorumFailedToGetEffectsQuorumWhenProcessingTransaction Error)");
     // Val 0, 1 & 2 returns retryable error
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
     // Validators 3 returns tx-cert with epoch 1
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter().skip(3),
@@ -988,13 +1067,12 @@ async fn test_handle_transaction_response() {
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
 
     // Validators 2 returns tx-cert and tx-effects with epoch 1
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1014,13 +1092,12 @@ async fn test_handle_transaction_response() {
         .set_tx_info_response(resp);
 
     // Validators 3 returns different tx-effects without cert for epoch 1 (simulating byzantine behavior)
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InvalidGasObject,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1067,7 +1144,7 @@ async fn test_handle_transaction_response() {
     // Validators now gives valid signed tx2 and we get TxCert2
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     let cert_epoch_0_2 = agg
-        .process_transaction(tx2.clone().into())
+        .process_transaction(tx2.clone().into(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -1076,13 +1153,12 @@ async fn test_handle_transaction_response() {
     set_retryable_tx_info_response_error(&mut clients, &authority_keys);
 
     // Validators 2 returns tx-cert and tx-effects with epoch 1
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1102,13 +1178,12 @@ async fn test_handle_transaction_response() {
         .set_tx_info_response(resp);
 
     // Validators 3 returns tx2-effects without cert for epoch 1 (simulating byzantine behavior)
-    let effects = TransactionEffects::new_with_tx_and_status(
-        cert_epoch_0_2.data(),
-        ExecutionStatus::Failure {
+    let effects = TestEffectsBuilder::new(cert_epoch_0_2.data())
+        .with_status(ExecutionStatus::Failure {
             error: ExecutionFailureStatus::InsufficientGas,
             command: None,
-        },
-    );
+        })
+        .build();
 
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
@@ -1191,7 +1266,9 @@ async fn test_handle_transaction_response() {
     println!("Case 7.2 - Successful Cert Transaction");
     // Update aggregator committee, and transaction will succeed.
     agg.committee = Arc::new(committee_1);
-    agg.process_transaction(tx.clone().into()).await.unwrap();
+    agg.process_transaction(tx.clone().into(), Some(client_ip))
+        .await
+        .unwrap();
 
     println!("Case 8 - Retryable Transaction (ObjectNotFound Error)");
     // < 2f+1 object not found errors
@@ -1340,16 +1417,7 @@ async fn test_handle_transaction_response() {
 
 #[tokio::test]
 async fn test_handle_conflicting_transaction_response() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let conflicting_object = random_object_ref();
@@ -1657,8 +1725,9 @@ async fn test_handle_conflicting_transaction_response() {
 
     // Validators now gives valid signed tx and we get TxCert
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    let client_ip = make_socket_addr();
     let cert_epoch_0 = agg
-        .process_transaction(tx1.clone().into())
+        .process_transaction(tx1.clone().into(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -1673,7 +1742,7 @@ async fn test_handle_conflicting_transaction_response() {
 
     // Val-0 returns cert
     let (name_0, key_0) = &authority_keys[0];
-    let effects = TransactionEffects::new_with_tx(cert_epoch_0.data());
+    let effects = TestEffectsBuilder::new(cert_epoch_0.data()).build();
     let resp = HandleTransactionResponse {
         status: TransactionStatus::Executed(
             Some(cert_epoch_0.auth_sig().clone()),
@@ -1685,7 +1754,9 @@ async fn test_handle_conflicting_transaction_response() {
 
     let agg = get_genesis_agg(authorities.clone(), clients.clone());
     // We have a valid cert because val-0 has it
-    agg.process_transaction(tx1.clone().into()).await.unwrap();
+    agg.process_transaction(tx1.clone().into(), Some(client_ip))
+        .await
+        .unwrap();
 
     println!("Case 5 - Retryable Transaction (MissingCommitteeAtEpoch Error)");
     // Validators return signed-tx with epoch 1
@@ -1700,13 +1771,13 @@ async fn test_handle_conflicting_transaction_response() {
 
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 1);
     let cert_epoch_1 = agg
-        .process_transaction(tx1.clone().into())
+        .process_transaction(tx1.clone().into(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
 
     // Validators have moved to epoch 2 and return tx-effects with epoch 2, client expects 1
-    let effects = TransactionEffects::new_with_tx(cert_epoch_1.data());
+    let effects = TestEffectsBuilder::new(cert_epoch_1.data()).build();
     set_tx_info_response_with_cert_and_effects(
         &mut clients,
         authority_keys.iter(),
@@ -1769,21 +1840,14 @@ async fn test_handle_conflicting_transaction_response() {
     println!("Case 5.2 - Successful Cert Transaction");
     // Update aggregator committee to epoch 2, and transaction will succeed.
     agg.committee = Arc::new(committee_2);
-    agg.process_transaction(tx1.clone().into()).await.unwrap();
+    agg.process_transaction(tx1.clone().into(), Some(client_ip))
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
 async fn test_handle_overload_response() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let gas_object = random_object_ref();
@@ -1856,18 +1920,82 @@ async fn test_handle_overload_response() {
     .await;
 }
 
+// Tests that authority aggregator can aggregate SuiError::ValidatorOverloadedRetryAfter into
+// AggregatorProcessTransactionError::SystemOverloadRetryAfter.
+#[tokio::test]
+async fn test_handle_overload_retry_response() {
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
+
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let txn = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    );
+
+    let overload_error = SuiError::ValidatorOverloadedRetryAfter {
+        retry_after_secs: 0,
+    };
+    let rpc_error = SuiError::RpcError("RPC".into(), "Error".into());
+
+    // Have 2f + 1 validators return the overload error and we should get the `SystemOverload` error.
+    set_retryable_tx_info_response_error(&mut clients, &authority_keys);
+    set_tx_info_response_with_error(&mut clients, authority_keys.iter().skip(1), overload_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::SystemOverloadRetryAfter { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+
+    // Change one of the valdiators' errors to RPC error so the system is considered not overloaded now and a `RetryableTransaction`
+    // should be returned.
+    clients
+        .get_mut(&authority_keys[1].0)
+        .unwrap()
+        .set_tx_info_response_error(rpc_error);
+
+    let agg = get_genesis_agg(authorities.clone(), clients.clone());
+
+    assert_resp_err(
+        &agg,
+        txn.clone(),
+        |e| {
+            matches!(
+                e,
+                AggregatorProcessTransactionError::RetryableTransaction { .. }
+            )
+        },
+        |e| {
+            matches!(
+                e,
+                SuiError::ValidatorOverloadedRetryAfter { .. } | SuiError::RpcError(..)
+            )
+        },
+    )
+    .await;
+}
+
 #[tokio::test]
 async fn test_early_exit_with_too_many_conflicts() {
-    let mut authorities = BTreeMap::new();
-    let mut clients = BTreeMap::new();
-    let mut authority_keys = Vec::new();
-    for _ in 0..4 {
-        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let name: AuthorityName = sec.public().into();
-        authorities.insert(name, 1);
-        authority_keys.push((name, sec));
-        clients.insert(name, HandleTransactionTestAuthorityClient::new());
-    }
+    let (authorities, mut clients, authority_keys) = make_fake_authorities();
 
     let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
     let txn = make_transfer_sui_transaction(
@@ -1965,17 +2093,110 @@ async fn test_byzantine_authority_sig_aggregation() {
 }
 
 #[tokio::test]
-#[should_panic]
 async fn test_fork_panic_process_cert_6_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(3, 6).await;
+    let err = process_with_cert(3, 6).await.unwrap_err();
+    assert!(matches!(
+        err,
+        AggregatorProcessTransactionError::FatalTransaction { .. }
+    ));
 }
 
 #[tokio::test]
-#[should_panic]
 async fn test_fork_panic_process_cert_4_auths() {
     telemetry_subscribers::init_for_testing();
-    let _ = process_with_cert(2, 4).await;
+    let err = process_with_cert(2, 4).await.unwrap_err();
+    assert!(matches!(
+        err,
+        AggregatorProcessTransactionError::FatalTransaction { .. }
+    ));
+}
+
+#[sim_test]
+async fn test_process_transaction_again() {
+    // This test exercises the newly_formed field in the ProcessTransactionResult.
+    // Specifically, when some validator already has a certificate for a given transaction,
+    // we should see this field set to true in the result.
+
+    telemetry_subscribers::init_for_testing();
+    let (authorities, clients, authority_keys) = make_fake_authorities();
+    let (sender, sender_kp): (_, AccountKeyPair) = get_key_pair();
+    let gas_object = random_object_ref();
+    let tx = make_transfer_sui_transaction(
+        gas_object,
+        SuiAddress::default(),
+        None,
+        sender,
+        &sender_kp,
+        666, // this is a dummy value which does not matter
+    );
+
+    let mut clients1 = clients.clone();
+    set_tx_info_response_with_signed_tx(
+        &mut clients1,
+        &authority_keys,
+        &VerifiedTransaction::new_unchecked(tx.clone()),
+        0,
+    );
+    let agg = get_genesis_agg(authorities.clone(), clients1);
+    let client_ip = Some(make_socket_addr());
+    let cert = agg
+        .process_transaction(tx.clone(), client_ip)
+        .await
+        .unwrap();
+    let certificate = match cert {
+        ProcessTransactionResult::Certified {
+            certificate,
+            newly_formed,
+        } => {
+            assert!(newly_formed);
+            certificate
+        }
+        _ => {
+            panic!("Expected Certified result");
+        }
+    };
+
+    let mut clients2 = clients.clone();
+    set_tx_info_response_with_cert_and_effects(
+        &mut clients2,
+        authority_keys.iter(),
+        Some(&certificate),
+        TestEffectsBuilder::new(certificate.data()).build(),
+        0,
+    );
+    let agg = get_genesis_agg(authorities, clients2);
+    let cert = agg
+        .process_transaction(tx.clone(), client_ip)
+        .await
+        .unwrap();
+    match cert {
+        ProcessTransactionResult::Certified { newly_formed, .. } => {
+            assert!(!newly_formed);
+        }
+        _ => {
+            panic!("Expected Certified result");
+        }
+    }
+}
+
+#[allow(clippy::type_complexity)]
+fn make_fake_authorities() -> (
+    BTreeMap<AuthorityName, StakeUnit>,
+    BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    Vec<(AuthorityName, AuthorityKeyPair)>,
+) {
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    let mut authority_keys = Vec::new();
+    for _ in 0..4 {
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        authority_keys.push((name, sec));
+        clients.insert(name, HandleTransactionTestAuthorityClient::new());
+    }
+    (authorities, clients, authority_keys)
 }
 
 // Aggregator aggregate signatures from authorities and process the transaction as signed.
@@ -2038,7 +2259,8 @@ async fn run_aggregator(
     }
 
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 0);
-    agg.process_transaction(tx.clone()).await
+    agg.process_transaction(tx.clone(), Some(make_socket_addr()))
+        .await
 }
 
 // Aggregator aggregate signatures from authorities and process the transaction as executed.
@@ -2081,8 +2303,9 @@ async fn process_with_cert(
 
     // Process the transaction first with an execution result as signed.
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 0);
+    let client_ip = make_socket_addr();
     let cert = agg
-        .process_transaction(tx.clone())
+        .process_transaction(tx.clone(), Some(client_ip))
         .await
         .unwrap()
         .into_cert_for_testing();
@@ -2121,7 +2344,7 @@ async fn process_with_cert(
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
     }
     let agg = get_agg_at_epoch(authorities.clone(), clients.clone(), 0);
-    agg.process_transaction(tx).await
+    agg.process_transaction(tx, Some(client_ip)).await
 }
 
 async fn assert_resp_err<E, F>(
@@ -2133,7 +2356,7 @@ async fn assert_resp_err<E, F>(
     E: Fn(&AggregatorProcessTransactionError) -> bool,
     F: Fn(&SuiError) -> bool,
 {
-    match agg.process_transaction(tx).await {
+    match agg.process_transaction(tx, Some(make_socket_addr())).await {
         Err(received_agg_err) if agg_err_checker(&received_agg_err) => match received_agg_err {
             AggregatorProcessTransactionError::RetryableConflictingTransaction {
                 errors,
@@ -2161,6 +2384,10 @@ async fn assert_resp_err<E, F>(
             }
 
             AggregatorProcessTransactionError::SystemOverload { errors, .. } => {
+                assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
+            }
+
+            AggregatorProcessTransactionError::SystemOverloadRetryAfter { errors, .. } => {
                 assert!(errors.iter().map(|e| &e.0).all(sui_err_checker));
             }
         },
@@ -2208,6 +2435,23 @@ fn set_tx_info_response_with_signed_tx(
             status: TransactionStatus::Signed(signed_tx.into_sig()),
         };
         clients.get_mut(name).unwrap().set_tx_info_response(resp);
+    }
+}
+
+fn set_cert_response_with_certified_tx(
+    clients: &mut BTreeMap<AuthorityName, HandleTransactionTestAuthorityClient>,
+    authority_keys: &Vec<(AuthorityName, AuthorityKeyPair)>,
+    cert: &CertifiedTransaction,
+    epoch: EpochId,
+) {
+    let effects = effects_with_tx(*cert.digest());
+    for (name, secret) in authority_keys {
+        let resp = HandleCertificateResponseV2 {
+            signed_effects: sign_tx_effects(effects.clone(), epoch, *name, secret),
+            events: TransactionEvents::default(),
+            fastpath_input_objects: vec![],
+        };
+        clients.get_mut(name).unwrap().set_cert_resp_to_return(resp);
     }
 }
 

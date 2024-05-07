@@ -1,0 +1,14 @@
+---
+source: crates/sui/tests/ptb_files_tests.rs
+expression: "results.join(\"\\n\")"
+---
+ === ERRORS AFTER PARSING INPUT COMMANDS === 
+  × Error when processing PTB
+   ╭─[2:36]
+ 1 │ --gas-budget 10000
+ 2 │ --make-move-vec <vector<address>> [[@0x1], [@0x2], [@0x3]] 
+   ·                                    ┬
+   ·                                    ╰── Unexpected '['
+   ╰────
+  help: Expected an argument here
+

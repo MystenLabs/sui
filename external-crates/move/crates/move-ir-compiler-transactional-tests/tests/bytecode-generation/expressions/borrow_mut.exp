@@ -1,11 +1,11 @@
 processed 3 tasks
 
-task 0 'print-bytecode'. lines 1-10:
+task 0 'print-bytecode'. lines 1-12:
 // Move bytecode v6
-script {
+module 1.m {
 
 
-main() {
+entry foo() {
 L0:	loc0: u64
 L1:	loc1: &mut u64
 B0:
@@ -20,7 +20,7 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 12-23:
+task 1 'print-bytecode'. lines 14-25:
 // Move bytecode v6
 module 3d.Foobar {
 struct FooCoin {
@@ -38,7 +38,7 @@ B0:
 }
 }
 
-task 2 'print-bytecode'. lines 25-36:
+task 2 'print-bytecode'. lines 27-38:
 // Move bytecode v6
 module 4d.Foobar {
 struct FooCoin<Ty0> {

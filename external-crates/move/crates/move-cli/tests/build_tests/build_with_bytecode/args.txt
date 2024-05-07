@@ -1,0 +1,7 @@
+build -v -p ./C
+> mv ./C/sources/Foo.move ./C/sources/Foo.move_old
+> rm -rf ./C/build/Foo/sources
+build -v -p ./B
+> mv ./B/sources/Bar.move ./C/sources/Bar.move_old
+> rm -rf ./B/build/Bar/sources
+build -v

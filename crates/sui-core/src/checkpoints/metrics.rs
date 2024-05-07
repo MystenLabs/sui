@@ -21,6 +21,7 @@ pub struct CheckpointMetrics {
     pub highest_accumulated_epoch: IntGauge,
     pub checkpoint_creation_latency_ms: Histogram,
     pub remote_checkpoint_forks: IntCounter,
+    pub split_brain_checkpoint_forks: IntCounter,
     pub last_created_checkpoint_age_ms: Histogram,
     pub last_certified_checkpoint_age_ms: Histogram,
 }
@@ -102,6 +103,12 @@ impl CheckpointMetrics {
             remote_checkpoint_forks: register_int_counter_with_registry!(
                 "remote_checkpoint_forks",
                 "Number of remote checkpoints that forked from local checkpoints",
+                registry
+            )
+            .unwrap(),
+            split_brain_checkpoint_forks: register_int_counter_with_registry!(
+                "split_brain_checkpoint_forks",
+                "Number of checkpoints that have resulted in a split brain",
                 registry
             )
             .unwrap(),

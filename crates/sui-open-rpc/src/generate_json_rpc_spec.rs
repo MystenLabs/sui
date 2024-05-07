@@ -9,8 +9,6 @@ use std::fs::File;
 use std::io::Write;
 //temporarily remove api ref content for indexer methods
 //use sui_json_rpc::api::ExtendedApiOpenRpc;
-use sui_json_rpc::api::IndexerApiOpenRpc;
-use sui_json_rpc::api::MoveUtilsOpenRpc;
 use sui_json_rpc::coin_api::CoinReadApi;
 use sui_json_rpc::governance_api::GovernanceReadApi;
 use sui_json_rpc::read_api::ReadApi;
@@ -18,6 +16,8 @@ use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::transaction_builder_api::TransactionBuilderApi;
 use sui_json_rpc::transaction_execution_api::TransactionExecutionApi;
 use sui_json_rpc::SuiRpcModule;
+use sui_json_rpc_api::IndexerApiOpenRpc;
+use sui_json_rpc_api::MoveUtilsOpenRpc;
 
 mod examples;
 

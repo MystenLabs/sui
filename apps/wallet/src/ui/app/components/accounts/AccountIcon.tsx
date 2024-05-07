@@ -9,6 +9,7 @@ import {
 	LogoQredo,
 	LogoTwitch,
 	SocialFacebook24,
+	SocialKakao24,
 	Sui,
 } from '@mysten/icons';
 
@@ -28,6 +29,8 @@ function ProviderIcon({ provider }: { provider: string }) {
 			return <LogoTwitch className="h-4 w-4 text-twitch" />;
 		case 'facebook':
 			return <SocialFacebook24 className="h-4 w-4 text-facebook" />;
+		case 'kakao':
+			return <SocialKakao24 className="h-4 w-4" />;
 		default:
 			return <SuiIcon />;
 	}

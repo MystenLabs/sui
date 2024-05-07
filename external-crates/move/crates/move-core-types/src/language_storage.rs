@@ -307,11 +307,40 @@ impl ModuleId {
         key.append(&mut bcs::to_bytes(self).unwrap());
         key
     }
+
+    pub fn to_canonical_string(&self, with_prefix: bool) -> String {
+        self.to_canonical_display(with_prefix).to_string()
+    }
+
+    /// Proxy type for overriding `ModuleId`'s display implementation, to use a canonical form
+    /// (full-width addresses), with an optional "0x" prefix (controlled by the `with_prefix` flag).
+    pub fn to_canonical_display(&self, with_prefix: bool) -> impl Display + '_ {
+        struct IdDisplay<'a> {
+            id: &'a ModuleId,
+            with_prefix: bool,
+        }
+
+        impl<'a> Display for IdDisplay<'a> {
+            fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+                write!(
+                    f,
+                    "{}::{}",
+                    self.id.address.to_canonical_display(self.with_prefix),
+                    self.id.name,
+                )
+            }
+        }
+
+        IdDisplay {
+            id: self,
+            with_prefix,
+        }
+    }
 }
 
 impl Display for ModuleId {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "{}::{}", self.address, self.name)
+        write!(f, "{}", self.to_canonical_display(/* with_prefix */ false))
     }
 }
 
@@ -374,9 +403,10 @@ impl From<StructTag> for TypeTag {
 
 #[cfg(test)]
 mod tests {
-    use super::TypeTag;
+    use super::{ModuleId, TypeTag};
     use crate::{
-        account_address::AccountAddress, identifier::Identifier, language_storage::StructTag,
+        account_address::AccountAddress, ident_str, identifier::Identifier,
+        language_storage::StructTag,
     };
     use std::mem;
 
@@ -392,5 +422,25 @@ mod tests {
         let c: TypeTag = serde_json::from_str(&b).unwrap();
         assert!(a.eq(&c), "Typetag serde error");
         assert_eq!(mem::size_of::<TypeTag>(), 16);
+    }
+
+    #[test]
+    fn test_module_id_display() {
+        let id = ModuleId::new(AccountAddress::ONE, ident_str!("foo").to_owned());
+
+        assert_eq!(
+            format!("{id}"),
+            "0000000000000000000000000000000000000000000000000000000000000001::foo",
+        );
+
+        assert_eq!(
+            format!("{}", id.to_canonical_display(/* with_prefix */ false)),
+            "0000000000000000000000000000000000000000000000000000000000000001::foo",
+        );
+
+        assert_eq!(
+            format!("{}", id.to_canonical_display(/* with_prefix */ true)),
+            "0x0000000000000000000000000000000000000000000000000000000000000001::foo",
+        );
     }
 }

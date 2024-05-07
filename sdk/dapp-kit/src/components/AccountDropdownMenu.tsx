@@ -42,7 +42,7 @@ export function AccountDropdownMenu({ currentAccount }: AccountDropdownMenuProps
 				</DropdownMenu.Trigger>
 			</StyleMarker>
 			<DropdownMenu.Portal>
-				<StyleMarker>
+				<StyleMarker className={styles.menuContainer}>
 					<DropdownMenu.Content className={styles.menuContent}>
 						{accounts.map((account) => (
 							<AccountDropdownMenuItem

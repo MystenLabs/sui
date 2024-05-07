@@ -1,21 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SharedObjectRef } from '@mysten/sui.js/bcs';
-import {
-	getFullnodeUrl,
-	OrderArguments,
-	PaginatedEvents,
-	PaginationArguments,
-	SuiClient,
-	SuiObjectRef,
-} from '@mysten/sui.js/client';
-import {
+import { bcs } from '@mysten/sui.js/bcs';
+import type { OrderArguments, PaginatedEvents, PaginationArguments } from '@mysten/sui.js/client';
+import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
+import type {
 	TransactionArgument,
-	TransactionBlock,
-	TransactionObjectArgument,
+	TransactionObjectInput,
 	TransactionResult,
 } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui.js/transactions';
 import {
 	normalizeStructTag,
 	normalizeSuiAddress,
@@ -24,17 +18,16 @@ import {
 	SUI_CLOCK_OBJECT_ID,
 } from '@mysten/sui.js/utils';
 
-import {
-	bcs,
+import { BcsOrder } from './types/bcs.js';
+import type {
 	Level2BookStatusPoint,
-	LimitOrderType,
 	MarketPrice,
 	Order,
 	PaginatedPoolSummary,
 	PoolSummary,
-	SelfMatchingPreventionStyle,
 	UserPosition,
-} from './types';
+} from './types/index.js';
+import { LimitOrderType, SelfMatchingPreventionStyle } from './types/index.js';
 import {
 	CREATION_FEE,
 	MODULE_CLOB,
@@ -42,32 +35,9 @@ import {
 	NORMALIZED_SUI_COIN_TYPE,
 	ORDER_DEFAULT_EXPIRATION_IN_MS,
 	PACKAGE_ID,
-} from './utils';
+} from './utils/index.js';
 
 const DUMMY_ADDRESS = normalizeSuiAddress('0x0');
-
-function objArg(
-	txb: TransactionBlock,
-	arg: string | SharedObjectRef | SuiObjectRef | TransactionObjectArgument,
-): TransactionObjectArgument {
-	if (typeof arg === 'string') {
-		return txb.object(arg);
-	}
-
-	if ('digest' in arg && 'version' in arg && 'objectId' in arg) {
-		return txb.objectRef(arg);
-	}
-
-	if ('objectId' in arg && 'initialSharedVersion' in arg && 'mutable' in arg) {
-		return txb.sharedObjectRef(arg);
-	}
-
-	if ('kind' in arg) {
-		return arg;
-	}
-
-	throw new Error('Invalid argument type');
-}
 
 export class DeepBookClient {
 	#poolTypeArgsCache: Map<string, string[]> = new Map();
@@ -221,7 +191,7 @@ export class DeepBookClient {
 
 		const [coin] = quantity ? txb.splitCoins(inputCoin, [quantity]) : [inputCoin];
 
-		const coinType = coinId ? await this.#getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
+		const coinType = coinId ? await this.getCoinType(coinId) : NORMALIZED_SUI_COIN_TYPE;
 		if (coinType !== baseAsset && coinType !== quoteAsset) {
 			throw new Error(
 				`coin ${coinId} of ${coinType} type is not a valid asset for pool ${poolId}, which supports ${baseAsset} and ${quoteAsset}`,
@@ -321,12 +291,12 @@ export class DeepBookClient {
 	 * @param txb
 	 */
 	async placeMarketOrder(
-		accountCap: string | Extract<TransactionArgument, { kind: 'NestedResult' }>,
+		accountCap: string | Extract<TransactionArgument, { $kind: 'NestedResult' }>,
 		poolId: string,
 		quantity: bigint,
 		orderType: 'bid' | 'ask',
-		baseCoin: TransactionResult | TransactionObjectArgument | string | undefined = undefined,
-		quoteCoin: TransactionResult | TransactionObjectArgument | string | undefined = undefined,
+		baseCoin: TransactionResult | string | undefined = undefined,
+		quoteCoin: TransactionResult | string | undefined = undefined,
 		clientOrderId: string | undefined = undefined,
 		recipientAddress: string | undefined = this.currentAddress,
 		txb: TransactionBlock = new TransactionBlock(),
@@ -352,8 +322,8 @@ export class DeepBookClient {
 				txb.pure.u64(clientOrderId ?? this.#nextClientOrderId()),
 				txb.pure.u64(quantity),
 				txb.pure.bool(orderType === 'bid'),
-				baseCoin ? objArg(txb, baseCoin) : emptyCoin,
-				quoteCoin ? objArg(txb, quoteCoin) : emptyCoin,
+				baseCoin ? txb.object(baseCoin) : emptyCoin,
+				quoteCoin ? txb.object(quoteCoin) : emptyCoin,
 				txb.object(SUI_CLOCK_OBJECT_ID),
 			],
 		});
@@ -376,7 +346,7 @@ export class DeepBookClient {
 	 */
 	async swapExactQuoteForBase(
 		poolId: string,
-		tokenObjectIn: TransactionResult | TransactionObjectArgument | string,
+		tokenObjectIn: TransactionObjectInput,
 		amountIn: bigint, // quantity of USDC
 		currentAddress: string,
 		clientOrderId?: string,
@@ -392,7 +362,7 @@ export class DeepBookClient {
 				txb.object(this.#checkAccountCap()),
 				txb.pure.u64(String(amountIn)),
 				txb.object(SUI_CLOCK_OBJECT_ID),
-				objArg(txb, tokenObjectIn),
+				txb.object(tokenObjectIn),
 			],
 		});
 		txb.transferObjects([base_coin_ret], currentAddress);
@@ -602,7 +572,7 @@ export class DeepBookClient {
 			return undefined;
 		}
 
-		return bcs.de('Order', Uint8Array.from(results![0].returnValues![0][0]));
+		return BcsOrder.parse(Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**
@@ -627,7 +597,7 @@ export class DeepBookClient {
 				transactionBlock: txb,
 				sender: this.currentAddress,
 			})
-		).results![0].returnValues!.map(([bytes, _]) => BigInt(bcs.de('u64', Uint8Array.from(bytes))));
+		).results![0].returnValues!.map(([bytes, _]) => BigInt(bcs.U64.parse(Uint8Array.from(bytes))));
 		return {
 			availableBaseAmount,
 			lockedBaseAmount,
@@ -665,7 +635,7 @@ export class DeepBookClient {
 			return [];
 		}
 
-		return bcs.de('vector<Order>', Uint8Array.from(results![0].returnValues![0][0]));
+		return bcs.vector(BcsOrder).parse(Uint8Array.from(results![0].returnValues![0][0]));
 	}
 
 	/**
@@ -685,8 +655,8 @@ export class DeepBookClient {
 				sender: this.currentAddress,
 			})
 		).results![0].returnValues!.map(([bytes, _]) => {
-			const opt = bcs.de('Option<u64>', Uint8Array.from(bytes));
-			return 'Some' in opt ? BigInt(opt.Some) : undefined;
+			const opt = bcs.option(bcs.U64).parse(Uint8Array.from(bytes));
+			return opt == null ? undefined : BigInt(opt);
 		});
 
 		return { bestBidPrice: resp[0], bestAskPrice: resp[1] };
@@ -697,35 +667,80 @@ export class DeepBookClient {
 	 * @param poolId the pool id, eg: 0xcaee8e1c046b58e55196105f1436a2337dcaa0c340a7a8c8baf65e4afb8823a4
 	 * @param lowerPrice lower price you want to query in the level2 book, eg: 18000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
 	 * @param higherPrice higher price you want to query in the level2 book, eg: 20000000000. The number must be an integer float scaled by `FLOAT_SCALING_FACTOR`.
-	 * @param side { 'bid' | 'ask' } bid or ask side
+	 * @param side { 'bid' | 'ask' | 'both' } bid or ask or both sides.
 	 */
 	async getLevel2BookStatus(
 		poolId: string,
 		lowerPrice: bigint,
 		higherPrice: bigint,
-		side: 'bid' | 'ask',
-	): Promise<Level2BookStatusPoint[]> {
+		side: 'bid' | 'ask' | 'both',
+	): Promise<Level2BookStatusPoint[] | Level2BookStatusPoint[][]> {
 		const txb = new TransactionBlock();
-		txb.moveCall({
-			typeArguments: await this.getPoolTypeArgs(poolId),
-			target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
-			arguments: [
-				txb.object(poolId),
-				txb.pure.u64(lowerPrice),
-				txb.pure.u64(higherPrice),
-				txb.object(SUI_CLOCK_OBJECT_ID),
-			],
+		if (side === 'both') {
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_bid_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_ask_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+		} else {
+			txb.moveCall({
+				typeArguments: await this.getPoolTypeArgs(poolId),
+				target: `${PACKAGE_ID}::${MODULE_CLOB}::get_level2_book_status_${side}_side`,
+				arguments: [
+					txb.object(poolId),
+					txb.pure.u64(lowerPrice),
+					txb.pure.u64(higherPrice),
+					txb.object(SUI_CLOCK_OBJECT_ID),
+				],
+			});
+		}
+
+		const results = await this.suiClient.devInspectTransactionBlock({
+			transactionBlock: txb,
+			sender: this.currentAddress,
 		});
 
-		const results = (
-			await this.suiClient.devInspectTransactionBlock({
-				transactionBlock: txb,
-				sender: this.currentAddress,
-			})
-		).results![0].returnValues!.map(([bytes, _]) =>
-			bcs.de('vector<u64>', Uint8Array.from(bytes)).map((s: string) => BigInt(s)),
-		);
-		return results[0].map((price: bigint, i: number) => ({ price, depth: results[1][i] }));
+		if (side === 'both') {
+			const bidSide = results.results![0].returnValues!.map(([bytes, _]) =>
+				bcs
+					.vector(bcs.U64)
+					.parse(Uint8Array.from(bytes))
+					.map((s: string) => BigInt(s)),
+			);
+			const askSide = results.results![1].returnValues!.map(([bytes, _]) =>
+				bcs
+					.vector(bcs.U64)
+					.parse(Uint8Array.from(bytes))
+					.map((s: string) => BigInt(s)),
+			);
+			return [
+				bidSide[0].map((price: bigint, i: number) => ({ price, depth: bidSide[1][i] })),
+				askSide[0].map((price: bigint, i: number) => ({ price, depth: askSide[1][i] })),
+			];
+		} else {
+			const result = results.results![0].returnValues!.map(([bytes, _]) =>
+				bcs
+					.vector(bcs.U64)
+					.parse(Uint8Array.from(bytes))
+					.map((s) => BigInt(s)),
+			);
+			return result[0].map((price: bigint, i: number) => ({ price, depth: result[1][i] }));
+		}
 	}
 
 	#checkAccountCap(accountCap: string | undefined = undefined): string {
@@ -743,7 +758,7 @@ export class DeepBookClient {
 		return normalizeSuiAddress(recipientAddress);
 	}
 
-	async #getCoinType(coinId: string) {
+	public async getCoinType(coinId: string) {
 		const resp = await this.suiClient.getObject({
 			id: coinId,
 			options: { showType: true },
@@ -752,11 +767,19 @@ export class DeepBookClient {
 		const parsed = resp.data?.type != null ? parseStructTag(resp.data.type) : null;
 
 		// Modification handle case like 0x2::coin::Coin<0xf398b9ecb31aed96c345538fb59ca5a1a2c247c5e60087411ead6c637129f1c4::fish::FISH>
-		return parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
+		if (
+			parsed?.address === NORMALIZED_SUI_COIN_TYPE.split('::')[0] &&
 			parsed.module === 'coin' &&
-			parsed.name === 'Coin'
-			? parsed.typeParams[0] + '::' + parsed.module + '::' + parsed.name
-			: null;
+			parsed.name === 'Coin' &&
+			parsed.typeParams.length > 0
+		) {
+			const firstTypeParam = parsed.typeParams[0];
+			return typeof firstTypeParam === 'object'
+				? firstTypeParam.address + '::' + firstTypeParam.module + '::' + firstTypeParam.name
+				: null;
+		} else {
+			return null;
+		}
 	}
 
 	#nextClientOrderId() {

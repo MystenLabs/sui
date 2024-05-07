@@ -3,9 +3,9 @@ title: Events
 description: Events are the main way to track actions on chain.
 ---
 
-Events are the main way to track actions on chain. The following example includes comments to document the logic of the code. The example extends the donut example used elsewhere in the documentation to include events that are emitted when someone purchases a donut and when the `DonutShop` collects coins from that sale. You could then set up subscriptions to listen for these events, then trigger logic when those events fire. To learn more about events, see [Using Events](/guides/developer/sui-101/using-events.mdx).
+Events are the main way to track actions on chain. The following example includes comments to document the logic of the code. The example extends the donut example used elsewhere in the documentation to include events that are emitted when someone purchases a donut and when the `DonutShop` collects coins from that sale. You could then set up subscriptions to listen for these events, then trigger logic when those events fire. 
 
-```rust
+```move
 /// Extended example of a shared object. Now with addition of events!
 module examples::donuts_with_events {
     use sui::transfer;
@@ -61,8 +61,8 @@ module examples::donuts_with_events {
 
     /// Buy a donut.
     public fun buy_donut(
-        shop: &mut DonutShop, 
-        payment: &mut Coin<SUI>, 
+        shop: &mut DonutShop,
+        payment: &mut Coin<SUI>,
         ctx: &mut TxContext,
     ): Donut {
         assert!(coin::value(payment) >= shop.price, ENotEnough);
@@ -87,8 +87,8 @@ module examples::donuts_with_events {
     /// Take coin from `DonutShop` and transfer it to tx sender.
     /// Requires authorization with `ShopOwnerCap`.
     public fun collect_profits(
-        _: &ShopOwnerCap, 
-        shop: &mut DonutShop, 
+        _: &ShopOwnerCap,
+        shop: &mut DonutShop,
         ctx: &mut TxContext,
     ): Coin<SUI> {
         let amount = balance::value(&shop.balance);
@@ -101,3 +101,7 @@ module examples::donuts_with_events {
     }
 }
 ```
+
+## Related links
+
+- [Using Events](/guides/developer/sui-101/using-events.mdx): A guide to leveraging Sui events in your smart contracts.

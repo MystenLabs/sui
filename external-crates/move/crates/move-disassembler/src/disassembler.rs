@@ -4,11 +4,10 @@
 
 use std::collections::HashMap;
 
-use anyhow::{bail, format_err, Error, Result};
+use anyhow::{bail, format_err, Result};
 use clap::Parser;
 use colored::*;
 use move_binary_format::{
-    binary_views::BinaryIndexedView,
     control_flow_graph::{ControlFlowGraph, VMControlFlowGraph},
     file_format::{
         Ability, AbilitySet, Bytecode, CodeUnit, Constant, FieldHandleIndex, FunctionDefinition,
@@ -16,12 +15,13 @@ use move_binary_format::{
         SignatureToken, StructDefinition, StructDefinitionIndex, StructFieldInformation,
         StructTypeParameter, TableIndex, TypeSignature, Visibility,
     },
+    CompiledModule,
 };
 use move_bytecode_source_map::{
     mapping::SourceMapping,
     source_map::{FunctionSourceMap, SourceName},
 };
-use move_compiler::compiled_unit::{CompiledUnit, NamedCompiledModule, NamedCompiledScript};
+use move_compiler::compiled_unit::CompiledUnit;
 use move_core_types::{identifier::IdentStr, language_storage::ModuleId};
 use move_coverage::coverage_map::{ExecCoverageMap, FunctionCoverage};
 use move_ir_types::location::Loc;
@@ -73,12 +73,7 @@ impl<'a> Disassembler<'a> {
     pub fn new(source_mapper: SourceMapping<'a>, options: DisassemblerOptions) -> Self {
         let mut module_names = HashMap::new();
         let mut module_aliases = HashMap::new();
-        module_names.extend(
-            source_mapper
-                .bytecode
-                .self_id()
-                .map(|id| (id.name().to_string(), 0)),
-        );
+        module_names.insert(source_mapper.bytecode.self_id().name().to_string(), 0);
         for h in source_mapper.bytecode.module_handles() {
             let id = source_mapper.bytecode.module_id_for_handle(h);
             let module_name = id.name().to_string();
@@ -101,11 +96,11 @@ impl<'a> Disassembler<'a> {
         }
     }
 
-    pub fn from_view(view: BinaryIndexedView<'a>, default_loc: Loc) -> Result<Self> {
+    pub fn from_module(module: &'a CompiledModule, default_loc: Loc) -> Result<Self> {
         let mut options = DisassemblerOptions::new();
         options.print_code = true;
         Ok(Self::new(
-            SourceMapping::new_from_view(view, default_loc)?,
+            SourceMapping::new_without_source_map(module, default_loc)?,
             options,
         ))
     }
@@ -113,16 +108,8 @@ impl<'a> Disassembler<'a> {
     pub fn from_unit(unit: &'a CompiledUnit) -> Self {
         let options = DisassemblerOptions::new();
         let source_map = unit.source_map().clone();
-        let index_view = match unit {
-            CompiledUnit::Module(NamedCompiledModule { module, .. }) => {
-                BinaryIndexedView::Module(module)
-            }
-            CompiledUnit::Script(NamedCompiledScript { script, .. }) => {
-                BinaryIndexedView::Script(script)
-            }
-        };
 
-        let source_mapping = SourceMapping::new(source_map, index_view);
+        let source_mapping = SourceMapping::new(source_map, &unit.module);
         Disassembler::new(source_mapping, options)
     }
 
@@ -186,57 +173,34 @@ impl<'a> Disassembler<'a> {
     }
 
     fn is_self_id(&self, mid: &ModuleId) -> bool {
-        self.source_mapper
-            .bytecode
-            .self_id()
-            .map(|id| &id == mid)
-            .unwrap_or(false)
+        &self.source_mapper.bytecode.self_id() == mid
     }
 
     fn get_function_def(
         &self,
         function_definition_index: FunctionDefinitionIndex,
     ) -> Result<&FunctionDefinition> {
-        if function_definition_index.0 as usize
-            >= self
-                .source_mapper
-                .bytecode
-                .function_defs()
-                .map_or(0, |f| f.len())
+        if function_definition_index.0 as usize >= self.source_mapper.bytecode.function_defs().len()
         {
             bail!("Invalid function definition index supplied when marking function")
         }
-        match self
+        Ok(self
             .source_mapper
             .bytecode
-            .function_def_at(function_definition_index)
-        {
-            Ok(definition) => Ok(definition),
-            Err(err) => Err(Error::new(err)),
-        }
+            .function_def_at(function_definition_index))
     }
 
     fn get_struct_def(
         &self,
         struct_definition_index: StructDefinitionIndex,
     ) -> Result<&StructDefinition> {
-        if struct_definition_index.0 as usize
-            >= self
-                .source_mapper
-                .bytecode
-                .struct_defs()
-                .map_or(0, |d| d.len())
-        {
+        if struct_definition_index.0 as usize >= self.source_mapper.bytecode.struct_defs().len() {
             bail!("Invalid struct definition index supplied when marking struct")
         }
-        match self
+        Ok(self
             .source_mapper
             .bytecode
-            .struct_def_at(struct_definition_index)
-        {
-            Ok(definition) => Ok(definition),
-            Err(err) => Err(Error::new(err)),
-        }
+            .struct_def_at(struct_definition_index))
     }
 
     //***************************************************************************
@@ -244,18 +208,14 @@ impl<'a> Disassembler<'a> {
     //***************************************************************************
 
     fn get_function_coverage(&self, function_name: &IdentStr) -> Option<&FunctionCoverage> {
-        self.source_mapper
-            .source_map
-            .module_name_opt
-            .as_ref()
-            .and_then(|module| {
-                self.coverage_map.as_ref().and_then(|coverage_map| {
-                    coverage_map
-                        .module_maps
-                        .get(module)
-                        .and_then(|module_map| module_map.get_function_coverage(function_name))
-                })
-            })
+        let module = &self.source_mapper.source_map.module_name;
+
+        self.coverage_map.as_ref().and_then(|coverage_map| {
+            coverage_map
+                .module_maps
+                .get(module)
+                .and_then(|module_map| module_map.get_function_coverage(function_name))
+        })
     }
 
     fn is_function_called(&self, function_name: &IdentStr) -> bool {
@@ -296,11 +256,11 @@ impl<'a> Disassembler<'a> {
     //***************************************************************************
 
     fn name_for_field(&self, field_idx: FieldHandleIndex) -> Result<String> {
-        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx)?;
+        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx);
         let struct_def = self
             .source_mapper
             .bytecode
-            .struct_def_at(field_handle.owner)?;
+            .struct_def_at(field_handle.owner);
         let field_def = match &struct_def.field_information {
             StructFieldInformation::Native => {
                 return Err(format_err!("Attempt to access field on a native struct"));
@@ -327,11 +287,11 @@ impl<'a> Disassembler<'a> {
     }
 
     fn type_for_field(&self, field_idx: FieldHandleIndex) -> Result<String> {
-        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx)?;
+        let field_handle = self.source_mapper.bytecode.field_handle_at(field_idx);
         let struct_def = self
             .source_mapper
             .bytecode
-            .struct_def_at(field_handle.owner)?;
+            .struct_def_at(field_handle.owner);
         let field_def = match &struct_def.field_information {
             StructFieldInformation::Native => {
                 return Err(format_err!("Attempt to access field on a native struct"));
@@ -499,7 +459,8 @@ impl<'a> Disassembler<'a> {
                         .name,
                 )
                 .to_string(),
-            SignatureToken::StructInstantiation(struct_handle_idx, instantiation) => {
+            SignatureToken::StructInstantiation(struct_inst) => {
+                let (struct_handle_idx, instantiation) = *struct_inst;
                 let instantiation = instantiation
                     .into_iter()
                     .map(|tok| self.disassemble_sig_tok(tok, type_param_context))
@@ -624,7 +585,7 @@ impl<'a> Disassembler<'a> {
                 let field_inst = self
                     .source_mapper
                     .bytecode
-                    .field_instantiation_at(*field_idx)?;
+                    .field_instantiation_at(*field_idx);
                 let name = self.name_for_field(field_inst.handle)?;
                 let ty = self.type_for_field(field_inst.handle)?;
                 Ok(format!(
@@ -641,7 +602,7 @@ impl<'a> Disassembler<'a> {
                 let field_inst = self
                     .source_mapper
                     .bytecode
-                    .field_instantiation_at(*field_idx)?;
+                    .field_instantiation_at(*field_idx);
                 let name = self.name_for_field(field_inst.handle)?;
                 let ty = self.type_for_field(field_inst.handle)?;
                 Ok(format!(
@@ -661,7 +622,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -688,7 +649,7 @@ impl<'a> Disassembler<'a> {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -703,7 +664,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::Exists(struct_idx) => {
+            Bytecode::ExistsDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -711,11 +672,11 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("Exists[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::ExistsGeneric(struct_idx) => {
+            Bytecode::ExistsGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -730,7 +691,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MutBorrowGlobal(struct_idx) => {
+            Bytecode::MutBorrowGlobalDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -741,11 +702,11 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MutBorrowGlobalGeneric(struct_idx) => {
+            Bytecode::MutBorrowGlobalGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -760,7 +721,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::ImmBorrowGlobal(struct_idx) => {
+            Bytecode::ImmBorrowGlobalDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -771,11 +732,11 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::ImmBorrowGlobalGeneric(struct_idx) => {
+            Bytecode::ImmBorrowGlobalGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -790,7 +751,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MoveFrom(struct_idx) => {
+            Bytecode::MoveFromDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -798,11 +759,11 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("MoveFrom[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::MoveFromGeneric(struct_idx) => {
+            Bytecode::MoveFromGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -817,7 +778,7 @@ impl<'a> Disassembler<'a> {
                     struct_idx, name, ty_params
                 ))
             }
-            Bytecode::MoveTo(struct_idx) => {
+            Bytecode::MoveToDeprecated(struct_idx) => {
                 let (name, ty_params) = self.struct_type_info(
                     *struct_idx,
                     &Signature(vec![]),
@@ -825,11 +786,11 @@ impl<'a> Disassembler<'a> {
                 )?;
                 Ok(format!("MoveTo[{}]({}{})", struct_idx, name, ty_params))
             }
-            Bytecode::MoveToGeneric(struct_idx) => {
+            Bytecode::MoveToGenericDeprecated(struct_idx) => {
                 let struct_inst = self
                     .source_mapper
                     .bytecode
-                    .struct_instantiation_at(*struct_idx)?;
+                    .struct_instantiation_at(*struct_idx);
                 let type_params = self
                     .source_mapper
                     .bytecode
@@ -1277,13 +1238,10 @@ impl<'a> Disassembler<'a> {
     }
 
     pub fn disassemble(&self) -> Result<String> {
-        let name_opt = self.source_mapper.source_map.module_name_opt.as_ref();
-        let name = name_opt.map(|(addr, n)| format!("{}.{}", addr.short_str_lossless(), n));
+        let (addr, n) = &self.source_mapper.source_map.module_name;
+        let name = format!("{}.{}", addr.short_str_lossless(), n);
         let version = format!("{}", self.source_mapper.bytecode.version());
-        let header = match name {
-            Some(s) => format!("module {}", s),
-            None => "script".to_owned(),
-        };
+        let header = format!("module {name}");
 
         let imports = self
             .source_mapper
@@ -1292,11 +1250,7 @@ impl<'a> Disassembler<'a> {
             .iter()
             .filter_map(|h| self.get_import_string(h))
             .collect::<Vec<String>>();
-        let struct_defs: Vec<String> = (0..self
-            .source_mapper
-            .bytecode
-            .struct_defs()
-            .map_or(0, |d| d.len()))
+        let struct_defs: Vec<String> = (0..self.source_mapper.bytecode.struct_defs().len())
             .map(|i| self.disassemble_struct_def(StructDefinitionIndex(i as TableIndex)))
             .collect::<Result<Vec<String>>>()?;
 
@@ -1309,42 +1263,28 @@ impl<'a> Disassembler<'a> {
             .map(|(i, constant)| self.disassemble_constant(i, constant))
             .collect::<Result<Vec<String>>>()?;
 
-        let function_defs: Vec<String> = match self.source_mapper.bytecode {
-            BinaryIndexedView::Script(script) => {
-                vec![self.disassemble_function_def(
+        let function_defs: Vec<String> = (0..self.source_mapper.bytecode.function_defs.len())
+            .map(|i| {
+                let function_definition_index = FunctionDefinitionIndex(i as TableIndex);
+                let function_definition = self.get_function_def(function_definition_index)?;
+                let function_handle = self
+                    .source_mapper
+                    .bytecode
+                    .function_handle_at(function_definition.function);
+                self.disassemble_function_def(
                     self.source_mapper
                         .source_map
-                        .get_function_source_map(FunctionDefinitionIndex(0_u16))?,
-                    None,
-                    IdentStr::new("main")?,
-                    &script.type_parameters,
-                    script.parameters,
-                    Some(&script.code),
-                )?]
-            }
-            BinaryIndexedView::Module(module) => (0..module.function_defs.len())
-                .map(|i| {
-                    let function_definition_index = FunctionDefinitionIndex(i as TableIndex);
-                    let function_definition = self.get_function_def(function_definition_index)?;
-                    let function_handle = self
-                        .source_mapper
+                        .get_function_source_map(function_definition_index)?,
+                    Some((function_definition, function_handle)),
+                    self.source_mapper
                         .bytecode
-                        .function_handle_at(function_definition.function);
-                    self.disassemble_function_def(
-                        self.source_mapper
-                            .source_map
-                            .get_function_source_map(function_definition_index)?,
-                        Some((function_definition, function_handle)),
-                        self.source_mapper
-                            .bytecode
-                            .identifier_at(function_handle.name),
-                        &function_handle.type_parameters,
-                        function_handle.parameters,
-                        function_definition.code.as_ref(),
-                    )
-                })
-                .collect::<Result<Vec<String>>>()?,
-        };
+                        .identifier_at(function_handle.name),
+                    &function_handle.type_parameters,
+                    function_handle.parameters,
+                    function_definition.code.as_ref(),
+                )
+            })
+            .collect::<Result<Vec<String>>>()?;
         let imports_str = if imports.is_empty() {
             "".to_string()
         } else {

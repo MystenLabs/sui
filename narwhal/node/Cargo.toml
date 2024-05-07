@@ -44,7 +44,6 @@ telemetry-subscribers.workspace = true
 
 anemo.workspace = true
 reqwest.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true

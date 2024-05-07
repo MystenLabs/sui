@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::object_runtime::LocalProtocolConfig;
+use crate::object_runtime::{get_all_uids, LocalProtocolConfig};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{effects::Op, value::MoveTypeLayout, vm_status::StatusCode};
+use move_core_types::{
+    annotated_value as A, effects::Op, runtime_value as R, vm_status::StatusCode,
+};
 use move_vm_types::{
     loaded_data::runtime_types::Type,
     values::{GlobalValue, StructRef, Value},
@@ -23,7 +25,6 @@ use sui_types::{
     storage::ChildObjectResolver,
 };
 
-use super::get_all_uids;
 pub(super) struct ChildObject {
     pub(super) owner: ObjectID,
     pub(super) ty: Type,
@@ -78,13 +79,15 @@ pub(crate) enum ObjectResult<V> {
     Loaded(V),
 }
 
+type LoadedWithMetadataResult<V> = Option<(V, DynamicallyLoadedObjectMetadata)>;
+
 impl<'a> Inner<'a> {
     fn receive_object_from_store(
         &self,
         owner: ObjectID,
         child: ObjectID,
         version: SequenceNumber,
-    ) -> PartialVMResult<Option<(MoveObject, DynamicallyLoadedObjectMetadata)>> {
+    ) -> PartialVMResult<LoadedWithMetadataResult<MoveObject>> {
         let child_opt = self
             .resolver
             .get_object_received_at_version(&owner, &child, version, self.current_epoch_id)
@@ -125,7 +128,7 @@ impl<'a> Inner<'a> {
                     )),
                 );
             }
-            match object.data {
+            match object.into_inner().data {
                 Data::Package(_) => {
                     return Err(PartialVMError::new(StatusCode::STORAGE_ERROR).with_message(
                         format!(
@@ -240,8 +243,8 @@ impl<'a> Inner<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_ty_layout: &MoveTypeLayout,
-        child_ty_fully_annotated_layout: &MoveTypeLayout,
+        child_ty_layout: &R::MoveTypeLayout,
+        child_ty_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, GlobalValue)>> {
         let obj = match self.get_or_fetch_object_from_store(parent, child)? {
@@ -301,7 +304,7 @@ impl<'a> Inner<'a> {
 fn deserialize_move_object(
     obj: &MoveObject,
     child_ty: &Type,
-    child_ty_layout: &MoveTypeLayout,
+    child_ty_layout: &R::MoveTypeLayout,
     child_move_type: MoveObjectType,
 ) -> PartialVMResult<ObjectResult<(Type, MoveObjectType, Value)>> {
     let child_id = obj.id();
@@ -356,10 +359,10 @@ impl<'a> ChildObjectStore<'a> {
         child: ObjectID,
         child_version: SequenceNumber,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
-    ) -> PartialVMResult<Option<(ObjectResult<Value>, DynamicallyLoadedObjectMetadata)>> {
+    ) -> PartialVMResult<LoadedWithMetadataResult<ObjectResult<Value>>> {
         let Some((obj, obj_meta)) =
             self.inner
                 .receive_object_from_store(parent, child, child_version)?
@@ -426,8 +429,8 @@ impl<'a> ChildObjectStore<'a> {
         parent: ObjectID,
         child: ObjectID,
         child_ty: &Type,
-        child_layout: &MoveTypeLayout,
-        child_fully_annotated_layout: &MoveTypeLayout,
+        child_layout: &R::MoveTypeLayout,
+        child_fully_annotated_layout: &A::MoveTypeLayout,
         child_move_type: MoveObjectType,
     ) -> PartialVMResult<ObjectResult<&mut ChildObject>> {
         let store_entries_count = self.store.len() as u64;

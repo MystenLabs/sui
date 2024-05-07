@@ -19,6 +19,7 @@ use crate::{
     shared::CompilationEnv,
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 
 pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 
@@ -181,7 +182,7 @@ pub trait SimpleAbsIntConstructor: Sized {
                 (v, unassigned)
             })
             .collect::<BTreeMap<_, _>>();
-        for (param, _) in &context.signature.parameters {
+        for (_, param, _) in &context.signature.parameters {
             locals.insert(
                 *param,
                 LocalState::Available(
@@ -244,7 +245,7 @@ pub trait SimpleAbsInt: Sized {
         }
         let sp!(_, cmd_) = cmd;
         match cmd_ {
-            C::Assign(ls, e) => {
+            C::Assign(_, ls, e) => {
                 let values = self.exp(context, state, e);
                 self.lvalues(context, state, ls, values);
             }
@@ -253,13 +254,14 @@ pub trait SimpleAbsInt: Sized {
                 self.exp(context, state, el);
             }
             C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. }
             | C::IgnoreAndPop { exp: e, .. }
             | C::Return { exp: e, .. }
             | C::Abort(e) => {
                 self.exp(context, state, e);
             }
             C::Jump { .. } => (),
-            C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
     }
 
@@ -303,11 +305,17 @@ pub trait SimpleAbsInt: Sized {
         let sp!(loc, l_) = l;
         match l_ {
             L::Ignore => (),
-            L::Var(v, _) => {
+            L::Var { var: v, .. } => {
                 let locals = state.locals_mut();
                 locals.insert(*v, LocalState::Available(*loc, value));
             }
             L::Unpack(_, _, fields) => {
+                for (_, l) in fields {
+                    let v = <Self::State as SimpleDomain>::Value::default();
+                    self.lvalue(context, state, l, v)
+                }
+            }
+            L::UnpackVariant(_, _, _, _, _, fields) => {
                 for (_, l) in fields {
                     let v = <Self::State as SimpleDomain>::Value::default();
                     self.lvalue(context, state, l, v)
@@ -336,6 +344,7 @@ pub trait SimpleAbsInt: Sized {
     ) -> Option<Vec<<Self::State as SimpleDomain>::Value>> {
         None
     }
+    #[growing_stack]
     fn exp(
         &self,
         context: &mut Self::ExecutionContext,
@@ -401,7 +410,9 @@ pub trait SimpleAbsInt: Sized {
             }
 
             E::Unit { .. } => vec![],
-            E::Value(_) | E::Constant(_) | E::Spec(_, _) | E::UnresolvedError => default_values(1),
+            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => {
+                default_values(1)
+            }
 
             E::BinopExp(e1, _, e2) => {
                 self.exp(context, state, e1);
@@ -409,6 +420,12 @@ pub trait SimpleAbsInt: Sized {
                 default_values(1)
             }
             E::Pack(_, _, fields) => {
+                for (_, _, e) in fields {
+                    self.exp(context, state, e);
+                }
+                default_values(1)
+            }
+            E::PackVariant(_, _, _, fields) => {
                 for (_, _, e) in fields {
                     self.exp(context, state, e);
                 }

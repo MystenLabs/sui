@@ -90,7 +90,7 @@ fn jwk_ord(a: &ActiveJwk, b: &ActiveJwk) -> std::cmp::Ordering {
     }
 }
 
-#[allow(clippy::incorrect_partial_ord_impl_on_ord_type)]
+#[allow(clippy::non_canonical_partial_ord_impl)]
 impl std::cmp::PartialOrd for ActiveJwk {
     // This must match the sort order defined by jwk_lt in authenticator_state.move
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {

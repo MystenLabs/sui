@@ -2,16 +2,13 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    access::ModuleAccess,
-    file_format::{
-        AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, FieldDefinition,
-        FieldHandle, FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex,
-        FunctionDefinition, FunctionHandle, FunctionHandleIndex, FunctionInstantiation, LocalIndex,
-        SignatureIndex, SignatureToken, StructDefInstantiation, StructDefInstantiationIndex,
-        StructDefinition, StructDefinitionIndex, StructFieldInformation, StructTypeParameter,
-        TypeParameterIndex, Visibility,
-    },
+use crate::file_format::{
+    AbilitySet, Bytecode as FBytecode, CodeOffset, CompiledModule, FieldDefinition, FieldHandle,
+    FieldHandleIndex, FieldInstantiation, FieldInstantiationIndex, FunctionDefinition,
+    FunctionHandle, FunctionHandleIndex, FunctionInstantiation, LocalIndex, SignatureIndex,
+    SignatureToken, StructDefInstantiation, StructDefInstantiationIndex, StructDefinition,
+    StructDefinitionIndex, StructFieldInformation, StructTypeParameter, TypeParameterIndex,
+    Visibility,
 };
 use move_core_types::{
     account_address::AccountAddress,
@@ -161,10 +158,6 @@ pub enum Bytecode {
     MutBorrowFieldGeneric((FieldRef, Vec<Type>)),
     ImmBorrowField(FieldRef),
     ImmBorrowFieldGeneric((FieldRef, Vec<Type>)),
-    MutBorrowGlobal(Identifier),
-    MutBorrowGlobalGeneric((Identifier, Vec<Type>)),
-    ImmBorrowGlobal(Identifier),
-    ImmBorrowGlobalGeneric((Identifier, Vec<Type>)),
     Add,
     Sub,
     Mul,
@@ -184,12 +177,6 @@ pub enum Bytecode {
     Ge,
     Abort,
     Nop,
-    Exists(Identifier),
-    ExistsGeneric((Identifier, Vec<Type>)),
-    MoveFrom(Identifier),
-    MoveFromGeneric((Identifier, Vec<Type>)),
-    MoveTo(Identifier),
-    MoveToGeneric((Identifier, Vec<Type>)),
     Shl,
     Shr,
     VecPack(Type, u64),
@@ -206,6 +193,17 @@ pub enum Bytecode {
     CastU16,
     CastU32,
     CastU256,
+    // ******** DEPRECATED BYTECODES ********
+    MutBorrowGlobalDeprecated(Identifier),
+    MutBorrowGlobalGenericDeprecated((Identifier, Vec<Type>)),
+    ImmBorrowGlobalDeprecated(Identifier),
+    ImmBorrowGlobalGenericDeprecated((Identifier, Vec<Type>)),
+    ExistsDeprecated(Identifier),
+    ExistsGenericDeprecated((Identifier, Vec<Type>)),
+    MoveFromDeprecated(Identifier),
+    MoveFromGenericDeprecated((Identifier, Vec<Type>)),
+    MoveToDeprecated(Identifier),
+    MoveToGenericDeprecated((Identifier, Vec<Type>)),
 }
 
 impl Constant {
@@ -282,7 +280,8 @@ impl Type {
                     type_arguments: Vec::new(),
                 }
             }
-            StructInstantiation(shi, type_actuals) => {
+            StructInstantiation(struct_inst) => {
+                let (shi, type_actuals) = &**struct_inst;
                 let s_handle = m.struct_handle_at(*shi);
                 let m_handle = m.module_handle_at(s_handle.module);
                 Type::Struct {
@@ -590,13 +589,13 @@ impl Bytecode {
             FB::Branch(x) => B::Branch(*x),
             FB::LdU8(x) => B::LdU8(*x),
             FB::LdU64(x) => B::LdU64(*x),
-            FB::LdU128(x) => B::LdU128(*x),
+            FB::LdU128(x) => B::LdU128(**x),
             FB::CopyLoc(x) => B::CopyLoc(*x),
             FB::MoveLoc(x) => B::MoveLoc(*x),
             FB::StLoc(x) => B::StLoc(*x),
             FB::LdU16(x) => B::LdU16(*x),
             FB::LdU32(x) => B::LdU32(*x),
-            FB::LdU256(x) => B::LdU256(*x),
+            FB::LdU256(x) => B::LdU256(**x),
             FB::LdConst(const_idx) => B::LdConst(Constant::new(m, m.constant_at(*const_idx))),
             FB::Call(fh_idx) => B::Call(FunctionRef::from_idx(m, fh_idx)),
             FB::CallGeneric(fhi_idx) => {
@@ -624,20 +623,32 @@ impl Bytecode {
             FB::ImmBorrowFieldGeneric(fhi_idx) => {
                 B::ImmBorrowFieldGeneric(field_instantiation(m, fhi_idx))
             }
-            FB::MutBorrowGlobal(s_idx) => B::MutBorrowGlobal(m.struct_name(*s_idx).to_owned()),
-            FB::MutBorrowGlobalGeneric(si_idx) => {
-                B::MutBorrowGlobalGeneric(struct_instantiation(m, si_idx))
+            FB::MutBorrowGlobalDeprecated(s_idx) => {
+                B::MutBorrowGlobalDeprecated(m.struct_name(*s_idx).to_owned())
             }
-            FB::ImmBorrowGlobal(s_idx) => B::ImmBorrowGlobal(m.struct_name(*s_idx).to_owned()),
-            FB::ImmBorrowGlobalGeneric(si_idx) => {
-                B::ImmBorrowGlobalGeneric(struct_instantiation(m, si_idx))
+            FB::MutBorrowGlobalGenericDeprecated(si_idx) => {
+                B::MutBorrowGlobalGenericDeprecated(struct_instantiation(m, si_idx))
             }
-            FB::Exists(s_idx) => B::Exists(m.struct_name(*s_idx).to_owned()),
-            FB::ExistsGeneric(si_idx) => B::ExistsGeneric(struct_instantiation(m, si_idx)),
-            FB::MoveFrom(s_idx) => B::MoveFrom(m.struct_name(*s_idx).to_owned()),
-            FB::MoveFromGeneric(si_idx) => B::MoveFromGeneric(struct_instantiation(m, si_idx)),
-            FB::MoveTo(s_idx) => B::MoveTo(m.struct_name(*s_idx).to_owned()),
-            FB::MoveToGeneric(si_idx) => B::MoveToGeneric(struct_instantiation(m, si_idx)),
+            FB::ImmBorrowGlobalDeprecated(s_idx) => {
+                B::ImmBorrowGlobalDeprecated(m.struct_name(*s_idx).to_owned())
+            }
+            FB::ImmBorrowGlobalGenericDeprecated(si_idx) => {
+                B::ImmBorrowGlobalGenericDeprecated(struct_instantiation(m, si_idx))
+            }
+            FB::ExistsDeprecated(s_idx) => B::ExistsDeprecated(m.struct_name(*s_idx).to_owned()),
+            FB::ExistsGenericDeprecated(si_idx) => {
+                B::ExistsGenericDeprecated(struct_instantiation(m, si_idx))
+            }
+            FB::MoveFromDeprecated(s_idx) => {
+                B::MoveFromDeprecated(m.struct_name(*s_idx).to_owned())
+            }
+            FB::MoveFromGenericDeprecated(si_idx) => {
+                B::MoveFromGenericDeprecated(struct_instantiation(m, si_idx))
+            }
+            FB::MoveToDeprecated(s_idx) => B::MoveToDeprecated(m.struct_name(*s_idx).to_owned()),
+            FB::MoveToGenericDeprecated(si_idx) => {
+                B::MoveToGenericDeprecated(struct_instantiation(m, si_idx))
+            }
             FB::VecPack(sig_idx, len) => B::VecPack(signature_to_single_type(m, sig_idx), *len),
             FB::VecLen(sig_idx) => B::VecLen(signature_to_single_type(m, sig_idx)),
             FB::VecImmBorrow(sig_idx) => B::VecImmBorrow(signature_to_single_type(m, sig_idx)),

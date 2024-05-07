@@ -5,34 +5,31 @@ description: Sui provides command line tools to interact with the network, its f
 
 Sui provides a command line interface (CLI) tool to interact with the Sui network, its features, and the Move programming language. The complete suite of tools is called the Sui CLI, with commands grouped together by feature. Each group of commands is commonly referred to by its top-level command: Sui Client CLI, Sui Console CLI, Sui Keytool CLI, Sui Move CLI, and Sui Validator CLI.
 
-## Check installation
-
-Before you can use the Sui CLI, you must install it. To check if the CLI exists on your system, open a terminal or console and type the following line.
-
-```shell
-sui --version
-```
-
-If the terminal or console responds with a version number, you already have the Sui CLI installed. 
-
-If the command is not found, follow the instructions in [Install Sui](/guides/developer/getting-started/sui-install.mdx) to get the CLI on your system.
+{@include: ../snippets/cli-check-install.mdx}
 
 ## Update CLI
 
-To get the latest version of the CLI, you can run the following command from a terminal or console. Be sure to replace `<BRANCH-NAME>` with `main`, `devnet`, `testnet`, or `mainnet` to get the desired version. For more information on the branches available, see [Sui Environment Setup](/guides/developer/getting-started/sui-environment.mdx).
+To get the latest version of the CLI, you can run the following command from a terminal or console. Be sure to replace `<BRANCH-NAME>` with `main`, `devnet`, `testnet`, or `mainnet` to get the desired version. For more information on the branches available, see [Sui Environment Setup](./contribute/sui-environment.mdx).
 
 ```shell
-cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> sui
+cargo install --locked --git https://github.com/MystenLabs/sui.git --branch <BRANCH-NAME> --features gas-profiler sui
 ```
+
+:::info
+
+The `--features gas-profiler` flag is necessary only if you want to run gas profiles for transactions.
+
+:::
 
 ## Sui CLI commands
 
 There are a number of top-level commands available, but the five most useful to users are the following. Use the `help` flag for the commands that are not documented yet. For example, `sui validator --help`.  
 
 - **[Sui Client CLI](./cli/client.mdx):** Use the `sui client` commands to interact with the Sui network.
-- **Sui Console CLI:** Use `sui console` to open an interactive console with the currently active network.
+- **[Sui Client PTB CLI](./cli/ptb.mdx):** Use the `sui client ptb` command to build and execute PTBs.
+- **[Sui Console CLI](./cli/console.mdx):** Use `sui console` to open an interactive console with the currently active network.
 - **[Sui Keytool CLI](./cli/keytool.mdx):** Use the `sui keytool` commands to access cryptography utilities.
 - **[Sui Move CLI](./cli/move.mdx):** Use the `sui move` commands to work with the Move programming language.
-- **Sui Validator CLI:** Use the `sui validator` commands to access tools useful for Sui validators.
+- **[Sui Validator CLI](./cli/validator.mdx):** Use the `sui validator` commands to access tools useful for Sui validators.
 
 

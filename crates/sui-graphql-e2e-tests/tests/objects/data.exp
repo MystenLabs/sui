@@ -1,0 +1,295 @@
+processed 5 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 6-39:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 7622800,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'programmable'. lines 41-43:
+created: object(2,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 2910800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 3 'create-checkpoint'. lines 45-45:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 47-68:
+Response: {
+  "data": {
+    "transactionBlocks": {
+      "nodes": [
+        {
+          "effects": {
+            "objectChanges": {
+              "nodes": [
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0xaef59984a07b16ff2694e824b18b7a8de87bbe134a923d3e570610de15b53557::m::Foo"
+                        },
+                        "data": {
+                          "Struct": [
+                            {
+                              "name": "id",
+                              "value": {
+                                "UID": [
+                                  65,
+                                  168,
+                                  32,
+                                  168,
+                                  138,
+                                  108,
+                                  123,
+                                  33,
+                                  206,
+                                  131,
+                                  105,
+                                  251,
+                                  3,
+                                  65,
+                                  67,
+                                  216,
+                                  222,
+                                  82,
+                                  103,
+                                  234,
+                                  40,
+                                  243,
+                                  99,
+                                  73,
+                                  36,
+                                  245,
+                                  18,
+                                  240,
+                                  177,
+                                  47,
+                                  70,
+                                  202
+                                ]
+                              }
+                            },
+                            {
+                              "name": "f0",
+                              "value": {
+                                "ID": [
+                                  65,
+                                  168,
+                                  32,
+                                  168,
+                                  138,
+                                  108,
+                                  123,
+                                  33,
+                                  206,
+                                  131,
+                                  105,
+                                  251,
+                                  3,
+                                  65,
+                                  67,
+                                  216,
+                                  222,
+                                  82,
+                                  103,
+                                  234,
+                                  40,
+                                  243,
+                                  99,
+                                  73,
+                                  36,
+                                  245,
+                                  18,
+                                  240,
+                                  177,
+                                  47,
+                                  70,
+                                  202
+                                ]
+                              }
+                            },
+                            {
+                              "name": "f1",
+                              "value": {
+                                "Bool": true
+                              }
+                            },
+                            {
+                              "name": "f2",
+                              "value": {
+                                "Number": "42"
+                              }
+                            },
+                            {
+                              "name": "f3",
+                              "value": {
+                                "Number": "43"
+                              }
+                            },
+                            {
+                              "name": "f4",
+                              "value": {
+                                "String": "hello"
+                              }
+                            },
+                            {
+                              "name": "f5",
+                              "value": {
+                                "String": "world"
+                              }
+                            },
+                            {
+                              "name": "f6",
+                              "value": {
+                                "Vector": [
+                                  {
+                                    "Address": [
+                                      65,
+                                      168,
+                                      32,
+                                      168,
+                                      138,
+                                      108,
+                                      123,
+                                      33,
+                                      206,
+                                      131,
+                                      105,
+                                      251,
+                                      3,
+                                      65,
+                                      67,
+                                      216,
+                                      222,
+                                      82,
+                                      103,
+                                      234,
+                                      40,
+                                      243,
+                                      99,
+                                      73,
+                                      36,
+                                      245,
+                                      18,
+                                      240,
+                                      177,
+                                      47,
+                                      70,
+                                      202
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "name": "f7",
+                              "value": {
+                                "Option": {
+                                  "Number": "44"
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        "json": {
+                          "id": "0x41a820a88a6c7b21ce8369fb034143d8de5267ea28f3634924f512f0b12f46ca",
+                          "f0": "0x41a820a88a6c7b21ce8369fb034143d8de5267ea28f3634924f512f0b12f46ca",
+                          "f1": true,
+                          "f2": 42,
+                          "f3": "43",
+                          "f4": "hello",
+                          "f5": "world",
+                          "f6": [
+                            "0x41a820a88a6c7b21ce8369fb034143d8de5267ea28f3634924f512f0b12f46ca"
+                          ],
+                          "f7": 44
+                        }
+                      }
+                    }
+                  }
+                },
+                {
+                  "outputState": {
+                    "asMoveObject": {
+                      "contents": {
+                        "type": {
+                          "repr": "0x0000000000000000000000000000000000000000000000000000000000000002::coin::Coin<0x0000000000000000000000000000000000000000000000000000000000000002::sui::SUI>"
+                        },
+                        "data": {
+                          "Struct": [
+                            {
+                              "name": "id",
+                              "value": {
+                                "UID": [
+                                  110,
+                                  174,
+                                  78,
+                                  111,
+                                  14,
+                                  167,
+                                  227,
+                                  43,
+                                  198,
+                                  67,
+                                  157,
+                                  6,
+                                  219,
+                                  111,
+                                  8,
+                                  99,
+                                  29,
+                                  163,
+                                  171,
+                                  187,
+                                  68,
+                                  120,
+                                  119,
+                                  211,
+                                  18,
+                                  201,
+                                  19,
+                                  80,
+                                  156,
+                                  136,
+                                  216,
+                                  15
+                                ]
+                              }
+                            },
+                            {
+                              "name": "balance",
+                              "value": {
+                                "Struct": [
+                                  {
+                                    "name": "value",
+                                    "value": {
+                                      "Number": "299999988444520"
+                                    }
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        "json": {
+                          "id": "0x6eae4e6f0ea7e32bc6439d06db6f08631da3abbb447877d312c913509c88d80f",
+                          "balance": {
+                            "value": "299999988444520"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

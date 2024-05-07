@@ -7,7 +7,6 @@ publish = false
 edition = "2021"
 
 [dependencies]
-workspace-hack.workspace = true
 
 [dev-dependencies]
 move-package.workspace = true
@@ -21,6 +20,7 @@ sui-macros.workspace = true
 sui-simulator.workspace = true
 sui-json.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true

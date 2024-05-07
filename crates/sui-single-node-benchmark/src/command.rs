@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 use strum_macros::EnumIter;
 
 #[derive(Parser)]
@@ -27,11 +28,15 @@ pub struct Command {
     pub checkpoint_size: usize,
     #[arg(
         long,
-        default_value_t = 2,
-        help = "Number of address owned input objects per transaction.\
-            This represents the amount of DB reads per transaction prior to execution."
+        help = "Whether to print out a sample transaction and effects that is going to be benchmarked on"
     )]
-    pub num_input_objects: u8,
+    pub print_sample_tx: bool,
+    #[arg(
+        long,
+        default_value_t = false,
+        help = "If true, skip signing on the validators, instead, creating certificates directly using validator secrets"
+    )]
+    pub skip_signing: bool,
     #[arg(
         long,
         default_value = "baseline",
@@ -66,10 +71,22 @@ pub enum Component {
     CheckpointExecutor,
 }
 
-#[derive(Subcommand, Clone, Copy)]
+#[derive(Subcommand, Clone)]
 pub enum WorkloadKind {
-    NoMove,
-    Move {
+    PTB {
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "Number of address owned input objects per transaction.\
+                This represents the amount of DB reads per transaction prior to execution."
+        )]
+        num_transfers: u64,
+        #[arg(
+            long,
+            default_value_t = false,
+            help = "When transferring an object, whether to use native TransferObjecet command, or to use Move code for the transfer"
+        )]
+        use_native_transfer: bool,
         #[arg(
             long,
             default_value_t = 0,
@@ -85,5 +102,56 @@ pub enum WorkloadKind {
             specified by this parameter * 100."
         )]
         computation: u8,
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "Whether to use shared objects in the transaction.\
+            If 0, no shared objects will be used.\
+            Otherwise `v` shared objects will be created and each transaction will use these `v` shared objects."
+        )]
+        num_shared_objects: usize,
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "How many NFTs to mint/transfer during the transaction.\
+            If 0, no NFTs will be minted.\
+            Otherwise `v` NFTs with the specified size will be created and transferred to the sender"
+        )]
+        num_mints: u16,
+        #[arg(
+            long,
+            default_value_t = 32,
+            help = "Size of the Move contents of the NFT to be minted, in bytes.\
+            Defaults to 32 bytes (i.e., NFT with ID only)."
+        )]
+        nft_size: u16,
+        #[arg(
+            long,
+            help = "If true, call a single batch_mint Move function.\
+            Otherwise, batch via a PTB with multiple commands"
+        )]
+        use_batch_mint: bool,
     },
+    Publish {
+        #[arg(
+            long,
+            help = "Path to the manifest file that describe the package dependencies.\
+            Follow examples in the tests directory to see how to set up the manifest file.\
+            The manifest file is a json file that contains a list of dependent packages that need to\
+            be published first, as well as the root package that will be benchmarked on. Each package\
+            can be either in source code or bytecode form. If it is in source code form, the benchmark\
+            will compile the package first before publishing it."
+        )]
+        manifest_file: PathBuf,
+    },
+}
+
+impl WorkloadKind {
+    pub(crate) fn gas_object_num_per_account(&self) -> u64 {
+        match self {
+            // Each transaction will always have 1 gas object, plus the number of owned objects that will be transferred.
+            WorkloadKind::PTB { num_transfers, .. } => *num_transfers + 1,
+            WorkloadKind::Publish { .. } => 1,
+        }
+    }
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use self::effects_v2::TransactionEffectsV2;
-use crate::base_types::{random_object_ref, ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
+use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
 use crate::committee::EpochId;
 use crate::crypto::{
     default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
@@ -20,19 +20,21 @@ use crate::message_envelope::{
 };
 use crate::object::Owner;
 use crate::storage::WriteKind;
-use crate::transaction::{SenderSignedData, TransactionDataAPI, VersionedProtocolMessage};
+use crate::transaction::VersionedProtocolMessage;
 use effects_v1::TransactionEffectsV1;
 pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
-pub use object_change::{EffectsObjectChange, IDOperation, ObjectIn, ObjectOut};
+pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
+pub use test_effects_builder::TestEffectsBuilder;
 
 mod effects_v1;
 mod effects_v2;
 mod object_change;
+mod test_effects_builder;
 
 // Since `std::mem::size_of` may not be stable across platforms, we use rough constants
 // We need these for estimating effects sizes
@@ -104,9 +106,10 @@ impl Message for TransactionEffects {
 
 impl UnauthenticatedMessage for TransactionEffects {}
 
+// TODO: Get rid of this and use TestEffectsBuilder instead.
 impl Default for TransactionEffects {
     fn default() -> Self {
-        TransactionEffects::V1(Default::default())
+        TransactionEffects::V2(Default::default())
     }
 }
 
@@ -304,29 +307,6 @@ impl TransactionEffects {
     }
 }
 
-// testing helpers.
-impl TransactionEffects {
-    pub fn new_with_tx(tx: &SenderSignedData) -> TransactionEffects {
-        Self::new_with_tx_and_gas(
-            tx,
-            (
-                random_object_ref(),
-                Owner::AddressOwner(tx.transaction_data().sender()),
-            ),
-        )
-    }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        // TODO: Figure out who is calling this and why.
-        // This creates an inconsistent effects where gas object is not mutated.
-        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_gas(tx, gas_object))
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        TransactionEffects::V2(TransactionEffectsV2::new_with_tx_and_status(tx, status))
-    }
-}
-
 #[derive(Eq, PartialEq, Clone, Debug)]
 pub enum InputSharedObject {
     Mutate(ObjectRef),
@@ -359,6 +339,9 @@ pub trait TransactionEffectsAPI {
     fn executed_epoch(&self) -> EpochId;
     fn modified_at_versions(&self) -> Vec<(ObjectID, SequenceNumber)>;
 
+    /// The version assigned to all output objects (apart from packages).
+    fn lamport_version(&self) -> SequenceNumber;
+
     /// Metadata of objects prior to modification. This includes any object that exists in the
     /// store prior to this transaction and is modified in this transaction.
     /// It includes objects that are mutated, wrapped and deleted.
@@ -376,6 +359,8 @@ pub trait TransactionEffectsAPI {
     fn deleted(&self) -> Vec<ObjectRef>;
     fn unwrapped_then_deleted(&self) -> Vec<ObjectRef>;
     fn wrapped(&self) -> Vec<ObjectRef>;
+
+    fn object_changes(&self) -> Vec<ObjectChange>;
 
     // TODO: We should consider having this function to return Option.
     // When the gas object is not available (i.e. system transaction), we currently return
@@ -414,6 +399,23 @@ pub trait TransactionEffectsAPI {
 
     // Adding a tombstone for a deleted object.
     fn unsafe_add_object_tombstone_for_testing(&mut self, obj_ref: ObjectRef);
+}
+
+#[derive(Clone)]
+pub struct ObjectChange {
+    pub id: ObjectID,
+    pub input_version: Option<SequenceNumber>,
+    pub input_digest: Option<ObjectDigest>,
+    pub output_version: Option<SequenceNumber>,
+    pub output_digest: Option<ObjectDigest>,
+    pub id_operation: IDOperation,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+pub enum IDOperation {
+    None,
+    Created,
+    Deleted,
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Default)]

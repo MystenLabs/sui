@@ -33,21 +33,17 @@
 /// charging extensive (and potentially slowing) usage.
 ///
 module defi::dev_pass {
-    use sui::tx_context::{TxContext};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-
     /// For when Subscription object no longer has uses.
     const ENoUses: u64 = 0;
 
     /// Owned object from which SingleUses are spawn.
-    struct Subscription<phantom T> has key {
+    public struct Subscription<phantom T> has key {
         id: UID,
         uses: u64
     }
 
     /// A single use potato to authorize actions.
-    struct SingleUse<phantom T> {}
+    public struct SingleUse<phantom T> {}
 
     // ======== Default Functions ========
 
@@ -107,10 +103,9 @@ module defi::dev_pass {
 /// show correlation with the `defi/pool.move` example.
 module defi::some_amm {
     use defi::dev_pass::{Self, Subscription, SingleUse};
-    use sui::tx_context::{Self, TxContext};
 
     /// A type to Mark subscription
-    struct DEVPASS has drop {}
+    public struct DEVPASS has drop {}
     /* Can be customized to: DEVPASS<phantom T, phantom S> to make one subscription per pool */
     /* And the price could be determined based on amount LP tokens issued or trade volume */
 
@@ -150,7 +145,7 @@ module defi::smart_swapper {
     use defi::dev_pass::{Self, Subscription};
 
     // just some types to use as generics for pools
-    struct ETH {} struct BTC {} struct KTS {}
+    public struct ETH {} public struct BTC {} public struct KTS {}
 
     /// Some function that allows cross-pool operations with some additional
     /// logic. The most important part here is the use of subscription to "pay"

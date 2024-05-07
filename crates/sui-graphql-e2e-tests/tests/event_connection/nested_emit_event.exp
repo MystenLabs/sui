@@ -1,0 +1,110 @@
+processed 9 tasks
+
+init:
+A: object(0,0)
+
+task 1 'publish'. lines 10-37:
+created: object(1,0)
+mutated: object(0,1)
+gas summary: computation_cost: 1000000, storage_cost: 6095200,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 2 'run'. lines 39-39:
+events: Event { package_id: Test, transaction_module: Identifier("M3"), sender: A, type_: StructTag { address: Test, module: Identifier("M1"), name: Identifier("EventA"), type_params: [] }, contents: [2, 0, 0, 0, 0, 0, 0, 0] }
+mutated: object(0,0)
+gas summary: computation_cost: 1000000, storage_cost: 988000,  storage_rebate: 0, non_refundable_storage_fee: 0
+
+task 3 'create-checkpoint'. lines 41-41:
+Checkpoint created: 1
+
+task 4 'run-graphql'. lines 43-60:
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M3"
+          },
+          "type": {
+            "repr": "0xd3c131398b1d9b1688bc94a0aa971e30ee3bd8ec225fb6f42a0fc3eb1f9bfef7::M1::EventA"
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 5 'run-graphql'. lines 62-79:
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M3"
+          },
+          "type": {
+            "repr": "0xd3c131398b1d9b1688bc94a0aa971e30ee3bd8ec225fb6f42a0fc3eb1f9bfef7::M1::EventA"
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}
+
+task 6 'run-graphql'. lines 81-98:
+Response: {
+  "data": {
+    "events": {
+      "nodes": []
+    }
+  }
+}
+
+task 7 'run-graphql'. lines 100-117:
+Response: {
+  "data": {
+    "events": {
+      "nodes": []
+    }
+  }
+}
+
+task 8 'run-graphql'. lines 119-136:
+Response: {
+  "data": {
+    "events": {
+      "nodes": [
+        {
+          "sendingModule": {
+            "name": "M3"
+          },
+          "type": {
+            "repr": "0xd3c131398b1d9b1688bc94a0aa971e30ee3bd8ec225fb6f42a0fc3eb1f9bfef7::M1::EventA"
+          },
+          "sender": {
+            "address": "0xfccc9a421bbb13c1a66a1aa98f0ad75029ede94857779c6915b44f94068b921e"
+          },
+          "json": {
+            "new_value": "2"
+          },
+          "bcs": "AgAAAAAAAAA="
+        }
+      ]
+    }
+  }
+}

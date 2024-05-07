@@ -1,14 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::authority::AuthorityMetrics;
-use crate::consensus_types::committee_api::CommitteeAPI;
-use crate::consensus_types::AuthorityIndex;
+use std::{collections::HashMap, sync::Arc};
+
 use arc_swap::ArcSwap;
 use narwhal_config::Stake;
-use std::collections::HashMap;
-use std::sync::Arc;
 use sui_types::base_types::AuthorityName;
 use tracing::debug;
+
+use crate::{
+    authority::AuthorityMetrics,
+    consensus_types::{committee_api::CommitteeAPI, AuthorityIndex},
+};
 
 /// Updates list of authorities that are deemed to have low reputation scores by consensus
 /// these may be lagging behind the network, byzantine, or not reliably participating for any reason.
@@ -80,23 +82,27 @@ pub(crate) fn update_low_scoring_authorities(
 #[cfg(test)]
 mod tests {
     #![allow(clippy::mutable_key_type)]
-    use crate::authority::AuthorityMetrics;
-    use crate::scoring_decision::update_low_scoring_authorities;
+    use std::{collections::HashMap, sync::Arc};
+
     use arc_swap::ArcSwap;
     use fastcrypto::traits::{InsecureDefault, KeyPair as _};
     use mysten_network::Multiaddr;
-    use narwhal_config::Committee;
-    use narwhal_config::CommitteeBuilder;
-    use narwhal_crypto::KeyPair;
-    use narwhal_crypto::NetworkPublicKey;
+    use narwhal_config::{Committee, CommitteeBuilder};
+    use narwhal_crypto::{KeyPair, NetworkPublicKey};
     use narwhal_types::ReputationScores;
     use prometheus::Registry;
-    use rand::rngs::{OsRng, StdRng};
-    use rand::SeedableRng;
-    use std::collections::HashMap;
-    use std::sync::Arc;
+    use rand::{
+        rngs::{OsRng, StdRng},
+        SeedableRng,
+    };
+
+    use crate::{
+        authority::AuthorityMetrics, consensus_types::AuthorityIndex,
+        scoring_decision::update_low_scoring_authorities,
+    };
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     pub fn test_update_low_scoring_authorities() {
         // GIVEN
         // Total stake is 8 for this committee and every authority has equal stake = 1
@@ -140,7 +146,7 @@ mod tests {
                 reputation_scores
                     .authorities_by_score_desc()
                     .into_iter()
-                    .map(|(id, score)| (id.0, score))
+                    .map(|(id, score)| (id.0 as AuthorityIndex, score))
                     .collect(),
             ),
             &metrics,
@@ -168,7 +174,7 @@ mod tests {
                 reputation_scores
                     .authorities_by_score_desc()
                     .into_iter()
-                    .map(|(id, score)| (id.0, score))
+                    .map(|(id, score)| (id.0 as AuthorityIndex, score))
                     .collect(),
             ),
             &metrics,

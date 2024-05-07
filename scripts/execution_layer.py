@@ -151,14 +151,11 @@ def do_cut(args):
         print("Cut failed", file=stderr)
         exit(result.returncode)
 
-    clean_up_cut(args.feature)
-    update_toml(args.feature)
+    update_toml(args.feature, Path() / "sui-execution" / "Cargo.toml")
     generate_impls(args.feature, impl_module)
 
     with open(Path() / "sui-execution" / "src" / "lib.rs", mode="w") as lib:
         generate_lib(lib)
-
-    run(["cargo", "hakari", "generate"])
 
 
 def do_generate_lib(args):
@@ -241,7 +238,6 @@ def do_rebase(args):
     if result.returncode != 0:
         print("Re-generation failed.", file=stderr)
         exit(result.returncode)
-    clean_up_cut(args.feature)
 
     print("Re-applying changes...", file=stderr)
     subprocess.run(
@@ -363,8 +359,9 @@ def cut_command(f):
         *["-p", "sui-move-natives-latest"],
         *["-p", "sui-verifier-latest"],
         *["-p", "move-bytecode-verifier"],
-        *["-p", "move-stdlib"],
+        *["-p", "move-stdlib-natives"],
         *["-p", "move-vm-runtime"],
+        *["-p", "bytecode-verifier-tests"],
     ]
 
 
@@ -383,16 +380,18 @@ def cut_directories(f):
         crates.extend(
             [
                 external / "move" / "crates" / "move-bytecode-verifier",
-                external / "move" / "crates" / "move-stdlib",
+                external / "move" / "crates" / "move-stdlib-natives",
                 external / "move" / "crates" / "move-vm-runtime",
+                external / "move" / "crates" / "bytecode-verifier-tests",
             ]
         )
     else:
         crates.extend(
             [
                 external / "move" / "move-execution" / f / "crates" / "move-bytecode-verifier",
-                external / "move" / "move-execution" / f / "crates" / "move-stdlib",
+                external / "move" / "move-execution" / f / "crates" / "move-stdlib-natives",
                 external / "move" / "move-execution" / f / "crates" / "move-vm-runtime",
+                external / "move" / "move-execution" / f / "crates" / "bytecode-verifier-tests",
             ]
         )
 
@@ -404,13 +403,6 @@ def impl(feature):
     return Path() / "sui-execution" / "src" / (feature.replace("-", "_") + ".rs")
 
 
-def clean_up_cut(feature):
-    """Remove some special-case files/directories from a given cut"""
-    move_exec = Path() / "external-crates" / "move" / "move-execution" / feature / "crates"
-    remove(move_exec / "move-stdlib" / "src" / "main.rs")
-    rmtree(move_exec / "move-stdlib" / "tests")
-
-
 def delete_cut_crates(feature):
     """Delete `feature`-specific crates."""
     if feature == "latest":
@@ -419,9 +411,8 @@ def delete_cut_crates(feature):
         rmtree(module)
 
 
-def update_toml(feature):
+def update_toml(feature, toml_path):
     """Add dependencies for 'feature' to sui-execution's manifest."""
-    toml_path = Path() / "sui-execution" / "Cargo.toml"
 
     # Read all the lines
     with open(toml_path) as toml:
@@ -489,8 +480,8 @@ def generate_lib(output_file: TextIO):
             executor = (
                 "{spc}{version} => Arc::new({cut}::Executor::new(\n"
                 "{spc}    protocol_config,\n"
-                "{spc}    paranoid_type_checks,\n"
                 "{spc}    silent,\n"
+                "{spc}    enable_profiler,\n"
                 "{spc})?),\n"
             )
             return "\n".join(
@@ -498,7 +489,7 @@ def generate_lib(output_file: TextIO):
                 for (version, feature, cut) in cuts
             )
         elif var == "VERIFIER_CUTS":
-            call = "Verifier::new(protocol_config, is_metered, metrics)"
+            call = "Verifier::new(config, metrics)"
             return "\n".join(
                 f"{spc}{feature or version} => Box::new({cut}::{call}),"
                 for (version, feature, cut) in cuts
@@ -605,7 +596,7 @@ def discover_cuts():
 
 
 if __name__ == "__main__":
-    for bin in ["git", "cargo", "cargo-hakari"]:
+    for bin in ["git", "cargo"]:
         if not which(bin):
             print(f"Please install '{bin}'", file=stderr)
 

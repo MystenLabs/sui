@@ -3,19 +3,12 @@
 
 /// The Capy module. Defines the Capy type and its functions.
 module capy::capy {
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID, ID};
     use std::string::{Self, String};
     use sui::url::{Self, Url};
-    use sui::transfer;
     use sui::event::emit;
     use sui::dynamic_object_field as dof;
 
-    use std::vector as vec;
-    use std::option::{Self, Option};
     use std::hash::sha3_256 as hash;
-
-    friend capy::capy_winter;
 
     /// Number of meaningful genes. Also marks the length
     /// of the hash used in the application: sha3_256.
@@ -36,10 +29,10 @@ module capy::capy {
 
     /// Internal representation of a Gene Sequence. Each Gene
     /// corresponds to an attribute. Max number of genes is `GENES`.
-    struct Genes has store, copy, drop { sequence: vector<u8> }
+    public struct Genes has store, copy, drop { sequence: vector<u8> }
 
     /// Defines a Capy attribute. Eg: `pattern: 'panda'`
-    struct Attribute has store, copy, drop {
+    public struct Attribute has store, copy, drop {
         name: String,
         value: String,
     }
@@ -48,21 +41,21 @@ module capy::capy {
     /// `selector` field corresponds to the u8 value of the gene in a sequence.
     ///
     /// See `breed` function for details on usage.
-    struct Value has store, drop, copy {
+    public struct Value has store, drop, copy {
         selector: u8,
         name: String
     }
 
     /// Holds the definitions for each gene. They are then assigned to
     /// Capys. Newborn will receive attributes available at the time.
-    struct GeneDefinition has store {
+    public struct GeneDefinition has store {
         name: String,
         values: vector<Value>
     }
 
     /// The Capy itself. Every Capy has its unique set of genes,
     /// as well as generation and parents. Ownable, tradeable.
-    struct Capy has key, store {
+    public struct Capy has key, store {
         id: UID,
         gen: u32,
         url: Url,
@@ -76,11 +69,11 @@ module capy::capy {
     /// Belongs to the creator of the game. Has store, which
     /// allows building something on top of it (ie shared object with
     /// multi-access policy for managers).
-    struct CapyManagerCap has key, store { id: UID }
+    public struct CapyManagerCap has key, store { id: UID }
 
     /// Every capybara is registered here. Acts as a source of randomness
     /// as well as the storage for the main information about the gamestate.
-    struct CapyRegistry has key {
+    public struct CapyRegistry has key {
         id: UID,
         capy_born: u64,
         capy_hash: vector<u8>,
@@ -92,17 +85,17 @@ module capy::capy {
 
     /// Event. When a new registry has been created.
     /// Marks the start of the game.
-    struct RegistryCreated has copy, drop { id: ID }
+    public struct RegistryCreated has copy, drop { id: ID }
 
     /// Event. Emitted when a new Gene definition was added.
     /// Helps announcing new features.
-    struct GeneDefinitionAdded has copy, drop {
+    public struct GeneDefinitionAdded has copy, drop {
         name: String,
         values: vector<Value>
     }
 
     /// Event. When new Capy is born.
-    struct CapyBorn has copy, drop {
+    public struct CapyBorn has copy, drop {
         id: ID,
         gen: u32,
         genes: Genes,
@@ -114,13 +107,13 @@ module capy::capy {
     }
 
     /// Event. Emitted when a new item is added to a capy.
-    struct ItemAdded<phantom T> has copy, drop {
+    public struct ItemAdded<phantom T> has copy, drop {
         capy_id: ID,
         item_id: ID
     }
 
     /// Event. Emitted when an item is taken off.
-    struct ItemRemoved<phantom T> has copy, drop {
+    public struct ItemRemoved<phantom T> has copy, drop {
         capy_id: ID,
         item_id: ID,
     }
@@ -148,7 +141,7 @@ module capy::capy {
             id,
             capy_hash,
             capy_born: 0,
-            genes: vec::empty()
+            genes: vector[],
         })
     }
 
@@ -178,17 +171,17 @@ module capy::capy {
         emit(GeneDefinitionAdded { name: *&name, values: *&values });
 
         // lastly add new gene definition to the registry
-        vec::push_back(&mut reg.genes, GeneDefinition { name, values });
+       reg.genes.push_back(GeneDefinition { name, values });
     }
 
     /// Batch-add new Capys with predefined gene sequences.
-    public fun batch(_: &CapyManagerCap, reg: &mut CapyRegistry, genes: vector<vector<u8>>, ctx: &mut TxContext): vector<Capy> {
-        let capys = vector[];
-        while (vec::length(&genes) > 0) {
-            let sequence = vec::pop_back(&mut genes);
+    public fun batch(_: &CapyManagerCap, reg: &mut CapyRegistry, mut genes: vector<vector<u8>>, ctx: &mut TxContext): vector<Capy> {
+        let mut capys = vector[];
+        while (genes.length() > 0) {
+            let sequence = genes.pop_back();
             let capy = create_capy(reg, sequence, vector[], ctx);
 
-            vec::push_back(&mut capys, capy)
+            capys.push_back(capy);
         };
 
         capys
@@ -197,7 +190,7 @@ module capy::capy {
     /// Creates an attribute with the given name and a value. Should only be used for
     /// events. Is currently a friend-only feature but will be put behind a capability
     /// authorization later.
-    public(friend) fun create_attribute(name: vector<u8>, value: vector<u8>): Attribute {
+    public(package) fun create_attribute(name: vector<u8>, value: vector<u8>): Attribute {
         Attribute {
             name: string::utf8(name),
             value: string::utf8(value)
@@ -206,7 +199,7 @@ module capy::capy {
 
     /// Create a Capy with a specified gene sequence.
     /// Also allows assigning custom attributes if an App is authorized to do it.
-    public(friend) fun create_capy(
+    public(package) fun create_capy(
         reg: &mut CapyRegistry, sequence: vector<u8>, custom_attributes: vector<Attribute>, ctx: &mut TxContext
     ): Capy {
         let id = object::new(ctx);
@@ -215,13 +208,13 @@ module capy::capy {
 
         reg.capy_born = reg.capy_born + 1;
 
-        vec::append(&mut reg.capy_hash, object::uid_to_bytes(&id));
+        reg.capy_hash.append(object::uid_to_bytes(&id));
         reg.capy_hash = hash(reg.capy_hash);
 
         let sender = tx_context::sender(ctx);
-        let attributes = get_attributes(&reg.genes, &genes);
+        let mut attributes = get_attributes(&reg.genes, &genes);
 
-        vec::append(&mut attributes, custom_attributes);
+        attributes.append(custom_attributes);
 
         emit(CapyBorn {
             id: object::uid_to_inner(&id),
@@ -290,7 +283,7 @@ module capy::capy {
         let id = object::new(ctx);
 
         // Update capy hash in the registry
-        vec::append(&mut reg.capy_hash, object::uid_to_bytes(&id));
+        reg.capy_hash.append(object::uid_to_bytes(&id));
 
         // compute genes
         reg.capy_hash = hash(reg.capy_hash);
@@ -332,17 +325,17 @@ module capy::capy {
 
     /// Get Capy attributes from the gene sequence.
     fun get_attributes(definitions: &vector<GeneDefinition>, genes: &Genes): vector<Attribute> {
-        let attributes = vec::empty();
-        let (i, len) = (0u64, vec::length(definitions));
+        let mut attributes = vector[];
+        let (mut i, len) = (0u64, definitions.length());
         while (i < len) {
-            let gene_def = vec::borrow(definitions, i);
-            let capy_gene = vec::borrow(&genes.sequence, i);
+            let gene_def = &definitions[i];
+            let capy_gene = &genes.sequence[i];
 
-            let (j, num_options) = (0u64, vec::length(&gene_def.values));
+            let (mut j, num_options) = (0u64, gene_def.values.length());
             while (j < num_options) {
-                let value = vec::borrow(&gene_def.values, j);
+                let value = &gene_def.values[j];
                 if (*capy_gene <= value.selector) {
-                    vec::push_back(&mut attributes, Attribute {
+                    attributes.push_back(Attribute {
                         name: *&gene_def.name,
                         value: *&value.name
                     });
@@ -360,30 +353,30 @@ module capy::capy {
     /// The `max` parameter affects how many genes should be changed (if there are no
     /// attributes yet for the)
     fun compute_genes(r0: &vector<u8>, g1: &Genes, g2: &Genes, max: u64): Genes {
-        let i = 0;
+        let mut i = 0;
 
         let s1 = &g1.sequence;
         let s2 = &g2.sequence;
-        let s3 = vec::empty();
+        let mut s3 = vector[];
 
         let r1 = derive(r0, 1); // for parent gene selection
         let r2 = derive(r0, 2); // chance of random mutation
         let r3 = derive(r0, 3); // value selector for random mutation
 
         while (i < max) {
-            let rng = *vec::borrow(&r1, i);
-            let gene = if (lor(rng, 127)) {
-                *vec::borrow(s1, i)
+            let rng = r1[i];
+            let mut gene = if (lor(rng, 127)) {
+                s1[i]
             } else {
-                *vec::borrow(s2, i)
+                s2[i]
             };
 
             // There's a tiny chance that a mutation will happen.
-            if (lor(*vec::borrow(&r2, i), MUTATION_CHANCE)) {
-                gene = *vec::borrow(&r3, i);
+            if (lor(r2[i], MUTATION_CHANCE)) {
+                gene = r3[i];
             };
 
-            vec::push_back(&mut s3, gene);
+            s3.push_back(gene);
             i = i + 1;
         };
 
@@ -399,8 +392,8 @@ module capy::capy {
     /// Derive something from the seed. Add a derivation path as u8, and
     /// hash the result.
     fun derive(r0: &vector<u8>, path: u8): vector<u8> {
-        let r1 = *r0;
-        vec::push_back(&mut r1, path);
+        let mut r1 = *r0;
+        r1.push_back(path);
         hash(r1)
     }
 
@@ -417,21 +410,21 @@ module capy::capy {
     ///    Value { selector: 127, name: String("red") },
     ///    Value { selector: 255, name: String("blue") },
     /// ]
-    fun raw_vec_to_values(definitions: vector<vector<u8>>): vector<Value> {
-        let result = vec::empty();
-        vec::reverse(&mut definitions);
-        while (vec::length(&definitions) > 0) {
+    fun raw_vec_to_values(mut definitions: vector<vector<u8>>): vector<Value> {
+        let mut result = vector[];
+        definitions.reverse();
+        while (definitions.length() > 0) {
             // [selector, name]
-            let value_def = vec::pop_back(&mut definitions);
+            let mut value_def = definitions.pop_back();
             // [eman, selector]
-            vec::reverse(&mut value_def);
-            let selector = vec::pop_back(&mut value_def);
-            let name = vec::empty();
-            while (vec::length(&value_def) > 0) {
-                vec::push_back(&mut name, vec::pop_back(&mut value_def));
+            value_def.reverse();
+            let selector = value_def.pop_back();
+            let mut name = vector[];
+            while (value_def.length() > 0) {
+                name.push_back(value_def.pop_back());
             };
 
-            vec::push_back(&mut result, Value {
+            result.push_back(Value {
                 selector,
                 name: string::utf8(name)
             });
@@ -442,52 +435,52 @@ module capy::capy {
 
     /// Construct an image URL for the capy.
     fun img_url(c: &UID): Url {
-        let capy_url = *&IMAGE_URL;
-        vec::append(&mut capy_url, sui::hex::encode(object::uid_to_bytes(c)));
-        vec::append(&mut capy_url, b"/svg");
+        let mut capy_url = IMAGE_URL;
+        capy_url.append(sui::hex::encode(object::uid_to_bytes(c)));
+        capy_url.append(b"/svg");
 
         url::new_unsafe_from_bytes(capy_url)
     }
 
     /// Construct a Url to the capy.art.
     fun link_url(c: &UID): Url {
-        let capy_url = *&MAIN_URL;
-        vec::append(&mut capy_url, sui::hex::encode(object::uid_to_bytes(c)));
+        let mut capy_url = MAIN_URL;
+        capy_url.append(sui::hex::encode(object::uid_to_bytes(c)));
         url::new_unsafe_from_bytes(capy_url)
     }
 
     #[test]
     fun test_raw_vec_to_values() {
-        let definitions: vector<vector<u8>> = vec::empty();
+        let mut definitions: vector<vector<u8>> = vector[];
 
         /* push [127, "red"] */ {
-            let def = vec::empty();
-            vec::push_back(&mut def, 127);
-            vec::append(&mut def, b"red");
-            vec::push_back(&mut definitions, def);
+            let mut def = vector[];
+            def.push_back(127);
+            def.append(b"red");
+            definitions.push_back(def);
         };
 
         /* push [255, "blue"] */ {
-            let def = vec::empty();
-            vec::push_back(&mut def, 255);
-            vec::append(&mut def, b"blue");
-            vec::push_back(&mut definitions, def);
+            let mut def = vector[];
+            def.push_back(255);
+            def.append(b"blue");
+            definitions.push_back(def);
         };
 
-        let values: vector<Value> = raw_vec_to_values(definitions);
+        let mut values: vector<Value> = raw_vec_to_values(definitions);
 
         /* expect [255, blue] */ {
-            let Value { selector, name } = vec::pop_back(&mut values);
+            let Value { selector, name } = values.pop_back();
             assert!(selector == 255, 0);
             assert!(string::bytes(&name) == &b"blue", 0);
         };
 
         /* expect [127, red] */ {
-            let Value { selector, name } = vec::pop_back(&mut values);
+            let Value { selector, name } = values.pop_back();
             assert!(selector == 127, 0);
             assert!(string::bytes(&name) == &b"red", 0);
         };
 
-        vec::destroy_empty(values);
+        values.destroy_empty();
     }
 }

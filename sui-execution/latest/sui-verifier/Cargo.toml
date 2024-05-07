@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
+move-bytecode-verifier-meter.workspace = true
 move-core-types.workspace = true
 move-vm-config.workspace = true
 move-abstract-stack.workspace = true
@@ -17,4 +18,4 @@ move-abstract-stack.workspace = true
 move-bytecode-verifier = { path = "../../../external-crates/move/crates/move-bytecode-verifier" }
 
 sui-types.workspace = true
-workspace-hack.workspace = true
+sui-protocol-config.workspace = true

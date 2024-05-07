@@ -5,35 +5,33 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
     use sui::dynamic_object_field as dof;
     use sui::dynamic_field as df;
 
     const KEY: u64 = 0;
     const BKEY: u64 = 1;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
         value: vector<u8>,
     }
 
-    struct Wrapper<T: key + store> has key, store {
-        id: UID, 
+    public struct Wrapper<T: key + store> has key, store {
+        id: UID,
         value: T,
     }
 
     public fun start(ctx: &mut TxContext) {
         let a_parent = A { id: object::new(ctx), value: b"a_parent" };
 
-        let b_parent = A { id: object::new(ctx), value: b"b_parent" };
-        let b_child = A { id: object::new(ctx), value: b"b_child" };
+        let mut b_parent = A { id: object::new(ctx), value: b"b_parent" };
+        let mut b_child = A { id: object::new(ctx), value: b"b_child" };
         let b_child_child = A { id: object::new(ctx), value: b"b_child_child" };
         let b_child_child_dof = A { id: object::new(ctx), value: b"b_child_child_dof" };
 
         let wrapped_df = A { id: object::new(ctx), value: b"wrapped_dof" };
-        let to_wrap = A { id: object::new(ctx), value: b"wrapped" };
+        let mut to_wrap = A { id: object::new(ctx), value: b"wrapped" };
         df::add(&mut to_wrap.id, KEY, wrapped_df);
         let wrapped = Wrapper { id: object::new(ctx), value: to_wrap };
 
@@ -72,7 +70,7 @@ module tto::M1 {
 }
 
 // receive, add, and then access through parent.
-// * A dynamic field 
+// * A dynamic field
 // * A dynamic field of a dynamic field
 // * A dynamic object field of a dynamic field
 // * A dynamic field of wrapped object that was received
@@ -96,7 +94,7 @@ module tto::M1 {
 //# view-object 2,7
 
 // E_OBJECT_TYPE_MISMATCH
-// Try to load an invalid type that will cause indexing to fail. 
+// Try to load an invalid type that will cause indexing to fail.
 //# run tto::M1::receive_b_parent --args object(2,4) receiving(2,7) --sender A
 
 //# run tto::M1::receive_b_parent --args object(2,4) receiving(2,6) --sender A

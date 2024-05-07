@@ -41,7 +41,6 @@ shared-crypto.workspace = true
 move-core-types.workspace = true
 
 telemetry-subscribers.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 sui-sdk.workspace = true

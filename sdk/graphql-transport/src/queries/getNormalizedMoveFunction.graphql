@@ -1,0 +1,32 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query getNormalizedMoveFunction($packageId: SuiAddress!, $module: String!, $function: String!) {
+	object(address: $packageId) {
+		address
+		asMovePackage {
+			module(name: $module) {
+				fileFormatVersion
+				function(name: $function) {
+					...RPC_MOVE_FUNCTION_FIELDS
+				}
+			}
+		}
+	}
+}
+
+fragment RPC_MOVE_FUNCTION_FIELDS on MoveFunction {
+	name
+	visibility
+	isEntry
+	parameters {
+		signature
+	}
+	typeParameters {
+		constraints
+	}
+	return {
+		repr
+		signature
+	}
+}

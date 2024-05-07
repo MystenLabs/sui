@@ -2,27 +2,26 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use move_ir_types::location::sp;
+use move_symbol_pool::Symbol;
 
 use crate::parser::ast as P;
 
+// TODO we should really do this after expansion so that its done after attribute resolution. But
+// that can only really be done if we move most of expansion into naming.
+
 /// A trait that decides whether to include a parsed element in the compilation
 pub trait FilterContext {
+    fn set_current_package(&mut self, package: Option<Symbol>);
+    fn set_is_source_def(&mut self, is_source_def: bool);
+
     /// Attribute-based node removal
-    fn should_remove_by_attributes(
-        &mut self,
-        _attrs: &[P::Attributes],
-        _is_source_def: bool,
-    ) -> bool {
-        false
-    }
+    fn should_remove_by_attributes(&mut self, _attrs: &[P::Attributes]) -> bool;
 
     fn filter_map_address(
         &mut self,
         address_def: P::AddressDefinition,
-        is_source_def: bool,
     ) -> Option<P::AddressDefinition> {
-        if self.should_remove_by_attributes(&address_def.attributes, is_source_def) {
+        if self.should_remove_by_attributes(&address_def.attributes) {
             None
         } else {
             Some(address_def)
@@ -32,33 +31,16 @@ pub trait FilterContext {
     fn filter_map_module(
         &mut self,
         module_def: P::ModuleDefinition,
-        is_source_def: bool,
     ) -> Option<P::ModuleDefinition> {
-        if self.should_remove_by_attributes(&module_def.attributes, is_source_def) {
+        if self.should_remove_by_attributes(&module_def.attributes) {
             None
         } else {
             Some(module_def)
         }
     }
 
-    fn filter_map_script(
-        &mut self,
-        script_def: P::Script,
-        is_source_def: bool,
-    ) -> Option<P::Script> {
-        if self.should_remove_by_attributes(&script_def.attributes, is_source_def) {
-            None
-        } else {
-            Some(script_def)
-        }
-    }
-
-    fn filter_map_function(
-        &mut self,
-        function_def: P::Function,
-        is_source_def: bool,
-    ) -> Option<P::Function> {
-        if self.should_remove_by_attributes(&function_def.attributes, is_source_def) {
+    fn filter_map_function(&mut self, function_def: P::Function) -> Option<P::Function> {
+        if self.should_remove_by_attributes(&function_def.attributes) {
             None
         } else {
             Some(function_def)
@@ -68,53 +50,40 @@ pub trait FilterContext {
     fn filter_map_struct(
         &mut self,
         struct_def: P::StructDefinition,
-        is_source_def: bool,
     ) -> Option<P::StructDefinition> {
-        if self.should_remove_by_attributes(&struct_def.attributes, is_source_def) {
+        if self.should_remove_by_attributes(&struct_def.attributes) {
             None
         } else {
             Some(struct_def)
         }
     }
 
-    fn filter_map_spec(
-        &mut self,
-        spec: P::SpecBlock_,
-        is_source_def: bool,
-    ) -> Option<P::SpecBlock_> {
-        if self.should_remove_by_attributes(&spec.attributes, is_source_def) {
+    fn filter_map_enum(&mut self, enum_def: P::EnumDefinition) -> Option<P::EnumDefinition> {
+        if self.should_remove_by_attributes(&enum_def.attributes) {
             None
         } else {
-            Some(spec)
+            Some(enum_def)
         }
     }
 
-    fn filter_map_use(&mut self, use_decl: P::UseDecl, is_source_def: bool) -> Option<P::UseDecl> {
-        if self.should_remove_by_attributes(&use_decl.attributes, is_source_def) {
+    fn filter_map_use(&mut self, use_decl: P::UseDecl) -> Option<P::UseDecl> {
+        if self.should_remove_by_attributes(&use_decl.attributes) {
             None
         } else {
             Some(use_decl)
         }
     }
 
-    fn filter_map_friend(
-        &mut self,
-        friend_decl: P::FriendDecl,
-        is_source_def: bool,
-    ) -> Option<P::FriendDecl> {
-        if self.should_remove_by_attributes(&friend_decl.attributes, is_source_def) {
+    fn filter_map_friend(&mut self, friend_decl: P::FriendDecl) -> Option<P::FriendDecl> {
+        if self.should_remove_by_attributes(&friend_decl.attributes) {
             None
         } else {
             Some(friend_decl)
         }
     }
 
-    fn filter_map_constant(
-        &mut self,
-        constant: P::Constant,
-        is_source_def: bool,
-    ) -> Option<P::Constant> {
-        if self.should_remove_by_attributes(&constant.attributes, is_source_def) {
+    fn filter_map_constant(&mut self, constant: P::Constant) -> Option<P::Constant> {
+        if self.should_remove_by_attributes(&constant.attributes) {
             None
         } else {
             Some(constant)
@@ -130,6 +99,7 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
         lib_definitions,
     } = prog;
 
+    context.set_is_source_def(false);
     let lib_definitions: Vec<_> = lib_definitions
         .into_iter()
         .filter_map(
@@ -138,15 +108,17 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
                  named_address_map,
                  def,
              }| {
+                context.set_current_package(package);
                 Some(P::PackageDefinition {
                     package,
                     named_address_map,
-                    def: filter_definition(context, def, false)?,
+                    def: filter_definition(context, def)?,
                 })
             },
         )
         .collect();
 
+    context.set_is_source_def(true);
     let source_definitions: Vec<_> = source_definitions
         .into_iter()
         .filter_map(
@@ -155,10 +127,11 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
                  named_address_map,
                  def,
              }| {
+                context.set_current_package(package);
                 Some(P::PackageDefinition {
                     package,
                     named_address_map,
-                    def: filter_definition(context, def, true)?,
+                    def: filter_definition(context, def)?,
                 })
             },
         )
@@ -174,27 +147,18 @@ pub fn filter_program<T: FilterContext>(context: &mut T, prog: P::Program) -> P:
 fn filter_definition<T: FilterContext>(
     context: &mut T,
     def: P::Definition,
-    is_source_def: bool,
 ) -> Option<P::Definition> {
     match def {
-        P::Definition::Module(m) => {
-            filter_module(context, m, is_source_def).map(P::Definition::Module)
-        }
-        P::Definition::Address(a) => {
-            filter_address(context, a, is_source_def).map(P::Definition::Address)
-        }
-        P::Definition::Script(s) => {
-            filter_script(context, s, is_source_def).map(P::Definition::Script)
-        }
+        P::Definition::Module(m) => filter_module(context, m).map(P::Definition::Module),
+        P::Definition::Address(a) => filter_address(context, a).map(P::Definition::Address),
     }
 }
 
 fn filter_address<T: FilterContext>(
     context: &mut T,
     address_def: P::AddressDefinition,
-    is_source_def: bool,
 ) -> Option<P::AddressDefinition> {
-    let address_def = context.filter_map_address(address_def, is_source_def)?;
+    let address_def = context.filter_map_address(address_def)?;
 
     let P::AddressDefinition {
         addr,
@@ -205,7 +169,7 @@ fn filter_address<T: FilterContext>(
 
     let modules = modules
         .into_iter()
-        .filter_map(|m| filter_module(context, m, is_source_def))
+        .filter_map(|m| filter_module(context, m))
         .collect();
 
     Some(P::AddressDefinition {
@@ -216,59 +180,11 @@ fn filter_address<T: FilterContext>(
     })
 }
 
-fn filter_script<T: FilterContext>(
-    context: &mut T,
-    script_def: P::Script,
-    is_source_def: bool,
-) -> Option<P::Script> {
-    let script_def = context.filter_map_script(script_def, is_source_def)?;
-
-    let P::Script {
-        attributes,
-        uses,
-        constants,
-        function,
-        specs,
-        loc,
-    } = script_def;
-
-    // This is a bit weird, if the only function in the script is filtered, we consider
-    // the whole script is filtered as well
-    let new_function = context.filter_map_function(function, is_source_def)?;
-
-    let new_uses = uses
-        .into_iter()
-        .filter_map(|use_decl| context.filter_map_use(use_decl, is_source_def))
-        .collect();
-    let new_constants = constants
-        .into_iter()
-        .filter_map(|constant| context.filter_map_constant(constant, is_source_def))
-        .collect();
-    let new_specs = specs
-        .into_iter()
-        .filter_map(|sp!(spec_loc, spec)| {
-            context
-                .filter_map_spec(spec, is_source_def)
-                .map(|new_spec| sp(spec_loc, new_spec))
-        })
-        .collect();
-
-    Some(P::Script {
-        attributes,
-        function: new_function,
-        uses: new_uses,
-        constants: new_constants,
-        specs: new_specs,
-        loc,
-    })
-}
-
 fn filter_module<T: FilterContext>(
     context: &mut T,
     module_def: P::ModuleDefinition,
-    is_source_def: bool,
 ) -> Option<P::ModuleDefinition> {
-    let module_def = context.filter_map_module(module_def, is_source_def)?;
+    let module_def = context.filter_map_module(module_def)?;
 
     let P::ModuleDefinition {
         attributes,
@@ -281,7 +197,7 @@ fn filter_module<T: FilterContext>(
 
     let new_members: Vec<_> = members
         .into_iter()
-        .filter_map(|member| filter_module_member(context, member, is_source_def))
+        .filter_map(|member| filter_module_member(context, member))
         .collect();
 
     Some(P::ModuleDefinition {
@@ -297,26 +213,16 @@ fn filter_module<T: FilterContext>(
 fn filter_module_member<T: FilterContext>(
     context: &mut T,
     module_member: P::ModuleMember,
-    is_source_def: bool,
 ) -> Option<P::ModuleMember> {
     use P::ModuleMember as PM;
 
     match module_member {
-        PM::Function(func_def) => context
-            .filter_map_function(func_def, is_source_def)
-            .map(PM::Function),
-        PM::Struct(struct_def) => context
-            .filter_map_struct(struct_def, is_source_def)
-            .map(PM::Struct),
-        PM::Spec(sp!(spec_loc, spec)) => context
-            .filter_map_spec(spec, is_source_def)
-            .map(|new_spec| PM::Spec(sp(spec_loc, new_spec))),
-        PM::Use(use_decl) => context.filter_map_use(use_decl, is_source_def).map(PM::Use),
-        PM::Friend(friend_decl) => context
-            .filter_map_friend(friend_decl, is_source_def)
-            .map(PM::Friend),
-        PM::Constant(constant) => context
-            .filter_map_constant(constant, is_source_def)
-            .map(PM::Constant),
+        PM::Function(func_def) => context.filter_map_function(func_def).map(PM::Function),
+        PM::Struct(struct_def) => context.filter_map_struct(struct_def).map(PM::Struct),
+        x @ PM::Spec(_) => Some(x),
+        PM::Enum(enum_def) => context.filter_map_enum(enum_def).map(PM::Enum),
+        PM::Use(use_decl) => context.filter_map_use(use_decl).map(PM::Use),
+        PM::Friend(friend_decl) => context.filter_map_friend(friend_decl).map(PM::Friend),
+        PM::Constant(constant) => context.filter_map_constant(constant).map(PM::Constant),
     }
 }

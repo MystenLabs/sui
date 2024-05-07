@@ -1,11 +1,11 @@
 processed 9 tasks
 
-task 0 'print-bytecode'. lines 1-11:
+task 0 'print-bytecode'. lines 1-13:
 // Move bytecode v6
-script {
+module 1.m {
 
 
-main() {
+entry foo() {
 L0:	loc0: u64
 L1:	loc1: &u64
 B0:
@@ -19,12 +19,12 @@ B0:
 }
 }
 
-task 1 'print-bytecode'. lines 13-24:
+task 1 'print-bytecode'. lines 15-28:
 // Move bytecode v6
-script {
+module 2.m {
 
 
-main() {
+entry foo() {
 L0:	loc0: u64
 L1:	loc1: &u64
 L2:	loc2: &u64
@@ -39,7 +39,7 @@ B0:
 }
 }
 
-task 2 'print-bytecode'. lines 26-59:
+task 2 'print-bytecode'. lines 30-63:
 // Move bytecode v6
 module 1d4.M {
 struct T {
@@ -75,7 +75,7 @@ B0:
 }
 }
 
-task 3 'print-bytecode'. lines 61-80:
+task 3 'print-bytecode'. lines 65-84:
 // Move bytecode v6
 module 2d4.M {
 struct T<Ty0> {
@@ -102,14 +102,14 @@ B0:
 }
 }
 
-task 5 'print-bytecode'. lines 93-108:
+task 5 'print-bytecode'. lines 97-112:
 Error: Unbound struct Self.T
 
-task 6 'print-bytecode'. lines 110-119:
+task 6 'print-bytecode'. lines 114-125:
 Error: Unbound struct Self.T
 
-task 7 'print-bytecode'. lines 121-136:
+task 7 'print-bytecode'. lines 127-142:
 Error: Unbound struct Self.T
 
-task 8 'print-bytecode'. lines 138-146:
+task 8 'print-bytecode'. lines 144-154:
 Error: Unbound module alias M

@@ -189,6 +189,8 @@ pub struct Parameters {
 }
 
 impl Parameters {
+    pub const DEFAULT_FILENAME: &'static str = "parameters.json";
+
     fn default_header_num_of_batches_threshold() -> usize {
         32
     }
@@ -325,6 +327,8 @@ impl Default for PrometheusMetricsParameters {
 }
 
 impl PrometheusMetricsParameters {
+    pub const DEFAULT_PORT: usize = 9184;
+
     fn with_available_port(&self) -> Self {
         let mut params = self.clone();
         let default = Self::default();
@@ -464,6 +468,8 @@ impl std::fmt::Display for WorkerCache {
 }
 
 impl WorkerCache {
+    pub const DEFAULT_FILENAME: &'static str = "workers.json";
+
     /// Returns the current epoch.
     pub fn epoch(&self) -> Epoch {
         self.epoch

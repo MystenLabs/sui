@@ -20,6 +20,15 @@ pub struct SingleSnapshot {
     package_ids: Vec<ObjectID>,
 }
 
+impl SingleSnapshot {
+    pub fn git_revision(&self) -> &str {
+        &self.git_revision
+    }
+    pub fn package_ids(&self) -> &[ObjectID] {
+        &self.package_ids
+    }
+}
+
 const SYSTEM_PACKAGE_PUBLISH_ORDER: &[ObjectID] = &[
     MOVE_STDLIB_PACKAGE_ID,
     SUI_FRAMEWORK_PACKAGE_ID,

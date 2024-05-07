@@ -1,0 +1,71 @@
+# Changes
+
+## /bcs
+
+### Types
+
+- `SuiObjectRef`: removing bigint from `version` should we remove this completely
+- `ObjectArg`: `ImmOrOwned` -> `ImmOrOwnedObject` and `Shared` -> `SharedObject`
+- Added `ObjectCallArg`
+- `PureArg` Changed ArrayLike to Array not sure if this is correct
+
+### Bcs Types
+
+- `CallArg` removed `ObjVec`
+- `Argument` enumKind to enum\, Removed nested structs to align with Rust definitions
+- `ProgrammableMoveCall` Split target into `package`\, `module` and `function`\, typeArguments now
+  TypeTag instead of String
+- `Transaction` enumKind to enum\, replaced nested structs with tuples to align with Rust
+  definitions
+- Removed some type exports
+- Use typeof bcs.XYZ.$inferType instead
+
+## /transactions
+
+### Types
+
+- `TransactionObjectArgument` shape changed
+- `TransactionResult` shape changed
+- `TransactionObjectInput` shape changed
+- `TransactionArgument` shape changed
+- `TransactionBlockInput` shape changed
+
+### TransactionBlock
+
+- `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
+- added getBlockData that returns new v2 blockData
+- removed txb.pure(rawValue)
+- Added support for (txb) => input as transaction arguments
+- renamed packageId -> package in Upgrade command
+
+### exports
+
+- getPureSerializationType removed
+- added getPureBcsSchema, normalizedTypeToMoveTypeSignature
+
+## /utils
+
+Removed `is` and `assert` helpers
+
+## /multisig
+
+- publicKeyFromSuiBytes moved to /verify
+
+## /verify
+
+- verifyTransactionBlock -> verifyTransactionBlockSignature
+- verifyPersonalMessage -> verifyPersonalMessageSignature
+
+## /cryptography
+
+- Removed intent enum exports (use bcs instead)
+
+# @mysten/bcs
+
+- removed registry
+- default maxSize of writer = Infinity
+- renamed `size` to `initialSize` in writer
+
+# TODO
+
+- Update wallet standard

@@ -5,7 +5,6 @@ import { type AccountSourceSerializedUI } from '_src/background/account-sources/
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { type ZkLoginProvider } from '_src/background/accounts/zklogin/providers';
 import { type Status } from '_src/background/legacy-accounts/storage-migration';
-import { type ExportedKeypair, type SerializedSignature } from '@mysten/sui.js/cryptography';
 
 import { isBasePayload } from './BasePayload';
 import type { Payload } from './Payload';
@@ -32,7 +31,7 @@ type MethodPayloads = {
 	unlockAccountSourceOrAccount: { id: string; password?: string };
 	createAccounts:
 		| { type: 'mnemonic-derived'; sourceID: string }
-		| { type: 'imported'; keyPair: ExportedKeypair; password: string }
+		| { type: 'imported'; keyPair: string; password: string }
 		| {
 				type: 'ledger';
 				accounts: { publicKey: string; derivationPath: string; address: string }[];
@@ -44,7 +43,7 @@ type MethodPayloads = {
 		  };
 	accountsCreatedResponse: { accounts: SerializedUIAccount[] };
 	signData: { data: string; id: string };
-	signDataResponse: { signature: SerializedSignature };
+	signDataResponse: { signature: string };
 	entitiesUpdated: { type: UIAccessibleEntityType };
 	getStorageMigrationStatus: null;
 	storageMigrationStatus: { status: Status };
@@ -61,7 +60,7 @@ type MethodPayloads = {
 	setAutoLockMinutes: { minutes: number | null };
 	notifyUserActive: {};
 	getAccountKeyPair: { accountID: string; password: string };
-	getAccountKeyPairResponse: { accountID: string; keyPair: ExportedKeypair };
+	getAccountKeyPairResponse: { accountID: string; keyPair: string };
 	resetPassword: {
 		password: string;
 		recoveryData: PasswordRecoveryData[];

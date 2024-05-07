@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import type { Configuration } from './configuration';
+import { lint } from './configuration';
 import * as vscode from 'vscode';
 import * as lc from 'vscode-languageclient';
 import { log } from './log';
@@ -13,12 +14,26 @@ import { IndentAction } from 'vscode';
 export class Context {
     private client: lc.LanguageClient | undefined;
 
+    private lintLevel: string;
+
+    // The vscode-languageclient module reads a configuration option named
+    // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
+    // channel is specified, these messages are printed there, otherwise they appear in the
+    // output channel that it automatically created by the `LanguageClient` (in this extension,
+    // that is 'Move Language Server'). For more information, see:
+    // https://code.visualstudio.com/api/language-extensions/language-server-extension-guide#logging-support-for-language-server
+    private readonly traceOutputChannel: vscode.OutputChannel;
+
     private constructor(
         private readonly extensionContext: Readonly<vscode.ExtensionContext>,
         readonly configuration: Readonly<Configuration>,
         client: lc.LanguageClient | undefined = undefined,
     ) {
         this.client = client;
+        this.lintLevel = lint();
+        this.traceOutputChannel = vscode.window.createOutputChannel(
+            'Move Language Server Trace',
+        );
     }
 
     static create(
@@ -28,9 +43,7 @@ export class Context {
         if (!commandExistsSync(configuration.serverPath)) {
             return new Error(
                 `language server executable '${configuration.serverPath}' could not be found, so ` +
-                'most extension features will be unavailable to you. Follow the instructions in ' +
-                'the move-analyzer Visual Studio Code extension README to install the language ' +
-                'server.',
+                'most extension features will be unavailable to you.',
             );
         }
         return new Context(extensionContext, configuration);
@@ -48,7 +61,7 @@ export class Context {
         command: (context: Readonly<Context>, ...args: Array<any>) => any,
     ): void {
         const disposable = vscode.commands.registerCommand(
-            `move-analyzer.${name}`,
+            `move.${name}`,
             async (...args: Array<any>) : Promise<any> => {
                 const ret = await command(this, ...args);
                 return ret;
@@ -111,23 +124,18 @@ export class Context {
             debug: executable,
         };
 
-        // The vscode-languageclient module reads a configuration option named
-        // "<extension-name>.trace.server" to determine whether to log messages. If a trace output
-        // channel is specified, these messages are printed there, otherwise they appear in the
-        // output channel that it automatically created by the `LanguageClient` (in this extension,
-        // that is 'Move Language Server'). For more information, see:
-        // https://code.visualstudio.com/api/language-extensions/language-server-extension-guide#logging-support-for-language-server
-        const traceOutputChannel = vscode.window.createOutputChannel(
-            'Move Analyzer Language Server Trace',
-        );
+        this.traceOutputChannel.clear();
         const clientOptions: lc.LanguageClientOptions = {
             documentSelector: [{ scheme: 'file', language: 'move' }],
-            traceOutputChannel,
+            traceOutputChannel: this.traceOutputChannel,
+            initializationOptions: {
+                lintLevel: this.lintLevel,
+            },
         };
 
         const client = new lc.LanguageClient(
-            'move-analyzer',
-            'Move Language Server',
+            'move',
+            'Move',
             serverOptions,
             clientOptions,
         );
@@ -148,5 +156,38 @@ export class Context {
      */
     getClient(): lc.LanguageClient | undefined {
         return this.client;
+    }
+
+    /**
+     * Deactivates the client interacting with the language server.
+     */
+    async stopClient(): Promise<void> {
+        log.info('Stopping client...');
+        if (this.client) {
+            await this.client.stop();
+        }
+    }
+
+    /**
+     * Registers a handler to be executed when user/workspace configuration gets changed.
+     */
+    registerOnDidChangeConfiguration(): void {
+        vscode.workspace.onDidChangeConfiguration(async event => {
+            const changed = event.affectsConfiguration('move.lint');
+            if (changed) {
+                const newLintLevel = lint();
+                if (this.lintLevel !== newLintLevel) {
+                    this.lintLevel = newLintLevel;
+                    try {
+                        await this.stopClient();
+                        await this.startClient();
+                    } catch (err) {
+                        // Handle error
+                        log.info(String(err));
+                    }
+                }
+            }
+        });
+
     }
 } // Context

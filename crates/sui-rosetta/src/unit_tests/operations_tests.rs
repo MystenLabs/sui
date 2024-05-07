@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_core_types::value::MoveTypeLayout;
+use move_core_types::annotated_value::MoveTypeLayout;
 use sui_json_rpc_types::SuiCallArg;
 use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber, SuiAddress};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;

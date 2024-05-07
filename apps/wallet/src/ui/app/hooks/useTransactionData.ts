@@ -13,13 +13,13 @@ export function useTransactionData(sender?: string | null, transaction?: Transac
 		// eslint-disable-next-line @tanstack/query/exhaustive-deps
 		queryKey: ['transaction-data', transaction?.serialize()],
 		queryFn: async () => {
-			const clonedTransaction = new TransactionBlock(transaction!);
+			const clonedTransaction = TransactionBlock.from(transaction!);
 			if (sender) {
 				clonedTransaction.setSenderIfNotSet(sender);
 			}
 			// Build the transaction to bytes, which will ensure that the transaction data is fully populated:
 			await clonedTransaction!.build({ client });
-			return clonedTransaction!.blockData;
+			return clonedTransaction!.getBlockData();
 		},
 		enabled: !!transaction,
 	});
@@ -31,7 +31,7 @@ export function useTransactionGasBudget(
 ) {
 	const { data, ...rest } = useTransactionData(sender, transaction);
 
-	const [formattedGas] = useFormatCoin(data?.gasConfig.budget, SUI_TYPE_ARG);
+	const [formattedGas] = useFormatCoin(data?.gasData.budget, SUI_TYPE_ARG);
 
 	return {
 		data: formattedGas,

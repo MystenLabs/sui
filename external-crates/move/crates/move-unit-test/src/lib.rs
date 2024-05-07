@@ -146,12 +146,12 @@ impl UnitTestingConfig {
             verify_and_create_named_address_mapping(self.named_address_values.clone()).ok()?;
         let flags = Flags::testing();
         let (files, comments_and_compiler_res) =
-            Compiler::from_files(source_files, deps, addresses)
+            Compiler::from_files(None, source_files, deps, addresses)
                 .set_flags(flags)
                 .run::<PASS_CFGIR>()
                 .unwrap();
         let (_, compiler) =
-            diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
+            diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
 
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
@@ -159,8 +159,9 @@ impl UnitTestingConfig {
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
-            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
+            diagnostics::unwrap_or_report_pass_diagnostics(&files, compilation_result);
         diagnostics::report_warnings(&files, warnings);
+        let units: Vec<_> = units.into_iter().map(|unit| unit.named_module).collect();
         test_plan.map(|tests| TestPlan::new(tests, files, units))
     }
 

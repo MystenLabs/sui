@@ -4,10 +4,11 @@
 use crate::command_line::compiler::Visitor;
 use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
-use crate::parser::ast::FunctionName;
+use crate::parser::ast::{ConstantName, FunctionName};
 use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
 use crate::typing::ast as T;
-use move_symbol_pool::Symbol;
+
+use move_proc_macros::growing_stack;
 
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
@@ -58,9 +59,6 @@ pub trait TypingVisitorContext {
     ) -> bool {
         false
     }
-    fn visit_script_custom(&mut self, _name: Symbol, _script: &mut T::Script) -> bool {
-        false
-    }
 
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
@@ -73,27 +71,45 @@ pub trait TypingVisitorContext {
                 continue;
             }
 
+            for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
+                self.visit_constant(mident, constant_name, cdef)
+            }
             for (function_name, fdef) in mdef.functions.key_cloned_iter_mut() {
-                self.visit_function(Some(mident), function_name, fdef)
+                self.visit_function(mident, function_name, fdef)
             }
 
-            self.pop_warning_filter_scope();
-        }
-        for (name, script) in &mut program.scripts {
-            self.add_warning_filter_scope(script.warning_filter.clone());
-            if self.visit_script_custom(*name, script) {
-                self.pop_warning_filter_scope();
-                continue;
-            }
-
-            self.visit_function(None, script.function_name, &mut script.function);
             self.pop_warning_filter_scope();
         }
     }
 
+    // TODO struct and type visiting
+
+    fn visit_constant_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _constant_name: ConstantName,
+        _cdef: &mut T::Constant,
+    ) -> bool {
+        false
+    }
+    fn visit_constant(
+        &mut self,
+        module: ModuleIdent,
+        constant_name: ConstantName,
+        cdef: &mut T::Constant,
+    ) {
+        self.add_warning_filter_scope(cdef.warning_filter.clone());
+        if self.visit_constant_custom(module, constant_name, cdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.visit_exp(&mut cdef.value);
+        self.pop_warning_filter_scope();
+    }
+
     fn visit_function_custom(
         &mut self,
-        _module: Option<ModuleIdent>,
+        _module: ModuleIdent,
         _function_name: FunctionName,
         _fdef: &mut T::Function,
     ) -> bool {
@@ -101,7 +117,7 @@ pub trait TypingVisitorContext {
     }
     fn visit_function(
         &mut self,
-        module: Option<ModuleIdent>,
+        module: ModuleIdent,
         function_name: FunctionName,
         fdef: &mut T::Function,
     ) {
@@ -116,7 +132,7 @@ pub trait TypingVisitorContext {
         self.pop_warning_filter_scope();
     }
 
-    fn visit_seq(&mut self, seq: &mut T::Sequence) {
+    fn visit_seq(&mut self, (_, seq): &mut T::Sequence) {
         for s in seq {
             self.visit_seq_item(s);
         }
@@ -136,6 +152,7 @@ pub trait TypingVisitorContext {
         false
     }
 
+    #[growing_stack]
     fn visit_exp(&mut self, exp: &mut T::Exp) {
         use T::UnannotatedExp_ as E;
         if self.visit_exp_custom(exp) {
@@ -151,11 +168,27 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
-            E::While(e1, e2) => {
+            E::Match(esubject, arms) => {
+                self.visit_exp(esubject);
+                for sp!(_, arm) in arms.value.iter_mut() {
+                    if let Some(guard) = arm.guard.as_mut() {
+                        self.visit_exp(guard)
+                    }
+                    self.visit_exp(&mut arm.rhs);
+                }
+            }
+            E::VariantMatch(esubject, _, arms) => {
+                self.visit_exp(esubject);
+                for (_, earm) in arms.iter_mut() {
+                    self.visit_exp(earm);
+                }
+            }
+            E::While(_, e1, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
             }
-            E::Loop { has_break: _, body } => self.visit_exp(body),
+            E::Loop { body, .. } => self.visit_exp(body),
+            E::NamedBlock(_, seq) => self.visit_seq(seq),
             E::Block(seq) => self.visit_seq(seq),
             E::Assign(_, _, e) => self.visit_exp(e),
             E::Mutate(e1, e2) => {
@@ -164,6 +197,7 @@ pub trait TypingVisitorContext {
             }
             E::Return(e) => self.visit_exp(e),
             E::Abort(e) => self.visit_exp(e),
+            E::Give(_, e) => self.visit_exp(e),
             E::Dereference(e) => self.visit_exp(e),
             E::UnaryExp(_, e) => self.visit_exp(e),
             E::BinopExp(e1, _, _, e2) => {
@@ -171,6 +205,9 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
             }
             E::Pack(_, _, _, fields) => fields
+                .iter_mut()
+                .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
+            E::PackVariant(_, _, _, _, fields) => fields
                 .iter_mut()
                 .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
             E::ExpList(list) => {
@@ -185,16 +222,16 @@ pub trait TypingVisitorContext {
             E::TempBorrow(_, e) => self.visit_exp(e),
             E::Cast(e, _) => self.visit_exp(e),
             E::Annotate(e, _) => self.visit_exp(e),
+            E::InvalidAccess(e) => self.visit_exp(e),
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
             | E::Copy { .. }
             | E::Use(_)
             | E::Constant(..)
-            | E::Break
-            | E::Continue
+            | E::Continue(_)
             | E::BorrowLocal(..)
-            | E::Spec(..)
+            | E::ErrorConstant(_)
             | E::UnresolvedError => (),
         }
     }

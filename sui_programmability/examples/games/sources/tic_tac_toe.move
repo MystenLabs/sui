@@ -18,13 +18,7 @@
 // providing different trade-offs: using shared object is more expensive,
 // however it eliminates the need of a centralized service.
 module games::tic_tac_toe {
-    use std::option::{Self, Option};
-    use std::vector;
-
-    use sui::object::{Self, ID, UID};
     use sui::event;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     // Game status
     const IN_PROGRESS: u8 = 0;
@@ -37,7 +31,7 @@ module games::tic_tac_toe {
     const EInvalidLocation: u64 = 0;
     const ENoMoreMark: u64 = 1;
 
-    struct TicTacToe has key {
+    public struct TicTacToe has key {
         id: UID,
         gameboard: vector<vector<Option<Mark>>>,
         cur_turn: u8,
@@ -46,31 +40,31 @@ module games::tic_tac_toe {
         o_address: address,
     }
 
-    struct MarkMintCap has key {
+    public struct MarkMintCap has key {
         id: UID,
         game_id: ID,
         remaining_supply: u8,
     }
 
-    struct Mark has key, store {
+    public struct Mark has key, store {
         id: UID,
         player: address,
         row: u64,
         col: u64,
     }
 
-    struct Trophy has key {
+    public struct Trophy has key {
         id: UID,
     }
 
-    struct MarkSentEvent has copy, drop {
+    public struct MarkSentEvent has copy, drop {
         // The Object ID of the game object
         game_id: ID,
         // The object ID of the mark sent
         mark_id: ID,
     }
 
-    struct GameEndEvent has copy, drop {
+    public struct GameEndEvent has copy, drop {
         // The Object ID of the game object
         game_id: ID,
     }
@@ -162,11 +156,11 @@ module games::tic_tac_toe {
     }
 
     public entry fun delete_game(game: TicTacToe) {
-        let TicTacToe { id, gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
+        let TicTacToe { id, mut gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         while (vector::length(&gameboard) > 0) {
-            let row = vector::pop_back(&mut gameboard);
+            let mut row = vector::pop_back(&mut gameboard);
             while (vector::length(&row) > 0) {
-                let element = vector::pop_back(&mut row);
+                let mut element = vector::pop_back(&mut row);
                 if (option::is_some(&element)) {
                     let mark = option::extract(&mut element);
                     delete_mark(mark);
@@ -247,7 +241,7 @@ module games::tic_tac_toe {
         if (game.game_status != IN_PROGRESS) {
             return
         };
-        let result = check_all_equal(game, row1, col1, row2, col2, row3, col3);
+        let mut result = check_all_equal(game, row1, col1, row2, col2, row3, col3);
         if (option::is_some(&result)) {
             let winner = option::extract(&mut result);
             game.game_status = if (&winner == &game.x_address) {

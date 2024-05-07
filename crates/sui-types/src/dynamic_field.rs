@@ -12,10 +12,10 @@ use crate::sui_serde::SuiTypeTag;
 use crate::{MoveTypeTagTrait, ObjectID, SequenceNumber, SUI_FRAMEWORK_ADDRESS};
 use fastcrypto::encoding::Base58;
 use fastcrypto::hash::HashFunction;
+use move_core_types::annotated_value::{MoveStruct, MoveValue};
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::value::{MoveStruct, MoveValue};
 use schemars::JsonSchema;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -202,32 +202,22 @@ pub fn extract_field_from_move_struct<'a>(
     move_struct: &'a MoveStruct,
     field_name: &str,
 ) -> Option<&'a MoveValue> {
-    match move_struct {
-        MoveStruct::WithTypes { fields, .. } | MoveStruct::WithFields(fields) => {
-            fields.iter().find_map(|(id, value)| {
-                if id.to_string() == field_name {
-                    Some(value)
-                } else {
-                    None
-                }
-            })
+    move_struct.fields.iter().find_map(|(id, value)| {
+        if id.to_string() == field_name {
+            Some(value)
+        } else {
+            None
         }
-        _ => None,
-    }
+    })
 }
 
 fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
     // id:UID is the first value in an object
-    let uid_value = match value {
-        MoveStruct::Runtime(fields) => fields.get(0)?,
-        MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. } => &fields.get(0)?.1,
-    };
+    let uid_value = &value.fields.first()?.1;
+
     // id is the first value in UID
     let id_value = match uid_value {
-        MoveValue::Struct(MoveStruct::Runtime(fields)) => fields.get(0)?,
-        MoveValue::Struct(
-            MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. },
-        ) => &fields.get(0)?.1,
+        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
         _ => return None,
     };
     extract_id_value(id_value)
@@ -236,10 +226,7 @@ fn extract_object_id(value: &MoveStruct) -> Option<ObjectID> {
 fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
     // the id struct has a single bytes field
     let id_bytes_value = match id_value {
-        MoveValue::Struct(MoveStruct::Runtime(fields)) => fields.get(0)?,
-        MoveValue::Struct(
-            MoveStruct::WithFields(fields) | MoveStruct::WithTypes { fields, .. },
-        ) => &fields.get(0)?.1,
+        MoveValue::Struct(MoveStruct { fields, .. }) => &fields.first()?.1,
         _ => return None,
     };
     // the bytes field should be an address
@@ -250,15 +237,10 @@ fn extract_id_value(id_value: &MoveValue) -> Option<ObjectID> {
 }
 
 pub fn is_dynamic_object(move_struct: &MoveStruct) -> bool {
-    match move_struct {
-        MoveStruct::WithTypes { type_, .. } => {
-            matches!(
-                &type_.type_params[0],
-                TypeTag::Struct(tag) if DynamicFieldInfo::is_dynamic_object_field_wrapper(tag)
-            )
-        }
-        _ => false,
-    }
+    matches!(
+        &move_struct.type_.type_params[0],
+        TypeTag::Struct(tag) if DynamicFieldInfo::is_dynamic_object_field_wrapper(tag)
+    )
 }
 
 pub fn derive_dynamic_field_id<T>(
@@ -269,12 +251,19 @@ pub fn derive_dynamic_field_id<T>(
 where
     T: Into<SuiAddress>,
 {
+    let parent: SuiAddress = parent.into();
     let k_tag_bytes = bcs::to_bytes(key_type_tag)?;
+    tracing::trace!(
+        "Deriving dynamic field ID for parent={:?}, key={:?}, key_type_tag={:?}",
+        parent,
+        key_bytes,
+        key_type_tag,
+    );
 
     // hash(parent || len(key) || key || key_type_tag)
     let mut hasher = DefaultHash::default();
     hasher.update([HashingIntentScope::ChildObjectId as u8]);
-    hasher.update(parent.into());
+    hasher.update(parent);
     hasher.update(key_bytes.len().to_le_bytes());
     hasher.update(key_bytes);
     hasher.update(k_tag_bytes);
@@ -282,7 +271,9 @@ where
 
     // truncate into an ObjectID and return
     // OK to access slice because digest should never be shorter than ObjectID::LENGTH.
-    Ok(ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap())
+    let id = ObjectID::try_from(&hash.as_ref()[0..ObjectID::LENGTH]).unwrap();
+    tracing::trace!("derive_dynamic_field_id result: {:?}", id);
+    Ok(id)
 }
 
 /// Given a parent object ID (e.g. a table), and a `key`, retrieve the corresponding dynamic field object

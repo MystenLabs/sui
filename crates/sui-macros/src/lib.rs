@@ -27,7 +27,7 @@ macro_rules! nondeterministic {
     };
 }
 
-type FpCallback = dyn Fn() -> Option<BoxFuture<'static, ()>> + Send + Sync + 'static;
+type FpCallback = dyn Fn() -> Box<dyn std::any::Any + Send + 'static> + Send + Sync;
 type FpMap = HashMap<&'static str, Arc<FpCallback>>;
 
 #[cfg(msim)]
@@ -53,28 +53,72 @@ fn get_callback(identifier: &'static str) -> Option<Arc<FpCallback>> {
     with_fp_map(|map| map.get(identifier).cloned())
 }
 
+fn get_sync_fp_result(result: Box<dyn std::any::Any + Send + 'static>) {
+    if result.downcast::<()>().is_err() {
+        panic!("sync failpoint must return ()");
+    }
+}
+
+fn get_async_fp_result(result: Box<dyn std::any::Any + Send + 'static>) -> BoxFuture<'static, ()> {
+    match result.downcast::<BoxFuture<'static, ()>>() {
+        Ok(fut) => *fut,
+        Err(err) => panic!(
+            "async failpoint must return BoxFuture<'static, ()> {:?}",
+            err
+        ),
+    }
+}
+
+fn get_fp_if_result(result: Box<dyn std::any::Any + Send + 'static>) -> bool {
+    match result.downcast::<bool>() {
+        Ok(b) => *b,
+        Err(_) => panic!("failpoint-if must return bool"),
+    }
+}
+
+fn get_fp_some_result<T: Send + 'static>(
+    result: Box<dyn std::any::Any + Send + 'static>,
+) -> Option<T> {
+    match result.downcast::<Option<T>>() {
+        Ok(opt) => *opt,
+        Err(_) => panic!("failpoint-arg must return Option<T>"),
+    }
+}
+
 pub fn handle_fail_point(identifier: &'static str) {
     if let Some(callback) = get_callback(identifier) {
-        tracing::error!("hit failpoint {}", identifier);
-        assert!(
-            callback().is_none(),
-            "sync failpoint must not return future"
-        );
+        get_sync_fp_result(callback());
+        tracing::trace!("hit failpoint {}", identifier);
     }
 }
 
 pub async fn handle_fail_point_async(identifier: &'static str) {
     if let Some(callback) = get_callback(identifier) {
-        tracing::error!("hit async failpoint {}", identifier);
-        let fut = callback().expect("async callback must return future");
+        tracing::trace!("hit async failpoint {}", identifier);
+        let fut = get_async_fp_result(callback());
         fut.await;
     }
 }
 
-fn register_fail_point_impl(
-    identifier: &'static str,
-    callback: Arc<dyn Fn() -> Option<BoxFuture<'static, ()>> + Sync + Send + 'static>,
-) {
+pub fn handle_fail_point_if(identifier: &'static str) -> bool {
+    if let Some(callback) = get_callback(identifier) {
+        tracing::trace!("hit failpoint_if {}", identifier);
+        get_fp_if_result(callback())
+    } else {
+        false
+    }
+}
+
+pub fn handle_fail_point_arg<T: Send + 'static>(identifier: &'static str) -> Option<T> {
+    if let Some(callback) = get_callback(identifier) {
+        tracing::trace!("hit failpoint_arg {}", identifier);
+        get_fp_some_result(callback())
+    } else {
+        None
+    }
+}
+
+fn register_fail_point_impl(identifier: &'static str, callback: Arc<FpCallback>) {
     with_fp_map(move |map| {
         assert!(
             map.insert(identifier, callback).is_none(),
@@ -98,27 +142,87 @@ pub fn register_fail_point(identifier: &'static str, callback: impl Fn() + Sync 
         identifier,
         Arc::new(move || {
             callback();
-            None
+            Box::new(())
         }),
     );
 }
 
+/// Register an asynchronous fail point. Because it is async it can yield execution of the calling
+/// task, e.g. by sleeping.
 pub fn register_fail_point_async<F>(
     identifier: &'static str,
     callback: impl Fn() -> F + Sync + Send + 'static,
 ) where
     F: Future<Output = ()> + Send + 'static,
 {
-    register_fail_point_impl(identifier, Arc::new(move || Some(Box::pin(callback()))));
+    register_fail_point_impl(
+        identifier,
+        Arc::new(move || {
+            let result: BoxFuture<'static, ()> = Box::pin(callback());
+            Box::new(result)
+        }),
+    );
+}
+
+/// Register code to run locally if the fail point is hit. Example:
+///
+/// In the test:
+///
+/// ```ignore
+///     register_fail_point_if("foo", || {
+///         sui_simulator::current_simnode_id() == 2
+///     });
+/// ```
+///
+/// In the code:
+///
+/// ```ignore
+///     let mut was_hit = false;
+///     fail_point_if("foo", || {
+///        was_hit = true;
+///     });
+/// ```
+pub fn register_fail_point_if(
+    identifier: &'static str,
+    callback: impl Fn() -> bool + Sync + Send + 'static,
+) {
+    register_fail_point_impl(identifier, Arc::new(move || Box::new(callback())));
+}
+
+/// Register code to run locally if the fail point is hit, with a value provided
+/// by the test. If the registered callback returns a Some(v), then the `v` is
+/// passed to the callback in the test.
+///
+/// In the test:
+///
+/// ```ignore
+///     register_fail_point_arg("foo", || {
+///         Some(42)
+///     });
+/// ```
+///
+/// In the code:
+///
+/// ```ignore
+///     let mut value = 0;
+///     fail_point_arg!("foo", |arg| {
+///        value = arg;
+///     });
+/// ```
+pub fn register_fail_point_arg<T: Send + 'static>(
+    identifier: &'static str,
+    callback: impl Fn() -> Option<T> + Sync + Send + 'static,
+) {
+    register_fail_point_impl(identifier, Arc::new(move || Box::new(callback())));
 }
 
 pub fn register_fail_points(
     identifiers: &[&'static str],
     callback: impl Fn() + Sync + Send + 'static,
 ) {
-    let cb = Arc::new(move || {
+    let cb: Arc<FpCallback> = Arc::new(move || {
         callback();
-        None
+        Box::new(())
     });
     for id in identifiers {
         register_fail_point_impl(id, cb.clone());
@@ -129,6 +233,7 @@ pub fn clear_fail_point(identifier: &'static str) {
     clear_fail_point_impl(identifier);
 }
 
+/// Trigger a fail point. Tests can trigger various behavior when the fail point is hit.
 #[cfg(any(msim, fail_points))]
 #[macro_export]
 macro_rules! fail_point {
@@ -137,11 +242,38 @@ macro_rules! fail_point {
     };
 }
 
+/// Trigger an async fail point. Tests can trigger various async behavior when the fail point is
+/// hit.
 #[cfg(any(msim, fail_points))]
 #[macro_export]
 macro_rules! fail_point_async {
     ($tag: expr) => {
         $crate::handle_fail_point_async($tag).await
+    };
+}
+
+/// Trigger a failpoint that runs a callback at the callsite if it is enabled.
+/// (whether it is enabled is controlled by whether the registration callback returns true/false).
+#[cfg(any(msim, fail_points))]
+#[macro_export]
+macro_rules! fail_point_if {
+    ($tag: expr, $callback: expr) => {
+        if $crate::handle_fail_point_if($tag) {
+            ($callback)();
+        }
+    };
+}
+
+/// Trigger a failpoint that runs a callback at the callsite if it is enabled.
+/// If the registration callback returns Some(v), then the `v` is passed to the callback in the test.
+/// Otherwise the failpoint is skipped
+#[cfg(any(msim, fail_points))]
+#[macro_export]
+macro_rules! fail_point_arg {
+    ($tag: expr, $callback: expr) => {
+        if let Some(arg) = $crate::handle_fail_point_arg($tag) {
+            ($callback)(arg);
+        }
     };
 }
 
@@ -155,6 +287,33 @@ macro_rules! fail_point {
 #[macro_export]
 macro_rules! fail_point_async {
     ($tag: expr) => {};
+}
+
+#[cfg(not(any(msim, fail_points)))]
+#[macro_export]
+macro_rules! fail_point_if {
+    ($tag: expr, $callback: expr) => {};
+}
+
+#[cfg(not(any(msim, fail_points)))]
+#[macro_export]
+macro_rules! fail_point_arg {
+    ($tag: expr, $callback: expr) => {};
+}
+
+/// Use to write INFO level logs only when REPLAY_LOG
+/// environment variable is set. Useful for log lines that
+/// are only relevant to test infra which still may need to
+/// run a release build. Also note that since logs of a chain
+/// replay are exceedingly verbose, this will allow one to bubble
+/// up "debug level" info while running with RUST_LOG=info.
+#[macro_export]
+macro_rules! replay_log {
+    ($($arg:tt)+) => {
+        if std::env::var("REPLAY_LOG").is_ok() {
+            tracing::info!($($arg)+);
+        }
+    };
 }
 
 // These tests need to be run in release mode, since debug mode does overflow checks by default!

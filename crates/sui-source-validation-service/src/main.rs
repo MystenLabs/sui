@@ -40,7 +40,7 @@ pub async fn main() -> anyhow::Result<()> {
     let package_config = parse_config(args.config_path)?;
     let tmp_dir = tempfile::tempdir()?;
     let start = tokio::time::Instant::now();
-    let sources = initialize(&package_config, tmp_dir.path()).await?;
+    let (sources, sources_list) = initialize(&package_config, tmp_dir.path()).await?;
     info!("verification complete in {:?}", start.elapsed());
 
     let metrics_listener = std::net::TcpListener::bind(METRICS_HOST_PORT)?;
@@ -51,6 +51,7 @@ pub async fn main() -> anyhow::Result<()> {
     let app_state = Arc::new(RwLock::new(AppState {
         sources,
         metrics: Some(metrics),
+        sources_list,
     }));
     let mut threads = vec![];
     let networks_to_watch = vec![

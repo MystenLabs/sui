@@ -4,7 +4,6 @@
 use move_core_types::{
     account_address::AccountAddress, gas_algebra::AbstractMemorySize, language_storage::TypeTag,
 };
-use std::mem::size_of;
 
 /// Trait that provides an abstract view into a Move type.
 ///
@@ -75,35 +74,35 @@ pub trait ValueView {
             }
 
             fn visit_vec_u8(&mut self, _depth: usize, vals: &[u8]) {
-                self.0 += ((size_of::<u8>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u16(&mut self, _depth: usize, vals: &[u16]) {
-                self.0 += ((size_of::<u16>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u32(&mut self, _depth: usize, vals: &[u32]) {
-                self.0 += ((size_of::<u32>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u64(&mut self, _depth: usize, vals: &[u64]) {
-                self.0 += ((size_of::<u64>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u128(&mut self, _depth: usize, vals: &[u128]) {
-                self.0 += ((size_of::<u128>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u256(&mut self, _depth: usize, vals: &[move_core_types::u256::U256]) {
-                self.0 += ((size_of::<move_core_types::u256::U256>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_bool(&mut self, _depth: usize, vals: &[bool]) {
-                self.0 += ((size_of::<bool>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_address(&mut self, _depth: usize, vals: &[AccountAddress]) {
-                self.0 += ((size_of::<AccountAddress>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_ref(&mut self, _depth: usize, _is_global: bool) -> bool {
@@ -169,42 +168,42 @@ pub trait ValueView {
 
             fn visit_vec_u8(&mut self, _depth: usize, vals: &[u8]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<u8>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u16(&mut self, _depth: usize, vals: &[u16]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<u16>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u32(&mut self, _depth: usize, vals: &[u32]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<u32>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u64(&mut self, _depth: usize, vals: &[u64]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<u64>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u128(&mut self, _depth: usize, vals: &[u128]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<u128>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_u256(&mut self, _depth: usize, vals: &[move_core_types::u256::U256]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<move_core_types::u256::U256>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_bool(&mut self, _depth: usize, vals: &[bool]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<bool>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_vec_address(&mut self, _depth: usize, vals: &[AccountAddress]) {
                 self.0 += LEGACY_STRUCT_SIZE;
-                self.0 += ((size_of::<AccountAddress>() * vals.len()) as u64).into();
+                self.0 += (std::mem::size_of_val(vals) as u64).into();
             }
 
             fn visit_ref(&mut self, _depth: usize, _is_global: bool) -> bool {

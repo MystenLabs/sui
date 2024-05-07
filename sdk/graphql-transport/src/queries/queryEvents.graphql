@@ -1,0 +1,45 @@
+# Copyright (c) Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+query queryEvents(
+	$filter: EventFilter!
+	# filter missing:
+	# - MoveEventField
+	# - TimeRange
+	# - All, Any, And, Or
+	# missing order
+	$before: String
+	$after: String
+	$first: Int
+	$last: Int
+) {
+	events(filter: $filter, first: $first, after: $after, last: $last, before: $before) {
+		pageInfo {
+			hasNextPage
+			hasPreviousPage
+			endCursor
+			startCursor
+		}
+		nodes {
+			...RPC_EVENTS_FIELDS
+		}
+	}
+}
+
+fragment RPC_EVENTS_FIELDS on Event {
+	sendingModule {
+		package {
+			address
+		}
+		name
+	}
+	sender {
+		address
+	}
+	type {
+		repr
+	}
+	json
+	bcs
+	timestamp
+}

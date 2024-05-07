@@ -3,24 +3,35 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    diag,
-    editions::Flavor,
-    expansion::ast::{self as E, Fields, ModuleIdent},
-    hlir::ast::{self as H, Block, MoveOpAnnotation},
+    debug_display, debug_display_verbose, diag,
+    editions::{FeatureGate, Flavor},
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
+    hlir::{
+        ast::{self as H, Block, BlockLabel, MoveOpAnnotation, UnpackType},
+        detect_dead_code::program as detect_dead_code_analysis,
+    },
+    ice,
     naming::ast as N,
-    parser::ast::{Ability_, BinOp_, ConstantName, Field, FunctionName, StructName},
-    shared::{ast_debug::AstDebug, unique_map::UniqueMap, *},
+    parser::ast::{
+        Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, VariantName,
+    },
+    shared::{process_binops, unique_map::UniqueMap, *},
     sui_mode::ID_FIELD_NAME,
     typing::ast as T,
     FullyCompiledProgram,
 };
+
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
 use move_symbol_pool::Symbol;
 use once_cell::sync::Lazy;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     convert::TryInto,
+    sync::Arc,
 };
+
+use super::match_compilation;
 
 //**************************************************************************************************
 // Vars
@@ -42,8 +53,25 @@ fn translate_var(sp!(loc, v_): N::Var) -> H::Var {
     H::Var(sp(loc, s))
 }
 
+fn translate_block_label(lbl: N::BlockLabel) -> H::BlockLabel {
+    let N::BlockLabel {
+        label: sp!(loc, v_),
+        ..
+    } = lbl;
+    let N::Var_ {
+        name,
+        id: depth,
+        color,
+    } = v_;
+    let s = format!("{name}{NEW_NAME_DELIM}{depth}{NEW_NAME_DELIM}{color}").into();
+    H::BlockLabel(sp(loc, s))
+}
+
 const TEMP_PREFIX: &str = "%";
 static TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| TEMP_PREFIX.into());
+
+const MATCH_TEMP_PREFIX: &str = "__match_tmp%";
+static MATCH_TEMP_PREFIX_SYMBOL: Lazy<Symbol> = Lazy::new(|| MATCH_TEMP_PREFIX.into());
 
 fn new_temp_name(context: &mut Context) -> Symbol {
     format!(
@@ -59,14 +87,21 @@ pub fn is_temp_name(s: Symbol) -> bool {
     s.starts_with(TEMP_PREFIX)
 }
 
+pub fn is_match_temp_name(s: Symbol) -> bool {
+    s.starts_with(MATCH_TEMP_PREFIX)
+}
+
 pub enum DisplayVar {
     Orig(String),
     Tmp,
+    MatchTmp(String),
 }
 
 pub fn display_var(s: Symbol) -> DisplayVar {
     if is_temp_name(s) {
         DisplayVar::Tmp
+    } else if is_match_temp_name(s) {
+        DisplayVar::MatchTmp(s.to_string())
     } else {
         let mut orig = s.as_str().to_string();
         if let Some(i) = orig.find(NEW_NAME_DELIM) {
@@ -80,13 +115,38 @@ pub fn display_var(s: Symbol) -> DisplayVar {
 // Context
 //**************************************************************************************************
 
-struct Context<'env> {
-    env: &'env mut CompilationEnv,
+type VariantFieldIndicies = UniqueMap<
+    ModuleIdent,
+    UniqueMap<DatatypeName, UniqueMap<VariantName, UniqueMap<Field, usize>>>,
+>;
+
+type VariantPositionalMap =
+    UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<VariantName, bool>>>;
+
+type StructPositionalMap = UniqueMap<ModuleIdent, UniqueMap<DatatypeName, bool>>;
+
+pub(super) struct HLIRDebugFlags {
+    pub(super) match_translation: bool,
+    pub(super) match_variant_translation: bool,
+    pub(super) match_specialization: bool,
+    pub(super) match_counterexample: bool,
+    pub(super) match_work_queue: bool,
+}
+
+pub(super) struct Context<'env> {
+    pub env: &'env mut CompilationEnv,
+    pub debug: HLIRDebugFlags,
     current_package: Option<Symbol>,
-    structs: UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
-    function_locals: UniqueMap<H::Var, H::SingleType>,
+    structs: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
+    struct_positional_info: StructPositionalMap,
+    enum_variants: UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
+    variant_fields: VariantFieldIndicies,
+    variant_positional_info: VariantPositionalMap,
+    function_locals: UniqueMap<H::Var, (Mutability, H::SingleType)>,
     signature: Option<H::FunctionSignature>,
     tmp_counter: usize,
+    named_block_binders: UniqueMap<H::BlockLabel, Vec<H::LValue>>,
+    named_block_types: UniqueMap<H::BlockLabel, H::Type>,
     /// collects all struct fields used in the current module
     pub used_fields: BTreeMap<Symbol, BTreeSet<Symbol>>,
 }
@@ -94,47 +154,193 @@ struct Context<'env> {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        pre_compiled_lib_opt: Option<&FullyCompiledProgram>,
+        pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
         prog: &T::Program_,
     ) -> Self {
         fn add_struct_fields(
-            structs: &mut UniqueMap<ModuleIdent, UniqueMap<StructName, UniqueMap<Field, usize>>>,
+            env: &mut CompilationEnv,
+            structs: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, UniqueMap<Field, usize>>>,
+            struct_positional_info: &mut StructPositionalMap,
             mident: ModuleIdent,
-            struct_defs: &UniqueMap<StructName, N::StructDefinition>,
+            struct_defs: &UniqueMap<DatatypeName, N::StructDefinition>,
         ) {
             let mut cur_structs = UniqueMap::new();
+            let mut cur_structs_positional_info = UniqueMap::new();
             for (sname, sdef) in struct_defs.key_cloned_iter() {
                 let mut fields = UniqueMap::new();
                 let field_map = match &sdef.fields {
                     N::StructFields::Native(_) => continue,
-                    N::StructFields::Defined(m) => m,
+                    N::StructFields::Defined(fields_are_positional, m) => {
+                        cur_structs_positional_info
+                            .add(sname, *fields_are_positional)
+                            .unwrap();
+                        m
+                    }
                 };
                 for (field, (idx, _)) in field_map.key_cloned_iter() {
                     fields.add(field, *idx).unwrap();
                 }
                 cur_structs.add(sname, fields).unwrap();
             }
-            structs.remove(&mident);
-            structs.add(mident, cur_structs).unwrap();
+            if let Err((_, prev_loc)) = structs.add(mident, cur_structs) {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Structs for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
+            if let Err((_, prev_loc)) =
+                struct_positional_info.add(mident, cur_structs_positional_info)
+            {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Struct for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
+        }
+
+        fn add_enums(
+            env: &mut CompilationEnv,
+            enum_variants: &mut UniqueMap<ModuleIdent, UniqueMap<DatatypeName, Vec<VariantName>>>,
+            variant_fields: &mut VariantFieldIndicies,
+            variant_positional_info: &mut VariantPositionalMap,
+            mident: ModuleIdent,
+            enum_defs: &UniqueMap<DatatypeName, N::EnumDefinition>,
+        ) {
+            let mut cur_enums_variants = UniqueMap::new();
+            let mut cur_enums_variant_fields = UniqueMap::new();
+            let mut cur_enums_variant_positional_info = UniqueMap::new();
+            for (ename, edef) in enum_defs.key_cloned_iter() {
+                let mut enum_variant_fields = UniqueMap::new();
+                let mut enum_variant_positional_info = UniqueMap::new();
+                let mut enum_indexed_variants = vec![];
+                for (variant_name, vdef) in edef.variants.key_cloned_iter() {
+                    let fields = match &vdef.fields {
+                        N::VariantFields::Empty => UniqueMap::new(),
+                        N::VariantFields::Defined(fields_are_positional, m) => {
+                            enum_variant_positional_info
+                                .add(variant_name, *fields_are_positional)
+                                .unwrap();
+                            UniqueMap::maybe_from_iter(
+                                m.key_cloned_iter().map(|(field, (idx, _))| (field, *idx)),
+                            )
+                            .unwrap()
+                        }
+                    };
+                    enum_indexed_variants.push((variant_name, vdef.index));
+                    enum_variant_fields.add(variant_name, fields).unwrap();
+                }
+                enum_indexed_variants.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
+                cur_enums_variants
+                    .add(
+                        ename,
+                        enum_indexed_variants
+                            .into_iter()
+                            .map(|(key, _ndx)| key)
+                            .collect::<Vec<_>>(),
+                    )
+                    .unwrap();
+                cur_enums_variant_fields
+                    .add(ename, enum_variant_fields)
+                    .unwrap();
+                cur_enums_variant_positional_info
+                    .add(ename, enum_variant_positional_info)
+                    .unwrap();
+            }
+            if let Err((_, prev_loc)) = enum_variants.add(mident, cur_enums_variants) {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Enums for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
+            if let Err((_, prev_loc)) = variant_fields.add(mident, cur_enums_variant_fields) {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Variants for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
+            if let Err((_, prev_loc)) =
+                variant_positional_info.add(mident, cur_enums_variant_positional_info)
+            {
+                let mut diag = ice!((
+                    mident.loc,
+                    format!("Variants for module {} redefined here", mident)
+                ));
+                diag.add_secondary_label((prev_loc, "Previously defined here"));
+                env.add_diag(diag);
+            }
         }
 
         let mut structs = UniqueMap::new();
+        let mut struct_positional_info = UniqueMap::new();
+        let mut enum_variants = UniqueMap::new();
+        let mut variant_fields = UniqueMap::new();
+        let mut variant_positional_info = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
             for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
-                add_struct_fields(&mut structs, mident, &mdef.structs)
+                add_struct_fields(
+                    env,
+                    &mut structs,
+                    &mut struct_positional_info,
+                    mident,
+                    &mdef.structs,
+                );
+                add_enums(
+                    env,
+                    &mut enum_variants,
+                    &mut variant_fields,
+                    &mut variant_positional_info,
+                    mident,
+                    &mdef.enums,
+                );
             }
         }
         for (mident, mdef) in prog.modules.key_cloned_iter() {
-            add_struct_fields(&mut structs, mident, &mdef.structs)
+            add_struct_fields(
+                env,
+                &mut structs,
+                &mut struct_positional_info,
+                mident,
+                &mdef.structs,
+            );
+            add_enums(
+                env,
+                &mut enum_variants,
+                &mut variant_fields,
+                &mut variant_positional_info,
+                mident,
+                &mdef.enums,
+            );
         }
+        let debug = HLIRDebugFlags {
+            match_translation: false,
+            match_variant_translation: false,
+            match_specialization: false,
+            match_counterexample: false,
+            match_work_queue: false,
+        };
         Context {
             env,
+            debug,
             current_package: None,
             structs,
+            struct_positional_info,
+            enum_variants,
+            variant_fields,
+            variant_positional_info,
             function_locals: UniqueMap::new(),
             signature: None,
             tmp_counter: 0,
             used_fields: BTreeMap::new(),
+            named_block_binders: UniqueMap::new(),
+            named_block_types: UniqueMap::new(),
         }
     }
 
@@ -142,27 +348,95 @@ impl<'env> Context<'env> {
         self.function_locals.is_empty()
     }
 
-    pub fn extract_function_locals(&mut self) -> UniqueMap<H::Var, H::SingleType> {
+    pub fn extract_function_locals(&mut self) -> UniqueMap<H::Var, (Mutability, H::SingleType)> {
         self.tmp_counter = 0;
         std::mem::replace(&mut self.function_locals, UniqueMap::new())
     }
 
     pub fn new_temp(&mut self, loc: Loc, t: H::SingleType) -> H::Var {
         let new_var = H::Var(sp(loc, new_temp_name(self)));
-        self.function_locals.add(new_var, t).unwrap();
+        self.function_locals
+            .add(new_var, (Mutability::Either, t))
+            .unwrap();
 
         new_var
     }
 
-    pub fn bind_local(&mut self, v: N::Var, t: H::SingleType) {
-        let symbol = translate_var(v);
-        self.function_locals.add(symbol, t).unwrap();
+    /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
+    /// should only be called in match expansion, which will have its body processed in HLIR
+    /// translation after expansion.
+    pub fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
+        let id = self.counter_next();
+        let name = format!(
+            "{}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",
+            *MATCH_TEMP_PREFIX_SYMBOL,
+        )
+        .into();
+        sp(
+            loc,
+            N::Var_ {
+                name,
+                id: id as u16,
+                color: 1,
+            },
+        )
     }
 
-    pub fn fields(
+    pub fn bind_local(&mut self, mut_: Mutability, v: N::Var, t: H::SingleType) {
+        let symbol = translate_var(v);
+        // We may reuse a name if it appears on both sides of an `or` pattern
+        if let Some((cur_mut, cur_t)) = self.function_locals.get(&symbol) {
+            assert!(cur_t == &t);
+            assert!(
+                cur_mut == &mut_,
+                "{:?} changed mutability from {:?} to {:?}",
+                v,
+                cur_mut,
+                mut_
+            );
+        } else {
+            self.function_locals.add(symbol, (mut_, t)).unwrap();
+        }
+    }
+
+    pub fn record_named_block_binders(
+        &mut self,
+        block_name: H::BlockLabel,
+        binders: Vec<H::LValue>,
+    ) {
+        self.named_block_binders
+            .add(block_name, binders)
+            .expect("ICE reused block name");
+    }
+
+    pub fn record_named_block_type(&mut self, block_name: H::BlockLabel, ty: H::Type) {
+        self.named_block_types
+            .add(block_name, ty)
+            .expect("ICE reused named block name");
+    }
+
+    pub fn lookup_named_block_binders(&mut self, block_name: &H::BlockLabel) -> Vec<H::LValue> {
+        self.named_block_binders
+            .get(block_name)
+            .expect("ICE named block with no binders")
+            .clone()
+    }
+
+    pub fn lookup_named_block_type(&mut self, block_name: &H::BlockLabel) -> Option<H::Type> {
+        self.named_block_types.get(block_name).cloned()
+    }
+
+    pub fn is_struct(&self, module: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        self.structs
+            .get(module)
+            .map(|structs| structs.contains_key(datatype_name))
+            .unwrap_or(false)
+    }
+
+    pub fn struct_fields(
         &self,
         module: &ModuleIdent,
-        struct_name: &StructName,
+        struct_name: &DatatypeName,
     ) -> Option<&UniqueMap<Field, usize>> {
         let fields = self
             .structs
@@ -174,9 +448,104 @@ impl<'env> Context<'env> {
         fields
     }
 
+    /// Indicates if the struct is positional. Returns false on empty or missing.
+    pub fn struct_is_positional(&self, module: &ModuleIdent, struct_name: &DatatypeName) -> bool {
+        self.struct_positional_info
+            .get(module)
+            .and_then(|structs| structs.get(struct_name))
+            .cloned()
+            .unwrap_or(false)
+    }
+
+    /// Returns the enum variant names in sorted order.
+    pub fn enum_variants(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+    ) -> Vec<VariantName> {
+        self.enum_variants
+            .get(module)
+            .and_then(|enums| enums.get(enum_name))
+            .expect("ICE enum resolution should have failed during naming")
+            .to_vec()
+    }
+
+    pub fn enum_variant_fields(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> Option<&UniqueMap<Field, usize>> {
+        let fields = self
+            .variant_fields
+            .get(module)
+            .and_then(|enums| enums.get(enum_name))
+            .and_then(|variants| variants.get(variant_name));
+        // if fields are none, the variant must be defined in another module,
+        // in that case, there should be errors
+        assert!(fields.is_some() || self.env.has_errors());
+        fields
+    }
+
+    /// Indicates if the enum variant is positional. Returns false on empty or missing.
+    pub fn enum_variant_is_positional(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> bool {
+        self.variant_positional_info
+            .get(module)
+            .and_then(|enums| enums.get(enum_name))
+            .and_then(|variants| variants.get(variant_name))
+            .cloned()
+            .unwrap_or(false)
+    }
+
+    pub fn make_imm_ref_match_binders(
+        &mut self,
+        pattern_loc: Loc,
+        arg_types: Fields<N::Type>,
+    ) -> Vec<(Field, N::Var, N::Type)> {
+        let fields = match_compilation::order_fields_by_decl(None, arg_types.clone());
+        fields
+            .into_iter()
+            .map(|(_, field_name, field_type)| {
+                (
+                    field_name,
+                    self.new_match_var(field_name.to_string(), pattern_loc),
+                    make_imm_ref_ty(field_type),
+                )
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn make_unpack_binders(
+        &mut self,
+        pattern_loc: Loc,
+        arg_types: Fields<N::Type>,
+    ) -> Vec<(Field, N::Var, N::Type)> {
+        let fields = match_compilation::order_fields_by_decl(None, arg_types.clone());
+        fields
+            .into_iter()
+            .map(|(_, field_name, field_type)| {
+                (
+                    field_name,
+                    self.new_match_var(field_name.to_string(), pattern_loc),
+                    field_type,
+                )
+            })
+            .collect::<Vec<_>>()
+    }
     fn counter_next(&mut self) -> usize {
         self.tmp_counter += 1;
         self.tmp_counter
+    }
+
+    fn exit_function(&mut self) {
+        self.signature = None;
+        self.named_block_binders = UniqueMap::new();
+        self.named_block_types = UniqueMap::new();
     }
 }
 
@@ -186,18 +555,16 @@ impl<'env> Context<'env> {
 
 pub fn program(
     compilation_env: &mut CompilationEnv,
-    pre_compiled_lib: Option<&FullyCompiledProgram>,
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
     prog: T::Program,
 ) -> H::Program {
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
-    let T::Program_ {
-        modules: tmodules,
-        scripts: tscripts,
-    } = prog.inner;
-    let modules = modules(&mut context, tmodules);
-    let scripts = scripts(&mut context, tscripts);
+    detect_dead_code_analysis(compilation_env, &prog);
 
-    H::Program { modules, scripts }
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
+    let T::Program_ { modules: tmodules } = prog.inner;
+    let modules = modules(&mut context, tmodules);
+
+    H::Program { modules }
 }
 
 fn modules(
@@ -224,18 +591,27 @@ fn module(
         dependency_order,
         immediate_neighbors: _,
         used_addresses: _,
+        use_funs: _,
+        syntax_methods: _,
         friends,
         structs: tstructs,
+        enums: tenums,
         functions: tfunctions,
         constants: tconstants,
-        spec_dependencies: _,
     } = mdef;
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
     let structs = tstructs.map(|name, s| struct_def(context, name, s));
+    let enums = tenums.map(|name, s| enum_def(context, name, s));
 
     let constants = tconstants.map(|name, c| constant(context, name, c));
-    let functions = tfunctions.map(|name, f| function(context, name, f));
+    let functions = tfunctions.filter_map(|name, f| {
+        if f.macro_.is_none() {
+            Some(function(context, name, f))
+        } else {
+            None
+        }
+    });
 
     gen_unused_warnings(context, is_source_module, &structs);
 
@@ -251,50 +627,11 @@ fn module(
             dependency_order,
             friends,
             structs,
+            enums,
             constants,
             functions,
         },
     )
-}
-
-fn scripts(
-    context: &mut Context,
-    tscripts: BTreeMap<Symbol, T::Script>,
-) -> BTreeMap<Symbol, H::Script> {
-    tscripts
-        .into_iter()
-        .map(|(n, s)| (n, script(context, s)))
-        .collect()
-}
-
-fn script(context: &mut Context, tscript: T::Script) -> H::Script {
-    let T::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        immediate_neighbors: _,
-        used_addresses: _,
-        constants: tconstants,
-        function_name,
-        function: tfunction,
-        spec_dependencies: _,
-    } = tscript;
-    context.current_package = package_name;
-    context.env.add_warning_filter_scope(warning_filter.clone());
-    let constants = tconstants.map(|name, c| constant(context, name, c));
-    let function = function(context, function_name, tfunction);
-    context.current_package = None;
-    context.env.pop_warning_filter_scope();
-    H::Script {
-        warning_filter,
-        package_name,
-        attributes,
-        loc,
-        constants,
-        function_name,
-        function,
-    }
 }
 
 //**************************************************************************************************
@@ -308,11 +645,14 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility: evisibility,
+        compiled_visibility: tcompiled_visibility,
+        visibility: tvisibility,
         entry,
+        macro_,
         signature,
         body,
     } = f;
+    assert!(macro_.is_none(), "ICE macros filtered above");
     context.env.add_warning_filter_scope(warning_filter.clone());
     let signature = function_signature(context, signature);
     let body = function_body(context, &signature, body);
@@ -321,7 +661,8 @@ fn function(context: &mut Context, _name: FunctionName, f: T::Function) -> H::Fu
         warning_filter,
         index,
         attributes,
-        visibility: visibility(evisibility),
+        compiled_visibility: visibility(tcompiled_visibility),
+        visibility: visibility(tvisibility),
         entry,
         signature,
         body,
@@ -333,10 +674,10 @@ fn function_signature(context: &mut Context, sig: N::FunctionSignature) -> H::Fu
     let parameters = sig
         .parameters
         .into_iter()
-        .map(|(_, v, tty)| {
+        .map(|(mut_, v, tty)| {
             let ty = single_type(context, tty);
-            context.bind_local(v, ty.clone());
-            (translate_var(v), ty)
+            context.bind_local(mut_, v, ty.clone());
+            (mut_, translate_var(v), ty)
         })
         .collect();
     let return_type = type_(context, sig.return_type);
@@ -359,10 +700,11 @@ fn function_body(
             context.extract_function_locals();
             HB::Native
         }
-        TB::Defined(seq) => {
+        TB::Defined((_, seq)) => {
             let (locals, body) = function_body_defined(context, sig, loc, seq);
             HB::Defined { locals, body }
         }
+        TB::Macro => unreachable!("ICE macros filtered above"),
     };
     sp(loc, b_)
 }
@@ -371,29 +713,21 @@ fn function_body_defined(
     context: &mut Context,
     signature: &H::FunctionSignature,
     loc: Loc,
-    seq: T::Sequence,
-) -> (UniqueMap<H::Var, H::SingleType>, Block) {
-    let mut body = VecDeque::new();
+    seq: VecDeque<T::SequenceItem>,
+) -> (UniqueMap<H::Var, (Mutability, H::SingleType)>, Block) {
     context.signature = Some(signature.clone());
-    let final_exp = block(context, &mut body, loc, Some(&signature.return_type), seq);
-    match &final_exp.exp.value {
-        H::UnannotatedExp_::Unreachable => (),
-        _ => {
-            use H::{Command_ as C, Statement_ as S};
-            let eloc = final_exp.exp.loc;
-            let ret = sp(
-                eloc,
-                C::Return {
-                    from_user: false,
-                    exp: final_exp,
-                },
-            );
-            body.push_back(sp(eloc, S::Command(ret)))
-        }
+    let (mut body, final_value) = { body(context, Some(&signature.return_type), loc, seq) };
+    if let Some(ret_exp) = final_value {
+        let ret_loc = ret_exp.exp.loc;
+        let ret_command = H::Command_::Return {
+            from_user: false,
+            exp: ret_exp,
+        };
+        body.push_back(make_command(ret_loc, ret_command));
     }
+
     let locals = context.extract_function_locals();
-    check_trailing_unit(context, &mut body);
-    context.signature = None;
+    context.exit_function();
     (locals, body)
 }
 
@@ -424,7 +758,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
     let signature = base_type(context, tsignature);
     let eloc = tvalue.exp.loc;
     let tseq = {
-        let mut v = T::Sequence::new();
+        let mut v = VecDeque::new();
         v.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(tvalue))));
         v
     };
@@ -433,7 +767,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
         parameters: vec![],
         return_type: H::Type_::base(signature.clone()),
     };
-    let (locals, body) = function_body_defined(context, &function_signature, eloc, tseq);
+    let (locals, body) = function_body_defined(context, &function_signature, loc, tseq);
     context.env.pop_warning_filter_scope();
     H::Constant {
         warning_filter,
@@ -451,7 +785,7 @@ fn constant(context: &mut Context, _name: ConstantName, cdef: T::Constant) -> H:
 
 fn struct_def(
     context: &mut Context,
-    _name: StructName,
+    _name: DatatypeName,
     sdef: N::StructDefinition,
 ) -> H::StructDefinition {
     let N::StructDefinition {
@@ -478,7 +812,7 @@ fn struct_def(
 fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFields {
     let tfields_map = match tfields {
         N::StructFields::Native(loc) => return H::StructFields::Native(loc),
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
     let mut indexed_fields = tfields_map
         .into_iter()
@@ -486,6 +820,53 @@ fn struct_fields(context: &mut Context, tfields: N::StructFields) -> H::StructFi
         .collect::<Vec<_>>();
     indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
     H::StructFields::Defined(indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect())
+}
+
+//**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+fn enum_def(
+    context: &mut Context,
+    _name: DatatypeName,
+    edef: N::EnumDefinition,
+) -> H::EnumDefinition {
+    let N::EnumDefinition {
+        warning_filter,
+        index,
+        attributes,
+        abilities,
+        type_parameters,
+        variants,
+    } = edef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
+    let variants = variants.map(|_, defn| H::VariantDefinition {
+        index: defn.index,
+        loc: defn.loc,
+        fields: variant_fields(context, defn.fields),
+    });
+    context.env.pop_warning_filter_scope();
+    H::EnumDefinition {
+        warning_filter,
+        index,
+        attributes,
+        abilities,
+        type_parameters,
+        variants,
+    }
+}
+
+fn variant_fields(context: &mut Context, tfields: N::VariantFields) -> Vec<(Field, H::BaseType)> {
+    let tfields_map = match tfields {
+        N::VariantFields::Empty => return vec![],
+        N::VariantFields::Defined(_, m) => m,
+    };
+    let mut indexed_fields = tfields_map
+        .into_iter()
+        .map(|(f, (idx, t))| (idx, (f, base_type(context, t))))
+        .collect::<Vec<_>>();
+    indexed_fields.sort_by(|(idx1, _), (idx2, _)| idx1.cmp(idx2));
+    indexed_fields.into_iter().map(|(_, f_ty)| f_ty).collect()
 }
 
 //**************************************************************************************************
@@ -509,43 +890,52 @@ fn type_name(_context: &Context, sp!(loc, ntn_): N::TypeName) -> H::TypeName {
 }
 
 fn base_types<R: std::iter::FromIterator<H::BaseType>>(
-    context: &Context,
+    context: &mut Context,
     tys: impl IntoIterator<Item = N::Type>,
 ) -> R {
     tys.into_iter().map(|t| base_type(context, t)).collect()
 }
 
-fn base_type(context: &Context, sp!(loc, nb_): N::Type) -> H::BaseType {
+fn base_type(context: &mut Context, sp!(loc, nb_): N::Type) -> H::BaseType {
     use H::BaseType_ as HB;
     use N::Type_ as NT;
     let b_ = match nb_ {
-        NT::Var(_) => panic!(
-            "ICE tvar not expanded: {}:{}-{}",
-            loc.file_hash(),
-            loc.start(),
-            loc.end()
-        ),
-        NT::Apply(None, n, tys) => {
-            NT::Apply(None, n, tys).print_verbose();
-            panic!("ICE kind not expanded: {:#?}", loc)
+        NT::Var(_) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!(
+                    "ICE type inf. var not expanded: {}",
+                    debug_display_verbose!(nb_)
+                )
+            )));
+            return error_base_type(loc);
+        }
+        NT::Apply(None, _, _) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!("ICE kind not expanded: {}", debug_display_verbose!(nb_))
+            )));
+            return error_base_type(loc);
         }
         NT::Apply(Some(k), n, nbs) => HB::Apply(k, type_name(context, n), base_types(context, nbs)),
         NT::Param(tp) => HB::Param(tp),
         NT::UnresolvedError => HB::UnresolvedError,
         NT::Anything => HB::Unreachable,
-        NT::Ref(_, _) | NT::Unit => {
-            panic!(
-                "ICE type constraints failed {}:{}-{}",
-                loc.file_hash(),
-                loc.start(),
-                loc.end()
-            )
+        NT::Ref(_, _) | NT::Unit | NT::Fun(_, _) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!(
+                    "ICE base type constraint failed: {}",
+                    debug_display_verbose!(nb_)
+                )
+            )));
+            return error_base_type(loc);
         }
     };
     sp(loc, b_)
 }
 
-fn expected_types(context: &Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
+fn expected_types(context: &mut Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::Type {
     let any = || {
         sp(
             loc,
@@ -559,11 +949,11 @@ fn expected_types(context: &Context, loc: Loc, nss: Vec<Option<N::Type>>) -> H::
     H::Type_::from_vec(loc, ss)
 }
 
-fn single_types(context: &Context, ss: Vec<N::Type>) -> Vec<H::SingleType> {
+fn single_types(context: &mut Context, ss: Vec<N::Type>) -> Vec<H::SingleType> {
     ss.into_iter().map(|s| single_type(context, s)).collect()
 }
 
-fn single_type(context: &Context, sp!(loc, ty_): N::Type) -> H::SingleType {
+fn single_type(context: &mut Context, sp!(loc, ty_): N::Type) -> H::SingleType {
     use H::SingleType_ as HS;
     use N::Type_ as NT;
     let s_ = match ty_ {
@@ -573,14 +963,17 @@ fn single_type(context: &Context, sp!(loc, ty_): N::Type) -> H::SingleType {
     sp(loc, s_)
 }
 
-fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
+fn type_(context: &mut Context, sp!(loc, ty_): N::Type) -> H::Type {
     use H::Type_ as HT;
     use N::{TypeName_ as TN, Type_ as NT};
     let t_ = match ty_ {
         NT::Unit => HT::Unit,
-        NT::Apply(None, n, tys) => {
-            NT::Apply(None, n, tys).print_verbose();
-            panic!("ICE kind not expanded: {:#?}", loc)
+        NT::Apply(None, _, _) => {
+            context.env.add_diag(ice!((
+                loc,
+                format!("ICE kind not expanded: {}", debug_display_verbose!(ty_))
+            )));
+            return error_type(loc);
         }
         NT::Apply(Some(_), sp!(_, TN::Multiple(_)), ss) => HT::Multiple(single_types(context, ss)),
         _ => HT::Single(single_type(context, sp(loc, ty_))),
@@ -588,558 +981,935 @@ fn type_(context: &Context, sp!(loc, ty_): N::Type) -> H::Type {
     sp(loc, t_)
 }
 
-//**************************************************************************************************
-// Statements
-//**************************************************************************************************
-
-fn block(
-    context: &mut Context,
-    result: &mut Block,
-    loc: Loc,
-    expected_type_opt: Option<&H::Type>,
-    mut seq: T::Sequence,
-) -> H::Exp {
-    use T::SequenceItem_ as S;
-    let last = match seq.pop_back() {
-        None => {
-            return H::exp(
-                sp(loc, H::Type_::Unit),
-                sp(
-                    loc,
-                    H::UnannotatedExp_::Unit {
-                        case: H::UnitCase::FromUser,
-                    },
-                ),
-            )
-        }
-        Some(sp!(_, S::Seq(last))) => last,
-        Some(_) => panic!("ICE last sequence item should be exp"),
-    };
-
-    for sp!(sloc, seq_item_) in seq {
-        match seq_item_ {
-            S::Seq(te) => statement(context, result, *te),
-            S::Declare(binds) => declare_bind_list(context, &binds),
-            S::Bind(binds, ty, e) => {
-                let expected_tys = expected_types(context, sloc, ty);
-                let res = exp(context, result, Some(&expected_tys), *e);
-                declare_bind_list(context, &binds);
-                assign_command(context, result, sloc, binds, *res);
-            }
-        }
-    }
-    exp_(context, result, expected_type_opt, *last)
+fn error_base_type(loc: Loc) -> H::BaseType {
+    sp(loc, H::BaseType_::UnresolvedError)
 }
 
-fn statement(context: &mut Context, result: &mut Block, e: T::Exp) {
+fn error_type(loc: Loc) -> H::Type {
+    H::Type_::base(error_base_type(loc))
+}
+
+//**************************************************************************************************
+// Expression Processing
+//**************************************************************************************************
+
+macro_rules! make_block {
+    () => { VecDeque::new() };
+    ($($elems:expr),+) => { VecDeque::from([$($elems),*]) };
+}
+
+// -------------------------------------------------------------------------------------------------
+// Tail Position
+// -------------------------------------------------------------------------------------------------
+
+fn body(
+    context: &mut Context,
+    expected_type: Option<&H::Type>,
+    loc: Loc,
+    seq: VecDeque<T::SequenceItem>,
+) -> (Block, Option<H::Exp>) {
+    if seq.is_empty() {
+        (make_block!(), Some(unit_exp(loc)))
+    } else {
+        let mut block = make_block!();
+        let final_exp = tail_block(context, &mut block, expected_type, seq);
+        (block, final_exp)
+    }
+}
+
+#[growing_stack]
+fn tail(
+    context: &mut Context,
+    block: &mut Block,
+    expected_type: Option<&H::Type>,
+    e: T::Exp,
+) -> Option<H::Exp> {
+    if is_statement(&e) {
+        let result = if is_unit_statement(&e) {
+            Some(unit_exp(e.exp.loc))
+        } else {
+            None
+        };
+        statement(context, block, e);
+        return result;
+    }
+
     use H::Statement_ as S;
-    use T::UnannotatedExp_ as TE;
+    use T::UnannotatedExp_ as E;
+    let T::Exp {
+        ty: ref in_type,
+        exp: sp!(eloc, e_),
+    } = e;
+    let out_type = type_(context, in_type.clone());
 
-    let ty = e.ty;
-    let sp!(eloc, e_) = e.exp;
-    let stmt_ = match e_ {
-        TE::IfElse(tb, tt, tf) => {
-            let cond = exp(context, result, None, *tb);
+    match e_ {
+        // -----------------------------------------------------------------------------------------
+        // control flow statements
+        // -----------------------------------------------------------------------------------------
+        E::IfElse(test, conseq, alt) => {
+            let cond = value(context, block, Some(&tbool(eloc)), *test);
+            let mut if_block = make_block!();
+            let conseq_exp = tail(context, &mut if_block, Some(&out_type), *conseq);
+            let mut else_block = make_block!();
+            let alt_exp = tail(context, &mut else_block, Some(&out_type), *alt);
 
-            let mut if_block = Block::new();
-            let et = exp_(context, &mut if_block, None, *tt);
-            ignore_and_pop(&mut if_block, et);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
-            let mut else_block = Block::new();
-            let ef = exp_(context, &mut else_block, None, *tf);
-            ignore_and_pop(&mut else_block, ef);
+            let arms_unreachable = conseq_exp.is_none() && alt_exp.is_none();
 
-            S::IfElse {
-                cond,
+            if let Some(conseq_exp) = conseq_exp {
+                bind_value_in_block(
+                    context,
+                    binders.clone(),
+                    Some(out_type.clone()),
+                    &mut if_block,
+                    conseq_exp,
+                );
+            }
+            if let Some(alt_exp) = alt_exp {
+                bind_value_in_block(context, binders, Some(out_type), &mut else_block, alt_exp);
+            }
+            let if_else = S::IfElse {
+                cond: Box::new(cond),
                 if_block,
                 else_block,
-            }
-        }
-        TE::While(tb, loop_body) => {
-            let mut cond_block = Block::new();
-            let cond_exp = exp(context, &mut cond_block, None, *tb);
-
-            let mut loop_block = Block::new();
-            let el = exp_(context, &mut loop_block, None, *loop_body);
-            ignore_and_pop(&mut loop_block, el);
-
-            S::While {
-                cond: (cond_block, cond_exp),
-                block: loop_block,
-            }
-        }
-        TE::Loop {
-            body: loop_body,
-            has_break,
-        } => {
-            let loop_block = statement_loop_body(context, *loop_body);
-
-            S::Loop {
-                block: loop_block,
-                has_break,
-            }
-        }
-        TE::Block(seq) => {
-            let res = block(context, result, eloc, None, seq);
-            ignore_and_pop(result, res);
-            return;
-        }
-        e_ => {
-            let te = T::exp(ty, sp(eloc, e_));
-            let e = exp_(context, result, None, te);
-            ignore_and_pop(result, e);
-            return;
-        }
-    };
-    result.push_back(sp(eloc, stmt_))
-}
-
-fn statement_loop_body(context: &mut Context, body: T::Exp) -> Block {
-    let mut loop_block = Block::new();
-    let el = exp_(context, &mut loop_block, None, body);
-    ignore_and_pop(&mut loop_block, el);
-    loop_block
-}
-
-//**************************************************************************************************
-// LValue
-//**************************************************************************************************
-
-fn declare_bind_list(context: &mut Context, sp!(_, binds): &T::LValueList) {
-    binds.iter().for_each(|b| declare_bind(context, b))
-}
-
-fn declare_bind(context: &mut Context, sp!(_, bind_): &T::LValue) {
-    use T::LValue_ as L;
-    match bind_ {
-        L::Ignore => (),
-        L::Var { var: v, ty, .. } => {
-            let st = single_type(context, *ty.clone());
-            context.bind_local(*v, st)
-        }
-        L::Unpack(_, _, _, fields) | L::BorrowUnpack(_, _, _, _, fields) => fields
-            .iter()
-            .for_each(|(_, _, (_, (_, b)))| declare_bind(context, b)),
-    }
-}
-
-fn assign_command(
-    context: &mut Context,
-    result: &mut Block,
-    loc: Loc,
-    sp!(_, assigns): T::LValueList,
-    rvalue: H::Exp,
-) {
-    use H::{Command_ as C, Statement_ as S};
-    let mut lvalues = vec![];
-    let mut after = Block::new();
-    for (idx, a) in assigns.into_iter().enumerate() {
-        let a_ty = rvalue.ty.value.type_at_index(idx);
-        let (ls, mut af) = assign(context, a, a_ty);
-
-        lvalues.push(ls);
-        after.append(&mut af);
-    }
-    result.push_back(sp(loc, S::Command(sp(loc, C::Assign(lvalues, rvalue)))));
-    result.append(&mut after);
-}
-
-fn assign(
-    context: &mut Context,
-    sp!(loc, ta_): T::LValue,
-    rvalue_ty: &H::SingleType,
-) -> (H::LValue, Block) {
-    use H::{LValue_ as L, UnannotatedExp_ as E};
-    use T::LValue_ as A;
-    let mut after = Block::new();
-    let l_ = match ta_ {
-        A::Ignore => L::Ignore,
-        A::Var { var: v, ty: st, .. } => {
-            L::Var(translate_var(v), Box::new(single_type(context, *st)))
-        }
-        A::Unpack(m, s, tbs, tfields) => {
-            // all fields of an unpacked struct type are used
-            context
-                .used_fields
-                .entry(s.value())
-                .or_default()
-                .extend(tfields.iter().map(|(_, s, _)| *s));
-
-            let bs = base_types(context, tbs);
-
-            let mut fields = vec![];
-            for (decl_idx, f, bt, tfa) in assign_fields(context, &m, &s, tfields) {
-                assert!(fields.len() == decl_idx);
-                let st = &H::SingleType_::base(bt);
-                let (fa, mut fafter) = assign(context, tfa, st);
-                after.append(&mut fafter);
-                fields.push((f, fa))
-            }
-            L::Unpack(s, bs, fields)
-        }
-        A::BorrowUnpack(mut_, m, s, _tss, tfields) => {
-            // all fields of an unpacked struct type are used
-            context
-                .used_fields
-                .entry(s.value())
-                .or_default()
-                .extend(tfields.iter().map(|(_, s, _)| *s));
-
-            let tmp = context.new_temp(loc, rvalue_ty.clone());
-            let copy_tmp = || {
-                let copy_tmp_ = E::Copy {
-                    from_user: false,
-                    var: tmp,
-                };
-                H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
             };
-            let from_unpack = Some(loc);
-            let fields = assign_fields(context, &m, &s, tfields)
+            block.push_back(sp(eloc, if_else));
+            if arms_unreachable {
+                None
+            } else {
+                Some(maybe_freeze(
+                    context,
+                    block,
+                    expected_type.cloned(),
+                    bound_exp,
+                ))
+            }
+        }
+
+        E::Match(subject, arms) => {
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = tail(context, block, expected_type, compiled);
+            debug_print!(context.debug.match_variant_translation,
+                         (lines "block" => block),
+                         (opt "result" => &result));
+            result
+        }
+
+        E::VariantMatch(subject, enum_name, arms) => {
+            let subject = Box::new(value(context, block, None, *subject));
+
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+
+            let mut arms_unreachable = true;
+            let arms = arms
                 .into_iter()
-                .enumerate();
-            for (idx, (decl_idx, f, bt, tfa)) in fields {
-                assert!(idx == decl_idx);
-                let floc = tfa.loc;
-                let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
-                let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
-                let borrow = H::exp(borrow_ty, sp(floc, borrow_));
-                assign_command(context, &mut after, floc, sp(floc, vec![tfa]), borrow);
-            }
-            L::Var(tmp, Box::new(rvalue_ty.clone()))
-        }
-    };
-    (sp(loc, l_), after)
-}
-
-fn assign_fields(
-    context: &Context,
-    m: &ModuleIdent,
-    s: &StructName,
-    tfields: Fields<(N::Type, T::LValue)>,
-) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
-    let decl_fields = context.fields(m, s);
-    let mut count = 0;
-    let mut decl_field = |f: &Field| -> usize {
-        match decl_fields {
-            Some(m) => *m.get(f).unwrap(),
-            None => {
-                // none can occur with errors in typing
-                let i = count;
-                count += 1;
-                i
-            }
-        }
-    };
-    let mut tfields_vec = tfields
-        .into_iter()
-        .map(|(f, (_idx, (tbt, tfa)))| (decl_field(&f), f, base_type(context, tbt), tfa))
-        .collect::<Vec<_>>();
-    tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
-    tfields_vec
-}
-
-//**************************************************************************************************
-// Commands
-//**************************************************************************************************
-
-fn ignore_and_pop(result: &mut Block, e: H::Exp) {
-    match &e.exp.value {
-        H::UnannotatedExp_::Unreachable => (),
-        _ => {
-            let pop_num = match &e.ty.value {
-                H::Type_::Unit => 0,
-                H::Type_::Single(_) => 1,
-                H::Type_::Multiple(tys) => tys.len(),
+                .map(|(variant, rhs)| {
+                    let mut arm_block = make_block!();
+                    let arm_exp = tail(context, &mut arm_block, Some(&out_type), rhs);
+                    if let Some(arm_exp) = arm_exp {
+                        arms_unreachable = false;
+                        bind_value_in_block(
+                            context,
+                            binders.clone(),
+                            Some(out_type.clone()),
+                            &mut arm_block,
+                            arm_exp,
+                        );
+                    }
+                    (variant, arm_block)
+                })
+                .collect::<Vec<_>>();
+            let variant_switch = S::VariantMatch {
+                subject,
+                enum_name,
+                arms,
             };
-            let loc = e.exp.loc;
-            let c = sp(loc, H::Command_::IgnoreAndPop { pop_num, exp: e });
-            result.push_back(sp(loc, H::Statement_::Command(c)))
+            block.push_back(sp(eloc, variant_switch));
+            if arms_unreachable {
+                None
+            } else {
+                Some(maybe_freeze(
+                    context,
+                    block,
+                    expected_type.cloned(),
+                    bound_exp,
+                ))
+            }
+        }
+
+        // While loops can't yield values, so we treat them as statements with no binders.
+        e_ @ E::While(_, _, _) => {
+            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
+            Some(trailing_unit_exp(eloc))
+        }
+        E::Loop {
+            name,
+            has_break: true,
+            body,
+        } => {
+            let name = translate_block_label(name);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            let result = if binders.is_empty() {
+                // need to swap the implicit unit out for a trailing unit in tail position
+                trailing_unit_exp(eloc)
+            } else {
+                maybe_freeze(context, block, expected_type.cloned(), bound_exp)
+            };
+            context.record_named_block_binders(name, binders);
+            context.record_named_block_type(name, out_type.clone());
+            let (loop_body, has_break) = process_loop_body(context, &name, *body);
+            block.push_back(sp(
+                eloc,
+                S::Loop {
+                    name,
+                    has_break,
+                    block: loop_body,
+                },
+            ));
+            if has_break {
+                Some(result)
+            } else {
+                None
+            }
+        }
+        e_ @ E::Loop { .. } => {
+            // A loop wthout a break has no concrete type for its binders, but since we'll never
+            // find a break we won't need binders anyway. We just treat it like a statement.
+            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
+            None
+        }
+        E::NamedBlock(name, (_, seq)) => {
+            let name = translate_block_label(name);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            let result = if binders.is_empty() {
+                // need to swap the implicit unit out for a trailing unit in tail position
+                trailing_unit_exp(eloc)
+            } else {
+                maybe_freeze(context, block, expected_type.cloned(), bound_exp)
+            };
+            context.record_named_block_binders(name, binders.clone());
+            context.record_named_block_type(name, out_type.clone());
+            let mut body_block = make_block!();
+            let final_exp = tail_block(context, &mut body_block, Some(&out_type), seq);
+            final_exp.map(|exp| {
+                bind_value_in_block(context, binders, Some(out_type), &mut body_block, exp);
+                block.push_back(sp(
+                    eloc,
+                    S::NamedBlock {
+                        name,
+                        block: body_block,
+                    },
+                ));
+                result
+            })
+        }
+        E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
+
+        // -----------------------------------------------------------------------------------------
+        //  statements that need to be hoisted out
+        // -----------------------------------------------------------------------------------------
+        E::Return(_)
+        | E::Abort(_)
+        | E::Give(_, _)
+        | E::Continue(_)
+        | E::Assign(_, _, _)
+        | E::Mutate(_, _) => {
+            context
+                .env
+                .add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
+            None
+        }
+
+        // -----------------------------------------------------------------------------------------
+        //  value-like expression
+        // -----------------------------------------------------------------------------------------
+        e_ => {
+            let e = T::Exp {
+                ty: in_type.clone(),
+                exp: sp(eloc, e_),
+            };
+            Some(value(context, block, expected_type, e))
         }
     }
 }
 
-//**************************************************************************************************
-// Expressions
-//**************************************************************************************************
-
-fn exp(
+fn tail_block(
     context: &mut Context,
-    result: &mut Block,
-    expected_type_opt: Option<&H::Type>,
-    te: T::Exp,
-) -> Box<H::Exp> {
-    Box::new(exp_(context, result, expected_type_opt, te))
+    block: &mut Block,
+    expected_type: Option<&H::Type>,
+    mut seq: VecDeque<T::SequenceItem>,
+) -> Option<H::Exp> {
+    use T::SequenceItem_ as S;
+    let last_exp = seq.pop_back();
+    statement_block(context, block, seq);
+    match last_exp {
+        None => None,
+        Some(sp!(_, S::Seq(last))) => tail(context, block, expected_type, *last),
+        Some(sp!(loc, _)) => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE statement mishandled in HLIR lowering")));
+            None
+        }
+    }
 }
 
-fn exp_(
-    context: &mut Context<'_>,
-    result: &mut Block,
-    initial_expected_type_opt: Option<&H::Type>,
-    initial_e: T::Exp,
+// -------------------------------------------------------------------------------------------------
+// Value Position
+// -------------------------------------------------------------------------------------------------
+
+#[growing_stack]
+fn value(
+    context: &mut Context,
+    block: &mut Block,
+    expected_type: Option<&H::Type>,
+    e: T::Exp,
 ) -> H::Exp {
-    use std::{cell::RefCell, rc::Rc};
+    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
+    use T::UnannotatedExp_ as E;
 
-    struct Stack<'a, 'env> {
-        frames: Vec<Box<dyn FnOnce(&mut Self)>>,
-        operands: Vec<H::Exp>,
-        context: &'a mut Context<'env>,
+    // we pull outthese cases because it's easier to process them without destructuring `e` first.
+    if is_statement(&e) {
+        let result = if is_unit_statement(&e) {
+            unit_exp(e.exp.loc)
+        } else {
+            H::exp(type_(context, e.ty.clone()), sp(e.exp.loc, HE::Unreachable))
+        };
+        statement(context, block, e);
+        return result;
+    } else if is_binop(&e) {
+        let out_type = type_(context, e.ty.clone());
+        let out_exp = process_binops(context, block, out_type, e);
+        return maybe_freeze(context, block, expected_type.cloned(), out_exp);
+    } else if is_exp_list(&e) {
+        let out_type = type_(context, e.ty.clone());
+        let eloc = e.exp.loc;
+        let out_vec = value_list(context, block, Some(&out_type), e);
+        return maybe_freeze(
+            context,
+            block,
+            expected_type.cloned(),
+            H::exp(out_type, sp(eloc, HE::Multiple(out_vec))),
+        );
     }
 
-    macro_rules! inner {
-        ($block:expr, $exp_ty_opt:expr, $e:expr) => {{
-            let e_result = $block.clone();
-            let e_exp_ty_opt = $exp_ty_opt;
-            move |s: &mut Stack| exp_loop(s, e_result, e_exp_ty_opt, $e)
-        }};
-    }
+    let T::Exp {
+        ty: ref in_type,
+        exp: sp!(eloc, e_),
+    } = e;
+    let out_type = type_(context, in_type.clone());
+    let make_exp = |exp| H::exp(out_type.clone(), sp(eloc, exp));
 
-    fn maybe_freeze(
-        context: &mut Context,
-        result: &mut Block,
-        expected_type_opt: Option<H::Type>,
-        e: H::Exp,
-    ) -> H::Exp {
-        match (&e.exp.value, expected_type_opt.as_ref()) {
-            (H::UnannotatedExp_::Unreachable, _) => e,
-            (_, Some(exty)) if needs_freeze(context, &e.ty, exty) != Freeze::NotNeeded => {
-                freeze(context, result, exty, e)
-            }
-            _ => e,
+    let preresult: H::Exp = match e_ {
+        // ---------------------------------------------------------------------------------------
+        // Expansion-y things
+        // These could likely be discharged during expansion instead.
+        //
+        E::Builtin(bt, arguments) if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(None))) => {
+            use T::ExpListItem as TI;
+            let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
+                E::ExpList(arg_list) => arg_list.try_into().unwrap(),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
+            };
+            let (econd, ecode) = match (cond_item, code_item) {
+                (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
+            };
+            let cond_value = value(context, block, Some(&tbool(eloc)), econd);
+            let code_value = value(context, block, None, ecode);
+            let cond = bind_exp(context, block, cond_value);
+            let code = bind_exp(context, block, code_value);
+            let if_block = make_block!();
+            let else_block = make_block!(make_command(eloc, C::Abort(code)));
+            block.push_back(sp(
+                eloc,
+                S::IfElse {
+                    cond: Box::new(cond),
+                    if_block,
+                    else_block,
+                },
+            ));
+            unit_exp(eloc)
         }
-    }
+        E::Builtin(bt, arguments)
+            if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(Some(_)))) =>
+        {
+            use T::ExpListItem as TI;
+            let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
+                E::ExpList(arg_list) => arg_list.try_into().unwrap(),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
+            };
+            let (econd, ecode) = match (cond_item, code_item) {
+                (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
+                _ => {
+                    context
+                        .env
+                        .add_diag(ice!((eloc, "ICE type checking assert failed")));
+                    return error_exp(eloc);
+                }
+            };
+            let cond = value(context, block, Some(&tbool(eloc)), econd);
+            let mut else_block = make_block!();
+            let code = value(context, &mut else_block, None, ecode);
+            let if_block = make_block!();
+            else_block.push_back(make_command(eloc, C::Abort(code)));
+            block.push_back(sp(
+                eloc,
+                S::IfElse {
+                    cond: Box::new(cond),
+                    if_block,
+                    else_block,
+                },
+            ));
+            unit_exp(eloc)
+        }
 
-    fn exp_loop(
-        stack: &mut Stack,
-        result: Rc<RefCell<Block>>,
-        cur_expected_type_opt: Option<H::Type>,
-        cur: Box<T::Exp>,
-    ) {
-        use H::{Statement_ as S, UnannotatedExp_ as HE};
-        use T::UnannotatedExp_ as TE;
+        // -----------------------------------------------------------------------------------------
+        // control flow statements
+        // -----------------------------------------------------------------------------------------
+        E::IfElse(test, conseq, alt) => {
+            let cond = value(context, block, Some(&tbool(eloc)), *test);
+            let mut if_block = make_block!();
+            let conseq_exp = value(context, &mut if_block, Some(&out_type), *conseq);
+            let mut else_block = make_block!();
+            let alt_exp = value(context, &mut else_block, Some(&out_type), *alt);
 
-        let (tty, sp!(loc, cur_)) = (cur.ty, cur.exp);
-        let ty = type_(stack.context, tty);
-        match cur_ {
-            //***********************************************
-            // Stack-ified traversal
-            //***********************************************
-            TE::IfElse(cond, if_true, if_false) => {
-                let f_cond = inner!(result, None, cond);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
 
-                let if_block = Rc::new(RefCell::new(Block::new()));
-                let f_if = inner!(if_block, Some(ty.clone()), if_true);
+            let arms_unreachable = conseq_exp.is_unreachable() && alt_exp.is_unreachable();
 
-                let else_block = Rc::new(RefCell::new(Block::new()));
-                let f_else = inner!(else_block, Some(ty.clone()), if_false);
+            bind_value_in_block(
+                context,
+                binders.clone(),
+                Some(out_type.clone()),
+                &mut if_block,
+                conseq_exp,
+            );
+            bind_value_in_block(
+                context,
+                binders,
+                Some(out_type.clone()),
+                &mut else_block,
+                alt_exp,
+            );
 
-                let f_if_else = move |s: &mut Stack| {
-                    let ef = s.operands.pop().unwrap();
-                    let et = s.operands.pop().unwrap();
-                    let cond = Box::new(s.operands.pop().unwrap());
-
-                    let mut if_block = Rc::try_unwrap(if_block).unwrap().into_inner();
-                    let mut else_block = Rc::try_unwrap(else_block).unwrap().into_inner();
-                    let result = &mut *result.borrow_mut();
-
-                    let e_ = match (&et.exp.value, &ef.exp.value) {
-                        (HE::Unreachable, HE::Unreachable) => {
-                            let s_ = S::IfElse {
-                                cond,
-                                if_block,
-                                else_block,
-                            };
-                            result.push_back(sp(loc, s_));
-                            HE::Unreachable
-                        }
-                        _ => {
-                            let tmps = make_temps(s.context, loc, ty.clone());
-                            let tres = bind_exp_(&mut if_block, loc, tmps.clone(), et);
-                            let fres = bind_exp_(&mut else_block, loc, tmps, ef);
-                            let s_ = S::IfElse {
-                                cond,
-                                if_block,
-                                else_block,
-                            };
-                            result.push_back(sp(loc, s_));
-                            match (tres, fres) {
-                                (HE::Unreachable, HE::Unreachable) => unreachable!(),
-                                (HE::Unreachable, res) | (res, HE::Unreachable) | (res, _) => res,
-                            }
-                        }
-                    };
-                    let e_res = H::exp(ty, sp(loc, e_));
-                    // each branch is frozen so no need to freeze
-                    s.operands.push(e_res)
-                };
-
-                stack.frames.push(Box::new(f_if_else));
-                stack.frames.push(Box::new(f_else));
-                stack.frames.push(Box::new(f_if));
-                stack.frames.push(Box::new(f_cond));
+            let if_else = S::IfElse {
+                cond: Box::new(cond),
+                if_block,
+                else_block,
+            };
+            block.push_back(sp(eloc, if_else));
+            if arms_unreachable {
+                make_exp(HE::Unreachable)
+            } else {
+                bound_exp
             }
-            TE::BinopExp(lhs, op, toperand_ty, rhs) => {
-                let operand_exp_ty_opt = match &op.value {
-                    BinOp_::And if bind_for_short_circuit(&rhs) => {
-                        let tfalse_ = sp(loc, TE::Value(sp(loc, E::Value_::Bool(false))));
-                        let tfalse = Box::new(T::exp(N::Type_::bool(loc), tfalse_));
-                        let if_else_ = sp(loc, TE::IfElse(lhs, rhs, tfalse));
-                        let if_else = Box::new(T::exp(N::Type_::bool(ty.loc), if_else_));
-                        return exp_loop(stack, result, cur_expected_type_opt, if_else);
-                    }
-                    BinOp_::Or if bind_for_short_circuit(&rhs) => {
-                        let ttrue_ = sp(loc, TE::Value(sp(loc, E::Value_::Bool(true))));
-                        let ttrue = Box::new(T::exp(N::Type_::bool(loc), ttrue_));
-                        let if_else_ = sp(loc, TE::IfElse(lhs, ttrue, rhs));
-                        let if_else = Box::new(T::exp(N::Type_::bool(ty.loc), if_else_));
-                        return exp_loop(stack, result, cur_expected_type_opt, if_else);
-                    }
-                    BinOp_::Eq | BinOp_::Neq => {
-                        let operand_ty = type_(stack.context, *toperand_ty);
-                        Some(freeze_ty(operand_ty))
-                    }
-                    _ => None,
-                };
+        }
 
-                let f_lhs = inner!(result, operand_exp_ty_opt.clone(), lhs);
-                let f_rhs = inner!(result, operand_exp_ty_opt, rhs);
-                let f_binop = move |s: &mut Stack| {
-                    let rhs = Box::new(s.operands.pop().unwrap());
-                    let lhs = Box::new(s.operands.pop().unwrap());
+        E::Match(subject, arms) => {
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let compiled = match_compilation::compile_match(context, in_type, *subject, arms);
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            let result = value(context, block, None, compiled);
+            debug_print!(context.debug.match_variant_translation, ("result" => &result));
+            result
+        }
 
-                    let result = &mut *result.borrow_mut();
+        E::VariantMatch(subject, enum_name, arms) => {
+            let subject_out_type = type_(context, subject.ty.clone());
+            let subject = Box::new(value(context, block, Some(&subject_out_type), *subject));
 
-                    let e_res = H::exp(ty, sp(loc, HE::BinopExp(lhs, op, rhs)));
-                    let e_res = maybe_freeze(s.context, result, cur_expected_type_opt, e_res);
-                    s.operands.push(e_res)
-                };
-                stack.frames.push(Box::new(f_binop));
-                stack.frames.push(Box::new(f_rhs));
-                stack.frames.push(Box::new(f_lhs));
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+
+            let mut arms_unreachable = true;
+            let arms = arms
+                .into_iter()
+                .map(|(variant, rhs)| {
+                    let mut arm_block = make_block!();
+                    let arm_exp = value(context, &mut arm_block, Some(&out_type), rhs);
+                    arms_unreachable = arms_unreachable && arm_exp.is_unreachable();
+                    bind_value_in_block(
+                        context,
+                        binders.clone(),
+                        Some(out_type.clone()),
+                        &mut arm_block,
+                        arm_exp,
+                    );
+                    (variant, arm_block)
+                })
+                .collect::<Vec<_>>();
+            let variant_switch = S::VariantMatch {
+                subject,
+                enum_name,
+                arms,
+            };
+            block.push_back(sp(eloc, variant_switch));
+            if arms_unreachable {
+                make_exp(HE::Unreachable)
+            } else {
+                bound_exp
             }
-            TE::Builtin(bt, arguments)
-                if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(false))) =>
-            {
-                let tbool = N::Type_::bool(loc);
-                let tu64 = N::Type_::u64(loc);
-                let tunit = sp(loc, N::Type_::Unit);
-                // name guaranteed to be unique, so we can skip the depth/color
-                let vcond_ = N::Var_ {
-                    name: new_temp_name(stack.context),
-                    id: 0,
-                    color: 0,
-                };
-                let vcode_ = N::Var_ {
-                    name: new_temp_name(stack.context),
-                    id: 0,
-                    color: 0,
-                };
-                let vcond = sp(loc, vcond_);
-                let vcode = sp(loc, vcode_);
+        }
 
-                let mut stmts = VecDeque::new();
+        // While loops can't yield values, so we treat them as statements with no binders.
+        e_ @ E::While(_, _, _) => {
+            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
+            unit_exp(eloc)
+        }
+        E::Loop {
+            name,
+            has_break: true,
+            body,
+        } => {
+            let name = translate_block_label(name);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            context.record_named_block_binders(name, binders);
+            context.record_named_block_type(name, out_type.clone());
+            let (loop_body, has_break) = process_loop_body(context, &name, *body);
+            block.push_back(sp(
+                eloc,
+                S::Loop {
+                    name,
+                    has_break,
+                    block: loop_body,
+                },
+            ));
+            if has_break {
+                bound_exp
+            } else {
+                make_exp(HE::Unreachable)
+            }
+        }
+        e_ @ E::Loop { .. } => {
+            statement(context, block, T::exp(in_type.clone(), sp(eloc, e_)));
+            make_exp(HE::Unreachable)
+        }
+        E::NamedBlock(name, (_, seq)) => {
+            let name = translate_block_label(name);
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            context.record_named_block_binders(name, binders.clone());
+            context.record_named_block_type(name, out_type.clone());
+            let mut body_block = make_block!();
+            let final_exp = value_block(context, &mut body_block, Some(&out_type), eloc, seq);
+            bind_value_in_block(context, binders, Some(out_type), &mut body_block, final_exp);
+            block.push_back(sp(
+                eloc,
+                S::NamedBlock {
+                    name,
+                    block: body_block,
+                },
+            ));
+            bound_exp
+        }
+        E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
 
-                let bvar = |v, st| {
-                    let var_ = T::LValue_::Var {
-                        var: v,
-                        ty: st,
-                        unused_binding: false,
-                    };
-                    sp(loc, var_)
+        // -----------------------------------------------------------------------------------------
+        //  calls
+        // -----------------------------------------------------------------------------------------
+        E::ModuleCall(call) => {
+            let T::ModuleCall {
+                module,
+                name,
+                type_arguments,
+                arguments,
+                parameter_types,
+                method_name: _,
+            } = *call;
+            let htys = base_types(context, type_arguments);
+            let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
+            let arguments = value_list(context, block, Some(&expected_type), *arguments);
+            let call = H::ModuleCall {
+                module,
+                name,
+                type_arguments: htys,
+                arguments,
+            };
+            make_exp(HE::ModuleCall(Box::new(call)))
+        }
+        E::Builtin(bt, args) => make_exp(builtin(context, block, eloc, *bt, args)),
+
+        // -----------------------------------------------------------------------------------------
+        // nested expressions
+        // -----------------------------------------------------------------------------------------
+        E::Vector(vec_loc, size, vty, args) => {
+            let values = value_list(context, block, None, *args);
+            make_exp(HE::Vector(
+                vec_loc,
+                size,
+                Box::new(base_type(context, *vty)),
+                values,
+            ))
+        }
+        E::Dereference(ev) => {
+            let value = value(context, block, None, *ev);
+            make_exp(HE::Dereference(Box::new(value)))
+        }
+        E::UnaryExp(op, operand) => {
+            let operand = value(context, block, None, *operand);
+            make_exp(HE::UnaryExp(op, Box::new(operand)))
+        }
+
+        E::Pack(module_ident, struct_name, arg_types, fields) => {
+            // all fields of a packed struct type are used
+            context
+                .used_fields
+                .entry(struct_name.value())
+                .or_default()
+                .extend(fields.iter().map(|(_, name, _)| *name));
+
+            let base_types = base_types(context, arg_types);
+
+            let decl_fields = context.struct_fields(&module_ident, &struct_name);
+
+            let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
+                if let Some(field_map) = decl_fields {
+                    fields
+                        .into_iter()
+                        .map(|(f, (exp_idx, (bt, tf)))| {
+                            (*field_map.get(&f).unwrap(), f, exp_idx, bt, tf)
+                        })
+                        .collect()
+                } else {
+                    // If no field map, compiler error in typing.
+                    fields
+                        .into_iter()
+                        .enumerate()
+                        .map(|(ndx, (f, (exp_idx, (bt, tf))))| (ndx, f, exp_idx, bt, tf))
+                        .collect()
                 };
-                let bind_list = sp(
-                    loc,
-                    vec![
-                        bvar(vcond, Box::new(tbool.clone())),
-                        bvar(vcode, Box::new(tu64.clone())),
-                    ],
+            texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
+
+            let reorder_fields = texp_fields
+                .iter()
+                .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
+
+            let fields = if !reorder_fields {
+                let mut fields = vec![];
+                let field_exps = texp_fields
+                    .into_iter()
+                    .map(|(_, f, _, bt, te)| {
+                        let bt = base_type(context, bt);
+                        fields.push((f, bt.clone()));
+                        let t = H::Type_::base(bt);
+                        (te, Some(t))
+                    })
+                    .collect();
+                let field_exps = value_evaluation_order(context, block, field_exps);
+                assert!(
+                    fields.len() == field_exps.len(),
+                    "ICE exp_evaluation_order changed arity"
                 );
-                let tys = vec![Some(tbool.clone()), Some(tu64.clone())];
-                let bind = sp(loc, T::SequenceItem_::Bind(bind_list, tys, arguments));
-                stmts.push_back(bind);
-
-                let mvar = |var, st| {
-                    let from_user = false;
-                    let mv = TE::Move { from_user, var };
-                    T::exp(st, sp(loc, mv))
-                };
-                let econd = mvar(vcond, tu64);
-                let ecode = mvar(vcode, tbool);
-                let eabort = T::exp(tunit.clone(), sp(loc, TE::Abort(Box::new(ecode))));
-                let eunit = T::exp(tunit.clone(), sp(loc, TE::Unit { trailing: false }));
-                let inlined_ = TE::IfElse(Box::new(econd), Box::new(eunit), Box::new(eabort));
-                let inlined = T::exp(tunit.clone(), sp(loc, inlined_));
-                stmts.push_back(sp(loc, T::SequenceItem_::Seq(Box::new(inlined))));
-
-                let block = T::exp(tunit, sp(loc, TE::Block(stmts)));
-                exp_loop(stack, result, cur_expected_type_opt, Box::new(block));
-            }
-            TE::Builtin(bt, arguments)
-                if matches!(&*bt, sp!(_, T::BuiltinFunction_::Assert(true))) =>
-            {
-                use T::ExpListItem as TI;
-                let tunit = sp(loc, N::Type_::Unit);
-                let [cond_item, code_item]: [TI; 2] = match arguments.exp.value {
-                    TE::ExpList(arg_list) => arg_list.try_into().unwrap(),
-                    _ => panic!("ICE type checking failed"),
-                };
-                let (econd, ecode) = match (cond_item, code_item) {
-                    (TI::Single(econd, _), TI::Single(ecode, _)) => (econd, ecode),
-                    _ => panic!("ICE type checking failed"),
-                };
-                let eabort = T::exp(tunit.clone(), sp(loc, TE::Abort(Box::new(ecode))));
-                let eunit = T::exp(tunit.clone(), sp(loc, TE::Unit { trailing: false }));
-                let if_else_ = TE::IfElse(Box::new(econd), Box::new(eunit), Box::new(eabort));
-                let if_else = T::exp(tunit, sp(loc, if_else_));
-                exp_loop(stack, result, cur_expected_type_opt, Box::new(if_else));
-            }
-            te_ => {
-                let result = &mut *result.borrow_mut();
-                let e_res = exp_impl(stack.context, result, ty, loc, te_);
-                let e_res = maybe_freeze(stack.context, result, cur_expected_type_opt, e_res);
-                stack.operands.push(e_res)
-            }
+                field_exps
+                    .into_iter()
+                    .zip(fields)
+                    .map(|(e, (f, bt))| (f, bt, e))
+                    .collect()
+            } else {
+                let num_fields = decl_fields.as_ref().map(|m| m.len()).unwrap_or(0);
+                let mut fields = (0..num_fields).map(|_| None).collect::<Vec<_>>();
+                for (decl_idx, field, _exp_idx, bt, tf) in texp_fields {
+                    // Might have too many arguments, there will be an error from typing
+                    if decl_idx >= fields.len() {
+                        debug_assert!(context.env.has_errors());
+                        break;
+                    }
+                    let base_ty = base_type(context, bt);
+                    let t = H::Type_::base(base_ty.clone());
+                    let field_expr = value(context, block, Some(&t), tf);
+                    assert!(fields.get(decl_idx).unwrap().is_none());
+                    let move_tmp = bind_exp(context, block, field_expr);
+                    fields[decl_idx] = Some((field, base_ty, move_tmp))
+                }
+                // Might have too few arguments, there will be an error from typing if so
+                fields
+                    .into_iter()
+                    .filter_map(|o| {
+                        // if o is None, context should have errors
+                        debug_assert!(o.is_some() || context.env.has_errors());
+                        o
+                    })
+                    .collect()
+            };
+            make_exp(HE::Pack(struct_name, base_types, fields))
         }
-    }
 
-    let mut stack = Stack {
-        frames: vec![],
-        operands: vec![],
-        context,
+        E::PackVariant(module_ident, enum_name, variant_name, arg_types, fields) => {
+            let base_types = base_types(context, arg_types);
+
+            let decl_fields = context.enum_variant_fields(&module_ident, &enum_name, &variant_name);
+
+            let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> =
+                if let Some(field_map) = decl_fields {
+                    fields
+                        .into_iter()
+                        .map(|(f, (exp_idx, (bt, tf)))| {
+                            (*field_map.get(&f).unwrap(), f, exp_idx, bt, tf)
+                        })
+                        .collect()
+                } else {
+                    // If no field map, compiler error in typing.
+                    fields
+                        .into_iter()
+                        .enumerate()
+                        .map(|(ndx, (f, (exp_idx, (bt, tf))))| (ndx, f, exp_idx, bt, tf))
+                        .collect()
+                };
+            texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
+
+            let reorder_fields = texp_fields
+                .iter()
+                .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
+
+            let fields = if !reorder_fields {
+                let mut fields = vec![];
+                let field_exps = texp_fields
+                    .into_iter()
+                    .map(|(_, f, _, bt, te)| {
+                        let bt = base_type(context, bt);
+                        fields.push((f, bt.clone()));
+                        let t = H::Type_::base(bt);
+                        (te, Some(t))
+                    })
+                    .collect();
+                let field_exps = value_evaluation_order(context, block, field_exps);
+                assert!(
+                    fields.len() == field_exps.len(),
+                    "ICE exp_evaluation_order changed arity"
+                );
+                field_exps
+                    .into_iter()
+                    .zip(fields)
+                    .map(|(e, (f, bt))| (f, bt, e))
+                    .collect()
+            } else {
+                let num_fields = decl_fields.as_ref().map(|m| m.len()).unwrap_or(0);
+                let mut fields = (0..num_fields).map(|_| None).collect::<Vec<_>>();
+                for (decl_idx, field, _exp_idx, bt, tf) in texp_fields {
+                    // Might have too many arguments, there will be an error from typing
+                    if decl_idx >= fields.len() {
+                        debug_assert!(context.env.has_errors());
+                        break;
+                    }
+                    let base_ty = base_type(context, bt);
+                    let t = H::Type_::base(base_ty.clone());
+                    let field_expr = value(context, block, Some(&t), tf);
+                    debug_assert!(fields.get(decl_idx).unwrap().is_none());
+                    let move_tmp = bind_exp(context, block, field_expr);
+                    fields[decl_idx] = Some((field, base_ty, move_tmp))
+                }
+                // Might have too few arguments, there will be an error from typing if so
+                fields
+                    .into_iter()
+                    .filter_map(|o| {
+                        // if o is None, context should have errors
+                        debug_assert!(o.is_some() || context.env.has_errors());
+                        o
+                    })
+                    .collect()
+            };
+            make_exp(HE::PackVariant(enum_name, variant_name, base_types, fields))
+        }
+
+        E::Borrow(mut_, base_exp, field) => {
+            let exp = value(context, block, None, *base_exp);
+            if let Some(struct_name) = struct_name(&exp.ty) {
+                context
+                    .used_fields
+                    .entry(struct_name.value())
+                    .or_default()
+                    .insert(field.value());
+            }
+            make_exp(HE::Borrow(mut_, Box::new(exp), field, None))
+        }
+        E::TempBorrow(mut_, base_exp) => {
+            let exp = value(context, block, None, *base_exp);
+            let bound_exp = bind_exp(context, block, exp);
+            let tmp = match bound_exp.exp.value {
+                HE::Move {
+                    annotation: MoveOpAnnotation::InferredLastUsage,
+                    var,
+                } => var,
+                _ => {
+                    context.env.add_diag(ice!((
+                        eloc,
+                        format!(
+                            "ICE invalid bind_exp for single value: {}",
+                            debug_display!(bound_exp)
+                        )
+                    )));
+                    return error_exp(eloc);
+                }
+            };
+            make_exp(HE::BorrowLocal(mut_, tmp))
+        }
+        E::BorrowLocal(mut_, var) => make_exp(HE::BorrowLocal(mut_, translate_var(var))),
+        E::Cast(base, rhs_ty) => {
+            use N::BuiltinTypeName_ as BT;
+            let new_base = value(context, block, None, *base);
+            let bt = match rhs_ty.value.builtin_name() {
+                Some(bt @ sp!(_, BT::U8))
+                | Some(bt @ sp!(_, BT::U16))
+                | Some(bt @ sp!(_, BT::U32))
+                | Some(bt @ sp!(_, BT::U64))
+                | Some(bt @ sp!(_, BT::U128))
+                | Some(bt @ sp!(_, BT::U256)) => *bt,
+                _ => {
+                    context.env.add_diag(ice!((
+                        eloc,
+                        format!(
+                            "ICE typing failed for cast: {} : {}",
+                            debug_display_verbose!(new_base),
+                            debug_display_verbose!(rhs_ty)
+                        )
+                    )));
+                    return error_exp(eloc);
+                }
+            };
+            make_exp(HE::Cast(Box::new(new_base), bt))
+        }
+        E::Annotate(base, rhs_ty) => {
+            let annotated_type = type_(context, *rhs_ty);
+            value(context, block, Some(&annotated_type), *base)
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // value-based expressions without subexpressions -- translate these directly
+        // -----------------------------------------------------------------------------------------
+        E::Unit { trailing } => {
+            let new_unit = HE::Unit {
+                case: if trailing {
+                    H::UnitCase::Trailing
+                } else {
+                    H::UnitCase::FromUser
+                },
+            };
+            make_exp(new_unit)
+        }
+        E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
+        E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
+        E::ErrorConstant(c) => make_exp(HE::ErrorConstant(c)),
+        E::Move { from_user, var } => {
+            let annotation = if from_user {
+                MoveOpAnnotation::FromUser
+            } else {
+                MoveOpAnnotation::InferredNoCopy
+            };
+            let var = translate_var(var);
+            make_exp(HE::Move { annotation, var })
+        }
+        E::Copy { from_user, var } => {
+            let var = translate_var(var);
+            make_exp(HE::Copy { from_user, var })
+        }
+
+        // -----------------------------------------------------------------------------------------
+        //  matches that handled earlier
+        // -----------------------------------------------------------------------------------------
+        E::BinopExp(_, _, _, _)
+        | E::ExpList(_)
+        | E::Return(_)
+        | E::Abort(_)
+        | E::Give(_, _)
+        | E::Continue(_)
+        | E::Assign(_, _, _)
+        | E::Mutate(_, _) => {
+            context
+                .env
+                .add_diag(ice!((eloc, "ICE statement mishandled in HLIR lowering")));
+            error_exp(eloc)
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // odds and ends -- things we need to deal with but that don't do much
+        // -----------------------------------------------------------------------------------------
+        E::Use(_) => {
+            context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
+            error_exp(eloc)
+        }
+        E::UnresolvedError | E::InvalidAccess(_) => {
+            assert!(context.env.has_errors());
+            make_exp(HE::UnresolvedError)
+        }
     };
-    let rc_result = Rc::new(RefCell::new(std::mem::take(result)));
-    exp_loop(
-        &mut stack,
-        rc_result.clone(),
-        initial_expected_type_opt.cloned(),
-        Box::new(initial_e),
-    );
-    while let Some(f) = stack.frames.pop() {
-        f(&mut stack)
-    }
-    let e_res = stack.operands.pop().unwrap();
-    assert!(stack.frames.is_empty());
-    assert!(stack.operands.is_empty());
-    *result = Rc::try_unwrap(rc_result).unwrap().into_inner();
-    e_res
+    maybe_freeze(context, block, expected_type.cloned(), preresult)
 }
 
-fn exp_list(
+fn value_block(
+    context: &mut Context,
+    block: &mut Block,
+    expected_type: Option<&H::Type>,
+    seq_loc: Loc,
+    mut seq: VecDeque<T::SequenceItem>,
+) -> H::Exp {
+    use T::SequenceItem_ as S;
+    let last_exp = seq.pop_back();
+    statement_block(context, block, seq);
+    match last_exp {
+        Some(sp!(_, S::Seq(last))) => value(context, block, expected_type, *last),
+        Some(sp!(loc, _)) => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE last sequence item should be an exp")));
+            error_exp(loc)
+        }
+        None => {
+            context
+                .env
+                .add_diag(ice!((seq_loc, "ICE empty sequence in value position")));
+            error_exp(seq_loc)
+        }
+    }
+}
+
+fn value_list(
     context: &mut Context,
     result: &mut Block,
     ty: Option<&H::Type>,
     e: T::Exp,
 ) -> Vec<H::Exp> {
     use T::UnannotatedExp_ as TE;
-    if let TE::ExpList(items) = e.exp.value {
-        exp_list_items_to_vec(context, result, ty, e.exp.loc, items)
+    // The main difference is that less-optimized version does conversion and binding, then
+    // freezing; the optimized will inline freezing when possible to avoid some bndings.
+    if context
+        .env
+        .supports_feature(context.current_package, FeatureGate::Move2024Optimizations)
+    {
+        value_list_opt(context, result, ty, e)
+    } else if let TE::ExpList(items) = e.exp.value {
+        // clippy insisted on this if structure!
+        value_list_items_to_vec(context, result, ty, e.exp.loc, items)
     } else if let TE::Unit { .. } = e.exp.value {
         vec![]
     } else {
-        vec![*exp(context, result, ty, e)]
+        vec![value(context, result, ty, e)]
     }
 }
 
-fn exp_list_items_to_vec(
+fn value_list_items_to_vec(
     context: &mut Context,
     result: &mut Block,
     ty: Option<&H::Type>,
@@ -1162,7 +1932,7 @@ fn exp_list_items_to_vec(
         }
     }
 
-    let es = exp_evaluation_order(context, result, tes);
+    let es = value_evaluation_order(context, result, tes);
     assert!(
         es.len() == tys.len(),
         "ICE exp_evaluation_order changed arity"
@@ -1185,7 +1955,8 @@ fn exp_list_items_to_vec(
                         ty: current_ty,
                         exp: sp(loc, HE::Multiple(es)),
                     };
-                    let frozen = freeze(context, result, expected_ty, current_exp);
+                    let (mut freeze_block, frozen) = freeze(context, expected_ty, current_exp);
+                    result.append(&mut freeze_block);
                     match frozen.exp.value {
                         HE::Multiple(final_es) => final_es,
                         _ => unreachable!(),
@@ -1200,170 +1971,516 @@ fn exp_list_items_to_vec(
     }
 }
 
-fn exp_impl(
+// optimized version, which inlines freezes when possible
+
+fn value_list_opt(
+    context: &mut Context,
+    block: &mut Block,
+    ty: Option<&H::Type>,
+    e: T::Exp,
+) -> Vec<H::Exp> {
+    use H::Type_ as HT;
+    use T::UnannotatedExp_ as TE;
+    if let TE::ExpList(items) = e.exp.value {
+        assert!(!items.is_empty());
+        let mut tys = vec![];
+        let mut item_exprs = vec![];
+        let expected_tys: Vec<_> = if let Some(sp!(tloc, HT::Multiple(ts))) = ty {
+            ts.iter()
+                .map(|t| Some(sp(*tloc, HT::Single(t.clone()))))
+                .collect()
+        } else {
+            items.iter().map(|_| None).collect()
+        };
+        for (item, expected_ty) in items.into_iter().zip(expected_tys) {
+            match item {
+                T::ExpListItem::Single(te, ts) => {
+                    let t = single_type(context, *ts);
+                    tys.push(t);
+                    item_exprs.push((te, expected_ty));
+                }
+                T::ExpListItem::Splat(_, _, _) => panic!("ICE splat is unsupported."),
+            }
+        }
+        let exprs = value_evaluation_order(context, block, item_exprs);
+        assert!(
+            exprs.len() == tys.len(),
+            "ICE value_evaluation_order changed arity"
+        );
+        exprs
+    } else if let TE::Unit { .. } = e.exp.value {
+        vec![]
+    } else {
+        vec![value(context, block, ty, e)]
+    }
+}
+
+fn error_exp(loc: Loc) -> H::Exp {
+    H::exp(
+        H::Type_::base(sp(loc, H::BaseType_::UnresolvedError)),
+        sp(loc, H::UnannotatedExp_::UnresolvedError),
+    )
+}
+
+// -------------------------------------------------------------------------------------------------
+// Statement Position
+// -------------------------------------------------------------------------------------------------
+
+#[growing_stack]
+fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
+    use H::{Command_ as C, Statement_ as S};
+    use T::UnannotatedExp_ as E;
+
+    let T::Exp {
+        ty,
+        exp: sp!(eloc, e_),
+    } = e;
+
+    let make_exp = |e_| T::Exp {
+        ty: ty.clone(),
+        exp: sp(eloc, e_),
+    };
+    match e_ {
+        // -----------------------------------------------------------------------------------------
+        // control flow statements
+        // -----------------------------------------------------------------------------------------
+        E::IfElse(test, conseq, alt) => {
+            let cond = value(context, block, Some(&tbool(eloc)), *test);
+            let mut if_block = make_block!();
+            statement(context, &mut if_block, *conseq);
+            let mut else_block = make_block!();
+            statement(context, &mut else_block, *alt);
+            block.push_back(sp(
+                eloc,
+                S::IfElse {
+                    cond: Box::new(cond),
+                    if_block,
+                    else_block,
+                },
+            ));
+        }
+        E::Match(subject, arms) => {
+            debug_print!(context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let subject_type = subject.ty.clone();
+            let compiled = match_compilation::compile_match(context, &subject_type, *subject, arms);
+            debug_print!(context.debug.match_translation, ("compiled" => compiled));
+            statement(context, block, compiled);
+            debug_print!(context.debug.match_variant_translation, (lines "block" => block));
+        }
+        E::VariantMatch(subject, enum_name, arms) => {
+            let subject = Box::new(value(context, block, None, *subject));
+            let arms = arms
+                .into_iter()
+                .map(|(variant, rhs)| {
+                    let mut arm_block = make_block!();
+                    statement(context, &mut arm_block, rhs);
+                    (variant, arm_block)
+                })
+                .collect::<Vec<_>>();
+            let variant_switch = S::VariantMatch {
+                subject,
+                enum_name,
+                arms,
+            };
+            block.push_back(sp(eloc, variant_switch));
+        }
+        E::While(name, test, body) => {
+            let mut cond_block = make_block!();
+            let cond_exp = value(context, &mut cond_block, Some(&tbool(eloc)), *test);
+            let cond = (cond_block, Box::new(cond_exp));
+            let name = translate_block_label(name);
+            // While loops can still use break and continue so we build them dummy binders.
+            context.record_named_block_binders(name, vec![]);
+            context.record_named_block_type(name, tunit(eloc));
+            let mut body_block = make_block!();
+            statement(context, &mut body_block, *body);
+            block.push_back(sp(
+                eloc,
+                S::While {
+                    cond,
+                    name,
+                    block: body_block,
+                },
+            ));
+        }
+        E::Loop { name, body, .. } => {
+            let name = translate_block_label(name);
+            let out_type = type_(context, ty.clone());
+            let (binders, bound_exp) = make_binders(context, eloc, out_type.clone());
+            context.record_named_block_binders(name, binders);
+            context.record_named_block_type(name, out_type);
+            let (loop_body, has_break) = process_loop_body(context, &name, *body);
+            block.push_back(sp(
+                eloc,
+                S::Loop {
+                    name,
+                    has_break,
+                    block: loop_body,
+                },
+            ));
+            if has_break {
+                make_ignore_and_pop(block, bound_exp);
+            }
+        }
+        E::Block((_, seq)) => statement_block(context, block, seq),
+        E::Return(rhs) => {
+            let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
+            let exp = value(context, block, expected_type.as_ref(), *rhs);
+            let ret_command = C::Return {
+                from_user: true,
+                exp,
+            };
+            block.push_back(make_command(eloc, ret_command));
+        }
+        E::Abort(rhs) => {
+            let exp = value(context, block, None, *rhs);
+            block.push_back(make_command(eloc, C::Abort(exp)));
+        }
+        E::Give(name, rhs) => {
+            let out_name = translate_block_label(name);
+            let bind_ty = context.lookup_named_block_type(&out_name);
+            let rhs = value(context, block, bind_ty.as_ref(), *rhs);
+            let binders = context.lookup_named_block_binders(&out_name);
+            if binders.is_empty() {
+                make_ignore_and_pop(block, rhs);
+            } else {
+                bind_value_in_block(context, binders, bind_ty, block, rhs);
+            }
+            block.push_back(make_command(eloc, C::Break(out_name)));
+        }
+        E::Continue(name) => {
+            let out_name = translate_block_label(name);
+            block.push_back(make_command(eloc, C::Continue(out_name)));
+        }
+
+        // -----------------------------------------------------------------------------------------
+        //  statements with effects
+        // -----------------------------------------------------------------------------------------
+        E::Assign(assigns, lvalue_ty, rhs) => {
+            let expected_type = expected_types(context, eloc, lvalue_ty);
+            let exp = value(context, block, Some(&expected_type), *rhs);
+            make_assignments(context, block, eloc, H::AssignCase::Update, assigns, exp);
+        }
+
+        E::Mutate(lhs_in, rhs_in) => {
+            // evaluate RHS first
+            let rhs = value(context, block, None, *rhs_in);
+            let lhs = value(context, block, None, *lhs_in);
+            block.push_back(make_command(eloc, C::Mutate(Box::new(lhs), Box::new(rhs))));
+        }
+
+        // calls might be for effect
+        e_ @ E::ModuleCall(_) | e_ @ E::Builtin(_, _) => {
+            value_statement(context, block, make_exp(e_));
+        }
+
+        // -----------------------------------------------------------------------------------------
+        // valued expressions -- when these occur in statement position need their children
+        // unravelled to find any embedded, effectful operations. We unravel those and discard the
+        // results. These cases could be synthesized as ignore_and_pop but we avoid them altogether
+        // -----------------------------------------------------------------------------------------
+
+        // FIXME(cgswords): we can't optimize because almost all of these throw. We have to do the
+        // "honest" work here, even though it's thrown away. Consider emitting a warning about
+        // these and/or weaking guarantees in Move 2024.
+        e_ @ (E::Vector(_, _, _, _)
+        | E::Dereference(_)
+        | E::UnaryExp(_, _)
+        | E::BinopExp(_, _, _, _)
+        | E::Pack(_, _, _, _)
+        | E::PackVariant(_, _, _, _, _)
+        | E::ExpList(_)
+        | E::Borrow(_, _, _)
+        | E::TempBorrow(_, _)
+        | E::Cast(_, _)
+        | E::Annotate(_, _)
+        | E::BorrowLocal(_, _)
+        | E::Constant(_, _)
+        | E::ErrorConstant(_)
+        | E::Move { .. }
+        | E::Copy { .. }
+        | E::UnresolvedError
+        | E::InvalidAccess(_)
+        | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
+
+        E::Value(_) | E::Unit { .. } => (),
+
+        // -----------------------------------------------------------------------------------------
+        // odds and ends -- things we need to deal with but that don't do much
+        // -----------------------------------------------------------------------------------------
+        E::Use(_) => {
+            context.env.add_diag(ice!((eloc, "ICE unexpanded use")));
+        }
+    }
+}
+
+fn statement_block(context: &mut Context, block: &mut Block, seq: VecDeque<T::SequenceItem>) {
+    use T::SequenceItem_ as S;
+    for sp!(sloc, seq_item) in seq.into_iter() {
+        match seq_item {
+            S::Seq(stmt_expr) => {
+                statement(context, block, *stmt_expr);
+            }
+            S::Declare(bindings) => {
+                declare_bind_list(context, &bindings);
+            }
+            S::Bind(bindings, ty, expr) => {
+                let expected_tys = expected_types(context, sloc, ty);
+                let rhs_exp = value(context, block, Some(&expected_tys), *expr);
+                declare_bind_list(context, &bindings);
+                make_assignments(context, block, sloc, H::AssignCase::Let, bindings, rhs_exp);
+            }
+        }
+    }
+}
+
+// Treat something like a value, and add a final `ignore_and_pop` at the end to consume that value.
+fn value_statement(context: &mut Context, block: &mut Block, e: T::Exp) {
+    let exp = value(context, block, None, e);
+    make_ignore_and_pop(block, exp);
+}
+
+// -------------------------------------------------------------------------------------------------
+// Helpers
+// -------------------------------------------------------------------------------------------------
+
+fn make_command(loc: Loc, command: H::Command_) -> H::Statement {
+    sp(loc, H::Statement_::Command(sp(loc, command)))
+}
+
+fn process_loop_body(context: &mut Context, name: &BlockLabel, body: T::Exp) -> (H::Block, bool) {
+    let mut loop_block = make_block!();
+    statement(context, &mut loop_block, body);
+    // nonlocal control flow may have removed the break, so we recompute has_break.
+    let has_break = still_has_break(name, &loop_block);
+    (loop_block, has_break)
+}
+
+fn tbool(loc: Loc) -> H::Type {
+    H::Type_::bool(loc)
+}
+
+fn bool_exp(loc: Loc, value: bool) -> H::Exp {
+    H::exp(
+        tbool(loc),
+        sp(
+            loc,
+            H::UnannotatedExp_::Value(sp(loc, H::Value_::Bool(value))),
+        ),
+    )
+}
+
+fn tunit(loc: Loc) -> H::Type {
+    sp(loc, H::Type_::Unit)
+}
+
+fn unit_exp(loc: Loc) -> H::Exp {
+    H::exp(
+        tunit(loc),
+        sp(
+            loc,
+            H::UnannotatedExp_::Unit {
+                case: H::UnitCase::Implicit,
+            },
+        ),
+    )
+}
+
+fn trailing_unit_exp(loc: Loc) -> H::Exp {
+    H::exp(
+        tunit(loc),
+        sp(
+            loc,
+            H::UnannotatedExp_::Unit {
+                case: H::UnitCase::Trailing,
+            },
+        ),
+    )
+}
+
+fn maybe_freeze(
+    context: &mut Context,
+    block: &mut Block,
+    expected_type_opt: Option<H::Type>,
+    exp: H::Exp,
+) -> H::Exp {
+    if exp.is_unreachable() {
+        exp
+    } else if let Some(expected_type) = expected_type_opt {
+        let (mut stmts, frozen_exp) = freeze(context, &expected_type, exp);
+        block.append(&mut stmts);
+        frozen_exp
+    } else {
+        exp
+    }
+}
+
+fn is_statement(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(
+        e.exp.value,
+        E::Return(_)
+            | E::Abort(_)
+            | E::Give(_, _)
+            | E::Continue(_)
+            | E::Assign(_, _, _)
+            | E::Mutate(_, _)
+    )
+}
+
+fn is_unit_statement(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::Assign(_, _, _) | E::Mutate(_, _))
+}
+
+fn is_binop(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::BinopExp(_, _, _, _))
+}
+
+fn is_exp_list(e: &T::Exp) -> bool {
+    use T::UnannotatedExp_ as E;
+    matches!(e.exp.value, E::ExpList(_))
+}
+
+macro_rules! hcmd {
+    ($cmd:pat) => {
+        S::Command(sp!(_, $cmd))
+    };
+}
+
+fn still_has_break(name: &BlockLabel, block: &Block) -> bool {
+    use H::{Command_ as C, Statement_ as S};
+
+    fn has_break(name: &BlockLabel, sp!(_, stmt_): &H::Statement) -> bool {
+        match stmt_ {
+            S::IfElse {
+                if_block,
+                else_block,
+                ..
+            } => has_break_block(name, if_block) || has_break_block(name, else_block),
+            S::While {
+                name: _,
+                cond: _,
+                block,
+            } => has_break_block(name, block),
+            S::Loop {
+                name: _,
+                has_break: _,
+                block,
+            } => has_break_block(name, block),
+            S::NamedBlock { name: _, block } => has_break_block(name, block),
+            hcmd!(C::Break(break_name)) => break_name == name,
+            S::Command(_) => false,
+            S::VariantMatch {
+                subject: _,
+                enum_name: _,
+                arms,
+            } => arms
+                .iter()
+                .map(|(_id, arm)| arm)
+                .any(|arm| has_break_block(name, arm)),
+        }
+    }
+
+    fn has_break_block(name: &BlockLabel, block: &Block) -> bool {
+        block.iter().any(|stmt| has_break(name, stmt))
+    }
+
+    has_break_block(name, block)
+}
+
+pub fn make_imm_ref_ty(ty: N::Type) -> N::Type {
+    match ty {
+        sp!(_, N::Type_::Ref(false, _)) => ty,
+        sp!(loc, N::Type_::Ref(true, inner)) => sp(loc, N::Type_::Ref(false, inner)),
+        ty => {
+            let loc = ty.loc;
+            sp(loc, N::Type_::Ref(false, Box::new(ty)))
+        }
+    }
+}
+
+//**************************************************************************************************
+// LValue
+//**************************************************************************************************
+
+fn declare_bind_list(context: &mut Context, sp!(_, binds): &T::LValueList) {
+    binds.iter().for_each(|b| declare_bind(context, b))
+}
+
+fn declare_bind(context: &mut Context, sp!(_, bind_): &T::LValue) {
+    use T::LValue_ as L;
+    match bind_ {
+        L::Ignore => (),
+        L::Var {
+            var: v, ty, mut_, ..
+        } => {
+            let st = single_type(context, *ty.clone());
+            context.bind_local(mut_.unwrap(), *v, st)
+        }
+        L::Unpack(_, _, _, fields) | L::BorrowUnpack(_, _, _, _, fields) => fields
+            .iter()
+            .for_each(|(_, _, (_, (_, b)))| declare_bind(context, b)),
+        L::UnpackVariant(_, _, _, _, fields) | L::BorrowUnpackVariant(_, _, _, _, _, fields) => {
+            fields
+                .iter()
+                .for_each(|(_, _, (_, (_, b)))| declare_bind(context, b))
+        }
+    }
+}
+
+fn make_assignments(
     context: &mut Context,
     result: &mut Block,
-    ty: H::Type,
-    eloc: Loc,
-    e_: T::UnannotatedExp_,
-) -> H::Exp {
-    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as HE};
-    use T::UnannotatedExp_ as TE;
+    loc: Loc,
+    case: H::AssignCase,
+    sp!(_, assigns): T::LValueList,
+    rvalue: H::Exp,
+) {
+    use H::{Command_ as C, Statement_ as S};
+    let mut lvalues = vec![];
+    let mut after = Block::new();
+    for (idx, a) in assigns.into_iter().enumerate() {
+        let a_ty = rvalue.ty.value.type_at_index(idx);
+        let (ls, mut af) = assign(context, case, a, a_ty);
 
-    let res = match e_ {
-        // Statement-like expressions
-        TE::While(tb, loop_body) => {
-            let mut cond_block = Block::new();
-            let cond_exp = exp(context, &mut cond_block, None, *tb);
+        lvalues.push(ls);
+        after.append(&mut af);
+    }
+    result.push_back(sp(
+        loc,
+        S::Command(sp(loc, C::Assign(case, lvalues, rvalue))),
+    ));
+    result.append(&mut after);
+}
 
-            let mut loop_block = Block::new();
-            let el = exp_(context, &mut loop_block, None, *loop_body);
-            ignore_and_pop(&mut loop_block, el);
-
-            let s_ = S::While {
-                cond: (cond_block, cond_exp),
-                block: loop_block,
-            };
-            result.push_back(sp(eloc, s_));
-            HE::Unit {
-                case: H::UnitCase::Implicit,
-            }
-        }
-        TE::Loop {
-            has_break,
-            body: loop_body,
-        } => {
-            let loop_block = statement_loop_body(context, *loop_body);
-
-            let s_ = S::Loop {
-                block: loop_block,
-                has_break,
-            };
-            result.push_back(sp(eloc, s_));
-            if !has_break {
-                HE::Unreachable
-            } else {
-                HE::Unit {
-                    case: H::UnitCase::Implicit,
-                }
-            }
-        }
-        TE::Block(seq) => return block(context, result, eloc, None, seq),
-
-        // Command-like expressions
-        TE::Return(te) => {
-            let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
-            let e = exp_(context, result, expected_type.as_ref(), *te);
-            let c = sp(
-                eloc,
-                C::Return {
-                    from_user: true,
-                    exp: e,
-                },
-            );
-            result.push_back(sp(eloc, S::Command(c)));
-            HE::Unreachable
-        }
-        TE::Abort(te) => {
-            let e = exp_(context, result, None, *te);
-            let c = sp(eloc, C::Abort(e));
-            result.push_back(sp(eloc, S::Command(c)));
-            HE::Unreachable
-        }
-        TE::Break => {
-            let c = sp(eloc, C::Break);
-            result.push_back(sp(eloc, S::Command(c)));
-            HE::Unreachable
-        }
-        TE::Continue => {
-            let c = sp(eloc, C::Continue);
-            result.push_back(sp(eloc, S::Command(c)));
-            HE::Unreachable
-        }
-        TE::Assign(assigns, lvalue_ty, te) => {
-            let expected_type = expected_types(context, eloc, lvalue_ty);
-            let e = exp(context, result, Some(&expected_type), *te);
-            assign_command(context, result, eloc, assigns, *e);
-            HE::Unit {
-                case: H::UnitCase::Implicit,
-            }
-        }
-        TE::Mutate(tl, tr) => {
-            let er = exp(context, result, None, *tr);
-            let el = exp(context, result, None, *tl);
-            let c = sp(eloc, C::Mutate(el, er));
-            result.push_back(sp(eloc, S::Command(c)));
-            HE::Unit {
-                case: H::UnitCase::Implicit,
-            }
-        }
-        // All other expressiosn
-        TE::Unit { trailing } => HE::Unit {
-            case: if trailing {
-                H::UnitCase::Trailing
-            } else {
-                H::UnitCase::FromUser
-            },
+fn assign(
+    context: &mut Context,
+    case: H::AssignCase,
+    sp!(loc, ta_): T::LValue,
+    rvalue_ty: &H::SingleType,
+) -> (H::LValue, Block) {
+    use H::{LValue_ as L, UnannotatedExp_ as E};
+    use T::LValue_ as A;
+    let mut after = Block::new();
+    let l_ = match ta_ {
+        A::Ignore => L::Ignore,
+        A::Var {
+            var: v,
+            ty: st,
+            unused_binding,
+            ..
+        } => L::Var {
+            var: translate_var(v),
+            ty: Box::new(single_type(context, *st)),
+            unused_assignment: unused_binding,
         },
-        TE::Value(ev) => HE::Value(value(context, ev)),
-        TE::Constant(_m, c) => {
-            // Currently only private constants exist
-            HE::Constant(c)
-        }
-        TE::Move { from_user, var } => {
-            let annotation = if from_user {
-                MoveOpAnnotation::FromUser
-            } else {
-                MoveOpAnnotation::InferredNoCopy
-            };
-            HE::Move {
-                annotation,
-                var: translate_var(var),
-            }
-        }
-        TE::Copy { from_user, var } => HE::Copy {
-            from_user,
-            var: translate_var(var),
-        },
-        TE::BorrowLocal(mut_, v) => HE::BorrowLocal(mut_, translate_var(v)),
-
-        TE::Use(_) => panic!("ICE unexpanded use"),
-        TE::ModuleCall(call) => {
-            let T::ModuleCall {
-                module,
-                name,
-                type_arguments,
-                arguments,
-                parameter_types,
-            } = *call;
-            let expected_type = H::Type_::from_vec(eloc, single_types(context, parameter_types));
-            let htys = base_types(context, type_arguments);
-            let hargs = exp_list(context, result, Some(&expected_type), *arguments);
-            let call = H::ModuleCall {
-                module,
-                name,
-                type_arguments: htys,
-                arguments: hargs,
-            };
-            HE::ModuleCall(Box::new(call))
-        }
-        TE::Builtin(bf, targ) => builtin(context, result, eloc, *bf, targ),
-        TE::Vector(vec_loc, n, tty, targ) => {
-            let ty = Box::new(base_type(context, *tty));
-            let args = exp_list(context, result, None, *targ);
-            HE::Vector(vec_loc, n, ty, args)
-        }
-        TE::Dereference(te) => {
-            let e = exp(context, result, None, *te);
-            HE::Dereference(e)
-        }
-        TE::UnaryExp(op, te) => {
-            let e = exp(context, result, None, *te);
-            HE::UnaryExp(op, e)
-        }
-
-        TE::Pack(m, s, tbs, tfields) => {
-            // all fields of a packed struct type are used
+        A::Unpack(m, s, tbs, tfields) => {
+            // all fields of an unpacked struct type are used
             context
                 .used_fields
                 .entry(s.value())
@@ -1372,142 +2489,188 @@ fn exp_impl(
 
             let bs = base_types(context, tbs);
 
-            let decl_fields = context.fields(&m, &s);
-            let mut count = 0;
-            let mut decl_field = |f: &Field| -> usize {
-                match decl_fields {
-                    Some(field_map) => *field_map.get(f).unwrap(),
-                    None => {
-                        // none can occur with errors in typing
-                        let i = count;
-                        count += 1;
-                        i
-                    }
-                }
-            };
-
-            let mut texp_fields: Vec<(usize, Field, usize, N::Type, T::Exp)> = tfields
-                .into_iter()
-                .map(|(f, (exp_idx, (bt, tf)))| (decl_field(&f), f, exp_idx, bt, tf))
-                .collect();
-            texp_fields.sort_by(|(_, _, eidx1, _, _), (_, _, eidx2, _, _)| eidx1.cmp(eidx2));
-
-            let bind_all_fields = texp_fields
-                .iter()
-                .any(|(decl_idx, _, exp_idx, _, _)| decl_idx != exp_idx);
-            let fields = if !bind_all_fields {
-                let mut fs = vec![];
-                let tes = texp_fields
-                    .into_iter()
-                    .map(|(_, f, _, bt, te)| {
-                        let bt = base_type(context, bt);
-                        fs.push((f, bt.clone()));
-                        let t = H::Type_::base(bt);
-                        (te, Some(t))
-                    })
-                    .collect();
-                let es = exp_evaluation_order(context, result, tes);
-                assert!(
-                    fs.len() == es.len(),
-                    "ICE exp_evaluation_order changed arity"
-                );
-                es.into_iter()
-                    .zip(fs)
-                    .map(|(e, (f, bt))| (f, bt, e))
-                    .collect()
-            } else {
-                let num_fields = decl_fields.as_ref().map(|m| m.len()).unwrap_or(0);
-                let mut fields = (0..num_fields).map(|_| None).collect::<Vec<_>>();
-                for (decl_idx, f, _exp_idx, bt, tf) in texp_fields {
-                    // Might have too many arguments, there will be an error from typing
-                    if decl_idx >= fields.len() {
-                        debug_assert!(context.env.has_errors());
-                        break;
-                    }
-                    let bt = base_type(context, bt);
-                    let t = H::Type_::base(bt.clone());
-                    let ef = exp_(context, result, Some(&t), tf);
-                    assert!(fields.get(decl_idx).unwrap().is_none());
-                    let move_tmp = bind_exp(context, result, ef);
-                    fields[decl_idx] = Some((f, bt, move_tmp))
-                }
-                // Might have too few arguments, there will be an error from typing if so
-                fields
-                    .into_iter()
-                    .filter_map(|o| {
-                        // if o is None, context should have errors
-                        debug_assert!(o.is_some() || context.env.has_errors());
-                        o
-                    })
-                    .collect()
-            };
-            HE::Pack(s, bs, fields)
-        }
-        TE::ExpList(items) => {
-            HE::Multiple(exp_list_items_to_vec(context, result, None, eloc, items))
-        }
-        TE::Borrow(mut_, te, f) => {
-            let e = exp(context, result, None, *te);
-            if let Some(struct_name) = struct_name(&e.ty) {
-                context
-                    .used_fields
-                    .entry(struct_name.value())
-                    .or_default()
-                    .insert(f.value());
+            let mut fields = vec![];
+            for (decl_idx, f, bt, tfa) in assign_struct_fields(context, &m, &s, tfields) {
+                assert!(fields.len() == decl_idx);
+                let st = &H::SingleType_::base(bt);
+                let (fa, mut fafter) = assign(context, case, tfa, st);
+                after.append(&mut fafter);
+                fields.push((f, fa))
             }
-            HE::Borrow(mut_, e, f, None)
+            L::Unpack(s, bs, fields)
         }
-        TE::TempBorrow(mut_, te) => {
-            let eb = exp_(context, result, None, *te);
-            let tmp = match bind_exp_impl(context, result, eb, true).exp.value {
-                HE::Move {
-                    annotation: MoveOpAnnotation::InferredLastUsage,
-                    var,
-                } => var,
-                _ => panic!("ICE invalid bind_exp for single value"),
-            };
-            HE::BorrowLocal(mut_, tmp)
-        }
-        TE::Cast(te, rhs_ty) => {
-            use N::BuiltinTypeName_ as BT;
-            let e = exp(context, result, None, *te);
-            let bt = match rhs_ty.value.builtin_name() {
-                Some(bt @ sp!(_, BT::U8))
-                | Some(bt @ sp!(_, BT::U16))
-                | Some(bt @ sp!(_, BT::U32))
-                | Some(bt @ sp!(_, BT::U64))
-                | Some(bt @ sp!(_, BT::U128))
-                | Some(bt @ sp!(_, BT::U256)) => *bt,
-                _ => panic!("ICE typing failed for cast"),
-            };
-            HE::Cast(e, bt)
-        }
-        TE::Annotate(te, rhs_ty) => {
-            let expected_ty = type_(context, *rhs_ty);
-            return exp_(context, result, Some(&expected_ty), *te);
-        }
-        TE::Spec(u, tused_locals) => {
-            let used_locals = tused_locals
-                .into_iter()
-                .map(|(var, ty)| {
-                    let v = translate_var(var);
-                    let st = single_type(context, ty);
-                    (v, st)
-                })
-                .collect();
-            HE::Spec(u, used_locals)
-        }
-        TE::UnresolvedError => {
-            assert!(context.env.has_errors());
-            HE::UnresolvedError
-        }
+        A::BorrowUnpack(mut_, m, s, _tss, tfields) => {
+            // all fields of an unpacked struct type are used
+            context
+                .used_fields
+                .entry(s.value())
+                .or_default()
+                .extend(tfields.iter().map(|(_, s, _)| *s));
 
-        TE::IfElse(..) | TE::BinopExp(..) => unreachable!(),
+            let unused_assignment = tfields.is_empty();
+
+            let tmp = context.new_temp(loc, rvalue_ty.clone());
+            let copy_tmp = || {
+                let copy_tmp_ = E::Copy {
+                    from_user: false,
+                    var: tmp,
+                };
+                H::exp(H::Type_::single(rvalue_ty.clone()), sp(loc, copy_tmp_))
+            };
+            let from_unpack = Some(loc);
+            let fields = assign_struct_fields(context, &m, &s, tfields)
+                .into_iter()
+                .enumerate();
+            for (idx, (decl_idx, f, bt, tfa)) in fields {
+                assert!(idx == decl_idx);
+                let floc = tfa.loc;
+                let borrow_ = E::Borrow(mut_, Box::new(copy_tmp()), f, from_unpack);
+                let borrow_ty = H::Type_::single(sp(floc, H::SingleType_::Ref(mut_, bt)));
+                let borrow = H::exp(borrow_ty, sp(floc, borrow_));
+                make_assignments(context, &mut after, floc, case, sp(floc, vec![tfa]), borrow);
+            }
+            L::Var {
+                var: tmp,
+                ty: Box::new(rvalue_ty.clone()),
+                unused_assignment,
+            }
+        }
+        A::UnpackVariant(m, e, v, tbs, tfields) => {
+            let bs = base_types(context, tbs);
+
+            let mut fields = vec![];
+            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
+                assert!(fields.len() == decl_idx);
+                let st = &H::SingleType_::base(bt);
+                let (fa, mut fafter) = assign(context, case, tfa, st);
+                after.append(&mut fafter);
+                fields.push((f, fa))
+            }
+            L::UnpackVariant(e, v, UnpackType::ByValue, loc, bs, fields)
+        }
+        A::BorrowUnpackVariant(mut_, m, e, v, tbs, tfields) => {
+            let bs = base_types(context, tbs);
+
+            let unpack = if mut_ {
+                UnpackType::ByMutRef
+            } else {
+                UnpackType::ByImmRef
+            };
+
+            let mut fields = vec![];
+            for (decl_idx, f, bt, tfa) in assign_variant_fields(context, &m, &e, &v, tfields) {
+                assert!(fields.len() == decl_idx);
+                let borrow_ty = sp(tfa.loc, H::SingleType_::Ref(mut_, bt));
+                let (fa, mut fafter) = assign(context, case, tfa, &borrow_ty);
+                after.append(&mut fafter);
+                fields.push((f, fa))
+            }
+            L::UnpackVariant(e, v, unpack, loc, bs, fields)
+        }
     };
-    H::exp(ty, sp(eloc, res))
+    (sp(loc, l_), after)
 }
 
-fn struct_name(sp!(_, t): &H::Type) -> Option<StructName> {
+fn assign_struct_fields(
+    context: &mut Context,
+    m: &ModuleIdent,
+    s: &DatatypeName,
+    tfields: Fields<(N::Type, T::LValue)>,
+) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
+    let decl_fields = context.struct_fields(m, s).cloned();
+    let mut tfields_vec: Vec<_> = match decl_fields {
+        Some(m) => tfields
+            .into_iter()
+            .map(|(f, (_idx, (tbt, tfa)))| {
+                let field = *m.get(&f).unwrap();
+                let base_ty = base_type(context, tbt);
+                (field, f, base_ty, tfa)
+            })
+            .collect(),
+        None => tfields
+            .into_iter()
+            .enumerate()
+            .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
+                let base_ty = base_type(context, tbt);
+                (ndx, f, base_ty, tfa)
+            })
+            .collect(),
+    };
+    tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
+    tfields_vec
+}
+
+fn assign_variant_fields(
+    context: &mut Context,
+    m: &ModuleIdent,
+    e: &DatatypeName,
+    v: &VariantName,
+    tfields: Fields<(N::Type, T::LValue)>,
+) -> Vec<(usize, Field, H::BaseType, T::LValue)> {
+    let decl_fields = context.enum_variant_fields(m, e, v).cloned();
+    let mut tfields_vec: Vec<_> = match decl_fields {
+        Some(m) => tfields
+            .into_iter()
+            .map(|(f, (_idx, (tbt, tfa)))| {
+                let field = *m.get(&f).unwrap();
+                let base_ty = base_type(context, tbt);
+                (field, f, base_ty, tfa)
+            })
+            .collect(),
+        None => tfields
+            .into_iter()
+            .enumerate()
+            .map(|(ndx, (f, (_idx, (tbt, tfa))))| {
+                let base_ty = base_type(context, tbt);
+                (ndx, f, base_ty, tfa)
+            })
+            .collect(),
+    };
+    tfields_vec.sort_by(|(idx1, _, _, _), (idx2, _, _, _)| idx1.cmp(idx2));
+    tfields_vec
+}
+
+//**************************************************************************************************
+// Commands
+//**************************************************************************************************
+
+fn make_ignore_and_pop(block: &mut Block, exp: H::Exp) {
+    use H::UnannotatedExp_ as E;
+    let loc = exp.exp.loc;
+    if exp.is_unreachable() {
+        return;
+    }
+    match &exp.ty.value {
+        H::Type_::Unit => match exp.exp.value {
+            E::Unit { .. } => (),
+            E::Value(_) => (),
+            _ => {
+                let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 0, exp });
+                block.push_back(sp(loc, H::Statement_::Command(c)));
+            }
+        },
+        H::Type_::Single(_) => {
+            let c = sp(loc, H::Command_::IgnoreAndPop { pop_num: 1, exp });
+            block.push_back(sp(loc, H::Statement_::Command(c)));
+        }
+        H::Type_::Multiple(tys) => {
+            let c = sp(
+                loc,
+                H::Command_::IgnoreAndPop {
+                    pop_num: tys.len(),
+                    exp,
+                },
+            );
+            block.push_back(sp(loc, H::Statement_::Command(c)));
+        }
+    };
+}
+
+//**************************************************************************************************
+// Expressions
+//**************************************************************************************************
+
+fn struct_name(sp!(_, t): &H::Type) -> Option<DatatypeName> {
     let H::Type_::Single(st) = t else {
         return None;
     };
@@ -1524,153 +2687,162 @@ fn struct_name(sp!(_, t): &H::Type) -> Option<StructName> {
     None
 }
 
-fn exp_evaluation_order(
+fn value_evaluation_order(
     context: &mut Context,
-    result: &mut Block,
-    tes: Vec<(T::Exp, Option<H::Type>)>,
+    block: &mut Block,
+    input_exps: Vec<(T::Exp, Option<H::Type>)>,
 ) -> Vec<H::Exp> {
     let mut needs_binding = false;
-    let mut e_results = vec![];
-    for (te, expected_type) in tes.into_iter().rev() {
-        let mut tmp_result = Block::new();
-        let e = *exp(context, &mut tmp_result, expected_type.as_ref(), te);
+    let mut statements = vec![];
+    let mut values = vec![];
+    for (exp, expected_type) in input_exps.into_iter().rev() {
+        let mut new_stmts = make_block!();
+        let exp = value(context, &mut new_stmts, expected_type.as_ref(), exp);
+        let exp = if needs_binding {
+            bind_exp(context, &mut new_stmts, exp)
+        } else {
+            exp
+        };
+        values.push(exp);
         // If evaluating this expression introduces statements, all previous exps need to be bound
         // to preserve left-to-right evaluation order
-        let adds_to_result = !tmp_result.is_empty();
-
-        let e = if needs_binding {
-            bind_exp(context, &mut tmp_result, e)
-        } else {
-            e
-        };
-        e_results.push((tmp_result, e));
-
+        let adds_to_result = !new_stmts.is_empty();
         needs_binding = needs_binding || adds_to_result;
+        statements.push(new_stmts);
     }
-
-    let mut es = vec![];
-    for (mut tmp_result, e) in e_results.into_iter().rev() {
-        result.append(&mut tmp_result);
-        es.push(e)
-    }
-    es
+    block.append(&mut statements.into_iter().rev().flatten().collect());
+    values.into_iter().rev().collect()
 }
 
-fn make_temps(context: &mut Context, loc: Loc, ty: H::Type) -> Vec<(H::Var, H::SingleType)> {
-    use H::Type_ as T;
-    match ty.value {
-        T::Unit => vec![],
-        T::Single(s) => vec![(context.new_temp(loc, s.clone()), s)],
-        T::Multiple(ss) => ss
-            .into_iter()
-            .map(|s| (context.new_temp(loc, s.clone()), s))
-            .collect(),
-    }
-}
-
-fn bind_exp(context: &mut Context, result: &mut Block, e: H::Exp) -> H::Exp {
-    bind_exp_impl(context, result, e, false)
-}
-
-fn bind_exp_(
-    result: &mut Block,
-    loc: Loc,
-    tmps: Vec<(H::Var, H::SingleType)>,
-    e: H::Exp,
-) -> H::UnannotatedExp_ {
-    bind_exp_impl_(result, loc, tmps, e, false)
-}
-
-fn bind_exp_impl(
-    context: &mut Context,
-    result: &mut Block,
-    e: H::Exp,
-    bind_unreachable: bool,
-) -> H::Exp {
-    if matches!(&e.exp.value, H::UnannotatedExp_::Unreachable) && !bind_unreachable {
-        return e;
-    }
+fn bind_exp(context: &mut Context, stmts: &mut Block, e: H::Exp) -> H::Exp {
     let loc = e.exp.loc;
     let ty = e.ty.clone();
-    let tmps = make_temps(context, loc, ty.clone());
-    H::exp(
-        ty,
-        sp(loc, bind_exp_impl_(result, loc, tmps, e, bind_unreachable)),
-    )
+    let (binders, var_exp) = make_binders(context, loc, ty.clone());
+    bind_value_in_block(context, binders, Some(ty), stmts, e);
+    var_exp
 }
 
-fn bind_exp_impl_(
-    result: &mut Block,
-    loc: Loc,
-    tmps: Vec<(H::Var, H::SingleType)>,
-    e: H::Exp,
-    bind_unreachable: bool,
-) -> H::UnannotatedExp_ {
-    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as E};
-    if matches!(&e.exp.value, H::UnannotatedExp_::Unreachable) && !bind_unreachable {
-        return H::UnannotatedExp_::Unreachable;
+// Takes binder(s), a block, and a value. If the value is defined, adds an assignment to the end
+// of the block to assign the binders to that value.
+// Returns the block and a flag indicating if that operation happened.
+fn bind_value_in_block(
+    context: &mut Context,
+    binders: Vec<H::LValue>,
+    binders_type: Option<H::Type>,
+    stmts: &mut Block,
+    value_exp: H::Exp,
+) {
+    use H::{Command_ as C, Statement_ as S};
+    let mut binders_valid = true;
+    for sp!(loc, lvalue) in &binders {
+        match lvalue {
+            H::LValue_::Var { .. } => (),
+            lv => {
+                context.env.add_diag(ice!((
+                    *loc,
+                    format!(
+                        "ICE tried bind_value for non-var lvalue {}",
+                        debug_display!(lv)
+                    )
+                )));
+                binders_valid = false;
+            }
+        }
     }
-
-    if tmps.is_empty() {
-        let cmd = sp(loc, C::IgnoreAndPop { pop_num: 0, exp: e });
-        result.push_back(sp(loc, S::Command(cmd)));
-        return E::Unit {
-            case: H::UnitCase::Implicit,
-        };
+    if !binders_valid {
+        return;
     }
-    let lvalues = tmps
-        .iter()
-        .map(|(v, st)| sp(v.loc(), H::LValue_::Var(*v, Box::new(st.clone()))))
-        .collect();
-    let asgn = sp(loc, C::Assign(lvalues, e));
-    result.push_back(sp(loc, S::Command(asgn)));
-
-    let mut etemps = tmps
-        .into_iter()
-        .map(|(var, st)| {
-            let evar_ = sp(var.loc(), use_tmp(var));
-            let ty = sp(st.loc, H::Type_::Single(st));
-            H::exp(ty, evar_)
-        })
-        .collect::<Vec<_>>();
-    match etemps.len() {
-        0 => unreachable!(),
-        1 => etemps.pop().unwrap().exp.value,
-        _ => E::Multiple(etemps),
-    }
+    let rhs_exp = maybe_freeze(context, stmts, binders_type, value_exp);
+    let loc = rhs_exp.exp.loc;
+    stmts.push_back(sp(
+        loc,
+        S::Command(sp(loc, C::Assign(H::AssignCase::Let, binders, rhs_exp))),
+    ));
 }
 
-fn use_tmp(var: H::Var) -> H::UnannotatedExp_ {
+fn make_binders(context: &mut Context, loc: Loc, ty: H::Type) -> (Vec<H::LValue>, H::Exp) {
+    use H::Type_ as T;
     use H::UnannotatedExp_ as E;
-    E::Move {
-        annotation: MoveOpAnnotation::InferredLastUsage,
-        var,
+    match ty.value {
+        T::Unit => (
+            vec![],
+            H::exp(
+                tunit(loc),
+                sp(
+                    loc,
+                    E::Unit {
+                        case: H::UnitCase::Implicit,
+                    },
+                ),
+            ),
+        ),
+        T::Single(single_type) => {
+            let (binder, var_exp) = make_temp(context, loc, single_type);
+            (vec![binder], var_exp)
+        }
+        T::Multiple(types) => {
+            let (binders, vars) = types
+                .iter()
+                .map(|single_type| make_temp(context, loc, single_type.clone()))
+                .unzip();
+            (
+                binders,
+                H::exp(
+                    sp(loc, T::Multiple(types)),
+                    sp(loc, H::UnannotatedExp_::Multiple(vars)),
+                ),
+            )
+        }
     }
+}
+
+fn make_temp(context: &mut Context, loc: Loc, sp!(_, ty): H::SingleType) -> (H::LValue, H::Exp) {
+    let binder = context.new_temp(loc, sp(loc, ty.clone()));
+    let lvalue_ = H::LValue_::Var {
+        var: binder,
+        ty: Box::new(sp(loc, ty.clone())),
+        unused_assignment: false,
+    };
+    let lvalue = sp(loc, lvalue_);
+    let uexp = sp(
+        loc,
+        H::UnannotatedExp_::Move {
+            annotation: MoveOpAnnotation::InferredLastUsage,
+            var: binder,
+        },
+    );
+    (lvalue, H::exp(H::Type_::single(sp(loc, ty)), uexp))
 }
 
 fn builtin(
     context: &mut Context,
-    result: &mut Block,
+    block: &mut Block,
     _eloc: Loc,
     sp!(_, tb_): T::BuiltinFunction,
     targ: Box<T::Exp>,
 ) -> H::UnannotatedExp_ {
     use H::UnannotatedExp_ as E;
     use T::BuiltinFunction_ as TB;
+
     match tb_ {
         TB::Freeze(_bt) => {
-            let arg = exp(context, result, None, *targ);
-            E::Freeze(arg)
+            let args = value(context, block, None, *targ);
+            E::Freeze(Box::new(args))
         }
         TB::Assert(_) => unreachable!(),
     }
 }
 
-fn value(_context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
+fn process_value(context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
     use E::Value_ as EV;
     use H::Value_ as HV;
     let v_ = match ev_ {
-        EV::InferredNum(_) => panic!("ICE should have been expanded"),
+        EV::InferredNum(_) => {
+            context
+                .env
+                .add_diag(ice!((loc, "ICE not expanded to value")));
+            HV::U64(0)
+        }
         EV::Address(a) => HV::Address(a.into_addr_bytes()),
         EV::U8(u) => HV::U8(u),
         EV::U16(u) => HV::U16(u),
@@ -1687,6 +2859,149 @@ fn value(_context: &mut Context, sp!(loc, ev_): E::Value) -> H::Value {
     sp(loc, v_)
 }
 
+fn process_binops(
+    context: &mut Context,
+    input_block: &mut Block,
+    result_type: H::Type,
+    e: T::Exp,
+) -> H::Exp {
+    use T::UnannotatedExp_ as E;
+    let (mut block, exp) = process_binops!(
+        (BinOp, H::Type, Loc),
+        (Block, H::Exp),
+        (e, result_type),
+        (exp, ty),
+        exp,
+        T::Exp {
+            exp: sp!(eloc, E::BinopExp(lhs, op, op_type, rhs)),
+            ..
+        } =>
+        {
+            let op = (op, ty, eloc);
+            let op_type = freeze_ty(type_(context, *op_type));
+            let rhs = (*rhs, op_type.clone());
+            let lhs = (*lhs, op_type);
+            (lhs, op, rhs)
+        },
+        {
+            let mut exp_block = make_block!();
+            let exp = value(context, &mut exp_block, Some(ty).as_ref(), exp);
+            (exp_block, exp)
+        },
+        value_stack,
+        (op, ty, eloc) =>
+        {
+            match op {
+                sp!(loc, op @ BinOp_::And) => {
+                    let test = value_stack.pop().expect("ICE binop hlir issue");
+                    let if_ = value_stack.pop().expect("ICE binop hlir issue");
+                    if simple_bool_binop_arg(&if_) {
+                        let (mut test_block, test_exp) = test;
+                        let (mut if_block, if_exp) = if_;
+                        test_block.append(&mut if_block);
+                        let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), if_exp)));
+                        (test_block, exp)
+                    } else {
+                        let else_ = (make_block!(), bool_exp(loc, false));
+                        make_boolean_binop(
+                            context,
+                            sp(loc, op),
+                            test,
+                            if_,
+                            else_,
+                        )
+                    }
+                }
+                sp!(loc, op @ BinOp_::Or) => {
+                    let test = value_stack.pop().expect("ICE binop hlir issue");
+                    let else_ = value_stack.pop().expect("ICE binop hlir issue");
+                    if simple_bool_binop_arg(&else_) {
+                        let (mut test_block, test_exp) = test;
+                        let (mut else_block, else_exp) = else_;
+                        test_block.append(&mut else_block);
+                        let exp = H::exp(ty, sp(eloc, make_binop(test_exp, sp(loc, op), else_exp)));
+                        (test_block, exp)
+                    } else {
+                        let if_ = (make_block!(), bool_exp(loc, true));
+                        make_boolean_binop(
+                            context,
+                            sp(loc, op),
+                            test,
+                            if_,
+                            else_,
+                        )
+                    }
+                }
+                op => {
+                    let (mut lhs_block, lhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                    let (mut rhs_block, rhs_exp) = value_stack.pop().expect("ICE binop hlir issue");
+                    lhs_block.append(&mut rhs_block);
+                    // NB: here we could check if the LHS and RHS are "large" terms and let-bind
+                    // them if they are getting too big.
+                    let exp = H::exp(ty, sp(eloc, make_binop(lhs_exp, op, rhs_exp)));
+                    (lhs_block, exp)
+                }
+            }
+        }
+    );
+    input_block.append(&mut block);
+    exp
+}
+
+fn make_binop(lhs: H::Exp, op: BinOp, rhs: H::Exp) -> H::UnannotatedExp_ {
+    H::UnannotatedExp_::BinopExp(Box::new(lhs), op, Box::new(rhs))
+}
+
+fn make_boolean_binop(
+    context: &mut Context,
+    op: BinOp,
+    (mut test_block, test_exp): (Block, H::Exp),
+    (mut if_block, if_exp): (Block, H::Exp),
+    (mut else_block, else_exp): (Block, H::Exp),
+) -> (Block, H::Exp) {
+    let loc = op.loc;
+
+    let bool_ty = tbool(loc);
+    let (binders, bound_exp) = make_binders(context, loc, bool_ty.clone());
+    let opty = Some(bool_ty);
+
+    let arms_unreachable = if_exp.is_unreachable() && else_exp.is_unreachable();
+    // one of these _must_ always bind by construction.
+    bind_value_in_block(
+        context,
+        binders.clone(),
+        opty.clone(),
+        &mut if_block,
+        if_exp,
+    );
+    bind_value_in_block(context, binders, opty, &mut else_block, else_exp);
+    assert!(!arms_unreachable, "ICE boolean binop processing failure");
+
+    let if_else = H::Statement_::IfElse {
+        cond: Box::new(test_exp),
+        if_block,
+        else_block,
+    };
+    test_block.push_back(sp(loc, if_else));
+    (test_block, bound_exp)
+}
+
+fn simple_bool_binop_arg((block, exp): &(Block, H::Exp)) -> bool {
+    use H::UnannotatedExp_ as HE;
+    if !block.is_empty() {
+        false
+    } else {
+        matches!(
+            exp.exp.value,
+            HE::Value(_)
+                | HE::Constant(_)
+                | HE::Move { .. }
+                | HE::Copy { .. }
+                | HE::UnresolvedError
+        )
+    }
+}
+
 //**************************************************************************************************
 // Freezing
 //**************************************************************************************************
@@ -1698,13 +3013,18 @@ enum Freeze {
     Sub(Vec<bool>),
 }
 
-fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &H::Type) -> Freeze {
+fn needs_freeze(
+    context: &mut Context,
+    sp!(loc, actual): &H::Type,
+    sp!(eloc, expected): &H::Type,
+) -> Freeze {
+    use H::BaseType_ as BT;
+    use H::SingleType_ as ST;
     use H::Type_ as T;
     match (actual, expected) {
         (T::Unit, T::Unit) => Freeze::NotNeeded,
-        (T::Single(actaul_s), T::Single(actual_e)) => {
-            let needs = needs_freeze_single(actaul_s, actual_e);
-            if needs {
+        (T::Single(actual_type), T::Single(expected_type)) => {
+            if needs_freeze_single(actual_type, expected_type) {
                 Freeze::Point
             } else {
                 Freeze::NotNeeded
@@ -1723,8 +3043,25 @@ fn needs_freeze(context: &Context, sp!(_, actual): &H::Type, sp!(_, expected): &
                 Freeze::NotNeeded
             }
         }
+        (T::Single(sp!(_, ST::Base(sp!(_, BT::UnresolvedError)))), _)
+        | (_, T::Single(sp!(_, ST::Base(sp!(_, BT::UnresolvedError)))))
+        | (T::Single(sp!(_, ST::Base(sp!(_, BT::Unreachable)))), _)
+        | (_, T::Single(sp!(_, ST::Base(sp!(_, BT::Unreachable))))) => Freeze::NotNeeded,
         (_actual, _expected) => {
-            assert!(context.env.has_errors());
+            if !context.env.has_errors() {
+                let diag = ice!(
+                    (*loc, "ICE HLIR freezing went wrong"),
+                    (
+                        *loc,
+                        format!("Actual type: {}", debug_display_verbose!(_actual))
+                    ),
+                    (
+                        *eloc,
+                        format!("Expected type: {}", debug_display_verbose!(_expected))
+                    ),
+                );
+                context.env.add_diag(diag);
+            }
             Freeze::NotNeeded
         }
     }
@@ -1735,53 +3072,47 @@ fn needs_freeze_single(sp!(_, actual): &H::SingleType, sp!(_, expected): &H::Sin
     matches!((actual, expected), (T::Ref(true, _), T::Ref(false, _)))
 }
 
-fn freeze(context: &mut Context, result: &mut Block, expected_type: &H::Type, e: H::Exp) -> H::Exp {
+fn freeze(context: &mut Context, expected_type: &H::Type, e: H::Exp) -> (Block, H::Exp) {
     use H::{Type_ as T, UnannotatedExp_ as E};
 
     match needs_freeze(context, &e.ty, expected_type) {
-        Freeze::NotNeeded => e,
-        Freeze::Point => freeze_point(e),
+        Freeze::NotNeeded => (make_block!(), e),
+        Freeze::Point => (make_block!(), freeze_point(e)),
         Freeze::Sub(points) => {
-            let loc = e.exp.loc;
-            let actual_tys = match &e.ty.value {
-                T::Multiple(v) => v.clone(),
-                _ => unreachable!("ICE needs_freeze failed"),
-            };
-            assert!(actual_tys.len() == points.len());
-            let new_temps = actual_tys
-                .into_iter()
-                .map(|ty| (context.new_temp(loc, ty.clone()), ty))
-                .collect::<Vec<_>>();
-
-            let lvalues = new_temps
-                .iter()
-                .cloned()
-                .map(|(v, ty)| sp(loc, H::LValue_::Var(v, Box::new(ty))))
-                .collect::<Vec<_>>();
-            let assign = sp(loc, H::Command_::Assign(lvalues, e));
-            result.push_back(sp(loc, H::Statement_::Command(assign)));
-
-            let exps = new_temps
-                .into_iter()
-                .zip(points)
-                .map(|((var, ty), needs_freeze)| {
-                    let e_ = sp(loc, use_tmp(var));
-                    let e = H::exp(T::single(ty), e_);
-                    if needs_freeze {
-                        freeze_point(e)
-                    } else {
-                        e
-                    }
-                })
-                .collect::<Vec<_>>();
-            let tys = exps
-                .iter()
-                .map(|e| match &e.ty.value {
-                    T::Single(s) => s.clone(),
-                    _ => panic!("ICE list item has Multple type"),
-                })
-                .collect::<Vec<_>>();
-            H::exp(sp(loc, T::Multiple(tys)), sp(loc, E::Multiple(exps)))
+            let mut bind_stmts = make_block!();
+            let bound_rhs = bind_exp(context, &mut bind_stmts, e);
+            if let H::Exp {
+                ty: _,
+                exp: sp!(eloc, E::Multiple(exps)),
+            } = bound_rhs
+            {
+                assert!(exps.len() == points.len());
+                let exps: Vec<_> = exps
+                    .into_iter()
+                    .zip(points)
+                    .map(|(exp, needs_freeze)| if needs_freeze { freeze_point(exp) } else { exp })
+                    .collect();
+                let tys = exps
+                    .iter()
+                    .map(|e| match &e.ty.value {
+                        T::Single(s) => s.clone(),
+                        _ => {
+                            let msg = format!(
+                                "ICE list item has Multple type: {}",
+                                debug_display_verbose!(e.ty)
+                            );
+                            context.env.add_diag(ice!((e.ty.loc, msg)));
+                            H::SingleType_::base(error_base_type(e.ty.loc))
+                        }
+                    })
+                    .collect();
+                (
+                    bind_stmts,
+                    H::exp(sp(eloc, T::Multiple(tys)), sp(eloc, E::Multiple(exps))),
+                )
+            } else {
+                unreachable!("ICE needs_freeze failed")
+            }
         }
     }
 }
@@ -1809,230 +3140,14 @@ fn freeze_single(sp!(sloc, s): H::SingleType) -> H::SingleType {
     }
 }
 
-fn bind_for_short_circuit(e: &T::Exp) -> bool {
-    use T::UnannotatedExp_ as TE;
-    match &e.exp.value {
-        TE::Use(_) => panic!("ICE should have been expanded"),
-        TE::Value(_)
-        | TE::Constant(_, _)
-        | TE::Move { .. }
-        | TE::Copy { .. }
-        | TE::UnresolvedError => false,
-
-        // TODO might want to case ModuleCall for fake natives
-        TE::ModuleCall(_) => true,
-
-        TE::Block(seq) => bind_for_short_circuit_sequence(seq),
-        TE::Annotate(el, _) => bind_for_short_circuit(el),
-
-        TE::Break
-        | TE::Continue
-        | TE::IfElse(_, _, _)
-        | TE::While(_, _)
-        | TE::Loop { .. }
-        | TE::Return(_)
-        | TE::Abort(_)
-        | TE::Builtin(_, _)
-        | TE::Dereference(_)
-        | TE::UnaryExp(_, _)
-        | TE::Borrow(_, _, _)
-        | TE::TempBorrow(_, _)
-        | TE::BinopExp(_, _, _, _) => true,
-
-        TE::Unit { .. }
-        | TE::Spec(_, _)
-        | TE::Assign(_, _, _)
-        | TE::Mutate(_, _)
-        | TE::Pack(_, _, _, _)
-        | TE::Vector(_, _, _, _)
-        | TE::BorrowLocal(_, _)
-        | TE::ExpList(_)
-        | TE::Cast(_, _) => panic!("ICE unexpected exp in short circuit check: {:?}", e),
-    }
-}
-
-fn bind_for_short_circuit_sequence(seq: &T::Sequence) -> bool {
-    use T::SequenceItem_ as TItem;
-    seq.len() != 1
-        || match &seq[0].value {
-            TItem::Seq(e) => bind_for_short_circuit(e),
-            item @ TItem::Declare(_) | item @ TItem::Bind(_, _, _) => {
-                panic!("ICE unexpected item in short circuit check: {:?}", item)
-            }
-        }
-}
-
 //**************************************************************************************************
-// Trailing semicolon
+// Generates warnings for unused struct fields.
 //**************************************************************************************************
 
-fn check_trailing_unit(context: &mut Context, block: &mut Block) {
-    use H::{Command_ as C, Statement_ as S, UnannotatedExp_ as E};
-    macro_rules! hcmd {
-        ($loc:pat, $cmd:pat) => {
-            sp!(_, S::Command(sp!($loc, $cmd)))
-        };
-    }
-    macro_rules! hignored {
-        ($loc:pat, $e:pat) => {
-            hcmd!(
-                _,
-                C::IgnoreAndPop {
-                    exp: H::Exp {
-                        exp: sp!($loc, $e),
-                        ..
-                    },
-                    ..
-                }
-            )
-        };
-    }
-    macro_rules! trailing {
-        ($uloc: pat) => {
-            hcmd!(
-                _,
-                C::IgnoreAndPop {
-                    exp: H::Exp {
-                        exp: sp!(
-                            $uloc,
-                            E::Unit {
-                                case: H::UnitCase::Trailing
-                            }
-                        ),
-                        ..
-                    },
-                    ..
-                }
-            )
-        };
-    }
-    macro_rules! trailing_returned {
-        ($uloc:pat) => {
-            hcmd!(
-                _,
-                C::Return {
-                    exp: H::Exp {
-                        exp: sp!(
-                            $uloc,
-                            E::Unit {
-                                case: H::UnitCase::Trailing
-                            }
-                        ),
-                        ..
-                    },
-                    ..
-                }
-            )
-        };
-    }
-    fn divergent_block(block: &Block) -> bool {
-        matches!(
-            block.back(),
-            Some(hcmd!(_, C::Break))
-                | Some(hcmd!(_, C::Continue))
-                | Some(hcmd!(_, C::Abort(_)))
-                | Some(hcmd!(_, C::Return { .. }))
-                | Some(hignored!(_, E::Unreachable))
-        )
-    }
-    macro_rules! invalid_trailing_unit {
-        ($context:ident, $loc:expr, $uloc:expr) => {{
-            let semi_msg = "Invalid trailing ';'";
-            let unreachable_msg = "Any code after this expression will not be reached";
-            let info_msg = "A trailing ';' in an expression block implicitly adds a '()' value \
-                        after the semicolon. That '()' value will not be reachable";
-            $context.env.add_diag(diag!(
-                UnusedItem::TrailingSemi,
-                ($uloc, semi_msg),
-                ($loc, unreachable_msg),
-                ($uloc, info_msg),
-            ));
-            block.pop_back();
-        }};
-    }
-
-    block
-        .iter_mut()
-        .for_each(|s| check_trailing_unit_statement(context, s));
-    let len = block.len();
-    if len < 2 {
-        return;
-    }
-    match (&block[len - 2], &block[len - 1]) {
-        (
-            sp!(
-                loc,
-                S::IfElse {
-                    if_block,
-                    else_block,
-                    ..
-                }
-            ),
-            trailing!(uloc),
-        )
-        | (
-            sp!(
-                loc,
-                S::IfElse {
-                    if_block,
-                    else_block,
-                    ..
-                }
-            ),
-            trailing_returned!(uloc),
-        ) if divergent_block(if_block) && divergent_block(else_block) => {
-            invalid_trailing_unit!(context, *loc, *uloc)
-        }
-        (sp!(loc, S::Loop { has_break, .. }), trailing!(uloc))
-        | (sp!(loc, S::Loop { has_break, .. }), trailing_returned!(uloc))
-            if !has_break =>
-        {
-            invalid_trailing_unit!(context, *loc, *uloc)
-        }
-        (hcmd!(loc, C::Break), trailing!(uloc))
-        | (hcmd!(loc, C::Break), trailing_returned!(uloc))
-        | (hcmd!(loc, C::Continue), trailing!(uloc))
-        | (hcmd!(loc, C::Continue), trailing_returned!(uloc))
-        | (hcmd!(loc, C::Abort(_)), trailing!(uloc))
-        | (hcmd!(loc, C::Abort(_)), trailing_returned!(uloc))
-        | (hcmd!(loc, C::Return { .. }), trailing!(uloc))
-        | (hcmd!(loc, C::Return { .. }), trailing_returned!(uloc))
-        | (hignored!(loc, E::Unreachable), trailing!(uloc))
-        | (hignored!(loc, E::Unreachable), trailing_returned!(uloc)) => {
-            invalid_trailing_unit!(context, *loc, *uloc)
-        }
-        _ => (),
-    };
-}
-
-fn check_trailing_unit_statement(context: &mut Context, sp!(_, s_): &mut H::Statement) {
-    use H::Statement_ as S;
-    match s_ {
-        S::Command(_) => (),
-        S::IfElse {
-            if_block,
-            else_block,
-            ..
-        } => {
-            check_trailing_unit(context, if_block);
-            check_trailing_unit(context, else_block)
-        }
-        S::While {
-            cond: (cond_block, _),
-            block,
-        } => {
-            check_trailing_unit(context, cond_block);
-            check_trailing_unit(context, block)
-        }
-        S::Loop { block, .. } => check_trailing_unit(context, block),
-    }
-}
-
-/// Generates warnings for unused struct fields.
 fn gen_unused_warnings(
     context: &mut Context,
     is_source_module: bool,
-    structs: &UniqueMap<StructName, H::StructDefinition>,
+    structs: &UniqueMap<DatatypeName, H::StructDefinition>,
 ) {
     if !is_source_module {
         // generate warnings only for modules compiled in this pass rather than for all modules

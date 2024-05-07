@@ -5,7 +5,7 @@ title: Capabilities
 A capability is a pattern that allows authorizing actions with an object. For example, the [`UpgradeCap`](../packages/upgrade.mdx#requirements) authorizes the action of upgrading packages. One of the most common capabilities you might encounter is `TreasuryCap`, which is defined in [`sui::coin`](https://github.com/MystenLabs/sui/tree/main/crates/sui-framework/packages/sui-framework/sources/coin.move).
 
 
-```rust
+```move
 module examples::item {
     use sui::transfer;
     use sui::object::{Self, UID};

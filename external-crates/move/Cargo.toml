@@ -3,6 +3,22 @@ resolver = "2"
 
 members = [
     "crates/*",
+    "move-execution/v0/crates/bytecode-verifier-tests",
+    "move-execution/v1/crates/bytecode-verifier-tests",
+    "move-execution/v2/crates/bytecode-verifier-tests",
+    # "move-execution/$CUT/crates/bytecode-verifier-tests",
+    "move-execution/v0/crates/move-bytecode-verifier",
+    "move-execution/v1/crates/move-bytecode-verifier",
+    "move-execution/v2/crates/move-bytecode-verifier",
+    # "move-execution/$CUT/crates/move-bytecode-verifier",
+    "move-execution/v0/crates/move-vm-runtime",
+    "move-execution/v1/crates/move-vm-runtime",
+    "move-execution/v2/crates/move-vm-runtime",
+    # "move-execution/$CUT/crates/move-vm-runtime",
+    "move-execution/v0/crates/move-stdlib-natives",
+    "move-execution/v1/crates/move-stdlib-natives",
+    "move-execution/v2/crates/move-stdlib-natives",
+    # "move-execution/$CUT/crates/move-stdlib-natives",
 ]
 
 # Dependencies that should be kept in sync through the whole workspace
@@ -25,7 +41,7 @@ criterion = "0.3.4"
 criterion-cpu-time = "0.1.0"
 crossbeam = "0.8"
 crossbeam-channel = "0.5.0"
-crossterm = "0.21"
+crossterm = "0.25.0"
 curve25519-dalek = { version = "0.1.0", package = "curve25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
 datatest-stable = "0.1.1"
 derivative = "2.2.0"
@@ -47,6 +63,7 @@ hkdf = "0.10.0"
 im = "15.1.0"
 internment = { version = "0.5.0", features = [ "arc"] }
 itertools = "0.10.0"
+leb128 = "0.2.5"
 libfuzzer-sys = "0.4"
 log = { version = "0.4.14", features = ["serde"] }
 lsp-server = "0.5.1"
@@ -86,7 +103,9 @@ sha2 = "0.9.3"
 sha3 = "0.9.1"
 shell-words = "1.0.0"
 simplelog = "0.9.0"
+similar = "2.4.0"
 smallvec = "1.6.1"
+stacker = "0.1.15"
 static_assertions = "1.1.0"
 syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.2.0"
@@ -99,10 +118,11 @@ toml_edit =  { version = "0.14.3", features = ["easy"] }
 tracing = "0.1.26"
 tracing-subscriber = { version = "0.3.15", features = ["env-filter"] }
 treeline = "0.1.0"
-tui = "0.17.0"
+tui = "0.19.0"
 uint = "0.9.4"
 url = "2.2.2"
 variant_count = "1.1.0"
+vfs = "0.10.0"
 walkdir = "2.3.1"
 whoami = { version = "1.2.1" }
 x25519-dalek = { version = "0.1.0", package = "x25519-dalek-fiat", default-features = false, features = ["std", "u64_backend"] }
@@ -112,13 +132,13 @@ bytecode-interpreter-crypto = { path = "crates/bytecode-interpreter-crypto" }
 enum-compat-util = { path = "crates/enum-compat-util"}
 invalid-mutations = { path = "crates/invalid-mutations" }
 module-generation = { path = "crates/module-generation" }
-move-abigen = { path = "crates/move-abigen" }
 move-abstract-stack = { path = "crates/move-abstract-stack" }
 move-binary-format = { path = "crates/move-binary-format" }
 move-borrow-graph = { path = "crates/move-borrow-graph" }
 move-bytecode-source-map = { path = "crates/move-bytecode-source-map" }
 move-bytecode-utils = { path = "crates/move-bytecode-utils" }
 move-bytecode-verifier = { path = "crates/move-bytecode-verifier" }
+move-bytecode-verifier-meter = { path = "crates/move-bytecode-verifier-meter" }
 move-bytecode-viewer = { path = "crates/move-bytecode-viewer" }
 move-cli = { path = "crates/move-cli" }
 move-command-line-common = { path = "crates/move-command-line-common" }
@@ -136,12 +156,12 @@ move-model = { path = "crates/move-model" }
 move-package = { path = "crates/move-package" }
 move-proc-macros = { path = "crates/move-proc-macros"}
 move-prover = { path = "crates/move-prover" }
-move-prover-boogie-backend = { path = "crates/move-prover-boogie-backend" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
 move-read-write-set-types = { path = "crates/move-read-write-set-types" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
 move-stackless-bytecode-interpreter = { path = "crates/move-stackless-bytecode-interpreter" }
 move-stdlib = { path = "crates/move-stdlib" }
+move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }
 move-transactional-test-runner = { path = "crates/move-transactional-test-runner" }
 move-unit-test = { path = "crates/move-unit-test" }

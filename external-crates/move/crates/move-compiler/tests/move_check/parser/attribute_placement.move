@@ -13,9 +13,6 @@ module M {
 
     #[attr]
     public fun foo() { N::bar() }
-
-    #[attr]
-    spec foo {}
 }
 }
 
@@ -29,7 +26,7 @@ module 0x42::N {
 }
 
 #[attr]
-script {
+module 0x42::m {
     #[attr]
     use 0x42::M;
 
@@ -40,7 +37,4 @@ script {
     fun main() {
         M::foo();
     }
-
-    #[attr]
-    spec main { }
 }

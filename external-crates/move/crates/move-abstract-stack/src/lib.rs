@@ -127,7 +127,7 @@ impl<T: Eq + Clone + Debug> AbstractStack<T> {
     }
 
     #[cfg(test)]
-    pub(crate) fn assert_run_lengths<'a, Items, Item>(&self, lengths: Items)
+    pub(crate) fn assert_run_lengths<Items, Item>(&self, lengths: Items)
     where
         Item: std::borrow::Borrow<u64>,
         Items: IntoIterator<Item = Item>,

@@ -29,11 +29,8 @@ module games::drand_based_scratch_card {
     use sui::balance::{Self};
     use sui::coin::{Self, Coin};
     use sui::hmac::hmac_sha3_256;
-    use sui::object::{Self, ID, UID};
 
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// Error codes
     const EInvalidDeposit: u64 = 0;
@@ -44,7 +41,7 @@ module games::drand_based_scratch_card {
     const EInvalidGame: u64 = 6;
 
     /// Game represents a set of parameters of a single game.
-    struct Game has key {
+    public struct Game has key {
         id: UID,
         creator: address,
         reward_amount: u64,
@@ -54,7 +51,7 @@ module games::drand_based_scratch_card {
     }
 
     /// Reward that is attached to a specific game. Can be withdrawn once.
-    struct Reward has key {
+    public struct Reward has key {
         id: UID,
         game_id: ID,
         balance: Balance<SUI>,
@@ -62,14 +59,14 @@ module games::drand_based_scratch_card {
 
     /// Ticket represents a participant in a single game.
     /// Can be deconstructed only by the owner.
-    struct Ticket has key, store {
+    public struct Ticket has key, store {
         id: UID,
         game_id: ID,
     }
 
     /// Winner represents a participant that won in a specific game.
     /// Can be consumed by the take_reward.
-    struct Winner has key, store {
+    public struct Winner has key, store {
         id: UID,
         game_id: ID,
     }
@@ -122,11 +119,10 @@ module games::drand_based_scratch_card {
         ticket: Ticket,
         game: &Game,
         drand_sig: vector<u8>,
-        drand_prev_sig: vector<u8>,
         ctx: &mut TxContext
     ) {
         assert!(ticket.game_id == object::id(game), EInvalidTicket);
-        drand_lib::verify_drand_signature(drand_sig, drand_prev_sig, end_of_game_round(game.base_drand_round));
+        drand_lib::verify_drand_signature(drand_sig, end_of_game_round(game.base_drand_round));
         // The randomness for the current ticket is derived by HMAC(drand randomness, ticket id).
         // A solution like checking if (drand randomness % reward_factor) == (ticket id % reward_factor) is not secure
         // as the adversary can control the values of ticket id. (For this particular game this attack is not
@@ -186,6 +182,6 @@ module games::drand_based_scratch_card {
         // at least 24 hours from now. Since the creator does not know as well if its game is created in the beginning
         // or the end of the epoch, we define the end of the game to be 24h + 24h from when it started, +1h to be on
         // the safe side since epoch duration is not deterministic.
-        round + 2 * 60 * (24 + 25)
+        round + 20 * 60 * (24 + 25)
     }
 }

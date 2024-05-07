@@ -8,16 +8,19 @@ use super::absint::*;
 use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
-    expansion::ast::{AbilitySet, ModuleIdent},
+    editions::Edition,
+    expansion::ast::{AbilitySet, ModuleIdent, Mutability},
     hlir::{
         ast::*,
         translate::{display_var, DisplayVar},
     },
     naming::ast::{self as N, TParam},
-    parser::ast::{Ability_, StructName},
+    parser::ast::{Ability_, DatatypeName},
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
+use move_proc_macros::growing_stack;
+use move_symbol_pool::Symbol;
 use state::*;
 use std::collections::BTreeMap;
 
@@ -26,41 +29,70 @@ use std::collections::BTreeMap;
 //**************************************************************************************************
 
 struct LocalsSafety<'a> {
-    struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-    local_types: &'a UniqueMap<Var, SingleType>,
+    env: &'a CompilationEnv,
+    package: Option<Symbol>,
+    datatype_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<DatatypeName, AbilitySet>>,
+    local_types: &'a UniqueMap<Var, (Mutability, SingleType)>,
     signature: &'a FunctionSignature,
+    unused_mut: BTreeMap<Var, Loc>,
 }
 
 impl<'a> LocalsSafety<'a> {
     fn new(
-        struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-        local_types: &'a UniqueMap<Var, SingleType>,
+        env: &'a CompilationEnv,
+        package: Option<Symbol>,
+        datatype_declared_abilities: &'a UniqueMap<
+            ModuleIdent,
+            UniqueMap<DatatypeName, AbilitySet>,
+        >,
+        local_types: &'a UniqueMap<Var, (Mutability, SingleType)>,
         signature: &'a FunctionSignature,
     ) -> Self {
+        let unused_mut = local_types
+            .key_cloned_iter()
+            .filter_map(|(v, (mut_, _))| {
+                if let Mutability::Mut(loc) = mut_ {
+                    Some((v, *loc))
+                } else {
+                    None
+                }
+            })
+            .collect();
         Self {
-            struct_declared_abilities,
+            env,
+            package,
+            datatype_declared_abilities,
             local_types,
             signature,
+            unused_mut,
         }
     }
 }
 
 struct Context<'a, 'b> {
-    struct_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<StructName, AbilitySet>>,
-    local_types: &'a UniqueMap<Var, SingleType>,
+    env: &'a CompilationEnv,
+    package: Option<Symbol>,
+    datatype_declared_abilities: &'a UniqueMap<ModuleIdent, UniqueMap<DatatypeName, AbilitySet>>,
+    local_types: &'a UniqueMap<Var, (Mutability, SingleType)>,
+    unused_mut: &'a mut BTreeMap<Var, Loc>,
     local_states: &'b mut LocalStates,
     signature: &'a FunctionSignature,
     diags: Diagnostics,
 }
 
 impl<'a, 'b> Context<'a, 'b> {
-    fn new(locals_safety: &'a LocalsSafety, local_states: &'b mut LocalStates) -> Self {
-        let struct_declared_abilities = &locals_safety.struct_declared_abilities;
-        let local_types = &locals_safety.local_types;
-        let signature = &locals_safety.signature;
+    fn new(locals_safety: &'a mut LocalsSafety, local_states: &'b mut LocalStates) -> Self {
+        let env = locals_safety.env;
+        let datatype_declared_abilities = &locals_safety.datatype_declared_abilities;
+        let local_types = locals_safety.local_types;
+        let signature = locals_safety.signature;
+        let unused_mut = &mut locals_safety.unused_mut;
         Self {
-            struct_declared_abilities,
+            env,
+            package: locals_safety.package,
+            datatype_declared_abilities,
             local_types,
+            unused_mut,
             local_states,
             signature,
             diags: Diagnostics::new(),
@@ -88,7 +120,23 @@ impl<'a, 'b> Context<'a, 'b> {
     }
 
     fn local_type(&self, local: &Var) -> &SingleType {
-        self.local_types.get(local).unwrap()
+        &self.local_types.get(local).unwrap().1
+    }
+
+    fn local_mutability(&self, local: &Var) -> Mutability {
+        self.local_types.get(local).unwrap().0
+    }
+
+    fn get_first_assignment(&self, local: &Var) -> Option<Loc> {
+        self.local_states.get_first_assignment(local)
+    }
+
+    fn maybe_set_first_assignment(&mut self, local: Var, loc: Loc) {
+        self.local_states.maybe_set_first_assignment(local, loc)
+    }
+
+    fn mark_mutable_usage(&mut self, _eloc: Loc, v: &Var) {
+        self.unused_mut.remove(v);
     }
 }
 
@@ -116,34 +164,70 @@ pub fn verify(
     cfg: &super::cfg::MutForwardCFG,
 ) -> BTreeMap<Label, LocalStates> {
     let super::CFGContext {
-        struct_declared_abilities,
+        datatype_declared_abilities,
         signature,
         locals,
         ..
     } = context;
     let initial_state = LocalStates::initial(&signature.parameters, locals);
-    let mut locals_safety = LocalsSafety::new(struct_declared_abilities, locals, signature);
+    let mut locals_safety = LocalsSafety::new(
+        compilation_env,
+        context.package,
+        datatype_declared_abilities,
+        locals,
+        signature,
+    );
     let (final_state, ds) = locals_safety.analyze_function(cfg, initial_state);
+    unused_let_muts(compilation_env, locals, locals_safety.unused_mut);
     compilation_env.add_diags(ds);
     final_state
+}
+
+/// Generates warnings for unused mut declarations
+fn unused_let_muts<T>(
+    env: &mut CompilationEnv,
+    locals: &UniqueMap<Var, T>,
+    unused_mut_locals: BTreeMap<Var, Loc>,
+) {
+    for (v, mut_loc) in unused_mut_locals {
+        if !v.starts_with_underscore() {
+            let vstr = match display_var(v.value()) {
+                DisplayVar::Tmp => panic!("ICE invalid unused mut tmp local {}", v.value()),
+                DisplayVar::MatchTmp(s) => s,
+                DisplayVar::Orig(s) => s,
+            };
+            let decl_loc = *locals.get_loc(&v).unwrap();
+            let decl_msg = format!("The variable '{vstr}' is never used mutably");
+            let mut_msg = "Consider removing the 'mut' declaration here";
+            env.add_diag(diag!(
+                UnusedItem::MutModifier,
+                (decl_loc, decl_msg),
+                (mut_loc, mut_msg)
+            ))
+        }
+    }
 }
 
 //**************************************************************************************************
 // Command
 //**************************************************************************************************
 
+#[growing_stack]
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(case, ls, e) => {
             exp(context, e);
-            lvalues(context, ls);
+            lvalues(context, *case, ls);
         }
         C::Mutate(el, er) => {
             exp(context, er);
             exp(context, el)
         }
-        C::Abort(e) | C::IgnoreAndPop { exp: e, .. } | C::JumpIf { cond: e, .. } => exp(context, e),
+        C::Abort(e)
+        | C::IgnoreAndPop { exp: e, .. }
+        | C::JumpIf { cond: e, .. }
+        | C::VariantSwitch { subject: e, .. } => exp(context, e),
 
         C::Return { exp: e, .. } => {
             exp(context, e);
@@ -164,6 +248,11 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
                             let available = *available;
                             let stmt = match display_var(local.value()) {
                                 DisplayVar::Tmp => "The value is created but not used".to_owned(),
+                                DisplayVar::MatchTmp(_name) => {
+                                    "The match expression takes ownership of this value \
+                                    but does not use it"
+                                        .to_string()
+                                }
                                 DisplayVar::Orig(l) => {
                                     if context.signature.is_parameter(&local) {
                                         format!("The parameter '{}' {} a value", l, verb,)
@@ -192,19 +281,28 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             context.extend_diags(diags)
         }
         C::Jump { .. } => (),
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
 
-fn lvalues(context: &mut Context, ls: &[LValue]) {
-    ls.iter().for_each(|l| lvalue(context, l))
+fn lvalues(context: &mut Context, case: AssignCase, ls: &[LValue]) {
+    ls.iter().for_each(|l| lvalue(context, case, l))
 }
 
-fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
+fn lvalue(context: &mut Context, case: AssignCase, sp!(loc, l_): &LValue) {
     use LValue_ as L;
     match l_ {
         L::Ignore => (),
-        L::Var(v, _) => {
+        L::Var { var: v, .. } => {
+            if case == AssignCase::Update {
+                let mut_ = context.local_mutability(v);
+                if let Some(assign_loc) = context.get_first_assignment(v) {
+                    // If it has already been assigned, it is a mutation.
+                    // This will trigger even if it was assigned and then moved
+                    check_mutability(context, *loc, "assignment", v, mut_, Some(assign_loc));
+                }
+            }
+            context.maybe_set_first_assignment(*v, *loc);
             let ty = context.local_type(v);
             let abilities = ty.value.abilities(ty.loc);
             if !abilities.has_ability_(Ability_::Drop) {
@@ -219,40 +317,68 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue) {
                             LocalState::MaybeUnavailable { .. } => "might contain",
                         };
                         let available = *available;
-                        let vstr = match display_var(v.value()) {
-                            DisplayVar::Tmp => panic!("ICE invalid assign tmp local"),
-                            DisplayVar::Orig(s) => s,
+                        match display_var(v.value()) {
+                            DisplayVar::Tmp | DisplayVar::MatchTmp(_) => {
+                                let msg = format!(
+                                    "This expression without the '{}' ability must be used",
+                                    Ability_::Drop,
+                                );
+                                let mut diag = diag!(
+                                    MoveSafety::UnusedUndroppable,
+                                    (*loc, "Invalid usage of undroppable value".to_string()),
+                                    (available, msg),
+                                );
+                                add_drop_ability_tip(context, &mut diag, ty.clone());
+                                context.add_diag(diag)
+                            }
+                            DisplayVar::Orig(s) => {
+                                let msg = format!(
+                                    "The variable {} a value due to this assignment. The value \
+                                    does not have the '{}' ability and must be used before you \
+                                    assign to this variable again",
+                                    verb,
+                                    Ability_::Drop,
+                                );
+                                let mut diag = diag!(
+                                    MoveSafety::UnusedUndroppable,
+                                    (*loc, format!("Invalid assignment to variable '{}'", s)),
+                                    (available, msg),
+                                );
+                                add_drop_ability_tip(context, &mut diag, ty.clone());
+                                context.add_diag(diag)
+                            }
                         };
-                        let msg = format!(
-                            "The variable {} a value due to this assignment. The value does not \
-                             have the '{}' ability and must be used before you assign to this \
-                             variable again",
-                            verb,
-                            Ability_::Drop,
-                        );
-                        let mut diag = diag!(
-                            MoveSafety::UnusedUndroppable,
-                            (*loc, format!("Invalid assignment to variable '{}'", vstr)),
-                            (available, msg),
-                        );
-                        add_drop_ability_tip(context, &mut diag, ty.clone());
-                        context.add_diag(diag)
                     }
                 }
             }
             context.set_state(*v, LocalState::Available(*loc))
         }
-        L::Unpack(_, _, fields) => fields.iter().for_each(|(_, l)| lvalue(context, l)),
+        L::Unpack(_, _, fields) => fields.iter().for_each(|(_, l)| lvalue(context, case, l)),
+        L::UnpackVariant(_, _, _, _, _, fields) => {
+            fields.iter().for_each(|(_, l)| lvalue(context, case, l))
+        }
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) {
     use UnannotatedExp_ as E;
     let eloc = &parent_e.exp.loc;
     match &parent_e.exp.value {
-        E::Unit { .. } | E::Value(_) | E::Constant(_) | E::Spec(_, _) | E::UnresolvedError => (),
+        E::Unit { .. }
+        | E::Value(_)
+        | E::Constant(_)
+        | E::UnresolvedError
+        | E::ErrorConstant(_) => (),
 
-        E::BorrowLocal(_, var) | E::Copy { var, .. } => use_local(context, eloc, var),
+        E::BorrowLocal(mut_, var) => {
+            if *mut_ {
+                let mutability = context.local_mutability(var);
+                check_mutability(context, *eloc, "mutable borrow", var, mutability, None)
+            }
+            use_local(context, eloc, var)
+        }
+        E::Copy { var, .. } => use_local(context, eloc, var),
 
         E::Move { var, .. } => {
             use_local(context, eloc, var);
@@ -277,6 +403,8 @@ fn exp(context: &mut Context, parent_e: &Exp) {
 
         E::Pack(_, _, fields) => fields.iter().for_each(|(_, _, e)| exp(context, e)),
 
+        E::PackVariant(_, _, _, fields) => fields.iter().for_each(|(_, _, e)| exp(context, e)),
+
         E::Multiple(es) => es.iter().for_each(|e| exp(context, e)),
 
         E::Unreachable => panic!("ICE should not analyze dead code"),
@@ -297,6 +425,7 @@ fn use_local(context: &mut Context, loc: &Loc, local: &Var) {
             let unavailable = *unavailable;
             let vstr = match display_var(local.value()) {
                 DisplayVar::Tmp => panic!("ICE invalid use tmp local {}", local.value()),
+                DisplayVar::MatchTmp(s) => s,
                 DisplayVar::Orig(s) => s,
             };
             match unavailable_reason {
@@ -349,6 +478,48 @@ fn use_local(context: &mut Context, loc: &Loc, local: &Var) {
     }
 }
 
+fn check_mutability(
+    context: &mut Context,
+    eloc: Loc,
+    usage: &str,
+    v: &Var,
+    mut_: Mutability,
+    prev_assignment: Option<Loc>,
+) {
+    context.mark_mutable_usage(eloc, v);
+    if mut_ == Mutability::Imm {
+        let vstr = match display_var(v.value()) {
+            DisplayVar::Tmp => panic!("ICE invalid mutation tmp local {}", v.value()),
+            DisplayVar::MatchTmp(s) => s,
+            DisplayVar::Orig(s) => s,
+        };
+        let decl_loc = *context.local_types.get_loc(v).unwrap();
+        let usage_msg = format!("Invalid {usage} of immutable variable '{vstr}'");
+        let decl_msg =
+            format!("To use the variable mutably, it must be declared 'mut', e.g. 'mut {vstr}'");
+        if context.env.edition(context.package) == Edition::E2024_MIGRATION {
+            context.add_diag(diag!(Migration::NeedsLetMut, (decl_loc, decl_msg.clone())))
+        } else {
+            let mut diag = diag!(
+                TypeSafety::InvalidImmVariableUsage,
+                (eloc, usage_msg),
+                (decl_loc, decl_msg),
+            );
+            if let Some(prev) = prev_assignment {
+                if prev != decl_loc {
+                    let msg = if eloc == prev {
+                        "The variable is assigned multiple times here in a loop"
+                    } else {
+                        "The variable was initially assigned here"
+                    };
+                    diag.add_secondary_label((prev, msg));
+                }
+            }
+            context.add_diag(diag)
+        }
+    }
+}
+
 //**************************************************************************************************
 // Error helper
 //**************************************************************************************************
@@ -369,13 +540,13 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
         }
         T::Apply(_, sp!(_, TN::ModuleType(m, s)), ty_args) => {
             let decl_loc = *context
-                .struct_declared_abilities
+                .datatype_declared_abilities
                 .get(m)
                 .unwrap()
                 .get_loc(s)
                 .unwrap();
             let declared_abilities = context
-                .struct_declared_abilities
+                .datatype_declared_abilities
                 .get(m)
                 .unwrap()
                 .get(s)
@@ -403,7 +574,7 @@ fn add_drop_ability_tip(context: &Context, diag: &mut Diagnostic, st: SingleType
                 T::Param(TParam { abilities, .. }) | T::Apply(Some(abilities), _, _) => {
                     abilities.clone()
                 }
-                T::Var(_) | T::Apply(None, _, _) => panic!("ICE expansion failed"),
+                T::Var(_) | T::Apply(None, _, _) | T::Fun(_, _) => panic!("ICE expansion failed"),
             };
             (ty_arg, abilities)
         }),

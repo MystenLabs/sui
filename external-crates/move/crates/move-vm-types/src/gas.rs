@@ -7,7 +7,7 @@ use move_core_types::{
     gas_algebra::{InternalGas, NumArgs, NumBytes},
     language_storage::ModuleId,
 };
-#[cfg(debug_assertions)]
+
 use move_vm_profiler::GasProfiler;
 
 /// Enum of instructions that do not need extra information for gas metering.
@@ -129,37 +129,6 @@ pub trait GasMeter {
 
     fn charge_neq(&mut self, lhs: impl ValueView, rhs: impl ValueView) -> PartialVMResult<()>;
 
-    fn charge_borrow_global(
-        &mut self,
-        is_mut: bool,
-        is_generic: bool,
-        ty: impl TypeView,
-        is_success: bool,
-    ) -> PartialVMResult<()>;
-
-    fn charge_exists(
-        &mut self,
-        is_generic: bool,
-        ty: impl TypeView,
-        // TODO(Gas): see if we can get rid of this param
-        exists: bool,
-    ) -> PartialVMResult<()>;
-
-    fn charge_move_from(
-        &mut self,
-        is_generic: bool,
-        ty: impl TypeView,
-        val: Option<impl ValueView>,
-    ) -> PartialVMResult<()>;
-
-    fn charge_move_to(
-        &mut self,
-        is_generic: bool,
-        ty: impl TypeView,
-        val: impl ValueView,
-        is_success: bool,
-    ) -> PartialVMResult<()>;
-
     fn charge_vec_pack<'a>(
         &mut self,
         ty: impl TypeView + 'a,
@@ -198,24 +167,6 @@ pub trait GasMeter {
     // TODO(Gas): Expose the two elements
     fn charge_vec_swap(&mut self, ty: impl TypeView) -> PartialVMResult<()>;
 
-    /// Charges for loading a resource from storage. This is only called when the resource is not
-    /// cached.
-    /// - `Some(n)` means `n` bytes are loaded.
-    /// - `None` means a load operation is performed but the resource does not exist.
-    ///
-    /// WARNING: This can be dangerous if you execute multiple user transactions in the same
-    /// session -- identical transactions can have different gas costs. Use at your own risk.
-    fn charge_load_resource(
-        &mut self,
-        loaded: Option<(NumBytes, impl ValueView)>,
-    ) -> PartialVMResult<()>;
-
-    /// Charge for executing a native function.
-    /// The cost is calculated returned by the native function implementation.
-    /// Should fail if not enough gas units are left.
-    ///
-    /// In the future, we may want to remove this and directly pass a reference to the GasMeter
-    /// instance to the native functions to allow gas to be deducted during computation.
     fn charge_native_function(
         &mut self,
         amount: InternalGas,
@@ -236,10 +187,8 @@ pub trait GasMeter {
     /// Returns the gas left
     fn remaining_gas(&self) -> InternalGas;
 
-    #[cfg(debug_assertions)]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler>;
 
-    #[cfg(debug_assertions)]
     fn set_profiler(&mut self, profiler: GasProfiler);
 }
 
@@ -336,44 +285,6 @@ impl GasMeter for UnmeteredGasMeter {
         Ok(())
     }
 
-    fn charge_borrow_global(
-        &mut self,
-        _is_mut: bool,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
-        Ok(())
-    }
-
-    fn charge_exists(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _exists: bool,
-    ) -> PartialVMResult<()> {
-        Ok(())
-    }
-
-    fn charge_move_from(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
-        Ok(())
-    }
-
-    fn charge_move_to(
-        &mut self,
-        _is_generic: bool,
-        _ty: impl TypeView,
-        _val: impl ValueView,
-        _is_success: bool,
-    ) -> PartialVMResult<()> {
-        Ok(())
-    }
-
     fn charge_vec_pack<'a>(
         &mut self,
         _ty: impl TypeView + 'a,
@@ -424,13 +335,6 @@ impl GasMeter for UnmeteredGasMeter {
         Ok(())
     }
 
-    fn charge_load_resource(
-        &mut self,
-        _loaded: Option<(NumBytes, impl ValueView)>,
-    ) -> PartialVMResult<()> {
-        Ok(())
-    }
-
     fn charge_native_function(
         &mut self,
         _amount: InternalGas,
@@ -458,11 +362,9 @@ impl GasMeter for UnmeteredGasMeter {
         InternalGas::new(u64::MAX)
     }
 
-    #[cfg(debug_assertions)]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         None
     }
 
-    #[cfg(debug_assertions)]
     fn set_profiler(&mut self, _profiler: GasProfiler) {}
 }

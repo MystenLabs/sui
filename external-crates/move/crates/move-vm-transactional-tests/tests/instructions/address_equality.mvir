@@ -1,5 +1,7 @@
 //# run
-main() {
+module 0x42.m {
+
+entry foo() {
     let a1: address;
     let a2: address;
     let a3: address;
@@ -23,4 +25,6 @@ label b0:
     assert(copy(a5) == copy(a6), 46);
     assert(copy(a6) == copy(a7), 47);
     return;
+}
+
 }

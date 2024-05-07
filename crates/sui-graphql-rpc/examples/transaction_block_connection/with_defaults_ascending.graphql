@@ -1,6 +1,6 @@
 # Fetch some default amount of transactions, ascending
 {
-  transactionBlockConnection {
+  transactionBlocks {
     nodes {
       digest
       effects {
@@ -19,7 +19,7 @@
         errors
       }
       sender {
-        location
+        address
       }
       gasInput {
         gasPrice

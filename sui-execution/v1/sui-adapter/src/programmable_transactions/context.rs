@@ -5,7 +5,6 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
-    use std::collections::{BTreeSet, HashSet};
     use std::{
         borrow::Borrow,
         collections::{BTreeMap, HashMap},
@@ -23,31 +22,26 @@ mod checked {
     };
     use move_core_types::gas_algebra::NumBytes;
     use move_core_types::resolver::ModuleResolver;
-    use move_core_types::value::MoveTypeLayout;
     use move_core_types::vm_status::StatusCode;
     use move_core_types::{
         account_address::AccountAddress,
         identifier::IdentStr,
         language_storage::{ModuleId, StructTag, TypeTag},
     };
-    #[cfg(debug_assertions)]
-    use move_vm_profiler::GasProfiler;
     use move_vm_runtime::native_extensions::NativeContextExtensions;
     use move_vm_runtime::{
         move_vm::MoveVM,
         session::{LoadedFunctionInstantiation, SerializedReturnValues},
     };
     use move_vm_types::data_store::DataStore;
-    #[cfg(debug_assertions)]
-    use move_vm_types::gas::GasMeter;
     use move_vm_types::loaded_data::runtime_types::Type;
-    use move_vm_types::values::{GlobalValue, Value as VMValue};
+    use move_vm_types::values::GlobalValue;
     use sui_move_natives::object_runtime::{
         self, get_all_uids, max_event_error, LoadedRuntimeObject, ObjectRuntime, RuntimeResults,
     };
     use sui_protocol_config::ProtocolConfig;
     use sui_types::execution::ExecutionResults;
-    use sui_types::storage::PackageObjectArc;
+    use sui_types::storage::PackageObject;
     use sui_types::{
         balance::Balance,
         base_types::{MoveObjectType, ObjectID, SuiAddress, TxContext},
@@ -60,7 +54,7 @@ mod checked {
         },
         metrics::LimitsMetrics,
         move_package::MovePackage,
-        object::{Data, MoveObject, Object, Owner},
+        object::{Data, MoveObject, Object, ObjectInner, Owner},
         storage::BackingPackageStore,
         transaction::{Argument, CallArg, ObjectArg},
         type_resolver::TypeTagResolver,
@@ -198,9 +192,12 @@ mod checked {
                 tx_context.epoch(),
             );
 
-            // Set the profiler if in debug mode
-            #[cfg(debug_assertions)]
-            {
+            // Set the profiler if feature is enabled
+            #[skip_checked_arithmetic]
+            move_vm_profiler::gas_profiler_feature_enabled! {
+                use move_vm_profiler::GasProfiler;
+                use move_vm_types::gas::GasMeter;
+
                 let tx_digest = tx_context.digest();
                 let remaining_gas: u64 =
                     move_vm_types::gas::GasMeter::remaining_gas(gas_charger.move_gas_status())
@@ -349,7 +346,6 @@ mod checked {
             command_kind: CommandKind<'_>,
             arg: Argument,
         ) -> Result<V, CommandArgumentError> {
-            let shared_obj_deletion_enabled = self.protocol_config.shared_object_deletion();
             let is_borrowed = self.arg_is_borrowed(&arg);
             let (input_metadata_opt, val_opt) = self.borrow_mut(arg, UsageKind::ByValue)?;
             let is_copyable = if let Some(val) = val_opt {
@@ -375,36 +371,22 @@ mod checked {
             if matches!(
                 input_metadata_opt,
                 Some(InputObjectMetadata::InputObject {
-                    owner: Owner::Immutable,
+                    owner: Owner::Immutable | Owner::Shared { .. },
                     ..
                 })
-            ) {
-                return Err(CommandArgumentError::InvalidObjectByValue);
-            }
-            if (
-                // this check can be removed after shared_object_deletion feature flag is removed
-                matches!(
-                    input_metadata_opt,
-                    Some(InputObjectMetadata::InputObject {
-                        owner: Owner::Shared { .. },
-                        ..
-                    })
-                ) && !shared_obj_deletion_enabled
             ) {
                 return Err(CommandArgumentError::InvalidObjectByValue);
             }
 
-            // ensure we don't transfer shared objects to new owners
+            // Any input object taken by value must be mutable
             if matches!(
                 input_metadata_opt,
                 Some(InputObjectMetadata::InputObject {
-                    owner: Owner::Shared { .. },
+                    is_mutable_input: false,
                     ..
                 })
-            ) && matches!(command_kind, CommandKind::TransferObjects)
-                && shared_obj_deletion_enabled
-            {
-                return Err(CommandArgumentError::SharedObjectOperationNotAllowed);
+            ) {
+                return Err(CommandArgumentError::InvalidObjectByValue);
             }
 
             let val = if is_copyable {
@@ -616,7 +598,6 @@ mod checked {
             let gas_id_opt = gas.object_metadata.as_ref().map(|info| info.id());
             let mut loaded_runtime_objects = BTreeMap::new();
             let mut additional_writes = BTreeMap::new();
-            let mut by_value_shared_objects = BTreeSet::new();
             for input in inputs.into_iter().chain(std::iter::once(gas)) {
                 let InputValue {
                     object_metadata:
@@ -641,8 +622,6 @@ mod checked {
                 );
                 if let Some(Value::Object(object_value)) = value {
                     add_additional_write(&mut additional_writes, owner, object_value)?;
-                } else if owner.is_shared() {
-                    by_value_shared_objects.insert(id);
                 }
             }
             // check for unused values
@@ -707,7 +686,6 @@ mod checked {
             }
 
             let object_runtime: ObjectRuntime = native_extensions.remove();
-            let external_transfers = additional_writes.keys().copied().collect::<HashSet<_>>();
 
             let RuntimeResults {
                 writes,
@@ -720,18 +698,6 @@ mod checked {
                 remaining_events.is_empty(),
                 "Events should be taken after every Move call"
             );
-
-            for id in by_value_shared_objects {
-                if !writes.contains_key(&id)
-                    && !deleted_object_ids.contains_key(&id)
-                    && !external_transfers.contains(&id)
-                {
-                    return Err(ExecutionError::new(
-                        ExecutionErrorKind::SharedObjectWrapped,
-                        Some(format!("Wrapping shared object {} not allowed", id).into()),
-                    ));
-                }
-            }
 
             loaded_runtime_objects.extend(loaded_child_objects);
 
@@ -1000,7 +966,7 @@ mod checked {
     fn package_for_linkage(
         linkage_view: &LinkageView,
         package_id: ObjectID,
-    ) -> VMResult<PackageObjectArc> {
+    ) -> VMResult<PackageObject> {
         use move_binary_format::errors::PartialVMError;
         use move_core_types::vm_status::StatusCode;
 
@@ -1076,7 +1042,10 @@ mod checked {
                 }
             }
 
-            Ok(Type::StructInstantiation(idx, loaded_type_params))
+            Ok(Type::StructInstantiation(Box::new((
+                idx,
+                loaded_type_params,
+            ))))
         }
     }
 
@@ -1154,10 +1123,10 @@ mod checked {
         new_packages: &[MovePackage],
         object: &Object,
     ) -> Result<ObjectValue, ExecutionError> {
-        let Object {
+        let ObjectInner {
             data: Data::Move(object),
             ..
-        } = object
+        } = object.as_inner()
         else {
             invariant_violation!("Expected a Move object");
         };
@@ -1487,22 +1456,8 @@ mod checked {
             panic!("load_resource should never be called for LinkageView")
         }
 
-        fn emit_event(
-            &mut self,
-            _guid: Vec<u8>,
-            _seq_num: u64,
-            _ty: Type,
-            _val: VMValue,
-        ) -> PartialVMResult<()> {
-            panic!("emit_event should never be called for LinkageView")
-        }
-
-        fn events(&self) -> &Vec<(Vec<u8>, u64, Type, MoveTypeLayout, VMValue)> {
-            panic!("events should never be called for LinkageView")
-        }
-
         fn publish_module(&mut self, _module_id: &ModuleId, _blob: Vec<u8>) -> VMResult<()> {
-            // we cannot panic here because during executon and publishing this is
+            // we cannot panic here because during execution and publishing this is
             // currently called from the publish flow in the Move runtime
             Ok(())
         }

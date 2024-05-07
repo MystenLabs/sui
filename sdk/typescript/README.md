@@ -1,24 +1,24 @@
 # Docs site
 
-For more complete docs, visit the [Sui TypeScript SDK docs](https://sui-typescript-docs.vercel.app/)
+For more complete docs, visit the [Sui TypeScript SDK docs](https://sdk.mystenlabs.com/)
 
 # Sui TypeScript SDK
 
 This is the Sui TypeScript SDK built on the Sui
-[JSON RPC API](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md). It provides
-utility classes and functions for applications to sign transactions and interact with the Sui
-network.
+[JSON RPC API](https://github.com/MystenLabs/sui/blob/main/docs/content/references/sui-api.mdx). It
+provides utility classes and functions for applications to sign transactions and interact with the
+Sui network.
 
 WARNING: Note that we are still iterating on the RPC and SDK API before TestNet, therefore please
 expect frequent breaking changes in the short-term. We expect the API to stabilize after the
 upcoming TestNet launch.
 
-## Working with DevNet
+## Working with Devnet
 
 The SDK will be published to [npm registry](https://www.npmjs.com/package/@mysten/sui.js) with the
-same bi-weekly release cycle as the DevNet validators and
-[RPC Server](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md). To use the SDK
-in your project, you can do:
+same bi-weekly release cycle as the Devnet validators and
+[RPC Server](https://github.com/MystenLabs/sui/blob/main/docs/content/references/sui-api.mdx). To
+use the SDK in your project, you can do:
 
 ```bash
 $ npm install @mysten/sui.js
@@ -37,7 +37,8 @@ contain the latest changes from `main`.
 npm install @mysten/sui.js@experimental
 ```
 
-Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) topic
+Refer to the
+[JSON RPC](https://github.com/MystenLabs/sui/blob/main/docs/content/references/sui-api.mdx) topic
 for instructions about how to start a local network and local RPC server.
 
 ## Building Locally
@@ -51,9 +52,7 @@ $ pnpm install
 $ pnpm sdk build
 ```
 
-> All `pnpm` commands are intended to be run in the root of the Sui repo. You can also run them
-> within the `sdk/typescript` directory, and remove change `pnpm sdk` to just `pnpm` when running
-> commands.
+> All `pnpm` commands below are intended to be run in the root of the Sui repo.
 
 ## Type Doc
 
@@ -69,16 +68,16 @@ For the latest docs for the `main` branch, run `pnpm doc` and open the
 To run unit tests
 
 ```
-pnpm sdk test:unit
+pnpm --filter @mysten/sui.js test:unit
 ```
 
 To run E2E tests against local network
 
 ```
-pnpm sdk prepare:e2e
+pnpm --filter @mysten/sui.js prepare:e2e
 
 // This will run all e2e tests
-pnpm sdk test:e2e
+pnpm --filter @mysten/sui.js test:e2e
 
 // Alternatively you can choose to run only one test file
 npx vitest txn-builder.test.ts
@@ -94,10 +93,10 @@ Some more follow up here is if you used homebrew to install node, there could be
 node on your machine.
 https://stackoverflow.com/questions/52676244/node-version-not-updating-after-nvm-use-on-mac
 
-To run E2E tests against DevNet
+To run E2E tests against Devnet
 
 ```
-VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm sdk exec vitest e2e
+VITE_FAUCET_URL='https://faucet.devnet.sui.io:443/gas' VITE_FULLNODE_URL='https://fullnode.devnet.sui.io' pnpm --filter @mysten/sui.js exec vitest e2e
 ```
 
 ## Connecting to Sui Network
@@ -106,7 +105,7 @@ The `SuiClient` class provides a connection to the JSON-RPC Server and should be
 read-only operations. The default URLs to connect with the RPC server are:
 
 - local: http://127.0.0.1:9000
-- DevNet: https://fullnode.devnet.sui.io
+- Devnet: https://fullnode.devnet.sui.io
 
 ```typescript
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';

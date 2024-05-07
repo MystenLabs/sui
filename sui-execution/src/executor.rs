@@ -43,6 +43,7 @@ pub trait Executor {
         transaction_digest: TransactionDigest,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<(), ExecutionError>,
     );
@@ -67,8 +68,10 @@ pub trait Executor {
         transaction_kind: TransactionKind,
         transaction_signer: SuiAddress,
         transaction_digest: TransactionDigest,
+        skip_all_checks: bool,
     ) -> (
         InnerTemporaryStore,
+        SuiGasStatus,
         TransactionEffects,
         Result<Vec<ExecutionResult>, ExecutionError>,
     );

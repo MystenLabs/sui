@@ -8,13 +8,13 @@ import ts from 'typescript';
 
 /** @ts-ignore */
 import prettierConfig from '../../../prettier.config.js';
-import {
+import type {
 	OpenRpcMethod,
 	OpenRpcParam,
+	OpenRpcSpec,
 	OpenRpcType,
 	OpenRpcTypeRef,
-	type OpenRpcSpec,
-} from './open-rpc';
+} from './open-rpc.js';
 
 const packageRoot = path.resolve(import.meta.url.slice(5), '../..');
 const openRpcSpec: OpenRpcSpec = JSON.parse(
@@ -343,7 +343,7 @@ methodGenerator.imports.push(
 				),
 			]),
 		),
-		ts.factory.createStringLiteral('../../builder/index.js'),
+		ts.factory.createStringLiteral('../../transactions/index.js'),
 	),
 );
 

@@ -1,3 +1,9 @@
+warning[W00001]: DEPRECATED. will be removed
+  ┌─ tests/move_check/verification/single_module_invalid.move:3:7
+  │
+3 │     #[verify_only]
+  │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
+
 error[E03004]: unbound type
   ┌─ tests/move_check/verification/single_module_invalid.move:8:23
   │
@@ -9,6 +15,12 @@ error[E03004]: unbound type
   │
 9 │         Foo {}
   │         ^^^ Unbound type 'Foo' in current scope
+
+warning[W00001]: DEPRECATED. will be removed
+   ┌─ tests/move_check/verification/single_module_invalid.move:12:7
+   │
+12 │     #[verify_only]
+   │       ^^^^^^^^^^^ The 'verify_only' attribute has been deprecated along with specification blocks
 
 error[E03005]: unbound unscoped name
    ┌─ tests/move_check/verification/single_module_invalid.move:17:24

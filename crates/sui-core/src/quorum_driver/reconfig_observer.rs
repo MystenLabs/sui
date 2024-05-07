@@ -8,10 +8,10 @@ use tokio::sync::broadcast::error::RecvError;
 use tracing::{info, warn};
 
 use crate::{
-    authority::AuthorityStore,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     epoch::committee_store::CommitteeStore,
+    execution_cache::ExecutionCacheRead,
     safe_client::SafeClientMetricsBase,
 };
 
@@ -27,7 +27,7 @@ pub trait ReconfigObserver<A: Clone> {
 /// This is used in TransactionOrchestrator.
 pub struct OnsiteReconfigObserver {
     reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
-    authority_store: Arc<AuthorityStore>,
+    execution_cache: Arc<dyn ExecutionCacheRead>,
     committee_store: Arc<CommitteeStore>,
     safe_client_metrics_base: SafeClientMetricsBase,
     auth_agg_metrics: AuthAggMetrics,
@@ -36,14 +36,14 @@ pub struct OnsiteReconfigObserver {
 impl OnsiteReconfigObserver {
     pub fn new(
         reconfig_rx: tokio::sync::broadcast::Receiver<SuiSystemState>,
-        authority_store: Arc<AuthorityStore>,
+        execution_cache: Arc<dyn ExecutionCacheRead>,
         committee_store: Arc<CommitteeStore>,
         safe_client_metrics_base: SafeClientMetricsBase,
         auth_agg_metrics: AuthAggMetrics,
     ) -> Self {
         Self {
             reconfig_rx,
-            authority_store,
+            execution_cache,
             committee_store,
             safe_client_metrics_base,
             auth_agg_metrics,
@@ -54,7 +54,7 @@ impl OnsiteReconfigObserver {
         &self,
     ) -> AuthorityAggregator<NetworkAuthorityClient> {
         AuthorityAggregator::new_from_local_system_state(
-            &self.authority_store,
+            &self.execution_cache,
             &self.committee_store,
             self.safe_client_metrics_base.clone(),
             self.auth_agg_metrics.clone(),
@@ -73,7 +73,7 @@ impl ReconfigObserver<NetworkAuthorityClient> for OnsiteReconfigObserver {
     fn clone_boxed(&self) -> Box<dyn ReconfigObserver<NetworkAuthorityClient> + Send + Sync> {
         Box::new(Self {
             reconfig_rx: self.reconfig_rx.resubscribe(),
-            authority_store: self.authority_store.clone(),
+            execution_cache: self.execution_cache.clone(),
             committee_store: self.committee_store.clone(),
             safe_client_metrics_base: self.safe_client_metrics_base.clone(),
             auth_agg_metrics: self.auth_agg_metrics.clone(),

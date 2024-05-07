@@ -11,7 +11,7 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo,
 };
 use crate::digests::Digest;
-use crate::effects::{TransactionEffects, TransactionEffectsAPI};
+use crate::effects::{TestEffectsBuilder, TransactionEffectsAPI};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
 use crate::message_envelope::{
@@ -30,7 +30,7 @@ use once_cell::sync::OnceCell;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use shared_crypto::intent::{Intent, IntentScope};
+use shared_crypto::intent::IntentScope;
 use std::fmt::{Debug, Display, Formatter};
 use std::slice::Iter;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -55,10 +55,46 @@ pub struct CheckpointRequest {
     pub request_content: bool,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointRequestV2 {
+    /// if a sequence number is specified, return the checkpoint with that sequence number;
+    /// otherwise if None returns the latest checkpoint stored (authenticated or pending,
+    /// depending on the value of `certified` flag)
+    pub sequence_number: Option<CheckpointSequenceNumber>,
+    // A flag, if true also return the contents of the
+    // checkpoint besides the meta-data.
+    pub request_content: bool,
+    // If true, returns certified checkpoint, otherwise returns pending checkpoint
+    pub certified: bool,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum CheckpointSummaryResponse {
+    Certified(CertifiedCheckpointSummary),
+    Pending(CheckpointSummary),
+}
+
+impl CheckpointSummaryResponse {
+    pub fn content_digest(&self) -> CheckpointContentsDigest {
+        match self {
+            Self::Certified(s) => s.content_digest,
+            Self::Pending(s) => s.content_digest,
+        }
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointResponse {
     pub checkpoint: Option<CertifiedCheckpointSummary>,
+    pub contents: Option<CheckpointContents>,
+}
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointResponseV2 {
+    pub checkpoint: Option<CheckpointSummaryResponse>,
     pub contents: Option<CheckpointContents>,
 }
 
@@ -228,6 +264,10 @@ impl CheckpointSummary {
                 )
             })
             .ok();
+    }
+
+    pub fn is_last_checkpoint_of_epoch(&self) -> bool {
+        self.end_of_epoch_data.is_some()
     }
 }
 
@@ -484,17 +524,17 @@ impl FullCheckpointContents {
     pub fn from_checkpoint_contents<S>(
         store: S,
         contents: CheckpointContents,
-    ) -> Result<Option<Self>, <S as ReadStore>::Error>
+    ) -> Result<Option<Self>, crate::storage::error::Error>
     where
         S: ReadStore,
     {
         let mut transactions = Vec::with_capacity(contents.size());
         for tx in contents.iter() {
             if let (Some(t), Some(e)) = (
-                store.get_transaction_block(&tx.transaction)?,
-                store.get_transaction_effects(&tx.effects)?,
+                store.get_transaction(&tx.transaction)?,
+                store.get_transaction_effects(&tx.transaction)?,
             ) {
-                transactions.push(ExecutionData::new(t.into_inner(), e))
+                transactions.push(ExecutionData::new((*t).clone().into_inner(), e))
             } else {
                 return Ok(None);
             }
@@ -567,10 +607,9 @@ impl FullCheckpointContents {
                 100000000000,
                 100,
             ),
-            Intent::sui_transaction(),
             vec![&key],
         );
-        let effects = TransactionEffects::new_with_tx(&transaction);
+        let effects = TestEffectsBuilder::new(transaction.data()).build();
         let exe_data = ExecutionData {
             transaction,
             effects,
@@ -613,6 +652,10 @@ impl VerifiedCheckpointContents {
         self.transactions.iter()
     }
 
+    pub fn transactions(&self) -> &[VerifiedExecutionData] {
+        &self.transactions
+    }
+
     pub fn into_inner(self) -> FullCheckpointContents {
         FullCheckpointContents {
             transactions: self
@@ -640,6 +683,8 @@ impl VerifiedCheckpointContents {
 #[cfg(test)]
 #[cfg(feature = "test-utils")]
 mod tests {
+    use crate::digests::{ConsensusCommitDigest, TransactionDigest, TransactionEffectsDigest};
+    use crate::transaction::VerifiedTransaction;
     use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
@@ -770,5 +815,68 @@ mod tests {
                 .verify_authority_signatures(&committee)
                 .is_err()
         )
+    }
+
+    // Generate a CheckpointSummary from the input transaction digest. All the other fields in the generated
+    // CheckpointSummary will be the same. The generated CheckpointSummary can be used to test how input
+    // transaction digest affects CheckpointSummary.
+    fn generate_test_checkpoint_summary_from_digest(
+        digest: TransactionDigest,
+    ) -> CheckpointSummary {
+        CheckpointSummary::new(
+            1,
+            2,
+            10,
+            &CheckpointContents::new_with_digests_only_for_tests([ExecutionDigests::new(
+                digest,
+                TransactionEffectsDigest::ZERO,
+            )]),
+            None,
+            GasCostSummary::default(),
+            None,
+            100,
+        )
+    }
+
+    // Tests that ConsensusCommitPrologue with different consensus commit digest will result in different checkpoint content.
+    #[test]
+    fn test_checkpoint_summary_with_different_consensus_digest() {
+        // First, tests that same consensus commit digest will produce the same checkpoint content.
+        {
+            let t1 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::default(),
+            );
+            let t2 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::default(),
+            );
+            let c1 = generate_test_checkpoint_summary_from_digest(*t1.digest());
+            let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
+            assert_eq!(c1.digest(), c2.digest());
+        }
+
+        // Next, tests that different consensus commit digests will produce the different checkpoint contents.
+        {
+            let t1 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::default(),
+            );
+            let t2 = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                1,
+                2,
+                100,
+                ConsensusCommitDigest::random(),
+            );
+            let c1 = generate_test_checkpoint_summary_from_digest(*t1.digest());
+            let c2 = generate_test_checkpoint_summary_from_digest(*t2.digest());
+            assert_ne!(c1.digest(), c2.digest());
+        }
     }
 }

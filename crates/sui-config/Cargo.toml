@@ -20,16 +20,14 @@ serde_with.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
+clap.workspace = true
+object_store.workspace = true
+reqwest.workspace = true
 
 narwhal-config.workspace = true
 sui-keys.workspace = true
 sui-protocol-config.workspace = true
-sui-storage.workspace = true
 sui-types.workspace = true
-workspace-hack.workspace = true
-
-[target.'cfg(msim)'.dependencies]
-sui-simulator.workspace = true
 
 [dev-dependencies]
 insta.workspace = true

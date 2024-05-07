@@ -13,8 +13,8 @@ use move_core_types::{
     identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, TypeTag},
     parser::{parse_transaction_argument, parse_type_tag},
+    runtime_value::{MoveStruct, MoveValue},
     transaction_argument::TransactionArgument,
-    value::{MoveStruct, MoveValue},
     vm_status::StatusCode,
 };
 use move_model::{

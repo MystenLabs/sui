@@ -132,7 +132,7 @@ impl<U> From<GasQuantity<U>> for u64 {
  * Clone & Copy
  *
  **************************************************************************************************/
-#[allow(clippy::incorrect_clone_impl_on_copy_type)]
+#[allow(clippy::non_canonical_clone_impl)]
 impl<U> Clone for GasQuantity<U> {
     fn clone(&self) -> Self {
         Self::new(self.val)

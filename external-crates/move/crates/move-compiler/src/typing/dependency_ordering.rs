@@ -5,12 +5,13 @@
 use crate::{
     diagnostics::{codes::*, Diagnostic},
     expansion::ast::{Address, ModuleIdent, Value_},
+    ice,
     naming::ast::{self as N, Neighbor, Neighbor_},
     shared::{unique_map::UniqueMap, *},
     typing::ast as T,
 };
 use move_ir_types::location::*;
-use move_symbol_pool::Symbol;
+use move_proc_macros::growing_stack;
 use petgraph::{algo::toposort as petgraph_toposort, graphmap::DiGraphMap};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -21,12 +22,10 @@ use std::collections::{BTreeMap, BTreeSet};
 pub fn program(
     compilation_env: &mut CompilationEnv,
     modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
-    scripts: &mut BTreeMap<Symbol, T::Script>,
 ) {
     let imm_modules = &modules;
-    let mut context = Context::new(imm_modules);
+    let mut context = Context::new(compilation_env, imm_modules);
     module_defs(&mut context, modules);
-    script_defs(&mut context, scripts);
 
     let Context {
         module_neighbors,
@@ -48,28 +47,12 @@ pub fn program(
         }
     }
     for (node, neighbors) in neighbors_by_node {
-        match node {
-            NodeIdent::Module(mident) => {
-                let module = modules.get_mut(&mident).unwrap();
-                module.immediate_neighbors = neighbors;
-            }
-            NodeIdent::Script(sname) => {
-                let script = scripts.get_mut(&sname).unwrap();
-                script.immediate_neighbors = neighbors;
-            }
-        }
+        let module = modules.get_mut(&node).unwrap();
+        module.immediate_neighbors = neighbors;
     }
     for (node, used_addresses) in addresses_by_node {
-        match node {
-            NodeIdent::Module(mident) => {
-                let module = modules.get_mut(&mident).unwrap();
-                module.used_addresses = used_addresses;
-            }
-            NodeIdent::Script(sname) => {
-                let script = scripts.get_mut(&sname).unwrap();
-                script.used_addresses = used_addresses;
-            }
-        }
+        let module = modules.get_mut(&node).unwrap();
+        module.used_addresses = used_addresses;
     }
 }
 
@@ -79,32 +62,28 @@ enum DepType {
     Friend,
 }
 
-#[derive(Clone, Eq, PartialEq, Ord, PartialOrd)]
-#[allow(clippy::large_enum_variant)]
-enum NodeIdent {
-    Module(ModuleIdent),
-    Script(Symbol),
-}
-
-struct Context<'a> {
+struct Context<'a, 'env> {
+    env: &'env mut CompilationEnv,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
     // - if A friends B, add edge B -> A
-    // NOTE: neighbors of scripts are not tracked by this field, as nothing can depend on a script
-    // and a script cannot declare friends. Hence, is no way to form a cyclic dependency via scripts
     module_neighbors: BTreeMap<ModuleIdent, BTreeMap<ModuleIdent, BTreeMap<DepType, Loc>>>,
-    // A summary of neighbors keyed by module or script
-    neighbors_by_node: BTreeMap<NodeIdent, UniqueMap<ModuleIdent, Neighbor>>,
+    // A summary of neighbors keyed by module
+    neighbors_by_node: BTreeMap<ModuleIdent, UniqueMap<ModuleIdent, Neighbor>>,
     // All addresses used by a node
-    addresses_by_node: BTreeMap<NodeIdent, BTreeSet<Address>>,
-    // The module or script we are currently exploring
-    current_node: Option<NodeIdent>,
+    addresses_by_node: BTreeMap<ModuleIdent, BTreeSet<Address>>,
+    // The module we are currently exploring
+    current_node: Option<ModuleIdent>,
 }
 
-impl<'a> Context<'a> {
-    fn new(modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>) -> Self {
+impl<'a, 'env> Context<'a, 'env> {
+    fn new(
+        env: &'env mut CompilationEnv,
+        modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
+    ) -> Self {
         Context {
+            env,
             modules,
             module_neighbors: BTreeMap::new(),
             neighbors_by_node: BTreeMap::new(),
@@ -121,8 +100,8 @@ impl<'a> Context<'a> {
             return;
         }
 
-        let current = self.current_node.clone().unwrap();
-        if matches!(&current, NodeIdent::Module(current_mident) if &mident == current_mident) {
+        let current = self.current_node.unwrap();
+        if mident == current {
             // do not add the module itself as a neighbor
             return;
         }
@@ -131,31 +110,26 @@ impl<'a> Context<'a> {
             DepType::Use => Neighbor_::Dependency,
             DepType::Friend => Neighbor_::Friend,
         };
-        let current_neighbors = self.neighbors_by_node.entry(current.clone()).or_default();
-        let current_used_addresses = self.addresses_by_node.entry(current.clone()).or_default();
+        let current_neighbors = self.neighbors_by_node.entry(current).or_default();
+        let current_used_addresses = self.addresses_by_node.entry(current).or_default();
         current_neighbors.remove(&mident);
         current_neighbors.add(mident, sp(loc, neighbor_)).unwrap();
         current_used_addresses.insert(mident.value.address);
 
-        match current {
-            NodeIdent::Module(current_mident) => {
-                let (node, new_neighbor) = match dep_type {
-                    DepType::Use => (current_mident, mident),
-                    DepType::Friend => (mident, current_mident),
-                };
-                let m = self
-                    .module_neighbors
-                    .entry(node)
-                    .or_default()
-                    .entry(new_neighbor)
-                    .or_default();
-                if m.contains_key(&dep_type) {
-                    return;
-                }
-                m.insert(dep_type, loc);
-            }
-            NodeIdent::Script(_) => (),
+        let (node, new_neighbor) = match dep_type {
+            DepType::Use => (current, mident),
+            DepType::Friend => (mident, current),
+        };
+        let m = self
+            .module_neighbors
+            .entry(node)
+            .or_default()
+            .entry(new_neighbor)
+            .or_default();
+        if m.contains_key(&dep_type) {
+            return;
         }
+        m.insert(dep_type, loc);
     }
 
     fn add_usage(&mut self, mident: ModuleIdent, loc: Loc) {
@@ -168,7 +142,7 @@ impl<'a> Context<'a> {
 
     fn add_address_usage(&mut self, address: Address) {
         self.addresses_by_node
-            .entry(self.current_node.clone().unwrap())
+            .entry(self.current_node.unwrap())
             .or_default()
             .insert(address);
     }
@@ -267,48 +241,19 @@ fn module_defs(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::Module
 }
 
 fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition) {
-    context.current_node = Some(NodeIdent::Module(mident));
+    context.current_node = Some(mident);
     mdef.friends
         .key_cloned_iter()
         .for_each(|(mident, friend)| context.add_friend(mident, friend.loc));
     mdef.structs
         .iter()
         .for_each(|(_, _, sdef)| struct_def(context, sdef));
+    mdef.enums
+        .iter()
+        .for_each(|(_, _, edef)| enum_def(context, edef));
     mdef.functions
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
-    for (mident, sp!(loc, neighbor_)) in &mdef.spec_dependencies {
-        let dep = match neighbor_ {
-            Neighbor_::Dependency => DepType::Use,
-            Neighbor_::Friend => DepType::Friend,
-        };
-        context.add_neighbor(*mident, dep, *loc);
-    }
-}
-
-//**************************************************************************************************
-// Scripts
-//**************************************************************************************************
-
-// Scripts cannot affect the dependency graph because 1) a script cannot friend anything and 2)
-// nothing can depends on a script. Therefore, we iterate over the scripts just to collect their
-// immediate dependencies.
-fn script_defs(context: &mut Context, scripts: &BTreeMap<Symbol, T::Script>) {
-    scripts
-        .iter()
-        .for_each(|(sname, sdef)| script(context, *sname, sdef))
-}
-
-fn script(context: &mut Context, sname: Symbol, sdef: &T::Script) {
-    context.current_node = Some(NodeIdent::Script(sname));
-    function(context, &sdef.function);
-    for (mident, sp!(loc, neighbor_)) in &sdef.spec_dependencies {
-        let dep = match neighbor_ {
-            Neighbor_::Dependency => DepType::Use,
-            Neighbor_::Friend => DepType::Friend,
-        };
-        context.add_neighbor(*mident, dep, *loc);
-    }
 }
 
 //**************************************************************************************************
@@ -328,12 +273,20 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
 }
 
 //**************************************************************************************************
-// Struct
+// Data Types
 //**************************************************************************************************
 
 fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+    }
+}
+
+fn enum_def(context: &mut Context, edef: &N::EnumDefinition) {
+    for (_, _, variant) in &edef.variants {
+        if let N::VariantFields::Defined(_, fields) = &variant.fields {
+            fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+        }
     }
 }
 
@@ -353,6 +306,10 @@ fn type_(context: &mut Context, sp!(_, ty_): &N::Type) {
             types(context, tys);
         }
         T::Ref(_, t) => type_(context, t),
+        T::Fun(tys, t) => {
+            types(context, tys);
+            type_(context, t);
+        }
         T::Unit | T::Param(_) | T::Var(_) | T::Anything | T::UnresolvedError => (),
     }
 }
@@ -374,7 +331,7 @@ fn type_opt(context: &mut Context, t_opt: &Option<N::Type>) {
 // Expressions
 //**************************************************************************************************
 
-fn sequence(context: &mut Context, sequence: &T::Sequence) {
+fn sequence(context: &mut Context, (_, sequence): &T::Sequence) {
     use T::SequenceItem_ as SI;
     for sp!(_, item_) in sequence {
         match item_ {
@@ -409,9 +366,16 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
                 lvalue(context, field)
             }
         }
+        L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
+            context.env.add_diag(ice!((
+                *loc,
+                "variant unpacking shouldn't occur before match expansion"
+            )));
+        }
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, e: &T::Exp) {
     use T::UnannotatedExp_ as E;
     match &e.exp.value {
@@ -438,11 +402,28 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::While(e1, e2) => {
+        E::Match(esubject, arms) => {
+            exp(context, esubject);
+            for sp!(_, arm) in &arms.value {
+                pat(context, &arm.pattern);
+                if let Some(guard) = arm.guard.as_ref() {
+                    exp(context, guard)
+                }
+                exp(context, &arm.rhs);
+            }
+        }
+        E::VariantMatch(..) => {
+            context.env.add_diag(ice!((
+                e.exp.loc,
+                "shouldn't find variant match before HLIR lowering"
+            )));
+        }
+        E::While(_, e1, e2) => {
             exp(context, e1);
             exp(context, e2);
         }
-        E::Loop { has_break: _, body } => exp(context, body),
+        E::Loop { body, .. } => exp(context, body),
+        E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);
@@ -457,6 +438,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         }
         E::Return(e) => exp(context, e),
         E::Abort(e) => exp(context, e),
+        E::Give(_, e) => exp(context, e),
         E::Dereference(e) => exp(context, e),
         E::UnaryExp(_, e) => exp(context, e),
         E::BinopExp(e1, _, _, e2) => {
@@ -464,6 +446,13 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
         }
         E::Pack(m, _, tys, fields) => {
+            context.add_usage(*m, e.exp.loc);
+            types(context, tys);
+            for (_, _, (_, (_, e))) in fields {
+                exp(context, e)
+            }
+        }
+        E::PackVariant(m, _, _, tys, fields) => {
             context.add_usage(*m, e.exp.loc);
             types(context, tys);
             for (_, _, (_, (_, e))) in fields {
@@ -488,16 +477,38 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
+        E::InvalidAccess(e) => exp(context, e),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
         | E::Copy { .. }
         | E::Use(_)
         | E::Constant(..)
-        | E::Break
-        | E::Continue
+        | E::Continue(_)
         | E::BorrowLocal(..)
-        | E::Spec(..)
+        | E::ErrorConstant(_)
         | E::UnresolvedError => (),
+    }
+}
+
+fn pat(context: &mut Context, p: &T::MatchPattern) {
+    use T::UnannotatedPat_ as P;
+    match &p.pat.value {
+        P::Variant(m, _, _, tys, fields)
+        | P::BorrowVariant(_, m, _, _, tys, fields)
+        | P::Struct(m, _, tys, fields)
+        | P::BorrowStruct(_, m, _, tys, fields) => {
+            context.add_usage(*m, p.pat.loc);
+            types(context, tys);
+            for (_, _, (_, (_, p))) in fields {
+                pat(context, p)
+            }
+        }
+        P::At(_, inner) => pat(context, inner),
+        P::Or(lhs, rhs) => {
+            pat(context, lhs);
+            pat(context, rhs);
+        }
+        P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
     }
 }

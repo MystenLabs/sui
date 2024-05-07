@@ -19,6 +19,7 @@ mod worker;
 
 pub mod metrics;
 
+pub use crate::client::LazyNarwhalClient;
 pub use crate::client::LocalNarwhalClient;
 pub use crate::tx_validator::{TransactionValidator, TrivialTransactionValidator};
 pub use crate::worker::Worker;

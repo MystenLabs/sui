@@ -10,16 +10,13 @@
 /// Test transferred id limits enforced
 /// Right now, we should never be able to hit the transfer limit because we will hit the create limit first
 module Test::M1 {
-    use sui::tx_context::{TxContext, Self};
-    use sui::object::{Self, UID};
-    use sui::transfer;
 
-    struct Obj has key, store {
+    public struct Obj has key, store {
         id: UID
     }
 
     public entry fun transfer_n_ids(n: u64, ctx: &mut TxContext) {
-        let i = 0;
+        let mut i = 0;
         while (i < n) {
             transfer::public_transfer(
                 Obj {

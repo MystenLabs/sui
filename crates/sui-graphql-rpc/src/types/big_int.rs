@@ -11,7 +11,11 @@ use serde::{Deserialize, Serialize};
 #[serde(transparent)]
 pub(crate) struct BigInt(String);
 
-#[Scalar]
+#[derive(thiserror::Error, Debug, PartialEq, Eq)]
+#[error("The provided string is not a number")]
+pub(crate) struct NotANumber;
+
+#[Scalar(use_type_description = true)]
 impl ScalarType for BigInt {
     fn parse(value: Value) -> InputValueResult<Self> {
         match value {
@@ -26,9 +30,11 @@ impl ScalarType for BigInt {
     }
 }
 
-#[derive(thiserror::Error, Debug, PartialEq, Eq)]
-#[error("The provided string is not a number")]
-pub(crate) struct NotANumber;
+impl Description for BigInt {
+    fn description() -> &'static str {
+        "String representation of an arbitrary width, possibly signed integer."
+    }
+}
 
 impl FromStr for BigInt {
     type Err = NotANumber;
@@ -63,7 +69,7 @@ macro_rules! impl_From {
     }
 }
 
-impl_From!(u8, u16, u32, i64, u64, u128, U256);
+impl_From!(u8, u16, u32, i64, u64, i128, u128, U256);
 
 #[cfg(test)]
 mod tests {
@@ -100,8 +106,18 @@ mod tests {
         assert_eq!(BigInt::from(123_456u32), BigInt("123456".to_string()));
 
         assert_eq!(
+            BigInt::from(-12_345_678_901i64),
+            BigInt("-12345678901".to_string()),
+        );
+
+        assert_eq!(
             BigInt::from(12_345_678_901u64),
             BigInt("12345678901".to_string()),
+        );
+
+        assert_eq!(
+            BigInt::from(-123_456_789_012_345_678_901i128),
+            BigInt("-123456789012345678901".to_string()),
         );
 
         assert_eq!(
@@ -113,5 +129,8 @@ mod tests {
             BigInt::from(U256::from_str("12345678901234567890123456789012345678901").unwrap()),
             BigInt("12345678901234567890123456789012345678901".to_string())
         );
+
+        assert_eq!(BigInt::from(1000i64 - 1200i64), BigInt("-200".to_string()));
+        assert_eq!(BigInt::from(-1200i64), BigInt("-1200".to_string()));
     }
 }

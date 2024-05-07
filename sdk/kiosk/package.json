@@ -2,32 +2,29 @@
 	"name": "@mysten/kiosk",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "Sui Kiosk library",
-	"version": "0.7.8",
+	"version": "0.8.6",
 	"license": "Apache-2.0",
-	"main": "./dist/index.js",
-	"module": "./dist/index.mjs",
-	"types": "./dist/index.d.ts",
+	"type": "commonjs",
+	"main": "./dist/cjs/index.js",
+	"module": "./dist/esm/index.js",
+	"types": "./dist/cjs/index.d.ts",
+	"exports": {
+		".": {
+			"import": "./dist/esm/index.js",
+			"require": "./dist/cjs/index.js"
+		}
+	},
 	"sideEffects": false,
 	"files": [
+		"CHANGELOG.md",
 		"dist",
-		"src",
-		"CHANGELOG.md"
+		"src"
 	],
 	"engines": {
 		"node": ">=16"
 	},
-	"exports": {
-		".": {
-			"types": "./dist/index.d.ts",
-			"source": "./src/index.ts",
-			"import": "./dist/index.mjs",
-			"require": "./dist/index.js"
-		}
-	},
 	"scripts": {
-		"build": "pnpm build:types && pnpm build:tsup",
-		"build:tsup": "tsup ./src/index.ts --format esm,cjs --sourcemap",
-		"build:types": "tsc --build",
+		"build": "build-package",
 		"test": "echo 'No unit tests for kiosk SDK'",
 		"pre-commit": "pnpm prettier:fix && pnpm lint && pnpm build",
 		"prepublishOnly": "pnpm build",
@@ -44,11 +41,11 @@
 		"@mysten/sui.js": "workspace:*"
 	},
 	"devDependencies": {
+		"@mysten/build-scripts": "workspace:*",
 		"cross-env": "^7.0.3",
 		"tmp": "^0.2.1",
 		"ts-retry-promise": "^0.7.0",
-		"tsup": "^7.1.0",
-		"typescript": "^5.1.6",
+		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
 		"vitest": "^0.33.0",
 		"wait-on": "^7.0.1"

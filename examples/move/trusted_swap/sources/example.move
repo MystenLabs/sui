@@ -7,18 +7,15 @@
 module trusted_swap::example {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         scarcity: u8,
         style: u8,
     }
 
-    struct SwapRequest has key {
+    public struct SwapRequest has key {
         id: UID,
         owner: address,
         object: Object,
@@ -66,7 +63,7 @@ module trusted_swap::example {
     /// When the service has two swap requests, it can execute them, sending the
     /// objects to the respective owners and taking its fee.
     public fun execute_swap(s1: SwapRequest, s2: SwapRequest): Balance<SUI> {
-        let SwapRequest {id: id1, owner: owner1, object: o1, fee: fee1} = s1;
+        let SwapRequest {id: id1, owner: owner1, object: o1, fee: mut fee1} = s1;
         let SwapRequest {id: id2, owner: owner2, object: o2, fee: fee2} = s2;
 
         assert!(o1.scarcity == o2.scarcity, EBadSwap);
@@ -90,7 +87,7 @@ module trusted_swap::example {
 
     #[test]
     fun successful_swap() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let alice = @0xA;
         let bob = @0xB;
         let custodian = @0xC;
@@ -144,7 +141,7 @@ module trusted_swap::example {
         let alice = @0xA;
         let custodian = @0xC;
 
-        let ts = ts::begin(alice);
+        let mut ts = ts::begin(alice);
         let o1 = new(1, 0, ts::ctx(&mut ts));
         let c1 = coin::mint_for_testing<SUI>(MIN_FEE - 1, ts::ctx(&mut ts));
         request_swap(o1, c1, custodian, ts::ctx(&mut ts));
@@ -155,7 +152,7 @@ module trusted_swap::example {
     #[test]
     #[expected_failure(abort_code = EBadSwap)]
     fun swap_different_scarcity() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let alice = @0xA;
         let bob = @0xB;
         let custodian = @0xC;
@@ -187,7 +184,7 @@ module trusted_swap::example {
     #[test]
     #[expected_failure(abort_code = EBadSwap)]
     fun swap_same_style() {
-        let ts = ts::begin(@0x0);
+        let mut ts = ts::begin(@0x0);
         let alice = @0xA;
         let bob = @0xB;
         let custodian = @0xC;

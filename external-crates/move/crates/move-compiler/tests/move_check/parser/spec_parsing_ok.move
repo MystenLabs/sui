@@ -12,7 +12,7 @@ module 0x8675309::M {
         global expected_coin_sum: u64;
         global other: bool;
 
-        native fun all<T>(x: SomeCollection<T>, predicate: |T|bool): bool;
+        native fun all<T>(x: SomeCollection<T>, predicate: |T| bool): bool;
 
         fun spec_fun_using_spec_constructs(x: u64, y: u64) : u64 {
             // This function would crash in phases after expansion if we would pass it on as a regular function. Testing

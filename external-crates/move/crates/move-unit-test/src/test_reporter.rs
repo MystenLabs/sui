@@ -5,14 +5,11 @@
 use crate::format_module_id;
 use codespan_reporting::files::{Files, SimpleFiles};
 use colored::{control, Colorize};
-use move_binary_format::{
-    access::ModuleAccess,
-    errors::{ExecutionState, Location, VMError, VMResult},
-};
+use move_binary_format::errors::{ExecutionState, Location, VMError, VMResult};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     diagnostics::{self, Diagnostic, Diagnostics},
-    unit_test::{ModuleTestPlan, TestName, TestPlan},
+    unit_test::{ModuleTestPlan, MoveErrorType, TestName, TestPlan},
 };
 use move_core_types::{language_storage::ModuleId, vm_status::StatusType};
 use move_ir_types::location::Loc;
@@ -20,7 +17,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     io::{Result, Write},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
@@ -33,7 +30,7 @@ pub enum FailureReason {
     // Aborted with the wrong code
     WrongError(String, MoveError, MoveError),
     // Aborted with the wrong code, without location specified
-    WrongAbortDEPRECATED(String, u64, MoveError),
+    WrongAbortDEPRECATED(String, MoveErrorType, MoveError),
     // Error wasn't expected, but it did
     UnexpectedError(String, MoveError),
     // Test timed out
@@ -97,7 +94,7 @@ impl FailureReason {
         )
     }
 
-    pub fn wrong_abort_deprecated(expected: u64, actual: MoveError) -> Self {
+    pub fn wrong_abort_deprecated(expected: MoveErrorType, actual: MoveError) -> Self {
         FailureReason::WrongAbortDEPRECATED(
             "Test did not abort with expected code".to_string(),
             expected,
@@ -205,7 +202,7 @@ impl TestFailure {
 
     fn get_line_number(
         loc: &Loc,
-        files: &SimpleFiles<Symbol, &str>,
+        files: &SimpleFiles<Symbol, Arc<str>>,
         file_mapping: &HashMap<FileHash, usize>,
     ) -> String {
         Self::get_line_number_internal(loc, files, file_mapping)
@@ -214,7 +211,7 @@ impl TestFailure {
 
     fn get_line_number_internal(
         loc: &Loc,
-        files: &SimpleFiles<Symbol, &str>,
+        files: &SimpleFiles<Symbol, Arc<str>>,
         file_mapping: &HashMap<FileHash, usize>,
     ) -> std::result::Result<String, codespan_reporting::files::Error> {
         let id = file_mapping
@@ -239,15 +236,12 @@ impl TestFailure {
             let mut files = SimpleFiles::new();
             let mut file_mapping = HashMap::new();
             for (fhash, (fname, source)) in &test_plan.files {
-                let id = files.add(*fname, source.as_str());
+                let id = files.add(*fname, source.clone());
                 file_mapping.insert(*fhash, id);
             }
 
             for frame in stack_trace {
-                let module_id = match &frame.0 {
-                    Some(v) => v,
-                    None => return "\tmalformed stack trace (no module ID)".to_string(),
-                };
+                let module_id = &frame.0;
                 let named_module = match test_plan.module_info.get(module_id) {
                     Some(v) => v,
                     None => return "\tmalformed stack trace (no module)".to_string(),
@@ -286,10 +280,12 @@ impl TestFailure {
         base_message: String,
         vm_error: &Option<VMError>,
     ) -> String {
-        let report_diagnostics = if control::SHOULD_COLORIZE.should_colorize() {
-            diagnostics::report_diagnostics_to_color_buffer
-        } else {
-            diagnostics::report_diagnostics_to_buffer
+        let report_diagnostics = |files, diags| {
+            diagnostics::report_diagnostics_to_buffer(
+                files,
+                diags,
+                control::SHOULD_COLORIZE.should_colorize(),
+            )
         };
 
         let vm_error = match vm_error {
@@ -339,6 +335,12 @@ impl TestFailure {
                 }
             }
         }
+    }
+}
+
+impl Default for TestStatistics {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

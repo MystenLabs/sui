@@ -30,7 +30,6 @@ anyhow.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 tower.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true

@@ -9,6 +9,7 @@ use tempfile::tempdir;
 use std::{sync::Arc, time::Duration};
 
 use crate::authority::epoch_start_configuration::EpochStartConfiguration;
+use crate::state_accumulator::AccumulatorStore;
 use broadcast::{Receiver, Sender};
 use sui_protocol_config::SupportedProtocolVersions;
 use sui_types::committee::ProtocolVersion;
@@ -21,6 +22,7 @@ use crate::{
 };
 use sui_swarm_config::test_utils::{empty_contents, CommitteeFixture};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
+use typed_store::Map;
 
 /// Test checkpoint executor happy path, test that checkpoint executor correctly
 /// picks up where it left off in the event of a mid-epoch node crash.
@@ -52,7 +54,7 @@ pub async fn test_checkpoint_executor_crash_recovery() {
 
     let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
-        spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
+        spawn_monitored_task!(async move { executor.run_epoch(epoch_store, None).await });
     tokio::time::sleep(Duration::from_secs(5)).await;
 
     // ensure we executed all synced checkpoints
@@ -79,14 +81,13 @@ pub async fn test_checkpoint_executor_crash_recovery() {
     let mut executor = CheckpointExecutor::new_for_tests(
         checkpoint_sender.subscribe(),
         checkpoint_store.clone(),
-        state.database.clone(),
-        state.transaction_manager().clone(),
+        state.clone(),
         accumulator.clone(),
     );
 
     let epoch_store = state.epoch_store_for_testing().clone();
     let executor_handle =
-        spawn_monitored_task!(async move { executor.run_epoch(epoch_store).await });
+        spawn_monitored_task!(async move { executor.run_epoch(epoch_store, None).await });
     tokio::time::sleep(Duration::from_secs(15)).await;
 
     let highest_executed = checkpoint_store
@@ -187,16 +188,15 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     .await;
 
     // Ensure root state hash for epoch does not exist before we close epoch
-    assert!(!authority_state
-        .database
-        .perpetual_tables
-        .root_state_hash_by_epoch
-        .contains_key(&0)
-        .unwrap());
+    assert!(authority_state
+        .get_execution_cache()
+        .get_root_state_accumulator_for_epoch(0)
+        .unwrap()
+        .is_none());
 
     // Ensure executor reaches end of epoch in a timely manner
     timeout(Duration::from_secs(5), async {
-        executor.run_epoch(epoch_store.clone()).await;
+        executor.run_epoch(epoch_store.clone(), None).await;
     })
     .await
     .unwrap();
@@ -213,12 +213,11 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let first_epoch = 0;
 
     // Ensure root state hash for epoch exists at end of epoch
-    assert!(authority_state
-        .database
-        .perpetual_tables
-        .root_state_hash_by_epoch
-        .contains_key(&first_epoch)
-        .unwrap());
+    authority_state
+        .get_execution_cache()
+        .get_root_state_accumulator_for_epoch(first_epoch)
+        .unwrap()
+        .expect("root state hash for epoch should exist");
 
     let system_state = EpochStartSystemState::new_for_testing_with_epoch(1);
 
@@ -227,7 +226,13 @@ pub async fn test_checkpoint_executor_cross_epoch() {
             &authority_state.epoch_store_for_testing(),
             SupportedProtocolVersions::SYSTEM_DEFAULT,
             second_committee.committee().clone(),
-            EpochStartConfiguration::new_v1(system_state, Default::default()),
+            EpochStartConfiguration::new(
+                system_state,
+                Default::default(),
+                authority_state.get_object_store(),
+                None,
+            )
+            .unwrap(),
             &executor,
             accumulator,
             &ExpensiveSafetyCheckConfig::default(),
@@ -238,7 +243,7 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     // checkpoint execution should resume starting at checkpoints
     // of next epoch
     timeout(Duration::from_secs(5), async {
-        executor.run_epoch(new_epoch_store.clone()).await;
+        executor.run_epoch(new_epoch_store.clone(), None).await;
     })
     .await
     .unwrap();
@@ -254,12 +259,11 @@ pub async fn test_checkpoint_executor_cross_epoch() {
     let second_epoch = 1;
     assert!(second_epoch == new_epoch_store.epoch());
 
-    assert!(authority_state
-        .database
-        .perpetual_tables
-        .root_state_hash_by_epoch
-        .contains_key(&second_epoch)
-        .unwrap());
+    authority_state
+        .get_execution_cache()
+        .get_root_state_accumulator_for_epoch(second_epoch)
+        .unwrap()
+        .expect("root state hash for epoch should exist");
 }
 
 /// Test that if we crash at end of epoch / during reconfig, we recover on startup
@@ -323,7 +327,7 @@ pub async fn test_reconfig_crash_recovery() {
 
     timeout(Duration::from_secs(1), async {
         executor
-            .run_epoch(authority_state.epoch_store_for_testing().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone(), None)
             .await;
     })
     .await
@@ -346,14 +350,13 @@ pub async fn test_reconfig_crash_recovery() {
     let mut executor = CheckpointExecutor::new_for_tests(
         checkpoint_sender.subscribe(),
         checkpoint_store.clone(),
-        authority_state.database.clone(),
-        authority_state.transaction_manager().clone(),
+        authority_state.clone(),
         accumulator.clone(),
     );
 
     timeout(Duration::from_millis(200), async {
         executor
-            .run_epoch(authority_state.epoch_store_for_testing().clone())
+            .run_epoch(authority_state.epoch_store_for_testing().clone(), None)
             .await;
     })
     .await
@@ -389,14 +392,13 @@ async fn init_executor_test(
     let (checkpoint_sender, _): (Sender<VerifiedCheckpoint>, Receiver<VerifiedCheckpoint>) =
         broadcast::channel(buffer_size);
 
-    let accumulator = StateAccumulator::new(state.database.clone());
+    let accumulator = StateAccumulator::new(state.get_execution_cache());
     let accumulator = Arc::new(accumulator);
 
     let executor = CheckpointExecutor::new_for_tests(
         checkpoint_sender.subscribe(),
         store.clone(),
-        state.database.clone(),
-        state.transaction_manager().clone(),
+        state.clone(),
         accumulator.clone(),
     );
     (

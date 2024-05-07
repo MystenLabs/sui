@@ -55,8 +55,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_others_digests: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`
     pub tx_our_digests: IntGauge,
-    /// occupancy of the channel from the `primary::StateHandler` to the `primary::Proposer`
-    pub tx_system_messages: IntGauge,
     /// occupancy of the channel from the `primary::Synchronizer` to the `primary::Proposer`
     pub tx_parents: IntGauge,
     /// occupancy of the channel from the `primary::Proposer` to the `primary::Certifier`
@@ -69,8 +67,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_new_certificates: IntGauge,
     /// occupancy of the channel signaling own committed headers
     pub tx_committed_own_headers: IntGauge,
-    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::StateHandler`
-    pub tx_randomness_partial_signatures: IntGauge,
     /// An internal synchronizer channel. Occupancy of the channel sending certificates to the internal
     /// task that accepts certificates.
     pub tx_certificate_acceptor: IntGauge,
@@ -82,8 +78,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_others_digests_total: IntCounter,
     /// total received on channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`
     pub tx_our_digests_total: IntCounter,
-    /// total received on channel from the `primary::StateHandler` to the `primary::Proposer`
-    pub tx_system_messages_total: IntCounter,
     /// total received on channel from the `primary::Synchronizer` to the `primary::Proposer`
     pub tx_parents_total: IntCounter,
     /// total received on channel from the `primary::Proposer` to the `primary::Certifier`
@@ -98,8 +92,6 @@ pub struct PrimaryChannelMetrics {
     pub tx_new_certificates_total: IntCounter,
     /// total received on the channel signaling own committed headers
     pub tx_committed_own_headers_total: IntCounter,
-    /// total received on the channel from the `primary::PrimaryReceiverHandler` to the `primary::StateHandler`
-    pub tx_randomness_partial_signatures_total: IntCounter,
     /// Total received by the channel sending certificates to the internal task that accepts certificates.
     pub tx_certificate_acceptor_total: IntCounter,
     /// Total received the channel to synchronize missing batches
@@ -141,11 +133,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`",
                 registry
             ).unwrap(),
-            tx_system_messages: register_int_gauge_with_registry!(
-                "tx_system_messages",
-                "occupancy of the channel from the `primary::StateHandler` to the `primary::Proposer`",
-                registry
-            ).unwrap(),
             tx_parents: register_int_gauge_with_registry!(
                 "tx_parents",
                 "occupancy of the channel from the `primary::Synchronizer` to the `primary::Proposer`",
@@ -176,11 +163,6 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel signaling own committed headers.",
                 registry
             ).unwrap(),
-            tx_randomness_partial_signatures: register_int_gauge_with_registry!(
-                "tx_randomness_partial_signatures",
-                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::StateHandler`",
-                registry
-            ).unwrap(),
             tx_certificate_acceptor: register_int_gauge_with_registry!(
                 "tx_certificate_acceptor",
                 "occupancy of the internal synchronizer channel that is accepting new certificates.",
@@ -201,11 +183,6 @@ impl PrimaryChannelMetrics {
             tx_our_digests_total: register_int_counter_with_registry!(
                 "tx_our_digests_total",
                 "total received on channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`",
-                registry
-            ).unwrap(),
-            tx_system_messages_total: register_int_counter_with_registry!(
-                "tx_system_messages_total",
-                "total received on channel from the `primary::StateHandler` to the `primary::Proposer`",
                 registry
             ).unwrap(),
             tx_parents_total: register_int_counter_with_registry!(
@@ -241,11 +218,6 @@ impl PrimaryChannelMetrics {
             tx_committed_own_headers_total: register_int_counter_with_registry!(
                 "tx_committed_own_headers_total",
                 "total received on channel signaling own committed headers.",
-                registry
-            ).unwrap(),
-            tx_randomness_partial_signatures_total: register_int_counter_with_registry!(
-                "tx_randomness_partial_signatures_total",
-                "total received on the channel from the `primary::PrimaryReceiverHandler` to the `primary::StateHandler`",
                 registry
             ).unwrap(),
             tx_certificate_acceptor_total: register_int_counter_with_registry!(

@@ -20,7 +20,6 @@ sui-core.workspace = true
 sui-protocol-config.workspace = true
 sui-types = { workspace = true, features = ["fuzzing"] }
 sui-move-build.workspace = true
-workspace-hack.workspace = true
 
 
 [dev-dependencies]

@@ -1,19 +1,35 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[allow(implicit_const_copy)]
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
     use std::ascii::{Self, String};
     use std::address;
-    use std::vector;
 
     /// ASCII Character code for the `:` (colon) symbol.
     const ASCII_COLON: u8 = 58;
 
-    struct TypeName has copy, drop, store {
+    /// ASCII Character code for the `v` (lowercase v) symbol.
+    const ASCII_V: u8 = 118;
+    /// ASCII Character code for the `e` (lowercase e) symbol.
+    const ASCII_E: u8 = 101;
+    /// ASCII Character code for the `c` (lowercase c) symbol.
+    const ASCII_C: u8 = 99;
+    /// ASCII Character code for the `t` (lowercase t) symbol.
+    const ASCII_T: u8 = 116;
+    /// ASCII Character code for the `o` (lowercase o) symbol.
+    const ASCII_O: u8 = 111;
+    /// ASCII Character code for the `r` (lowercase r) symbol.
+    const ASCII_R: u8 = 114;
+
+    /// The type is not from a package/module. It is a primitive type.
+    const ENonModuleType: u64 = 0;
+
+    public struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
         /// using their source syntax:
-        /// "u8", "u64", "u128", "bool", "address", "vector", "signer" for ground types.
+        /// "u8", "u64", "bool", "address", "vector", and so on for primitive types.
         /// Struct types are represented as fully qualified type names; e.g.
         /// `00000000000000000000000000000001::string::String` or
         /// `0000000000000000000000000000000a::module_name1::type_name1<0000000000000000000000000000000a::module_name2::type_name2<u64>>`
@@ -26,9 +42,6 @@ module std::type_name {
     /// this function are defining IDs (the ID of the package in
     /// storage that first introduced the type).
     public native fun get<T>(): TypeName;
-    spec get {
-        pragma opaque;
-    }
 
     /// Return a value representation of the type `T`.  Package IDs
     /// that appear in fully qualified type names in the output from
@@ -36,8 +49,27 @@ module std::type_name {
     /// the package, even if the type in question was introduced in a
     /// later upgrade).
     public native fun get_with_original_ids<T>(): TypeName;
-    spec get_with_original_ids {
-        pragma opaque;
+
+    /// Returns true iff the TypeName represents a primitive type, i.e. one of
+    /// u8, u16, u32, u64, u128, u256, bool, address, vector.
+    public fun is_primitive(self: &TypeName): bool {
+        let bytes = self.name.as_bytes();
+        bytes == &b"bool" ||
+        bytes == &b"u8" ||
+        bytes == &b"u16" ||
+        bytes == &b"u32" ||
+        bytes == &b"u64" ||
+        bytes == &b"u128" ||
+        bytes == &b"u256" ||
+        bytes == &b"address" ||
+        (bytes.length() >= 6 &&
+         bytes[0] == ASCII_V &&
+         bytes[1] == ASCII_E &&
+         bytes[2] == ASCII_C &&
+         bytes[3] == ASCII_T &&
+         bytes[4] == ASCII_O &&
+         bytes[5] == ASCII_R)
+
     }
 
     /// Get the String representation of `self`
@@ -46,19 +78,19 @@ module std::type_name {
     }
 
     /// Get Address string (Base16 encoded), first part of the TypeName.
+    /// Aborts if given a primitive type.
     public fun get_address(self: &TypeName): String {
+        assert!(!self.is_primitive(), ENonModuleType);
+
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
-        let str_bytes = ascii::as_bytes(&self.name);
-        let addr_bytes = vector[];
-        let i = 0;
+        let str_bytes = self.name.as_bytes();
+        let mut addr_bytes = vector[];
+        let mut i = 0;
 
         // Read `len` bytes from the type name and push them to addr_bytes.
         while (i < len) {
-            vector::push_back(
-                &mut addr_bytes,
-                *vector::borrow(str_bytes, i)
-            );
+            addr_bytes.push_back(str_bytes[i]);
             i = i + 1;
         };
 
@@ -66,16 +98,19 @@ module std::type_name {
     }
 
     /// Get name of the module.
+    /// Aborts if given a primitive type.
     public fun get_module(self: &TypeName): String {
+        assert!(!self.is_primitive(), ENonModuleType);
+
         // Starts after address and a double colon: `<addr as HEX>::`
-        let i = address::length() * 2 + 2;
-        let str_bytes = ascii::as_bytes(&self.name);
-        let module_name = vector[];
+        let mut i = address::length() * 2 + 2;
+        let str_bytes = self.name.as_bytes();
+        let mut module_name = vector[];
 
         loop {
-            let char = vector::borrow(str_bytes, i);
+            let char = &str_bytes[i];
             if (char != &ASCII_COLON) {
-                vector::push_back(&mut module_name, *char);
+                module_name.push_back(*char);
                 i = i + 1;
             } else {
                 break

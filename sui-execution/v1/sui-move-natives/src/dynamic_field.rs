@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::transfer::{object_is_shared, E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED};
 use crate::{
     get_nested_struct_field, get_object_id,
     object_runtime::{object_store::ObjectResult, ObjectRuntime},
@@ -25,6 +24,7 @@ use move_vm_types::{
 use smallvec::smallvec;
 use std::collections::VecDeque;
 use sui_types::{base_types::MoveObjectType, dynamic_field::derive_dynamic_field_id};
+use tracing::instrument;
 
 const E_KEY_DOES_NOT_EXIST: u64 = 1;
 const E_FIELD_TYPE_MISMATCH: u64 = 2;
@@ -78,6 +78,7 @@ pub struct DynamicFieldHashTypeAndKeyCostParams {
  *              + dynamic_field_hash_type_and_key_value_cost_per_byte * size_of(k)  | covers cost of operating on the value `k`
  *              + dynamic_field_hash_type_and_key_type_tag_cost_per_byte * size_of(type_tag(k))    | covers cost of operating on the type tag of `K`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn hash_type_and_key(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -158,6 +159,7 @@ pub struct DynamicFieldAddChildObjectCostParams {
  *              + dynamic_field_add_child_object_value_cost_per_byte * size_of(child)       | covers cost of operating on the value `child`
  *              + dynamic_field_add_child_object_struct_tag_cost_per_byte * size_of(struct)tag(Child))  | covers cost of operating on the struct tag of `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn add_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -226,13 +228,6 @@ pub fn add_child_object(
             * struct_tag_size.into()
     );
 
-    if object_is_shared(context, &child)? {
-        return Ok(NativeResult::err(
-            context.gas_used(),
-            E_SHARED_OBJECT_OPERATION_NOT_SUPPORTED,
-        ));
-    }
-
     let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
     object_runtime.add_child_object(
         parent,
@@ -260,6 +255,7 @@ pub struct DynamicFieldBorrowChildObjectCostParams {
  *              + dynamic_field_borrow_child_object_child_ref_cost_per_byte  * size_of(&Child)  | covers cost of fetching and returning `&Child`
  *              + dynamic_field_borrow_child_object_type_cost_per_byte  * size_of(Child)        | covers cost of operating on type `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn borrow_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -336,6 +332,7 @@ pub struct DynamicFieldRemoveChildObjectCostParams {
  *              + dynamic_field_remove_child_object_type_cost_per_byte * size_of(Child)      | covers cost of operating on type `Child`
  *              + dynamic_field_remove_child_object_child_cost_per_byte  * size_of(child)     | covers cost of fetching and returning value of type `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn remove_child_object(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,
@@ -399,6 +396,7 @@ pub struct DynamicFieldHasChildObjectCostParams {
  * Implementation of the Move native function `has_child_object(parent: address, id: address): bool`
  *   gas cost: dynamic_field_has_child_object_cost_base                    | covers various fixed costs in the oper
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn has_child_object(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -440,6 +438,7 @@ pub struct DynamicFieldHasChildObjectWithTyCostParams {
  *              + dynamic_field_has_child_object_with_ty_type_cost_per_byte * size_of(Child)        | covers cost of operating on type `Child`
  *              + dynamic_field_has_child_object_with_ty_type_tag_cost_per_byte * size_of(Child)    | covers cost of fetching and returning value of type tag for `Child`
  **************************************************************************************************/
+#[instrument(level = "trace", skip_all, err)]
 pub fn has_child_object_with_ty(
     context: &mut NativeContext,
     mut ty_args: Vec<Type>,

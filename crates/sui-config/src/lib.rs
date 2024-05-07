@@ -14,6 +14,7 @@ pub mod genesis;
 pub mod local_ip_utils;
 pub mod node;
 pub mod node_config_metrics;
+pub mod object_storage_config;
 pub mod p2p;
 pub mod transaction_deny_config;
 
@@ -26,6 +27,7 @@ pub const SUI_NETWORK_CONFIG: &str = "network.yaml";
 pub const SUI_FULLNODE_CONFIG: &str = "fullnode.yaml";
 pub const SUI_CLIENT_CONFIG: &str = "client.yaml";
 pub const SUI_KEYSTORE_FILENAME: &str = "sui.keystore";
+pub const SUI_KEYSTORE_ALIASES_FILENAME: &str = "sui.aliases";
 pub const SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME: &str = "benchmark.keystore";
 pub const SUI_GENESIS_FILENAME: &str = "genesis.blob";
 pub const SUI_DEV_NET_URL: &str = "https://fullnode.devnet.sui.io:443";

@@ -6,16 +6,20 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+mime = "0.3.17"
 anyhow.workspace = true
-serde.workspace = true
-bcs.workspace = true
-reqwest.workspace = true
 axum.workspace = true
+bcs.workspace = true
 rand.workspace = true
-simulacrum.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_with.workspace = true
+tap.workspace = true
+thiserror.workspace = true
+
+fastcrypto.workspace = true
 sui-types.workspace = true
-sui-core.workspace = true
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

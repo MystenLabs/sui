@@ -1,0 +1,30 @@
+//# init --protocol-version 30
+
+//# publish
+module 0x0.m2 {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_bad<T>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.receive<T>(move(m), move(r));
+        return move(x);
+    }
+}
+
+// Up to version 31 this was a valid program, but it is not anymore since the
+// restriction that `receive` with `key` only constraint can only be called to
+// receive a type defined in the module that defined the type.
+//# publish
+module 0x0.m2 {
+    import 0x2.transfer;
+    import 0x2.object;
+
+    receive_good<T: key>(m: &mut object.UID, r: transfer.Receiving<T>): T {
+        let x: T;
+        label l0:
+        x = transfer.receive<T>(move(m), move(r));
+        return move(x);
+    }
+}

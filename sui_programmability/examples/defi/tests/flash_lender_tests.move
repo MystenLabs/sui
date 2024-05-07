@@ -15,7 +15,7 @@ module defi::flash_lender_tests {
         let borrower = @0x2;
 
         // admin creates a flash lender with 100 coins and a fee of 1 coin
-        let scenario_val = test_scenario::begin(admin);
+        let mut scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
         {
             let ctx = test_scenario::ctx(scenario);
@@ -25,14 +25,14 @@ module defi::flash_lender_tests {
         // borrower requests and repays a loan of 10 coins + the fee
         test_scenario::next_tx(scenario, borrower);
         {
-            let lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
+            let mut lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
             let lender = &mut lender_val;
             let ctx = test_scenario::ctx(scenario);
 
             let (loan, receipt) = flash_lender::loan(lender, 10, ctx);
             // in practice, borrower does something (e.g., arbitrage) to make a profit from the loan.
             // simulate this by minting the borrower 5 coins.
-            let profit = coin::mint_for_testing<SUI>(5, ctx);
+            let mut profit = coin::mint_for_testing<SUI>(5, ctx);
             coin::join(&mut profit, loan);
             let to_keep = coin::take(coin::balance_mut(&mut profit), 4, ctx);
             pay::keep(to_keep, ctx);
@@ -43,7 +43,7 @@ module defi::flash_lender_tests {
         // admin withdraws the 1 coin profit from lending
         test_scenario::next_tx(scenario, admin);
         {
-            let lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
+            let mut lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
             let lender = &mut lender_val;
             let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
             let ctx = test_scenario::ctx(scenario);

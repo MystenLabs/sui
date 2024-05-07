@@ -5,10 +5,7 @@ description: Besides Mainnet, Sui offers Testnet, Devnet, and local networks tha
 
 Sui has Mainnet, Devnet, and Testnet networks available. You can use one of the test networks, Devnet or Testnet, to experiment with the version of Sui running on that network. You can also spin up a [local Sui network](./local-network.mdx) for local development. 
 
-The Sui Testnet and Devnet networks consist of:
-
- * Four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](/references/sui-api/json-rpc-format.mdx).
- * A public network [Sui Explorer](https://suiexplorer.com/) for browsing transaction history.
+The Sui Testnet and Devnet networks consist of four validator nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: `https://fullnode.<SUI-NETWORK-VERSION>.sui.io:443` using [JSON-RPC](/references/sui-api/json-rpc-format.mdx).
 
 You can [request test SUI tokens](#request-test-tokens) through the Sui [devnet-faucet](https://discordapp.com/channels/916379725201563759/971488439931392130) and [testnet-faucet](https://discord.com/channels/916379725201563759/1037811694564560966) Discord channels, depending on which version of the network you use. If connected to Localnet, use cURL to request tokens from your [local faucet](./local-network.mdx#use-the-local-faucet). The coins on these networks have no financial value. There is no faucet service for Mainnet.
 
@@ -16,15 +13,16 @@ See announcements about Sui in the [#announcements](https://discord.com/channels
 
 See the [terms of service](https://sui.io/terms/) for using Sui networks.
 
-## Tools
+{@include: ../../../snippets/data-wipe.mdx}
 
-Sui provides the following tools to interact with Sui networks:
+## Sui CLI
 
- * [Sui command line interface (CLI)](/references/cli/client.mdx)
-     * Create and manage your private keys
-     * Create example NFTs
-     * Call and publish Move modules
- * [Sui Explorer](https://github.com/MystenLabs/sui/blob/main/apps/explorer/README.md) to view transactions and objects on the network
+Sui provides [Sui command line interface (CLI)](/references/cli/client.mdx) to interact with Sui networks:
+
+- Create and manage your private keys
+- Create example NFTs
+- Call and publish Move modules
+
 
 ## Environment set up
 
@@ -117,5 +115,3 @@ sui client switch --env <ALIAS>
 ```
 
 If you encounter an issue, delete the Sui configuration directory (`~/.sui/sui_config`) and reinstall the latest [Sui binaries](./sui-install.mdx#install-sui-binaries).
-
-

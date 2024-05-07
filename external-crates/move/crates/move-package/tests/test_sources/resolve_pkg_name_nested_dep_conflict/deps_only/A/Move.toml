@@ -1,0 +1,5 @@
+[package]
+name = "A"
+
+[dependencies]
+ADep-rename = { local = "../ADep", addr_subst = { "A" = "0x7" } }

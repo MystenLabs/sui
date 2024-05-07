@@ -16,7 +16,7 @@ module 0x42::Y {
 
 
 //# run
-script {
+module 0x42::m {
 use 0x42::Y;
 
 fun main() {

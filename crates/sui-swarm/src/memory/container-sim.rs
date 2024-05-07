@@ -6,6 +6,7 @@ use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, Weak};
 use sui_config::NodeConfig;
 use sui_node::{SuiNode, SuiNodeHandle};
+use sui_types::base_types::ConciseableName;
 use tokio::sync::watch;
 use tracing::{info, trace};
 
@@ -48,7 +49,6 @@ impl Container {
             _ => panic!("unsupported protocol"),
         };
 
-        let config = Arc::new(config);
         let startup_sender = Arc::new(startup_sender);
         let node = builder
             .ip(ip)
@@ -60,7 +60,7 @@ impl Container {
                 let startup_sender = startup_sender.clone();
                 async move {
                     let registry_service = mysten_metrics::RegistryService::new(Registry::new());
-                    let server = SuiNode::start(&config, registry_service, None)
+                    let server = SuiNode::start(config, registry_service, None)
                         .await
                         .unwrap();
 

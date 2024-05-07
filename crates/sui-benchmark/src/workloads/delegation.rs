@@ -45,7 +45,7 @@ impl Payload for DelegationTestPayload {
         }
 
         let coin = match self.coin {
-            None => Some(effects.created().get(0).unwrap().0),
+            None => Some(effects.created().first().unwrap().0),
             Some(_) => None,
         };
         self.coin = coin;

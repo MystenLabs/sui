@@ -137,6 +137,7 @@ export interface ClickedCollectibleCardProperties {
 	 * The ID of an object on Sui.
 	 */
 	objectId: string;
+	sourceScreen?: string;
 }
 
 export interface ClickedCreateNewAccountProperties {
@@ -177,9 +178,9 @@ export interface ClickedSocialSignInButtonProperties {
 	 *
 	 * | Rule | Value |
 	 * |---|---|
-	 * | Enum Values | Microsoft, Facebook, Google, Twitch |
+	 * | Enum Values | Microsoft, Facebook, Google, Twitch, Kakao |
 	 */
-	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch';
+	signInProvider: 'Microsoft' | 'Facebook' | 'Google' | 'Twitch' | 'Kakao';
 	/**
 	 * The flow the user came from.
 	 */
@@ -741,7 +742,7 @@ export class Ampli {
     this.disabled = options.disabled ?? false;
 
     if (this.amplitude) {
-      console.warn('WARNING: Ampli is already intialized. Ampli.load() should be called once at application startup.');
+      console.warn('WARNING: Ampli is already initialized. Ampli.load() should be called once at application startup.');
       return getVoidPromiseResult();
     }
 

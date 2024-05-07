@@ -3,7 +3,38 @@
 
 const standards = [
 	'standards',
+	'standards/coin',
+	{
+		type: 'category',
+		label: 'Closed-Loop Token',
+		link: {
+			type: 'doc',
+			id: 'standards/closed-loop-token',
+		},
+		items: [
+			'standards/closed-loop-token/action-request',
+			'standards/closed-loop-token/token-policy',
+			'standards/closed-loop-token/spending',
+			'standards/closed-loop-token/rules',
+			'standards/closed-loop-token/coin-token-comparison',
+		],
+	},
 	'standards/kiosk',
+	{
+		type: 'category',
+		label: 'Kiosk Apps',
+		link: {
+			type: 'doc',
+			id: 'standards/kiosk-apps',
+		},
+		items: [
+			{
+				type: 'doc',
+				label: 'NFT Rental Example',
+				id: 'standards/kiosk-apps/nft-rental',
+			},
+		],
+	},
 	{
 		type: 'category',
 		label: 'DeepBook',
@@ -21,10 +52,6 @@ const standards = [
 		],
 	},
 	'standards/display',
-	{
-		type: 'link',
-		label: 'Wallet Kit',
-		href: 'https://sui-typescript-docs.vercel.app/wallet-kit',
-	},
+	'standards/wallet-standard',
 ];
 module.exports = standards;

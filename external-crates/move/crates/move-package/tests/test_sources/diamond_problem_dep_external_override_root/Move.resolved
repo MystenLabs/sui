@@ -1,7 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/diamond_problem_dep_external_override_root",
-        root_package: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -65,15 +66,9 @@ ResolvedGraph {
         package_table: {
             "A": Package {
                 kind: Local(
-                    "deps_only/A",
+                    "deps_only/A-v1",
                 ),
-                version: Some(
-                    (
-                        1,
-                        0,
-                        0,
-                    ),
-                ),
+                version: None,
                 resolver: None,
             },
             "ADep": Package {
@@ -105,14 +100,13 @@ ResolvedGraph {
             "C",
             "Root",
         },
-        manifest_digest: "A2144C32B1220F15525DF8D7983CCBD60B5BFB0110FFFBA42C139E24997651D4",
+        manifest_digest: "E1BD09BE802FCCF437672321DEBFD0C8000F9D4A0AC5E54ED432087ABACA9667",
         deps_digest: "060AD7E57DFB13104F21BE5F5C3759D03F0553FC3229247D9A7A6B45F50D03A3",
     },
     build_options: BuildConfig {
         dev_mode: true,
         test_mode: false,
         generate_docs: false,
-        generate_abis: false,
         install_dir: Some(
             "ELIDED_FOR_TEST",
         ),
@@ -120,7 +114,6 @@ ResolvedGraph {
         lock_file: Some(
             "ELIDED_FOR_TEST",
         ),
-        additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
@@ -128,17 +121,17 @@ ResolvedGraph {
         deps_as_root: false,
         silence_warnings: false,
         warnings_are_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
     },
     package_table: {
         "A": Package {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "A",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -155,7 +148,6 @@ ResolvedGraph {
                                 "../ADep",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -172,11 +164,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "ADep",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -198,11 +185,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "B",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -219,7 +201,6 @@ ResolvedGraph {
                                 "../A",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -236,11 +217,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -266,11 +242,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -284,16 +255,9 @@ ResolvedGraph {
                     "A": Internal(
                         InternalDependency {
                             kind: Local(
-                                "deps_only/A",
+                                "deps_only/A-v1",
                             ),
                             subst: None,
-                            version: Some(
-                                (
-                                    1,
-                                    0,
-                                    0,
-                                ),
-                            ),
                             digest: None,
                             dep_override: true,
                         },
@@ -304,7 +268,6 @@ ResolvedGraph {
                                 "deps_only/B",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -315,7 +278,6 @@ ResolvedGraph {
                                 "deps_only/C",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

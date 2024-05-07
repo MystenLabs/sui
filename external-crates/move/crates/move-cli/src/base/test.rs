@@ -7,7 +7,7 @@ use anyhow::Result;
 use clap::*;
 use move_command_line_common::files::{FileHash, MOVE_COVERAGE_MAP_EXTENSION};
 use move_compiler::{
-    diagnostics::{self},
+    diagnostics::{self, Diagnostics},
     shared::{NumberFormat, NumericalAddress},
     unit_test::{plan_builder::construct_test_plan, TestPlan},
     PASS_CFGIR,
@@ -22,6 +22,7 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::ExitStatus,
+    sync::Arc,
 };
 // if windows
 #[cfg(target_family = "windows")]
@@ -66,7 +67,7 @@ pub struct Test {
     /// Verbose mode
     #[clap(long = "verbose")]
     pub verbose_mode: bool,
-    /// Collect coverage information for later use with the various `move coverage` subcommands
+    /// Collect coverage information for later use with the various `move coverage` subcommands. Currently supported only in debug builds.
     #[clap(long = "coverage")]
     pub compute_coverage: bool,
 }
@@ -80,6 +81,25 @@ impl Test {
         cost_table: Option<CostTable>,
     ) -> anyhow::Result<()> {
         let rerooted_path = reroot_path(path)?;
+        let compute_coverage = self.compute_coverage;
+        let result = run_move_unit_tests(
+            &rerooted_path,
+            config,
+            self.unit_test_config(),
+            natives,
+            cost_table,
+            compute_coverage,
+            &mut std::io::stdout(),
+        )?;
+
+        // Return a non-zero exit code if any test failed
+        if let (UnitTestResult::Failure, _) = result {
+            std::process::exit(1)
+        }
+        Ok(())
+    }
+
+    pub fn unit_test_config(self) -> UnitTestingConfig {
         let Self {
             gas_limit,
             filter,
@@ -88,9 +108,9 @@ impl Test {
             report_statistics,
             check_stackless_vm,
             verbose_mode,
-            compute_coverage,
+            compute_coverage: _,
         } = self;
-        let unit_test_config = UnitTestingConfig {
+        UnitTestingConfig {
             gas_limit,
             filter,
             list,
@@ -99,23 +119,7 @@ impl Test {
             check_stackless_vm,
             verbose: verbose_mode,
             ..UnitTestingConfig::default_with_bound(None)
-        };
-        let result = run_move_unit_tests(
-            &rerooted_path,
-            config,
-            unit_test_config,
-            natives,
-            cost_table,
-            compute_coverage,
-            &mut std::io::stdout(),
-            &mut std::io::stdout(),
-        )?;
-
-        // Return a non-zero exit code if any test failed
-        if let UnitTestResult::Failure = result {
-            std::process::exit(1)
         }
-        Ok(())
     }
 }
 
@@ -126,16 +130,15 @@ pub enum UnitTestResult {
     Failure,
 }
 
-pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
+pub fn run_move_unit_tests<W: Write + Send>(
     pkg_path: &Path,
     mut build_config: move_package::BuildConfig,
     mut unit_test_config: UnitTestingConfig,
     natives: Vec<NativeFunctionRecord>,
     cost_table: Option<CostTable>,
     compute_coverage: bool,
-    compiler_writer: &mut CW,
-    test_writer: &mut TW,
-) -> Result<UnitTestResult> {
+    writer: &mut W,
+) -> Result<(UnitTestResult, Option<Diagnostics>)> {
     let mut test_plan = None;
     build_config.test_mode = true;
     build_config.dev_mode = true;
@@ -168,7 +171,7 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
                 .map(|fname| {
                     let contents = fs::read_to_string(Path::new(fname.as_str())).unwrap();
                     let fhash = FileHash::new(&contents);
-                    (fhash, (*fname, contents))
+                    (fhash, (*fname, Arc::from(contents)))
                 })
                 .collect::<HashMap<_, _>>()
         })
@@ -179,19 +182,26 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // Move package system, to first grab the compilation env, construct the test plan from it, and
     // then save it, before resuming the rest of the compilation and returning the results and
     // control back to the Move package system.
-    build_plan.compile_with_driver(compiler_writer, |compiler| {
+    let mut warning_diags = None;
+    build_plan.compile_with_driver(writer, |compiler| {
         let (files, comments_and_compiler_res) = compiler.run::<PASS_CFGIR>().unwrap();
         let (_, compiler) =
-            diagnostics::unwrap_or_report_diagnostics(&files, comments_and_compiler_res);
+            diagnostics::unwrap_or_report_pass_diagnostics(&files, comments_and_compiler_res);
         let (mut compiler, cfgir) = compiler.into_ast();
         let compilation_env = compiler.compilation_env();
         let built_test_plan = construct_test_plan(compilation_env, Some(root_package), &cfgir);
 
         let compilation_result = compiler.at_cfgir(cfgir).build();
         let (units, warnings) =
-            diagnostics::unwrap_or_report_diagnostics(&files, compilation_result);
-        diagnostics::report_warnings(&files, warnings);
-        test_plan = Some((built_test_plan, files.clone(), units.clone()));
+            diagnostics::unwrap_or_report_pass_diagnostics(&files, compilation_result);
+        diagnostics::report_warnings(&files, warnings.clone());
+        let named_units: Vec<_> = units
+            .clone()
+            .into_iter()
+            .map(|unit| unit.named_module)
+            .collect();
+        test_plan = Some((built_test_plan, files.clone(), named_units));
+        warning_diags = Some(warnings);
         Ok((files, units))
     })?;
 
@@ -222,12 +232,12 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
     // Run the tests. If any of the tests fail, then we don't produce a coverage report, so cleanup
     // the trace files.
     if !unit_test_config
-        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, test_writer)
+        .run_and_report_unit_tests(test_plan, Some(natives), cost_table, writer)
         .unwrap()
         .1
     {
         cleanup_trace();
-        return Ok(UnitTestResult::Failure);
+        return Ok((UnitTestResult::Failure, warning_diags));
     }
 
     // Compute the coverage map. This will be used by other commands after this.
@@ -235,7 +245,7 @@ pub fn run_move_unit_tests<CW: Write + Send, TW: Write + Send>(
         let coverage_map = CoverageMap::from_trace_file(trace_path);
         output_map_to_file(coverage_map_path, &coverage_map).unwrap();
     }
-    Ok(UnitTestResult::Success)
+    Ok((UnitTestResult::Success, warning_diags))
 }
 
 impl From<UnitTestResult> for ExitStatus {

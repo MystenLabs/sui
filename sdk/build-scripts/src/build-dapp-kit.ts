@@ -6,7 +6,7 @@ import autoprefixer from 'autoprefixer';
 import postcss from 'postcss';
 import prefixSelector from 'postcss-prefix-selector';
 
-import { buildPackage } from './utils/buildPackage';
+import { buildPackage } from './utils/buildPackage.js';
 
 buildPackage({
 	plugins: [

@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 /*
 Transaction Orchestrator is a Node component that utilizes Quorum Driver to
 submit transactions to validators for finality, and proactively executes
 finalized transactions locally, when possible.
 */
-use crate::authority::{AuthorityState, EffectsNotifyRead};
+use crate::authority::AuthorityState;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use crate::quorum_driver::reconfig_observer::{OnsiteReconfigObserver, ReconfigObserver};
@@ -23,6 +24,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Registry,
 };
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
@@ -70,7 +72,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let validators = AuthorityAggregator::new_from_local_system_state(
-            &validator_state.db(),
+            validator_state.get_cache_reader(),
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
             auth_agg_metrics.clone(),
@@ -78,7 +80,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
-            validator_state.db(),
+            validator_state.get_cache_reader().clone(),
             validator_state.clone_committee_store(),
             safe_client_metrics_base,
             auth_agg_metrics,
@@ -155,13 +157,14 @@ where
     pub async fn execute_transaction_block(
         &self,
         request: ExecuteTransactionRequest,
+        client_addr: Option<SocketAddr>,
     ) -> Result<ExecuteTransactionResponse, QuorumDriverError> {
         // TODO check if tx is already executed on this node.
         // Note: since EffectsCert is not stored today, we need to gather that from validators
         // (and maybe store it for caching purposes)
+        let epoch_store = self.validator_state.load_epoch_store_one_call_per_task();
 
-        let transaction = self
-            .validator_state
+        let transaction = epoch_store
             .verify_transaction(request.transaction)
             .map_err(QuorumDriverError::InvalidUserSignature)?;
         let (_in_flight_metrics_guards, good_response_metrics) = self.update_metrics(&transaction);
@@ -191,10 +194,13 @@ where
             in_flight.dec();
         });
 
-        let ticket = self.submit(transaction.clone()).await.map_err(|e| {
-            warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
-            QuorumDriverError::QuorumDriverInternalError(e)
-        })?;
+        let ticket = self
+            .submit(transaction.clone(), client_addr)
+            .await
+            .map_err(|e| {
+                warn!(?tx_digest, "QuorumDriverInternalError: {e:?}");
+                QuorumDriverError::QuorumDriverInternalError(e)
+            })?;
 
         let wait_for_local_execution = matches!(
             request.request_type,
@@ -235,6 +241,7 @@ where
 
                 match Self::execute_finalized_tx_locally_with_timeout(
                     &self.validator_state,
+                    &epoch_store,
                     &executable_tx,
                     &effects_cert,
                     &self.metrics,
@@ -261,9 +268,12 @@ where
     async fn submit(
         &self,
         transaction: VerifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> SuiResult<impl Future<Output = SuiResult<QuorumDriverResult>> + '_> {
         let tx_digest = *transaction.digest();
         let ticket = self.notifier.register_one(&tx_digest);
+        // TODO(william) need to also write client adr to pending tx log below
+        // so that we can re-execute with this client addr if we restart
         if self
             .pending_tx_log
             .write_pending_transaction_maybe(&transaction)
@@ -271,42 +281,44 @@ where
         {
             debug!(?tx_digest, "no pending request in flight, submitting.");
             self.quorum_driver()
-                .submit_transaction_no_ticket(transaction.clone().into())
+                .submit_transaction_no_ticket(transaction.clone().into(), client_addr)
                 .await?;
         }
         // It's possible that the transaction effects is already stored in DB at this point.
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
         // to form a certificate for us again, to serve this request.
-        let effects_await = self
-            .validator_state
-            .database
-            .notify_read_executed_effects(vec![tx_digest]);
+        let cache_reader = self.validator_state.get_cache_reader().clone();
         let qd = self.clone_quorum_driver();
         Ok(async move {
-            match select(ticket, effects_await.boxed()).await {
+            let digests = [tx_digest];
+            let effects_await = cache_reader.notify_read_executed_effects(&digests);
+            // let-and-return necessary to satisfy borrow checker.
+            #[allow(clippy::let_and_return)]
+            let res = match select(ticket, effects_await.boxed()).await {
                 Either::Left((quorum_driver_response, _)) => Ok(quorum_driver_response),
                 Either::Right((_, unfinished_quorum_driver_task)) => {
                     debug!(
                         ?tx_digest,
                         "Effects are available in DB, use quorum driver to get a certificate"
                     );
-                    qd.submit_transaction_no_ticket(transaction.into()).await?;
+                    qd.submit_transaction_no_ticket(transaction.into(), client_addr)
+                        .await?;
                     Ok(unfinished_quorum_driver_task.await)
                 }
-            }
+            };
+            res
         })
     }
 
     #[instrument(name = "tx_orchestrator_execute_finalized_tx_locally_with_timeout", level = "debug", skip_all, fields(tx_digest = ?transaction.digest()), err)]
     async fn execute_finalized_tx_locally_with_timeout(
         validator_state: &Arc<AuthorityState>,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: &VerifiedExecutableTransaction,
         effects_cert: &VerifiedCertifiedTransactionEffects,
         metrics: &TransactionOrchestratorMetrics,
     ) -> SuiResult {
-        let epoch_store = validator_state.load_epoch_store_one_call_per_task();
-
         // TODO: attempt a finalized tx at most once per request.
         // Every WaitForLocalExecution request will be attempted to execute twice,
         // one from the subscriber queue, one from the proactive execution before
@@ -337,7 +349,7 @@ where
             validator_state.fullnode_execute_certificate_with_effects(
                 transaction,
                 effects_cert,
-                &epoch_store,
+                epoch_store,
             ),
         )
         .instrument(error_span!(
@@ -394,9 +406,11 @@ where
                         continue;
                     }
 
+                    let epoch_store = validator_state.load_epoch_store_one_call_per_task();
+
                     // This is a redundant verification, but SignatureVerifier will cache the
                     // previous result.
-                    let transaction = match validator_state.verify_transaction(transaction) {
+                    let transaction = match epoch_store.verify_transaction(transaction) {
                         Ok(transaction) => transaction,
                         Err(err) => {
                             // This should be impossible, since we verified the transaction
@@ -416,6 +430,7 @@ where
 
                     let _ = Self::execute_finalized_tx_locally_with_timeout(
                         &validator_state,
+                        &epoch_store,
                         &executable_tx,
                         &effects_cert,
                         &metrics,
@@ -503,7 +518,8 @@ where
                 let tx = tx.into_inner();
                 let tx_digest = *tx.digest();
                 // It's not impossible we fail to enqueue a task but that's not the end of world.
-                if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx).await {
+                // TODO(william) correctly extract client_addr from logs
+                if let Err(err) = quorum_driver.submit_transaction_no_ticket(tx, None).await {
                     warn!(
                         ?tx_digest,
                         "Failed to enqueue transaction from pending_tx_log, err: {err:?}"

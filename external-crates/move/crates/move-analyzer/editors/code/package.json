@@ -1,52 +1,86 @@
 {
-	"name": "move-analyzer",
-	"displayName": "move-analyzer",
-	"description": "A language server and basic grammar for the Move programming language.",
-	"publisher": "move",
+	"name": "move",
+	"displayName": "Move",
+	"description": "A Move language integrated development environment for Sui.",
+	"publisher": "mysten",
 	"icon": "images/move.png",
 	"license": "Apache-2.0",
-	"version": "0.0.10",
+	"version": "0.0.2",
 	"preview": true,
-	"homepage": "https://github.com/move-language/move",
 	"repository": {
-		"url": "https://github.com/move-language/move.git",
+		"url": "https://github.com/MystenLabs/sui.git",
 		"type": "git"
 	},
 	"bugs": {
-		"url": "https://github.com/move-language/move/issues"
+		"url": "https://github.com/MystenLabs/sui/issues"
 	},
 	"engines": {
-		"vscode": "^1.58.2"
+		"vscode": "^1.61.0"
 	},
 	"categories": [
 		"Programming Languages"
 	],
 	"keywords": [
-		"move"
+		"move",
+		"Sui",
+		"Mysten"
 	],
 	"main": "./out/src/main.js",
 	"activationEvents": [
-		"onLanguage:move",
-		"workspaceContains:Move.toml"
+		"workspaceContains:Move.toml",
+		"onLanguage:move"
 	],
 	"contributes": {
 		"commands": [
 			{
-				"command": "move-analyzer.serverVersion",
+				"command": "move.serverVersion",
 				"title": "Show Server Version",
-				"category": "Move Analyzer"
+				"category": "Move"
+			},
+			{
+				"command": "move.build",
+				"title": "Build a Move package",
+				"category": "Move"
+			},
+			{
+				"command": "move.test",
+				"title": "Test a Move package",
+				"category": "Move"
 			}
 		],
 		"configuration": {
 			"type": "object",
-			"title": "Move Analyzer",
+			"title": "Move",
 			"properties": {
-				"move-analyzer.server.path": {
-					"type": "string",
-					"default": "move-analyzer",
-					"markdownDescription": "Path and filename of the move-analyzer executable, e.g. `/usr/bin/move-analyzer`."
+                "move.lint": {
+                    "type": "string",
+                    "enum": [
+                        "default",
+                        "all",
+                        "none"
+                    ],
+                    "default": "default",
+                    "markdownDescription": "Move source code linting level."
+                },
+                "move.server.path": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "scope": "machine-overridable",
+                    "default": null,
+                    "markdownDescription": "Path to rust-analyzer executable (points to `~/.sui/bin/move-analyzer` by default)."
 				},
-				"move-analyzer.trace.server": {
+				"move.sui.path": {
+                    "type": [
+                        "null",
+                        "string"
+                    ],
+                    "scope": "machine-overridable",
+                    "default": null,
+                    "markdownDescription": "Path to Sui executable (by default assumes that `sui` is on the systems path)."
+				},
+				"move.trace.server": {
 					"type": "string",
 					"scope": "window",
 					"enum": [
@@ -80,7 +114,13 @@
 		"menus": {
 			"commandPalette": [
 				{
-					"command": "move-analyzer.serverVersion"
+					"command": "sui.serverVersion"
+				},
+				{
+					"command": "sui.build"
+				},
+				{
+					"command": "sui.test"
 				}
 			]
 		}
@@ -95,7 +135,7 @@
 		"test": "node ./out/tests/runTests.js",
 		"dev": "npm run pretest && cross-env mode=dev node ./out/tests/runTests.js",
 		"vscode:prepublish": "npm run pretest",
-		"package": "npm run pretest && vsce package -o move-analyzer.vsix",
+		"package": "npm run pretest && vsce package -o move.vsix",
 		"publish": "npm run pretest && npm run test && vsce publish"
 	},
 	"extensionDependencies": [
@@ -103,8 +143,8 @@
 	],
 	"dependencies": {
 		"command-exists": "^1.2.9",
-		"vscode-languageclient": "6.1.4",
-		"lru-cache": "^4.1.3"
+		"lru-cache": "^4.1.3",
+		"vscode-languageclient": "6.1.4"
 	},
 	"devDependencies": {
 		"@types/command-exists": "^1.2.0",
@@ -112,18 +152,18 @@
 		"@types/glob": "^7.1.4",
 		"@types/mocha": "^9.0.0",
 		"@types/node": "^14.17.22",
-		"@types/vscode": "^1.58.2",
-		"@typescript-eslint/eslint-plugin": "^4.33.0",
-		"@typescript-eslint/parser": "^4.33.0",
+		"@types/vscode": "^1.61.0",
+		"@typescript-eslint/eslint-plugin": "^6.10.0",
+		"@typescript-eslint/parser": "^6.10.0",
 		"@vscode/test-electron": "^2.0.0",
 		"copyfiles": "2.4.1",
 		"cross-env": "^7.0.3",
-		"eslint": "^7.32.0",
+		"eslint": "^8.53.0",
 		"eslint-plugin-tsdoc": "^0.2.14",
 		"fs-extra": "10.0.1",
 		"glob": "^7.1.7",
 		"mocha": "^9.1.1",
-		"typescript": "^4.4.4",
+		"typescript": "^4.9.5",
 		"typescript-formatter": "^7.2.2",
 		"vsce": "^2.5.1",
 		"vscode-test": "^1.6.1"

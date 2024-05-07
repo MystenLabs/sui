@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui.js/bcs';
-import {
+import type {
 	TransactionArgument,
 	TransactionBlock,
 	TransactionObjectArgument,
 } from '@mysten/sui.js/transactions';
 
-import { ObjectArgument, TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types';
-import { objArg } from '../utils';
+import type { ObjectArgument } from '../types/index.js';
+import { TRANSFER_POLICY_MODULE, TRANSFER_POLICY_TYPE } from '../types/index.js';
 
 /**
  * Call the `transfer_policy::new` function to create a new transfer policy.
@@ -43,7 +43,7 @@ export function createTransferPolicyWithoutSharing(
 	const [transferPolicy, transferPolicyCap] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::new`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, publisher)],
+		arguments: [tx.object(publisher)],
 	});
 
 	return [transferPolicy, transferPolicyCap];
@@ -78,7 +78,7 @@ export function withdrawFromPolicy(
 	const [profits] = tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::withdraw`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap), amountArg],
+		arguments: [tx.object(policy), tx.object(policyCap), amountArg],
 	});
 
 	return profits;
@@ -97,7 +97,7 @@ export function confirmRequest(
 	tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::confirm_request`,
 		typeArguments: [itemType],
-		arguments: [objArg(tx, policy), request],
+		arguments: [tx.object(policy), request],
 	});
 }
 
@@ -115,6 +115,6 @@ export function removeTransferPolicyRule(
 	tx.moveCall({
 		target: `${TRANSFER_POLICY_MODULE}::remove_rule`,
 		typeArguments: [itemType, ruleType, configType],
-		arguments: [objArg(tx, policy), objArg(tx, policyCap)],
+		arguments: [tx.object(policy), tx.object(policyCap)],
 	});
 }

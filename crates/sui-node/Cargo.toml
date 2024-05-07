@@ -36,20 +36,21 @@ sui-rest-api.workspace = true
 sui-storage.workspace = true
 sui-network.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-protocol-config.workspace = true
 sui-snapshot.workspace = true
 sui-telemetry.workspace = true
 sui-types.workspace = true
-sui-kvstore.workspace = true
 mysten-metrics.workspace = true
 mysten-common.workspace = true
 narwhal-network.workspace = true
+narwhal-worker.workspace = true
 typed-store.workspace = true
 mysten-network.workspace = true
 telemetry-subscribers.workspace = true
 fastcrypto.workspace = true
 fastcrypto-zkp.workspace = true
-workspace-hack.workspace = true
+move-vm-profiler.workspace = true
 
 [target.'cfg(msim)'.dependencies]
 sui-simulator.workspace = true

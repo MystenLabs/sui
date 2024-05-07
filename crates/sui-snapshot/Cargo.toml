@@ -23,12 +23,13 @@ futures.workspace = true
 object_store.workspace = true
 prometheus.workspace = true
 sui-types.workspace = true
+sui-config.workspace = true
 sui-core.workspace = true
 sui-storage.workspace = true
 sui-protocol-config.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 tokio = { workspace = true, features = ["full"] }
-workspace-hack.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

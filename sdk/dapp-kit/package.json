@@ -2,8 +2,8 @@
 	"name": "@mysten/dapp-kit",
 	"author": "Mysten Labs <build@mystenlabs.com>",
 	"description": "A collection of React hooks and components for interacting with the Sui blockchain and wallets.",
-	"homepage": "https://sui-typescript-docs.vercel.app/typescript",
-	"version": "0.7.0",
+	"homepage": "https://sdk.mystenlabs.com/typescript",
+	"version": "0.12.9",
 	"license": "Apache-2.0",
 	"files": [
 		"CHANGELOG.md",
@@ -18,7 +18,6 @@
 	"types": "./dist/cjs/index.d.ts",
 	"exports": {
 		".": {
-			"source": "./src/index.ts",
 			"import": "./dist/esm/index.js",
 			"require": "./dist/cjs/index.js"
 		},
@@ -31,7 +30,7 @@
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-dapp-kit",
 		"test": "pnpm test:typecheck && pnpm vitest",
-		"test:typecheck": "tsc -p ./test",
+		"test:typecheck": "tsc -b ./test",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",
 		"analyze": "size-limit --why",
@@ -70,18 +69,18 @@
 		"@types/testing-library__jest-dom": "^5.14.9",
 		"@vanilla-extract/esbuild-plugin": "^2.3.0",
 		"@vanilla-extract/vite-plugin": "^3.9.0",
-		"happy-dom": "^10.5.1",
+		"jsdom": "^23.0.0",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"size-limit": "^8.2.6",
-		"tsx": "^3.12.7",
-		"typescript": "^5.1.6",
-		"vite-tsconfig-paths": "^4.2.0",
+		"typescript": "^5.3.3",
+		"vite": "^4.4.4",
 		"vitest": "^0.33.0"
 	},
 	"dependencies": {
 		"@mysten/sui.js": "workspace:*",
 		"@mysten/wallet-standard": "workspace:*",
+		"@mysten/zksend": "workspace:*",
 		"@radix-ui/react-dialog": "^1.0.4",
 		"@radix-ui/react-dropdown-menu": "^2.0.5",
 		"@radix-ui/react-slot": "^1.0.2",

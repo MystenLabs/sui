@@ -3,9 +3,9 @@
 
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/builder';
 import { OwnedObjectRef, SuiClient } from '../../src/client';
 import type { Keypair } from '../../src/cryptography';
+import { TransactionBlock } from '../../src/transactions';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
 function getOwnerAddress(o: OwnedObjectRef): string | undefined {
@@ -142,5 +142,7 @@ async function validateTransaction(client: SuiClient, signer: Keypair, tx: Trans
 	});
 	expect(localDigest).toEqual(result.digest);
 	expect(result.effects?.status.status).toEqual('success');
+
+	await client.waitForTransactionBlock({ digest: result.digest });
 	return result;
 }

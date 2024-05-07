@@ -4,34 +4,39 @@
 
 use crate::{
     debug_display, diag,
-    diagnostics::{codes::NameResolution, Diagnostic},
-    expansion::ast::{AbilitySet, AttributeName_, ModuleIdent, ModuleIdent_, Visibility},
+    diagnostics::{
+        codes::{NameResolution, TypeSafety},
+        Diagnostic,
+    },
+    editions::FeatureGate,
+    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
+    ice,
     naming::ast::{
-        self as N, BuiltinTypeName_, ResolvedUseFuns, StructDefinition, StructTypeParameter,
-        TParam, TParamID, TVar, Type, TypeName, TypeName_, Type_, UseFunKind, Var,
+        self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
+        IndexSyntaxMethods, ResolvedUseFuns, StructDefinition, TParam, TParamID, TVar, Type,
+        TypeName, TypeName_, Type_, UseFun, UseFunKind, Var,
     },
     parser::ast::{
-        Ability_, ConstantName, Field, FunctionName, Mutability, StructName, ENTRY_MODIFIER,
+        Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
-    shared::{
-        known_attributes::{KnownAttribute, TestingAttribute},
-        program_info::*,
-        unique_map::UniqueMap,
-        *,
-    },
+    shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet, HashMap},
+    sync::Arc,
+};
 
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
-struct UseFunsScope {
+pub struct UseFunsScope {
+    color: Option<Color>,
     count: usize,
-    unused: BTreeMap<(TypeName, Name), (Loc, UseFunKind, /* depth */ usize)>,
     use_funs: ResolvedUseFuns,
 }
 
@@ -51,36 +56,39 @@ pub enum Constraint {
 pub type Constraints = Vec<Constraint>;
 pub type TParamSubst = HashMap<TParamID, Type>;
 
-pub struct LoopInfo(LoopInfo_);
-
-enum LoopInfo_ {
-    NotInLoop,
-    BreakTypeUnknown,
-    BreakType(Box<Type>),
+#[derive(Debug)]
+pub struct MacroCall {
+    pub module: ModuleIdent,
+    pub function: FunctionName,
+    pub invocation: Loc,
+    pub scope_color: Color,
 }
 
-pub struct Local {
-    pub mut_: Mutability,
-    pub ty: Type,
-    pub used_mut: Option<Loc>,
+#[derive(Debug)]
+pub enum MacroExpansion {
+    Call(Box<MacroCall>),
+    // An argument to a macro, where the entire expression was substituted in
+    Argument { scope_color: Color },
 }
 
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
+    macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
 
     use_funs: Vec<UseFunsScope>,
     pub current_package: Option<Symbol>,
     pub current_module: Option<ModuleIdent>,
     pub current_function: Option<FunctionName>,
-    pub current_script_constants: Option<UniqueMap<ConstantName, ConstantInfo>>,
+    pub in_macro_function: bool,
+    max_variable_color: RefCell<u16>,
     pub return_type: Option<Type>,
-    locals: UniqueMap<Var, Local>,
+    locals: UniqueMap<Var, Type>,
 
     pub subst: Subst,
     pub constraints: Constraints,
 
-    loop_info: LoopInfo,
+    named_block_map: BTreeMap<BlockLabel, Type>,
 
     /// collects all friends that should be added over the course of 'public(package)' calls
     /// structured as (defining module, new friend, location) where `new friend` is usually the
@@ -90,12 +98,25 @@ pub struct Context<'env> {
     /// collects all used module members (functions and constants) but it's a superset of these in
     /// that it may contain other identifiers that do not in fact represent a function or a constant
     pub used_module_members: BTreeMap<ModuleIdent_, BTreeSet<Symbol>>,
+    /// Current macros being expanded
+    pub macro_expansion: Vec<MacroExpansion>,
+    /// Stack of items from `macro_expansion` pushed/popped when entering/leaving a lambda expansion
+    /// This is to prevent accidentally thinking we are in a recursive call if a macro is used
+    /// inside a lambda body
+    pub lambda_expansion: Vec<Vec<MacroExpansion>>,
+}
+
+pub struct ResolvedFunctionType {
+    pub declared: Loc,
+    pub macro_: Option<Loc>,
+    pub ty_args: Vec<Type>,
+    pub params: Vec<(Var, Type)>,
+    pub return_: Type,
 }
 
 impl UseFunsScope {
     pub fn global(info: &NamingProgramInfo) -> Self {
         let count = 1;
-        let unused = BTreeMap::new();
         let mut use_funs = BTreeMap::new();
         for (_, _, minfo) in &info.modules {
             for (tn, methods) in &minfo.use_funs {
@@ -123,8 +144,8 @@ impl UseFunsScope {
             }
         }
         UseFunsScope {
+            color: None,
             count,
-            unused,
             use_funs,
         }
     }
@@ -133,7 +154,7 @@ impl UseFunsScope {
 impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
-        _pre_compiled_lib: Option<&FullyCompiledProgram>,
+        _pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
@@ -143,110 +164,297 @@ impl<'env> Context<'env> {
             current_package: None,
             current_module: None,
             current_function: None,
-            current_script_constants: None,
+            in_macro_function: false,
+            max_variable_color: RefCell::new(0),
             return_type: None,
             constraints: vec![],
             locals: UniqueMap::new(),
-            loop_info: LoopInfo(LoopInfo_::NotInLoop),
             modules: info,
+            macros: UniqueMap::new(),
+            named_block_map: BTreeMap::new(),
             env,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
+            macro_expansion: vec![],
+            lambda_expansion: vec![],
         }
+    }
+
+    pub fn set_macros(
+        &mut self,
+        macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
+    ) {
+        debug_assert!(self.macros.is_empty());
+        self.macros = macros;
     }
 
     pub fn add_use_funs_scope(&mut self, new_scope: N::UseFuns) {
         let N::UseFuns {
-            resolved: new_scope,
+            color,
+            resolved: mut new_scope,
             implicit_candidates,
         } = new_scope;
         assert!(
             implicit_candidates.is_empty(),
             "ICE use fun candidates should have been resolved"
         );
-        let depth = self.use_funs.len();
         let cur = self.use_funs.last_mut().unwrap();
-        if new_scope.is_empty() {
+        if new_scope.is_empty() && cur.color == Some(color) {
             cur.count += 1;
             return;
         }
-        let mut unused = cur.unused.clone();
-        let mut use_funs = cur.use_funs.clone();
-        for (tn, additional_methods) in new_scope {
-            for (method, nuf) in additional_methods {
-                match nuf.kind {
-                    UseFunKind::Explicit if nuf.is_public.is_none() => {
-                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
-                    }
-                    UseFunKind::UseAlias { used: false } => {
-                        unused.insert((tn.clone(), method), (nuf.loc, nuf.kind, depth));
-                    }
-                    _ => (),
+        for (tn, methods) in &mut new_scope {
+            for (method, use_fun) in methods.key_cloned_iter_mut() {
+                if use_fun.used || !matches!(use_fun.kind, UseFunKind::Explicit) {
+                    continue;
                 }
-                let cur_methods = use_funs.entry(tn.clone()).or_default();
-                cur_methods.remove(&method);
-                cur_methods.add(method, nuf).unwrap();
+                let mut same_target = false;
+                let mut case = None;
+                let Some(prev) = self.find_method_impl(tn, method, |prev| {
+                    if use_fun.target_function == prev.target_function {
+                        case = Some(match &prev.kind {
+                            UseFunKind::UseAlias | UseFunKind::Explicit => "Duplicate",
+                            UseFunKind::FunctionDeclaration => "Unnecessary",
+                        });
+                        same_target = true;
+                        // suppress unused warning
+                        prev.used = true;
+                    }
+                }) else {
+                    continue;
+                };
+                if same_target {
+                    let case = case.unwrap();
+                    let prev_loc = prev.loc;
+                    let (target_m, target_f) = &use_fun.target_function;
+                    let msg =
+                        format!("{case} method alias '{tn}.{method}' for '{target_m}::{target_f}'");
+                    self.env.add_diag(diag!(
+                        Declarations::DuplicateAlias,
+                        (use_fun.loc, msg),
+                        (prev_loc, "The same alias was previously declared here")
+                    ));
+                }
             }
         }
         self.use_funs.push(UseFunsScope {
             count: 1,
-            unused,
-            use_funs,
+            use_funs: new_scope,
+            color: Some(color),
         })
     }
 
-    pub fn pop_use_funs_scope(&mut self) {
+    pub fn pop_use_funs_scope(&mut self) -> N::UseFuns {
         let cur = self.use_funs.last_mut().unwrap();
         if cur.count > 1 {
             cur.count -= 1;
-            return;
+            return N::UseFuns::new(cur.color.unwrap_or(0));
         }
-        let UseFunsScope { unused, .. } = self.use_funs.pop().unwrap();
-        let cur_depth = self.use_funs.len();
-        let mut new_unused = BTreeMap::new();
-        for ((tn, method), (loc, kind, depth)) in unused {
-            if depth != cur_depth {
-                // the unused was added in a scope above
-                assert!(depth < cur_depth);
-                new_unused.insert((tn, method), (loc, kind, depth));
-                continue;
+        let UseFunsScope {
+            use_funs, color, ..
+        } = self.use_funs.pop().unwrap();
+        for (tn, methods) in use_funs.iter() {
+            let unused = methods.iter().filter(|(_, _, uf)| !uf.used);
+            for (_, method, use_fun) in unused {
+                let N::UseFun {
+                    loc,
+                    kind,
+                    attributes: _,
+                    is_public: _,
+                    tname: _,
+                    target_function: _,
+                    used: _,
+                } = use_fun;
+                match kind {
+                    UseFunKind::Explicit => {
+                        let msg =
+                            format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it");
+                        self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                    }
+                    UseFunKind::UseAlias => {
+                        let msg = format!("Unused 'use' of alias '{method}'. Consider removing it");
+                        self.env.add_diag(diag!(UnusedItem::Alias, (*loc, msg)))
+                    }
+                    UseFunKind::FunctionDeclaration => {
+                        let diag = ice!((
+                            *loc,
+                            "ICE fun declaration 'use' funs should never be added to 'use' funs"
+                        ));
+                        self.env.add_diag(diag);
+                    }
+                }
             }
-            let msg = match kind {
-                UseFunKind::Explicit => {
-                    format!("Unused 'use fun' of '{tn}.{method}'. Consider removing it")
-                }
-                UseFunKind::UseAlias { used } => {
-                    assert!(!used);
-                    format!("Unused 'use' of alias '{method}'. Consider removing it")
-                }
-                UseFunKind::FunctionDeclaration => {
-                    panic!("ICE function declaration use funs should never be added to use fun")
-                }
-            };
-            self.env.add_diag(diag!(UnusedItem::Alias, (loc, msg)))
         }
-        self.use_funs.last_mut().unwrap().unused = new_unused;
+        N::UseFuns {
+            resolved: use_funs,
+            color: color.unwrap_or(0),
+            implicit_candidates: UniqueMap::new(),
+        }
+    }
+
+    fn find_method_impl(
+        &mut self,
+        tn: &TypeName,
+        method: Name,
+        mut fmap_use_fun: impl FnMut(&mut N::UseFun),
+    ) -> Option<&UseFun> {
+        let cur_color = self.use_funs.last().unwrap().color;
+        self.use_funs.iter_mut().rev().find_map(|scope| {
+            // scope color is None for global scope, which is always in consideration
+            // otherwise, the color must match the current color. In practice, we are preventing
+            // macro scopes from interfering with each the scopes in which they are expanded
+            if scope.color.is_some() && scope.color != cur_color {
+                return None;
+            }
+            let use_fun = scope.use_funs.get_mut(tn)?.get_mut(&method)?;
+            fmap_use_fun(use_fun);
+            Some(&*use_fun)
+        })
+    }
+
+    pub fn find_method_and_mark_used(
+        &mut self,
+        tn: &TypeName,
+        method: Name,
+    ) -> Option<(ModuleIdent, FunctionName)> {
+        self.find_method_impl(tn, method, |use_fun| use_fun.used = true)
+            .map(|use_fun| use_fun.target_function)
+    }
+
+    /// true iff it is safe to expand,
+    /// false with an error otherwise (e.g. a recursive expansion)
+    pub fn add_macro_expansion(&mut self, m: ModuleIdent, f: FunctionName, loc: Loc) -> bool {
+        let current_call_color = self.current_call_color();
+
+        let mut prev_opt = None;
+        for (idx, mexp) in self.macro_expansion.iter().enumerate().rev() {
+            match mexp {
+                MacroExpansion::Argument { scope_color } => {
+                    // the argument has a smaller (or equal) color, meaning this lambda/arg was
+                    // written in an outer scope
+                    if current_call_color > *scope_color {
+                        break;
+                    }
+                }
+                MacroExpansion::Call(c) => {
+                    let MacroCall {
+                        module,
+                        function,
+                        scope_color,
+                        ..
+                    } = &**c;
+                    // If we find a call (same module/fn) above us at a shallower expansion depth,
+                    // without an interceding macro arg/lambda, we are in a macro calling itself.
+                    // If it was a deeper depth, that's fine -- it must have come from elsewhere.
+                    if current_call_color > *scope_color && module == &m && function == &f {
+                        prev_opt = Some(idx);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if let Some(idx) = prev_opt {
+            let msg = format!(
+                "Recursive macro expansion. '{}::{}' cannot recursively expand itself",
+                m, f
+            );
+            let mut diag = diag!(TypeSafety::CannotExpandMacro, (loc, msg));
+            let cycle = self.macro_expansion[idx..]
+                .iter()
+                .filter_map(|case| match case {
+                    MacroExpansion::Call(c) => Some((&c.module, &c.function, &c.invocation)),
+                    MacroExpansion::Argument { .. } => None,
+                });
+            for (prev_m, prev_f, prev_loc) in cycle {
+                let msg = if prev_m == &m && prev_f == &f {
+                    format!("'{}::{}' previously expanded here", prev_m, prev_f)
+                } else {
+                    "From this macro expansion".to_owned()
+                };
+                diag.add_secondary_label((*prev_loc, msg));
+            }
+            self.env.add_diag(diag);
+            false
+        } else {
+            self.macro_expansion
+                .push(MacroExpansion::Call(Box::new(MacroCall {
+                    module: m,
+                    function: f,
+                    invocation: loc,
+                    scope_color: current_call_color,
+                })));
+            true
+        }
+    }
+
+    pub fn pop_macro_expansion(&mut self, loc: Loc, m: &ModuleIdent, f: &FunctionName) -> bool {
+        let c = match self.macro_expansion.pop() {
+            Some(MacroExpansion::Call(c)) => c,
+            _ => {
+                let diag = ice!((
+                    loc,
+                    "ICE macro expansion stack should have a call when leaving a macro expansion"
+                ));
+                self.env.add_diag(diag);
+                return false;
+            }
+        };
+        let MacroCall {
+            module, function, ..
+        } = *c;
+        assert!(
+            m == &module && f == &function,
+            "ICE macro expansion stack should be popped in reverse order"
+        );
+        true
+    }
+
+    pub fn maybe_enter_macro_argument(
+        &mut self,
+        from_macro_argument: Option<N::MacroArgument>,
+        color: Color,
+    ) {
+        if from_macro_argument.is_some() {
+            self.macro_expansion
+                .push(MacroExpansion::Argument { scope_color: color })
+        }
+    }
+
+    pub fn maybe_exit_macro_argument(
+        &mut self,
+        loc: Loc,
+        from_macro_argument: Option<N::MacroArgument>,
+    ) {
+        if from_macro_argument.is_some() {
+            match self.macro_expansion.pop() {
+                Some(MacroExpansion::Argument { .. }) => (),
+                _ => {
+                    let diag = ice!((
+                        loc,
+                        "ICE macro expansion stack should have a lambda when leaving a lambda",
+                    ));
+                    self.env.add_diag(diag);
+                }
+            }
+        }
+    }
+
+    pub fn current_call_color(&self) -> Color {
+        self.use_funs.last().unwrap().color.unwrap()
     }
 
     pub fn reset_for_module_item(&mut self) {
-        assert!(
-            matches!(&self.loop_info, LoopInfo(LoopInfo_::NotInLoop)),
-            "ICE loop_info should be reset after the loop"
-        );
+        self.named_block_map = BTreeMap::new();
         self.return_type = None;
         self.locals = UniqueMap::new();
         self.subst = Subst::empty();
         self.constraints = Constraints::new();
         self.current_function = None;
-    }
-
-    pub fn bind_script_constants(&mut self, constants: &UniqueMap<ConstantName, N::Constant>) {
-        assert!(self.current_script_constants.is_none());
-        self.current_script_constants = Some(constants.ref_map(|cname, cdef| ConstantInfo {
-            attributes: cdef.attributes.clone(),
-            defined_loc: cname.loc(),
-            signature: cdef.signature.clone(),
-        }));
+        self.in_macro_function = false;
+        self.max_variable_color = RefCell::new(0);
+        self.macro_expansion = vec![];
+        self.lambda_expansion = vec![];
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -308,30 +516,22 @@ impl<'env> Context<'env> {
             .push(Constraint::OrderedConstraint(loc, op, t))
     }
 
-    pub fn declare_local(&mut self, mut_: Mutability, var: Var, ty: Type) {
-        let local = Local {
-            mut_,
-            ty,
-            used_mut: None,
-        };
-        self.locals.add(var, local).unwrap()
+    pub fn declare_local(&mut self, _: Mutability, var: Var, ty: Type) {
+        if let Err((_, prev_loc)) = self.locals.add(var, ty) {
+            let msg = format!("ICE duplicate {var:?}. Should have been made unique in naming");
+            self.env
+                .add_diag(ice!((var.loc, msg), (prev_loc, "Previously declared here")));
+        }
     }
 
     pub fn get_local_type(&mut self, var: &Var) -> Type {
-        // should not fail, already checked in naming
-        self.locals.get(var).unwrap().ty.clone()
-    }
+        if !self.locals.contains_key(var) {
+            let msg = format!("ICE unbound {var:?}. Should have failed in naming");
+            self.env.add_diag(ice!((var.loc, msg)));
+            return self.error_type(var.loc);
+        }
 
-    pub fn mark_mutable_usage(&mut self, loc: Loc, var: &Var) -> (Loc, Mutability) {
-        // should not fail, already checked in naming
-        let decl_loc = *self.locals.get_loc(var).unwrap();
-        let local = self.locals.get_mut(var).unwrap();
-        local.used_mut = Some(loc);
-        (decl_loc, local.mut_)
-    }
-
-    pub fn take_locals(&mut self) -> UniqueMap<Var, Local> {
-        std::mem::take(&mut self.locals)
+        self.locals.get(var).unwrap().clone()
     }
 
     pub fn is_current_module(&self, m: &ModuleIdent) -> bool {
@@ -377,18 +577,13 @@ impl<'env> Context<'env> {
 
     /// current_module.is_test_only || current_function.is_test_only || current_function.is_test
     fn is_testing_context(&self) -> bool {
-        // TODO should we store this in the context?
-        let test_only = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::TestOnly));
-        let test = AttributeName_::Known(KnownAttribute::Testing(TestingAttribute::Test));
-
         self.current_module.as_ref().is_some_and(|m| {
             let minfo = self.module_info(m);
-            let is_test_only = minfo.attributes.contains_key_(&test_only);
+            let is_test_only = minfo.attributes.is_test_or_test_only();
             is_test_only
                 || self.current_function.as_ref().is_some_and(|f| {
                     let finfo = minfo.functions.get(f).unwrap();
-                    finfo.attributes.contains_key_(&test_only)
-                        || finfo.attributes.contains_key_(&test)
+                    finfo.attributes.is_test_or_test_only()
                 })
         })
     }
@@ -397,68 +592,86 @@ impl<'env> Context<'env> {
         self.modules.module(m)
     }
 
-    fn struct_definition(&self, m: &ModuleIdent, n: &StructName) -> &StructDefinition {
+    fn struct_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &StructDefinition {
         self.modules.struct_definition(m, n)
     }
 
-    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &StructName) -> &AbilitySet {
+    pub fn struct_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
         self.modules.struct_declared_abilities(m, n)
     }
 
-    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &StructName) -> Loc {
+    pub fn struct_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
         self.modules.struct_declared_loc(m, n)
     }
 
-    pub fn struct_tparams(&self, m: &ModuleIdent, n: &StructName) -> &Vec<StructTypeParameter> {
+    pub fn struct_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
         self.modules.struct_type_parameters(m, n)
     }
 
-    fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
+    fn enum_definition(&self, m: &ModuleIdent, n: &DatatypeName) -> &EnumDefinition {
+        self.modules.enum_definition(m, n)
+    }
+
+    pub fn enum_declared_abilities(&self, m: &ModuleIdent, n: &DatatypeName) -> &AbilitySet {
+        self.modules.enum_declared_abilities(m, n)
+    }
+
+    pub fn enum_declared_loc(&self, m: &ModuleIdent, n: &DatatypeName) -> Loc {
+        self.modules.enum_declared_loc(m, n)
+    }
+
+    pub fn enum_tparams(&self, m: &ModuleIdent, n: &DatatypeName) -> &Vec<DatatypeTypeParameter> {
+        self.modules.enum_type_parameters(m, n)
+    }
+
+    pub fn datatype_kind(&self, m: &ModuleIdent, n: &DatatypeName) -> DatatypeKind {
+        self.modules.datatype_kind(m, n)
+    }
+
+    pub fn function_info(&self, m: &ModuleIdent, n: &FunctionName) -> &FunctionInfo {
         self.modules.function_info(m, n)
     }
 
-    fn constant_info(&mut self, m_opt: &Option<ModuleIdent>, n: &ConstantName) -> &ConstantInfo {
-        let constants = match m_opt {
-            None => self.current_script_constants.as_ref().unwrap(),
-            Some(m) => &self.module_info(m).constants,
-        };
+    pub fn macro_body(&self, m: &ModuleIdent, n: &FunctionName) -> Option<&N::Sequence> {
+        self.macros.get(m)?.get(n)
+    }
+
+    pub fn constant_info(&mut self, m: &ModuleIdent, n: &ConstantName) -> &ConstantInfo {
+        let constants = &self.module_info(m).constants;
         constants.get(n).expect("ICE should have failed in naming")
     }
 
-    pub fn in_loop(&self) -> bool {
-        match &self.loop_info.0 {
-            LoopInfo_::NotInLoop => false,
-            LoopInfo_::BreakTypeUnknown | LoopInfo_::BreakType(_) => true,
+    // pass in a location for a better error location
+    pub fn named_block_type(&mut self, name: BlockLabel, loc: Loc) -> Type {
+        if let Some(ty) = self.named_block_map.get(&name) {
+            ty.clone()
+        } else {
+            let new_type = make_tvar(self, loc);
+            self.named_block_map.insert(name, new_type.clone());
+            new_type
         }
     }
 
-    pub fn get_break_type(&self) -> Option<&Type> {
-        match &self.loop_info.0 {
-            LoopInfo_::NotInLoop | LoopInfo_::BreakTypeUnknown => None,
-            LoopInfo_::BreakType(t) => Some(t),
-        }
+    pub fn named_block_type_opt(&self, name: BlockLabel) -> Option<Type> {
+        self.named_block_map.get(&name).cloned()
     }
 
-    pub fn set_break_type(&mut self, t: Type) {
-        match &self.loop_info.0 {
-            LoopInfo_::NotInLoop => (),
-            LoopInfo_::BreakTypeUnknown | LoopInfo_::BreakType(_) => {
-                self.loop_info.0 = LoopInfo_::BreakType(Box::new(t))
-            }
-        }
+    pub fn next_variable_color(&mut self) -> Color {
+        let max_variable_color: &mut u16 = &mut self.max_variable_color.borrow_mut();
+        *max_variable_color += 1;
+        *max_variable_color
     }
 
-    pub fn enter_loop(&mut self) -> LoopInfo {
-        std::mem::replace(&mut self.loop_info, LoopInfo(LoopInfo_::BreakTypeUnknown))
-    }
-
-    // Reset loop info and return the loop's break type, if it has one
-    pub fn exit_loop(&mut self, old_info: LoopInfo) -> Option<Type> {
-        match std::mem::replace(&mut self.loop_info, old_info).0 {
-            LoopInfo_::NotInLoop => panic!("ICE exit_loop called while not in a loop"),
-            LoopInfo_::BreakTypeUnknown => None,
-            LoopInfo_::BreakType(t) => Some(*t),
-        }
+    pub fn set_max_variable_color(&self, color: Color) {
+        let max_variable_color: &mut u16 = &mut self.max_variable_color.borrow_mut();
+        assert!(
+            *max_variable_color <= color,
+            "ICE a new, lower color means reusing variables \
+            {} <= {}",
+            *max_variable_color,
+            color,
+        );
+        *max_variable_color = color;
     }
 }
 
@@ -582,6 +795,13 @@ fn error_format_impl_(b_: &Type_, subst: &Subst, nested: bool) -> String {
             };
             format!("{}{}", n, tys_str)
         }
+        Fun(args, result) => {
+            format!(
+                "|{}| -> {}",
+                format_comma(args.iter().map(|t| error_format_nested(t, subst))),
+                error_format_nested(result, subst)
+            )
+        }
         Param(tp) => tp.user_specified_name.value.to_string(),
         Ref(mut_, ty) => format!(
             "&{}{}",
@@ -617,16 +837,28 @@ pub fn infer_abilities<const INFO_PASS: bool>(
             let (declared_abilities, ty_args) = match &n.value {
                 TypeName_::Multiple(_) => (AbilitySet::collection(loc), ty_args),
                 TypeName_::Builtin(b) => (b.value.declared_abilities(b.loc), ty_args),
-                TypeName_::ModuleType(m, n) => {
-                    let declared_abilities = context.struct_declared_abilities(m, n).clone();
-                    let non_phantom_ty_args = ty_args
-                        .into_iter()
-                        .zip(context.struct_type_parameters(m, n))
-                        .filter(|(_, param)| !param.is_phantom)
-                        .map(|(arg, _)| arg)
-                        .collect::<Vec<_>>();
-                    (declared_abilities, non_phantom_ty_args)
-                }
+                TypeName_::ModuleType(m, n) => match context.datatype_kind(m, n) {
+                    DatatypeKind::Struct => {
+                        let declared_abilities = context.struct_declared_abilities(m, n).clone();
+                        let non_phantom_ty_args = ty_args
+                            .into_iter()
+                            .zip(context.struct_type_parameters(m, n))
+                            .filter(|(_, param)| !param.is_phantom)
+                            .map(|(arg, _)| arg)
+                            .collect::<Vec<_>>();
+                        (declared_abilities, non_phantom_ty_args)
+                    }
+                    DatatypeKind::Enum => {
+                        let declared_abilities = context.enum_declared_abilities(m, n).clone();
+                        let non_phantom_ty_args = ty_args
+                            .into_iter()
+                            .zip(context.enum_type_parameters(m, n))
+                            .filter(|(_, param)| !param.is_phantom)
+                            .map(|(arg, _)| arg)
+                            .collect::<Vec<_>>();
+                        (declared_abilities, non_phantom_ty_args)
+                    }
+                },
             };
             let ty_args_abilities = ty_args
                 .into_iter()
@@ -640,6 +872,7 @@ pub fn infer_abilities<const INFO_PASS: bool>(
             }))
             .unwrap()
         }
+        T::Fun(_, _) => AbilitySet::functions(loc),
     }
 }
 
@@ -647,12 +880,19 @@ pub fn infer_abilities<const INFO_PASS: bool>(
 // - the declared location where abilities are added (if applicable)
 // - the set of declared abilities
 // - its type arguments
-fn debug_abilities_info(context: &Context, ty: &Type) -> (Option<Loc>, AbilitySet, Vec<Type>) {
+fn debug_abilities_info(context: &mut Context, ty: &Type) -> (Option<Loc>, AbilitySet, Vec<Type>) {
     use Type_ as T;
     let loc = ty.loc;
     match &ty.value {
         T::Unit | T::Ref(_, _) => (None, AbilitySet::references(loc), vec![]),
-        T::Var(_) => panic!("ICE call unfold_type before debug_abilities_info"),
+        T::Var(_) => {
+            let diag = ice!((
+                loc,
+                "ICE did not call unfold_type before debug_abiliites_info"
+            ));
+            context.env.add_diag(diag);
+            (None, AbilitySet::all(loc), vec![])
+        }
         T::UnresolvedError | T::Anything => (None, AbilitySet::all(loc), vec![]),
         T::Param(TParam {
             abilities,
@@ -665,11 +905,21 @@ fn debug_abilities_info(context: &Context, ty: &Type) -> (Option<Loc>, AbilitySe
         T::Apply(_, sp!(_, TypeName_::Builtin(b)), ty_args) => {
             (None, b.value.declared_abilities(b.loc), ty_args.clone())
         }
-        T::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), ty_args) => (
-            Some(context.struct_declared_loc(m, n)),
-            context.struct_declared_abilities(m, n).clone(),
-            ty_args.clone(),
-        ),
+        T::Apply(_, sp!(_, TypeName_::ModuleType(m, n)), ty_args) => {
+            match context.datatype_kind(m, n) {
+                DatatypeKind::Struct => (
+                    Some(context.struct_declared_loc(m, n)),
+                    context.struct_declared_abilities(m, n).clone(),
+                    ty_args.clone(),
+                ),
+                DatatypeKind::Enum => (
+                    Some(context.enum_declared_loc(m, n)),
+                    context.enum_declared_abilities(m, n).clone(),
+                    ty_args.clone(),
+                ),
+            }
+        }
+        T::Fun(_, _) => (None, AbilitySet::functions(loc), vec![]),
     }
 }
 
@@ -690,7 +940,7 @@ pub fn make_struct_type(
     context: &mut Context,
     loc: Loc,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     ty_args_opt: Option<Vec<Type>>,
 ) -> (Type, Vec<Type>) {
     let tn = sp(loc, TypeName_::ModuleType(*m, *n));
@@ -709,7 +959,7 @@ pub fn make_struct_type(
             let tapply_ = instantiate_apply(context, loc, None, tn, ty_args);
             let targs = match &tapply_ {
                 Type_::Apply(_, _, targs) => targs.clone(),
-                _ => panic!("ICE instantiate_apply returned non Apply"),
+                _ => unreachable!(),
             };
             (sp(loc, tapply_), targs)
         }
@@ -736,11 +986,11 @@ pub fn make_expr_list_tvars(
 }
 
 // ty_args should come from make_struct_type
-pub fn make_field_types(
+pub fn make_struct_field_types(
     context: &mut Context,
     _loc: Loc,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     ty_args: Vec<Type>,
 ) -> N::StructFields {
     let sdef = context.struct_definition(m, n);
@@ -754,20 +1004,19 @@ pub fn make_field_types(
     );
     match &sdef.fields {
         N::StructFields::Native(loc) => N::StructFields::Native(*loc),
-        N::StructFields::Defined(m) => {
-            N::StructFields::Defined(m.ref_map(|_, (idx, field_ty)| {
-                (*idx, subst_tparams(tparam_subst, field_ty.clone()))
-            }))
-        }
+        N::StructFields::Defined(positional, m) => N::StructFields::Defined(
+            *positional,
+            m.ref_map(|_, (idx, field_ty)| (*idx, subst_tparams(tparam_subst, field_ty.clone()))),
+        ),
     }
 }
 
 // ty_args should come from make_struct_type
-pub fn make_field_type(
+pub fn make_struct_field_type(
     context: &mut Context,
     loc: Loc,
     m: &ModuleIdent,
-    n: &StructName,
+    n: &DatatypeName,
     ty_args: Vec<Type>,
     field: &Field,
 ) -> Type {
@@ -783,7 +1032,7 @@ pub fn make_field_type(
             ));
             return context.error_type(loc);
         }
-        N::StructFields::Defined(m) => m,
+        N::StructFields::Defined(_, m) => m,
     };
     match fields_map.get(field).cloned() {
         None => {
@@ -807,6 +1056,76 @@ pub fn make_field_type(
     }
 }
 
+pub fn find_index_funs(context: &mut Context, type_name: &TypeName) -> Option<IndexSyntaxMethods> {
+    let module_ident = match &type_name.value {
+        TypeName_::Multiple(_) => return None,
+        TypeName_::Builtin(builtin_name) => context.env.primitive_definer(builtin_name.value)?,
+        TypeName_::ModuleType(m, _) => m,
+    };
+    let module_defn = context.module_info(module_ident);
+    let entry = module_defn.syntax_methods.get(type_name)?;
+    let index = entry.index.clone()?;
+    Some(*index)
+}
+
+//**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+pub fn make_enum_type(
+    context: &mut Context,
+    loc: Loc,
+    mident: &ModuleIdent,
+    enum_: &DatatypeName,
+    ty_args_opt: Option<Vec<Type>>,
+) -> (Type, Vec<Type>) {
+    let tn = sp(loc, TypeName_::ModuleType(*mident, *enum_));
+    let edef = context.enum_definition(mident, enum_);
+    match ty_args_opt {
+        None => {
+            let constraints = edef
+                .type_parameters
+                .iter()
+                .map(|tp| (loc, tp.param.abilities.clone()))
+                .collect();
+            let ty_args = make_tparams(context, loc, TVarCase::Base, constraints);
+            (sp(loc, Type_::Apply(None, tn, ty_args.clone())), ty_args)
+        }
+        Some(ty_args) => {
+            let tapply_ = instantiate_apply(context, loc, None, tn, ty_args);
+            let targs = match &tapply_ {
+                Type_::Apply(_, _, targs) => targs.clone(),
+                _ => panic!("ICE instantiate_apply returned non Apply"),
+            };
+            (sp(loc, tapply_), targs)
+        }
+    }
+}
+
+// ty_args should come from make_enum_type
+pub fn make_variant_field_types(
+    context: &mut Context,
+    _loc: Loc,
+    mident: &ModuleIdent,
+    enum_: &DatatypeName,
+    variant: &VariantName,
+    ty_args: Vec<Type>,
+) -> N::VariantFields {
+    let edef = context.enum_definition(mident, enum_);
+    let tparam_subst = &make_tparam_subst(edef.type_parameters.iter().map(|tp| &tp.param), ty_args);
+    let vdef = edef
+        .variants
+        .get(variant)
+        .expect("ICE should have failed during naming");
+    match &vdef.fields {
+        N::VariantFields::Empty => N::VariantFields::Empty,
+        N::VariantFields::Defined(is_positional, m) => N::VariantFields::Defined(
+            *is_positional,
+            m.ref_map(|_, (idx, field_ty)| (*idx, subst_tparams(tparam_subst, field_ty.clone()))),
+        ),
+    }
+}
+
 //**************************************************************************************************
 // Constants
 //**************************************************************************************************
@@ -814,10 +1133,10 @@ pub fn make_field_type(
 pub fn make_constant_type(
     context: &mut Context,
     loc: Loc,
-    m: &Option<ModuleIdent>,
+    m: &ModuleIdent,
     c: &ConstantName,
 ) -> Type {
-    let in_current_module = m == &context.current_module;
+    let in_current_module = Some(m) == context.current_module.as_ref();
     let (defined_loc, signature) = {
         let ConstantInfo {
             attributes: _,
@@ -827,10 +1146,7 @@ pub fn make_constant_type(
         (*defined_loc, signature.clone())
     };
     if !in_current_module {
-        let msg = match m {
-            None => format!("Invalid access of '{}'", c),
-            Some(mident) => format!("Invalid access of '{}::{}'", mident, c),
-        };
+        let msg = format!("Invalid access of '{}::{}'", m, c);
         let internal_msg = "Constants are internal to their module, and cannot can be accessed \
                             outside of their module";
         context.env.add_diag(diag!(
@@ -854,26 +1170,20 @@ pub fn make_method_call_type(
     tn: &TypeName,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
-) -> Option<(
-    Loc,
-    ModuleIdent,
-    FunctionName,
-    Vec<Type>,
-    Vec<(Var, Type)>,
-    Type,
-)> {
-    let target_function_opt = context
-        .use_funs
-        .last()
-        .unwrap()
-        .use_funs
-        .get(tn)
-        .and_then(|methods| Some(methods.get(&method)?.target_function));
+) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType)> {
+    let target_function_opt = context.find_method_and_mark_used(tn, method);
     // try to find a function in the defining module for errors
     let Some((target_m, target_f)) = target_function_opt else {
-        let lhs_ty_str = error_format_nested(lhs_ty, &Subst::empty());
+        let lhs_ty_str = error_format_nested(lhs_ty, &context.subst);
         let defining_module = match &tn.value {
-            TypeName_::Multiple(_) => panic!("ICE method on tuple"),
+            TypeName_::Multiple(_) => {
+                let diag = ice!((
+                    loc,
+                    format!("ICE method on tuple type {}", debug_display!(tn))
+                ));
+                context.env.add_diag(diag);
+                return None;
+            }
             TypeName_::Builtin(sp!(_, bt_)) => context.env.primitive_definer(*bt_),
             TypeName_::ModuleType(m, _) => Some(m),
         };
@@ -898,7 +1208,7 @@ pub fn make_method_call_type(
             };
             let arg_msg = match first_ty {
                 Some(ty) => {
-                    let tys_str = error_format(&ty, &Subst::empty());
+                    let tys_str = error_format(&ty, &context.subst);
                     format!("but it has a different type for its first argument, {tys_str}")
                 }
                 None => "but it takes no arguments".to_owned(),
@@ -934,18 +1244,10 @@ pub fn make_method_call_type(
         }
         return None;
     };
-    // mark the method as used
-    context
-        .use_funs
-        .last_mut()
-        .unwrap()
-        .unused
-        .remove(&(tn.clone(), method));
 
-    let (defined_loc, ty_args, params, return_ty) =
-        make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
+    let function_ty = make_function_type(context, loc, &target_m, &target_f, ty_args_opt);
 
-    Some((defined_loc, target_m, target_f, ty_args, params, return_ty))
+    Some((target_m, target_f, function_ty))
 }
 
 pub fn make_function_type(
@@ -954,13 +1256,14 @@ pub fn make_function_type(
     m: &ModuleIdent,
     f: &FunctionName,
     ty_args_opt: Option<Vec<Type>>,
-) -> (Loc, Vec<Type>, Vec<(Var, Type)>, Type) {
+) -> ResolvedFunctionType {
     let in_current_module = match &context.current_module {
         Some(current) => m == current,
         None => false,
     };
-    let constraints: Vec<_> = context
-        .function_info(m, f)
+    let finfo = context.function_info(m, f);
+    let macro_ = finfo.macro_;
+    let constraints: Vec<_> = finfo
         .signature
         .type_parameters
         .iter()
@@ -969,10 +1272,20 @@ pub fn make_function_type(
 
     let ty_args = match ty_args_opt {
         None => {
+            let case = if macro_.is_some() {
+                TVarCase::Macro
+            } else {
+                TVarCase::Base
+            };
             let locs_constraints = constraints.into_iter().map(|k| (loc, k)).collect();
-            make_tparams(context, loc, TVarCase::Base, locs_constraints)
+            make_tparams(context, loc, case, locs_constraints)
         }
         Some(ty_args) => {
+            let case = if macro_.is_some() {
+                TArgCase::Macro
+            } else {
+                TArgCase::Fun
+            };
             let ty_args = check_type_argument_arity(
                 context,
                 loc,
@@ -980,7 +1293,7 @@ pub fn make_function_type(
                 ty_args,
                 &constraints,
             );
-            instantiate_type_args(context, loc, None, ty_args, constraints)
+            instantiate_type_args(context, loc, case, ty_args, constraints)
         }
     };
 
@@ -998,21 +1311,28 @@ pub fn make_function_type(
     let public_for_testing =
         public_testing_visibility(context.env, context.current_package, f, finfo.entry);
     let is_testing_context = context.is_testing_context();
+    let supports_public_package = context
+        .env
+        .supports_feature(context.current_package, FeatureGate::PublicPackage);
     match finfo.visibility {
         _ if is_testing_context && public_for_testing.is_some() => (),
         Visibility::Internal if in_current_module => (),
         Visibility::Internal => {
+            let friend_or_package = if supports_public_package {
+                Visibility::PACKAGE
+            } else {
+                Visibility::FRIEND
+            };
             let internal_msg = format!(
-                "This function is internal to its module. Only '{}', '{}', and '{}' functions can \
+                "This function is internal to its module. Only '{}' and '{}' functions can \
                  be called outside of their module",
                 Visibility::PUBLIC,
-                Visibility::FRIEND,
-                Visibility::PACKAGE
+                friend_or_package,
             );
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, format!("Invalid call to internal function '{m}::{f}'")),
                 (defined_loc, internal_msg),
             );
         }
@@ -1022,6 +1342,12 @@ pub fn make_function_type(
             context.record_current_module_as_friend(m, loc);
         }
         Visibility::Package(vis_loc) => {
+            let msg = format!(
+                "Invalid call to '{}' visible function '{}::{}'",
+                Visibility::PACKAGE,
+                m,
+                f
+            );
             let internal_msg = format!(
                 "A '{}' function can only be called from the same address and package as \
                 module '{}' in package '{}'. This call is from address '{}' in package '{}'",
@@ -1045,28 +1371,37 @@ pub fn make_function_type(
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Friend(_) if in_current_module || context.current_module_is_a_friend_of(m) => {}
         Visibility::Friend(vis_loc) => {
-            let internal_msg = format!(
-                "This function can only be called from a 'friend' of module '{}'",
-                m
+            let msg = format!(
+                "Invalid call to '{}' visible function '{m}::{f}'",
+                Visibility::FRIEND,
             );
+            let internal_msg =
+                format!("This function can only be called from a 'friend' of module '{m}'",);
             visibility_error(
                 context,
                 public_for_testing,
-                (loc, format!("Invalid call to '{}::{}'", m, f)),
+                (loc, msg),
                 (vis_loc, internal_msg),
             );
         }
         Visibility::Public(_) => (),
     };
-    (defined_loc, ty_args, params, return_ty)
+    ResolvedFunctionType {
+        declared: defined_loc,
+        macro_,
+        ty_args,
+        params,
+        return_: return_ty,
+    }
 }
 
+#[derive(Clone, Copy)]
 pub enum PublicForTesting {
     /// The function is entry, so it can be called in unit tests
     Entry(Loc),
@@ -1121,6 +1456,35 @@ fn visibility_error(
         }
     }
     context.env.add_diag(diag)
+}
+
+pub fn check_call_arity<S: std::fmt::Display, F: Fn() -> S>(
+    context: &mut Context,
+    loc: Loc,
+    msg: F,
+    arity: usize,
+    argloc: Loc,
+    given_len: usize,
+) {
+    if given_len == arity {
+        return;
+    }
+    let code = if given_len < arity {
+        TypeSafety::TooFewArguments
+    } else {
+        TypeSafety::TooManyArguments
+    };
+    let cmsg = format!(
+        "{}. The call expected {} argument(s) but got {}",
+        msg(),
+        arity,
+        given_len
+    );
+    context.env.add_diag(diag!(
+        code,
+        (loc, cmsg),
+        (argloc, format!("Found {} argument(s) here", given_len)),
+    ));
 }
 
 //**************************************************************************************************
@@ -1336,7 +1700,7 @@ fn solve_base_type_constraint(context: &mut Context, loc: Loc, msg: String, ty: 
                 (tyloc, tmsg)
             ))
         }
-        UnresolvedError | Anything | Param(_) | Apply(_, _, _) => (),
+        UnresolvedError | Anything | Param(_) | Apply(_, _, _) | Fun(_, _) => (),
     }
 }
 
@@ -1357,7 +1721,7 @@ fn solve_single_type_constraint(context: &mut Context, loc: Loc, msg: String, ty
                 (tyloc, tmsg)
             ))
         }
-        UnresolvedError | Anything | Ref(_, _) | Param(_) | Apply(_, _, _) => (),
+        UnresolvedError | Anything | Ref(_, _) | Param(_) | Apply(_, _, _) | Fun(_, _) => (),
     }
 }
 
@@ -1431,17 +1795,51 @@ pub fn subst_tparams(subst: &TParamSubst, sp!(loc, t_): Type) -> Type {
                 .collect();
             sp(loc, Apply(k, n, ftys))
         }
+        Fun(args, result) => {
+            let ftys = args.into_iter().map(|t| subst_tparams(subst, t)).collect();
+            let fres = Box::new(subst_tparams(subst, *result));
+            sp(loc, Fun(ftys, fres))
+        }
+    }
+}
+
+pub fn all_tparams(sp!(_, t_): Type) -> BTreeSet<TParam> {
+    use Type_::*;
+    match t_ {
+        Unit | UnresolvedError | Anything => BTreeSet::new(),
+        Var(_) => panic!("ICE tvar in all_tparams"),
+        Ref(_, t) => all_tparams(*t),
+        Param(tp) => BTreeSet::from([tp]),
+        Apply(_, _, ty_args) => {
+            let mut tparams = BTreeSet::new();
+            for arg in ty_args {
+                tparams.append(&mut all_tparams(arg));
+            }
+            tparams
+        }
+        Fun(args, result) => {
+            let mut tparams = all_tparams(*result);
+            for arg in args {
+                tparams.append(&mut all_tparams(arg));
+            }
+            tparams
+        }
     }
 }
 
 pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     match t_ {
-        x @ UnresolvedError | x @ Unit | x @ Anything | x @ Param(_) => sp(loc, x),
+        x @ (UnresolvedError | Unit | Anything | Param(_)) => sp(loc, x),
         Ref(mut_, t) => sp(loc, Ref(mut_, Box::new(ready_tvars(subst, *t)))),
         Apply(k, n, tys) => {
             let tys = tys.into_iter().map(|t| ready_tvars(subst, t)).collect();
             sp(loc, Apply(k, n, tys))
+        }
+        Fun(args, result) => {
+            let args = args.into_iter().map(|t| ready_tvars(subst, t)).collect();
+            let result = Box::new(ready_tvars(subst, *result));
+            sp(loc, Fun(args, result))
         }
         Var(i) => {
             let last_var = forward_tvar(subst, i);
@@ -1458,29 +1856,87 @@ pub fn ready_tvars(subst: &Subst, sp!(loc, t_): Type) -> Type {
 // Instantiate
 //**************************************************************************************************
 
-pub fn instantiate(context: &mut Context, sp!(loc, t_): Type) -> Type {
+pub fn instantiate(context: &mut Context, ty: Type) -> Type {
+    let keep_tanything = false;
+    instantiate_impl(context, keep_tanything, ty)
+}
+
+pub fn instantiate_keep_tanything(context: &mut Context, ty: Type) -> Type {
+    let keep_tanything = true;
+    instantiate_impl(context, keep_tanything, ty)
+}
+
+fn instantiate_apply(
+    context: &mut Context,
+    loc: Loc,
+    abilities_opt: Option<AbilitySet>,
+    n: TypeName,
+    ty_args: Vec<Type>,
+) -> Type_ {
+    let keep_tanything = false;
+    instantiate_apply_impl(context, keep_tanything, loc, abilities_opt, n, ty_args)
+}
+
+fn instantiate_type_args(
+    context: &mut Context,
+    loc: Loc,
+    case: TArgCase,
+    ty_args: Vec<Type>,
+    constraints: Vec<AbilitySet>,
+) -> Vec<Type> {
+    let keep_tanything = false;
+    instantiate_type_args_impl(context, keep_tanything, loc, case, ty_args, constraints)
+}
+
+/// Instantiates a type, applying constraints to type arguments, and binding type arguments to
+/// type variables
+/// keep_tanything is an annoying case to handle macro signature checking, were we want to delay
+/// instantiating Anything to a type varabile until _after_ the macro is expanded
+fn instantiate_impl(context: &mut Context, keep_tanything: bool, sp!(loc, t_): Type) -> Type {
     use Type_::*;
     let it_ = match t_ {
         Unit => Unit,
         UnresolvedError => UnresolvedError,
-        Anything => make_tvar(context, loc).value,
+        Anything => {
+            if keep_tanything {
+                Anything
+            } else {
+                make_tvar(context, loc).value
+            }
+        }
+
         Ref(mut_, b) => {
             let inner = *b;
             context.add_base_type_constraint(loc, "Invalid reference type", inner.clone());
-            Ref(mut_, Box::new(instantiate(context, inner)))
+            Ref(
+                mut_,
+                Box::new(instantiate_impl(context, keep_tanything, inner)),
+            )
         }
         Apply(abilities_opt, n, ty_args) => {
-            instantiate_apply(context, loc, abilities_opt, n, ty_args)
+            instantiate_apply_impl(context, keep_tanything, loc, abilities_opt, n, ty_args)
         }
+        Fun(args, result) => Fun(
+            args.into_iter()
+                .map(|t| instantiate_impl(context, keep_tanything, t))
+                .collect(),
+            Box::new(instantiate_impl(context, keep_tanything, *result)),
+        ),
         x @ Param(_) => x,
-        Var(_) => panic!("ICE instantiate type variable"),
+        // instantiating a var really shouldn't happen... but it does because of macro expansion
+        // We expand macros before type checking, but after the arguments to the macro are type
+        // checked (otherwise we couldn't properly do method syntax macros). As a result, we are
+        // substituting type variables into the macro body, and might hit one while expanding a
+        // type in the macro where a type parameter's argument had a type variable.
+        x @ Var(_) => x,
     };
     sp(loc, it_)
 }
 
 // abilities_opt is expected to be None for non primitive types
-fn instantiate_apply(
+fn instantiate_apply_impl(
     context: &mut Context,
+    keep_tanything: bool,
     loc: Loc,
     abilities_opt: Option<AbilitySet>,
     n: TypeName,
@@ -1492,14 +1948,24 @@ fn instantiate_apply(
             debug_assert!(abilities_opt.is_none(), "ICE instantiated expanded type");
             (0..*len).map(|_| AbilitySet::empty()).collect()
         }
-        sp!(_, N::TypeName_::ModuleType(m, s)) => {
+        sp!(_, N::TypeName_::ModuleType(m, n)) => {
             debug_assert!(abilities_opt.is_none(), "ICE instantiated expanded type");
-            let tps = context.struct_tparams(m, s);
+            let tps = match context.datatype_kind(m, n) {
+                DatatypeKind::Struct => context.struct_tparams(m, n),
+                DatatypeKind::Enum => context.enum_tparams(m, n),
+            };
             tps.iter().map(|tp| tp.param.abilities.clone()).collect()
         }
     };
 
-    let tys = instantiate_type_args(context, loc, Some(&n.value), ty_args, tparam_constraints);
+    let tys = instantiate_type_args_impl(
+        context,
+        keep_tanything,
+        loc,
+        TArgCase::Apply(&n.value),
+        ty_args,
+        tparam_constraints,
+    );
     Type_::Apply(abilities_opt, n, tys)
 }
 
@@ -1508,10 +1974,11 @@ fn instantiate_apply(
 // This might be needed for any variance case, and I THINK that it should be fine without it
 // BUT I'm adding it as a safeguard against instantiating twice. Can always remove once this
 // stabilizes
-fn instantiate_type_args(
+fn instantiate_type_args_impl(
     context: &mut Context,
+    keep_tanything: bool,
     loc: Loc,
-    n: Option<&TypeName_>,
+    case: TArgCase,
     mut ty_args: Vec<Type>,
     constraints: Vec<AbilitySet>,
 ) -> Vec<Type> {
@@ -1521,16 +1988,21 @@ fn instantiate_type_args(
         .zip(&ty_args)
         .map(|(abilities, t)| (t.loc, abilities))
         .collect();
-    let tvar_case = match n {
-        Some(TypeName_::Multiple(_)) => {
+    let tvar_case = match case {
+        TArgCase::Apply(TypeName_::Multiple(_)) => {
             TVarCase::Single("Invalid expression list type argument".to_owned())
         }
-        None | Some(TypeName_::Builtin(_)) | Some(TypeName_::ModuleType(_, _)) => TVarCase::Base,
+        TArgCase::Fun
+        | TArgCase::Apply(TypeName_::Builtin(_))
+        | TArgCase::Apply(TypeName_::ModuleType(_, _)) => TVarCase::Base,
+        TArgCase::Macro => TVarCase::Macro,
     };
+    // TODO in many cases we likely immediatley fill these type variables in with the type
+    // arguments. We could maybe just not create them in the first place in some instances
     let tvars = make_tparams(context, loc, tvar_case, locs_constraints);
     ty_args = ty_args
         .into_iter()
-        .map(|t| instantiate(context, t))
+        .map(|t| instantiate_impl(context, keep_tanything, t))
         .collect();
 
     assert!(ty_args.len() == tvars.len());
@@ -1586,6 +2058,13 @@ fn check_type_argument_arity<F: FnOnce() -> String>(
 enum TVarCase {
     Single(String),
     Base,
+    Macro,
+}
+
+enum TArgCase<'a> {
+    Apply(&'a TypeName_),
+    Fun,
+    Macro,
 }
 
 fn make_tparams(
@@ -1604,10 +2083,32 @@ fn make_tparams(
                 TVarCase::Base => {
                     context.add_base_type_constraint(loc, "Invalid type argument", tvar.clone())
                 }
+                TVarCase::Macro => (),
             };
             tvar
         })
         .collect()
+}
+
+// used in macros to make the signatures consistent with the bodies, in that we don't check
+// constraints until application
+pub fn give_tparams_all_abilities(sp!(_, ty_): &mut Type) {
+    match ty_ {
+        Type_::Unit | Type_::Var(_) | Type_::UnresolvedError | Type_::Anything => (),
+        Type_::Ref(_, inner) => give_tparams_all_abilities(inner),
+        Type_::Apply(_, _, ty_args) => {
+            for ty_arg in ty_args {
+                give_tparams_all_abilities(ty_arg)
+            }
+        }
+        Type_::Fun(args, ret) => {
+            for arg in args {
+                give_tparams_all_abilities(arg)
+            }
+            give_tparams_all_abilities(ret)
+        }
+        Type_::Param(_) => *ty_ = Type_::Anything,
+    }
 }
 
 //**************************************************************************************************
@@ -1618,13 +2119,16 @@ fn make_tparams(
 pub enum TypingError {
     SubtypeError(Box<Type>, Box<Type>),
     Incompatible(Box<Type>, Box<Type>),
+    InvariantError(Box<Type>, Box<Type>),
     ArityMismatch(usize, Box<Type>, usize, Box<Type>),
+    FunArityMismatch(usize, Box<Type>, usize, Box<Type>),
     RecursiveType(Loc),
 }
 
 #[derive(Clone, Copy, Debug)]
 enum TypingCase {
     Join,
+    Invariant,
     Subtype,
 }
 
@@ -1634,6 +2138,10 @@ pub fn subtype(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), Ty
 
 pub fn join(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), TypingError> {
     join_impl(subst, TypingCase::Join, lhs, rhs)
+}
+
+pub fn invariant(subst: Subst, lhs: &Type, rhs: &Type) -> Result<(Subst, Type), TypingError> {
+    join_impl(subst, TypingCase::Invariant, lhs, rhs)
 }
 
 fn join_impl(
@@ -1656,6 +2164,13 @@ fn join_impl(
                     // if 1 is imm and 2 is mut, use loc1. Else, loc2
                     let loc = if !*mut1 && *mut2 { *loc1 } else { *loc2 };
                     (loc, *mut1 && *mut2)
+                }
+                (Invariant, mut1, mut2) if mut1 == mut2 => (*loc1, *mut1),
+                (Invariant, _mut1, _mut2) => {
+                    return Err(TypingError::InvariantError(
+                        Box::new(lhs.clone()),
+                        Box::new(rhs.clone()),
+                    ))
                 }
                 // imm <: imm
                 // mut <: imm
@@ -1699,6 +2214,24 @@ fn join_impl(
             );
             let (subst, tys) = join_impl_types(subst, case, tys1, tys2)?;
             Ok((subst, sp(*loc, Apply(k2.clone(), n2.clone(), tys))))
+        }
+        (sp!(_, Fun(a1, _)), sp!(_, Fun(a2, _))) if a1.len() != a2.len() => {
+            Err(TypingError::FunArityMismatch(
+                a1.len(),
+                Box::new(lhs.clone()),
+                a2.len(),
+                Box::new(rhs.clone()),
+            ))
+        }
+        (sp!(_, Fun(a1, r1)), sp!(loc, Fun(a2, r2))) => {
+            // TODO this is going to likely lead to some strange error locations/messages
+            // since the RHS in subtyping is currently assumed to be an annotation
+            let (subst, args) = match case {
+                Join | Invariant => join_impl_types(subst, case, a1, a2)?,
+                Subtype => join_impl_types(subst, case, a2, a1)?,
+            };
+            let (subst, result) = join_impl(subst, case, r1, r2)?;
+            Ok((subst, sp(*loc, Fun(args, Box::new(result)))))
         }
         (sp!(loc1, Var(id1)), sp!(loc2, Var(id2))) => {
             if *id1 == *id2 {
@@ -1846,6 +2379,13 @@ fn join_bind_tvar(subst: &mut Subst, loc: Loc, tvar: TVar, ty: Type) -> Result<b
                 .iter()
                 .rev()
                 .for_each(|inner| used_tvars(used, inner)),
+            T::Fun(inner_args, inner_ret) => {
+                inner_args
+                    .iter()
+                    .rev()
+                    .for_each(|inner| used_tvars(used, inner));
+                used_tvars(used, inner_ret)
+            }
             T::Unit | T::Param(_) | T::Anything | T::UnresolvedError => (),
         }
     }

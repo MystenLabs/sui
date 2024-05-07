@@ -7,15 +7,12 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
-    struct Pub has key, store {
+    public struct Pub has key, store {
         id: UID,
         value: u64,
     }
 
-    struct Cup<phantom T> has key, store {
+    public struct Cup<phantom T> has key, store {
         id: UID,
     }
 

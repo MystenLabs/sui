@@ -10,19 +10,15 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
     }
 
-    struct C1 has key, store {
+    public struct C1 has key, store {
         id: UID,
     }
 
-    struct C2 has key, store {
+    public struct C2 has key, store {
         id: UID,
     }
 

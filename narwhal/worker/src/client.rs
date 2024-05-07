@@ -1,22 +1,52 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use arc_swap::{ArcSwap, ArcSwapOption};
+use mysten_metrics::metered_channel::Sender;
+use mysten_network::{multiaddr::Protocol, Multiaddr};
 use std::{
     collections::{btree_map::Entry, BTreeMap},
     net::Ipv4Addr,
     sync::{Arc, Mutex},
 };
-
-use arc_swap::ArcSwap;
-use mysten_metrics::metered_channel::Sender;
-use mysten_network::{multiaddr::Protocol, Multiaddr};
 use thiserror::Error;
+use tokio::time::{sleep, timeout, Duration};
 use tracing::info;
 use types::{Transaction, TxResponse};
 
-/// Uses a map to allow running multiple Narwhal instances in the same process.
-static LOCAL_NARWHAL_CLIENTS: Mutex<BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>> =
-    Mutex::new(BTreeMap::new());
+#[cfg(msim)]
+mod static_client_cache {
+    use super::*;
+    thread_local! {
+        /// Uses a map to allow running multiple Narwhal instances in the same process.
+        static LOCAL_NARWHAL_CLIENTS: Mutex<BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>> =
+            Mutex::new(BTreeMap::new());
+    }
+
+    pub(super) fn with_clients<T>(
+        f: impl FnOnce(&mut BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>) -> T,
+    ) -> T {
+        LOCAL_NARWHAL_CLIENTS.with(|clients| {
+            let mut clients = clients.lock().unwrap();
+            f(&mut clients)
+        })
+    }
+}
+
+#[cfg(not(msim))]
+mod static_client_cache {
+    use super::*;
+    /// Uses a map to allow running multiple Narwhal instances in the same process.
+    static LOCAL_NARWHAL_CLIENTS: Mutex<BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>> =
+        Mutex::new(BTreeMap::new());
+
+    pub(super) fn with_clients<T>(
+        f: impl FnOnce(&mut BTreeMap<Multiaddr, Arc<ArcSwap<LocalNarwhalClient>>>) -> T,
+    ) -> T {
+        let mut clients = LOCAL_NARWHAL_CLIENTS.lock().unwrap();
+        f(&mut clients)
+    }
+}
 
 /// The maximum allowed size of transactions into Narwhal.
 /// TODO: maybe move to TxValidator?
@@ -37,6 +67,48 @@ pub enum NarwhalError {
 
 /// TODO: add NarwhalClient trait and implement RemoteNarwhalClient with grpc.
 
+/// A Narwhal client that instantiates LocalNarwhalClient lazily.
+pub struct LazyNarwhalClient {
+    /// Outer ArcSwapOption allows initialization after the first connection to Narwhal.
+    /// Inner ArcSwap allows Narwhal restarts across epoch changes.
+    pub client: ArcSwapOption<ArcSwap<LocalNarwhalClient>>,
+    pub addr: Multiaddr,
+}
+
+impl LazyNarwhalClient {
+    /// Lazily instantiates LocalNarwhalClient keyed by the address of the Narwhal worker.
+    pub fn new(addr: Multiaddr) -> Self {
+        Self {
+            client: ArcSwapOption::empty(),
+            addr,
+        }
+    }
+
+    pub async fn get(&self) -> Arc<ArcSwap<LocalNarwhalClient>> {
+        // Narwhal may not have started and created LocalNarwhalClient, so retry in a loop.
+        // Retries should only happen on Sui process start.
+        const NARWHAL_WORKER_START_TIMEOUT: Duration = Duration::from_secs(30);
+        if let Ok(client) = timeout(NARWHAL_WORKER_START_TIMEOUT, async {
+            loop {
+                match LocalNarwhalClient::get_global(&self.addr) {
+                    Some(c) => return c,
+                    None => {
+                        sleep(Duration::from_millis(100)).await;
+                    }
+                };
+            }
+        })
+        .await
+        {
+            return client;
+        }
+        panic!(
+            "Timed out after {:?} waiting for Narwhal worker ({}) to start!",
+            NARWHAL_WORKER_START_TIMEOUT, self.addr,
+        );
+    }
+}
+
 /// A client that connects to Narwhal locally.
 #[derive(Clone)]
 pub struct LocalNarwhalClient {
@@ -54,23 +126,23 @@ impl LocalNarwhalClient {
     pub fn set_global(addr: Multiaddr, instance: Arc<Self>) {
         info!("Narwhal worker client added ({})", addr);
         let addr = Self::canonicalize_address_key(addr);
-        let mut clients = LOCAL_NARWHAL_CLIENTS.lock().unwrap();
-        match clients.entry(addr) {
-            Entry::Vacant(entry) => {
-                entry.insert(Arc::new(ArcSwap::from(instance)));
-            }
-            Entry::Occupied(mut entry) => {
-                entry.get_mut().store(instance);
-            }
-        };
+        static_client_cache::with_clients(|clients| {
+            match clients.entry(addr) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Arc::new(ArcSwap::from(instance)));
+                }
+                Entry::Occupied(mut entry) => {
+                    entry.get_mut().store(instance);
+                }
+            };
+        });
     }
 
     /// Gets the instance of LocalNarwhalClient for the local address.
     /// Address is only used as the key.
     pub fn get_global(addr: &Multiaddr) -> Option<Arc<ArcSwap<Self>>> {
         let addr = Self::canonicalize_address_key(addr.clone());
-        let clients = LOCAL_NARWHAL_CLIENTS.lock().unwrap();
-        clients.get(&addr).cloned()
+        static_client_cache::with_clients(|clients| clients.get(&addr).cloned())
     }
 
     /// Submits a transaction to the local Narwhal worker.

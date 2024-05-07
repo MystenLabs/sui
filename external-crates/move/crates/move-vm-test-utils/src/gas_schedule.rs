@@ -25,7 +25,6 @@ use move_core_types::{
     u256,
     vm_status::StatusCode,
 };
-#[cfg(debug_assertions)]
 use move_vm_profiler::GasProfiler;
 use move_vm_types::{
     gas::{GasMeter, SimpleInstruction},
@@ -114,7 +113,6 @@ pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
     charge: bool,
-    #[cfg(debug_assertions)]
     profiler: Option<GasProfiler>,
 }
 
@@ -128,7 +126,6 @@ impl<'a> GasStatus<'a> {
             gas_left: gas_left.to_unit(),
             cost_table,
             charge: true,
-            #[cfg(debug_assertions)]
             profiler: None,
         }
     }
@@ -142,7 +139,6 @@ impl<'a> GasStatus<'a> {
             gas_left: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
             charge: false,
-            #[cfg(debug_assertions)]
             profiler: None,
         }
     }
@@ -402,95 +398,6 @@ impl<'b> GasMeter for GasStatus<'b> {
         )
     }
 
-    fn charge_load_resource(
-        &mut self,
-        _loaded: Option<(NumBytes, impl ValueView)>,
-    ) -> PartialVMResult<()> {
-        Ok(())
-    }
-
-    fn charge_borrow_global(
-        &mut self,
-        is_mut: bool,
-        is_generic: bool,
-        _ty: impl TypeView,
-        is_success: bool,
-    ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        if is_success {
-            let op = match (is_mut, is_generic) {
-                (false, false) => IMM_BORROW_GLOBAL,
-                (false, true) => IMM_BORROW_GLOBAL_GENERIC,
-                (true, false) => MUT_BORROW_GLOBAL,
-                (true, true) => MUT_BORROW_GLOBAL_GENERIC,
-            };
-
-            self.charge_instr_with_size(op, REFERENCE_SIZE)?;
-        }
-
-        Ok(())
-    }
-
-    fn charge_exists(
-        &mut self,
-        is_generic: bool,
-        _ty: impl TypeView,
-        // TODO(Gas): see if we can get rid of this param
-        exists: bool,
-    ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        let op = if is_generic { EXISTS_GENERIC } else { EXISTS };
-        self.charge_instr_with_size(
-            op,
-            if exists {
-                REFERENCE_SIZE
-            } else {
-                MIN_EXISTS_DATA_SIZE
-            },
-        )
-    }
-
-    fn charge_move_from(
-        &mut self,
-        is_generic: bool,
-        _ty: impl TypeView,
-        val: Option<impl ValueView>,
-    ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        if let Some(val) = val {
-            let op = if is_generic {
-                MOVE_FROM_GENERIC
-            } else {
-                MOVE_FROM
-            };
-
-            self.charge_instr_with_size(op, val.legacy_abstract_memory_size())?;
-        }
-
-        Ok(())
-    }
-
-    fn charge_move_to(
-        &mut self,
-        is_generic: bool,
-        _ty: impl TypeView,
-        val: impl ValueView,
-        is_success: bool,
-    ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        let op = if is_generic { MOVE_TO_GENERIC } else { MOVE_TO };
-
-        if is_success {
-            self.charge_instr_with_size(op, val.legacy_abstract_memory_size())?;
-        }
-
-        Ok(())
-    }
-
     fn charge_vec_pack<'a>(
         &mut self,
         _ty: impl TypeView + 'a,
@@ -562,12 +469,10 @@ impl<'b> GasMeter for GasStatus<'b> {
         self.gas_left
     }
 
-    #[cfg(debug_assertions)]
     fn get_profiler_mut(&mut self) -> Option<&mut GasProfiler> {
         self.profiler.as_mut()
     }
 
-    #[cfg(debug_assertions)]
     fn set_profiler(&mut self, profiler: GasProfiler) {
         self.profiler = Some(profiler);
     }
@@ -600,14 +505,20 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
 
     vec![
-        (MoveTo(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
         (
-            MoveToGeneric(StructDefInstantiationIndex::new(0)),
+            MoveToDeprecated(StructDefinitionIndex::new(0)),
             GasCost::new(0, 0),
         ),
-        (MoveFrom(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
         (
-            MoveFromGeneric(StructDefInstantiationIndex::new(0)),
+            MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            MoveFromDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            MoveFromGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
         (BrTrue(0), GasCost::new(0, 0)),
@@ -636,7 +547,7 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (Lt, GasCost::new(0, 0)),
         (LdU8(0), GasCost::new(0, 0)),
         (LdU64(0), GasCost::new(0, 0)),
-        (LdU128(0), GasCost::new(0, 0)),
+        (LdU128(Box::new(0)), GasCost::new(0, 0)),
         (CastU8, GasCost::new(0, 0)),
         (CastU64, GasCost::new(0, 0)),
         (CastU128, GasCost::new(0, 0)),
@@ -667,27 +578,30 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(0, 0)),
         (Mod, GasCost::new(0, 0)),
         (BrFalse(0), GasCost::new(0, 0)),
-        (Exists(StructDefinitionIndex::new(0)), GasCost::new(0, 0)),
         (
-            ExistsGeneric(StructDefInstantiationIndex::new(0)),
+            ExistsDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(0, 0),
+        ),
+        (
+            ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
         (BitOr, GasCost::new(0, 0)),
         (FreezeRef, GasCost::new(0, 0)),
         (
-            MutBorrowGlobal(StructDefinitionIndex::new(0)),
+            MutBorrowGlobalDeprecated(StructDefinitionIndex::new(0)),
             GasCost::new(0, 0),
         ),
         (
-            MutBorrowGlobalGeneric(StructDefInstantiationIndex::new(0)),
+            MutBorrowGlobalGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
         (
-            ImmBorrowGlobal(StructDefinitionIndex::new(0)),
+            ImmBorrowGlobalDeprecated(StructDefinitionIndex::new(0)),
             GasCost::new(0, 0),
         ),
         (
-            ImmBorrowGlobalGeneric(StructDefInstantiationIndex::new(0)),
+            ImmBorrowGlobalGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(0, 0),
         ),
         (Div, GasCost::new(0, 0)),
@@ -709,7 +623,7 @@ pub fn zero_cost_instruction_table() -> Vec<(Bytecode, GasCost)> {
         (VecSwap(SignatureIndex::new(0)), GasCost::new(0, 0)),
         (LdU16(0), GasCost::new(0, 0)),
         (LdU32(0), GasCost::new(0, 0)),
-        (LdU256(u256::U256::zero()), GasCost::new(0, 0)),
+        (LdU256(Box::new(u256::U256::zero())), GasCost::new(0, 0)),
         (CastU16, GasCost::new(0, 0)),
         (CastU32, GasCost::new(0, 0)),
         (CastU256, GasCost::new(0, 0)),
@@ -739,17 +653,20 @@ pub fn unit_cost_schedule() -> CostTable {
 pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
     vec![
-        (MoveTo(StructDefinitionIndex::new(0)), GasCost::new(13, 1)),
         (
-            MoveToGeneric(StructDefInstantiationIndex::new(0)),
+            MoveToDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(13, 1),
+        ),
+        (
+            MoveToGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(27, 1),
         ),
         (
-            MoveFrom(StructDefinitionIndex::new(0)),
+            MoveFromDeprecated(StructDefinitionIndex::new(0)),
             GasCost::new(459, 1),
         ),
         (
-            MoveFromGeneric(StructDefInstantiationIndex::new(0)),
+            MoveFromGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(13, 1),
         ),
         (BrTrue(0), GasCost::new(1, 1)),
@@ -778,7 +695,7 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (Lt, GasCost::new(1, 1)),
         (LdU8(0), GasCost::new(1, 1)),
         (LdU64(0), GasCost::new(1, 1)),
-        (LdU128(0), GasCost::new(1, 1)),
+        (LdU128(Box::new(0)), GasCost::new(1, 1)),
         (CastU8, GasCost::new(2, 1)),
         (CastU64, GasCost::new(1, 1)),
         (CastU128, GasCost::new(1, 1)),
@@ -809,27 +726,30 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (LdTrue, GasCost::new(1, 1)),
         (Mod, GasCost::new(1, 1)),
         (BrFalse(0), GasCost::new(1, 1)),
-        (Exists(StructDefinitionIndex::new(0)), GasCost::new(41, 1)),
         (
-            ExistsGeneric(StructDefInstantiationIndex::new(0)),
+            ExistsDeprecated(StructDefinitionIndex::new(0)),
+            GasCost::new(41, 1),
+        ),
+        (
+            ExistsGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(34, 1),
         ),
         (BitOr, GasCost::new(2, 1)),
         (FreezeRef, GasCost::new(1, 1)),
         (
-            MutBorrowGlobal(StructDefinitionIndex::new(0)),
+            MutBorrowGlobalDeprecated(StructDefinitionIndex::new(0)),
             GasCost::new(21, 1),
         ),
         (
-            MutBorrowGlobalGeneric(StructDefInstantiationIndex::new(0)),
+            MutBorrowGlobalGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(15, 1),
         ),
         (
-            ImmBorrowGlobal(StructDefinitionIndex::new(0)),
+            ImmBorrowGlobalDeprecated(StructDefinitionIndex::new(0)),
             GasCost::new(23, 1),
         ),
         (
-            ImmBorrowGlobalGeneric(StructDefInstantiationIndex::new(0)),
+            ImmBorrowGlobalGenericDeprecated(StructDefInstantiationIndex::new(0)),
             GasCost::new(14, 1),
         ),
         (Div, GasCost::new(3, 1)),
@@ -851,7 +771,7 @@ pub fn bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (VecSwap(SignatureIndex::new(0)), GasCost::new(1436, 1)),
         (LdU16(0), GasCost::new(1, 1)),
         (LdU32(0), GasCost::new(1, 1)),
-        (LdU256(u256::U256::zero()), GasCost::new(1, 1)),
+        (LdU256(Box::new(u256::U256::zero())), GasCost::new(1, 1)),
         (CastU16, GasCost::new(2, 1)),
         (CastU32, GasCost::new(2, 1)),
         (CastU256, GasCost::new(2, 1)),

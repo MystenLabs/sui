@@ -17,7 +17,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 use strum_macros::{AsRefStr, IntoStaticStr};
 use thiserror::Error;
 use tonic::Status;
-use typed_store::rocks::TypedStoreError;
+use typed_store_error::TypedStoreError;
 
 pub const TRANSACTION_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transaction";
 pub const TRANSACTIONS_NOT_FOUND_MSG_PREFIX: &str = "Could not find the referenced transactions";
@@ -248,6 +248,15 @@ pub enum UserInputError {
 
     #[error("Immutable parameter provided, mutable parameter expected.")]
     MutableParameterExpected { object_id: ObjectID },
+
+    #[error("Address {address:?} is denied for coin {coin_type}")]
+    AddressDeniedForCoin {
+        address: SuiAddress,
+        coin_type: String,
+    },
+
+    #[error("Commands following a command with Random can only be TransferObjects or MergeCoins")]
+    PostRandomCommandRestrictions,
 }
 
 #[derive(
@@ -331,7 +340,7 @@ pub enum SuiError {
         expected: String,
         actual: Vec<String>,
     },
-    #[error("Expect {actual} signer signatures but got {expected}.")]
+    #[error("Expect {expected} signer signatures but got {actual}.")]
     SignerSignatureNumberMismatch { expected: usize, actual: usize },
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
@@ -461,10 +470,14 @@ pub enum SuiError {
         authority: AuthorityName,
         reason: String,
     },
-    #[error("Storage error")]
-    StorageError(#[from] TypedStoreError),
-    #[error("Non-RocksDB Storage error: {0}")]
-    GenericStorageError(String),
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageError,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "GenericStorageError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_GenericStorageError,
     #[error(
         "Attempted to access {object} through parent {given_parent}, \
         but it's actual parent is {actual_owner}"
@@ -475,10 +488,14 @@ pub enum SuiError {
         actual_owner: Owner,
     },
 
-    #[error("Missing fields/data in storage error: {0}")]
-    StorageMissingFieldError(String),
-    #[error("Corrupted fields/data in storage error: {0}")]
-    StorageCorruptedFieldError(String),
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageMissingFieldError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageMissingFieldError,
+    #[allow(non_camel_case_types)]
+    #[serde(rename = "StorageCorruptedFieldError")]
+    #[error("DEPRECATED")]
+    DEPRECATED_StorageCorruptedFieldError,
 
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
@@ -523,10 +540,6 @@ pub enum SuiError {
     HandleConsensusTransactionFailure(String),
 
     // Cryptography errors.
-    #[error("Signature seed invalid length, input byte size was: {0}")]
-    SignatureSeedInvalidLength(usize),
-    #[error("HKDF error: {0}")]
-    HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
     #[error("Key Conversion Error: {0}")]
@@ -541,6 +554,8 @@ pub enum SuiError {
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
     ValidatorHaltedAtEpochEnd,
+    #[error("Operations for epoch {0} have ended")]
+    EpochEnded(EpochId),
     #[error("Error when advancing epoch: {:?}", error)]
     AdvanceEpochError { error: String },
 
@@ -551,6 +566,9 @@ pub enum SuiError {
     // Tonic::Status
     #[error("{1} - {0}")]
     RpcError(String, String),
+
+    #[error("Method not allowed")]
+    InvalidRpcMethodError,
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
@@ -593,6 +611,15 @@ pub enum SuiError {
 
     #[error("Failed to get JWK")]
     JWKRetrievalError,
+
+    #[error("Storage error: {0}")]
+    Storage(String),
+
+    #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
+    ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
+
+    #[error("Too many requests")]
+    TooManyRequests,
 }
 
 #[repr(u64)]
@@ -637,6 +664,10 @@ impl From<ExecutionError> for SuiError {
 
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
+        if status.message() == "Too many requests" {
+            return Self::TooManyRequests;
+        }
+
         let result = bcs::from_bytes::<SuiError>(status.details());
         if let Ok(sui_error) = result {
             sui_error
@@ -646,6 +677,18 @@ impl From<Status> for SuiError {
                 status.code().description().to_owned(),
             )
         }
+    }
+}
+
+impl From<TypedStoreError> for SuiError {
+    fn from(e: TypedStoreError) -> Self {
+        Self::Storage(e.to_string())
+    }
+}
+
+impl From<crate::storage::error::Error> for SuiError {
+    fn from(e: crate::storage::error::Error) -> Self {
+        Self::Storage(e.to_string())
     }
 }
 
@@ -669,17 +712,6 @@ impl From<&str> for SuiError {
         }
     }
 }
-
-// impl From<FastCryptoError> for SuiError {
-//     fn from(kind: FastCryptoError) -> Self {
-//         match kind {
-//             FastCryptoError::InvalidSignature => SuiError::InvalidSignature {
-//                 error: "Invalid signature".to_string(),
-//             },
-//             _ => SuiError::Unknown("Unknown cryptography error".to_string()),
-//         }
-//     }
-// }
 
 impl TryFrom<SuiError> for UserInputError {
     type Error = anyhow::Error;
@@ -717,44 +749,51 @@ impl SuiError {
     /// There should be only a handful of retryable errors. For now we list common
     /// non-retryable error below to help us find more retryable errors in logs.
     pub fn is_retryable(&self) -> (bool, bool) {
-        match self {
+        let retryable = match self {
             // Network error
-            SuiError::RpcError { .. } => (true, true),
+            SuiError::RpcError { .. } => true,
 
             // Reconfig error
-            SuiError::ValidatorHaltedAtEpochEnd => (true, true),
-            SuiError::MissingCommitteeAtEpoch(..) => (true, true),
-            SuiError::WrongEpoch { .. } => (true, true),
+            SuiError::ValidatorHaltedAtEpochEnd => true,
+            SuiError::MissingCommitteeAtEpoch(..) => true,
+            SuiError::WrongEpoch { .. } => true,
 
             SuiError::UserInputError { error } => {
                 match error {
                     // Only ObjectNotFound and DependentPackageNotFound is potentially retryable
-                    UserInputError::ObjectNotFound { .. } => (true, true),
-                    UserInputError::DependentPackageNotFound { .. } => (true, true),
-                    _ => (false, true),
+                    UserInputError::ObjectNotFound { .. } => true,
+                    UserInputError::DependentPackageNotFound { .. } => true,
+                    _ => false,
                 }
             }
 
-            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => (true, true),
+            SuiError::PotentiallyTemporarilyInvalidSignature { .. } => true,
 
             // Overload errors
-            SuiError::TooManyTransactionsPendingExecution { .. } => (true, true),
-            SuiError::TooManyTransactionsPendingOnObject { .. } => (true, true),
-            SuiError::TooOldTransactionPendingOnObject { .. } => (true, true),
-            SuiError::TooManyTransactionsPendingConsensus => (true, true),
+            SuiError::TooManyTransactionsPendingExecution { .. } => true,
+            SuiError::TooManyTransactionsPendingOnObject { .. } => true,
+            SuiError::TooOldTransactionPendingOnObject { .. } => true,
+            SuiError::TooManyTransactionsPendingConsensus => true,
+            SuiError::ValidatorOverloadedRetryAfter { .. } => true,
 
             // Non retryable error
-            SuiError::ExecutionError(..) => (false, true),
-            SuiError::ByzantineAuthoritySuspicion { .. } => (false, true),
-            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => {
-                (false, true)
-            }
-            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => (false, true),
-            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => (false, true),
-            SuiError::ObjectLockConflict { .. } => (false, true),
+            SuiError::ExecutionError(..) => false,
+            SuiError::ByzantineAuthoritySuspicion { .. } => false,
+            SuiError::QuorumFailedToGetEffectsQuorumWhenProcessingTransaction { .. } => false,
+            SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
+            SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
+            SuiError::ObjectLockConflict { .. } => false,
 
-            _ => (false, false),
-        }
+            // NB: This is not an internal overload, but instead an imposed rate
+            // limit / blocking of a client. It must be non-retryable otherwise
+            // we will make the threat worse through automatic retries.
+            SuiError::TooManyRequests => false,
+
+            // For all un-categorized errors, return here with categorized = false.
+            _ => return (false, false),
+        };
+
+        (retryable, true)
     }
 
     pub fn is_object_or_package_not_found(&self) -> bool {
@@ -778,6 +817,10 @@ impl SuiError {
                 | SuiError::TooOldTransactionPendingOnObject { .. }
                 | SuiError::TooManyTransactionsPendingConsensus
         )
+    }
+
+    pub fn is_retryable_overload(&self) -> bool {
+        matches!(self, SuiError::ValidatorOverloadedRetryAfter { .. })
     }
 }
 

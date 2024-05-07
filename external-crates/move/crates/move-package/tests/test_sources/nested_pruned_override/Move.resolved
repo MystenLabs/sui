@@ -1,7 +1,8 @@
 ResolvedGraph {
     graph: DependencyGraph {
         root_path: "tests/test_sources/nested_pruned_override",
-        root_package: "Root",
+        root_package_id: "Root",
+        root_package_name: "Root",
         package_graph: {
             "Root": [
                 (
@@ -73,14 +74,13 @@ ResolvedGraph {
             "C",
             "Root",
         },
-        manifest_digest: "B0F678B9227387AF29ACA8CFA4EB437787A2FC7690E2627761402DE85C728E51",
+        manifest_digest: "0157AC19D24D39641693161A0A6A0A4E3C424C337419209BBCD31C7C8BC34D18",
         deps_digest: "3C4103934B1E040BB6B23F1D610B4EF9F2F1166A50A104EADCF77467C004C600",
     },
     build_options: BuildConfig {
         dev_mode: true,
         test_mode: false,
         generate_docs: false,
-        generate_abis: false,
         install_dir: Some(
             "ELIDED_FOR_TEST",
         ),
@@ -88,7 +88,6 @@ ResolvedGraph {
         lock_file: Some(
             "ELIDED_FOR_TEST",
         ),
-        additional_named_addresses: {},
         fetch_deps_only: false,
         skip_fetch_latest_git_deps: false,
         default_flavor: None,
@@ -96,17 +95,17 @@ ResolvedGraph {
         deps_as_root: false,
         silence_warnings: false,
         warnings_are_errors: false,
+        additional_named_addresses: {},
+        lint_flag: LintFlag {
+            no_lint: false,
+            lint: false,
+        },
     },
     package_table: {
         "A": Package {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "A",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -128,11 +127,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "B",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -149,7 +143,6 @@ ResolvedGraph {
                                 "../C",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -166,11 +159,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "C",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -187,7 +175,6 @@ ResolvedGraph {
                                 "../A2",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },
@@ -204,11 +191,6 @@ ResolvedGraph {
             source_package: SourceManifest {
                 package: PackageInfo {
                     name: "Root",
-                    version: (
-                        0,
-                        0,
-                        0,
-                    ),
                     authors: [],
                     license: None,
                     edition: None,
@@ -225,7 +207,6 @@ ResolvedGraph {
                                 "deps_only/A1",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: true,
                         },
@@ -236,7 +217,6 @@ ResolvedGraph {
                                 "deps_only/B",
                             ),
                             subst: None,
-                            version: None,
                             digest: None,
                             dep_override: false,
                         },

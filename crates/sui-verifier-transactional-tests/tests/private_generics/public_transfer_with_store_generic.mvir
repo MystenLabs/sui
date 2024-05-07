@@ -54,3 +54,23 @@ module 0x0.m {
         return;
     }
 }
+
+//# publish
+module 0x0.m {
+    import 0x2.coin;
+    import 0x2.transfer;
+    import 0x2.object;
+
+    t(uid: &mut object.UID, coin: transfer.Receiving<coin.Coin<u64>>): coin.Coin<u64> {
+        let c: coin.Coin<u64>;
+        label l0:
+        c = transfer.public_receive<coin.Coin<u64>>(move(uid), move(coin));
+        return move(c);
+    }
+    t_gen<T: key + store>(uid: &mut object.UID, coin: transfer.Receiving<T>): T {
+        let c: T;
+        label l0:
+        c = transfer.public_receive<T>(move(uid), move(coin));
+        return move(c);
+    }
+}

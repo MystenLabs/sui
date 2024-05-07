@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use mysten_metrics::histogram::HistogramVec;
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use prometheus::{
+    register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
+    IntCounterVec, Registry,
+};
 use std::sync::Arc;
 
 pub struct KeyValueStoreMetrics {
@@ -39,19 +41,27 @@ impl KeyValueStoreMetrics {
             )
             .unwrap(),
 
-            key_value_store_num_fetches_latency_ms: HistogramVec::new_in_registry(
+            key_value_store_num_fetches_latency_ms: register_histogram_vec_with_registry!(
                 "key_value_store_num_fetches_latency_ms",
                 "Latency of fetches from key value store",
-                &["store"],
+                &["store", "type"],
+                prometheus::exponential_buckets(1.0, 1.6, 24)
+                    .unwrap()
+                    .to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
 
-            key_value_store_num_fetches_batch_size: HistogramVec::new_in_registry(
+            key_value_store_num_fetches_batch_size: register_histogram_vec_with_registry!(
                 "key_value_store_num_fetches_batch_size",
                 "Number of keys fetched per batch",
-                &["store"],
+                &["store", "type"],
+                prometheus::exponential_buckets(1.0, 1.6, 20)
+                    .unwrap()
+                    .to_vec(),
                 registry,
-            ),
+            )
+            .unwrap(),
         })
     }
 

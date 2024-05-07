@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { toB58 } from './b58';
-import { toB64 } from './b64';
-import { toHEX } from './hex';
-import { BcsReader } from './reader';
-import { ulebEncode } from './uleb';
-import { BcsWriter, BcsWriterOptions } from './writer';
+import { toB58 } from './b58.js';
+import { toB64 } from './b64.js';
+import { toHEX } from './hex.js';
+import { BcsReader } from './reader.js';
+import { ulebEncode } from './uleb.js';
+import type { BcsWriterOptions } from './writer.js';
+import { BcsWriter } from './writer.js';
 
 export interface BcsTypeOptions<T, Input = T> {
 	name?: string;
@@ -44,8 +45,8 @@ export class BcsType<T, Input = T> {
 			options.serialize ??
 			((value, options) => {
 				const writer = new BcsWriter({
-					size: this.serializedSize(value) ?? undefined,
-					...this.#writerOptions,
+					initialSize: this.serializedSize(value) ?? undefined,
+          ...this.#writerOptions,
 					...options,
 				});
 				this.#write(value, writer);

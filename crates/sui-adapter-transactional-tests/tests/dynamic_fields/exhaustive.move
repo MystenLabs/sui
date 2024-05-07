@@ -10,16 +10,14 @@
 module a::m {
 
 use sui::dynamic_field::{add, exists_with_type, borrow, borrow_mut, remove};
-use sui::object;
-use sui::tx_context::{sender, TxContext};
 
-struct Obj has key {
+public struct Obj has key {
     id: object::UID,
 }
 
 entry fun t0(ctx: &mut TxContext) {
     let id = object::new(ctx);
-    sui::transfer::transfer(Obj { id }, sender(ctx))
+    sui::transfer::transfer(Obj { id }, ctx.sender())
 }
 
 entry fun t1(obj: &mut Obj) {

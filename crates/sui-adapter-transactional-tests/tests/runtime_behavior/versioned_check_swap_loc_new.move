@@ -8,7 +8,7 @@
 //# publish
 module test::m {
     public fun t1(cond: bool) {
-        let x: vector<u64>;
+        let mut x: vector<u64>;
         let r: &vector<u64>;
         if (cond) {
             x = vector[];

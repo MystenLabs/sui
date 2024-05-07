@@ -7,7 +7,6 @@ edition = "2021"
 version = "0.1.0"
 
 [dependencies]
-workspace-hack.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
@@ -40,8 +39,10 @@ move-core-types.workspace = true
 sui-core.workspace = true
 sui-framework.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-node.workspace = true
 sui-macros.workspace = true
+sui-network.workspace = true
 sui-simulator.workspace = true
 sui-storage.workspace = true
 mysten-metrics.workspace = true
@@ -57,4 +58,4 @@ sui-json-rpc-types.workspace = true
 sui.workspace = true
 sui-sdk.workspace = true
 sui-keys.workspace = true
-workspace-hack.workspace = true
+shared-crypto.workspace = true

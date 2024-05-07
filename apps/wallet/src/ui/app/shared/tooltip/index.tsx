@@ -17,7 +17,7 @@ import {
 } from '@floating-ui/react';
 import type { Placement } from '@floating-ui/react';
 import { Info16 } from '@mysten/icons';
-import clsx from 'classnames';
+import clsx from 'clsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';

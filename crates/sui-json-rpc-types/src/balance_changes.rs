@@ -27,7 +27,7 @@ pub struct BalanceChange {
 
 impl Display for BalanceChange {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        writeln!(
+        write!(
             f,
             " ┌──\n │ Owner: {} \n │ CoinType: {} \n │ Amount: {}\n └──",
             self.owner, self.coin_type, self.amount

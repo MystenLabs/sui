@@ -15,6 +15,8 @@ use crate::{
     parser::ast::BinOp_,
     shared::{unique_map::UniqueMap, CompilationEnv},
 };
+use move_proc_macros::growing_stack;
+
 use state::{Value, *};
 use std::{cell::RefCell, collections::BTreeMap, rc::Rc};
 
@@ -150,10 +152,11 @@ fn unused_mut_borrows(
 // Command
 //**************************************************************************************************
 
+#[growing_stack]
 fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
     use Command_ as C;
     match cmd_ {
-        C::Assign(ls, e) => {
+        C::Assign(_, ls, e) => {
             let values = exp(context, e);
             lvalues(context, ls, values);
         }
@@ -167,6 +170,12 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
         C::JumpIf { cond: e, .. } => {
             let value = assert_single_value(exp(context, e));
             assert!(!value.is_ref());
+        }
+        C::VariantSwitch { subject, .. } => {
+            let value = assert_single_value(exp(context, subject));
+            assert!(value.is_ref());
+            let diags = context.borrow_state.variant_switch(*loc, value);
+            context.add_diags(diags);
         }
         C::IgnoreAndPop { exp: e, .. } => {
             let values = exp(context, e);
@@ -184,7 +193,7 @@ fn command(context: &mut Context, sp!(loc, cmd_): &Command) {
             context.borrow_state.abort()
         }
         C::Jump { .. } => (),
-        C::Break | C::Continue => panic!("ICE break/continue not translated to jumps"),
+        C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
     }
 }
 
@@ -197,10 +206,18 @@ fn lvalues(context: &mut Context, ls: &[LValue], values: Values) {
 fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
     use LValue_ as L;
     match l_ {
-        L::Ignore => {
+        L::Ignore
+        | L::Var {
+            unused_assignment: true,
+            ..
+        } => {
             context.borrow_state.release_value(value);
         }
-        L::Var(v, _) => {
+        L::Var {
+            var: v,
+            unused_assignment: false,
+            ..
+        } => {
             let diags = context.borrow_state.assign_local(*loc, v, value);
             context.add_diags(diags)
         }
@@ -210,9 +227,40 @@ fn lvalue(context: &mut Context, sp!(loc, l_): &LValue, value: Value) {
                 .iter()
                 .for_each(|(_, l)| lvalue(context, l, Value::NonRef))
         }
+        L::UnpackVariant(_, _, unpack_type, _, _, fields) => match unpack_type {
+            UnpackType::ByValue => {
+                assert!(!value.is_ref());
+                fields
+                    .iter()
+                    .for_each(|(_, l)| lvalue(context, l, Value::NonRef))
+            }
+            UnpackType::ByImmRef => {
+                assert!(value.is_ref());
+                let (diags, fvs) = context
+                    .borrow_state
+                    .borrow_variant_fields(*loc, false, value, fields);
+                context.add_diags(diags);
+                assert!(fvs.len() == fields.len());
+                fvs.into_iter()
+                    .zip(fields.iter())
+                    .for_each(|(fv, (_, l))| lvalue(context, l, fv));
+            }
+            UnpackType::ByMutRef => {
+                assert!(value.is_ref());
+                let (diags, fvs) = context
+                    .borrow_state
+                    .borrow_variant_fields(*loc, true, value, fields);
+                context.add_diags(diags);
+                assert!(fvs.len() == fields.len());
+                fvs.into_iter()
+                    .zip(fields.iter())
+                    .for_each(|(fv, (_, l))| lvalue(context, l, fv));
+            }
+        },
     }
 }
 
+#[growing_stack]
 fn exp(context: &mut Context, parent_e: &Exp) -> Values {
     use UnannotatedExp_ as E;
     let eloc = &parent_e.exp.loc;
@@ -277,7 +325,7 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
         }
 
         E::Unit { .. } => vec![],
-        E::Value(_) | E::Constant(_) | E::Spec(_, _) | E::UnresolvedError => svalue(),
+        E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => svalue(),
 
         E::Cast(e, _) | E::UnaryExp(_, e) => {
             let v = exp(context, e);
@@ -306,6 +354,13 @@ fn exp(context: &mut Context, parent_e: &Exp) -> Values {
             svalue()
         }
         E::Pack(_, _, fields) => {
+            fields.iter().for_each(|(_, _, e)| {
+                let arg = exp(context, e);
+                assert!(!assert_single_value(arg).is_ref());
+            });
+            svalue()
+        }
+        E::PackVariant(_, _, _, fields) => {
             fields.iter().for_each(|(_, _, e)| {
                 let arg = exp(context, e);
                 assert!(!assert_single_value(arg).is_ref());

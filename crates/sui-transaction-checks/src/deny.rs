@@ -30,7 +30,7 @@ pub fn check_transaction_for_signing(
     input_object_kinds: &[InputObjectKind],
     receiving_objects: &[ObjectRef],
     filter_config: &TransactionDenyConfig,
-    package_store: &impl BackingPackageStore,
+    package_store: &dyn BackingPackageStore,
 ) -> SuiResult {
     check_disabled_features(filter_config, tx_data, tx_signatures)?;
 
@@ -151,7 +151,7 @@ fn check_input_objects(
 fn check_package_dependencies(
     filter_config: &TransactionDenyConfig,
     tx_data: &TransactionData,
-    package_store: &impl BackingPackageStore,
+    package_store: &dyn BackingPackageStore,
 ) -> SuiResult {
     let deny_map = filter_config.get_package_deny_set();
     if deny_map.is_empty() {

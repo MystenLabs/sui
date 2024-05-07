@@ -190,10 +190,10 @@ impl SignatureTokenGen {
                                 _ => type_params.push(SignatureToken::U64),
                             }
                         }
-                        SignatureToken::StructInstantiation(
+                        SignatureToken::StructInstantiation(Box::new((
                             StructHandleIndex(struct_idx as TableIndex),
                             type_params,
-                        )
+                        )))
                     }
                 }
             }

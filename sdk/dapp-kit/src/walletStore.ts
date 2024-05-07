@@ -6,14 +6,13 @@ import { createStore } from 'zustand';
 import type { StateStorage } from 'zustand/middleware';
 import { createJSONStorage, persist } from 'zustand/middleware';
 
-type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
+import { getWalletUniqueIdentifier } from './utils/walletUtils.js';
 
-type WalletAutoConnectionStatus = 'disabled' | 'idle' | 'settled';
+type WalletConnectionStatus = 'disconnected' | 'connecting' | 'connected';
 
 export type WalletActions = {
 	setAccountSwitched: (selectedAccount: WalletAccount) => void;
 	setConnectionStatus: (connectionStatus: WalletConnectionStatus) => void;
-	setAutoConnectionStatus: (autoConnectionStatus: WalletAutoConnectionStatus) => void;
 	setWalletConnected: (
 		wallet: WalletWithRequiredFeatures,
 		connectedAccounts: readonly WalletAccount[],
@@ -31,6 +30,7 @@ export type WalletActions = {
 export type WalletStore = ReturnType<typeof createWalletStore>;
 
 export type StoreState = {
+	autoConnectEnabled: boolean;
 	wallets: WalletWithRequiredFeatures[];
 	accounts: readonly WalletAccount[];
 	currentWallet: WalletWithRequiredFeatures | null;
@@ -38,12 +38,11 @@ export type StoreState = {
 	lastConnectedAccountAddress: string | null;
 	lastConnectedWalletName: string | null;
 	connectionStatus: WalletConnectionStatus;
-	autoConnectionStatus: WalletAutoConnectionStatus;
 } & WalletActions;
 
 type WalletConfiguration = {
+	autoConnectEnabled: boolean;
 	wallets: WalletWithRequiredFeatures[];
-	autoConnect: boolean;
 	storage: StateStorage;
 	storageKey: string;
 };
@@ -52,27 +51,22 @@ export function createWalletStore({
 	wallets,
 	storage,
 	storageKey,
-	autoConnect,
+	autoConnectEnabled,
 }: WalletConfiguration) {
 	return createStore<StoreState>()(
 		persist(
 			(set, get) => ({
+				autoConnectEnabled,
 				wallets,
-				accounts: [],
+				accounts: [] as WalletAccount[],
 				currentWallet: null,
 				currentAccount: null,
 				lastConnectedAccountAddress: null,
 				lastConnectedWalletName: null,
 				connectionStatus: 'disconnected',
-				autoConnectionStatus: autoConnect ? 'idle' : 'disabled',
 				setConnectionStatus(connectionStatus) {
 					set(() => ({
 						connectionStatus,
-					}));
-				},
-				setAutoConnectionStatus(autoConnectionStatus) {
-					set(() => ({
-						autoConnectionStatus,
 					}));
 				},
 				setWalletConnected(wallet, connectedAccounts, selectedAccount) {
@@ -80,7 +74,7 @@ export function createWalletStore({
 						accounts: connectedAccounts,
 						currentWallet: wallet,
 						currentAccount: selectedAccount,
-						lastConnectedWalletName: wallet.name,
+						lastConnectedWalletName: getWalletUniqueIdentifier(wallet),
 						lastConnectedAccountAddress: selectedAccount?.address,
 						connectionStatus: 'connected',
 					}));
@@ -124,9 +118,10 @@ export function createWalletStore({
 
 					set(() => ({
 						accounts,
-						currentAccount: currentAccount
-							? accounts.find(({ address }) => address === currentAccount.address)
-							: accounts[0],
+						currentAccount:
+							(currentAccount &&
+								accounts.find(({ address }) => address === currentAccount.address)) ||
+							accounts[0],
 					}));
 				},
 			}),

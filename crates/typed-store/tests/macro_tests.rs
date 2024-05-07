@@ -48,6 +48,17 @@ pub struct Generic<T, V> {
     field2: V,
 }
 
+#[derive(DBMapUtils)]
+struct RenameTables1 {
+    table: DBMap<String, String>,
+}
+
+#[derive(DBMapUtils)]
+struct RenameTables2 {
+    #[rename = "table"]
+    renamed_table: DBMap<String, String>,
+}
+
 impl<
         T: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
         V: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
@@ -162,6 +173,28 @@ async fn macro_test() {
     assert_eq!(3, m.len());
     assert_eq!(format!("\"7\""), *m.get(&"\"7\"".to_string()).unwrap());
     assert_eq!(format!("\"8\""), *m.get(&"\"8\"".to_string()).unwrap());
+}
+
+#[tokio::test]
+async fn rename_test() {
+    let dbdir = temp_dir();
+
+    let key = "key".to_string();
+    let value = "value".to_string();
+    {
+        let original_db =
+            RenameTables1::open_tables_read_write(dbdir.clone(), MetricConf::default(), None, None);
+        original_db.table.insert(&key, &value).unwrap();
+    }
+
+    // sleep for 1 second
+    tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+
+    {
+        let renamed_db =
+            RenameTables2::open_tables_read_write(dbdir.clone(), MetricConf::default(), None, None);
+        assert_eq!(renamed_db.renamed_table.get(&key), Ok(Some(value)));
+    }
 }
 
 #[derive(SallyDB)]

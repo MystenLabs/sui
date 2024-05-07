@@ -1,16 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::node::RuntimeType;
 use futures::FutureExt;
 use std::sync::{Arc, Weak};
 use std::thread;
 use sui_config::NodeConfig;
 use sui_node::{SuiNode, SuiNodeHandle};
+use sui_types::base_types::ConciseableName;
 use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
 use telemetry_subscribers::get_global_telemetry_config;
 use tracing::{info, trace};
-
-use super::node::RuntimeType;
 
 #[derive(Debug)]
 pub(crate) struct Container {
@@ -95,7 +95,7 @@ impl Container {
                     "Started Prometheus HTTP endpoint. To query metrics use\n\tcurl -s http://{}/metrics",
                     config.metrics_address
                 );
-                let server = SuiNode::start(&config, registry_service, None).await.unwrap();
+                let server = SuiNode::start(config, registry_service, None).await.unwrap();
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(Arc::downgrade(&server));
                 // run until canceled

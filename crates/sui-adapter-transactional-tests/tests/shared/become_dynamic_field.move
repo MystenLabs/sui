@@ -8,16 +8,13 @@
 
 //# publish
 module a::m {
-    use sui::transfer;
     use sui::dynamic_field::{add, remove};
-    use sui::object;
-    use sui::tx_context::{sender, TxContext};
 
-    struct Outer has key, store {
+    public struct Outer has key, store {
         id: object::UID,
     }
 
-    struct Inner has key, store {
+    public struct Inner has key, store {
         id: object::UID,
     }
 
@@ -26,17 +23,17 @@ module a::m {
     }
 
     public entry fun add_dynamic_field(inner: Inner, ctx: &mut TxContext) {
-        let outer = Outer {id: object::new(ctx)};
+        let mut outer = Outer {id: object::new(ctx)};
         add<u64, Inner>(&mut outer.id, 0, inner);
-        transfer::transfer(outer, sender(ctx));
+        transfer::transfer(outer, ctx.sender());
     }
 
     public entry fun add_and_remove_dynamic_field(inner: Inner, ctx: &mut TxContext) {
-        let outer = Outer {id: object::new(ctx)};
+        let mut outer = Outer {id: object::new(ctx)};
         add<u64, Inner>(&mut outer.id, 0, inner);
         let removed = remove<u64, Inner>(&mut outer.id, 0);
         transfer::public_share_object(removed);
-        transfer::transfer(outer, sender(ctx));
+        transfer::transfer(outer, ctx.sender());
     }
 
 }

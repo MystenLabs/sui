@@ -32,13 +32,7 @@ pub fn run_instruction(
             | Bytecode::MutBorrowField(_)
             | Bytecode::MutBorrowFieldGeneric(_)
             | Bytecode::ImmBorrowFieldGeneric(_)
-            | Bytecode::ImmBorrowField(_)
-            | Bytecode::MutBorrowGlobal(_)
-            | Bytecode::MutBorrowGlobalGeneric(_)
-            | Bytecode::ImmBorrowGlobal(_)
-            | Bytecode::ImmBorrowGlobalGeneric(_)
-            | Bytecode::MoveTo(_)
-            | Bytecode::MoveToGeneric(_) => {
+            | Bytecode::ImmBorrowField(_) => {
                 let len = summary.preconditions.len();
                 summary.preconditions[..(len - 1)]
                     .iter()
@@ -61,8 +55,8 @@ pub fn run_instruction(
             .iter()
             .any(|precondition| !precondition(&initial_state))
     };
-    assert_eq!(
-        unsatisfied_preconditions, false,
+    assert!(
+        !unsatisfied_preconditions,
         "preconditions of instruction not satisfied"
     );
     match summary.effects {

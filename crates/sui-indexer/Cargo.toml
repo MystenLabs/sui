@@ -6,7 +6,6 @@ license = "Apache-2.0"
 publish = false
 edition = "2021"
 
-
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
@@ -17,28 +16,34 @@ chrono.workspace = true
 serde_with.workspace = true
 clap.workspace = true
 tap.workspace = true
-diesel.workspace = true
-diesel-derive-enum.workspace = true
+diesel = { workspace = true, optional = true }
+diesel-derive-enum = { workspace = true, optional = true }
 futures.workspace = true
 itertools.workspace = true
 jsonrpsee.workspace = true
 prometheus.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+rayon.workspace = true
 regex.workspace = true
+tempfile.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
 url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-json.workspace = true
 sui-json-rpc.workspace = true
+sui-json-rpc-api.workspace = true
 sui-json-rpc-types.workspace = true
 sui-open-rpc.workspace = true
 sui-sdk.workspace = true
 sui-types.workspace = true
+sui-package-resolver.workspace = true
 sui-protocol-config.workspace = true
 telemetry-subscribers.workspace = true
 sui-rest-api.workspace = true
@@ -50,10 +55,14 @@ move-binary-format.workspace = true
 
 diesel_migrations.workspace = true
 cached.workspace = true
-workspace-hack.workspace = true
+secrecy = "0.8.0"
+downcast = "0.11.0"
 
 [features]
 pg_integration = []
+default = ["postgres-feature"]
+postgres-feature = ["diesel/postgres", "diesel/postgres_backend", "diesel-derive-enum/postgres"]
+mysql-feature = ["diesel/mysql", "diesel/mysql_backend", "diesel-derive-enum/mysql"]
 
 [dev-dependencies]
 sui-keys.workspace = true
@@ -62,11 +71,8 @@ sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 ntest.workspace = true
 criterion.workspace = true
+simulacrum.workspace = true
 
 [[bin]]
 name = "sui-indexer"
 path = "src/main.rs"
-
-[[bench]]
-name = "indexer_benchmark"
-harness = false

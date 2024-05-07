@@ -12,5 +12,4 @@ reqwest.workspace = true
 tracing.workspace = true
 
 sui-core.workspace = true
-workspace-hack.workspace = true
 

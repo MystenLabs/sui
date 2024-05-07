@@ -31,204 +31,180 @@ error[E04013]: invalid statement or expression in constant
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:17:9
    │
-17 │         spec { };
-   │         ^^^^^^^^ Spec blocks are not supported in constants
+17 │         &x;
+   │         ^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:18:9
    │
-18 │         &x;
-   │         ^^ References (and reference operations) are not supported in constants
+18 │         &mut x;
+   │         ^^^^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:19:9
    │
-19 │         &mut x;
-   │         ^^^^^^ References (and reference operations) are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:20:9
-   │
-20 │         f_public();
+19 │         f_public();
    │         ^^^^^^^^^^ Module calls are not supported in constants
 
 error[E03005]: unbound unscoped name
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:20:9
+   │
+20 │         f_script();
+   │         ^^^^^^^^ Unbound function 'f_script' in current scope
+
+error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:21:9
    │
-21 │         f_script();
-   │         ^^^^^^^^ Unbound function 'f_script' in current scope
+21 │         f_friend();
+   │         ^^^^^^^^^^ Module calls are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:22:9
    │
-22 │         f_friend();
-   │         ^^^^^^^^^^ Module calls are not supported in constants
+22 │         f_private();
+   │         ^^^^^^^^^^^ Module calls are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:23:9
    │
-23 │         f_private();
-   │         ^^^^^^^^^^^ Module calls are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:24:9
-   │
-24 │         0x42::X::f_public();
+23 │         0x42::X::f_public();
    │         ^^^^^^^^^^^^^^^^^^^ Module calls are not supported in constants
 
 error[E03003]: unbound module member
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:25:9
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:24:9
    │
-25 │         0x42::X::f_script();
+24 │         0x42::X::f_script();
    │         ^^^^^^^^^^^^^^^^^ Invalid module access. Unbound function 'f_script' in module '0x42::X'
 
 error[E04001]: restricted visibility
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:26:9
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:25:9
    │
  4 │     public(friend) fun f_friend() {}
    │     -------------- This function can only be called from a 'friend' of module '0x42::X'
    ·
-26 │         0x42::X::f_friend();
-   │         ^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::X::f_friend'
+25 │         0x42::X::f_friend();
+   │         ^^^^^^^^^^^^^^^^^^^ Invalid call to 'public(friend)' visible function '0x42::X::f_friend'
+
+error[E04013]: invalid statement or expression in constant
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:25:9
+   │
+25 │         0x42::X::f_friend();
+   │         ^^^^^^^^^^^^^^^^^^^ Module calls are not supported in constants
+
+error[E04001]: restricted visibility
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:26:9
+   │
+ 5 │     fun f_private() {}
+   │         --------- This function is internal to its module. Only 'public' and 'public(friend)' functions can be called outside of their module
+   ·
+26 │         0x42::X::f_private();
+   │         ^^^^^^^^^^^^^^^^^^^^ Invalid call to internal function '0x42::X::f_private'
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:26:9
    │
-26 │         0x42::X::f_friend();
-   │         ^^^^^^^^^^^^^^^^^^^ Module calls are not supported in constants
-
-error[E04001]: restricted visibility
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:27:9
-   │
- 5 │     fun f_private() {}
-   │         --------- This function is internal to its module. Only 'public', 'public(friend)', and 'public(package)' functions can be called outside of their module
-   ·
-27 │         0x42::X::f_private();
-   │         ^^^^^^^^^^^^^^^^^^^^ Invalid call to '0x42::X::f_private'
+26 │         0x42::X::f_private();
+   │         ^^^^^^^^^^^^^^^^^^^^ Module calls are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:27:9
    │
-27 │         0x42::X::f_private();
-   │         ^^^^^^^^^^^^^^^^^^^^ Module calls are not supported in constants
+27 │         freeze(&mut x);
+   │         ^^^^^^^^^^^^^^ 'freeze' is not supported in constants
+
+error[E04013]: invalid statement or expression in constant
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:27:16
+   │
+27 │         freeze(&mut x);
+   │                ^^^^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:28:9
    │
-28 │         freeze(&mut x);
-   │         ^^^^^^^^^^^^^^ 'freeze' is not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:28:16
-   │
-28 │         freeze(&mut x);
-   │                ^^^^^^ References (and reference operations) are not supported in constants
+28 │         assert!(true, 42);
+   │         ^^^^^^^^^^^^^^^^^ 'assert' is not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:29:9
    │
-29 │         assert!(true, 42);
-   │         ^^^^^^^^^^^^^^^^^ 'assert' is not supported in constants
+29 │         if (true) 0 else 1;
+   │         ^^^^^^^^^^^^^^^^^^ 'if' expressions are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:30:9
    │
-30 │         if (true) 0 else 1;
-   │         ^^^^^^^^^^^^^^^^^^ 'if' expressions are not supported in constants
+30 │         loop ();
+   │         ^^^^^^^ 'loop' expressions are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:31:9
    │
-31 │         loop ();
-   │         ^^^^^^^ 'loop' expressions are not supported in constants
+31 │         loop { break; continue; };
+   │         ^^^^^^^^^^^^^^^^^^^^^^^^^ 'loop' expressions are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:32:9
    │
-32 │         loop { break; continue; };
-   │         ^^^^^^^^^^^^^^^^^^^^^^^^^ 'loop' expressions are not supported in constants
+32 │         while (true) ();
+   │         ^^^^^^^^^^^^^^^ 'while' expressions are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:33:9
    │
-33 │         while (true) ();
-   │         ^^^^^^^^^^^^^^^ 'while' expressions are not supported in constants
+33 │         x = 1;
+   │         ^^^^^ Assignments are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:34:9
    │
-34 │         x = 1;
-   │         ^^^^^ Assignments are not supported in constants
+34 │         return 0;
+   │         ^^^^^^^^ 'return' expressions are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:35:9
    │
-35 │         return 0;
-   │         ^^^^^^^^ 'return' expressions are not supported in constants
+35 │         abort 0;
+   │         ^^^^^^^ 'abort' expressions are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:36:9
    │
-36 │         abort 0;
-   │         ^^^^^^^ 'abort' expressions are not supported in constants
+36 │         *(&mut 0) = 0;
+   │         ^^^^^^^^^^^^^ References (and reference operations) are not supported in constants
+
+error[E04013]: invalid statement or expression in constant
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:36:11
+   │
+36 │         *(&mut 0) = 0;
+   │           ^^^^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
    ┌─ tests/move_check/typing/constant_unsupported_exps.move:37:9
    │
-37 │         *(&mut 0) = 0;
-   │         ^^^^^^^^^^^^^ References (and reference operations) are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:37:10
-   │
-37 │         *(&mut 0) = 0;
-   │          ^^^^^^^^ References (and reference operations) are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:38:9
-   │
-38 │         b.f = 0;
-   │         ^ References (and reference operations) are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:38:9
-   │
-38 │         b.f = 0;
+37 │         b.f = 0;
    │         ^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:38:9
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:37:9
    │
-38 │         b.f = 0;
+37 │         b.f = 0;
    │         ^^^^^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:39:9
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:38:9
    │
-39 │         b.f;
-   │         ^ References (and reference operations) are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:39:9
-   │
-39 │         b.f;
+38 │         b.f;
    │         ^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:40:9
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:39:9
    │
-40 │         *&b.f;
+39 │         *&b.f;
    │         ^^^^^ References (and reference operations) are not supported in constants
 
 error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:40:10
+   ┌─ tests/move_check/typing/constant_unsupported_exps.move:39:10
    │
-40 │         *&b.f;
+39 │         *&b.f;
    │          ^^^^ References (and reference operations) are not supported in constants
-
-error[E04013]: invalid statement or expression in constant
-   ┌─ tests/move_check/typing/constant_unsupported_exps.move:40:11
-   │
-40 │         *&b.f;
-   │           ^ References (and reference operations) are not supported in constants
 

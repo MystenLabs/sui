@@ -7,6 +7,7 @@ use crate::epoch::committee_store::CommitteeStore;
 use mysten_metrics::histogram::{Histogram, HistogramVec};
 use prometheus::core::GenericCounter;
 use prometheus::{register_int_counter_vec_with_registry, IntCounterVec, Registry};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::effects::{SignedTransactionEffects, TransactionEffectsAPI};
@@ -14,8 +15,8 @@ use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponse, HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse,
-    SystemStateRequest, TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
+    HandleCertificateResponseV2, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionStatus, VerifiedObjectInfoResponse,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::sui_system_state::SuiSystemState;
@@ -306,12 +307,13 @@ where
     pub async fn handle_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<PlainTransactionInfoResponse, SuiError> {
         let _timer = self.metrics.handle_transaction_latency.start_timer();
         let digest = *transaction.digest();
         let response = self
             .authority_client
-            .handle_transaction(transaction.clone())
+            .handle_transaction(transaction.clone(), client_addr)
             .await?;
         let response = check_error!(
             self.address,
@@ -319,21 +321,6 @@ where
             "Client error in handle_transaction"
         )?;
         Ok(response)
-    }
-
-    fn verify_certificate_response(
-        &self,
-        digest: &TransactionDigest,
-        response: HandleCertificateResponse,
-    ) -> SuiResult<HandleCertificateResponse> {
-        Ok(HandleCertificateResponse {
-            signed_effects: self.check_signed_effects_plain(
-                digest,
-                response.signed_effects,
-                None,
-            )?,
-            events: response.events,
-        })
     }
 
     fn verify_certificate_response_v2(
@@ -355,36 +342,18 @@ where
     pub async fn handle_certificate_v2(
         &self,
         certificate: CertifiedTransaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError> {
         let digest = *certificate.digest();
         let _timer = self.metrics.handle_certificate_latency.start_timer();
         let response = self
             .authority_client
-            .handle_certificate_v2(certificate)
+            .handle_certificate_v2(certificate, client_addr)
             .await?;
 
         let verified = check_error!(
             self.address,
             self.verify_certificate_response_v2(&digest, response),
-            "Client error in handle_certificate"
-        )?;
-        Ok(verified)
-    }
-
-    pub async fn handle_certificate(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<HandleCertificateResponse, SuiError> {
-        let digest = *certificate.digest();
-        let _timer = self.metrics.handle_certificate_latency.start_timer();
-        let response = self
-            .authority_client
-            .handle_certificate(certificate)
-            .await?;
-
-        let verified = check_error!(
-            self.address,
-            self.verify_certificate_response(&digest, response),
             "Client error in handle_certificate"
         )?;
         Ok(verified)

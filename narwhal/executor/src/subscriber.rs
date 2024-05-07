@@ -112,7 +112,6 @@ async fn run_notify<State: ExecutionState + Send + Sync + 'static>(
             _ = rx_shutdown.receiver.recv() => {
                 return
             }
-
         }
     }
 }
@@ -220,7 +219,8 @@ impl Subscriber {
             debug!("No batches to fetch, payload is empty");
             return ConsensusOutput {
                 sub_dag: Arc::new(deliver),
-                batches: vec![],
+                // Length of `batches` must match certificate count in `sub_dag` even if empty.
+                batches: vec![Vec::new(); num_certs],
             };
         }
 
@@ -269,6 +269,13 @@ impl Subscriber {
         let fetched_batches =
             Self::fetch_batches_from_workers(&inner, batch_digests_and_workers).await;
         drop(fetched_batches_timer);
+
+        for batch in fetched_batches.values() {
+            inner
+                .metrics
+                .consensus_output_transactions
+                .inc_by(batch.transactions().len() as u64);
+        }
 
         // Map all fetched batches to their respective certificates and submit as
         // consensus output

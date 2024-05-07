@@ -23,19 +23,19 @@ mod surfer_state;
 mod surfer_task;
 
 const VALIDATOR_COUNT: usize = 7;
-const EPOCH_DURATION_MS: u64 = 15000;
 
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
 
 pub async fn run<S: SurfStrategy + Default>(
     run_duration: Duration,
+    epoch_duration: Duration,
     package_paths: Vec<PathBuf>,
 ) -> SurfStatistics {
     let cluster = Arc::new(
         TestClusterBuilder::new()
             .with_num_validators(VALIDATOR_COUNT)
-            .with_epoch_duration_ms(EPOCH_DURATION_MS)
+            .with_epoch_duration_ms(epoch_duration.as_millis() as u64)
             .with_accounts(vec![
                 AccountConfig {
                     address: None,
@@ -48,7 +48,8 @@ pub async fn run<S: SurfStrategy + Default>(
     );
     info!(
         "Started cluster with {} validators and epoch duration of {:?}ms",
-        VALIDATOR_COUNT, EPOCH_DURATION_MS
+        VALIDATOR_COUNT,
+        epoch_duration.as_millis()
     );
 
     let seed = rand::thread_rng().gen::<u64>();

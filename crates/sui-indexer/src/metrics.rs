@@ -1,10 +1,71 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::net::SocketAddr;
+
+use axum::{extract::Extension, http::StatusCode, routing::get, Router};
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
+use prometheus::{Registry, TextEncoder};
+use regex::Regex;
+use tracing::{info, warn};
+
+use mysten_metrics::RegistryService;
+
+const METRICS_ROUTE: &str = "/metrics";
+
+pub fn start_prometheus_server(
+    addr: SocketAddr,
+    fn_url: &str,
+) -> Result<(RegistryService, Registry), anyhow::Error> {
+    let converted_fn_url = convert_url(fn_url);
+    if converted_fn_url.is_none() {
+        warn!(
+            "Failed to convert full node url {} to a shorter version",
+            fn_url
+        );
+    }
+    let fn_url_str = converted_fn_url.unwrap_or_else(|| "unknown_url".to_string());
+
+    let labels = HashMap::from([("indexer_fullnode".to_string(), fn_url_str)]);
+    info!("Starting prometheus server with labels: {:?}", labels);
+    let registry = Registry::new_custom(Some("indexer".to_string()), Some(labels))?;
+    let registry_service = RegistryService::new(registry.clone());
+
+    let app = Router::new()
+        .route(METRICS_ROUTE, get(metrics))
+        .layer(Extension(registry_service.clone()));
+
+    tokio::spawn(async move {
+        axum::Server::bind(&addr)
+            .serve(app.into_make_service())
+            .await
+            .unwrap();
+    });
+    Ok((registry_service, registry))
+}
+
+async fn metrics(Extension(registry_service): Extension<RegistryService>) -> (StatusCode, String) {
+    let metrics_families = registry_service.gather_all();
+    match TextEncoder.encode_to_string(&metrics_families) {
+        Ok(metrics) => (StatusCode::OK, metrics),
+        Err(error) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("unable to encode metrics: {error}"),
+        ),
+    }
+}
+
+fn convert_url(url_str: &str) -> Option<String> {
+    // NOTE: unwrap here is safe because the regex is a constant.
+    let re = Regex::new(r"https?://([a-z0-9-]+\.[a-z0-9-]+\.[a-z]+)").unwrap();
+    let captures = re.captures(url_str)?;
+
+    captures.get(1).map(|m| m.as_str().to_string())
+}
 
 /// Prometheus metrics for sui-indexer.
 // buckets defined in seconds
@@ -31,19 +92,26 @@ pub struct IndexerMetrics {
     pub latest_fullnode_checkpoint_sequence_number: IntGauge,
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
+    pub latest_object_snapshot_sequence_number: IntGauge,
+    // lag starting from the timestamp of the latest checkpoint to the current time
+    pub download_lag_ms: IntGauge,
+    pub index_lag_ms: IntGauge,
+    pub db_commit_lag_ms: IntGauge,
     // checkpoint E2E latency is:
     // fullnode_download_latency + checkpoint_index_latency + db_commit_latency
+    pub checkpoint_download_bytes_size: IntGauge,
     pub fullnode_checkpoint_data_download_latency: Histogram,
     pub fullnode_checkpoint_wait_and_download_latency: Histogram,
     pub fullnode_transaction_download_latency: Histogram,
     pub fullnode_object_download_latency: Histogram,
     pub checkpoint_index_latency: Histogram,
+    pub indexing_batch_size: IntGauge,
     pub indexing_tx_object_changes_latency: Histogram,
     pub indexing_objects_latency: Histogram,
     pub indexing_get_object_in_mem_hit: IntCounter,
     pub indexing_get_object_db_hit: IntCounter,
     pub indexing_module_resolver_in_mem_hit: IntCounter,
-    pub indexing_module_resolver_in_mem_miss: IntCounter,
+    pub indexing_package_resolver_in_mem_hit: IntCounter,
     pub indexing_packages_latency: Histogram,
     pub checkpoint_objects_index_latency: Histogram,
     pub checkpoint_db_commit_latency: Histogram,
@@ -52,14 +120,21 @@ pub struct IndexerMetrics {
     pub checkpoint_db_commit_latency_transactions_chunks: Histogram,
     pub checkpoint_db_commit_latency_transactions_chunks_transformation: Histogram,
     pub checkpoint_db_commit_latency_objects: Histogram,
+    pub checkpoint_db_commit_latency_objects_snapshot: Histogram,
+    pub checkpoint_db_commit_latency_objects_history: Histogram,
     pub checkpoint_db_commit_latency_objects_chunks: Histogram,
+    pub checkpoint_db_commit_latency_objects_snapshot_chunks: Histogram,
+    pub checkpoint_db_commit_latency_objects_history_chunks: Histogram,
     pub checkpoint_db_commit_latency_events: Histogram,
     pub checkpoint_db_commit_latency_events_chunks: Histogram,
     pub checkpoint_db_commit_latency_packages: Histogram,
     pub checkpoint_db_commit_latency_tx_indices: Histogram,
     pub checkpoint_db_commit_latency_tx_indices_chunks: Histogram,
     pub checkpoint_db_commit_latency_checkpoints: Histogram,
-    pub checkpoint_db_commit_latency_epochs: Histogram,
+    pub checkpoint_db_commit_latency_epoch: Histogram,
+    pub advance_epoch_latency: Histogram,
+    pub update_object_snapshot_latency: Histogram,
+    pub tokio_blocking_task_wait_latency: Histogram,
     // average latency of committing 1000 transactions.
     // 1000 is not necessarily the batch size, it's to roughly map average tx commit latency to [0.1, 1] seconds,
     // which is well covered by DB_COMMIT_LATENCY_SEC_BUCKETS.
@@ -169,6 +244,31 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            latest_object_snapshot_sequence_number: register_int_gauge_with_registry!(
+                "latest_object_snapshot_sequence_number",
+                "Latest object snapshot sequence number from the Indexer",
+                registry,
+            ).unwrap(),
+            download_lag_ms: register_int_gauge_with_registry!(
+                "download_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            index_lag_ms: register_int_gauge_with_registry!(
+                "index_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            db_commit_lag_ms: register_int_gauge_with_registry!(
+                "db_commit_lag_ms",
+                "Lag of the latest checkpoint in milliseconds",
+                registry,
+            ).unwrap(),
+            checkpoint_download_bytes_size: register_int_gauge_with_registry!(
+                "checkpoint_download_bytes_size",
+                "Size of the downloaded checkpoint in bytes",
+                registry,
+            ).unwrap(),
             fullnode_checkpoint_data_download_latency: register_histogram_with_registry!(
                 "fullnode_checkpoint_data_download_latency",
                 "Time spent in downloading checkpoint and transation for a new checkpoint from the Full Node",
@@ -205,6 +305,11 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            indexing_batch_size: register_int_gauge_with_registry!(
+                "indexing_batch_size",
+                "Size of the indexing batch",
+                registry,
+            ).unwrap(),
             indexing_tx_object_changes_latency: register_histogram_with_registry!(
                 "indexing_tx_object_changes_latency",
                 "Time spent in indexing object changes for a transaction",
@@ -244,9 +349,9 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            indexing_module_resolver_in_mem_miss: register_int_counter_with_registry!(
-                "indexing_module_resolver_in_mem_miss",
-                "Total number module resolver miss in mem",
+            indexing_package_resolver_in_mem_hit: register_int_counter_with_registry!(
+                "indexing_package_resolver_in_mem_hit",
+                "Total number package resolver hit in mem",
                 registry,
             )
             .unwrap(),
@@ -300,6 +405,19 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_db_commit_latency_objects_snapshot: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_snapshot",
+                "Time spent commiting objects snapshots",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_objects_history: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_history",
+                "Time spent commiting objects history",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             checkpoint_db_commit_latency_objects_chunks: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_objects_chunks",
                 "Time spent commiting objects chunks",
@@ -307,6 +425,19 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
+            checkpoint_db_commit_latency_objects_snapshot_chunks: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_snapshot_chunks",
+                "Time spent commiting objects snapshot chunks",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            checkpoint_db_commit_latency_objects_history_chunks: register_histogram_with_registry!(
+                "checkpoint_db_commit_latency_objects_history_chunks",
+                "Time spent commiting objects history chunks",
+                DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             checkpoint_db_commit_latency_events: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_events",
                 "Time spent commiting events",
@@ -350,13 +481,31 @@ impl IndexerMetrics {
                 registry,
             )
             .unwrap(),
-            checkpoint_db_commit_latency_epochs: register_histogram_with_registry!(
+            checkpoint_db_commit_latency_epoch: register_histogram_with_registry!(
                 "checkpoint_db_commit_latency_epochs",
                 "Time spent commiting epochs",
                 DB_COMMIT_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
+            advance_epoch_latency: register_histogram_with_registry!(
+                "advance_epoch_latency",
+                "Time spent in advancing epoch",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            update_object_snapshot_latency: register_histogram_with_registry!(
+                "update_object_snapshot_latency",
+                "Time spent in updating object snapshot",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
+            tokio_blocking_task_wait_latency: register_histogram_with_registry!(
+                "tokio_blocking_task_wait_latency",
+                "Time spent to wait for tokio blocking task pool",
+                LATENCY_SEC_BUCKETS.to_vec(),
+                registry,
+            ).unwrap(),
             thousand_transaction_avg_db_commit_latency: register_histogram_with_registry!(
                 "transaction_db_commit_latency",
                 "Average time spent commiting 1000 transactions to the db",
@@ -551,31 +700,6 @@ impl IndexerMetrics {
             checkpoint_metrics_processor_failure: register_int_counter_with_registry!(
                 "checkpoint_metrics_processor_failure",
                 "Total number of checkpoint metrics processor failure",
-                registry,
-            )
-            .unwrap(),
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct IndexerObjectProcessorMetrics {
-    pub total_object_batch_processed: IntCounter,
-    pub total_object_processor_error: IntCounter,
-}
-
-impl IndexerObjectProcessorMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            total_object_batch_processed: register_int_counter_with_registry!(
-                "total_object_batch_processed",
-                "Total number of object batches processed",
-                registry,
-            )
-            .unwrap(),
-            total_object_processor_error: register_int_counter_with_registry!(
-                "total_object_processor_error",
-                "Total number of object processor error",
                 registry,
             )
             .unwrap(),

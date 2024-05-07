@@ -6,10 +6,9 @@
 //# publish --upgradeable --sender A
 module A0::m {
     use sui::package;
-    use sui::tx_context::TxContext;
 
-    struct A {}
-    struct M has drop {}
+    public struct A {}
+    public struct M has drop {}
 
     fun init(m: M, ctx: &mut TxContext) {
         package::claim_and_keep(m, ctx);
@@ -19,11 +18,10 @@ module A0::m {
 //# upgrade --package A0 --upgrade-capability 1,2 --sender A
 module A1::m {
     use sui::package::{Self, Publisher};
-    use sui::tx_context::TxContext;
 
-    struct A {}
-    struct B {}
-    struct M has drop {}
+    public struct A {}
+    public struct B {}
+    public struct M has drop {}
 
     fun init(m: M, ctx: &mut TxContext) {
         package::claim_and_keep(m, ctx);

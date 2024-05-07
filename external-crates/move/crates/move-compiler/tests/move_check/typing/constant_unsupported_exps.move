@@ -14,7 +14,6 @@ module M {
         let x = 0;
         let s: signer = abort 0;
         let b = B { f: 0 };
-        spec { };
         &x;
         &mut x;
         f_public();

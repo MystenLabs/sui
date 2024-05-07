@@ -1,13 +1,9 @@
 # Filtering on package
 {
-  transactionBlockConnection(
-    filter: {
-      package: "0x0000000000000000000000000000000000000000000000000000000000000003"
-    }
-  ) {
+  transactionBlocks(filter: { function: "0x3" }) {
     nodes {
       sender {
-        location
+        address
       }
       gasInput {
         gasPrice

@@ -5,7 +5,7 @@ use std::fs;
 use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use anyhow::Context;
 use anyhow::Result;
@@ -13,18 +13,21 @@ use object_store::path::Path;
 use object_store::DynObjectStore;
 use serde::Serialize;
 use tokio::sync::{mpsc, oneshot};
-use tracing::info;
+use tracing::{error, info};
 
+use sui_config::object_storage_config::{ObjectStoreConfig, ObjectStoreType};
 use sui_indexer::framework::Handler;
 use sui_rest_api::CheckpointData;
 use sui_storage::object_store::util::{copy_file, path_to_filesystem};
-use sui_storage::object_store::{ObjectStoreConfig, ObjectStoreType};
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 
 use crate::analytics_metrics::AnalyticsMetrics;
 use crate::handlers::AnalyticsHandler;
 use crate::writers::AnalyticsWriter;
-use crate::{AnalyticsIndexerConfig, FileMetadata, ParquetSchema, EPOCH_DIR_PREFIX};
+use crate::{
+    join_paths, AnalyticsIndexerConfig, FileMetadata, MaxCheckpointReader, ParquetSchema,
+    EPOCH_DIR_PREFIX,
+};
 
 pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     handler: Box<dyn AnalyticsHandler<S>>,
@@ -37,7 +40,12 @@ pub struct AnalyticsProcessor<S: Serialize + ParquetSchema> {
     sender: mpsc::Sender<FileMetadata>,
     #[allow(dead_code)]
     kill_sender: oneshot::Sender<()>,
+    #[allow(dead_code)]
+    max_checkpoint_sender: oneshot::Sender<()>,
+    num_checkpoint_iterations: u64,
 }
+
+const CHECK_FILE_SIZE_ITERATION_CYCLE: u64 = 50;
 
 #[async_trait::async_trait]
 impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
@@ -66,7 +74,10 @@ impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
         let num_checkpoints_processed =
             self.current_checkpoint_range.end - self.current_checkpoint_range.start;
         let cut_new_files = (num_checkpoints_processed >= self.config.checkpoint_interval)
-            || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s);
+            || (self.last_commit_instant.elapsed().as_secs() > self.config.time_interval_s)
+            || (self.num_checkpoint_iterations % CHECK_FILE_SIZE_ITERATION_CYCLE == 0
+                && self.writer.file_size()?.unwrap_or(0)
+                    > self.config.max_file_size_mb * 1024 * 1024);
         if cut_new_files {
             self.cut().await?;
             self.reset()?;
@@ -83,7 +94,7 @@ impl<S: Serialize + ParquetSchema + 'static> Handler for AnalyticsProcessor<S> {
             .end
             .checked_add(1)
             .context("Checkpoint sequence num overflow")?;
-
+        self.num_checkpoint_iterations += 1;
         Ok(())
     }
 }
@@ -92,6 +103,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     pub async fn new(
         handler: Box<dyn AnalyticsHandler<S>>,
         writer: Box<dyn AnalyticsWriter<S>>,
+        max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
         next_checkpoint_seq_num: CheckpointSequenceNumber,
         metrics: AnalyticsMetrics,
         config: AnalyticsIndexerConfig,
@@ -112,9 +124,17 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             remote_object_store,
             local_object_store.clone(),
             checkpoint_dir,
+            config.remote_store_path_prefix.clone(),
             receiver,
             kill_receiver,
             cloned_metrics,
+            name.clone(),
+        ));
+        let (max_checkpoint_sender, max_checkpoint_receiver) = oneshot::channel::<()>();
+        tokio::task::spawn(Self::setup_max_checkpoint_metrics_updates(
+            max_checkpoint_reader,
+            metrics.clone(),
+            max_checkpoint_receiver,
             name,
         ));
         Ok(Self {
@@ -125,8 +145,10 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
             last_commit_instant: Instant::now(),
             kill_sender,
             sender,
+            max_checkpoint_sender,
             metrics,
             config,
+            num_checkpoint_iterations: 0,
         })
     }
 
@@ -135,8 +157,9 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
     }
 
     async fn cut(&mut self) -> anyhow::Result<()> {
-        if !self.current_checkpoint_range.is_empty() {
-            self.writer.flush(self.current_checkpoint_range.end)?;
+        if !self.current_checkpoint_range.is_empty()
+            && self.writer.flush(self.current_checkpoint_range.end)?
+        {
             let file_metadata = FileMetadata::new(
                 self.config.file_type,
                 self.config.file_format,
@@ -192,6 +215,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         remote_object_store: Arc<DynObjectStore>,
         local_object_store: Arc<DynObjectStore>,
         local_staging_root_dir: PathBuf,
+        remote_store_path_prefix: Option<Path>,
         mut file_recv: mpsc::Receiver<FileMetadata>,
         mut recv: oneshot::Receiver<()>,
         metrics: AnalyticsMetrics,
@@ -207,6 +231,7 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
                         Self::sync_file_to_remote(
                                 local_staging_root_dir.clone(),
                                 file_metadata.file_path(),
+                                remote_store_path_prefix.clone(),
                                 local_object_store.clone(),
                                 remote_object_store.clone()
                             )
@@ -223,14 +248,43 @@ impl<S: Serialize + ParquetSchema + 'static> AnalyticsProcessor<S> {
         Ok(())
     }
 
+    async fn setup_max_checkpoint_metrics_updates(
+        max_checkpoint_reader: Box<dyn MaxCheckpointReader>,
+        analytics_metrics: AnalyticsMetrics,
+        mut recv: oneshot::Receiver<()>,
+        handler_name: String,
+    ) -> Result<()> {
+        let mut interval = tokio::time::interval(Duration::from_secs(300));
+        loop {
+            tokio::select! {
+                _ = &mut recv => break,
+                 _ = interval.tick() => {
+                    let max_checkpoint = max_checkpoint_reader.max_checkpoint().await;
+                    if let Ok(max_checkpoint) = max_checkpoint {
+                        analytics_metrics
+                            .max_checkpoint_on_store
+                            .with_label_values(&[&handler_name])
+                            .set(max_checkpoint);
+                    } else {
+                        error!("Failed to read max checkpoint for {} with err: {}", handler_name, max_checkpoint.unwrap_err());
+                    }
+
+                 }
+            }
+        }
+        Ok(())
+    }
+
     async fn sync_file_to_remote(
         dir: PathBuf,
         path: Path,
+        prefix: Option<Path>,
         from: Arc<DynObjectStore>,
         to: Arc<DynObjectStore>,
     ) -> Result<()> {
-        info!("Syncing file to remote: {:?}", path);
-        copy_file(path.clone(), path.clone(), from, to).await?;
+        let remote_dest = join_paths(prefix, &path);
+        info!("Syncing file to remote: {:?}", &remote_dest);
+        copy_file(&path, &remote_dest, &from, &to).await?;
         fs::remove_file(path_to_filesystem(dir, &path)?)?;
         Ok(())
     }

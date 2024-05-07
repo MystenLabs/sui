@@ -1,6 +1,5 @@
 [package]
 name = "Dep"
-version = "0.0.0"
 
 [addresses]
 a = "0x41"
