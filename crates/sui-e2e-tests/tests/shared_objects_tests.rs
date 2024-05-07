@@ -134,7 +134,7 @@ async fn shared_object_deletion_multiple_times() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
         .await
         .unwrap();
@@ -191,7 +191,7 @@ async fn shared_object_deletion_multiple_times_cert_racing() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
         .await
         .unwrap();
@@ -305,7 +305,7 @@ async fn shared_object_deletion_multi_certs() {
     let fullnode = test_cluster.spawn_new_fullnode().await.sui_node;
     fullnode
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[inc_tx_a_digest, inc_tx_b_digest])
         .await
         .unwrap();

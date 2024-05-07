@@ -147,7 +147,7 @@ async fn test_net_determinism() {
     handle
         .sui_node
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();

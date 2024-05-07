@@ -1304,7 +1304,7 @@ impl SuiNode {
             state.clone(),
             checkpoint_store,
             epoch_store,
-            state.get_cache_reader().clone(),
+            state.get_transaction_cache_reader().clone(),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1474,7 +1474,7 @@ impl SuiNode {
             // Safe to call because we are in the middle of reconfiguration.
             let latest_system_state = self
                 .state
-                .get_cache_reader()
+                .get_object_cache_reader()
                 .get_sui_system_state_object_unsafe()
                 .expect("Read Sui System State object cannot fail");
 
