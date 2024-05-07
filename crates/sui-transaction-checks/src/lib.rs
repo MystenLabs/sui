@@ -187,7 +187,7 @@ mod checked {
         gas_override: &[ObjectRef],
     ) -> SuiResult<SuiGasStatus> {
         // Cheap validity checks that is ok to run multiple times during processing.
-        transaction.check_version_supported(protocol_config)?;
+        transaction.check_version_and_features_supported(protocol_config)?;
         let gas = if gas_override.is_empty() {
             transaction.validity_check(protocol_config)?;
             transaction.gas()

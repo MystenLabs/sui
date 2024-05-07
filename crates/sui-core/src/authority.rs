@@ -1511,7 +1511,7 @@ impl AuthorityState {
 
         // Cheap validity checks for a transaction, including input size limits.
         let tx_data = certificate.data().transaction_data();
-        tx_data.check_version_supported(epoch_store.protocol_config())?;
+        tx_data.check_version_and_features_supported(epoch_store.protocol_config())?;
         tx_data.validity_check(epoch_store.protocol_config())?;
 
         // The cost of partially re-auditing a transaction before execution is tolerated.
@@ -1639,7 +1639,7 @@ impl AuthorityState {
         Option<ObjectID>,
     )> {
         // Cheap validity checks for a transaction, including input size limits.
-        transaction.check_version_supported(epoch_store.protocol_config())?;
+        transaction.check_version_and_features_supported(epoch_store.protocol_config())?;
         transaction.validity_check_no_gas_check(epoch_store.protocol_config())?;
 
         let input_object_kinds = transaction.input_objects()?;
@@ -1859,7 +1859,7 @@ impl AuthorityState {
             vec![]
         };
 
-        transaction.check_version_supported(protocol_config)?;
+        transaction.check_version_and_features_supported(protocol_config)?;
         transaction.validity_check_no_gas_check(protocol_config)?;
 
         let input_object_kinds = transaction.input_objects()?;
