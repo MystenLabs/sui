@@ -611,6 +611,14 @@ impl SuiTransactionBlockKind {
                             EndOfEpochTransactionKind::DenyListStateCreate => {
                                 SuiEndOfEpochTransactionKind::CoinDenyListStateCreate
                             }
+                            EndOfEpochTransactionKind::BridgeStateCreate(id) => {
+                                SuiEndOfEpochTransactionKind::BridgeStateCreate(
+                                    (*id.as_bytes()).into(),
+                                )
+                            }
+                            EndOfEpochTransactionKind::BridgeCommitteeInit(seq) => {
+                                SuiEndOfEpochTransactionKind::BridgeCommitteeUpdate(seq)
+                            }
                         })
                         .collect(),
                 })

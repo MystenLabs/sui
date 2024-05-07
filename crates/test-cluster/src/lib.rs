@@ -1235,7 +1235,7 @@ impl TestClusterBuilder {
             .active_validators()
             .zip(bridge_authority_keys.iter())
         {
-            let validator_address = node.config.sui_address();
+            let validator_address = node.config().sui_address();
             // 1, send some gas to validator
             test_cluster
                 .transfer_sui_must_exceed(sender_address, validator_address, 1000000000)
@@ -1263,7 +1263,7 @@ impl TestClusterBuilder {
 
             let tx = Transaction::from_data_and_signer(
                 data,
-                vec![node.config.account_key_pair.keypair()],
+                vec![node.config().account_key_pair.keypair()],
             );
             tasks.push(
                 test_cluster
