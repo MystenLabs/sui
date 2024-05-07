@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useSuiClientQuery } from '@mysten/dapp-kit';
-import { type BalanceChange } from '@mysten/sui.js/src/client';
+import { type BalanceChange } from '@mysten/sui/src/client';
 
 import { PreviewCard } from '../PreviewCard';
 import { onChainAmountToFloat } from '../utils';

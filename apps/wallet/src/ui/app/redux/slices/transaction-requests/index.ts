@@ -10,9 +10,9 @@ import {
 	type WalletSigner,
 } from '_src/ui/app/WalletSigner';
 import type { AppThunkConfig } from '_store/thunk-extras';
-import { type SuiTransactionBlockResponse } from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64 } from '@mysten/sui.js/utils';
+import { type SuiTransactionBlockResponse } from '@mysten/sui/client';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { fromB64 } from '@mysten/sui/utils';
 import { createAsyncThunk, createEntityAdapter, createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction } from '@reduxjs/toolkit';
 

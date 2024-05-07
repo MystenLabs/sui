@@ -109,7 +109,7 @@ importers:
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../sdk/typescript
       '@sentry/react':
@@ -245,7 +245,7 @@ importers:
       '@mysten/ledgerjs-hw-app-sui':
         specifier: workspace:*
         version: link:../../sdk/ledgerjs-hw-app-sui
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../sdk/typescript
       '@mysten/wallet-standard':
@@ -582,7 +582,7 @@ importers:
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../sdk/typescript
       '@tanstack/react-query':
@@ -637,7 +637,7 @@ importers:
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../../sdk/kiosk
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../sdk/typescript
       commander:
@@ -713,7 +713,7 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../sdk/dapp-kit
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../sdk/typescript
       '@tailwindcss/forms':
@@ -765,7 +765,7 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../sdk/dapp-kit
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../sdk/typescript
       '@types/react':
@@ -792,6 +792,138 @@ importers:
       vite:
         specifier: ^4.4.4
         version: 4.4.4(@types/node@20.12.11)(sass@1.63.6)(terser@5.19.1)
+
+  examples/mev_bot:
+    dependencies:
+      '@mysten/bcs':
+        specifier: workspace:*
+        version: link:../../sdk/bcs
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../../sdk/typescript
+      p-limit:
+        specifier: ^4.0.0
+        version: 4.0.0
+    devDependencies:
+      ts-node:
+        specifier: ^10.9.1
+        version: 10.9.1(@swc/core@1.3.92)(@types/node@20.12.11)(typescript@5.3.3)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.3.3
+
+  examples/trading/api:
+    dependencies:
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../../../sdk/typescript
+      '@prisma/client':
+        specifier: ^5.8.1
+        version: 5.13.0(prisma@5.13.0)
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.5
+      express:
+        specifier: ^4.18.2
+        version: 4.18.2
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.17
+      '@types/express':
+        specifier: ^4.17.21
+        version: 4.17.21
+      '@types/node':
+        specifier: ^20.4.2
+        version: 20.4.2
+      concurrently:
+        specifier: ^8.2.0
+        version: 8.2.0
+      prisma:
+        specifier: ^5.8.1
+        version: 5.13.0
+      ts-node:
+        specifier: ^10.9.1
+        version: 10.9.1(@swc/core@1.3.92)(@types/node@20.4.2)(typescript@5.3.3)
+      typescript:
+        specifier: ^5.3.3
+        version: 5.3.3
+
+  examples/trading/frontend:
+    dependencies:
+      '@mysten/dapp-kit':
+        specifier: workspace:*
+        version: link:../../../sdk/dapp-kit
+      '@mysten/sui':
+        specifier: workspace:*
+        version: link:../../../sdk/typescript
+      '@radix-ui/colors':
+        specifier: ^3.0.0
+        version: 3.0.0
+      '@radix-ui/react-icons':
+        specifier: ^1.3.0
+        version: 1.3.0(react@18.2.0)
+      '@radix-ui/themes':
+        specifier: ^2.0.0
+        version: 2.0.0(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      '@tanstack/react-query':
+        specifier: ^5.0.0
+        version: 5.35.1(react@18.2.0)
+      react:
+        specifier: ^18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: ^18.2.0
+        version: 18.2.0(react@18.2.0)
+      react-hot-toast:
+        specifier: ^2.4.1
+        version: 2.4.1(csstype@3.1.2)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      react-router-dom:
+        specifier: ^6.14.2
+        version: 6.14.2(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^18.2.15
+        version: 18.2.15
+      '@types/react-dom':
+        specifier: ^18.2.7
+        version: 18.2.7
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^6.1.0
+        version: 6.1.0(@typescript-eslint/parser@6.1.0(eslint@8.45.0)(typescript@5.3.3))(eslint@8.45.0)(typescript@5.3.3)
+      '@typescript-eslint/parser':
+        specifier: ^6.1.0
+        version: 6.1.0(eslint@8.45.0)(typescript@5.3.3)
+      '@vitejs/plugin-react-swc':
+        specifier: ^3.3.2
+        version: 3.4.0(@swc/helpers@0.5.5)(vite@4.4.11(@types/node@20.12.11)(sass@1.63.6)(terser@5.19.1))
+      autoprefixer:
+        specifier: ^10.4.14
+        version: 10.4.14(postcss@8.4.31)
+      eslint:
+        specifier: ^8.45.0
+        version: 8.45.0
+      eslint-plugin-react-hooks:
+        specifier: ^4.6.0
+        version: 4.6.0(eslint@8.45.0)
+      eslint-plugin-react-refresh:
+        specifier: ^0.4.3
+        version: 0.4.3(eslint@8.45.0)
+      postcss:
+        specifier: ^8.4.31
+        version: 8.4.31
+      prettier:
+        specifier: ^3.0.0
+        version: 3.0.3
+      tailwindcss:
+        specifier: ^3.3.3
+        version: 3.3.3(ts-node@10.9.1(@types/node@20.12.11)(typescript@5.3.3))
+      typescript:
+        specifier: ^5.3.3
+        version: 5.3.3
+      vite:
+        specifier: ^4.4.4
+        version: 4.4.11(@types/node@20.12.11)(sass@1.63.6)(terser@5.19.1)
 
   sdk/bcs:
     dependencies:
@@ -848,7 +980,7 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../dapp-kit
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@types/node':
@@ -870,7 +1002,7 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../../dapp-kit
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../../typescript
       '@radix-ui/colors':
@@ -931,7 +1063,7 @@ importers:
       '@mysten/dapp-kit':
         specifier: workspace:*
         version: link:../../../dapp-kit
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../../../typescript
       '@radix-ui/colors':
@@ -989,7 +1121,7 @@ importers:
 
   sdk/dapp-kit:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@mysten/wallet-standard':
@@ -1080,7 +1212,7 @@ importers:
 
   sdk/deepbook:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
     devDependencies:
@@ -1132,7 +1264,7 @@ importers:
       '@mysten/kiosk':
         specifier: workspace:*
         version: link:../kiosk
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@mysten/zklogin':
@@ -1172,7 +1304,7 @@ importers:
 
   sdk/enoki:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@mysten/zklogin':
@@ -1224,7 +1356,7 @@ importers:
       '@mysten/bcs':
         specifier: workspace:*
         version: link:../bcs
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       graphql:
@@ -1273,7 +1405,7 @@ importers:
 
   sdk/kiosk:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
     devDependencies:
@@ -1333,8 +1465,6 @@ importers:
         specifier: ^0.33.0
         version: 0.33.0(happy-dom@10.5.1)(jsdom@23.0.0)(sass@1.63.6)(terser@5.19.1)
 
-  sdk/move-binary-format-wasm/pkg: {}
-
   sdk/move-bytecode-template:
     devDependencies:
       '@mysten/bcs':
@@ -1355,7 +1485,7 @@ importers:
 
   sdk/suins-toolkit:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
     devDependencies:
@@ -1480,7 +1610,7 @@ importers:
 
   sdk/wallet-standard:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@wallet-standard/core':
@@ -1499,7 +1629,7 @@ importers:
       '@mysten/bcs':
         specifier: workspace:*
         version: link:../bcs
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@noble/hashes':
@@ -1527,7 +1657,7 @@ importers:
 
   sdk/zksend:
     dependencies:
-      '@mysten/sui.js':
+      '@mysten/sui':
         specifier: workspace:*
         version: link:../typescript
       '@mysten/wallet-standard':
@@ -4291,6 +4421,30 @@ packages:
   '@popperjs/core@2.11.8':
     resolution: {integrity: sha512-P1st0aksCrn9sGZhp8GMYwBnQsbvAWsZAX44oXNNvLHGqAOcoVxmjZiohstwQ7SqKnbR47akdNi+uleWD8+g6A==}
 
+  '@prisma/client@5.13.0':
+    resolution: {integrity: sha512-uYdfpPncbZ/syJyiYBwGZS8Gt1PTNoErNYMuqHDa2r30rNSFtgTA/LXsSk55R7pdRTMi5pHkeP9B14K6nHmwkg==}
+    engines: {node: '>=16.13'}
+    peerDependencies:
+      prisma: '*'
+    peerDependenciesMeta:
+      prisma:
+        optional: true
+
+  '@prisma/debug@5.13.0':
+    resolution: {integrity: sha512-699iqlEvzyCj9ETrXhs8o8wQc/eVW+FigSsHpiskSFydhjVuwTJEfj/nIYqTaWFYuxiWQRfm3r01meuW97SZaQ==}
+
+  '@prisma/engines-version@5.13.0-23.b9a39a7ee606c28e3455d0fd60e78c3ba82b1a2b':
+    resolution: {integrity: sha512-AyUuhahTINGn8auyqYdmxsN+qn0mw3eg+uhkp8zwknXYIqoT3bChG4RqNY/nfDkPvzWAPBa9mrDyBeOnWSgO6A==}
+
+  '@prisma/engines@5.13.0':
+    resolution: {integrity: sha512-hIFLm4H1boj6CBZx55P4xKby9jgDTeDG0Jj3iXtwaaHmlD5JmiDkZhh8+DYWkTGchu+rRF36AVROLnk0oaqhHw==}
+
+  '@prisma/fetch-engine@5.13.0':
+    resolution: {integrity: sha512-Yh4W+t6YKyqgcSEB3odBXt7QyVSm0OQlBSldQF2SNXtmOgMX8D7PF/fvH6E6qBCpjB/yeJLy/FfwfFijoHI6sA==}
+
+  '@prisma/get-platform@5.13.0':
+    resolution: {integrity: sha512-B/WrQwYTzwr7qCLifQzYOmQhZcFmIFhR81xC45gweInSUn2hTEbfKUPd2keAog+y5WI5xLAFNJ3wkXplvSVkSw==}
+
   '@radix-ui/colors@3.0.0':
     resolution: {integrity: sha512-FUOsGBkHrYJwCSEtWRCIfQbZG7q1e6DgxCIOe1SUQzDe/7rXXeA47s8yCn6fuTNQAj1Zq4oTFi9Yjp3wzElcxg==}
 
@@ -5867,6 +6021,9 @@ packages:
   '@types/cookie@0.4.1':
     resolution: {integrity: sha512-XW/Aa8APYr6jSVVA1y/DEIZX0/GMKLEVekNG727R8cs56ahETkRAy/3DR7+fJyh7oUgGwNQaRfXCun0+KbWY7Q==}
 
+  '@types/cors@2.8.17':
+    resolution: {integrity: sha512-8CGDvrBj1zgo2qE+oS3pOCyYNqCPryMWY2bGfwA0dcfopWGgxs+78df0Rs3rc9THP4JkOhLsAa+15VdpAqkcUA==}
+
   '@types/cross-spawn@6.0.2':
     resolution: {integrity: sha512-KuwNhp3eza+Rhu8IFI5HUXRP0LIhqH5cAjubUvGXXthh4YYBuP2ntwEX+Cz8GJoZUHlKo247wPWOfA9LYEq4cw==}
 
@@ -5927,8 +6084,8 @@ packages:
   '@types/express-serve-static-core@4.17.35':
     resolution: {integrity: sha512-wALWQwrgiB2AWTT91CB62b6Yt0sNHpznUXeZEcnPU3DRdlDIz74x8Qg1UUYKSVFi+va5vKOLYRBI1bRKiLLKIg==}
 
-  '@types/express@4.17.17':
-    resolution: {integrity: sha512-Q4FmmuLGBG58btUnfS1c1r/NQdlp3DMfGDGig8WhfpA2YRUtEkxAjkZb0yvplJGYdF1fsQ81iMDcH24sSCNC/Q==}
+  '@types/express@4.17.21':
+    resolution: {integrity: sha512-ejlPM315qwLpaQlQDTjPdsUFSc6ZsP4AN6AlWnogPjQ7CVi7PYF3YVz+CY3jE2pwYf7E/7HlDAN0rV2GxTG0HQ==}
 
   '@types/find-cache-dir@3.2.1':
     resolution: {integrity: sha512-frsJrz2t/CeGifcu/6uRo4b+SzAwT4NYCVPu1GN8IB9XTzrpPkGuV0tmh9mN+/L0PklAlsC3u5Fxt0ju00LXIw==}
@@ -7138,9 +7295,6 @@ packages:
     resolution: {integrity: sha512-Oj3cAGPCqOZX7Rz64Uny2GYAZNliQSqfbePrgAQ1wKAihYmCUnraBtJtKcGR4xz7wF+LoJC+ssFZvv5BgF9Igg==}
     engines: {node: '>=8'}
 
-  call-bind@1.0.2:
-    resolution: {integrity: sha512-7O+FbCihrB5WGbFYesctwmTKae6rOiIzmz1icreWJ+0aA7LJfuqhEso2T9ncpcFtzMQtzXf2QGGueWJGTYsqrA==}
-
   call-bind@1.0.6:
     resolution: {integrity: sha512-Mj50FLHtlsoVfRfnHaZvyrooHcrlceNZdL/QBvJJVd9Ta55qCQK0gs4ss2oZDeV9zFCs6ewzYgVE5yfVmfFpVg==}
     engines: {node: '>= 0.4'}
@@ -7549,6 +7703,10 @@ packages:
 
   core-util-is@1.0.3:
     resolution: {integrity: sha512-ZQBvi1DcpJ4GDqanjucZ2Hj3wEO5pZDS89BWbkcrvdxksJorwUDDZamX9ldFkp9aw2lmBDLgkObEA4DWNJ9FYQ==}
+
+  cors@2.8.5:
+    resolution: {integrity: sha512-KIHbLJqu73RGr/hnbrO9uBeixNGuvSQjul/jdFvS/KFSIH1hWVd1ng7zOHx+YrEfInLG7q4n6GHQ9cDtxv/P6g==}
+    engines: {node: '>= 0.10'}
 
   cose-base@1.0.3:
     resolution: {integrity: sha512-s9whTXInMSgAp/NVXVNuVxVKzGH2qck3aQlVHxDCdAEPgtMKwc4Wq6/QKhgdEdgbLSi9rBTAcPoRa6JpiG4ksg==}
@@ -8987,9 +9145,6 @@ packages:
     engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
     os: [darwin]
 
-  function-bind@1.1.1:
-    resolution: {integrity: sha512-yIovAzMX49sF8Yl58fSCWJ5svSLuaibPxXQJFLmBObTuCr0Mf1KiPopGM9NiFjiYBCbfaa2Fh6breQ6ANVTI0A==}
-
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
 
@@ -9017,9 +9172,6 @@ packages:
 
   get-func-name@2.0.0:
     resolution: {integrity: sha512-Hm0ixYtaSZ/V7C8FJrtZIuBBI+iSgL+1Aq82zSu8VQNB4S3Gk8e7Qs3VwBDJAhmRZcFqkl3tQu36g/Foh5I5ig==}
-
-  get-intrinsic@1.2.1:
-    resolution: {integrity: sha512-2DcsyfABl+gVHEfCOaTrWgyt+tb6MSEGmKq+kI5HwLbIYgjgmMcV8KQ41uaKz1xxUcn9tJtgFbQUEVcEbd0FYw==}
 
   get-intrinsic@1.2.4:
     resolution: {integrity: sha512-5uYhsJH8VJBTv7oslg4BznJYhDoRI6waYCxMmCdnTrcCrHA/fCFKoTFz2JKKE0HdDFUF7/oQuhzumXJK7paBRQ==}
@@ -9280,9 +9432,6 @@ packages:
   has-flag@4.0.0:
     resolution: {integrity: sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ==}
     engines: {node: '>=8'}
-
-  has-property-descriptors@1.0.0:
-    resolution: {integrity: sha512-62DVLZGoiEBDHQyqG4w9xCuZ7eJEwNmJRWw2VY84Oedb7WFcA27fiEVe8oUQx9hAUJ4ekurquucTGwsyO1XGdQ==}
 
   has-property-descriptors@1.0.1:
     resolution: {integrity: sha512-VsX8eaIewvas0xnvinAe9bw4WfIeODpGYikiWYLH+dma0Jw6KHYqWiWfhQlgOVK8D6PvjubK5Uc4P0iIhIcNVg==}
@@ -11825,6 +11974,11 @@ packages:
   pretty-hrtime@1.0.3:
     resolution: {integrity: sha512-66hKPCr+72mlfiSjlEB1+45IjXSqvVAIy6mocupoww4tBFE9R9IhwwUGoI4G++Tc9Aq+2rxOt0RFU6gPcrte0A==}
     engines: {node: '>= 0.8'}
+
+  prisma@5.13.0:
+    resolution: {integrity: sha512-kGtcJaElNRAdAGsCNykFSZ7dBKpL14Cbs+VaQ8cECxQlRPDjBlMHNFYeYt0SKovAVy2Y65JXQwB3A5+zIQwnTg==}
+    engines: {node: '>=16.13'}
+    hasBin: true
 
   process-nextick-args@2.0.1:
     resolution: {integrity: sha512-3ouUOpQhtgrbOa17J7+uxOTpITYWaGP7/AhoR3+A+/1e9skrzelGi/dXzEYyvbxubEF6Wn2ypscTKiKJFFn1ag==}
@@ -14517,7 +14671,7 @@ snapshots:
       eslint: 8.45.0
       eslint-scope: 5.1.1
       eslint-visitor-keys: 2.1.0
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@babel/generator@7.22.9':
     dependencies:
@@ -14569,7 +14723,7 @@ snapshots:
       '@babel/helper-replace-supers': 7.22.5
       '@babel/helper-skip-transparent-expression-wrappers': 7.22.5
       '@babel/helper-split-export-declaration': 7.22.6
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -14584,7 +14738,7 @@ snapshots:
       '@babel/helper-replace-supers': 7.22.5
       '@babel/helper-skip-transparent-expression-wrappers': 7.22.5
       '@babel/helper-split-export-declaration': 7.22.6
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -14599,14 +14753,14 @@ snapshots:
       '@babel/helper-replace-supers': 7.22.9(@babel/core@7.22.9)
       '@babel/helper-skip-transparent-expression-wrappers': 7.22.5
       '@babel/helper-split-export-declaration': 7.22.6
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@babel/helper-create-regexp-features-plugin@7.22.9(@babel/core@7.22.9)':
     dependencies:
       '@babel/core': 7.22.9
       '@babel/helper-annotate-as-pure': 7.22.5
       regexpu-core: 5.3.2
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@babel/helper-define-polyfill-provider@0.3.3(@babel/core@7.22.9)':
     dependencies:
@@ -14616,7 +14770,7 @@ snapshots:
       debug: 4.3.4(supports-color@8.1.1)
       lodash.debounce: 4.0.8
       resolve: 1.22.2
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -15470,7 +15624,7 @@ snapshots:
       babel-plugin-polyfill-corejs2: 0.3.3(@babel/core@7.22.9)
       babel-plugin-polyfill-corejs3: 0.5.3(@babel/core@7.22.9)
       babel-plugin-polyfill-regenerator: 0.4.1(@babel/core@7.22.9)
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -15821,7 +15975,7 @@ snapshots:
       outdent: 0.5.0
       prettier: 2.8.8
       resolve-from: 5.0.0
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@changesets/assemble-release-plan@5.2.4':
     dependencies:
@@ -15830,7 +15984,7 @@ snapshots:
       '@changesets/get-dependents-graph': 1.3.6
       '@changesets/types': 5.2.1
       '@manypkg/get-packages': 1.1.3
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@changesets/changelog-git@0.1.14':
     dependencies:
@@ -15892,7 +16046,7 @@ snapshots:
       '@manypkg/get-packages': 1.1.3
       chalk: 2.4.2
       fs-extra: 7.0.1
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@changesets/get-release-plan@3.0.17':
     dependencies:
@@ -17090,12 +17244,12 @@ snapshots:
   '@jridgewell/source-map@0.3.3':
     dependencies:
       '@jridgewell/gen-mapping': 0.3.3
-      '@jridgewell/trace-mapping': 0.3.18
+      '@jridgewell/trace-mapping': 0.3.22
 
   '@jridgewell/source-map@0.3.5':
     dependencies:
       '@jridgewell/gen-mapping': 0.3.3
-      '@jridgewell/trace-mapping': 0.3.18
+      '@jridgewell/trace-mapping': 0.3.22
 
   '@jridgewell/sourcemap-codec@1.4.14': {}
 
@@ -17113,7 +17267,7 @@ snapshots:
 
   '@jridgewell/trace-mapping@0.3.9':
     dependencies:
-      '@jridgewell/resolve-uri': 3.1.0
+      '@jridgewell/resolve-uri': 3.1.1
       '@jridgewell/sourcemap-codec': 1.4.15
 
   '@juggle/resize-observer@3.4.0': {}
@@ -17125,14 +17279,14 @@ snapshots:
       '@ledgerhq/errors': 6.12.6
       '@ledgerhq/logs': 6.10.1
       rxjs: 6.6.7
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@ledgerhq/devices@8.0.3':
     dependencies:
       '@ledgerhq/errors': 6.12.6
       '@ledgerhq/logs': 6.10.1
       rxjs: 6.6.7
-      semver: 7.5.4
+      semver: 7.6.0
 
   '@ledgerhq/errors@6.12.4': {}
 
@@ -17664,6 +17818,31 @@ snapshots:
 
   '@popperjs/core@2.11.8': {}
 
+  '@prisma/client@5.13.0(prisma@5.13.0)':
+    optionalDependencies:
+      prisma: 5.13.0
+
+  '@prisma/debug@5.13.0': {}
+
+  '@prisma/engines-version@5.13.0-23.b9a39a7ee606c28e3455d0fd60e78c3ba82b1a2b': {}
+
+  '@prisma/engines@5.13.0':
+    dependencies:
+      '@prisma/debug': 5.13.0
+      '@prisma/engines-version': 5.13.0-23.b9a39a7ee606c28e3455d0fd60e78c3ba82b1a2b
+      '@prisma/fetch-engine': 5.13.0
+      '@prisma/get-platform': 5.13.0
+
+  '@prisma/fetch-engine@5.13.0':
+    dependencies:
+      '@prisma/debug': 5.13.0
+      '@prisma/engines-version': 5.13.0-23.b9a39a7ee606c28e3455d0fd60e78c3ba82b1a2b
+      '@prisma/get-platform': 5.13.0
+
+  '@prisma/get-platform@5.13.0':
+    dependencies:
+      '@prisma/debug': 5.13.0
+
   '@radix-ui/colors@3.0.0': {}
 
   '@radix-ui/number@1.0.1':
@@ -17680,7 +17859,7 @@ snapshots:
 
   '@radix-ui/react-accessible-icon@1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/react-visually-hidden': 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
@@ -17690,7 +17869,7 @@ snapshots:
 
   '@radix-ui/react-alert-dialog@1.0.5(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -17715,7 +17894,7 @@ snapshots:
 
   '@radix-ui/react-aspect-ratio@1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/react-primitive': 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
@@ -17725,7 +17904,7 @@ snapshots:
 
   '@radix-ui/react-avatar@1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-primitive': 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@radix-ui/react-use-callback-ref': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -17797,7 +17976,7 @@ snapshots:
 
   '@radix-ui/react-context-menu@2.1.5(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-menu': 2.0.6(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -17869,7 +18048,7 @@ snapshots:
 
   '@radix-ui/react-dialog@1.0.5(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -17954,7 +18133,7 @@ snapshots:
 
   '@radix-ui/react-dropdown-menu@2.0.6(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18015,7 +18194,7 @@ snapshots:
 
   '@radix-ui/react-form@0.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18030,7 +18209,7 @@ snapshots:
 
   '@radix-ui/react-hover-card@1.0.7(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18177,7 +18356,7 @@ snapshots:
 
   '@radix-ui/react-popover@1.0.7(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18302,7 +18481,7 @@ snapshots:
 
   '@radix-ui/react-radio-group@1.1.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.6
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18339,7 +18518,7 @@ snapshots:
 
   '@radix-ui/react-scroll-area@1.0.5(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/number': 1.0.1
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18387,7 +18566,7 @@ snapshots:
 
   '@radix-ui/react-select@2.0.0(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/number': 1.0.1
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-collection': 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
@@ -18417,7 +18596,7 @@ snapshots:
 
   '@radix-ui/react-separator@1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/react-primitive': 1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       react: 18.2.0
       react-dom: 18.2.0(react@18.2.0)
@@ -18461,7 +18640,7 @@ snapshots:
 
   '@radix-ui/react-switch@1.0.3(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.5
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -18522,7 +18701,7 @@ snapshots:
 
   '@radix-ui/react-tooltip@1.0.7(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
     dependencies:
-      '@babel/runtime': 7.22.10
+      '@babel/runtime': 7.24.5
       '@radix-ui/primitive': 1.0.1
       '@radix-ui/react-compose-refs': 1.0.1(@types/react@18.2.15)(react@18.2.0)
       '@radix-ui/react-context': 1.0.1(@types/react@18.2.15)(react@18.2.0)
@@ -19392,7 +19571,7 @@ snapshots:
       pretty-hrtime: 1.0.3
       prompts: 2.4.2
       read-pkg-up: 7.0.1
-      semver: 7.5.4
+      semver: 7.6.0
       serve-favicon: 2.5.0
       telejson: 7.1.0
       tiny-invariant: 1.3.1
@@ -19668,7 +19847,7 @@ snapshots:
     dependencies:
       '@storybook/channels': 7.1.0
       '@types/babel__core': 7.20.1
-      '@types/express': 4.17.17
+      '@types/express': 4.17.21
       file-system-cache: 2.3.0
 
   '@suchipi/femver@1.0.0': {}
@@ -19991,6 +20170,10 @@ snapshots:
 
   '@types/cookie@0.4.1': {}
 
+  '@types/cors@2.8.17':
+    dependencies:
+      '@types/node': 20.12.11
+
   '@types/cross-spawn@6.0.2':
     dependencies:
       '@types/node': 20.12.11
@@ -20061,7 +20244,7 @@ snapshots:
       '@types/range-parser': 1.2.4
       '@types/send': 0.17.1
 
-  '@types/express@4.17.17':
+  '@types/express@4.17.21':
     dependencies:
       '@types/body-parser': 1.19.2
       '@types/express-serve-static-core': 4.17.35
@@ -20305,7 +20488,7 @@ snapshots:
       graphemer: 1.4.0
       ignore: 5.2.4
       natural-compare-lite: 1.4.0
-      semver: 7.5.4
+      semver: 7.6.0
       tsutils: 3.21.0(typescript@5.3.3)
     optionalDependencies:
       typescript: 5.3.3
@@ -20418,7 +20601,7 @@ snapshots:
       debug: 4.3.4(supports-color@8.1.1)
       globby: 11.1.0
       is-glob: 4.0.3
-      semver: 7.5.4
+      semver: 7.6.0
       tsutils: 3.21.0(typescript@5.3.3)
     optionalDependencies:
       typescript: 5.3.3
@@ -20432,7 +20615,7 @@ snapshots:
       debug: 4.3.4(supports-color@8.1.1)
       globby: 11.1.0
       is-glob: 4.0.3
-      semver: 7.5.4
+      semver: 7.6.0
       tsutils: 3.21.0(typescript@5.3.3)
     optionalDependencies:
       typescript: 5.3.3
@@ -20446,7 +20629,7 @@ snapshots:
       debug: 4.3.4(supports-color@8.1.1)
       globby: 11.1.0
       is-glob: 4.0.3
-      semver: 7.5.4
+      semver: 7.6.0
       ts-api-utils: 1.0.1(typescript@5.3.3)
     optionalDependencies:
       typescript: 5.3.3
@@ -20476,7 +20659,7 @@ snapshots:
       '@typescript-eslint/typescript-estree': 5.62.0(typescript@5.3.3)
       eslint: 8.45.0
       eslint-scope: 5.1.1
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -20490,7 +20673,7 @@ snapshots:
       '@typescript-eslint/types': 6.1.0
       '@typescript-eslint/typescript-estree': 6.1.0(typescript@5.3.3)
       eslint: 8.45.0
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -20937,10 +21120,6 @@ snapshots:
     dependencies:
       acorn: 7.4.1
 
-  acorn-jsx@5.3.2(acorn@8.10.0):
-    dependencies:
-      acorn: 8.10.0
-
   acorn-jsx@5.3.2(acorn@8.11.3):
     dependencies:
       acorn: 8.11.3
@@ -20984,7 +21163,7 @@ snapshots:
       pino: 8.11.0
       postcss: 8.4.31
       relaxed-json: 1.0.3
-      semver: 7.5.4
+      semver: 7.6.0
       sha.js: 2.4.11
       source-map-support: 0.5.21
       tosource: 1.0.0
@@ -21153,7 +21332,7 @@ snapshots:
 
   array-buffer-byte-length@1.0.0:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       is-array-buffer: 3.0.2
 
   array-differ@4.0.0: {}
@@ -21162,10 +21341,10 @@ snapshots:
 
   array-includes@3.1.6:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
       is-string: 1.0.7
 
   array-union@2.1.0: {}
@@ -21176,25 +21355,25 @@ snapshots:
 
   array.prototype.flat@1.3.1:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
       es-shim-unscopables: 1.0.0
 
   array.prototype.flatmap@1.3.1:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
       es-shim-unscopables: 1.0.0
 
   array.prototype.tosorted@1.1.1:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
       es-shim-unscopables: 1.0.0
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
 
   arrify@1.0.1: {}
 
@@ -21320,7 +21499,7 @@ snapshots:
       '@babel/compat-data': 7.21.4
       '@babel/core': 7.22.9
       '@babel/helper-define-polyfill-provider': 0.3.3(@babel/core@7.22.9)
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -21646,11 +21825,6 @@ snapshots:
       normalize-url: 4.5.1
       responselike: 1.0.2
 
-  call-bind@1.0.2:
-    dependencies:
-      function-bind: 1.1.1
-      get-intrinsic: 1.2.1
-
   call-bind@1.0.6:
     dependencies:
       es-errors: 1.3.0
@@ -21890,7 +22064,7 @@ snapshots:
       natural-orderby: 2.0.3
       object-treeify: 1.1.33
       password-prompt: 1.1.2
-      semver: 7.5.4
+      semver: 7.6.0
       string-width: 4.2.3
       strip-ansi: 6.0.1
       supports-color: 8.1.1
@@ -22126,6 +22300,11 @@ snapshots:
 
   core-util-is@1.0.3: {}
 
+  cors@2.8.5:
+    dependencies:
+      object-assign: 4.1.1
+      vary: 1.1.2
+
   cose-base@1.0.3:
     dependencies:
       layout-base: 1.0.2
@@ -22136,7 +22315,7 @@ snapshots:
       import-fresh: 3.3.0
       parse-json: 5.2.0
       path-type: 4.0.0
-      yaml: 2.3.1
+      yaml: 2.3.4
 
   cosmiconfig@8.1.3:
     dependencies:
@@ -22193,7 +22372,7 @@ snapshots:
     dependencies:
       nice-try: 1.0.5
       path-key: 2.0.1
-      semver: 7.5.4
+      semver: 7.6.0
       shebang-command: 1.2.0
       which: 1.3.1
 
@@ -22552,9 +22731,9 @@ snapshots:
   deep-equal@2.2.2:
     dependencies:
       array-buffer-byte-length: 1.0.0
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       es-get-iterator: 1.1.3
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
       is-arguments: 1.1.1
       is-array-buffer: 3.0.2
       is-date-object: 1.0.5
@@ -22617,7 +22796,7 @@ snapshots:
 
   define-properties@1.2.0:
     dependencies:
-      has-property-descriptors: 1.0.0
+      has-property-descriptors: 1.0.1
       object-keys: 1.1.1
 
   defu@6.1.2: {}
@@ -22876,16 +23055,16 @@ snapshots:
     dependencies:
       array-buffer-byte-length: 1.0.0
       available-typed-arrays: 1.0.5
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       es-set-tostringtag: 2.0.1
       es-to-primitive: 1.2.1
       function.prototype.name: 1.1.5
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
       get-symbol-description: 1.0.0
       globalthis: 1.0.3
       gopd: 1.0.1
       has: 1.0.3
-      has-property-descriptors: 1.0.0
+      has-property-descriptors: 1.0.1
       has-proto: 1.0.1
       has-symbols: 1.0.3
       internal-slot: 1.0.5
@@ -22913,8 +23092,8 @@ snapshots:
 
   es-get-iterator@1.1.3:
     dependencies:
-      call-bind: 1.0.2
-      get-intrinsic: 1.2.1
+      call-bind: 1.0.6
+      get-intrinsic: 1.2.4
       has-symbols: 1.0.3
       is-arguments: 1.1.1
       is-map: 2.0.2
@@ -22927,7 +23106,7 @@ snapshots:
 
   es-set-tostringtag@2.0.1:
     dependencies:
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
       has: 1.0.3
       has-tostringtag: 1.0.0
 
@@ -23221,7 +23400,7 @@ snapshots:
       jsx-ast-utils: 3.3.3
       language-tags: 1.0.5
       minimatch: 3.1.2
-      semver: 7.5.4
+      semver: 7.6.0
 
   eslint-plugin-no-unsanitized@4.0.2(eslint@8.36.0):
     dependencies:
@@ -23261,7 +23440,7 @@ snapshots:
       object.values: 1.1.6
       prop-types: 15.8.1
       resolve: 2.0.0-next.4
-      semver: 7.5.4
+      semver: 7.6.0
       string.prototype.matchall: 4.0.8
 
   eslint-plugin-require-extensions@0.1.3(eslint@8.45.0):
@@ -23417,15 +23596,15 @@ snapshots:
 
   espree@9.5.0:
     dependencies:
-      acorn: 8.10.0
-      acorn-jsx: 5.3.2(acorn@8.10.0)
+      acorn: 8.11.3
+      acorn-jsx: 5.3.2(acorn@8.11.3)
       eslint-visitor-keys: 3.3.0
 
   espree@9.6.1:
     dependencies:
-      acorn: 8.10.0
-      acorn-jsx: 5.3.2(acorn@8.10.0)
-      eslint-visitor-keys: 3.4.1
+      acorn: 8.11.3
+      acorn-jsx: 5.3.2(acorn@8.11.3)
+      eslint-visitor-keys: 3.4.3
 
   esprima@4.0.1: {}
 
@@ -23831,7 +24010,7 @@ snapshots:
       minimatch: 3.1.2
       node-abort-controller: 3.1.1
       schema-utils: 3.3.0
-      semver: 7.5.4
+      semver: 7.6.0
       tapable: 2.2.1
       typescript: 5.3.3
       webpack: 5.79.0(@swc/core@1.3.92(@swc/helpers@0.5.5))(webpack-cli@5.0.1(webpack@5.79.0))
@@ -23945,13 +24124,11 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  function-bind@1.1.1: {}
-
   function-bind@1.1.2: {}
 
   function.prototype.name@1.1.5:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
       functions-have-names: 1.2.3
@@ -23984,13 +24161,6 @@ snapshots:
 
   get-func-name@2.0.0: {}
 
-  get-intrinsic@1.2.1:
-    dependencies:
-      function-bind: 1.1.1
-      has: 1.0.3
-      has-proto: 1.0.1
-      has-symbols: 1.0.3
-
   get-intrinsic@1.2.4:
     dependencies:
       es-errors: 1.3.0
@@ -24021,8 +24191,8 @@ snapshots:
 
   get-symbol-description@1.0.0:
     dependencies:
-      call-bind: 1.0.2
-      get-intrinsic: 1.2.1
+      call-bind: 1.0.6
+      get-intrinsic: 1.2.4
 
   get-tsconfig@4.6.2:
     dependencies:
@@ -24181,7 +24351,7 @@ snapshots:
 
   gopd@1.0.1:
     dependencies:
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
 
   got@12.6.1:
     dependencies:
@@ -24364,10 +24534,6 @@ snapshots:
 
   has-flag@4.0.0: {}
 
-  has-property-descriptors@1.0.0:
-    dependencies:
-      get-intrinsic: 1.2.1
-
   has-property-descriptors@1.0.1:
     dependencies:
       get-intrinsic: 1.2.4
@@ -24386,7 +24552,7 @@ snapshots:
 
   has@1.0.3:
     dependencies:
-      function-bind: 1.1.1
+      function-bind: 1.1.2
 
   hash-obj@4.0.0:
     dependencies:
@@ -24744,7 +24910,7 @@ snapshots:
 
   internal-slot@1.0.5:
     dependencies:
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
       has: 1.0.3
       side-channel: 1.0.4
 
@@ -24790,13 +24956,13 @@ snapshots:
 
   is-arguments@1.1.1:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       has-tostringtag: 1.0.0
 
   is-array-buffer@3.0.2:
     dependencies:
-      call-bind: 1.0.2
-      get-intrinsic: 1.2.1
+      call-bind: 1.0.6
+      get-intrinsic: 1.2.4
       is-typed-array: 1.1.10
 
   is-arrayish@0.2.1: {}
@@ -24811,7 +24977,7 @@ snapshots:
 
   is-boolean-object@1.1.2:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       has-tostringtag: 1.0.0
 
   is-buffer@2.0.5: {}
@@ -24885,7 +25051,7 @@ snapshots:
 
   is-nan@1.3.2:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
 
   is-negative-zero@2.0.2: {}
@@ -24928,7 +25094,7 @@ snapshots:
 
   is-regex@1.1.4:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       has-tostringtag: 1.0.0
 
   is-relative@0.1.3: {}
@@ -24943,7 +25109,7 @@ snapshots:
 
   is-shared-array-buffer@1.0.2:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
 
   is-ssh@1.4.0:
     dependencies:
@@ -24970,7 +25136,7 @@ snapshots:
   is-typed-array@1.1.10:
     dependencies:
       available-typed-arrays: 1.0.5
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       for-each: 0.3.3
       gopd: 1.0.1
       has-tostringtag: 1.0.0
@@ -24993,12 +25159,12 @@ snapshots:
 
   is-weakref@1.0.2:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
 
   is-weakset@2.0.2:
     dependencies:
-      call-bind: 1.0.2
-      get-intrinsic: 1.2.1
+      call-bind: 1.0.6
+      get-intrinsic: 1.2.4
 
   is-windows@1.0.2: {}
 
@@ -25032,7 +25198,7 @@ snapshots:
       '@babel/parser': 7.24.5
       '@istanbuljs/schema': 0.1.3
       istanbul-lib-coverage: 3.2.0
-      semver: 7.5.4
+      semver: 7.6.0
     transitivePeerDependencies:
       - supports-color
 
@@ -25298,7 +25464,7 @@ snapshots:
       jws: 3.2.2
       lodash: 4.17.21
       ms: 2.1.3
-      semver: 7.5.4
+      semver: 7.6.0
 
   jsprim@1.4.2:
     dependencies:
@@ -25533,11 +25699,11 @@ snapshots:
   make-dir@2.1.0:
     dependencies:
       pify: 4.0.1
-      semver: 7.5.4
+      semver: 7.6.0
 
   make-dir@3.1.0:
     dependencies:
-      semver: 7.5.4
+      semver: 7.6.0
 
   make-error-cause@2.3.0:
     dependencies:
@@ -26219,7 +26385,7 @@ snapshots:
 
   mlly@1.4.0:
     dependencies:
-      acorn: 8.10.0
+      acorn: 8.11.3
       pathe: 1.1.1
       pkg-types: 1.0.3
       ufo: 1.1.2
@@ -26466,7 +26632,7 @@ snapshots:
     dependencies:
       growly: 1.3.0
       is-wsl: 2.2.0
-      semver: 7.5.4
+      semver: 7.6.0
       shellwords: 0.1.1
       uuid: 8.3.2
       which: 2.0.2
@@ -26481,7 +26647,7 @@ snapshots:
     dependencies:
       hosted-git-info: 2.8.9
       resolve: 1.22.2
-      semver: 7.5.4
+      semver: 7.6.0
       validate-npm-package-license: 3.0.4
 
   normalize-path@2.1.1:
@@ -26537,7 +26703,7 @@ snapshots:
 
   object-is@1.1.5:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
 
   object-keys@1.1.1: {}
@@ -26546,20 +26712,20 @@ snapshots:
 
   object.assign@4.1.4:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       has-symbols: 1.0.3
       object-keys: 1.1.1
 
   object.entries@1.1.6:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
 
   object.fromentries@2.0.6:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
 
@@ -26570,7 +26736,7 @@ snapshots:
 
   object.values@1.1.6:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
 
@@ -26727,14 +26893,14 @@ snapshots:
       got: 9.6.0
       registry-auth-token: 4.2.2
       registry-url: 5.1.0
-      semver: 7.5.4
+      semver: 7.6.0
 
   package-json@8.1.1:
     dependencies:
       got: 12.6.1
       registry-auth-token: 5.0.2
       registry-url: 6.0.1
-      semver: 7.5.4
+      semver: 7.6.0
 
   pako@0.2.9: {}
 
@@ -27108,7 +27274,7 @@ snapshots:
   postcss-load-config@4.0.1(postcss@8.4.31)(ts-node@10.9.1(@swc/core@1.3.92(@swc/helpers@0.5.5))(@types/node@20.4.2)(typescript@5.3.3)):
     dependencies:
       lilconfig: 2.1.0
-      yaml: 2.3.1
+      yaml: 2.3.4
     optionalDependencies:
       postcss: 8.4.31
       ts-node: 10.9.1(@swc/core@1.3.92)(@types/node@20.4.2)(typescript@5.3.3)
@@ -27320,6 +27486,10 @@ snapshots:
       react-is: 18.2.0
 
   pretty-hrtime@1.0.3: {}
+
+  prisma@5.13.0:
+    dependencies:
+      '@prisma/engines': 5.13.0
 
   process-nextick-args@2.0.1: {}
 
@@ -27747,13 +27917,13 @@ snapshots:
 
   regexp.prototype.flags@1.4.3:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       functions-have-names: 1.2.3
 
   regexp.prototype.flags@1.5.0:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       functions-have-names: 1.2.3
 
@@ -27948,7 +28118,7 @@ snapshots:
 
   resolve@1.19.0:
     dependencies:
-      is-core-module: 2.12.0
+      is-core-module: 2.12.1
       path-parse: 1.0.7
 
   resolve@1.22.2:
@@ -27959,7 +28129,7 @@ snapshots:
 
   resolve@2.0.0-next.4:
     dependencies:
-      is-core-module: 2.12.0
+      is-core-module: 2.12.1
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
@@ -28048,8 +28218,8 @@ snapshots:
 
   safe-regex-test@1.0.0:
     dependencies:
-      call-bind: 1.0.2
-      get-intrinsic: 1.2.1
+      call-bind: 1.0.6
+      get-intrinsic: 1.2.4
       is-regex: 1.1.4
 
   safe-stable-stringify@2.4.3: {}
@@ -28119,11 +28289,11 @@ snapshots:
   sembear@0.5.2:
     dependencies:
       '@types/semver': 6.2.5
-      semver: 7.5.4
+      semver: 7.6.0
 
   semver-diff@4.0.0:
     dependencies:
-      semver: 7.5.4
+      semver: 7.6.0
 
   semver@7.5.3:
     dependencies:
@@ -28247,8 +28417,8 @@ snapshots:
 
   side-channel@1.0.4:
     dependencies:
-      call-bind: 1.0.2
-      get-intrinsic: 1.2.1
+      call-bind: 1.0.6
+      get-intrinsic: 1.2.4
       object-inspect: 1.12.3
 
   siginfo@2.0.0: {}
@@ -28274,7 +28444,7 @@ snapshots:
 
   simple-update-notifier@1.1.0:
     dependencies:
-      semver: 7.5.4
+      semver: 7.6.0
 
   sisteransi@1.0.5: {}
 
@@ -28474,10 +28644,10 @@ snapshots:
 
   string.prototype.matchall@4.0.8:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
-      get-intrinsic: 1.2.1
+      get-intrinsic: 1.2.4
       has-symbols: 1.0.3
       internal-slot: 1.0.5
       regexp.prototype.flags: 1.4.3
@@ -28485,19 +28655,19 @@ snapshots:
 
   string.prototype.trim@1.2.7:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
 
   string.prototype.trimend@1.0.6:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
 
   string.prototype.trimstart@1.0.6:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       define-properties: 1.2.0
       es-abstract: 1.21.2
 
@@ -28669,10 +28839,10 @@ snapshots:
       chokidar: 3.5.3
       didyoumean: 1.2.2
       dlv: 1.1.3
-      fast-glob: 3.3.0
+      fast-glob: 3.3.1
       glob-parent: 6.0.2
       is-glob: 4.0.3
-      jiti: 1.19.1
+      jiti: 1.21.0
       lilconfig: 2.1.0
       micromatch: 4.0.5
       normalize-path: 3.0.0
@@ -28787,14 +28957,14 @@ snapshots:
   terser@5.16.9:
     dependencies:
       '@jridgewell/source-map': 0.3.3
-      acorn: 8.10.0
+      acorn: 8.11.3
       commander: 2.20.3
       source-map-support: 0.5.21
 
   terser@5.19.1:
     dependencies:
       '@jridgewell/source-map': 0.3.5
-      acorn: 8.10.0
+      acorn: 8.11.3
       commander: 2.20.3
       source-map-support: 0.5.21
 
@@ -28943,7 +29113,7 @@ snapshots:
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.3
       '@types/node': 20.12.11
-      acorn: 8.8.2
+      acorn: 8.11.3
       acorn-walk: 8.2.0
       arg: 4.1.3
       create-require: 1.1.1
@@ -28963,7 +29133,7 @@ snapshots:
       '@tsconfig/node14': 1.0.3
       '@tsconfig/node16': 1.0.3
       '@types/node': 20.4.2
-      acorn: 8.8.2
+      acorn: 8.11.3
       acorn-walk: 8.2.0
       arg: 4.1.3
       create-require: 1.1.1
@@ -29091,7 +29261,7 @@ snapshots:
 
   typed-array-length@1.0.4:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       for-each: 0.3.3
       is-typed-array: 1.1.10
 
@@ -29122,7 +29292,7 @@ snapshots:
 
   unbox-primitive@1.0.2:
     dependencies:
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       has-bigints: 1.0.2
       has-symbols: 1.0.3
       which-boxed-primitive: 1.0.2
@@ -29273,7 +29443,7 @@ snapshots:
 
   unplugin@1.4.0:
     dependencies:
-      acorn: 8.10.0
+      acorn: 8.11.3
       chokidar: 3.5.3
       webpack-sources: 3.2.3
       webpack-virtual-modules: 0.5.0
@@ -29313,7 +29483,7 @@ snapshots:
       is-yarn-global: 0.4.1
       latest-version: 7.0.0
       pupa: 3.1.0
-      semver: 7.5.4
+      semver: 7.6.0
       semver-diff: 4.0.0
       xdg-basedir: 5.1.0
 
@@ -29422,7 +29592,7 @@ snapshots:
 
   v8-to-istanbul@9.1.0:
     dependencies:
-      '@jridgewell/trace-mapping': 0.3.18
+      '@jridgewell/trace-mapping': 0.3.22
       '@types/istanbul-lib-coverage': 2.0.4
       convert-source-map: 1.9.0
 
@@ -29885,7 +30055,7 @@ snapshots:
   which-typed-array@1.1.10:
     dependencies:
       available-typed-arrays: 1.0.5
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       for-each: 0.3.3
       gopd: 1.0.1
       has-tostringtag: 1.0.0
@@ -29894,7 +30064,7 @@ snapshots:
   which-typed-array@1.1.11:
     dependencies:
       available-typed-arrays: 1.0.5
-      call-bind: 1.0.2
+      call-bind: 1.0.6
       for-each: 0.3.3
       gopd: 1.0.1
       has-tostringtag: 1.0.0

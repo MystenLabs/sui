@@ -8,9 +8,9 @@ import type {
 	SuiArgument,
 	SuiClient,
 	SuiMoveNormalizedModule,
-} from '@mysten/sui.js/client';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
-import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui/utils';
 
 import type {
 	ObjectFilter,

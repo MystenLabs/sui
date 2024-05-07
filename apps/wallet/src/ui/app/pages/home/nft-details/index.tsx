@@ -19,7 +19,7 @@ import PageTitle from '_src/ui/app/shared/PageTitle';
 import { Text } from '_src/ui/app/shared/text';
 import { useGetKioskContents } from '@mysten/core';
 import { ArrowRight16, ArrowUpRight12 } from '@mysten/icons';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { formatAddress } from '@mysten/sui/utils';
 import cl from 'clsx';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 

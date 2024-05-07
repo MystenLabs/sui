@@ -3,8 +3,8 @@
 
 import { useTransactionData, useTransactionGasBudget } from '_src/ui/app/hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
-import { type TransactionBlock } from '@mysten/sui.js/transactions';
-import { formatAddress } from '@mysten/sui.js/utils';
+import { type TransactionBlock } from '@mysten/sui/transactions';
+import { formatAddress } from '@mysten/sui/utils';
 
 import { DescriptionItem, DescriptionList } from './DescriptionList';
 import { SummaryCard } from './SummaryCard';

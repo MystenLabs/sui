@@ -1,10 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { SignatureWithBytes } from '@mysten/sui.js/cryptography';
-import { Keypair, PublicKey, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui.js/cryptography';
-import type { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui.js/keypairs/ed25519';
-import type { ZkLoginSignatureInputs } from '@mysten/sui.js/zklogin';
+import type { SignatureWithBytes } from '@mysten/sui/cryptography';
+import { Keypair, PublicKey, SIGNATURE_SCHEME_TO_FLAG } from '@mysten/sui/cryptography';
+import type { Ed25519Keypair, Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
+import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { getZkLoginSignature } from '@mysten/zklogin';
 
 export class EnokiPublicKey extends PublicKey {

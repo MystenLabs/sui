@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionBlock } from '@mysten/sui.js/transactions';
+import type { TransactionBlock } from '@mysten/sui/transactions';
 
 import type { ObjectArgument } from '../../types/index.js';
 

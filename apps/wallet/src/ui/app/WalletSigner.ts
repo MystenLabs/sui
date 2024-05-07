@@ -1,17 +1,17 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui.js/bcs';
+import { bcs } from '@mysten/sui/bcs';
 import {
 	type DryRunTransactionBlockResponse,
 	type ExecuteTransactionRequestType,
 	type SuiClient,
 	type SuiTransactionBlockResponse,
 	type SuiTransactionBlockResponseOptions,
-} from '@mysten/sui.js/client';
-import { messageWithIntent } from '@mysten/sui.js/cryptography';
-import { isTransactionBlock, type TransactionBlock } from '@mysten/sui.js/transactions';
-import { fromB64, toB64 } from '@mysten/sui.js/utils';
+} from '@mysten/sui/client';
+import { messageWithIntent } from '@mysten/sui/cryptography';
+import { isTransactionBlock, type TransactionBlock } from '@mysten/sui/transactions';
+import { fromB64, toB64 } from '@mysten/sui/utils';
 
 export type SignedTransaction = {
 	transactionBlockBytes: string;

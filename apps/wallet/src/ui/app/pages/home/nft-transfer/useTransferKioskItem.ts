@@ -14,7 +14,7 @@ import {
 import { useKioskClient } from '@mysten/core/src/hooks/useKioskClient';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { KioskTransaction } from '@mysten/kiosk';
-import { TransactionBlock } from '@mysten/sui.js/transactions';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import { useMutation } from '@tanstack/react-query';
 
 const ORIGINBYTE_PACKAGE_ID = '0x083b02db943238dcea0ff0938a54a17d7575f5b48034506446e501e963391480';
