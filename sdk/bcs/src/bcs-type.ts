@@ -83,6 +83,7 @@ export class BcsType<T, Input = T> {
 		name,
 		input,
 		output,
+		validate,
 	}: {
 		input: (val: Input2) => Input;
 		output: (value: T) => T2;
@@ -93,7 +94,10 @@ export class BcsType<T, Input = T> {
 			write: (value, writer) => this.#write(input(value), writer),
 			serializedSize: (value) => this.serializedSize(input(value)),
 			serialize: (value, options) => this.#serialize(input(value), options),
-			validate: (value) => this.validate(input(value)),
+			validate: (value) => {
+				validate?.(value);
+				this.validate(input(value));
+			},
 		});
 	}
 }
