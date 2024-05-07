@@ -1404,7 +1404,7 @@ mod tests {
                 SuiExecutionStatus::Success
             ));
         } else {
-            panic!("PayAllSui command did not return SuiClientCommandResult::PayAllSui");
+            panic!("PayAllSui command did not return SuiClientCommandResult::TransactionBlock");
         };
 
         let number_of_coins = gases.len();
@@ -1524,7 +1524,7 @@ mod tests {
                 .reference
                 .object_id
         } else {
-            panic!("split command did not return SuiClientCommandResult::TransactionBlock");
+            panic!("SplitCoin command did not return SuiClientCommandResult::TransactionBlock");
         };
 
         // Get the latest list of gas
