@@ -1,12 +1,16 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{eth_bridge_committee, eth_sui_bridge, EthBridgeCommittee, EthBridgeLimiter};
+use crate::abi::{
+    eth_bridge_committee, eth_committee_upgradeable_contract, eth_sui_bridge, EthBridgeCommittee,
+    EthBridgeLimiter, EthCommitteeUpgradeableContract,
+};
 use crate::abi::{eth_bridge_config, eth_bridge_limiter, EthBridgeConfig};
 use crate::error::{BridgeError, BridgeResult};
 use crate::types::{
     AddTokensOnEvmAction, AssetPriceUpdateAction, BlocklistCommitteeAction,
-    BridgeCommitteeValiditySignInfo, LimitUpdateAction, VerifiedCertifiedBridgeAction,
+    BridgeCommitteeValiditySignInfo, EvmContractUpgradeAction, LimitUpdateAction,
+    VerifiedCertifiedBridgeAction,
 };
 use crate::utils::EthSigner;
 use crate::{
@@ -61,9 +65,8 @@ pub async fn build_eth_transaction(
             )
             .await
         }
-        BridgeAction::EvmContractUpgradeAction(_) => {
-            // TODO
-            unimplemented!();
+        BridgeAction::EvmContractUpgradeAction(action) => {
+            build_evm_upgrade_transaction(signer, action.clone(), sigs).await
         }
         BridgeAction::AddTokensOnSuiAction(_) => {
             unreachable!();
@@ -158,6 +161,20 @@ pub async fn build_add_tokens_on_evm_transaction(
     Ok(contract.add_tokens_with_signatures(signatures, message))
 }
 
-// TODO contract upgrade
+pub async fn build_evm_upgrade_transaction(
+    signer: EthSigner,
+    action: EvmContractUpgradeAction,
+    sigs: &BridgeCommitteeValiditySignInfo,
+) -> BridgeResult<ContractCall<EthSigner, ()>> {
+    let contract_address = action.proxy_address;
+    let contract = EthCommitteeUpgradeableContract::new(contract_address, signer.into());
+    let message: eth_committee_upgradeable_contract::Message = action.clone().into();
+    let signatures = sigs
+        .signatures
+        .values()
+        .map(|sig| Bytes::from(sig.as_ref().to_vec()))
+        .collect::<Vec<_>>();
+    Ok(contract.upgrade_with_signatures(signatures, message))
+}
 
 // TODO: add tests for eth transaction building
