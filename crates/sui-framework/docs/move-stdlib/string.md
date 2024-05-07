@@ -371,8 +371,8 @@ must be at a valid utf8 char boundary.
         <a href="../move-stdlib/string.md#0x1_string_EInvalidIndex">EInvalidIndex</a>
     );
     <b>let</b> l = s.<a href="../move-stdlib/string.md#0x1_string_length">length</a>();
-    <b>let</b> <b>mut</b> front = s.<a href="../move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(0, at);
-    <b>let</b> end = s.<a href="../move-stdlib/string.md#0x1_string_sub_string">sub_string</a>(at, l);
+    <b>let</b> <b>mut</b> front = s.substring(0, at);
+    <b>let</b> end = s.substring(at, l);
     front.<a href="../move-stdlib/string.md#0x1_string_append">append</a>(o);
     front.<a href="../move-stdlib/string.md#0x1_string_append">append</a>(end);
     *s = front;

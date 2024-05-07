@@ -645,7 +645,7 @@ Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">st
         <b>if</b> (<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i] == substr.bytes[j]) {
             j = j + 1;
             <b>if</b> (j == m) {
-                <b>return</b> i - m + 1;
+                <b>return</b> i - m + 1
             }
         } <b>else</b> {
             j = 0;

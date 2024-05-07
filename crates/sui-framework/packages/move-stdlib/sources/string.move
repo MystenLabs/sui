@@ -89,8 +89,8 @@ module std::string {
             EInvalidIndex
         );
         let l = s.length();
-        let mut front = s.sub_string(0, at);
-        let end = s.sub_string(at, l);
+        let mut front = s.substring(0, at);
+        let end = s.substring(at, l);
         front.append(o);
         front.append(end);
         *s = front;
