@@ -24,7 +24,7 @@ type UseSignTransactionBlockArgs = PartialBy<
 	Omit<SuiSignTransactionBlockV2Input, 'transactionBlock'>,
 	'account' | 'chain'
 > & {
-	transactionBlock: TransactionBlock;
+	transactionBlock: TransactionBlock | string;
 };
 
 type UseSignTransactionBlockResult = SuiSignTransactionBlockV2Output;
@@ -81,12 +81,15 @@ export function useSignTransactionBlock({
 				);
 			}
 
-			return await walletFeature.signTransactionBlock({
+			return await walletFeature.signTransactionBlock()({
 				...signTransactionBlockArgs,
-				transactionBlock: await transactionBlock.toJSON({
-					supportedIntents: [],
-					client,
-				}),
+				transactionBlock:
+					typeof transactionBlock === 'string'
+						? transactionBlock
+						: await transactionBlock.toJSON({
+								supportedIntents: [],
+								client,
+						  }),
 				account: signerAccount,
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});

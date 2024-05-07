@@ -11,8 +11,10 @@ import type {
 	StandardEventsFeature,
 	StandardEventsOnMethod,
 	SuiFeatures,
+	SuiSignAndExecuteTransactionBlockMethod,
 	SuiSignAndExecuteTransactionBlockV2Method,
 	SuiSignPersonalMessageMethod,
+	SuiSignTransactionBlockMethod,
 	SuiSignTransactionBlockV2Method,
 	Wallet,
 } from '@mysten/wallet-standard';
@@ -94,13 +96,21 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 					version: '1.0.0',
 					signPersonalMessage: this.#signPersonalMessage,
 				},
+				'sui:signTransactionBlock': {
+					version: '1.0.0',
+					signTransactionBlock: this.#signTransactionBlock,
+				},
+				'sui:signAndExecuteTransactionBlock': {
+					version: '1.0.0',
+					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
+				},
 				'sui:signTransactionBlock:v2': {
 					version: '2.0.0',
-					signTransactionBlock: this.#signTransactionBlock,
+					signTransactionBlock: this.#signTransactionBlockV2,
 				},
 				'sui:signAndExecuteTransactionBlock:v2': {
 					version: '2.0.0',
-					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
+					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlockV2,
 				},
 			};
 		}
@@ -118,13 +128,27 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			return { bytes, signature };
 		};
 
-		#signTransactionBlock: SuiSignTransactionBlockV2Method = async (transactionInput) => {
+		#signTransactionBlock: SuiSignTransactionBlockMethod = async (transactionInput) => {
+			const { bytes, signature } = await transactionInput.transactionBlock.sign({
+				client: suiClient,
+				signer: keypair,
+			});
+
+			return {
+				transactionBlockBytes: bytes,
+				signature: signature,
+			};
+		};
+
+		#signTransactionBlockV2: SuiSignTransactionBlockV2Method = () => async (transactionInput) => {
 			const { bytes, signature } = await TransactionBlock.from(
 				transactionInput.transactionBlock,
 			).sign({
 				client: suiClient,
 				signer: keypair,
 			});
+
+			transactionInput.signal?.throwIfAborted();
 
 			return {
 				bytes,
@@ -132,17 +156,15 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			};
 		};
 
-		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockV2Method = async (
+		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (
 			transactionInput,
 		) => {
-			const { bytes, signature } = await TransactionBlock.from(
-				transactionInput.transactionBlock,
-			).sign({
+			const { bytes, signature } = await transactionInput.transactionBlock.sign({
 				client: suiClient,
 				signer: keypair,
 			});
 
-			const { rawEffects, balanceChanges, digest } = await suiClient.executeTransactionBlock({
+			return suiClient.executeTransactionBlock({
 				signature,
 				transactionBlock: bytes,
 				options: {
@@ -150,26 +172,47 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 					showBalanceChanges: true,
 				},
 			});
-
-			return {
-				bytes,
-				signature,
-				digest,
-				effects: toB64(new Uint8Array(rawEffects!)),
-				balanceChanges:
-					balanceChanges?.map(({ coinType, amount, owner }) => {
-						const address =
-							(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
-							(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
-
-						return {
-							coinType,
-							amount,
-							address,
-						};
-					}) ?? null,
-			};
 		};
+
+		#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method =
+			() => async (transactionInput) => {
+				const { bytes, signature } = await TransactionBlock.from(
+					transactionInput.transactionBlock,
+				).sign({
+					client: suiClient,
+					signer: keypair,
+				});
+
+				transactionInput.signal?.throwIfAborted();
+
+				const { rawEffects, balanceChanges, digest } = await suiClient.executeTransactionBlock({
+					signature,
+					transactionBlock: bytes,
+					options: {
+						showRawEffects: true,
+						showBalanceChanges: true,
+					},
+				});
+
+				return {
+					bytes,
+					signature,
+					digest,
+					effects: toB64(new Uint8Array(rawEffects!)),
+					balanceChanges:
+						balanceChanges?.map(({ coinType, amount, owner }) => {
+							const address =
+								(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
+								(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
+
+							return {
+								coinType,
+								amount,
+								address,
+							};
+						}) ?? null,
+				};
+			};
 	}
 
 	return walletsApi.register(new UnsafeBurnerWallet());

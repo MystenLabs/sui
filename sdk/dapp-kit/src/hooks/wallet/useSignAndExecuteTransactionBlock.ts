@@ -25,7 +25,8 @@ type UseSignAndExecuteTransactionBlockArgs = PartialBy<
 	Omit<SuiSignAndExecuteTransactionBlockV2Input, 'transactionBlock'>,
 	'account' | 'chain'
 > & {
-	transactionBlock: TransactionBlock;
+	transactionBlock: TransactionBlock | string;
+	waitForIndexing?: boolean;
 };
 
 type UseSignAndExecuteTransactionBlockResult = SuiSignAndExecuteTransactionBlockV2Output;
@@ -63,7 +64,7 @@ export function useSignAndExecuteTransactionBlock({
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signAndExecuteTransactionBlock(mutationKey),
-		mutationFn: async ({ transactionBlock, ...signTransactionBlockArgs }) => {
+		mutationFn: async ({ transactionBlock, waitForIndexing, ...signTransactionBlockArgs }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
@@ -86,15 +87,24 @@ export function useSignAndExecuteTransactionBlock({
 					);
 				}
 
-				return walletFeature.signAndExecuteTransactionBlock({
+				const result = await walletFeature.signAndExecuteTransactionBlock()({
 					...signTransactionBlockArgs,
-					transactionBlock: await transactionBlock.toJSON({
-						supportedIntents,
-						client,
-					}),
+					transactionBlock:
+						typeof transactionBlock === 'string'
+							? transactionBlock
+							: await transactionBlock.toJSON({
+									supportedIntents,
+									client,
+							  }),
 					account: signerAccount,
 					chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 				});
+
+				if (waitForIndexing) {
+					await client.waitForTransactionBlock({ digest: result.digest });
+				}
+
+				return result;
 			}
 
 			const walletFeature = currentWallet.features['sui:signTransactionBlock:v2'];
@@ -104,12 +114,15 @@ export function useSignAndExecuteTransactionBlock({
 				);
 			}
 
-			const { signature, bytes } = await walletFeature.signTransactionBlock({
+			const { signature, bytes } = await walletFeature.signTransactionBlock()({
 				...signTransactionBlockArgs,
-				transactionBlock: await transactionBlock.toJSON({
-					supportedIntents,
-					client,
-				}),
+				transactionBlock:
+					typeof transactionBlock === 'string'
+						? transactionBlock
+						: await transactionBlock.toJSON({
+								supportedIntents,
+								client,
+						  }),
 				account: signerAccount,
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
@@ -122,6 +135,10 @@ export function useSignAndExecuteTransactionBlock({
 					showBalanceChanges: true,
 				},
 			});
+
+			if (waitForIndexing) {
+				await client.waitForTransactionBlock({ digest });
+			}
 
 			return {
 				digest,

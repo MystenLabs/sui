@@ -118,9 +118,13 @@ export class StashedWallet implements Wallet {
 
 		const data = transactionBlock.serialize();
 
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
 			type: 'sign-transaction-block',
+		});
+
+		const response = await popup.send({
 			data,
 			address: account.address,
 		});
@@ -131,33 +135,40 @@ export class StashedWallet implements Wallet {
 		};
 	};
 
-	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
-		transactionBlock,
-		account,
-	}) => {
-		const txb = TransactionBlock.from(transactionBlock);
-		txb.setSenderIfNotSet(account.address);
-
-		const data = txb.serialize();
-
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = () => {
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
 			type: 'sign-transaction-block',
-			data,
-			address: account.address,
 		});
 
-		return {
-			bytes: response.bytes,
-			signature: response.signature,
+		return async ({ transactionBlock, account }) => {
+			const txb = TransactionBlock.from(transactionBlock);
+			txb.setSenderIfNotSet(account.address);
+
+			const data = txb.serialize();
+
+			const response = await popup.send({
+				data,
+				address: account.address,
+			});
+
+			return {
+				bytes: response.bytes,
+				signature: response.signature,
+			};
 		};
 	};
 
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
 			type: 'sign-personal-message',
+		});
+
+		const response = await popup.send({
 			bytes,
 			address: account.address,
 		});
@@ -204,10 +215,10 @@ export class StashedWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
-			type: 'connect',
-		});
+		const popup = new StashedPopup({ name: this.#name, origin: this.#origin, type: 'connect' });
+
+		const response = await popup.send({});
+
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');
 		}

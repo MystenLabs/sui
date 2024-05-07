@@ -54,7 +54,7 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 		const { signTransactionBlock } = wallet.features['sui:signTransactionBlock'];
 		features['sui:signTransactionBlock:v2'] = {
 			version: '2.0.0',
-			signTransactionBlock: async (input) => {
+			signTransactionBlock: () => async (input) => {
 				const transactionBlock = TransactionBlock.from(input.transactionBlock);
 				const { transactionBlockBytes, signature } = await signTransactionBlock({
 					...input,
@@ -74,7 +74,7 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 			wallet.features['sui:signAndExecuteTransactionBlock'];
 		features['sui:signAndExecuteTransactionBlock:v2'] = {
 			version: '2.0.0',
-			signAndExecuteTransactionBlock: async (input) => {
+			signAndExecuteTransactionBlock: () => async (input) => {
 				const transactionBlock = TransactionBlock.from(input.transactionBlock);
 				const { digest, rawEffects, balanceChanges, rawTransaction } =
 					await signAndExecuteTransactionBlock({
