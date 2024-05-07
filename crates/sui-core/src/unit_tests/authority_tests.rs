@@ -4806,13 +4806,13 @@ async fn test_consensus_message_processed() {
                 .acquire_shared_locks_from_effects(
                     &VerifiedExecutableTransaction::new_from_certificate(certificate.clone()),
                     &effects1,
-                    authority2.get_cache_reader().as_ref(),
+                    authority2.get_object_cache_reader().as_ref(),
                 )
                 .await
                 .unwrap();
             authority2.try_execute_for_test(&certificate).await.unwrap();
             authority2
-                .get_cache_reader()
+                .get_transaction_cache_reader()
                 .get_executed_effects(transaction_digest)
                 .unwrap()
                 .unwrap()

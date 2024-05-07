@@ -60,7 +60,7 @@ impl MockConsensusClient {
                         .process_consensus_transactions_for_tests(
                             vec![SequencedConsensusTransaction::new_test(tx.clone())],
                             &checkpoint_service,
-                            validator.get_cache_reader().as_ref(),
+                            validator.get_object_cache_reader().as_ref(),
                             &authority_metrics,
                         )
                         .await

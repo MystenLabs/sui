@@ -70,7 +70,8 @@ impl ExecutionCacheMetrics {
 // (aka fat pointers) up front and return references to them.
 #[derive(Clone)]
 pub struct ExecutionCacheTraitPointers {
-    pub cache_reader: Arc<dyn ExecutionCacheRead>,
+    pub object_cache_reader: Arc<dyn ObjectCacheRead>,
+    pub transaction_cache_reader: Arc<dyn TransactionCacheRead>,
     pub cache_writer: Arc<dyn ExecutionCacheWrite>,
     pub backing_store: Arc<dyn BackingStore + Send + Sync>,
     pub backing_package_store: Arc<dyn BackingPackageStore + Send + Sync>,
@@ -86,7 +87,8 @@ pub struct ExecutionCacheTraitPointers {
 impl ExecutionCacheTraitPointers {
     pub fn new<T>(cache: Arc<T>) -> Self
     where
-        T: ExecutionCacheRead
+        T: ObjectCacheRead
+            + TransactionCacheRead
             + ExecutionCacheWrite
             + BackingStore
             + BackingPackageStore
@@ -100,7 +102,8 @@ impl ExecutionCacheTraitPointers {
             + 'static,
     {
         Self {
-            cache_reader: cache.clone(),
+            object_cache_reader: cache.clone(),
+            transaction_cache_reader: cache.clone(),
             cache_writer: cache.clone(),
             backing_store: cache.clone(),
             backing_package_store: cache.clone(),
@@ -206,7 +209,7 @@ pub trait ExecutionCacheCommit: Send + Sync {
     ) -> BoxFuture<'a, SuiResult>;
 }
 
-pub trait ExecutionCacheRead: Send + Sync {
+pub trait ObjectCacheRead: Send + Sync {
     fn get_package_object(&self, id: &ObjectID) -> SuiResult<Option<PackageObject>>;
     fn force_reload_system_packages(&self, system_package_ids: &[ObjectID]);
 
@@ -394,6 +397,80 @@ pub trait ExecutionCacheRead: Send + Sync {
     // safety check before execution, and could potentially be deleted or changed to a debug_assert
     fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult;
 
+    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge>;
+
+    // Marker methods
+
+    /// Get the marker at a specific version
+    fn get_marker_value(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<MarkerValue>>;
+
+    /// Get the latest marker for a given object.
+    fn get_latest_marker(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>>;
+
+    /// If the shared object was deleted, return deletion info for the current live version
+    fn get_last_shared_object_deletion_info(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
+        match self.get_latest_marker(object_id, epoch_id)? {
+            Some((version, MarkerValue::SharedDeleted(digest))) => Ok(Some((version, digest))),
+            _ => Ok(None),
+        }
+    }
+
+    /// If the shared object was deleted, return deletion info for the specified version.
+    fn get_deleted_shared_object_previous_tx_digest(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<TransactionDigest>> {
+        match self.get_marker_value(object_id, version, epoch_id)? {
+            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
+            _ => Ok(None),
+        }
+    }
+
+    fn have_received_object_at_version(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        match self.get_marker_value(object_id, version, epoch_id)? {
+            Some(MarkerValue::Received) => Ok(true),
+            _ => Ok(false),
+        }
+    }
+
+    fn have_deleted_owned_object_at_version_or_after(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<bool> {
+        match self.get_latest_marker(object_id, epoch_id)? {
+            Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version => {
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
+    }
+}
+
+pub trait TransactionCacheRead: Send + Sync {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
@@ -537,78 +614,6 @@ pub trait ExecutionCacheRead: Send + Sync {
         }
         .boxed()
     }
-
-    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
-
-    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge>;
-
-    // Marker methods
-
-    /// Get the marker at a specific version
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>>;
-
-    /// Get the latest marker for a given object.
-    fn get_latest_marker(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>>;
-
-    /// If the shared object was deleted, return deletion info for the current live version
-    fn get_last_shared_object_deletion_info(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, TransactionDigest)>> {
-        match self.get_latest_marker(object_id, epoch_id)? {
-            Some((version, MarkerValue::SharedDeleted(digest))) => Ok(Some((version, digest))),
-            _ => Ok(None),
-        }
-    }
-
-    /// If the shared object was deleted, return deletion info for the specified version.
-    fn get_deleted_shared_object_previous_tx_digest(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<TransactionDigest>> {
-        match self.get_marker_value(object_id, version, epoch_id)? {
-            Some(MarkerValue::SharedDeleted(digest)) => Ok(Some(digest)),
-            _ => Ok(None),
-        }
-    }
-
-    fn have_received_object_at_version(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<bool> {
-        match self.get_marker_value(object_id, version, epoch_id)? {
-            Some(MarkerValue::Received) => Ok(true),
-            _ => Ok(false),
-        }
-    }
-
-    fn have_deleted_owned_object_at_version_or_after(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<bool> {
-        match self.get_latest_marker(object_id, epoch_id)? {
-            Some((marker_version, MarkerValue::OwnedDeleted)) if marker_version >= version => {
-                Ok(true)
-            }
-            _ => Ok(false),
-        }
-    }
 }
 
 pub trait ExecutionCacheWrite: Send + Sync {
@@ -729,7 +734,7 @@ macro_rules! implement_storage_traits {
     ($implementor: ident) => {
         impl ObjectStore for $implementor {
             fn get_object(&self, object_id: &ObjectID) -> StorageResult<Option<Object>> {
-                ExecutionCacheRead::get_object(self, object_id).map_err(StorageError::custom)
+                ObjectCacheRead::get_object(self, object_id).map_err(StorageError::custom)
             }
 
             fn get_object_by_key(
@@ -737,7 +742,7 @@ macro_rules! implement_storage_traits {
                 object_id: &ObjectID,
                 version: sui_types::base_types::VersionNumber,
             ) -> StorageResult<Option<Object>> {
-                ExecutionCacheRead::get_object_by_key(self, object_id, version)
+                ObjectCacheRead::get_object_by_key(self, object_id, version)
                     .map_err(StorageError::custom)
             }
         }
@@ -773,7 +778,7 @@ macro_rules! implement_storage_traits {
                 receive_object_at_version: SequenceNumber,
                 epoch_id: EpochId,
             ) -> SuiResult<Option<Object>> {
-                let Some(recv_object) = ExecutionCacheRead::get_object_by_key(
+                let Some(recv_object) = ObjectCacheRead::get_object_by_key(
                     self,
                     receiving_object_id,
                     receive_object_at_version,
@@ -806,7 +811,7 @@ macro_rules! implement_storage_traits {
                 &self,
                 package_id: &ObjectID,
             ) -> SuiResult<Option<PackageObject>> {
-                ExecutionCacheRead::get_package_object(self, package_id)
+                ObjectCacheRead::get_package_object(self, package_id)
             }
         }
 
@@ -815,7 +820,7 @@ macro_rules! implement_storage_traits {
                 &self,
                 object_id: ObjectID,
             ) -> SuiResult<Option<ObjectRef>> {
-                ExecutionCacheRead::get_latest_object_ref_or_tombstone(self, object_id)
+                ObjectCacheRead::get_latest_object_ref_or_tombstone(self, object_id)
             }
         }
     };
@@ -951,7 +956,7 @@ implement_storage_traits!(WritebackCache);
 implement_storage_traits!(ProxyCache);
 
 pub trait ExecutionCacheAPI:
-    ExecutionCacheRead
+    ObjectCacheRead
     + ExecutionCacheWrite
     + ExecutionCacheCommit
     + ExecutionCacheReconfigAPI

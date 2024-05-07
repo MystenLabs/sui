@@ -279,7 +279,7 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .state()
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
             .unwrap()
             .unwrap()
@@ -563,7 +563,7 @@ impl TestCluster {
                 while let Some(tx) = txns.next().await {
                     let digest = *tx.transaction_digest();
                     let tx = state
-                        .get_cache_reader()
+                        .get_transaction_cache_reader()
                         .get_transaction_block(&digest)
                         .unwrap()
                         .unwrap();

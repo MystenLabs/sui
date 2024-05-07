@@ -68,7 +68,7 @@ async fn test_blocking_execution() -> Result<(), anyhow::Error> {
     // Wait for data sync to catch up
     handle
         .state()
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[digest])
         .await
         .unwrap();

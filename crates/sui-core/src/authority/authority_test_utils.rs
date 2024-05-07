@@ -373,7 +373,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
         )
         .await
@@ -396,7 +396,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
         .process_consensus_transactions_for_tests(
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
         )
         .await
@@ -424,7 +424,7 @@ pub async fn send_batch_consensus_no_execution(
         .process_consensus_transactions_for_tests(
             transactions,
             &Arc::new(CheckpointServiceNoop {}),
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &authority.metrics,
         )
         .await

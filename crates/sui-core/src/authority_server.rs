@@ -730,7 +730,7 @@ impl ValidatorService {
     ) -> Result<tonic::Response<SuiSystemState>, tonic::Status> {
         let response = self
             .state
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_sui_system_state_object_unsafe()?;
 
         Ok(tonic::Response::new(response))

@@ -263,7 +263,7 @@ pub async fn do_cert_with_shared_objects(
 ) -> TransactionEffects {
     send_consensus(authority, cert).await;
     authority
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[*cert.digest()])
         .await
         .unwrap()
@@ -442,7 +442,7 @@ async fn test_execution_with_dependencies() {
         .map(|cert| *cert.digest())
         .collect();
     authorities[3]
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&digests)
         .await
         .unwrap();
@@ -506,7 +506,7 @@ async fn test_per_object_overload() {
     }
     for authority in authorities.iter().take(3) {
         authority
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
             .unwrap()
@@ -521,7 +521,7 @@ async fn test_per_object_overload() {
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
         .unwrap()
@@ -635,7 +635,7 @@ async fn test_txn_age_overload() {
     }
     for authority in authorities.iter().take(3) {
         authority
-            .get_cache_reader()
+            .get_transaction_cache_reader()
             .notify_read_executed_effects(&[*create_counter_cert.digest()])
             .await
             .unwrap()
@@ -650,7 +650,7 @@ async fn test_txn_age_overload() {
         .unwrap();
     send_consensus(&authorities[3], &create_counter_cert).await;
     let create_counter_effects = authorities[3]
-        .get_cache_reader()
+        .get_transaction_cache_reader()
         .notify_read_executed_effects(&[*create_counter_cert.digest()])
         .await
         .unwrap()
