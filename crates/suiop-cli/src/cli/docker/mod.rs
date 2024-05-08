@@ -53,7 +53,7 @@ pub async fn docker_cmd(args: &DockerArgs) -> Result<()> {
             }
             DockerLanguageRuntime::Ts => {
                 info!("Generating Dockerfile for Typescript in {:?}", path);
-                generate_ts_dockerfile(&path)
+                generate_ts_dockerfile(path)
             }
         },
     }
