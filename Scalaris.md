@@ -16,3 +16,25 @@ pub use scalaris::ConsensusTransactionWrapper;
 //----- End of scalaris extension -----//
 
 ```
+
+3. docker/sui-node/Dockerfile 
+
+Add protobuf-compiler
+
+```
+RUN apt-get update && apt-get install -y cmake clang protobuf-compiler
+
+```
+
+4. docker/sui-network/docker-compose-scalaris.yaml
+
+Build scalaris docker image
+```
+docker/sui-node/build.sh -t scalaris/consensus-node
+```
+
+Run containers in folder docker/sui-network
+
+```
+docker-compose -f docker-compose-scalaris.yaml up -d
+```
