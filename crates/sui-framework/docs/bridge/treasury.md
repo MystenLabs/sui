@@ -299,11 +299,20 @@ title: Module `0xb::treasury`
 ## Constants
 
 
+<a name="0xb_treasury_EInvalidNotionalValue"></a>
+
+
+
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>: u64 = 4;
+</code></pre>
+
+
+
 <a name="0xb_treasury_EInvalidUpgradeCap"></a>
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>: u64 = 1;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>: u64 = 2;
 </code></pre>
 
 
@@ -312,7 +321,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>: u64 = 2;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>: u64 = 3;
 </code></pre>
 
 
@@ -321,7 +330,7 @@ title: Module `0xb::treasury`
 
 
 
-<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>: u64 = 0;
+<pre><code><b>const</b> <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>: u64 = 1;
 </code></pre>
 
 
@@ -416,7 +425,12 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, tc: TreasuryCap&lt;T&gt;, uc: UpgradeCap, metadata: &CoinMetadata&lt;T&gt;) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_register_foreign_token">register_foreign_token</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
+    tc: TreasuryCap&lt;T&gt;,
+    uc: UpgradeCap,
+    metadata: &CoinMetadata&lt;T&gt;,
+) {
     // Make sure TreasuryCap <b>has</b> not been minted before.
     <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_total_supply">coin::total_supply</a>(&tc) == 0, <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
     <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
@@ -424,14 +438,17 @@ title: Module `0xb::treasury`
     <b>let</b> coin_address = address::from_bytes(address_bytes);
     // Make sure upgrade cap is for the Coin <a href="../sui-framework/package.md#0x2_package">package</a>
     // FIXME: add test
-    <b>assert</b>!(<a href="../sui-framework/object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="../sui-framework/package.md#0x2_package_upgrade_package">package::upgrade_package</a>(&uc)) == coin_address, <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>);
+    <b>assert</b>!(
+        <a href="../sui-framework/object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="../sui-framework/package.md#0x2_package_upgrade_package">package::upgrade_package</a>(&uc))
+            == coin_address, <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>
+    );
     <b>let</b> registration = <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
         <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
         uc,
         decimal: <a href="../sui-framework/coin.md#0x2_coin_get_decimals">coin::get_decimals</a>(metadata),
     };
-    <a href="../sui-framework/bag.md#0x2_bag_add">bag::add</a>(&<b>mut</b> self.waiting_room, <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>), registration);
-    <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>, tc);
+    self.waiting_room.add(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>), registration);
+    self.treasuries.add(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>, tc);
 
     emit(<a href="treasury.md#0xb_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a>{
         <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
@@ -460,21 +477,31 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_add_new_token">add_new_token</a>(
+    self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
+    token_name: String,
+    token_id:u8,
+    native_token: bool,
+    notional_value: u64,
+) {
     <b>if</b> (!native_token){
+        <b>assert</b>!(notional_value &gt; 0, <a href="treasury.md#0xb_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>);
         <b>let</b> <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>{
             <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
             uc,
             decimal,
         } = <a href="../sui-framework/bag.md#0x2_bag_remove">bag::remove</a>&lt;String, <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a>&gt;(&<b>mut</b> self.waiting_room, token_name);
         <b>let</b> decimal_multiplier = <a href="../sui-framework/math.md#0x2_math_pow">math::pow</a>(10, decimal);
-        <a href="../sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.supported_tokens, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>, <a href="treasury.md#0xb_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a>{
-            id: token_id,
-            decimal_multiplier,
-            notional_value,
-            native_token
-        });
-        <a href="../sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.id_token_type_map, token_id, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>);
+        self.supported_tokens.insert(
+            <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
+            <a href="treasury.md#0xb_treasury_BridgeTokenMetadata">BridgeTokenMetadata</a>{
+                id: token_id,
+                decimal_multiplier,
+                notional_value,
+                native_token
+            },
+        );
+        self.id_token_type_map.insert(token_id, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>);
 
         // Freeze upgrade cap <b>to</b> prevent changes <b>to</b> the <a href="../sui-framework/coin.md#0x2_coin">coin</a>
         <a href="../sui-framework/transfer.md#0x2_transfer_public_freeze_object">transfer::public_freeze_object</a>(uc);
@@ -565,7 +592,11 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_mint">mint</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, amount: u64, ctx: &<b>mut</b> TxContext): Coin&lt;T&gt; {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_mint">mint</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
+    amount: u64,
+    ctx: &<b>mut</b> TxContext,
+): Coin&lt;T&gt; {
     <b>let</b> <a href="treasury.md#0xb_treasury">treasury</a> = &<b>mut</b> self.treasuries[<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;()];
     <a href="../sui-framework/coin.md#0x2_coin_mint">coin::mint</a>(<a href="treasury.md#0xb_treasury">treasury</a>, amount, ctx)
 }
@@ -590,9 +621,14 @@ title: Module `0xb::treasury`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_update_asset_notional_price">update_asset_notional_price</a>(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, token_id: u8, new_usd_price: u64) {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_update_asset_notional_price">update_asset_notional_price</a>(
+    self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>,
+    token_id: u8,
+    new_usd_price: u64,
+) {
     <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = self.id_token_type_map.try_get(&token_id);
     <b>assert</b>!(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.is_some(), <a href="treasury.md#0xb_treasury_EUnsupportedTokenType">EUnsupportedTokenType</a>);
+    <b>assert</b>!(new_usd_price &gt; 0, <a href="treasury.md#0xb_treasury_EInvalidNotionalValue">EInvalidNotionalValue</a>);
     <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>.destroy_some();
     <b>let</b> metadata = self.supported_tokens.get_mut(&<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>);
     metadata.notional_value = new_usd_price;

@@ -20,9 +20,10 @@ module bridge::treasury {
     use sui::vec_map;
     use sui::vec_map::VecMap;
 
-    const EUnsupportedTokenType: u64 = 0;
-    const EInvalidUpgradeCap: u64 = 1;
-    const ETokenSupplyNonZero: u64 = 2;
+    const EUnsupportedTokenType: u64 = 1;
+    const EInvalidUpgradeCap: u64 = 2;
+    const ETokenSupplyNonZero: u64 = 3;
+    const EInvalidNotionalValue: u64 = 4;
 
     #[test_only]
     const USD_VALUE_MULTIPLIER: u64 = 100000000; // 8 DP accuracy
@@ -92,7 +93,12 @@ module bridge::treasury {
     // Internal functions
     //
 
-    public(package) fun register_foreign_token<T>(self: &mut BridgeTreasury, tc: TreasuryCap<T>, uc: UpgradeCap, metadata: &CoinMetadata<T>) {
+    public(package) fun register_foreign_token<T>(
+        self: &mut BridgeTreasury,
+        tc: TreasuryCap<T>,
+        uc: UpgradeCap,
+        metadata: &CoinMetadata<T>,
+    ) {
         // Make sure TreasuryCap has not been minted before.
         assert!(coin::total_supply(&tc) == 0, ETokenSupplyNonZero);
         let type_name = type_name::get<T>();
@@ -100,14 +106,17 @@ module bridge::treasury {
         let coin_address = address::from_bytes(address_bytes);
         // Make sure upgrade cap is for the Coin package
         // FIXME: add test
-        assert!(object::id_to_address(&package::upgrade_package(&uc)) == coin_address, EInvalidUpgradeCap);
+        assert!(
+            object::id_to_address(&package::upgrade_package(&uc))
+                == coin_address, EInvalidUpgradeCap
+        );
         let registration = ForeignTokenRegistration {
             type_name,
             uc,
             decimal: coin::get_decimals(metadata),
         };
-        bag::add(&mut self.waiting_room, type_name::into_string(type_name), registration);
-        object_bag::add(&mut self.treasuries, type_name, tc);
+        self.waiting_room.add(type_name::into_string(type_name), registration);
+        self.treasuries.add(type_name, tc);
 
         emit(TokenRegistrationEvent{
             type_name,
@@ -116,21 +125,31 @@ module bridge::treasury {
         });
     }
 
-    public(package) fun add_new_token(self: &mut BridgeTreasury, token_name: String, token_id:u8, native_token: bool, notional_value: u64) {
+    public(package) fun add_new_token(
+        self: &mut BridgeTreasury,
+        token_name: String,
+        token_id:u8,
+        native_token: bool,
+        notional_value: u64,
+    ) {
         if (!native_token){
+            assert!(notional_value > 0, EInvalidNotionalValue);
             let ForeignTokenRegistration{
                 type_name,
                 uc,
                 decimal,
             } = bag::remove<String, ForeignTokenRegistration>(&mut self.waiting_room, token_name);
             let decimal_multiplier = math::pow(10, decimal);
-            vec_map::insert(&mut self.supported_tokens, type_name, BridgeTokenMetadata{
-                id: token_id,
-                decimal_multiplier,
-                notional_value,
-                native_token
-            });
-            vec_map::insert(&mut self.id_token_type_map, token_id, type_name);
+            self.supported_tokens.insert(
+                type_name,
+                BridgeTokenMetadata{
+                    id: token_id,
+                    decimal_multiplier,
+                    notional_value,
+                    native_token
+                },
+            );
+            self.id_token_type_map.insert(token_id, type_name);
 
             // Freeze upgrade cap to prevent changes to the coin
             transfer::public_freeze_object(uc);
@@ -161,14 +180,23 @@ module bridge::treasury {
         coin::burn(treasury, token);
     }
 
-    public(package) fun mint<T>(self: &mut BridgeTreasury, amount: u64, ctx: &mut TxContext): Coin<T> {
+    public(package) fun mint<T>(
+        self: &mut BridgeTreasury,
+        amount: u64,
+        ctx: &mut TxContext,
+    ): Coin<T> {
         let treasury = &mut self.treasuries[type_name::get<T>()];
         coin::mint(treasury, amount, ctx)
     }
 
-    public(package) fun update_asset_notional_price(self: &mut BridgeTreasury, token_id: u8, new_usd_price: u64) {
+    public(package) fun update_asset_notional_price(
+        self: &mut BridgeTreasury,
+        token_id: u8,
+        new_usd_price: u64,
+    ) {
         let type_name = self.id_token_type_map.try_get(&token_id);
         assert!(type_name.is_some(), EUnsupportedTokenType);
+        assert!(new_usd_price > 0, EInvalidNotionalValue);
         let type_name = type_name.destroy_some();
         let metadata = self.supported_tokens.get_mut(&type_name);
         metadata.notional_value = new_usd_price;
