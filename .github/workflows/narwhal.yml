@@ -80,7 +80,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
+          - [self-hosted]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
@@ -111,7 +111,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [ubuntu-ghcloud]
+          - [self-hosted]
       fail-fast: false
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
@@ -149,7 +149,7 @@ jobs:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
     timeout-minutes: 45
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [self-hosted]
     env:
       MSIM_WATCHDOG_TIMEOUT_MS: 60000
     steps:
