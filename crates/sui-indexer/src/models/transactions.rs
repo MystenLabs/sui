@@ -24,7 +24,7 @@ use crate::types::IndexedObjectChange;
 use crate::types::IndexedTransaction;
 use crate::types::IndexerResult;
 
-#[derive(Clone, Debug, Queryable, Insertable, QueryableByName)]
+#[derive(Clone, Debug, Queryable, Insertable, QueryableByName, Selectable)]
 #[diesel(table_name = transactions)]
 pub struct StoredTransaction {
     pub tx_sequence_number: i64,

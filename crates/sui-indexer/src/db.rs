@@ -140,8 +140,7 @@ pub fn new_connection_pool_with_config<T: R2D2Connection + 'static>(
         .build(manager)
         .map_err(|e| {
             IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool with error: {:?}",
-                e
+                "Failed to initialize connection pool for {db_url} with error: {e:?}"
             ))
         })
 }

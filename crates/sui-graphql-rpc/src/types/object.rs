@@ -552,13 +552,9 @@ impl ObjectImpl<'_> {
         };
         let digest = native.previous_transaction;
 
-        TransactionBlock::query(
-            ctx.data_unchecked(),
-            digest.into(),
-            self.0.checkpoint_viewed_at,
-        )
-        .await
-        .extend()
+        TransactionBlock::query(ctx, digest.into(), self.0.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     pub(crate) async fn storage_rebate(&self) -> Option<BigInt> {
