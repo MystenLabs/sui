@@ -3583,9 +3583,6 @@ NewTokenEvent
 TokenRegistrationEvent
 	public struct
 	0xb::treasury
-register_foreign_token
-	public(package) fun
-	0xb::treasury
 token_id
 	public fun
 	0xb::treasury
@@ -3594,6 +3591,9 @@ decimal_multiplier
 	0xb::treasury
 notional_value
 	public fun
+	0xb::treasury
+register_foreign_token
+	public(package) fun
 	0xb::treasury
 add_new_token
 	public(package) fun
@@ -3823,20 +3823,20 @@ TransferRecord
 UpdateRouteLimitEvent
 	public struct
 	0xb::limiter
-new
-	public fun
-	0xb::limiter
 get_route_limit
 	public fun
+	0xb::limiter
+new
+	public(package) fun
+	0xb::limiter
+check_and_record_sending_transfer
+	public(package) fun
 	0xb::limiter
 update_route_limit
 	public(package) fun
 	0xb::limiter
 current_hour_since_epoch
 	fun
-	0xb::limiter
-check_and_record_sending_transfer
-	public fun
 	0xb::limiter
 adjust_transfer_records
 	fun
@@ -3845,7 +3845,7 @@ initial_transfer_limits
 	fun
 	0xb::limiter
 ecdsa_pub_key_to_eth_address
-	public fun
+	public(package) fun
 	0xb::crypto
 BlocklistValidatorEvent
 	public struct
@@ -3862,17 +3862,14 @@ CommitteeMember
 CommitteeMemberRegistration
 	public struct
 	0xb::committee
-create
-	public(package) fun
-	0xb::committee
 verify_signatures
 	public fun
 	0xb::committee
-register
+create
 	public(package) fun
 	0xb::committee
-check_uniqueness_bridge_keys
-	fun
+register
+	public(package) fun
 	0xb::committee
 try_create_next_committee
 	public(package) fun
@@ -3882,6 +3879,9 @@ execute_blocklist
 	0xb::committee
 committee_members
 	public(package) fun
+	0xb::committee
+check_uniqueness_bridge_keys
+	fun
 	0xb::committee
 Bridge
 	public struct
@@ -3937,17 +3937,20 @@ claim_token
 claim_and_transfer_token
 	public fun
 	0xb::bridge
-load_inner_mut
-	fun
+execute_system_message
+	public fun
+	0xb::bridge
+get_token_transfer_action_status
+	public fun
 	0xb::bridge
 load_inner
 	fun
 	0xb::bridge
-claim_token_internal
+load_inner_mut
 	fun
 	0xb::bridge
-execute_system_message
-	public fun
+claim_token_internal
+	fun
 	0xb::bridge
 execute_emergency_op
 	fun
@@ -3963,9 +3966,6 @@ execute_add_tokens_on_sui
 	0xb::bridge
 get_current_seq_num_and_increment
 	fun
-	0xb::bridge
-get_token_transfer_action_status
-	public fun
 	0xb::bridge
 get_token_transfer_action_signatures
 	fun

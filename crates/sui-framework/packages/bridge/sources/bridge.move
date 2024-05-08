@@ -30,6 +30,10 @@ module bridge::bridge {
     const TRANSFER_STATUS_CLAIMED: u8 = 2;
     const TRANSFER_STATUS_NOT_FOUND: u8 = 3;
 
+    //////////////////////////////////////////////////////
+    // Types
+    //
+
     public struct Bridge has key {
         id: UID,
         inner: Versioned,
@@ -112,6 +116,10 @@ module bridge::bridge {
         message_key: BridgeMessageKey,
     }
 
+    //////////////////////////////////////////////////////
+    // Internal initialization functions
+    //
+
     // this method is called once in end of epoch tx to create the bridge
     #[allow(unused_function)]
     fun create(id: UID, chain_id: u8, ctx: &mut TxContext) {
@@ -151,6 +159,10 @@ module bridge::bridge {
             )
         }
     }
+
+    //////////////////////////////////////////////////////
+    // Public functions
+    //
 
     public fun committee_registration(
         bridge: &mut Bridge,
@@ -329,14 +341,76 @@ module bridge::bridge {
         };
     }
 
-    fun load_inner_mut(bridge: &mut Bridge): &mut BridgeInner {
-        let version = bridge.inner.version();
-        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
-        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
-        let inner: &mut BridgeInner = bridge.inner.load_value_mut();
-        assert!(inner.bridge_version == version, EWrongInnerVersion);
-        inner
+    public fun execute_system_message(
+        bridge: &mut Bridge,
+        message: BridgeMessage,
+        signatures: vector<vector<u8>>,
+    ) {
+        let message_type = message.message_type();
+
+        // TODO: test version mismatch
+        assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
+        let inner = load_inner_mut(bridge);
+
+        assert!(message.source_chain() == inner.chain_id, EUnexpectedChainID);
+
+        // check system ops seq number and increment it
+        let expected_seq_num = inner.get_current_seq_num_and_increment(message_type);
+        assert!(message.seq_num() == expected_seq_num, EUnexpectedSeqNum);
+
+        inner.committee.verify_signatures(message, signatures);
+
+        if (message_type == message_types::emergency_op()) {
+            let payload = message.extract_emergency_op_payload();
+            inner.execute_emergency_op(payload);
+        } else if (message_type == message_types::committee_blocklist()) {
+            let payload = message.extract_blocklist_payload();
+            inner.committee.execute_blocklist(payload);
+        } else if (message_type == message_types::update_bridge_limit()) {
+            let payload = message.extract_update_bridge_limit();
+            inner.execute_update_bridge_limit(payload);
+        } else if (message_type == message_types::update_asset_price()) {
+            let payload = message.extract_update_asset_price();
+            inner.execute_update_asset_price(payload);
+        } else if (message_type == message_types::add_tokens_on_sui()) {
+            let payload = message.extract_add_tokens_on_sui();
+            inner.execute_add_tokens_on_sui(payload);
+        } else {
+            abort EUnexpectedMessageType
+        };
     }
+
+    public fun get_token_transfer_action_status(
+        bridge: &Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): u8 {
+        let inner = load_inner(bridge);
+        let key = message::create_key(
+            source_chain,
+            message_types::token(),
+            bridge_seq_num
+        );
+
+        if (!inner.token_transfer_records.contains(key)) {
+            return TRANSFER_STATUS_NOT_FOUND
+        };
+
+        let record = &inner.token_transfer_records[key];
+        if (record.claimed) {
+            return TRANSFER_STATUS_CLAIMED
+        };
+
+        if (record.verified_signatures.is_some()) {
+            return TRANSFER_STATUS_APPROVED
+        };
+
+        TRANSFER_STATUS_PENDING
+    }
+
+    //////////////////////////////////////////////////////
+    // Internal functions
+    //
 
     fun load_inner(
         bridge: &Bridge,
@@ -346,6 +420,15 @@ module bridge::bridge {
         // TODO: Replace this with a lazy update function when we add a new version of the inner object.
         assert!(version == CURRENT_VERSION, EWrongInnerVersion);
         let inner: &BridgeInner = bridge.inner.load_value();
+        assert!(inner.bridge_version == version, EWrongInnerVersion);
+        inner
+    }
+
+    fun load_inner_mut(bridge: &mut Bridge): &mut BridgeInner {
+        let version = bridge.inner.version();
+        // TODO: Replace this with a lazy update function when we add a new version of the inner object.
+        assert!(version == CURRENT_VERSION, EWrongInnerVersion);
+        let inner: &mut BridgeInner = bridge.inner.load_value_mut();
         assert!(inner.bridge_version == version, EWrongInnerVersion);
         inner
     }
@@ -426,45 +509,6 @@ module bridge::bridge {
         (option::some(token), owner)
     }
 
-    public fun execute_system_message(
-        bridge: &mut Bridge,
-        message: BridgeMessage,
-        signatures: vector<vector<u8>>,
-    ) {
-        let message_type = message.message_type();
-
-        // TODO: test version mismatch
-        assert!(message.message_version() == MESSAGE_VERSION, EUnexpectedMessageVersion);
-        let inner = load_inner_mut(bridge);
-
-        assert!(message.source_chain() == inner.chain_id, EUnexpectedChainID);
-
-        // check system ops seq number and increment it
-        let expected_seq_num = inner.get_current_seq_num_and_increment(message_type);
-        assert!(message.seq_num() == expected_seq_num, EUnexpectedSeqNum);
-
-        inner.committee.verify_signatures(message, signatures);
-
-        if (message_type == message_types::emergency_op()) {
-            let payload = message.extract_emergency_op_payload();
-            inner.execute_emergency_op(payload);
-        } else if (message_type == message_types::committee_blocklist()) {
-            let payload = message.extract_blocklist_payload();
-            inner.committee.execute_blocklist(payload);
-        } else if (message_type == message_types::update_bridge_limit()) {
-            let payload = message.extract_update_bridge_limit();
-            inner.execute_update_bridge_limit(payload);
-        } else if (message_type == message_types::update_asset_price()) {
-            let payload = message.extract_update_asset_price();
-            inner.execute_update_asset_price(payload);
-        } else if (message_type == message_types::add_tokens_on_sui()) {
-            let payload = message.extract_add_tokens_on_sui();
-            inner.execute_add_tokens_on_sui(payload);
-        } else {
-            abort EUnexpectedMessageType
-        };
-    }
-
     fun execute_emergency_op(inner: &mut BridgeInner, payload: EmergencyOp) {
         let op = payload.emergency_op_type();
         if (op == message::emergency_op_pause()) {
@@ -534,34 +578,6 @@ module bridge::bridge {
         seq_num
     }
 
-    public fun get_token_transfer_action_status(
-        bridge: &Bridge,
-        source_chain: u8,
-        bridge_seq_num: u64,
-    ): u8 {
-        let inner = load_inner(bridge);
-        let key = message::create_key(
-            source_chain,
-            message_types::token(),
-            bridge_seq_num
-        );
-
-        if (!inner.token_transfer_records.contains(key)) {
-            return TRANSFER_STATUS_NOT_FOUND
-        };
-
-        let record = &inner.token_transfer_records[key];
-        if (record.claimed) {
-            return TRANSFER_STATUS_CLAIMED
-        };
-
-        if (record.verified_signatures.is_some()) {
-            return TRANSFER_STATUS_APPROVED
-        };
-
-        TRANSFER_STATUS_PENDING
-    }
-
     #[allow(unused_function)]
     fun get_token_transfer_action_signatures(
         bridge: &Bridge,
@@ -583,8 +599,8 @@ module bridge::bridge {
         record.verified_signatures
     }
 
-    //
-    // Test only helper functions
+    //////////////////////////////////////////////////////
+    // Test functions
     //
 
     #[test_only]

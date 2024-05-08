@@ -14,10 +14,18 @@ module bridge::chain_ids {
 
     const EInvalidBridgeRoute: u64 = 0;
 
+    //////////////////////////////////////////////////////
+    // Types
+    //
+
     public struct BridgeRoute has copy, drop, store {
         source: u8,
         destination: u8,
     }
+
+    //////////////////////////////////////////////////////
+    // Public functions
+    //
 
     public fun sui_mainnet(): u8 { SuiMainnet }
     public fun sui_testnet(): u8 { SuiTestnet }
@@ -76,6 +84,10 @@ module bridge::chain_ids {
         assert!(valid_routes().contains(&route), EInvalidBridgeRoute);
         route
     }
+
+    //////////////////////////////////////////////////////
+    // Test functions
+    //
 
     #[test]
     fun test_chains_ok() {
