@@ -154,7 +154,7 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV1 {
                     stake_agg.add(authority, &subdag.context.committee);
                     all_votes.insert(*reference, (is_vote, stake_agg));
                 } else {
-                    tracing::info!(
+                    tracing::trace!(
                         "Potential vote not found in unscored committed subdags: {:?}",
                         reference
                     );
@@ -165,10 +165,10 @@ impl ScoringStrategy for CertifiedVoteScoringStrategyV1 {
         for (vote_ref, (is_vote, stake_agg)) in all_votes {
             if is_vote && stake_agg.reached_threshold(&subdag.context.committee) {
                 let authority = vote_ref.author;
-                tracing::info!(
+                tracing::trace!(
                     "Found a certified vote {vote_ref} for leader {leader_block} from authority {authority}"
                 );
-                tracing::info!(
+                tracing::trace!(
                     "[{}] scores +1 reputation for {authority}!",
                     subdag.context.own_index
                 );
@@ -218,11 +218,11 @@ impl ScoringStrategy for VoteScoringStrategy {
         for potential_vote in voting_blocks {
             if subdag.is_vote(&potential_vote, leader_block) {
                 let authority = potential_vote.author();
-                tracing::info!(
+                tracing::trace!(
                     "Found a vote {} for leader {leader_block} from authority {authority}",
                     potential_vote.reference()
                 );
-                tracing::info!(
+                tracing::trace!(
                     "[{}] scores +1 reputation for {authority}!",
                     subdag.context.own_index
                 );
@@ -329,7 +329,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
     #[test]
@@ -344,7 +344,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
     #[test]
@@ -359,7 +359,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
     #[test]
@@ -374,7 +374,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
     fn basic_setup() -> (

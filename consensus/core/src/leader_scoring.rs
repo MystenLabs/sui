@@ -216,7 +216,7 @@ impl UnscoredSubdag {
 
         // Guaranteed to have a contiguous list of commit indices
         let commit_range = CommitRange::new(
-            subdags.first().unwrap().commit_index..subdags.last().unwrap().commit_index,
+            subdags.first().unwrap().commit_index..subdags.last().unwrap().commit_index + 1,
         );
 
         assert!(
@@ -231,6 +231,7 @@ impl UnscoredSubdag {
         }
     }
 
+    // Returns round range that has an inclusive start and end
     pub(crate) fn get_leader_round_range(&self) -> (Round, Round) {
         // Skip genesis round as we don't produce leaders for that round.
         let first_round = self
@@ -243,7 +244,7 @@ impl UnscoredSubdag {
         (first_round, last_round)
     }
 
-    pub(crate) fn find_supported_block(
+    pub(crate) fn find_supported_leader_block(
         &self,
         leader_slot: Slot,
         from: &VerifiedBlock,
@@ -260,7 +261,7 @@ impl UnscoredSubdag {
                 continue;
             }
             if let Some(ancestor) = self.get_block(ancestor) {
-                if let Some(support) = self.find_supported_block(leader_slot, &ancestor) {
+                if let Some(support) = self.find_supported_leader_block(leader_slot, &ancestor) {
                     return Some(support);
                 }
             } else {
@@ -282,7 +283,7 @@ impl UnscoredSubdag {
     ) -> bool {
         let reference = leader_block.reference();
         let leader_slot = Slot::from(reference);
-        self.find_supported_block(leader_slot, potential_vote) == Some(reference)
+        self.find_supported_leader_block(leader_slot, potential_vote) == Some(reference)
     }
 
     pub(crate) fn is_certificate(
@@ -300,7 +301,7 @@ impl UnscoredSubdag {
                 all_votes.insert(*reference, is_vote);
                 is_vote
             } else {
-                tracing::info!(
+                tracing::trace!(
                     "Potential vote not found in unscored committed subdags: {:?}",
                     reference
                 );
@@ -500,7 +501,7 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
     #[test]
@@ -531,9 +532,7 @@ mod tests {
             &unscored_subdags,
             Box::new(VoteScoringStrategy {}),
         );
-        let scores = calculator.calculate();
-        assert_eq!(scores.scores_per_authority, vec![0, 0, 0, 0]);
-        assert_eq!(scores.commit_range, CommitRange::new(0..0));
+        calculator.calculate();
     }
 
     #[test]
@@ -655,6 +654,6 @@ mod tests {
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
-        assert_eq!(scores.commit_range, CommitRange::new(1..1));
+        assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 }
