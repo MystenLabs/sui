@@ -81,10 +81,9 @@ import { MultiSigPublicKey } from '@mysten/sui.js/multisig';
 
 const kp1 = new Ed25519Keypair();
 const kp2 = new Ed25519Keypair();
-const kp3 = new Ed25519Keypair();
 
 const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
-	threshold: 2,
+	threshold: 1,
 	publicKeys: [
 		{
 			publicKey: kp1.getPublicKey(),
@@ -94,18 +93,13 @@ const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
 			publicKey: kp2.getPublicKey(),
 			weight: 1,
 		},
-		{
-			publicKey: kp3.getPublicKey(),
-			weight: 2,
-		},
 	],
 });
 
-const signer1 = multiSigPublicKey.getSigner([kp1, kp2]);
-const signer2 = multiSigPublicKey.getSigner([kp3]);
+const signer = multiSigPublicKey.getSigner(kp1);
 
 const message = new TextEncoder().encode('hello world');
-const { signature } = await signer1.signPersonalMessage(message);
+const { signature } = await signer.signPersonalMessage(message);
 const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedSignature);
 ```
 
