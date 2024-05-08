@@ -9,11 +9,11 @@ title: Module `0xb::limiter`
 -  [Struct `TransferRecord`](#0xb_limiter_TransferRecord)
 -  [Struct `UpdateRouteLimitEvent`](#0xb_limiter_UpdateRouteLimitEvent)
 -  [Constants](#@Constants_0)
--  [Function `new`](#0xb_limiter_new)
 -  [Function `get_route_limit`](#0xb_limiter_get_route_limit)
+-  [Function `new`](#0xb_limiter_new)
+-  [Function `check_and_record_sending_transfer`](#0xb_limiter_check_and_record_sending_transfer)
 -  [Function `update_route_limit`](#0xb_limiter_update_route_limit)
 -  [Function `current_hour_since_epoch`](#0xb_limiter_current_hour_since_epoch)
--  [Function `check_and_record_sending_transfer`](#0xb_limiter_check_and_record_sending_transfer)
 -  [Function `adjust_transfer_records`](#0xb_limiter_adjust_transfer_records)
 -  [Function `initial_transfer_limits`](#0xb_limiter_initial_transfer_limits)
 
@@ -178,34 +178,6 @@ title: Module `0xb::limiter`
 
 
 
-<a name="0xb_limiter_new"></a>
-
-## Function `new`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
-    // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> <a href="../sui-system/genesis.md#0x3_genesis">genesis</a>
-    <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
-        transfer_limits: <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
-        transfer_records: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>()
-    }
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xb_limiter_get_route_limit"></a>
 
 ## Function `get_route_limit`
@@ -223,6 +195,109 @@ title: Module `0xb::limiter`
 
 <pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_get_route_limit">get_route_limit</a>(self: &<a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>, route: &BridgeRoute): u64 {
     self.transfer_limits[route]
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_limiter_new"></a>
+
+## Function `new`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="limiter.md#0xb_limiter_new">new</a>(): <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
+    // hardcoded limit for <a href="bridge.md#0xb_bridge">bridge</a> <a href="../sui-system/genesis.md#0x3_genesis">genesis</a>
+    <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a> {
+        transfer_limits: <a href="limiter.md#0xb_limiter_initial_transfer_limits">initial_transfer_limits</a>(),
+        transfer_records: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>()
+    }
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_limiter_check_and_record_sending_transfer"></a>
+
+## Function `check_and_record_sending_transfer`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, <a href="treasury.md#0xb_treasury">treasury</a>: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(
+    self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
+    <a href="treasury.md#0xb_treasury">treasury</a>: &BridgeTreasury,
+    <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
+    route: BridgeRoute,
+    amount: u64
+): bool {
+    // Create record for route <b>if</b> not exists
+    <b>if</b> (!self.transfer_records.contains(&route)) {
+        self.transfer_records.insert(route, <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a> {
+            hour_head: 0,
+            hour_tail: 0,
+            per_hour_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[],
+            total_amount: 0
+        })
+    };
+    <b>let</b> record = self.transfer_records.get_mut(&route);
+    <b>let</b> current_hour_since_epoch = <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>);
+
+    record.<a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(current_hour_since_epoch);
+
+    // Get limit for the route
+    <b>let</b> route_limit = self.transfer_limits.try_get(&route);
+    <b>assert</b>!(route_limit.is_some(), <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>);
+    <b>let</b> route_limit = route_limit.destroy_some();
+    <b>let</b> route_limit_adjusted =
+        (route_limit <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
+
+    // Compute notional amount
+    // Upcast <b>to</b> u128 <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
+    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> u128);
+    <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> u128);
+
+    // Check <b>if</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> amount exceed limit
+    // Upscale them <b>to</b> the token's decimal.
+    <b>if</b> ((record.total_amount <b>as</b> u128)
+        * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128)
+        + notional_amount_with_token_multiplier &gt; route_limit_adjusted
+    ) {
+        <b>return</b> <b>false</b>
+    };
+
+    // Now scale down <b>to</b> notional value
+    <b>let</b> notional_amount = notional_amount_with_token_multiplier
+        / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
+    // Should be safe <b>to</b> downcast <b>to</b> u64 after dividing by the decimals
+    <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
+
+    // Record <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> value
+    <b>let</b> new_amount = record.per_hour_amounts.pop_back() + notional_amount;
+    record.per_hour_amounts.push_back(new_amount);
+    record.total_amount = record.total_amount + notional_amount;
+    <b>true</b>
 }
 </code></pre>
 
@@ -287,76 +362,6 @@ title: Module `0xb::limiter`
 
 <pre><code><b>fun</b> <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock): u64 {
     <a href="../sui-framework/clock.md#0x2_clock_timestamp_ms">clock::timestamp_ms</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>) / 3600000
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_limiter_check_and_record_sending_transfer"></a>
-
-## Function `check_and_record_sending_transfer`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">limiter::TransferLimiter</a>, <a href="treasury.md#0xb_treasury">treasury</a>: &<a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &<a href="../sui-framework/clock.md#0x2_clock_Clock">clock::Clock</a>, route: <a href="chain_ids.md#0xb_chain_ids_BridgeRoute">chain_ids::BridgeRoute</a>, amount: u64): bool
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="limiter.md#0xb_limiter_check_and_record_sending_transfer">check_and_record_sending_transfer</a>&lt;T&gt;(
-    self: &<b>mut</b> <a href="limiter.md#0xb_limiter_TransferLimiter">TransferLimiter</a>,
-    <a href="treasury.md#0xb_treasury">treasury</a>: &BridgeTreasury,
-    <a href="../sui-framework/clock.md#0x2_clock">clock</a>: &Clock,
-    route: BridgeRoute,
-    amount: u64
-): bool {
-    // Create record for route <b>if</b> not exists
-    <b>if</b> (!<a href="../sui-framework/vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.transfer_records, &route)) {
-        <a href="../sui-framework/vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.transfer_records, route, <a href="limiter.md#0xb_limiter_TransferRecord">TransferRecord</a> {
-            hour_head: 0,
-            hour_tail: 0,
-            per_hour_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[],
-            total_amount: 0
-        })
-    };
-    <b>let</b> record = <a href="../sui-framework/vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.transfer_records, &route);
-    <b>let</b> current_hour_since_epoch = <a href="limiter.md#0xb_limiter_current_hour_since_epoch">current_hour_since_epoch</a>(<a href="../sui-framework/clock.md#0x2_clock">clock</a>);
-
-    <a href="limiter.md#0xb_limiter_adjust_transfer_records">adjust_transfer_records</a>(record, current_hour_since_epoch);
-
-    // Get limit for the route
-    <b>let</b> route_limit = self.transfer_limits.try_get(&route);
-    <b>assert</b>!(route_limit.is_some(), <a href="limiter.md#0xb_limiter_ELimitNotFoundForRoute">ELimitNotFoundForRoute</a>);
-    <b>let</b> route_limit = route_limit.destroy_some();
-    <b>let</b> route_limit_adjusted = (route_limit <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
-
-    // Compute notional amount
-    // Upcast <b>to</b> u128 <b>to</b> prevent overflow, <b>to</b> not miss out on small amounts.
-    <b>let</b> value = (<a href="treasury.md#0xb_treasury">treasury</a>.notional_value&lt;T&gt;() <b>as</b> u128);
-    <b>let</b> notional_amount_with_token_multiplier = value * (amount <b>as</b> u128);
-
-    // Check <b>if</b> <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> amount exceed limit
-    // Upscale them <b>to</b> the token's decimal.
-    <b>if</b> ((record.total_amount <b>as</b> u128) * (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128) + notional_amount_with_token_multiplier &gt; route_limit_adjusted) {
-        <b>return</b> <b>false</b>
-    };
-
-    // Now scale down <b>to</b> notional value
-    <b>let</b> notional_amount = notional_amount_with_token_multiplier / (<a href="treasury.md#0xb_treasury">treasury</a>.decimal_multiplier&lt;T&gt;() <b>as</b> u128);
-    // Should be safe <b>to</b> downcast <b>to</b> u64 after dividing by the decimals
-    <b>let</b> notional_amount = (notional_amount <b>as</b> u64);
-
-    // Record <a href="../sui-framework/transfer.md#0x2_transfer">transfer</a> value
-    <b>let</b> new_amount = record.per_hour_amounts.pop_back() + notional_amount;
-    record.per_hour_amounts.push_back(new_amount);
-    record.total_amount = record.total_amount + notional_amount;
-    <b>true</b>
 }
 </code></pre>
 

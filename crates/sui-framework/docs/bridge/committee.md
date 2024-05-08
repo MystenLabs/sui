@@ -11,13 +11,13 @@ title: Module `0xb::committee`
 -  [Struct `CommitteeMember`](#0xb_committee_CommitteeMember)
 -  [Struct `CommitteeMemberRegistration`](#0xb_committee_CommitteeMemberRegistration)
 -  [Constants](#@Constants_0)
--  [Function `create`](#0xb_committee_create)
 -  [Function `verify_signatures`](#0xb_committee_verify_signatures)
+-  [Function `create`](#0xb_committee_create)
 -  [Function `register`](#0xb_committee_register)
--  [Function `check_uniqueness_bridge_keys`](#0xb_committee_check_uniqueness_bridge_keys)
 -  [Function `try_create_next_committee`](#0xb_committee_try_create_next_committee)
 -  [Function `execute_blocklist`](#0xb_committee_execute_blocklist)
 -  [Function `committee_members`](#0xb_committee_committee_members)
+-  [Function `check_uniqueness_bridge_keys`](#0xb_committee_check_uniqueness_bridge_keys)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
@@ -335,35 +335,6 @@ title: Module `0xb::committee`
 
 
 
-<a name="0xb_committee_create"></a>
-
-## Function `create`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_create">create</a>(ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="committee.md#0xb_committee_create">create</a>(ctx: &TxContext): <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>);
-    <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
-        members: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        member_registrations: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
-        last_committee_update_epoch: 0,
-    }
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xb_committee_verify_signatures"></a>
 
 ## Function `verify_signatures`
@@ -393,8 +364,7 @@ title: Module `0xb::committee`
 
     <b>let</b> <b>mut</b> threshold = 0;
     <b>while</b> (i &lt; signature_counts) {
-        <b>let</b> signature = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&signatures, i);
-        <b>let</b> pubkey = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">ecdsa_k1::secp256k1_ecrecover</a>(signature, &message_bytes, 0);
+        <b>let</b> pubkey = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_secp256k1_ecrecover">ecdsa_k1::secp256k1_ecrecover</a>(&signatures[i], &message_bytes, 0);
 
         // check duplicate
         // and make sure pub key is part of the <a href="committee.md#0xb_committee">committee</a>
@@ -411,6 +381,35 @@ title: Module `0xb::committee`
     };
 
     <b>assert</b>!(threshold &gt;= required_voting_power, <a href="committee.md#0xb_committee_ESignatureBelowThreshold">ESignatureBelowThreshold</a>);
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_committee_create"></a>
+
+## Function `create`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="committee.md#0xb_committee_create">create</a>(ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="committee.md#0xb_committee_create">create</a>(ctx: &TxContext): <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
+    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx) == @0x0, <a href="committee.md#0xb_committee_ENotSystemAddress">ENotSystemAddress</a>);
+    <a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a> {
+        members: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        member_registrations: <a href="../sui-framework/vec_map.md#0x2_vec_map_empty">vec_map::empty</a>(),
+        last_committee_update_epoch: 0,
+    }
 }
 </code></pre>
 
@@ -441,9 +440,9 @@ title: Module `0xb::committee`
     ctx: &TxContext
 ) {
     // We disallow registration after <a href="committee.md#0xb_committee">committee</a> initiated in v1
-    <b>assert</b>!(<a href="../sui-framework/vec_map.md#0x2_vec_map_is_empty">vec_map::is_empty</a>(&self.members), <a href="committee.md#0xb_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
+    <b>assert</b>!(self.members.is_empty(), <a href="committee.md#0xb_committee_ECommitteeAlreadyInitiated">ECommitteeAlreadyInitiated</a>);
     // Ensure pubkey is valid
-    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bridge_pubkey_bytes) == <a href="committee.md#0xb_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>, <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>);
+    <b>assert</b>!(bridge_pubkey_bytes.length() == <a href="committee.md#0xb_committee_ECDSA_COMPRESSED_PUBKEY_LENGTH">ECDSA_COMPRESSED_PUBKEY_LENGTH</a>, <a href="committee.md#0xb_committee_EInvalidPubkeyLength">EInvalidPubkeyLength</a>);
     // sender must be the same sender that created the <a href="../sui-system/validator.md#0x3_validator">validator</a> <a href="../sui-framework/object.md#0x2_object">object</a>, this is <b>to</b> prevent DDoS from non-<a href="../sui-system/validator.md#0x3_validator">validator</a> actor.
     <b>let</b> sender = ctx.sender();
     <b>let</b> validators = system_state.active_validator_addresses();
@@ -474,40 +473,6 @@ title: Module `0xb::committee`
     <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self, bridge_pubkey_bytes);
 
     emit(registration)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_committee_check_uniqueness_bridge_keys"></a>
-
-## Function `check_uniqueness_bridge_keys`
-
-
-
-<pre><code><b>fun</b> <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>fun</b> <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
-    <b>let</b> <b>mut</b> count = self.member_registrations.size();
-    // bridge_pubkey_bytes must be found once and once only
-    <b>let</b> <b>mut</b> bridge_key_found = <b>false</b>;
-    <b>while</b> (count &gt; 0) {
-        count = count - 1;
-        <b>let</b> (_, registration) = self.member_registrations.get_entry_by_idx(count);
-        <b>if</b> (registration.bridge_pubkey_bytes == bridge_pubkey_bytes) {
-            <b>assert</b>!(!bridge_key_found, <a href="committee.md#0xb_committee_EDuplicatePubkey">EDuplicatePubkey</a>);
-            bridge_key_found = <b>true</b>; // bridge_pubkey_bytes found, we must not have another one
-        }
-    };
 }
 </code></pre>
 
@@ -614,7 +579,7 @@ title: Module `0xb::committee`
 
         <b>while</b> (member_idx &lt; self.members.size()) {
             <b>let</b> (pub_key, member) = self.members.get_entry_by_idx_mut(member_idx);
-            <b>let</b> eth_address = <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(*pub_key);
+            <b>let</b> eth_address = <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">crypto::ecdsa_pub_key_to_eth_address</a>(pub_key);
 
             <b>if</b> (*target_address == eth_address) {
                 member.blocklisted = blocklisted;
@@ -657,8 +622,44 @@ title: Module `0xb::committee`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="committee.md#0xb_committee_committee_members">committee_members</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>): &VecMap&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a>&gt; {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="committee.md#0xb_committee_committee_members">committee_members</a>(
+    self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>,
+): &VecMap&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, <a href="committee.md#0xb_committee_CommitteeMember">CommitteeMember</a>&gt; {
     &self.members
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_committee_check_uniqueness_bridge_keys"></a>
+
+## Function `check_uniqueness_bridge_keys`
+
+
+
+<pre><code><b>fun</b> <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">committee::BridgeCommittee</a>, bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="committee.md#0xb_committee_check_uniqueness_bridge_keys">check_uniqueness_bridge_keys</a>(self: &<a href="committee.md#0xb_committee_BridgeCommittee">BridgeCommittee</a>, bridge_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+    <b>let</b> <b>mut</b> count = self.member_registrations.size();
+    // bridge_pubkey_bytes must be found once and once only
+    <b>let</b> <b>mut</b> bridge_key_found = <b>false</b>;
+    <b>while</b> (count &gt; 0) {
+        count = count - 1;
+        <b>let</b> (_, registration) = self.member_registrations.get_entry_by_idx(count);
+        <b>if</b> (registration.bridge_pubkey_bytes == bridge_pubkey_bytes) {
+            <b>assert</b>!(!bridge_key_found, <a href="committee.md#0xb_committee_EDuplicatePubkey">EDuplicatePubkey</a>);
+            bridge_key_found = <b>true</b>; // bridge_pubkey_bytes found, we must not have another one
+        }
+    };
 }
 </code></pre>
 

@@ -24,16 +24,16 @@ title: Module `0xb::bridge`
 -  [Function `approve_token_transfer`](#0xb_bridge_approve_token_transfer)
 -  [Function `claim_token`](#0xb_bridge_claim_token)
 -  [Function `claim_and_transfer_token`](#0xb_bridge_claim_and_transfer_token)
--  [Function `load_inner_mut`](#0xb_bridge_load_inner_mut)
--  [Function `load_inner`](#0xb_bridge_load_inner)
--  [Function `claim_token_internal`](#0xb_bridge_claim_token_internal)
 -  [Function `execute_system_message`](#0xb_bridge_execute_system_message)
+-  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
+-  [Function `load_inner`](#0xb_bridge_load_inner)
+-  [Function `load_inner_mut`](#0xb_bridge_load_inner_mut)
+-  [Function `claim_token_internal`](#0xb_bridge_claim_token_internal)
 -  [Function `execute_emergency_op`](#0xb_bridge_execute_emergency_op)
 -  [Function `execute_update_bridge_limit`](#0xb_bridge_execute_update_bridge_limit)
 -  [Function `execute_update_asset_price`](#0xb_bridge_execute_update_asset_price)
 -  [Function `execute_add_tokens_on_sui`](#0xb_bridge_execute_add_tokens_on_sui)
 -  [Function `get_current_seq_num_and_increment`](#0xb_bridge_get_current_seq_num_and_increment)
--  [Function `get_token_transfer_action_status`](#0xb_bridge_get_token_transfer_action_status)
 -  [Function `get_token_transfer_action_signatures`](#0xb_bridge_get_token_transfer_action_signatures)
 
 
@@ -1021,13 +1021,13 @@ title: Module `0xb::bridge`
 
 </details>
 
-<a name="0xb_bridge_load_inner_mut"></a>
+<a name="0xb_bridge_execute_system_message"></a>
 
-## Function `load_inner_mut`
+## Function `execute_system_message`
 
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_execute_system_message">execute_system_message</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, <a href="message.md#0xb_message">message</a>: <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>, signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;)
 </code></pre>
 
 
@@ -1036,13 +1036,91 @@ title: Module `0xb::bridge`
 <summary>Implementation</summary>
 
 
-<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
-    <b>let</b> version = <a href="bridge.md#0xb_bridge">bridge</a>.inner.version();
-    // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
-    <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
-    <b>let</b> inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="bridge.md#0xb_bridge">bridge</a>.inner.load_value_mut();
-    <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
-    inner
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_execute_system_message">execute_system_message</a>(
+    <a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    <a href="message.md#0xb_message">message</a>: BridgeMessage,
+    signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
+) {
+    <b>let</b> message_type = <a href="message.md#0xb_message">message</a>.message_type();
+
+    // TODO: test version mismatch
+    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.message_version() == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+
+    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.source_chain() == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
+
+    // check system ops seq number and increment it
+    <b>let</b> expected_seq_num = inner.<a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(message_type);
+    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.seq_num() == expected_seq_num, <a href="bridge.md#0xb_bridge_EUnexpectedSeqNum">EUnexpectedSeqNum</a>);
+
+    inner.<a href="committee.md#0xb_committee">committee</a>.verify_signatures(<a href="message.md#0xb_message">message</a>, signatures);
+
+    <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_emergency_op_payload();
+        inner.<a href="bridge.md#0xb_bridge_execute_emergency_op">execute_emergency_op</a>(payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_blocklist_payload();
+        inner.<a href="committee.md#0xb_committee">committee</a>.execute_blocklist(payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_bridge_limit();
+        inner.<a href="bridge.md#0xb_bridge_execute_update_bridge_limit">execute_update_bridge_limit</a>(payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_asset_price();
+        inner.<a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(payload);
+    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
+        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_add_tokens_on_sui();
+        inner.<a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(payload);
+    } <b>else</b> {
+        <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>
+    };
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_get_token_transfer_action_status"></a>
+
+## Function `get_token_transfer_action_status`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
+    <a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
+    source_chain: u8,
+    bridge_seq_num: u64,
+): u8 {
+    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
+    <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(
+        source_chain,
+        <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
+        bridge_seq_num
+    );
+
+    <b>if</b> (!inner.token_transfer_records.contains(key)) {
+        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_NOT_FOUND">TRANSFER_STATUS_NOT_FOUND</a>
+    };
+
+    <b>let</b> record = &inner.token_transfer_records[key];
+    <b>if</b> (record.claimed) {
+        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_CLAIMED">TRANSFER_STATUS_CLAIMED</a>
+    };
+
+    <b>if</b> (record.verified_signatures.is_some()) {
+        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_APPROVED">TRANSFER_STATUS_APPROVED</a>
+    };
+
+    <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>
 }
 </code></pre>
 
@@ -1073,6 +1151,35 @@ title: Module `0xb::bridge`
     // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
     <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
     <b>let</b> inner: &<a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="bridge.md#0xb_bridge">bridge</a>.inner.load_value();
+    <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
+    inner
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_bridge_load_inner_mut"></a>
+
+## Function `load_inner_mut`
+
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">bridge::BridgeInner</a>
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>): &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> {
+    <b>let</b> version = <a href="bridge.md#0xb_bridge">bridge</a>.inner.version();
+    // TODO: Replace this <b>with</b> a lazy <b>update</b> function when we add a new version of the inner <a href="../sui-framework/object.md#0x2_object">object</a>.
+    <b>assert</b>!(version == <a href="bridge.md#0xb_bridge_CURRENT_VERSION">CURRENT_VERSION</a>, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
+    <b>let</b> inner: &<b>mut</b> <a href="bridge.md#0xb_bridge_BridgeInner">BridgeInner</a> = <a href="bridge.md#0xb_bridge">bridge</a>.inner.load_value_mut();
     <b>assert</b>!(inner.bridge_version == version, <a href="bridge.md#0xb_bridge_EWrongInnerVersion">EWrongInnerVersion</a>);
     inner
 }
@@ -1169,65 +1276,6 @@ title: Module `0xb::bridge`
     emit(<a href="bridge.md#0xb_bridge_TokenTransferClaimed">TokenTransferClaimed</a> { message_key: key });
 
     (<a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(token), owner)
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_bridge_execute_system_message"></a>
-
-## Function `execute_system_message`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_execute_system_message">execute_system_message</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, <a href="message.md#0xb_message">message</a>: <a href="message.md#0xb_message_BridgeMessage">message::BridgeMessage</a>, signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_execute_system_message">execute_system_message</a>(
-    <a href="bridge.md#0xb_bridge">bridge</a>: &<b>mut</b> <a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-    <a href="message.md#0xb_message">message</a>: BridgeMessage,
-    signatures: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;&gt;,
-) {
-    <b>let</b> message_type = <a href="message.md#0xb_message">message</a>.message_type();
-
-    // TODO: test version mismatch
-    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.message_version() == <a href="bridge.md#0xb_bridge_MESSAGE_VERSION">MESSAGE_VERSION</a>, <a href="bridge.md#0xb_bridge_EUnexpectedMessageVersion">EUnexpectedMessageVersion</a>);
-    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner_mut">load_inner_mut</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
-
-    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.source_chain() == inner.chain_id, <a href="bridge.md#0xb_bridge_EUnexpectedChainID">EUnexpectedChainID</a>);
-
-    // check system ops seq number and increment it
-    <b>let</b> expected_seq_num = inner.<a href="bridge.md#0xb_bridge_get_current_seq_num_and_increment">get_current_seq_num_and_increment</a>(message_type);
-    <b>assert</b>!(<a href="message.md#0xb_message">message</a>.seq_num() == expected_seq_num, <a href="bridge.md#0xb_bridge_EUnexpectedSeqNum">EUnexpectedSeqNum</a>);
-
-    inner.<a href="committee.md#0xb_committee">committee</a>.verify_signatures(<a href="message.md#0xb_message">message</a>, signatures);
-
-    <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_emergency_op">message_types::emergency_op</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_emergency_op_payload();
-        inner.<a href="bridge.md#0xb_bridge_execute_emergency_op">execute_emergency_op</a>(payload);
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_committee_blocklist">message_types::committee_blocklist</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_blocklist_payload();
-        inner.<a href="committee.md#0xb_committee">committee</a>.execute_blocklist(payload);
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_bridge_limit">message_types::update_bridge_limit</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_bridge_limit();
-        inner.<a href="bridge.md#0xb_bridge_execute_update_bridge_limit">execute_update_bridge_limit</a>(payload);
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_update_asset_price">message_types::update_asset_price</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_update_asset_price();
-        inner.<a href="bridge.md#0xb_bridge_execute_update_asset_price">execute_update_asset_price</a>(payload);
-    } <b>else</b> <b>if</b> (message_type == <a href="message_types.md#0xb_message_types_add_tokens_on_sui">message_types::add_tokens_on_sui</a>()) {
-        <b>let</b> payload = <a href="message.md#0xb_message">message</a>.extract_add_tokens_on_sui();
-        inner.<a href="bridge.md#0xb_bridge_execute_add_tokens_on_sui">execute_add_tokens_on_sui</a>(payload);
-    } <b>else</b> {
-        <b>abort</b> <a href="bridge.md#0xb_bridge_EUnexpectedMessageType">EUnexpectedMessageType</a>
-    };
 }
 </code></pre>
 
@@ -1395,54 +1443,6 @@ title: Module `0xb::bridge`
     <b>let</b> seq_num = *entry;
     *entry = seq_num + 1;
     seq_num
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0xb_bridge_get_token_transfer_action_status"></a>
-
-## Function `get_token_transfer_action_status`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(<a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">bridge::Bridge</a>, source_chain: u8, bridge_seq_num: u64): u8
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="bridge.md#0xb_bridge_get_token_transfer_action_status">get_token_transfer_action_status</a>(
-    <a href="bridge.md#0xb_bridge">bridge</a>: &<a href="bridge.md#0xb_bridge_Bridge">Bridge</a>,
-    source_chain: u8,
-    bridge_seq_num: u64,
-): u8 {
-    <b>let</b> inner = <a href="bridge.md#0xb_bridge_load_inner">load_inner</a>(<a href="bridge.md#0xb_bridge">bridge</a>);
-    <b>let</b> key = <a href="message.md#0xb_message_create_key">message::create_key</a>(
-        source_chain,
-        <a href="message_types.md#0xb_message_types_token">message_types::token</a>(),
-        bridge_seq_num
-    );
-
-    <b>if</b> (!inner.token_transfer_records.contains(key)) {
-        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_NOT_FOUND">TRANSFER_STATUS_NOT_FOUND</a>
-    };
-
-    <b>let</b> record = &inner.token_transfer_records[key];
-    <b>if</b> (record.claimed) {
-        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_CLAIMED">TRANSFER_STATUS_CLAIMED</a>
-    };
-
-    <b>if</b> (record.verified_signatures.is_some()) {
-        <b>return</b> <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_APPROVED">TRANSFER_STATUS_APPROVED</a>
-    };
-
-    <a href="bridge.md#0xb_bridge_TRANSFER_STATUS_PENDING">TRANSFER_STATUS_PENDING</a>
 }
 </code></pre>
 

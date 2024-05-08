@@ -20,7 +20,7 @@ title: Module `0xb::crypto`
 
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">ecdsa_pub_key_to_eth_address</a>(compressed_pub_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">ecdsa_pub_key_to_eth_address</a>(compressed_pub_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
 </code></pre>
 
 
@@ -29,9 +29,9 @@ title: Module `0xb::crypto`
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">ecdsa_pub_key_to_eth_address</a>(compressed_pub_key: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="crypto.md#0xb_crypto_ecdsa_pub_key_to_eth_address">ecdsa_pub_key_to_eth_address</a>(compressed_pub_key: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
     // Decompress pub key
-    <b>let</b> decompressed = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">ecdsa_k1::decompress_pubkey</a>(&compressed_pub_key);
+    <b>let</b> decompressed = <a href="../sui-framework/ecdsa_k1.md#0x2_ecdsa_k1_decompress_pubkey">ecdsa_k1::decompress_pubkey</a>(compressed_pub_key);
 
     // Skip the first byte
     <b>let</b> (<b>mut</b> i, <b>mut</b> decompressed_64) = (1, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[]);

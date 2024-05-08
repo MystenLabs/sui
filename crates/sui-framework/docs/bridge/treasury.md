@@ -12,10 +12,10 @@ title: Module `0xb::treasury`
 -  [Struct `NewTokenEvent`](#0xb_treasury_NewTokenEvent)
 -  [Struct `TokenRegistrationEvent`](#0xb_treasury_TokenRegistrationEvent)
 -  [Constants](#@Constants_0)
--  [Function `register_foreign_token`](#0xb_treasury_register_foreign_token)
 -  [Function `token_id`](#0xb_treasury_token_id)
 -  [Function `decimal_multiplier`](#0xb_treasury_decimal_multiplier)
 -  [Function `notional_value`](#0xb_treasury_notional_value)
+-  [Function `register_foreign_token`](#0xb_treasury_register_foreign_token)
 -  [Function `add_new_token`](#0xb_treasury_add_new_token)
 -  [Function `create`](#0xb_treasury_create)
 -  [Function `burn`](#0xb_treasury_burn)
@@ -327,50 +327,6 @@ title: Module `0xb::treasury`
 
 
 
-<a name="0xb_treasury_register_foreign_token"></a>
-
-## Function `register_foreign_token`
-
-
-
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, tc: <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, uc: <a href="../sui-framework/package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, metadata: &<a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, tc: TreasuryCap&lt;T&gt;, uc: UpgradeCap, metadata: &CoinMetadata&lt;T&gt;) {
-    // Make sure TreasuryCap <b>has</b> not been minted before.
-    <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_total_supply">coin::total_supply</a>(&tc) == 0, <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
-    <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
-    <b>let</b> address_bytes = <a href="../sui-framework/hex.md#0x2_hex_decode">hex::decode</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>)));
-    <b>let</b> coin_address = address::from_bytes(address_bytes);
-    // Make sure upgrade cap is for the Coin <a href="../sui-framework/package.md#0x2_package">package</a>
-    // FIXME: add test
-    <b>assert</b>!(<a href="../sui-framework/object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="../sui-framework/package.md#0x2_package_upgrade_package">package::upgrade_package</a>(&uc)) == coin_address, <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>);
-    <b>let</b> registration = <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
-        <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
-        uc,
-        decimal: <a href="../sui-framework/coin.md#0x2_coin_get_decimals">coin::get_decimals</a>(metadata),
-    };
-    <a href="../sui-framework/bag.md#0x2_bag_add">bag::add</a>(&<b>mut</b> self.waiting_room, <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>), registration);
-    <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>, tc);
-
-    emit(<a href="treasury.md#0xb_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a>{
-        <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
-        decimal: <a href="../sui-framework/coin.md#0x2_coin_get_decimals">coin::get_decimals</a>(metadata),
-        native_token: <b>false</b>
-    });
-}
-</code></pre>
-
-
-
-</details>
-
 <a name="0xb_treasury_token_id"></a>
 
 ## Function `token_id`
@@ -439,6 +395,50 @@ title: Module `0xb::treasury`
 <pre><code><b>public</b> <b>fun</b> <a href="treasury.md#0xb_treasury_notional_value">notional_value</a>&lt;T&gt;(self: &<a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>): u64 {
     <b>let</b> metadata = self.<a href="treasury.md#0xb_treasury_get_token_metadata">get_token_metadata</a>&lt;T&gt;();
     metadata.notional_value
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0xb_treasury_register_foreign_token"></a>
+
+## Function `register_foreign_token`
+
+
+
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="treasury.md#0xb_treasury_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">treasury::BridgeTreasury</a>, tc: <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, uc: <a href="../sui-framework/package.md#0x2_package_UpgradeCap">package::UpgradeCap</a>, metadata: &<a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="treasury.md#0xb_treasury_register_foreign_token">register_foreign_token</a>&lt;T&gt;(self: &<b>mut</b> <a href="treasury.md#0xb_treasury_BridgeTreasury">BridgeTreasury</a>, tc: TreasuryCap&lt;T&gt;, uc: UpgradeCap, metadata: &CoinMetadata&lt;T&gt;) {
+    // Make sure TreasuryCap <b>has</b> not been minted before.
+    <b>assert</b>!(<a href="../sui-framework/coin.md#0x2_coin_total_supply">coin::total_supply</a>(&tc) == 0, <a href="treasury.md#0xb_treasury_ETokenSupplyNonZero">ETokenSupplyNonZero</a>);
+    <b>let</b> <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a> = <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;T&gt;();
+    <b>let</b> address_bytes = <a href="../sui-framework/hex.md#0x2_hex_decode">hex::decode</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_address">type_name::get_address</a>(&<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>)));
+    <b>let</b> coin_address = address::from_bytes(address_bytes);
+    // Make sure upgrade cap is for the Coin <a href="../sui-framework/package.md#0x2_package">package</a>
+    // FIXME: add test
+    <b>assert</b>!(<a href="../sui-framework/object.md#0x2_object_id_to_address">object::id_to_address</a>(&<a href="../sui-framework/package.md#0x2_package_upgrade_package">package::upgrade_package</a>(&uc)) == coin_address, <a href="treasury.md#0xb_treasury_EInvalidUpgradeCap">EInvalidUpgradeCap</a>);
+    <b>let</b> registration = <a href="treasury.md#0xb_treasury_ForeignTokenRegistration">ForeignTokenRegistration</a> {
+        <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
+        uc,
+        decimal: <a href="../sui-framework/coin.md#0x2_coin_get_decimals">coin::get_decimals</a>(metadata),
+    };
+    <a href="../sui-framework/bag.md#0x2_bag_add">bag::add</a>(&<b>mut</b> self.waiting_room, <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>), registration);
+    <a href="../sui-framework/object_bag.md#0x2_object_bag_add">object_bag::add</a>(&<b>mut</b> self.treasuries, <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>, tc);
+
+    emit(<a href="treasury.md#0xb_treasury_TokenRegistrationEvent">TokenRegistrationEvent</a>{
+        <a href="../move-stdlib/type_name.md#0x1_type_name">type_name</a>,
+        decimal: <a href="../sui-framework/coin.md#0x2_coin_get_decimals">coin::get_decimals</a>(metadata),
+        native_token: <b>false</b>
+    });
 }
 </code></pre>
 
