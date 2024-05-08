@@ -151,9 +151,10 @@ const E2024_BETA_FEATURES: &[FeatureGate] = &[
     FeatureGate::NoParensCast,
     FeatureGate::MacroFuns,
     FeatureGate::TypeHoles,
+    FeatureGate::CleverAssertions,
 ];
 
-const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::CleverAssertions, FeatureGate::Enums];
+const DEVELOPMENT_FEATURES: &[FeatureGate] = &[FeatureGate::Enums];
 
 const E2024_MIGRATION_FEATURES: &[FeatureGate] = &[FeatureGate::Move2024Migration];
 

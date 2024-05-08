@@ -217,7 +217,7 @@ fn max_version_lower_than_hardcoded() {
 
     let res = CompiledModule::deserialize_with_config(
         &binary,
-        &BinaryConfig::legacy(VERSION_MAX.checked_sub(1).unwrap(), false),
+        &BinaryConfig::legacy(VERSION_MAX.checked_sub(1).unwrap(), VERSION_MIN, false),
     );
     assert_eq!(
         res.expect_err("Expected unknown version").major_status(),
@@ -330,4 +330,25 @@ fn no_metadata() {
         v
     };
     test(&test2);
+}
+
+#[test]
+fn deserialize_below_min_version() {
+    let mut module = basic_test_module();
+    module.version = VERSION_MIN;
+    let bytes = {
+        let mut v = vec![];
+        module
+            .serialize_with_version(module.version, &mut v)
+            .unwrap();
+        v
+    };
+
+    let res = CompiledModule::deserialize_with_config(
+        &bytes,
+        &BinaryConfig::legacy(VERSION_MAX, VERSION_MAX, true),
+    )
+    .unwrap_err()
+    .major_status();
+    assert_eq!(res, StatusCode::UNKNOWN_VERSION);
 }

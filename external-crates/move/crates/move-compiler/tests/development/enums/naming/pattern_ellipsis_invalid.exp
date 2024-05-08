@@ -31,7 +31,7 @@ error[E03013]: positional call mismatch
    │
    = Remove '()' arguments from this pattern
 
-error[E04015]: invalid use of native item
+error[E04017]: too many arguments
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:18:13
    │
 18 │             Y::D(x, ..) => 0,
@@ -56,7 +56,7 @@ error[E03013]: positional call mismatch
    │
    = Remove '{ }' arguments from this pattern
 
-error[E04015]: invalid use of native item
+error[E04017]: too many arguments
    ┌─ tests/development/enums/naming/pattern_ellipsis_invalid.move:19:13
    │
 19 │             Y::D{x, ..} => 0,

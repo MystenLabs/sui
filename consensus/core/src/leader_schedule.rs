@@ -357,7 +357,7 @@ mod tests {
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(0..10),
+            CommitRange::new(0..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -381,7 +381,7 @@ mod tests {
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(0..10),
+            CommitRange::new(0..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -450,7 +450,7 @@ mod tests {
 
         let swap_stake_threshold = 34;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(0..10),
+            CommitRange::new(0..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         LeaderSwapTable::new(context, reputation_scores, swap_stake_threshold);
@@ -463,7 +463,7 @@ mod tests {
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(1..10),
+            CommitRange::new(1..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -475,7 +475,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(11..20),
+            CommitRange::new(11..21),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -487,7 +487,7 @@ mod tests {
 
     #[test]
     #[should_panic(
-        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..20) vs new LeaderSwapTable CommitRange(21..25)"
+        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..21) vs new LeaderSwapTable CommitRange(21..26)"
     )]
     fn test_update_bad_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
@@ -495,7 +495,7 @@ mod tests {
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(1..10),
+            CommitRange::new(1..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -507,7 +507,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(11..20),
+            CommitRange::new(11..21),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -517,7 +517,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(21..25),
+            CommitRange::new(21..26),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =

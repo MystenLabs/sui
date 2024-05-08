@@ -8,7 +8,7 @@ import type { PublicKeyInitData } from '../cryptography/publickey.js';
 import { SIGNATURE_SCHEME_TO_FLAG } from '../cryptography/signature-scheme.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
 import { SuiGraphQLClient } from '../graphql/client.js';
-import { graphql } from '../graphql/schemas/2024-01/index.js';
+import { graphql } from '../graphql/schemas/2024.4/index.js';
 import { extractClaimValue } from './jwt-utils.js';
 import { parseZkLoginSignature } from './signature.js';
 import { toPaddedBigEndianBytes } from './utils.js';
