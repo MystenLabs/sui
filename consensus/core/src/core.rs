@@ -1269,7 +1269,7 @@ mod test {
                 1
             );
             let expected_reputation_scores =
-                ReputationScores::new((11..20).into(), vec![8, 8, 9, 8]);
+                ReputationScores::new((11..21).into(), vec![8, 8, 9, 8]);
             assert_eq!(
                 core.leader_schedule
                     .leader_swap_table

@@ -512,7 +512,7 @@ mod tests {
 
         // The CommitInfo for the first 10 commits are written to store. This is the
         // info that LeaderSchedule will be recovered from
-        let commit_range = (1..10).into();
+        let commit_range = (1..11).into();
         let reputation_scores = ReputationScores::new(commit_range, vec![4, 1, 1, 3]);
         let committed_rounds = vec![9, 9, 10, 9];
         let commit_ref = CommitRef::new(10, CommitDigest::MIN);
