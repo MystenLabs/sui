@@ -1,5 +1,15 @@
 # @mysten/sui.js
 
+## 0.54.0
+
+### Minor Changes
+
+- b7f673dbd9: Update versioned graphql schema imports
+
+### Patch Changes
+
+- 123b42c75c: Only accept 1 keypair on getSigner method of MultiSigPubKey
+
 ## 0.53.0
 
 ### Minor Changes
