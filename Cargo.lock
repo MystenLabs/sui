@@ -2024,7 +2024,6 @@ checksum = "7a8a8ed6fefbeef4a8c7b460e4110e12c5e22a5b7cf32621aae6ad650c4dcf29"
 dependencies = [
  "blst",
  "byte-slice-cast",
- "ec-gpu",
  "ff 0.13.0",
  "group 0.13.0",
  "pairing",
@@ -3746,12 +3745,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "545b22097d44f8a9581187cdf93de7a71e4722bf51200cfaba810865b49a495d"
 
 [[package]]
-name = "ec-gpu"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd63582de2b59ea1aa48d7c1941b5d87618d95484397521b3acdfa0e1e9f5e45"
-
-[[package]]
 name = "ecdsa"
 version = "0.14.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4383,7 +4376,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.8"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8f65dadd742ab15e6284a143ee04f4b03baadaa6#8f65dadd742ab15e6284a143ee04f4b03baadaa6"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4406,7 +4399,6 @@ dependencies = [
  "ecdsa 0.16.6",
  "ed25519-consensus",
  "elliptic-curve 0.13.4",
- "eyre",
  "fastcrypto-derive",
  "generic-array",
  "hex",
@@ -4438,7 +4430,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8f65dadd742ab15e6284a143ee04f4b03baadaa6#8f65dadd742ab15e6284a143ee04f4b03baadaa6"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4447,7 +4439,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8f65dadd742ab15e6284a143ee04f4b03baadaa6#8f65dadd742ab15e6284a143ee04f4b03baadaa6"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4465,7 +4457,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=8f65dadd742ab15e6284a143ee04f4b03baadaa6#8f65dadd742ab15e6284a143ee04f4b03baadaa6"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -8835,7 +8827,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3e57598f73cc7e1b2ac63c79c517b31a0877cd7c402cdcaa311b5208de7a095"
 dependencies = [
  "blake2b_simd",
- "ec-gpu",
  "ff 0.13.0",
  "group 0.13.0",
  "hex",
