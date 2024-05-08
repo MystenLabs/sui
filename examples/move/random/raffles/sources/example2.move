@@ -14,7 +14,7 @@ module raffles::example2 {
     use sui::coin::{Self, Coin};
     use sui::random::{Random, new_generator};
     use sui::sui::SUI;
-    use sui::table::{Self, Table};
+    use sui::table_vec::{Self, TableVec};
     use sui::tx_context::sender;
 
     /// Error codes
@@ -32,7 +32,7 @@ module raffles::example2 {
         participants: u32,
         end_time: u64,
         balance: Balance<SUI>,
-        participants_table: Table<u32, address>,
+        participants_table: TableVec<address>,
     }
 
     /// Create a shared-object Game.
@@ -43,7 +43,7 @@ module raffles::example2 {
             participants: 0,
             end_time,
             balance: balance::zero(),
-            participants_table: table::new(ctx),
+            participants_table: table_vec::empty(ctx),
         };
         transfer::share_object(game);
     }
@@ -55,23 +55,18 @@ module raffles::example2 {
     /// Gas based attacks are not possible since the gas cost of this function is independent of the winner.
     entry fun close(game: Game, r: &Random, clock: &Clock, ctx: &mut TxContext) {
         assert!(game.end_time <= clock.timestamp_ms(), EGameInProgress);
-        let Game { id, cost_in_sui: _, participants, end_time: _, balance, mut participants_table } = game;
+        let Game { id, cost_in_sui: _, participants, end_time: _, balance, participants_table } = game;
         if (participants > 0) {
             let mut generator = r.new_generator(ctx);
-            let winner = generator.generate_u32_in_range(1, participants);
-            let winner_address = participants_table[winner];
+            let winner = generator.generate_u32_in_range(0, participants - 1);
+            let winner_address = participants_table[winner as u64];
             let reward = coin::from_balance(balance, ctx);
             transfer::public_transfer(reward, winner_address);
         } else {
             balance.destroy_zero();
         };
 
-        let mut i = 1;
-        while (i <= participants) {
-            participants_table.remove(i);
-            i = i + 1;
-        };
-        participants_table.destroy_empty();
+        participants_table.drop();
         object::delete(id);
     }
 
@@ -81,9 +76,9 @@ module raffles::example2 {
         assert!(coin.value() == game.cost_in_sui, EInvalidAmount);
         assert!(game.participants < MaxParticipants, EReachedMaxParticipants);
 
-        game.participants = game.participants + 1;
         coin::put(&mut game.balance, coin);
-        game.participants_table.add(game.participants, ctx.sender());
+        game.participants_table.push_back(ctx.sender());
+        game.participants = game.participants + 1;
     }
 
     #[test_only]
