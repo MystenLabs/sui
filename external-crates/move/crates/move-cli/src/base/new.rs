@@ -1,13 +1,14 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use clap::*;
 use move_package::source_package::layout::SourcePackageLayout;
 use std::{
     fmt::Display,
     fs::create_dir_all,
     io::Write,
-    path::{Path, PathBuf},
+    path::{Path, PathBuf, MAIN_SEPARATOR},
 };
 
 // TODO get a stable path to this stdlib
@@ -47,6 +48,11 @@ impl New {
     ) -> anyhow::Result<()> {
         // TODO warn on build config flags
         let Self { name } = self;
+
+        if name.contains(MAIN_SEPARATOR) {
+            return Err(anyhow!("only package name is allowed, cannot be a path"));
+        }
+
         let p: PathBuf;
         let path: &Path = match path {
             Some(path) => {
