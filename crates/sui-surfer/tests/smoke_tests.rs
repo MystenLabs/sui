@@ -4,7 +4,6 @@
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_macros::sim_test;
-use sui_surfer::surf_strategy::SurfStrategy;
 
 #[sim_test]
 async fn smoke_test() {
