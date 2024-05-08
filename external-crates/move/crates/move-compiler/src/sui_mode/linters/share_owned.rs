@@ -30,7 +30,7 @@ use crate::{
 use std::collections::BTreeMap;
 
 use super::{
-    type_abilities, LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    type_abilities, LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
     PUBLIC_SHARE_FUN, SHARE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
@@ -42,8 +42,8 @@ const SHARE_FUNCTIONS: &[(&str, &str, &str)] = &[
 const SHARE_OWNED_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::ShareOwned as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::ShareOwned as u8,
     "possible owned object share",
 );
 

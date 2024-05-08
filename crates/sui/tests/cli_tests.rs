@@ -2994,8 +2994,7 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
 #[tokio::test]
 async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
-    const LINTER_MSG: &str =
-        "Total number of linter warnings suppressed: 5 (filtered categories: 3)";
+    const LINTER_MSG: &str = "Total number of linter warnings suppressed: 5 (unique lints: 3)";
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = vec!["move", "test", "--path", "tests/data/linter"];
     let output = cmd
@@ -3003,7 +3002,10 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .output()
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(out_str.contains(LINTER_MSG));
+    assert!(
+        out_str.contains(LINTER_MSG),
+        "Expected to match {LINTER_MSG}, got: {out_str}"
+    );
     // test no-lint suppresses
     let args = vec!["move", "test", "--no-lint", "--path", "tests/data/linter"];
     let output = cmd
@@ -3011,7 +3013,10 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .output()
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(!out_str.contains(LINTER_MSG));
+    assert!(
+        !out_str.contains(LINTER_MSG),
+        "Expected _not to_ match {LINTER_MSG}, got: {out_str}"
+    );
     Ok(())
 }
 

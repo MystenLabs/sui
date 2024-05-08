@@ -660,9 +660,8 @@ impl Diagnostics {
             .any(|d| d.info().category() == Category::Syntax as u8 && d.primary_label.0 == loc)
     }
 
-    /// Returns the number of diags filtered in source (user) code (an not in the dependencies) that
-    /// have a given prefix (first value returned) and how many different categories of diags were
-    /// filtered.
+    /// Returns the number of diags filtered in source (user) code (not in the dependencies) that
+    /// have a given prefix and how many different unique lints were filtered.
     pub fn filtered_source_diags_with_prefix(&self, prefix: &str) -> (usize, usize) {
         let Self {
             diags: Some(inner),
@@ -672,14 +671,14 @@ impl Diagnostics {
             return (0, 0);
         };
         let mut filtered_diags_num = 0;
-        let mut filtered_categories = HashSet::new();
+        let mut unique = HashSet::new();
         inner.filtered_source_diagnostics.iter().for_each(|d| {
             if d.info.external_prefix() == Some(prefix) {
                 filtered_diags_num += 1;
-                filtered_categories.insert(d.info.category());
+                unique.insert((d.info.category(), d.info.code()));
             }
         });
-        (filtered_diags_num, filtered_categories.len())
+        (filtered_diags_num, unique.len())
     }
 
     fn env_color(&self) -> ColorChoice {
