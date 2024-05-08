@@ -19,12 +19,15 @@ const MAX_PENDING_TRANSACTIONS: usize = 2_000;
 
 const MAX_CONSUMED_TRANSACTIONS_PER_REQUEST: u64 = 5_000;
 
-/// The guard acts as an acknowledgment mechanism for the inclusion of the transaction to a block.
-/// When the transaction is included to a block then the inclusion should be explicitly acknowledged
-/// by calling the `acknowledge` method. If the guard is dropped without getting acknowledged then
-/// that means the transaction has not been included to a block and the consensus is shutting down.
-pub(crate) struct TransactionGuard {
+/// The guard acts as an acknowledgment mechanism for the inclusion of the transactions to a block.
+/// When its last transaction is included to a block then `included_in_block_ack` will be signalled.
+/// If the guard is dropped without getting acknowledged that means the transactions have not been
+/// included to a block and the consensus is shutting down.
+pub(crate) struct TransactionsGuard {
+    // Holds a list of transactions to be included in the block.
+    // A TransactionsGuard may be partially consumed by `TransactionConsumer`, in which case, this holds the remaining transactions.
     transactions: Vec<Transaction>,
+
     included_in_block_ack: oneshot::Sender<()>,
 }
 
@@ -32,15 +35,15 @@ pub(crate) struct TransactionGuard {
 /// The transactions are submitted to a channel which is shared between the TransactionConsumer and the TransactionClient
 /// and are pulled every time the `next` method is called.
 pub(crate) struct TransactionConsumer {
-    tx_receiver: metered_channel::Receiver<TransactionGuard>,
+    tx_receiver: metered_channel::Receiver<TransactionsGuard>,
     max_consumed_bytes_per_request: u64,
     max_consumed_transactions_per_request: u64,
-    pending_transaction: Option<TransactionGuard>,
+    pending_transactions: Option<TransactionsGuard>,
 }
 
 impl TransactionConsumer {
     pub(crate) fn new(
-        tx_receiver: metered_channel::Receiver<TransactionGuard>,
+        tx_receiver: metered_channel::Receiver<TransactionsGuard>,
         context: Arc<Context>,
         max_consumed_transactions_per_request: Option<u64>,
     ) -> Self {
@@ -51,12 +54,15 @@ impl TransactionConsumer {
                 .consensus_max_transactions_in_block_bytes(),
             max_consumed_transactions_per_request: max_consumed_transactions_per_request
                 .unwrap_or(MAX_CONSUMED_TRANSACTIONS_PER_REQUEST),
-            pending_transaction: None,
+            pending_transactions: None,
         }
     }
 
     // Attempts to fetch the next transactions that have been submitted for sequence. Also a `max_consumed_bytes_per_request` parameter
     // is given in order to ensure up to `max_consumed_bytes_per_request` bytes of transactions are retrieved.
+    // This returns one or more transactions to be included in the block and a callback to acknowledge the inclusion of those transactions.
+    // Note that a TransactionsGuard may be partially consumed and the rest saved for the next pull, in which case its `included_in_block_ack`
+    // will not be signalled in the callback.
     pub(crate) fn next(&mut self) -> (Vec<Transaction>, Box<dyn FnOnce()>) {
         let mut transactions = Vec::new();
         let mut acks = Vec::new();
@@ -64,7 +70,7 @@ impl TransactionConsumer {
 
         // Handle one batch of incoming transactions from TransactionGuard.
         // Returns the remaining txs as a new TransactionGuard, if the batch breaks any limit.
-        let mut handle_txs = |t: TransactionGuard| -> Option<TransactionGuard> {
+        let mut handle_txs = |t: TransactionsGuard| -> Option<TransactionsGuard> {
             // Here we assume that a transaction can always fit in `max_fetched_bytes_per_request`
             let remaining_txs: Vec<_> = t
                 .transactions
@@ -94,22 +100,22 @@ impl TransactionConsumer {
             } else {
                 // If we went over the any limit while processing the batch, return the remainings.
                 // It is the caller's responsibility to cache it for the next pull.
-                Some(TransactionGuard {
+                Some(TransactionsGuard {
                     transactions: remaining_txs,
                     included_in_block_ack: t.included_in_block_ack,
                 })
             }
         };
 
-        if let Some(t) = self.pending_transaction.take() {
-            self.pending_transaction = handle_txs(t);
+        if let Some(t) = self.pending_transactions.take() {
+            self.pending_transactions = handle_txs(t);
         }
 
         // Until we have reached the limit for the pull.
         // We may have already reached limit in the first iteration above, in which case we stop immediately.
-        while self.pending_transaction.is_none() {
+        while self.pending_transactions.is_none() {
             if let Ok(t) = self.tx_receiver.try_recv() {
-                self.pending_transaction = handle_txs(t);
+                self.pending_transactions = handle_txs(t);
             } else {
                 break;
             }
@@ -127,11 +133,11 @@ impl TransactionConsumer {
 
     #[cfg(test)]
     fn is_empty(&mut self) -> bool {
-        if self.pending_transaction.is_some() {
+        if self.pending_transactions.is_some() {
             return false;
         }
         if let Ok(t) = self.tx_receiver.try_recv() {
-            self.pending_transaction = Some(t);
+            self.pending_transactions = Some(t);
             return false;
         }
         true
@@ -140,7 +146,7 @@ impl TransactionConsumer {
 
 #[derive(Clone)]
 pub struct TransactionClient {
-    sender: metered_channel::Sender<TransactionGuard>,
+    sender: metered_channel::Sender<TransactionsGuard>,
     max_transaction_size: u64,
 }
 
@@ -156,7 +162,7 @@ pub enum ClientError {
 impl TransactionClient {
     pub(crate) fn new(
         context: Arc<Context>,
-    ) -> (Self, metered_channel::Receiver<TransactionGuard>) {
+    ) -> (Self, metered_channel::Receiver<TransactionsGuard>) {
         let (sender, receiver) = channel_with_total(
             MAX_PENDING_TRANSACTIONS,
             &context.metrics.channel_metrics.tx_transactions_submit,
@@ -203,7 +209,7 @@ impl TransactionClient {
             }
         }
 
-        let t = TransactionGuard {
+        let t = TransactionsGuard {
             transactions: transactions
                 .into_iter()
                 .map(|x| Transaction::new(x))
