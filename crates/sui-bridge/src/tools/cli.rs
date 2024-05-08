@@ -4,12 +4,12 @@
 use clap::*;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
-use sui_bridge::tools::LoadedBridgeCliConfig;
 use std::sync::Arc;
 use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
 use sui_bridge::sui_client::SuiClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
+use sui_bridge::tools::LoadedBridgeCliConfig;
 use sui_bridge::tools::{
     make_action, select_contract_address, Args, BridgeCliConfig, BridgeValidatorCommand,
 };
@@ -154,6 +154,14 @@ async fn main() -> anyhow::Result<()> {
                 }
             };
 
+            return Ok(());
+        }
+
+        BridgeValidatorCommand::Client { config_path, cmd } => {
+            let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
+            let config = LoadedBridgeCliConfig::load(config).await?;
+            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
+            cmd.handle(&config, sui_bridge_client).await?;
             return Ok(());
         }
     }

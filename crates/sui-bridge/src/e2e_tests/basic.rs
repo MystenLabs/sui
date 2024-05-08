@@ -148,7 +148,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         &parsed_msg.parsed_payload.target_address,
         eth_address_1.as_bytes()
     );
-    assert_eq!(parsed_msg.parsed_payload.target_chain, eth_chain_id as u8);
+    assert_eq!(parsed_msg.parsed_payload.target_chain, eth_chain_id);
     assert_eq!(parsed_msg.parsed_payload.token_type, TOKEN_ID_ETH);
     assert_eq!(parsed_msg.parsed_payload.amount, sui_amount);
 
