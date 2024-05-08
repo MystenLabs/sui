@@ -34,7 +34,7 @@ mod test {
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
-    use sui_surfer::surf_strategy::{self, SurfStrategy};
+    use sui_surfer::surf_strategy::SurfStrategy;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_cluster::{TestCluster, TestClusterBuilder};
