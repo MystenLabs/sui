@@ -3106,6 +3106,20 @@ type SharedInput {
 }
 
 """
+The transaction accpeted a shared object as input, but its execution was cancelled.
+"""
+type SharedObjectCancelled {
+	"""
+	ID of the shared object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned shared object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: Int!
+}
+
+"""
 The transaction accepted a shared object as input, but it was deleted before the transaction
 executed.
 """
@@ -3873,7 +3887,7 @@ This information is considered part of the effects, because although the transac
 the shared object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
 
 type UnchangedSharedObjectConnection {
 	"""

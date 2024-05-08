@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::authority::authority_per_epoch_store::DeferralKey;
+use crate::authority::transaction_deferral::DeferralKey;
 use narwhal_types::Round;
 use std::collections::HashMap;
 use sui_types::base_types::{ObjectID, TransactionDigest};
