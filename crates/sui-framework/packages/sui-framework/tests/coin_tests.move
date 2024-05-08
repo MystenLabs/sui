@@ -170,6 +170,8 @@ module sui::coin_tests {
             coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
             coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
             assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
