@@ -220,6 +220,11 @@ impl Compiler {
         self
     }
 
+    pub fn set_ide_mode(mut self) -> Self {
+        self.flags = self.flags.set_ide_mode(true);
+        self
+    }
+
     pub fn set_interface_files_dir(mut self, dir: String) -> Self {
         assert!(self.interface_files_dir_opt.is_none());
         self.interface_files_dir_opt = Some(dir);
