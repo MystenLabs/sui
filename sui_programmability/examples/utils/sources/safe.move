@@ -52,7 +52,7 @@ module utils::safe {
         // Check that the ids match
         assert!(object::id(safe) == capability.safe_id, EInvalidTransferCapability);
         // Check that it has not been cancelled
-        assert!(vec_set::contains(&safe.allowed_safes, &object::id(capability)), ETransferCapabilityRevoked);
+        assert!(safe.allowed_safes.contains(&object::id(capability)), ETransferCapabilityRevoked);
     }
 
     fun check_owner_capability_validity<T>(safe: &Safe<T>, capability: &OwnerCapability<T>) {
@@ -62,11 +62,11 @@ module utils::safe {
     /// Helper function to create a capability.
     fun create_capability_<T>(safe: &mut Safe<T>, withdraw_amount: u64, ctx: &mut TxContext): TransferCapability<T> {
         let cap_id = object::new(ctx);
-        vec_set::insert(&mut safe.allowed_safes, object::uid_to_inner(&cap_id));
+        safe.allowed_safes.insert(cap_id.uid_to_inner());
 
         let capability = TransferCapability {
             id: cap_id,
-            safe_id: object::uid_to_inner(&safe.id),
+            safe_id: safe.id.uid_to_inner(),
             amount: withdraw_amount,
         };
 
@@ -98,7 +98,7 @@ module utils::safe {
     }
 
     public entry fun create<T>(coin: Coin<T>, ctx: &mut TxContext) {
-        let balance = coin::into_balance(coin);
+        let balance = coin.into_balance();
         let cap = create_<T>(balance, ctx);
         transfer::public_transfer(cap, ctx.sender());
     }
@@ -111,12 +111,12 @@ module utils::safe {
 
     /// Deposit funds to the safe
     public fun deposit_<T>(safe: &mut Safe<T>, balance: Balance<T>) {
-        balance::join(&mut safe.balance, balance);
+        safe.balance.join(balance);
     }
 
     /// Deposit funds to the safe
     public entry fun deposit<T>(safe: &mut Safe<T>, coin: Coin<T>) {
-        let balance = coin::into_balance(coin);
+        let balance = coin.into_balance();
         deposit_<T>(safe, balance);
     }
 
@@ -124,7 +124,7 @@ module utils::safe {
     public fun withdraw_<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, withdraw_amount: u64): Balance<T> {
         // Ensures that only the owner can withdraw from the safe.
         check_owner_capability_validity(safe, capability);
-        balance::split(&mut safe.balance, withdraw_amount)
+        safe.balance.split(withdraw_amount)
     }
 
     /// Withdraw coins from the safe as a `OwnerCapability` holder
@@ -142,20 +142,20 @@ module utils::safe {
         // Withdraw funds
         assert!(capability.amount >= withdraw_amount, EOverdrawn);
         capability.amount = capability.amount - withdraw_amount;
-        balance::split(&mut safe.balance, withdraw_amount)
+        safe.balance.split(withdraw_amount)
     }
 
     /// Revoke a `TransferCapability` as an `OwnerCapability` holder
     public entry fun revoke_transfer_capability<T>(safe: &mut Safe<T>, capability: &OwnerCapability<T>, capability_id: ID) {
         // Ensures that only the owner can withdraw from the safe.
         check_owner_capability_validity(safe, capability);
-        vec_set::remove(&mut safe.allowed_safes, &capability_id);
+        safe.allowed_safes.remove(&capability_id);
     }
 
     /// Revoke a `TransferCapability` as its owner
     public entry fun self_revoke_transfer_capability<T>(safe: &mut Safe<T>, capability: &TransferCapability<T>) {
         check_capability_validity(safe, capability);
-        vec_set::remove(&mut safe.allowed_safes, &object::id(capability));
+        safe.allowed_safes.remove(&object::id(capability));
     }
 
     /// Create `TransferCapability` as an `OwnerCapability` holder
