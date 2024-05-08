@@ -68,7 +68,6 @@ use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemS
 use sui_types::sui_system_state::SuiSystemState;
 use sui_types::sui_system_state::SuiSystemStateTrait;
 use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
-use sui_types::transaction::CallArg;
 use sui_types::transaction::{
     CertifiedTransaction, ObjectArg, Transaction, TransactionData, TransactionDataAPI,
     TransactionKind,
@@ -1236,7 +1235,7 @@ impl TestClusterBuilder {
             .active_validators()
             .zip(bridge_authority_keys.iter())
         {
-            let validator_address = node.config.sui_address();
+            let validator_address = node.config().sui_address();
             // 1, send some gas to validator
             test_cluster
                 .transfer_sui_must_exceed(sender_address, validator_address, 1000000000)
@@ -1264,7 +1263,7 @@ impl TestClusterBuilder {
 
             let tx = Transaction::from_data_and_signer(
                 data,
-                vec![node.config.account_key_pair.keypair()],
+                vec![node.config().account_key_pair.keypair()],
             );
             tasks.push(
                 test_cluster

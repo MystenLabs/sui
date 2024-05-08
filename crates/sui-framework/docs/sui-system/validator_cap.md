@@ -30,12 +30,12 @@ the authorizer validator. Thus, if a validator wants to separate the keys for op
 (such as reference gas price setting or tallying rule reporting) from fund/staking, it
 could transfer this capability object to another address.
 To facilitate rotating/revocation, <code>Validator</code> stores the ID of currently valid
-<code><a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code>. Thus, before converting <code><a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code>
-to <code><a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code>, verification needs to be done to make sure
+<code><a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code>. Thus, before converting <code><a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code>
+to <code><a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code>, verification needs to be done to make sure
 the cap object is still valid.
 
 
-<pre><code><b>struct</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a> <b>has</b> store, key
+<pre><code><b>struct</b> <a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a> <b>has</b> store, key
 </code></pre>
 
 
@@ -66,11 +66,11 @@ the cap object is still valid.
 
 ## Struct `ValidatorOperationCap`
 
-Privileged operations require <code><a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code> for permission check.
+Privileged operations require <code><a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code> for permission check.
 This is only constructed after successful verification.
 
 
-<pre><code><b>struct</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> <b>has</b> drop
+<pre><code><b>struct</b> <a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> <b>has</b> drop
 </code></pre>
 
 
@@ -97,7 +97,7 @@ This is only constructed after successful verification.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>): &<b>address</b>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>): &<b>address</b>
 </code></pre>
 
 
@@ -106,7 +106,7 @@ This is only constructed after successful verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>): &<b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_unverified_operation_cap_address">unverified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>): &<b>address</b> {
     &cap.authorizer_validator_address
 }
 </code></pre>
@@ -121,7 +121,7 @@ This is only constructed after successful verification.
 
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>): &<b>address</b>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>): &<b>address</b>
 </code></pre>
 
 
@@ -130,7 +130,7 @@ This is only constructed after successful verification.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a>): &<b>address</b> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">verified_operation_cap_address</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a>): &<b>address</b> {
     &cap.authorizer_validator_address
 }
 </code></pre>
@@ -147,7 +147,7 @@ Should be only called by the friend modules when adding a <code>Validator</code>
 or rotating an existing validaotr's <code>operation_cap_id</code>.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(validator_address: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): <a href="../sui-framework/object.md#0x2_object_ID">object::ID</a>
 </code></pre>
 
 
@@ -156,17 +156,17 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(
     validator_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ): ID {
-    // This function needs <b>to</b> be called only by the <a href="../sui-system/validator.md#0x3_validator">validator</a> itself, <b>except</b>
-    // 1. in <a href="../sui-system/genesis.md#0x3_genesis">genesis</a> <b>where</b> all valdiators are created by @0x0
+    // This function needs <b>to</b> be called only by the <a href="validator.md#0x3_validator">validator</a> itself, <b>except</b>
+    // 1. in <a href="genesis.md#0x3_genesis">genesis</a> <b>where</b> all valdiators are created by @0x0
     // 2. in tests <b>where</b> @0x0 could be used <b>to</b> simplify the setup
     <b>let</b> sender_address = ctx.sender();
     <b>assert</b>!(sender_address == @0x0 || sender_address == validator_address, 0);
 
-    <b>let</b> operation_cap = <a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a> {
+    <b>let</b> operation_cap = <a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
         authorizer_validator_address: validator_address,
     };
@@ -184,11 +184,11 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
 
 ## Function `new_from_unverified`
 
-Convert an <code><a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code> to <code><a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code>.
-Should only be called by <code><a href="../sui-system/validator_set.md#0x3_validator_set">validator_set</a></code> module AFTER verification.
+Convert an <code><a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a></code> to <code><a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a></code>.
+Should only be called by <code><a href="validator_set.md#0x3_validator_set">validator_set</a></code> module AFTER verification.
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_new_from_unverified">new_from_unverified</a>(cap: &<a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>): <a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>
+<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_from_unverified">new_from_unverified</a>(cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">validator_cap::UnverifiedValidatorOperationCap</a>): <a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">validator_cap::ValidatorOperationCap</a>
 </code></pre>
 
 
@@ -197,10 +197,10 @@ Should only be called by <code><a href="../sui-system/validator_set.md#0x3_valid
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<a href="../sui-framework/package.md#0x2_package">package</a>) <b>fun</b> <a href="../sui-system/validator_cap.md#0x3_validator_cap_new_from_unverified">new_from_unverified</a>(
-    cap: &<a href="../sui-system/validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>,
-): <a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
-    <a href="../sui-system/validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator_cap.md#0x3_validator_cap_new_from_unverified">new_from_unverified</a>(
+    cap: &<a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a>,
+): <a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
+    <a href="validator_cap.md#0x3_validator_cap_ValidatorOperationCap">ValidatorOperationCap</a> {
         authorizer_validator_address: cap.authorizer_validator_address
     }
 }

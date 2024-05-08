@@ -1344,7 +1344,7 @@ gas price, weighted by stake.
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator_set.md#0x3_validator_set_validator_voting_power">validator_voting_power</a>(self: &<a href="validator_set.md#0x3_validator_set_ValidatorSet">ValidatorSet</a>, validator_address: <b>address</b>): u64 {
     <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_ref">get_validator_ref</a>(&self.active_validators, validator_address);
-    <a href="validator.md#0x3_validator_voting_power">validator::voting_power</a>(<a href="validator.md#0x3_validator">validator</a>)
+    <a href="validator.md#0x3_validator">validator</a>.<a href="voting_power.md#0x3_voting_power">voting_power</a>()
 }
 </code></pre>
 

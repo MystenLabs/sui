@@ -1,4 +1,3 @@
-
 ---
 title: Module `0xb::treasury`
 ---
