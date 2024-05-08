@@ -69,6 +69,11 @@ const references = [
 				label: 'dApp Kit',
 				href: 'https://sdk.mystenlabs.com/dapp-kit',
 			},
+			{
+				type: 'link',
+				label: 'dApp Kit (Vue)',
+				href: 'https://github.com/SuiFansCN/suiue',
+			},
 			'references/rust-sdk',
 			{
 				type: 'link',
