@@ -56,7 +56,7 @@ query getLatestSuiSystemState {
 
 			inactivePoolsSize
 			pendingActiveValidatorsSize
-			stakePoolMappingsSize
+			stakingPoolMappingsSize
 			validatorCandidatesSize
 			pendingRemovals
 			totalStake
