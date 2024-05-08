@@ -757,7 +757,7 @@ impl<'env> Context<'env> {
             .variants
             .get(variant_name)
         else {
-            self.env.has_errors();
+            assert!(self.env.has_errors());
             return None;
         };
         match &variant.fields {
