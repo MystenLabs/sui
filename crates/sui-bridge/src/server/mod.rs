@@ -286,7 +286,7 @@ async fn handle_add_tokens_on_sui(
 
     if !chain_id.is_sui_chain() {
         return Err(BridgeError::InvalidBridgeClientRequest(
-            "handle_add_tokens_on_evm only expects Sui chain id".to_string(),
+            "handle_add_tokens_on_sui only expects Sui chain id".to_string(),
         ));
     }
 
