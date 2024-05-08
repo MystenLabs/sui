@@ -110,7 +110,7 @@ pub fn update_identifiers(binary: &[u8], map: JsValue) -> Result<Box<[u8]>, JsEr
 
     let mut binary = Vec::new();
     compiled_module
-        .serialize(&mut binary)
+        .serialize_with_version(compiled_module.version, &mut binary)
         .map_err(|err| JsErr {
             display: format!("{}", err),
             message: err.to_string(),
@@ -154,7 +154,7 @@ pub fn update_constants(
 
     let mut binary = Vec::new();
     compiled_module
-        .serialize(&mut binary)
+        .serialize_with_version(compiled_module.version, &mut binary)
         .map_err(|err| JsErr {
             display: format!("{}", err),
             message: err.to_string(),
@@ -200,7 +200,7 @@ pub fn serialize(json_module: JsValue) -> Result<Box<[u8]>, JsErr> {
     let compiled_module: CompiledModule = from_value(json_module)?;
     let mut binary = Vec::new();
     compiled_module
-        .serialize(&mut binary)
+        .serialize_with_version(compiled_module.version, &mut binary)
         .map_err(|err| JsErr {
             display: format!("{}", err),
             message: err.to_string(),
