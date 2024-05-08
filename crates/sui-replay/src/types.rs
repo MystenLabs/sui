@@ -48,6 +48,12 @@ pub struct OnChainTransactionInfo {
     pub gas_price: u64,
     pub executed_epoch: u64,
     pub dependencies: Vec<TransactionDigest>,
+    // TODO: There are two problems with this being a json-rpc type:
+    // 1. The json-rpc type is not a perfect mirror with TransactionEffects since v2. We lost the
+    // ability to replay effects v2 specific forks. We need to fix this asap. Unfortunately at the moment
+    // it is really difficult to get the raw effects given a transaction digest.
+    // 2. This data structure is not bcs/bincode friendly. It makes it much more expensive to
+    // store the sandbox state for batch replay.
     pub effects: SuiTransactionBlockEffects,
     pub protocol_version: ProtocolVersion,
     pub epoch_start_timestamp: u64,
