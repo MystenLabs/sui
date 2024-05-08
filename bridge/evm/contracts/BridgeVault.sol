@@ -56,7 +56,8 @@ contract BridgeVault is Ownable, IBridgeVault {
         wETH.withdraw(amount);
 
         // Transfer the unwrapped ETH to the target address
-        recipientAddress.transfer(amount);
+        (bool success,) = recipientAddress.call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 
     /// @notice Wraps as eth sent to this contract.
