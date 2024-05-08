@@ -3,7 +3,9 @@ title: Multisig Authentication
 description: Guide on how to create a multisig transaction and then submit it against a local network using the Sui CLI.
 ---
 
-The following steps demonstrate how to create a multisig transaction and then submit it against a local network using the [Sui CLI](/references/cli.mdx). A transaction can be the transfer of an object, the publish or upgrade of a package, the payment of SUI, and so on. To learn how to set up a local network, see [Connect to a Local Network](/guides/developer/getting-started/local-network.mdx).
+The following steps demonstrate how to create a multisig transaction and then submit it against a local network using the [Sui CLI](/references/cli.mdx). A transaction can be the transfer of an object, the publish or upgrade of a package, the payment of SUI, and so on. To learn how to set up a local network, see [Connect to a Local Network](/guides/developer/getting-started/local-network.mdx). 
+
+To learn more how to create multisig address and create multisig transaction from Typescript SDK, see [this page](https://sdk.mystenlabs.com/typescript/cryptography/multisig) for details. 
 
 ## Step 1: Create keys
 
@@ -150,4 +152,5 @@ sui client execute-signed-tx --tx-bytes <TX_BYTES> --signatures <SERIALIZED-MULT
 
 ## Related links
 
-- [Multisig](../../../concepts/cryptography/transaction-auth/multisig.mdx): Definition of multisig transactions on the Sui network.
+- [Multisig](../../../concepts/cryptography/transaction-auth/multisig.mdx): Definition of multisig transactions on the Sui network and how to use it with CLI.
+- [Multisig Typescript SDK](https://sdk.mystenlabs.com/typescript/cryptography/multisig): How to create multisig address and sign transactions using the Sui SDK.
