@@ -4,7 +4,7 @@
 import { bcs } from '@mysten/sui.js/bcs';
 import type { SuiClient } from '@mysten/sui.js/client';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
+import { graphql } from '@mysten/sui.js/graphql/schemas/2024.4';
 import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { ZkSendLink } from './claim.js';
