@@ -1,10 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph},
-    file_format::Bytecode,
-};
+use crate::control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph};
+use move_binary_format::file_format::Bytecode;
 
 #[test]
 fn traversal_no_loops() {

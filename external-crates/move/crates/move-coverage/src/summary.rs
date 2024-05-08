@@ -7,8 +7,10 @@
 use crate::coverage_map::{
     ExecCoverageMap, ExecCoverageMapWithModules, ModuleCoverageMap, TraceMap,
 };
+use move_abstract_interpreter::control_flow_graph::{
+    BlockId, ControlFlowGraph, VMControlFlowGraph,
+};
 use move_binary_format::{
-    control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph},
     file_format::{Bytecode, CodeOffset},
     CompiledModule,
 };

@@ -12,6 +12,9 @@
 //! 2. Written into a mutable reference
 //! 3. Added to a vector
 //! 4. Passed to a function cal::;
+use move_abstract_interpreter::absint::{
+    AbstractDomain, AbstractInterpreter, FunctionContext, JoinResult, TransferFunctions,
+};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     errors::PartialVMError,
@@ -19,9 +22,6 @@ use move_binary_format::{
         Bytecode, CodeOffset, CompiledModule, FunctionDefinitionIndex, FunctionHandle, LocalIndex,
         StructDefinition, StructFieldInformation,
     },
-};
-use move_bytecode_verifier::absint::{
-    AbstractDomain, AbstractInterpreter, FunctionContext, JoinResult, TransferFunctions,
 };
 use move_bytecode_verifier_meter::{Meter, Scope};
 use move_core_types::{

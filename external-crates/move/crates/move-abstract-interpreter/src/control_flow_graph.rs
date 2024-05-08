@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! This module defines the control-flow graph uses for bytecode verification.
-use crate::file_format::{Bytecode, CodeOffset};
+use move_binary_format::file_format::{Bytecode, CodeOffset};
 use std::collections::{btree_map::Entry, BTreeMap, BTreeSet};
 
 // BTree/Hash agnostic type wrappers
