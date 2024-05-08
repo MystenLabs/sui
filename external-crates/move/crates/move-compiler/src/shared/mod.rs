@@ -596,6 +596,10 @@ impl CompilationEnv {
     pub fn primitive_definer(&self, t: N::BuiltinTypeName_) -> Option<&E::ModuleIdent> {
         self.prim_definers.get(&t)
     }
+
+    pub fn ide_mode(&self) -> bool {
+        self.flags.ide_mode()
+    }
 }
 
 pub fn format_allow_attr(attr_name: FilterPrefix, filter: FilterName) -> String {
@@ -687,6 +691,10 @@ pub struct Flags {
     /// included only in tests, without creating the unit test code regular tests do.
     #[clap(skip)]
     keep_testing_functions: bool,
+
+    /// If set, all warnings are silenced
+    #[clap(skip = false)]
+    ide_mode: bool,
 }
 
 impl Flags {
@@ -699,6 +707,7 @@ impl Flags {
             silence_warnings: false,
             json_errors: false,
             keep_testing_functions: false,
+            ide_mode: false,
         }
     }
 
@@ -711,6 +720,7 @@ impl Flags {
             json_errors: false,
             silence_warnings: false,
             keep_testing_functions: false,
+            ide_mode: false,
         }
     }
 
@@ -749,6 +759,13 @@ impl Flags {
         }
     }
 
+    pub fn set_ide_mode(self, value: bool) -> Self {
+        Self {
+            ide_mode: value,
+            ..self
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self == &Self::empty()
     }
@@ -779,6 +796,10 @@ impl Flags {
 
     pub fn silence_warnings(&self) -> bool {
         self.silence_warnings
+    }
+
+    pub fn ide_mode(&self) -> bool {
+        self.ide_mode
     }
 }
 

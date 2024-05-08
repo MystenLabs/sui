@@ -1,0 +1,68 @@
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/ide_mode/dot_incomplete.move:3:5
+  │
+3 │     public struct SomeStruct has drop {
+  │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/ide_mode/dot_incomplete.move:3:5
+  │
+3 │     public struct SomeStruct has drop {
+  │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+  │
+  = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E13001]: feature is not supported in specified edition
+  ┌─ tests/move_check/ide_mode/dot_incomplete.move:7:5
+  │
+7 │     public struct AnotherStruct has drop {
+  │     ^^^^^^ Struct visibility modifiers are not supported by current edition 'legacy', only '2024.alpha' and '2024.beta' support this feature
+  │
+  = You can update the edition in the 'Move.toml', or via command line flag if invoking the compiler directly.
+
+error[E01003]: invalid modifier
+  ┌─ tests/move_check/ide_mode/dot_incomplete.move:7:5
+  │
+7 │     public struct AnotherStruct has drop {
+  │     ^^^^^^ Invalid struct declaration. Structs cannot have visibility modifiers as they are always 'public'
+  │
+  = Starting in the Move 2024 edition visibility must be annotated on struct declarations.
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/ide_mode/dot_incomplete.move:12:23
+   │
+12 │         let _tmp1 = s.;                // incomplete with `;` (next line should parse)
+   │                       ^
+   │                       │
+   │                       Unexpected ';'
+   │                       Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/ide_mode/dot_incomplete.move:13:37
+   │
+13 │         let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
+   │                                     ^
+   │                                     │
+   │                                     Unexpected ';'
+   │                                     Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/ide_mode/dot_incomplete.move:15:9
+   │
+15 │         let _tmp4 = s;
+   │         ^^^
+   │         │
+   │         Unexpected 'let'
+   │         Expected an identifier or a decimal number
+
+error[E01002]: unexpected token
+   ┌─ tests/move_check/ide_mode/dot_incomplete.move:17:5
+   │
+17 │     }
+   │     ^
+   │     │
+   │     Unexpected '}'
+   │     Expected an identifier or a decimal number
+
