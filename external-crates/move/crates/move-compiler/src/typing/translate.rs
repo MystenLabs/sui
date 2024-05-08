@@ -85,7 +85,7 @@ pub fn program(
         v.visit(compilation_env, &module_info, &mut prog);
     }
     T::Program {
-        info: module_info,
+        info: Arc::new(module_info),
         inner: prog,
     }
 }

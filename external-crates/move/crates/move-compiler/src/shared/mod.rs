@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    cfgir::ast as G,
     cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
     command_line as cli,
     diagnostics::{
@@ -14,8 +15,11 @@ use crate::{
         FeatureGate, Flavor,
     },
     expansion::ast as E,
+    hlir::ast as H,
     naming::ast as N,
+    parser::ast as P,
     sui_mode,
+    typing::ast as T,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
 };
 use clap::*;
@@ -236,6 +240,7 @@ pub struct CompilationEnv {
     // TODO(tzakian): Remove the global counter and use this counter instead
     // pub counter: u64,
     mapped_files: MappedFiles,
+    save_hooks: Vec<SaveHook>,
 }
 
 macro_rules! known_code_filter {
@@ -256,6 +261,7 @@ impl CompilationEnv {
     pub fn new(
         flags: Flags,
         mut visitors: Vec<cli::compiler::Visitor>,
+        save_hooks: Vec<SaveHook>,
         package_configs: BTreeMap<Symbol, PackageConfig>,
         default_config: Option<PackageConfig>,
     ) -> Self {
@@ -356,6 +362,7 @@ impl CompilationEnv {
             known_filter_names,
             prim_definers: BTreeMap::new(),
             mapped_files: MappedFiles::empty(),
+            save_hooks,
         }
     }
 
@@ -599,6 +606,48 @@ impl CompilationEnv {
 
     pub fn ide_mode(&self) -> bool {
         self.flags.ide_mode()
+    }
+
+    pub fn save_parser_ast(&self, ast: &P::Program) {
+        for hook in &self.save_hooks {
+            hook.save_parser_ast(ast)
+        }
+    }
+
+    pub fn save_expansion_ast(&self, ast: &E::Program) {
+        for hook in &self.save_hooks {
+            hook.save_expansion_ast(ast)
+        }
+    }
+
+    pub fn save_naming_ast(&self, ast: &N::Program) {
+        for hook in &self.save_hooks {
+            hook.save_naming_ast(ast)
+        }
+    }
+
+    pub fn save_typing_ast(&self, ast: &T::Program) {
+        for hook in &self.save_hooks {
+            hook.save_typing_ast(ast)
+        }
+    }
+
+    pub fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
+        for hook in &self.save_hooks {
+            hook.save_typing_info(info)
+        }
+    }
+
+    pub fn save_hlir_ast(&self, ast: &H::Program) {
+        for hook in &self.save_hooks {
+            hook.save_hlir_ast(ast)
+        }
+    }
+
+    pub fn save_cfgir_ast(&self, ast: &G::Program) {
+        for hook in &self.save_hooks {
+            hook.save_cfgir_ast(ast)
+        }
     }
 }
 
@@ -849,6 +898,164 @@ impl Visitors {
             }
         }
         vs
+    }
+}
+
+//**************************************************************************************************
+// Save Hooks
+//**************************************************************************************************
+
+#[derive(Clone)]
+pub struct SaveHook(Rc<RefCell<SavedInfo>>);
+
+#[derive(Clone)]
+pub(crate) struct SavedInfo {
+    flags: BTreeSet<SaveFlag>,
+    parser: Option<P::Program>,
+    expansion: Option<E::Program>,
+    naming: Option<N::Program>,
+    typing: Option<T::Program>,
+    typing_info: Option<Arc<program_info::TypingProgramInfo>>,
+    hlir: Option<H::Program>,
+    cfgir: Option<G::Program>,
+}
+
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub enum SaveFlag {
+    Parser,
+    Expansion,
+    Naming,
+    Typing,
+    TypingInfo,
+    HLIR,
+    CFGIR,
+}
+
+impl SaveHook {
+    pub fn new(flags: impl IntoIterator<Item = SaveFlag>) -> Self {
+        let flags = flags.into_iter().collect();
+        Self(Rc::new(RefCell::new(SavedInfo {
+            flags,
+            parser: None,
+            expansion: None,
+            naming: None,
+            typing: None,
+            typing_info: None,
+            hlir: None,
+            cfgir: None,
+        })))
+    }
+
+    pub(crate) fn save_parser_ast(&self, ast: &P::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.parser.is_none() && r.flags.contains(&SaveFlag::Parser) {
+            r.parser = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_expansion_ast(&self, ast: &E::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.expansion.is_none() && r.flags.contains(&SaveFlag::Expansion) {
+            r.expansion = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_naming_ast(&self, ast: &N::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
+            r.naming = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_typing_ast(&self, ast: &T::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.typing.is_none() && r.flags.contains(&SaveFlag::Typing) {
+            r.typing = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.typing_info.is_none() && r.flags.contains(&SaveFlag::TypingInfo) {
+            r.typing_info = Some(info.clone())
+        }
+    }
+
+    pub(crate) fn save_hlir_ast(&self, ast: &H::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.hlir.is_none() && r.flags.contains(&SaveFlag::HLIR) {
+            r.hlir = Some(ast.clone())
+        }
+    }
+
+    pub(crate) fn save_cfgir_ast(&self, ast: &G::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
+            r.cfgir = Some(ast.clone())
+        }
+    }
+
+    pub fn take_parser_ast(&self) -> P::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Parser),
+            "Parser AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.parser.take().unwrap()
+    }
+
+    pub fn take_expansion_ast(&self) -> E::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Expansion),
+            "Expansion AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.expansion.take().unwrap()
+    }
+
+    pub fn take_naming_ast(&self) -> N::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Naming),
+            "Naming AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.naming.take().unwrap()
+    }
+
+    pub fn take_typing_ast(&self) -> T::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Typing),
+            "Typing AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing.take().unwrap()
+    }
+
+    pub fn take_typing_info(&self) -> Arc<program_info::TypingProgramInfo> {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::TypingInfo),
+            "Typing info not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing_info.take().unwrap()
+    }
+
+    pub fn take_hlir_ast(&self) -> H::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::HLIR),
+            "HLIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.hlir.take().unwrap()
+    }
+
+    pub fn take_cfgir_ast(&self) -> G::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIR),
+            "CFGIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir.take().unwrap()
     }
 }
 
