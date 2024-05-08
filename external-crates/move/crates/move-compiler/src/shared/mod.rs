@@ -602,57 +602,43 @@ impl CompilationEnv {
 
     pub fn save_parser_ast(&self, ast: &P::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Parser(h) = hook {
-                h.set(ast)
-            }
+            hook.save_parser_ast(ast)
         }
     }
 
     pub fn save_expansion_ast(&self, ast: &E::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Expansion(h) = hook {
-                h.set(ast)
-            }
+            hook.save_expansion_ast(ast)
         }
     }
 
     pub fn save_naming_ast(&self, ast: &N::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Naming(h) = hook {
-                h.set(ast)
-            }
+            hook.save_naming_ast(ast)
         }
     }
 
     pub fn save_typing_ast(&self, ast: &T::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Typing(h) = hook {
-                h.set(ast)
-            }
+            hook.save_typing_ast(ast)
         }
     }
 
     pub fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
         for hook in &self.save_hooks {
-            if let SaveHook::TypingInfo(h) = hook {
-                h.set(info)
-            }
+            hook.save_typing_info(info)
         }
     }
 
     pub fn save_hlir_ast(&self, ast: &H::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::HLIR(h) = hook {
-                h.set(ast)
-            }
+            hook.save_hlir_ast(ast)
         }
     }
 
     pub fn save_cfgir_ast(&self, ast: &G::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::CFGIR(h) = hook {
-                h.set(ast)
-            }
+            hook.save_cfgir_ast(ast)
         }
     }
 }
@@ -875,202 +861,157 @@ impl Visitors {
 // Save Hooks
 //**************************************************************************************************
 
-pub enum SaveHook {
-    Parser(SaveParser),
-    Expansion(SaveExpansion),
-    Naming(SaveNaming),
-    Typing(SaveTyping),
-    TypingInfo(SaveTypingInfo),
-    HLIR(SaveHLIR),
-    CFGIR(SaveCFGIR),
+#[derive(Clone)]
+pub struct SaveHook(Rc<RefCell<SavedInfo>>);
+
+#[derive(Clone)]
+pub(crate) struct SavedInfo {
+    flags: BTreeSet<SaveFlag>,
+    parser: Option<P::Program>,
+    expansion: Option<E::Program>,
+    naming: Option<N::Program>,
+    typing: Option<T::Program>,
+    typing_info: Option<Arc<program_info::TypingProgramInfo>>,
+    hlir: Option<H::Program>,
+    cfgir: Option<G::Program>,
 }
 
-#[derive(Clone)]
-pub struct SaveParser(Rc<RefCell<Option<P::Program>>>);
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub enum SaveFlag {
+    Parser,
+    Expansion,
+    Naming,
+    Typing,
+    TypingInfo,
+    HLIR,
+    CFGIR,
+}
 
-#[derive(Clone)]
-pub struct SaveExpansion(Rc<RefCell<Option<E::Program>>>);
-
-#[derive(Clone)]
-pub struct SaveNaming(Rc<RefCell<Option<N::Program>>>);
-
-#[derive(Clone)]
-pub struct SaveTyping(Rc<RefCell<Option<T::Program>>>);
-
-#[derive(Clone)]
-pub struct SaveTypingInfo(Rc<RefCell<Option<Arc<program_info::TypingProgramInfo>>>>);
-
-#[derive(Clone)]
-pub struct SaveHLIR(Rc<RefCell<Option<H::Program>>>);
-
-#[derive(Clone)]
-pub struct SaveCFGIR(Rc<RefCell<Option<G::Program>>>);
-
-impl SaveParser {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
+impl SaveHook {
+    pub fn new(flags: impl IntoIterator<Item = SaveFlag>) -> Self {
+        let flags = flags.into_iter().collect();
+        Self(Rc::new(RefCell::new(SavedInfo {
+            flags,
+            parser: None,
+            expansion: None,
+            naming: None,
+            typing: None,
+            typing_info: None,
+            hlir: None,
+            cfgir: None,
+        })))
     }
 
-    pub(crate) fn set(&self, p: &crate::parser::ast::Program) {
+    pub(crate) fn save_parser_ast(&self, ast: &P::Program) {
         let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.parser.is_none() && r.flags.contains(&SaveFlag::Parser) {
+            r.parser = Some(ast.clone())
         }
     }
 
-    pub fn into_inner(self) -> crate::parser::ast::Program {
+    pub(crate) fn save_expansion_ast(&self, ast: &E::Program) {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
-    }
-}
-
-impl From<SaveParser> for SaveHook {
-    fn from(s: SaveParser) -> Self {
-        SaveHook::Parser(s)
-    }
-}
-
-impl SaveExpansion {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-
-    pub(crate) fn set(&self, p: &crate::expansion::ast::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.expansion.is_none() && r.flags.contains(&SaveFlag::Expansion) {
+            r.expansion = Some(ast.clone())
         }
     }
 
-    pub fn into_inner(self) -> crate::expansion::ast::Program {
+    pub(crate) fn save_naming_ast(&self, ast: &N::Program) {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
-    }
-}
-
-impl From<SaveExpansion> for SaveHook {
-    fn from(s: SaveExpansion) -> Self {
-        SaveHook::Expansion(s)
-    }
-}
-
-impl SaveNaming {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-
-    pub(crate) fn set(&self, p: &crate::naming::ast::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
+            r.naming = Some(ast.clone())
         }
     }
 
-    pub fn into_inner(self) -> crate::naming::ast::Program {
+    pub(crate) fn save_typing_ast(&self, ast: &T::Program) {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
-    }
-}
-
-impl From<SaveNaming> for SaveHook {
-    fn from(s: SaveNaming) -> Self {
-        SaveHook::Naming(s)
-    }
-}
-
-impl SaveTyping {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-
-    pub(crate) fn set(&self, p: &crate::typing::ast::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.typing.is_none() && r.flags.contains(&SaveFlag::Typing) {
+            r.typing = Some(ast.clone())
         }
     }
 
-    pub fn into_inner(self) -> crate::typing::ast::Program {
+    pub(crate) fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
-    }
-}
-
-impl From<SaveTyping> for SaveHook {
-    fn from(s: SaveTyping) -> Self {
-        SaveHook::Typing(s)
-    }
-}
-
-impl SaveTypingInfo {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-
-    pub(crate) fn set(&self, p: &Arc<program_info::TypingProgramInfo>) {
-        let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.typing_info.is_none() && r.flags.contains(&SaveFlag::TypingInfo) {
+            r.typing_info = Some(info.clone())
         }
     }
 
-    pub fn into_inner(self) -> Arc<program_info::TypingProgramInfo> {
+    pub(crate) fn save_hlir_ast(&self, ast: &H::Program) {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
-    }
-}
-
-impl From<SaveTypingInfo> for SaveHook {
-    fn from(s: SaveTypingInfo) -> Self {
-        SaveHook::TypingInfo(s)
-    }
-}
-
-impl SaveHLIR {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-
-    pub(crate) fn set(&self, p: &crate::hlir::ast::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.hlir.is_none() && r.flags.contains(&SaveFlag::HLIR) {
+            r.hlir = Some(ast.clone())
         }
     }
 
-    pub fn into_inner(self) -> crate::hlir::ast::Program {
+    pub(crate) fn save_cfgir_ast(&self, ast: &G::Program) {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
-    }
-}
-
-impl From<SaveHLIR> for SaveHook {
-    fn from(s: SaveHLIR) -> Self {
-        SaveHook::HLIR(s)
-    }
-}
-
-impl SaveCFGIR {
-    pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-
-    pub(crate) fn set(&self, p: &crate::cfgir::ast::Program) {
-        let mut r = RefCell::borrow_mut(&self.0);
-        if r.is_none() {
-            *r = Some(p.clone())
+        if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
+            r.cfgir = Some(ast.clone())
         }
     }
 
-    pub fn into_inner(self) -> crate::cfgir::ast::Program {
+    pub fn take_parser_ast(&self) -> P::Program {
         let mut r = RefCell::borrow_mut(&self.0);
-        r.take().unwrap()
+        assert!(
+            r.flags.contains(&SaveFlag::Parser),
+            "Parser AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.parser.take().unwrap()
     }
-}
 
-impl From<SaveCFGIR> for SaveHook {
-    fn from(s: SaveCFGIR) -> Self {
-        SaveHook::CFGIR(s)
+    pub fn take_expansion_ast(&self) -> E::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Expansion),
+            "Expansion AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.expansion.take().unwrap()
+    }
+
+    pub fn take_naming_ast(&self) -> N::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Naming),
+            "Naming AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.naming.take().unwrap()
+    }
+
+    pub fn take_typing_ast(&self) -> T::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Typing),
+            "Typing AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing.take().unwrap()
+    }
+
+    pub fn take_typing_info(&self) -> Arc<program_info::TypingProgramInfo> {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::TypingInfo),
+            "Typing info not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing_info.take().unwrap()
+    }
+
+    pub fn take_hlir_ast(&self) -> H::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::HLIR),
+            "HLIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.hlir.take().unwrap()
+    }
+
+    pub fn take_cfgir_ast(&self) -> G::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIR),
+            "CFGIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir.take().unwrap()
     }
 }
 
