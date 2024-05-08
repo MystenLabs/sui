@@ -201,8 +201,7 @@ fn run_pulumi_preview(project_dir_str: &str) -> Result<()> {
     Ok(())
 }
 
-fn set_pulumi_env(project_dir: &PathBuf) -> Result<()> {
-    let project_dir_str = project_dir.to_str().expect("project dir to str");
+fn set_pulumi_env(project_dir_str: &str) -> Result<()> {
     let cmd = &format!(
         "cd {} && pulumi config env add gcp-app-env --yes",
         project_dir_str
@@ -282,7 +281,7 @@ fn create_basic_project(
     // run go mod tidy to make sure all dependencies are installed
     run_go_mod_tidy(project_dir_str)?;
     // set pulumi env
-    set_pulumi_env(project_dir)?;
+    set_pulumi_env(project_dir_str)?;
     // try a pulumi preview to make sure it's good
     run_pulumi_preview(project_dir_str)
 }
@@ -313,7 +312,7 @@ fn create_mysten_k8s_project(
     // has to give the repo dir (improvements to this coming soon)
 
     // set pulumi env
-    set_pulumi_env(project_dir)
+    set_pulumi_env(project_dir_str)
 }
 
 #[derive(Serialize, Deserialize)]
