@@ -15,8 +15,6 @@ expression: "results.join(\"\\n\")"
 │ assign      │ c0 coins.0   │
 │ assign      │ c1 coins.1   │
 │ merge-coins │ gas [c0, c1] │
-├─────────────┼──────────────┤
-│ gas-budget  │ 10000000     │
 ╰─────────────┴──────────────╯
  === BUILT PTB === 
 Input 0: Pure([10, 0, 0, 0, 0, 0, 0, 0])
