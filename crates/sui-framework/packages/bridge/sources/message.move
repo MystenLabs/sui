@@ -24,6 +24,7 @@ module bridge::message {
     const EInvalidMessageType: u64 = 3;
     const EInvalidEmergencyOpType: u64 = 4;
     const EInvalidPayloadLength: u64 = 5;
+    const EMustBeTokenMessage: u64 = 6;
 
     // Emergency Op types
     const PAUSE: u8 = 0;
@@ -43,7 +44,7 @@ module bridge::message {
         bridge_seq_num: u64
     }
 
-    public struct TokenPayload has drop {
+    public struct TokenTransferPayload has drop {
         sender_address: vector<u8>,
         target_chain: u8,
         target_address: vector<u8>,
@@ -82,11 +83,33 @@ module bridge::message {
         token_prices: vector<u64>
     }
 
+    // For read
+    public struct ParsedTokenTransferMessage has drop {
+        message_version: u8,
+        seq_num: u64,
+        source_chain: u8,
+        payload: vector<u8>,
+        parsed_payload: TokenTransferPayload,
+    }
+
+    // Convert BridgeMessage to ParsedTokenTransferMessage
+    public fun to_parsed_token_transfer_message(message: &BridgeMessage): ParsedTokenTransferMessage {
+        assert!(message.message_type() == message_types::token(), EMustBeTokenMessage);
+        let payload = message.extract_token_bridge_payload();
+        ParsedTokenTransferMessage {
+            message_version: message.message_version(),
+            seq_num: message.seq_num(),
+            source_chain: message.source_chain(),
+            payload: message.payload(),
+            parsed_payload: payload,
+        }
+    }
+
     // Note: `bcs::peel_vec_u8` *happens* to work here because
     // `sender_address` and `target_address` are no longer than 255 bytes.
     // Therefore their length can be represented by a single byte.
     // See `create_token_bridge_message` for the actual encoding rule.
-    public fun extract_token_bridge_payload(message: &BridgeMessage): TokenPayload {
+    public fun extract_token_bridge_payload(message: &BridgeMessage): TokenTransferPayload {
         let mut bcs = bcs::new(message.payload);
         let sender_address = bcs.peel_vec_u8();
         let target_chain = bcs.peel_u8();
@@ -99,7 +122,7 @@ module bridge::message {
         chain_ids::assert_valid_chain_id(target_chain);
         assert!(bcs.into_remainder_bytes().is_empty(), ETrailingBytes);
 
-        TokenPayload {
+        TokenTransferPayload {
             sender_address,
             target_chain,
             target_address,
@@ -444,19 +467,23 @@ module bridge::message {
         self.source_chain
     }
 
-    public fun token_target_chain(self: &TokenPayload): u8 {
+    public fun payload(self: &BridgeMessage): vector<u8> {
+        self.payload
+    }
+
+    public fun token_target_chain(self: &TokenTransferPayload): u8 {
         self.target_chain
     }
 
-    public fun token_target_address(self: &TokenPayload): vector<u8> {
+    public fun token_target_address(self: &TokenTransferPayload): vector<u8> {
         self.target_address
     }
 
-    public fun token_type(self: &TokenPayload): u8 {
+    public fun token_type(self: &TokenTransferPayload): u8 {
         self.token_type
     }
 
-    public fun token_amount(self: &TokenPayload): u64 {
+    public fun token_amount(self: &TokenTransferPayload): u64 {
         self.amount
     }
 
@@ -597,7 +624,7 @@ module bridge::message {
         );
 
         // Test payload extraction
-        let token_payload = TokenPayload {
+        let token_payload = TokenTransferPayload {
             sender_address: address::to_bytes(sender_address),
             target_chain: chain_ids::eth_sepolia(),
             target_address: hex::decode(b"00000000000000000000000000000000000000c8"),
@@ -639,7 +666,7 @@ module bridge::message {
         );
 
         // Test payload extraction
-        let token_payload = TokenPayload {
+        let token_payload = TokenTransferPayload {
             sender_address: hex::decode(b"00000000000000000000000000000000000000c8"),
             target_chain: chain_ids::sui_testnet(),
             target_address: address::to_bytes(address_1),

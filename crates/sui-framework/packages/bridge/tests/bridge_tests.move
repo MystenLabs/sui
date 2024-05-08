@@ -5,7 +5,7 @@
 module bridge::bridge_tests {
     use bridge::bridge::{
         assert_not_paused, assert_paused, create_bridge_for_testing, execute_system_message,
-        get_token_transfer_action_status, inner_limiter, inner_paused,
+        test_get_token_transfer_action_status, inner_limiter, inner_paused,
         inner_treasury, inner_token_transfer_records, new_bridge_record_for_testing,
         new_for_testing, send_token, test_execute_emergency_op, test_init_bridge_committee,
         test_get_current_seq_num_and_increment, test_execute_update_asset_price,
@@ -15,7 +15,7 @@ module bridge::bridge_tests {
         Bridge,
     };
     use bridge::chain_ids;
-    use bridge::message::{Self, create_blocklist_message};
+    use bridge::message::{Self, create_blocklist_message, to_parsed_token_transfer_message};
     use bridge::message_types;
     use bridge::treasury::{BTC, ETH};
 
@@ -287,7 +287,7 @@ module bridge::bridge_tests {
 
     //     scenario.next_tx(@0xAAAA);
     //     let mut bridge = scenario.take_shared<Bridge>();
-    //     let eth_address = b"01234"; // it does not really matter
+    //     let eth_address = x"0000000000000000000000000000000000000000";
     //     let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, scenario.ctx());
     //     bridge.send_token(
     //         chain_ids::eth_sepolia(),
@@ -301,6 +301,26 @@ module bridge::bridge_tests {
     // }
 
     #[test]
+    #[expected_failure(abort_code = bridge::bridge::EInvalidEvmAddress)]
+    fun test_execute_send_token_invalid_evem_address() {
+        let mut scenario = test_scenario::begin(@0x0);
+        let ctx = scenario.ctx();
+        let chain_id = chain_ids::sui_testnet();
+        let mut bridge = new_for_testing(chain_id, ctx);
+
+        let eth_address = x"1234"; // invalid evm address
+        let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, ctx);
+        bridge.send_token(
+            chain_ids::eth_sepolia(),
+            eth_address,
+            btc,
+            ctx,
+        );
+
+        abort TEST_DONE
+    }
+
+    #[test]
     #[expected_failure(abort_code = bridge::bridge::EBridgeUnavailable)]
     fun test_execute_send_token_frozen() {
         let mut scenario = test_scenario::begin(@0x0);
@@ -311,7 +331,7 @@ module bridge::bridge_tests {
         assert!(!bridge.test_load_inner_mut().inner_paused(), UNEXPECTED_ERROR);
         freeze_bridge(&mut bridge, UNEXPECTED_ERROR + 1);
 
-        let eth_address = b"01234"; // it does not really matter
+        let eth_address = x"0000000000000000000000000000000000000000";
         let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, ctx);
         bridge.send_token(
             chain_ids::eth_sepolia(),
@@ -331,7 +351,7 @@ module bridge::bridge_tests {
         let chain_id = chain_ids::sui_testnet();
         let mut bridge = new_for_testing(chain_id, ctx);
 
-        let eth_address = b"01234"; // it does not really matter
+        let eth_address = x"0000000000000000000000000000000000000000";
         let btc: Coin<BTC> = coin::mint_for_testing<BTC>(1, ctx);
         bridge.send_token(
             chain_ids::eth_mainnet(),
@@ -608,7 +628,7 @@ module bridge::bridge_tests {
     }
 
     #[test]
-    fun test_get_token_transfer_action_status() {
+    fun test_get_token_transfer_action_data() {
         let mut scenario = test_scenario::begin(@0x0);
         let ctx = scenario.ctx();
         let chain_id = chain_ids::sui_testnet();
@@ -632,7 +652,7 @@ module bridge::bridge_tests {
             new_bridge_record_for_testing(message, option::none(), false),
         );
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 10)
+            bridge.test_get_token_transfer_action_status(chain_id, 10)
                 == transfer_status_pending(),
             UNEXPECTED_ERROR,
         );
@@ -657,7 +677,7 @@ module bridge::bridge_tests {
             new_bridge_record_for_testing(message, option::some(vector[]), false),
         );
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 11)
+            bridge.test_get_token_transfer_action_status(chain_id, 11)
                 == transfer_status_approved(),
             UNEXPECTED_ERROR + 2,
         );
@@ -665,6 +685,13 @@ module bridge::bridge_tests {
             bridge.test_get_token_transfer_action_signatures(chain_id, 11)
                 == option::some(vector[]),
             UNEXPECTED_ERROR + 3,
+        );
+        assert!(
+            bridge.test_get_parsed_token_transfer_message(chain_id, 11)
+                == option::some(
+                    to_parsed_token_transfer_message(&message)
+                ),
+            UNEXPECTED_ERROR + 7,
         );
 
         // Test when already claimed
@@ -683,7 +710,7 @@ module bridge::bridge_tests {
             new_bridge_record_for_testing(message, option::some(vector[b"1234"]), true),
         );
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 12)
+            bridge.test_get_token_transfer_action_status(chain_id, 12)
                 == transfer_status_claimed(),
             UNEXPECTED_ERROR + 3,
         );
@@ -692,10 +719,17 @@ module bridge::bridge_tests {
                 == option::some(vector[b"1234"]),
             UNEXPECTED_ERROR + 4,
         );
+        assert!(
+            bridge.test_get_parsed_token_transfer_message(chain_id, 12)
+                == option::some(
+                    to_parsed_token_transfer_message(&message)
+                ),
+            UNEXPECTED_ERROR + 8,
+        );
 
         // Test when message not found
         assert!(
-            bridge.get_token_transfer_action_status(chain_id, 13)
+            bridge.test_get_token_transfer_action_status(chain_id, 13)
                 == transfer_status_not_found(),
             UNEXPECTED_ERROR + 5,
         );
@@ -703,6 +737,11 @@ module bridge::bridge_tests {
             bridge.test_get_token_transfer_action_signatures(chain_id, 13)
                 == option::none(),
             UNEXPECTED_ERROR + 6,
+        );
+        assert!(
+            bridge.test_get_parsed_token_transfer_message(chain_id, 13)
+                == option::none(),
+            UNEXPECTED_ERROR + 8,
         );
 
         destroy(bridge);

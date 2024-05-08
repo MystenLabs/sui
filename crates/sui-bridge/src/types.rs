@@ -22,14 +22,15 @@ use serde::{Deserialize, Serialize};
 use shared_crypto::intent::IntentScope;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::bridge::{
-    BridgeChainId, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM, APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI,
-    BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER, BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
+    BridgeChainId, MoveTypeTokenTransferPayload, APPROVAL_THRESHOLD_ADD_TOKENS_ON_EVM,
+    APPROVAL_THRESHOLD_ADD_TOKENS_ON_SUI, BRIDGE_COMMITTEE_MAXIMAL_VOTING_POWER,
+    BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER,
 };
 use sui_types::bridge::{
-    APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE, APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST,
-    APPROVAL_THRESHOLD_EMERGENCY_PAUSE, APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE,
-    APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE, APPROVAL_THRESHOLD_LIMIT_UPDATE,
-    APPROVAL_THRESHOLD_TOKEN_TRANSFER,
+    MoveTypeParsedTokenTransferMessage, APPROVAL_THRESHOLD_ASSET_PRICE_UPDATE,
+    APPROVAL_THRESHOLD_COMMITTEE_BLOCKLIST, APPROVAL_THRESHOLD_EMERGENCY_PAUSE,
+    APPROVAL_THRESHOLD_EMERGENCY_UNPAUSE, APPROVAL_THRESHOLD_EVM_CONTRACT_UPGRADE,
+    APPROVAL_THRESHOLD_LIMIT_UPDATE, APPROVAL_THRESHOLD_TOKEN_TRANSFER,
 };
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::EpochId;
@@ -488,6 +489,36 @@ pub fn is_route_valid(one: BridgeChainId, other: BridgeChainId) -> bool {
         return one == BridgeChainId::EthMainnet;
     }
     true
+}
+
+// Sanitized version of MoveTypeParsedTokenTransferMessage
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
+pub struct ParsedTokenTransferMessage {
+    pub message_version: u8,
+    pub seq_num: u64,
+    pub source_chain: BridgeChainId,
+    pub payload: Vec<u8>,
+    pub parsed_payload: MoveTypeTokenTransferPayload,
+}
+
+impl TryFrom<MoveTypeParsedTokenTransferMessage> for ParsedTokenTransferMessage {
+    type Error = BridgeError;
+
+    fn try_from(message: MoveTypeParsedTokenTransferMessage) -> BridgeResult<Self> {
+        let source_chain = BridgeChainId::try_from(message.source_chain).map_err(|_e| {
+            BridgeError::Generic(format!(
+                "Failed to convert MoveTypeParsedTokenTransferMessage to ParsedTokenTransferMessage. Failed to convert source chain {} to BridgeChainId",
+                message.source_chain,
+            ))
+        })?;
+        Ok(Self {
+            message_version: message.message_version,
+            seq_num: message.seq_num,
+            source_chain,
+            payload: message.payload,
+            parsed_payload: message.parsed_payload,
+        })
+    }
 }
 
 #[cfg(test)]
