@@ -808,7 +808,7 @@ export const RPC_METHODS: {
 			stakeSubsidyDistributionCounter: String(systemState.systemStakeSubsidy?.distributionCounter),
 			stakeSubsidyPeriodLength: String(systemState.systemStakeSubsidy?.periodLength),
 			stakeSubsidyStartEpoch: String(systemState.systemParameters?.stakeSubsidyStartEpoch),
-			stakingPoolMappingsSize: String(systemState.validatorSet?.stakePoolMappingsSize),
+			stakingPoolMappingsSize: String(systemState.validatorSet?.stakingPoolMappingsSize),
 			storageFundNonRefundableBalance: String(systemState.storageFund?.nonRefundableBalance),
 			storageFundTotalObjectStorageRebates: String(
 				systemState.storageFund?.totalObjectStorageRebates,
@@ -965,7 +965,7 @@ export const RPC_METHODS: {
 					cursor,
 				},
 			},
-			(data) => data.object?.dynamicFields,
+			(data) => data.owner?.dynamicFields,
 		);
 
 		return {
@@ -1014,9 +1014,9 @@ export const RPC_METHODS: {
 				},
 			},
 			(data) => {
-				return data.object?.dynamicObjectField?.value?.__typename === 'MoveObject'
-					? data.object.dynamicObjectField.value.owner?.__typename === 'Parent'
-						? data.object.dynamicObjectField.value.owner.parent
+				return data.owner?.dynamicObjectField?.value?.__typename === 'MoveObject'
+					? data.owner.dynamicObjectField.value.owner?.__typename === 'Parent'
+						? data.owner.dynamicObjectField.value.owner.parent
 						: undefined
 					: undefined;
 			},
