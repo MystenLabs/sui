@@ -65,6 +65,50 @@ const combinedSignature = multiSigPublicKey.combinePartialSignatures([signature1
 const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedSignature);
 ```
 
+## Creating a MultiSigSigner
+
+The `MultiSigSigner` class allows you to create a Signer that can be used to sign personal messages
+and TransactionBlocks like any other keypair or signer class. This is often easier than manually
+combining signatures, since many methods accept Signers and handle signing directly.
+
+A `MultiSigSigner` is created by providing the underlying Signers to the `getSigner` method on the
+`MultiSigPublicKey`. You can provide a subset of the Signers that make up the public key, so long as
+their combined weight is equal to or greater than the threshold.
+
+```typescript
+import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
+import { MultiSigPublicKey } from '@mysten/sui.js/multisig';
+
+const kp1 = new Ed25519Keypair();
+const kp2 = new Ed25519Keypair();
+const kp3 = new Ed25519Keypair();
+
+const multiSigPublicKey = MultiSigPublicKey.fromPublicKeys({
+	threshold: 2,
+	publicKeys: [
+		{
+			publicKey: kp1.getPublicKey(),
+			weight: 1,
+		},
+		{
+			publicKey: kp2.getPublicKey(),
+			weight: 1,
+		},
+		{
+			publicKey: kp3.getPublicKey(),
+			weight: 2,
+		},
+	],
+});
+
+const signer1 = multiSigPublicKey.getSigner([kp1, kp2]);
+const signer2 = multiSigPublicKey.getSigner([kp3]);
+
+const message = new TextEncoder().encode('hello world');
+const { signature } = await signer1.signPersonalMessage(message);
+const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedSignature);
+```
+
 ## Multisig with zkLogin
 
 You can use zkLogin to participate in multisig just like keys for other signature schemes. Unlike
