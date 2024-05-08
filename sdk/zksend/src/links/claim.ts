@@ -207,10 +207,14 @@ export class ZkSendLink {
 		}
 
 		const txb = this.createClaimTransaction(address);
-
-		const { digest } = await this.#executeSponsoredTransactionBlock(
-			await this.#createSponsoredTransactionBlock(txb, address, this.keypair.toSuiAddress()),
-			this.keypair,
+		const sponsoredTransactionBlock = await this.createSponsoredTransactionBlock(
+			txb,
+			address,
+			this.keypair.toSuiAddress(),
+		);
+		const { digest } = await this.executeSponsoredTransactionBlock(
+			sponsoredTransactionBlock.digest,
+			(await this.keypair.signTransactionBlock(fromB64(sponsoredTransactionBlock.bytes))).signature,
 		);
 
 		return this.#client.waitForTransactionBlock({ digest });
@@ -499,8 +503,8 @@ export class ZkSendLink {
 		});
 	}
 
-	async #createSponsoredTransactionBlock(txb: TransactionBlock, claimer: string, sender: string) {
-		return this.#fetch<{ digest: string; bytes: string }>('transaction-blocks/sponsor', {
+	async createSponsoredTransactionBlock(txb: TransactionBlock, claimer: string, sender: string) {
+		const res = await this.#fetch<{ digest: string; bytes: string }>('transaction-blocks/sponsor', {
 			method: 'POST',
 			body: JSON.stringify({
 				network: this.#network,
@@ -521,17 +525,13 @@ export class ZkSendLink {
 				),
 			}),
 		});
+		return { ...res, txb: TransactionBlock.from(res.bytes) };
 	}
 
-	async #executeSponsoredTransactionBlock(
-		input: { digest: string; bytes: string },
-		keypair: Keypair,
-	) {
-		return this.#fetch<{ digest: string }>(`transaction-blocks/sponsor/${input.digest}`, {
+	async executeSponsoredTransactionBlock(digest: string, signature: string) {
+		return this.#fetch<{ digest: string }>(`transaction-blocks/sponsor/${digest}`, {
 			method: 'POST',
-			body: JSON.stringify({
-				signature: (await keypair.signTransactionBlock(fromB64(input.bytes))).signature,
-			}),
+			body: JSON.stringify({ signature }),
 		});
 	}
 

@@ -29,6 +29,7 @@ export async function getSentTransactionBlocksWithLinks({
 	host?: string;
 	path?: string;
 	client?: SuiClient;
+	claimApi?: string;
 }) {
 	const packageId = normalizeSuiAddress(contract.packageId);
 
