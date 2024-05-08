@@ -115,36 +115,64 @@ module sui::coin_tests {
             // test freezing an address
             scenario.next_tx(TEST_ADDR);
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @1, scenario.ctx());
-            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
-            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @1, scenario.ctx());
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
             test_scenario::return_shared(deny_list);
         };
         {
             // test freezing an address over multiple "transactions"
             scenario.next_tx(TEST_ADDR);
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @1), 0);
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
-            coin::deny_list_add(&mut deny_list, &mut deny_cap, @2, scenario.ctx());
-            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @200), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @200), 0);
             test_scenario::return_shared(deny_list);
 
             scenario.next_tx(TEST_ADDR);
             let mut deny_list: deny_list::DenyList = scenario.take_shared();
-            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
-            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @2, scenario.ctx());
-            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @2), 0);
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @200), 0);
+            coin::deny_list_remove(&mut deny_list, &mut deny_cap, @200, scenario.ctx());
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @200), 0);
             test_scenario::return_shared(deny_list);
         };
         transfer::public_freeze_object(deny_cap);
         scenario.end();
     }
 
-    #[test]
-    fun address_is_frozen_with_arbitrary_types() {
 
+    #[test]
+    fun deny_list_double_add() {
+        let mut scenario = test_scenario::begin(@0);
+        deny_list::create_for_test(scenario.ctx());
+        scenario.next_tx(TEST_ADDR);
+
+        let witness = COIN_TESTS {};
+        let (treasury, mut deny_cap, metadata) = coin::create_regulated_currency(
+            witness,
+            6,
+            b"COIN_TESTS",
+            b"coin_name",
+            b"description",
+            option::some(url::new_unsafe_from_bytes(b"icon_url")),
+            scenario.ctx(),
+        );
+        transfer::public_freeze_object(metadata);
+        transfer::public_freeze_object(treasury);
+        {
+            // test freezing an address
+            scenario.next_tx(TEST_ADDR);
+            let mut deny_list: deny_list::DenyList = scenario.take_shared();
+            assert!(!coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            coin::deny_list_add(&mut deny_list, &mut deny_cap, @100, scenario.ctx());
+            assert!(coin::deny_list_contains<COIN_TESTS>(&deny_list, @100), 0);
+            test_scenario::return_shared(deny_list);
+        };
+        transfer::public_freeze_object(deny_cap);
+        scenario.end();
     }
 }
