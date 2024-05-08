@@ -8,4 +8,3 @@ MoveStdlib = { local = "../../../move-stdlib/", addr_subst = { "std" = "0x1" } }
 
 [addresses]
 Move2024 = "0xCAFE"
-Sui = "0x2"

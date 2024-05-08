@@ -7,7 +7,9 @@ use crate::{
     cfgir::{ast as G, translate::move_value_from_value_},
     compiled_unit::*,
     diag,
-    expansion::ast::{AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability},
+    expansion::ast::{
+        AbilitySet, Address, Attributes, ModuleIdent, ModuleIdent_, Mutability, TargetKind,
+    },
     hlir::ast::{self as H, Value_, Var, Visibility},
     naming::{
         ast::{BuiltinTypeName_, DatatypeTypeParameter, TParam},
@@ -136,7 +138,7 @@ pub fn program(
 
     let mut source_modules = gmodules
         .into_iter()
-        .filter(|(_, mdef)| mdef.is_source_module)
+        .filter(|(_, mdef)| matches!(mdef.target_kind, TargetKind::Source { .. }))
         .collect::<Vec<_>>();
     source_modules.sort_by_key(|(_, mdef)| mdef.dependency_order);
     for (m, mdef) in source_modules {
@@ -162,7 +164,7 @@ fn module(
         warning_filter: _warning_filter,
         package_name,
         attributes,
-        is_source_module: _is_source_module,
+        target_kind: _,
         dependency_order: _dependency_order,
         friends: gfriends,
         structs: gstructs,
@@ -960,8 +962,16 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
 
         E::Constant(c) => code.push(sp(loc, B::LdNamedConst(context.constant_name(c)))),
 
-        E::ErrorConstant(const_name) => {
-            let line_no = context.env.file_mapping().location(loc).start.line;
+        E::ErrorConstant {
+            line_number_loc,
+            error_constant,
+        } => {
+            let line_no = context
+                .env
+                .file_mapping()
+                .location(line_number_loc)
+                .start
+                .line;
 
             // Clamp line number to u16::MAX -- so if the line number exceeds u16::MAX, we don't
             // record the line number essentially.
@@ -971,7 +981,7 @@ fn exp(context: &mut Context, code: &mut IR::BytecodeBlock, e: H::Exp) {
                 loc,
                 B::ErrorConstant {
                     line_number,
-                    constant: const_name.map(|n| context.constant_name(n)),
+                    constant: error_constant.map(|n| context.constant_name(n)),
                 },
             ));
         }

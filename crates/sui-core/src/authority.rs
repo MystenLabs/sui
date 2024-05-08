@@ -22,8 +22,8 @@ use parking_lot::Mutex;
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -199,6 +199,7 @@ pub mod epoch_start_configuration;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod test_authority_builder;
+pub mod transaction_deferral;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -264,8 +265,8 @@ pub struct AuthorityMetrics {
     post_processing_total_failures: IntCounter,
 
     /// Consensus handler metrics
-    pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
+    pub consensus_handler_transaction_sizes: HistogramVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
@@ -305,9 +306,11 @@ pub struct AuthorityMetrics {
     pub execution_rate_tracker: Arc<Mutex<RateTracker>>,
 }
 
-// Override default Prom buckets for positive numbers in 0-50k range
+// Override default Prom buckets for positive numbers in 0-10M range
 const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+    1., 2., 5., 7., 10., 20., 50., 70., 100., 200., 500., 700., 1000., 2000., 5000., 7000., 10000.,
+    20000., 50000., 70000., 100000., 200000., 500000., 700000., 1000000., 2000000., 5000000.,
+    7000000., 10000000.,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -627,13 +630,19 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            consensus_handler_processed_bytes: register_int_counter_with_registry!(
-                "consensus_handler_processed_bytes",
-                "Number of bytes processed by consensus_handler",
+            consensus_handler_processed: register_int_counter_vec_with_registry!(
+                "consensus_handler_processed",
+                "Number of transactions processed by consensus handler",
+                &["class"],
                 registry
             ).unwrap(),
-            consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
-                .unwrap(),
+            consensus_handler_transaction_sizes: register_histogram_vec_with_registry!(
+                "consensus_handler_transaction_sizes",
+                "Sizes of each type of transactions processed by consensus handler",
+                &["class"],
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
                 "consensus_handler_num_low_scoring_authorities",
                 "Number of low scoring authorities based on reputation scores from consensus",
@@ -844,10 +853,6 @@ impl AuthorityState {
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
-        // Cheap validity checks for a transaction, including input size limits.
-        tx_data.check_version_supported(epoch_store.protocol_config())?;
-        tx_data.validity_check(epoch_store.protocol_config())?;
-
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
@@ -913,17 +918,10 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<HandleTransactionResponse> {
-        // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
         let tx_digest = *transaction.digest();
         debug!("handle_transaction");
 
-        // Ensure an idempotent answer. This is checked before the system_tx check so that
-        // a validator is able to return the signed system tx if it was already signed locally.
+        // Ensure an idempotent answer.
         if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
@@ -942,14 +940,6 @@ impl AuthorityState {
             .should_accept_user_certs()
         {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
-        }
-
-        // Checks to see if the transaction has expired
-        if match &transaction.inner().data().transaction_data().expiration() {
-            TransactionExpiration::None => false,
-            TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
-        } {
-            return Err(SuiError::TransactionExpired);
         }
 
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
@@ -1102,7 +1092,7 @@ impl AuthorityState {
         self.metrics.total_cert_attempts.inc();
 
         if !certificate.contains_shared_object() {
-            // Shared object transactions need to be sequenced by Narwhal before enqueueing
+            // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
@@ -2758,8 +2748,6 @@ impl AuthorityState {
     }
 
     /// Adds certificates to transaction manager for ordered execution.
-    /// It is unnecessary to persist the certificates into the pending_execution table,
-    /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -4986,7 +4974,7 @@ pub mod framework_injection {
             .iter()
             .map(|m| {
                 let mut buf = Vec::new();
-                m.serialize(&mut buf).unwrap();
+                m.serialize_with_version(m.version, &mut buf).unwrap();
                 buf
             })
             .collect()
@@ -5143,7 +5131,9 @@ impl NodeStateDump {
                         shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
-                InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
+                InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::MutateDeleted(..)
+                | InputSharedObject::Cancelled(..) => (), // TODO: consider record congested objects.
             }
         }
 

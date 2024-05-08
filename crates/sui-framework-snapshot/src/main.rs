@@ -8,21 +8,8 @@ use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_framework_snapshot::update_bytecode_snapshot_manifest;
 use sui_protocol_config::ProtocolVersion;
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
-    }
-};
+// Define the `GIT_REVISION` const
+bin_version::git_revision!();
 
 fn main() {
     // Always generate snapshot for the latest version.

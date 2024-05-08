@@ -2,6 +2,7 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::file_format_common::VERSION_MAX;
 use move_vm_config::verifier::{
     MeterConfig, VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN, DEFAULT_MAX_IDENTIFIER_LENGTH,
 };
@@ -48,6 +49,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
             allow_receiving_object_id: true,
             reject_mutable_random_on_entry_functions: true,
+            bytecode_version: VERSION_MAX,
         },
         MeterConfig::default(),
     )

@@ -10,15 +10,20 @@ use crate::{
     GroupedObjectOutput, VerboseObjectOutput,
 };
 use anyhow::Result;
-use std::env;
+use futures::{future::join_all, StreamExt};
 use std::path::PathBuf;
+use std::{collections::BTreeMap, env, sync::Arc};
 use sui_config::genesis::Genesis;
 use sui_core::authority_client::AuthorityAPI;
 use sui_protocol_config::Chain;
 use sui_replay::{execute_replay_command, ReplayToolCommand};
+use sui_sdk::{rpc_types::SuiTransactionBlockResponseOptions, SuiClient, SuiClientBuilder};
 use telemetry_subscribers::TracingHandle;
 
-use sui_types::{base_types::*, object::Owner};
+use sui_types::{
+    base_types::*, crypto::AuthorityPublicKeyBytes, messages_grpc::TransactionInfoRequest,
+    object::Owner,
+};
 
 use clap::*;
 use fastcrypto::encoding::Encoding;
@@ -37,32 +42,28 @@ pub enum Verbosity {
     Concise,
     Verbose,
 }
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--abbrev=12", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
-    }
-};
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
 
 #[derive(Parser)]
-#[command(
-    name = "sui-tool",
-    about = "Debugging utilities for sui",
-    rename_all = "kebab-case",
-    author,
-    version = VERSION,
-)]
 pub enum ToolCommand {
+    /// Inspect if a specific object is or all gas objects owned by an address are locked by validators
+    #[command(name = "locked-object")]
+    LockedObject {
+        /// Either id or address must be provided
+        /// The object to check
+        #[arg(long, help = "The object ID to fetch")]
+        id: Option<ObjectID>,
+        /// Either id or address must be provided
+        /// If provided, check all gas objects owned by this account
+        #[arg(long = "address")]
+        address: Option<SuiAddress>,
+        /// RPC address to provide the up-to-date committee info
+        #[arg(long = "fullnode-rpc-url")]
+        fullnode_rpc_url: String,
+        /// Should attempt to rescue the object if it's locked but not fully locked
+        #[arg(long = "rescue")]
+        rescue: bool,
+    },
+
     /// Fetch the same object from all validators
     #[command(name = "fetch-object")]
     FetchObject {
@@ -78,14 +79,9 @@ pub enum ToolCommand {
         )]
         validator: Option<AuthorityName>,
 
-        // At least one of genesis or fullnode_rpc_url must be provided
-        #[arg(long = "genesis")]
-        genesis: Option<PathBuf>,
-
-        // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
-        fullnode_rpc_url: Option<String>,
+        fullnode_rpc_url: String,
 
         /// Concise mode groups responses by results.
         /// prints tabular output suitable for processing with unix tools. For
@@ -113,14 +109,9 @@ pub enum ToolCommand {
     /// Fetch the effects association with transaction `digest`
     #[command(name = "fetch-transaction")]
     FetchTransaction {
-        // At least one of genesis or fullnode_rpc_url must be provided
-        #[arg(long = "genesis")]
-        genesis: Option<PathBuf>,
-
-        // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
-        fullnode_rpc_url: Option<String>,
+        fullnode_rpc_url: String,
 
         #[arg(long, help = "The transaction ID to fetch")]
         digest: TransactionDigest,
@@ -229,14 +220,9 @@ pub enum ToolCommand {
     /// If sequence number is not specified, get the latest authenticated checkpoint.
     #[command(name = "fetch-checkpoint")]
     FetchCheckpoint {
-        // At least one of genesis or fullnode_rpc_url must be provided
-        #[arg(long = "genesis")]
-        genesis: Option<PathBuf>,
-
-        // At least one of genesis or fullnode_rpc_url must be provided
         // RPC address to provide the up-to-date committee info
         #[arg(long = "fullnode-rpc-url")]
-        fullnode_rpc_url: Option<String>,
+        fullnode_rpc_url: String,
 
         #[arg(long, help = "Fetch checkpoint at a specific sequence number")]
         sequence_number: Option<CheckpointSequenceNumber>,
@@ -481,24 +467,142 @@ impl std::fmt::Display for OwnerOutput {
     }
 }
 
+async fn check_locked_object(
+    sui_client: &Arc<SuiClient>,
+    committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
+    id: ObjectID,
+    rescue: bool,
+) -> anyhow::Result<()> {
+    let clients = Arc::new(make_clients(sui_client).await?);
+    let output = get_object(id, None, None, clients.clone()).await?;
+    let output = GroupedObjectOutput::new(output, committee);
+    if output.fully_locked {
+        println!("Object {} is fully locked.", id);
+        return Ok(());
+    }
+    let top_record = output.voting_power.first().unwrap();
+    let top_record_stake = top_record.1;
+    let top_record = top_record.0.unwrap();
+    if top_record.4.is_none() {
+        println!(
+            "Object {} does not seem to be locked by majority of validators (unlocked stake: {})",
+            id, top_record_stake
+        );
+        return Ok(());
+    }
+
+    let tx_digest = top_record.2;
+    if !rescue {
+        println!("Object {} is rescueable, top tx: {:?}", id, tx_digest);
+        return Ok(());
+    }
+    println!("Object {} is rescueable, trying tx {}", id, tx_digest);
+    let validator = output
+        .grouped_results
+        .get(&Some(top_record))
+        .unwrap()
+        .first()
+        .unwrap();
+    let client = &clients.get(validator).unwrap().1;
+    let tx = client
+        .handle_transaction_info_request(TransactionInfoRequest {
+            transaction_digest: tx_digest,
+        })
+        .await?
+        .transaction;
+    let res = sui_client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            Transaction::new(tx),
+            SuiTransactionBlockResponseOptions::full_content(),
+            None,
+        )
+        .await;
+    match res {
+        Ok(_) => {
+            println!("Transaction executed successfully ({:?})", tx_digest);
+        }
+        Err(e) => {
+            println!("Failed to execute transaction ({:?}): {:?}", tx_digest, e);
+        }
+    }
+    Ok(())
+}
+
 impl ToolCommand {
     #[allow(clippy::format_in_format_args)]
     pub async fn execute(self, tracing_handle: TracingHandle) -> Result<(), anyhow::Error> {
         match self {
+            ToolCommand::LockedObject {
+                id,
+                fullnode_rpc_url,
+                rescue,
+                address,
+            } => {
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let committee = Arc::new(
+                    sui_client
+                        .governance_api()
+                        .get_committee_info(None)
+                        .await?
+                        .validators
+                        .into_iter()
+                        .collect::<BTreeMap<_, _>>(),
+                );
+                let object_ids = match id {
+                    Some(id) => vec![id],
+                    None => {
+                        let address = address.expect("Either id or address must be provided");
+                        sui_client
+                            .coin_read_api()
+                            .get_coins_stream(address, None)
+                            .map(|c| c.coin_object_id)
+                            .collect()
+                            .await
+                    }
+                };
+                for ids in object_ids.chunks(30) {
+                    let mut tasks = vec![];
+                    for id in ids {
+                        tasks.push(check_locked_object(
+                            &sui_client,
+                            committee.clone(),
+                            *id,
+                            rescue,
+                        ))
+                    }
+                    join_all(tasks)
+                        .await
+                        .into_iter()
+                        .collect::<Result<Vec<_>, _>>()?;
+                }
+            }
             ToolCommand::FetchObject {
                 id,
                 validator,
-                genesis,
                 version,
                 fullnode_rpc_url,
                 verbosity,
                 concise_no_header,
             } => {
-                let output = get_object(id, version, validator, genesis, fullnode_rpc_url).await?;
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let clients = Arc::new(make_clients(&sui_client).await?);
+                let output = get_object(id, version, validator, clients).await?;
 
                 match verbosity {
                     Verbosity::Grouped => {
-                        println!("{}", GroupedObjectOutput(output));
+                        let committee = Arc::new(
+                            sui_client
+                                .governance_api()
+                                .get_committee_info(None)
+                                .await?
+                                .validators
+                                .into_iter()
+                                .collect::<BTreeMap<_, _>>(),
+                        );
+                        println!("{}", GroupedObjectOutput::new(output, committee));
                     }
                     Verbosity::Verbose => {
                         println!("{}", VerboseObjectOutput(output));
@@ -512,14 +616,13 @@ impl ToolCommand {
                 }
             }
             ToolCommand::FetchTransaction {
-                genesis,
                 digest,
                 show_input_tx,
                 fullnode_rpc_url,
             } => {
                 print!(
                     "{}",
-                    get_transaction_block(digest, genesis, show_input_tx, fullnode_rpc_url).await?
+                    get_transaction_block(digest, show_input_tx, fullnode_rpc_url).await?
                 );
             }
             ToolCommand::DbTool { db_path, cmd } => {
@@ -565,11 +668,12 @@ impl ToolCommand {
                 println!("{:#?}", genesis);
             }
             ToolCommand::FetchCheckpoint {
-                genesis,
                 sequence_number,
                 fullnode_rpc_url,
             } => {
-                let clients = make_clients(genesis, fullnode_rpc_url).await?;
+                let sui_client =
+                    Arc::new(SuiClientBuilder::default().build(fullnode_rpc_url).await?);
+                let clients = make_clients(&sui_client).await?;
 
                 for (name, (_, client)) in clients {
                     let resp = client

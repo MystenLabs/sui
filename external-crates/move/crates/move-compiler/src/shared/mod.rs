@@ -8,7 +8,7 @@ use crate::{
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters,
+        Diagnostic, Diagnostics, DiagnosticsFormat, FileName, MappedFiles, WarningFilters,
     },
     editions::{
         check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
@@ -347,10 +347,14 @@ impl CompilationEnv {
         } else {
             vec![]
         };
+        let mut diags = Diagnostics::new();
+        if flags.json_errors() {
+            diags.set_format(DiagnosticsFormat::JSON);
+        }
         Self {
             flags,
             warning_filter,
-            diags: Diagnostics::new(),
+            diags,
             visitors: Rc::new(Visitors::new(visitors)),
             package_configs,
             default_config: default_config.unwrap_or_default(),
@@ -700,6 +704,12 @@ pub struct Flags {
     )]
     warnings_are_errors: bool,
 
+    /// If set, report errors as json.
+    #[clap(
+        long = cli::JSON_ERRORS,
+    )]
+    json_errors: bool,
+
     /// If set, all warnings are silenced
     #[clap(
         long = cli::SILENCE_WARNINGS,
@@ -736,6 +746,7 @@ impl Flags {
             bytecode_version: None,
             warnings_are_errors: false,
             silence_warnings: false,
+            json_errors: false,
             keep_testing_functions: false,
         }
     }
@@ -746,6 +757,7 @@ impl Flags {
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
+            json_errors: false,
             silence_warnings: false,
             keep_testing_functions: false,
         }
@@ -779,6 +791,13 @@ impl Flags {
         }
     }
 
+    pub fn set_json_errors(self, value: bool) -> Self {
+        Self {
+            json_errors: value,
+            ..self
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self == &Self::empty()
     }
@@ -801,6 +820,10 @@ impl Flags {
 
     pub fn warnings_are_errors(&self) -> bool {
         self.warnings_are_errors
+    }
+
+    pub fn json_errors(&self) -> bool {
+        self.json_errors
     }
 
     pub fn silence_warnings(&self) -> bool {

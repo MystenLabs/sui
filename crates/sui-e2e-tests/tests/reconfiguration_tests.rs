@@ -96,29 +96,21 @@ async fn test_transaction_expiration() {
     let mut expired_data = data.clone();
     *expired_data.expiration_mut_for_testing() = TransactionExpiration::Epoch(0);
     let expired_transaction = test_cluster.wallet.sign_transaction(&expired_data);
-    let authority = test_cluster.swarm.validator_node_handles().pop().unwrap();
-    let result = authority
-        .with_async(|node| async {
-            let epoch_store = node.state().epoch_store_for_testing();
-            let state = node.state();
-            let expired_transaction = epoch_store.verify_transaction(expired_transaction).unwrap();
-            state
-                .handle_transaction(&epoch_store, expired_transaction)
-                .await
-        })
+    let result = test_cluster
+        .wallet
+        .execute_transaction_may_fail(expired_transaction)
         .await;
-    assert!(matches!(result.unwrap_err(), SuiError::TransactionExpired));
+    assert!(result
+        .unwrap_err()
+        .to_string()
+        .contains(&SuiError::TransactionExpired.to_string()));
 
     // Non expired transaction signed without issue
     *data.expiration_mut_for_testing() = TransactionExpiration::Epoch(10);
     let transaction = test_cluster.wallet.sign_transaction(&data);
-    authority
-        .with_async(|node| async {
-            let epoch_store = node.state().epoch_store_for_testing();
-            let state = node.state();
-            let transaction = epoch_store.verify_transaction(transaction).unwrap();
-            state.handle_transaction(&epoch_store, transaction).await
-        })
+    test_cluster
+        .wallet
+        .execute_transaction_may_fail(transaction)
         .await
         .unwrap();
 }
@@ -698,7 +690,7 @@ async fn do_test_reconfig_with_committee_change_stress() {
             // otherwise new validators to the committee will not be able to catch up to the network
             // TODO: remove and replace with usage of archival solution
             .filter(|node| {
-                node.config
+                node.config()
                     .authority_store_pruning_config
                     .num_epochs_to_retain_for_checkpoints()
                     .is_some()

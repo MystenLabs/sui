@@ -2,8 +2,10 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_abstract_interpreter::control_flow_graph::{
+    BlockId, ControlFlowGraph, VMControlFlowGraph,
+};
 use move_binary_format::{
-    control_flow_graph::{BlockId, ControlFlowGraph, VMControlFlowGraph},
     errors::PartialVMResult,
     file_format::{
         AbilitySet, Bytecode, CodeOffset, CodeUnit, FunctionDefinitionIndex, FunctionHandle,

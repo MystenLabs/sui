@@ -335,6 +335,7 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
@@ -349,6 +350,7 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
@@ -363,6 +365,7 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v1",
@@ -377,6 +380,7 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v2",
@@ -1553,6 +1557,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
+name = "move-abstract-interpreter-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -1633,6 +1653,7 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1656,6 +1677,7 @@ name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1670,6 +1692,7 @@ name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1684,6 +1707,7 @@ name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1790,6 +1814,7 @@ dependencies = [
  "petgraph",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",
@@ -1840,6 +1865,7 @@ dependencies = [
  "clap 4.4.1",
  "codespan",
  "colored",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -1858,6 +1884,7 @@ dependencies = [
  "clap 4.4.1",
  "colored",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -1919,6 +1946,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap 4.4.1",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",

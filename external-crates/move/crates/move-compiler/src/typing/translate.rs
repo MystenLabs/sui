@@ -8,7 +8,7 @@ use crate::{
     editions::{FeatureGate, Flavor},
     expansion::ast::{
         AbilitySet, Attribute, AttributeValue_, Attribute_, DottedUsage, Fields, Friend,
-        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, Value_, Visibility,
+        ModuleAccess_, ModuleIdent, ModuleIdent_, Mutability, TargetKind, Value_, Visibility,
     },
     ice,
     naming::ast::{
@@ -190,7 +190,7 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         syntax_methods,
         use_funs,
         friends,
@@ -219,7 +219,7 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         dependency_order: 0,
         immediate_neighbors: UniqueMap::new(),
         used_addresses: BTreeSet::new(),
@@ -514,7 +514,7 @@ mod check_valid_constant {
 
             // NB: module scoping is checked during constant type creation, so we don't need to
             // relitigate here.
-            E::Constant(_, _) | E::ErrorConstant(_) => {
+            E::Constant(_, _) | E::ErrorConstant { .. } => {
                 return;
             }
 
@@ -1439,7 +1439,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
     let sp!(eloc, ne_) = *ne;
     let (ty, e_) = match ne_ {
-        NE::ErrorConstant => (Type_::u64(eloc), TE::ErrorConstant(None)),
+        NE::ErrorConstant { line_number_loc } => (
+            Type_::u64(eloc),
+            TE::ErrorConstant {
+                line_number_loc,
+                error_constant: None,
+            },
+        ),
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
@@ -3756,13 +3762,11 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             attributes.contains_key_(&known_attributes::ErrorAttribute.into());
 
         if has_error_annotation {
-            *e = T::exp(
-                u64_type.clone(),
-                sp(
-                    *const_loc,
-                    T::UnannotatedExp_::ErrorConstant(Some(*constant_name)),
-                ),
-            );
+            let econst = T::UnannotatedExp_::ErrorConstant {
+                line_number_loc: *const_loc,
+                error_constant: Some(*constant_name),
+            };
+            *e = T::exp(u64_type.clone(), sp(*const_loc, econst));
         }
     }
 
@@ -4334,7 +4338,12 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.
 fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
-    if !mdef.is_source_module {
+    if !matches!(
+        mdef.target_kind,
+        TargetKind::Source {
+            is_root_package: true
+        }
+    ) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass

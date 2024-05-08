@@ -19,9 +19,9 @@ npm i @mysten/bcs
 import { bcs } from '@mysten/bcs';
 
 // define UID as a 32-byte array, then add a transform to/from hex strings
-const UID = bcs.array(32, bcs.u8()).transform({
-	input: (id: string) => fromHex(id),
-	output: (id) => toHex(id),
+const UID = bcs.fixedArray(32, bcs.u8()).transform({
+	input: (id: string) => fromHEX(id),
+	output: (id) => toHEX(Uint8Array.from(id)),
 });
 
 const Coin = bcs.struct('Coin', {

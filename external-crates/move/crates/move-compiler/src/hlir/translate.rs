@@ -5,7 +5,7 @@
 use crate::{
     debug_display, debug_display_verbose, diag,
     editions::{FeatureGate, Flavor},
-    expansion::ast::{self as E, Fields, ModuleIdent, Mutability},
+    expansion::ast::{self as E, Fields, ModuleIdent, Mutability, TargetKind},
     hlir::{
         ast::{self as H, Block, BlockLabel, MoveOpAnnotation, UnpackType},
         detect_dead_code::program as detect_dead_code_analysis,
@@ -593,7 +593,7 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         dependency_order,
         immediate_neighbors: _,
         used_addresses: _,
@@ -619,7 +619,7 @@ fn module(
         }
     });
 
-    gen_unused_warnings(context, is_source_module, &structs);
+    gen_unused_warnings(context, target_kind, &structs);
 
     context.current_package = None;
     context.env.pop_warning_filter_scope();
@@ -629,7 +629,7 @@ fn module(
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             friends,
             structs,
@@ -1824,7 +1824,13 @@ fn value(
         }
         E::Value(ev) => make_exp(HE::Value(process_value(context, ev))),
         E::Constant(_m, c) => make_exp(HE::Constant(c)), // only private constants (for now)
-        E::ErrorConstant(c) => make_exp(HE::ErrorConstant(c)),
+        E::ErrorConstant {
+            line_number_loc,
+            error_constant,
+        } => make_exp(HE::ErrorConstant {
+            line_number_loc,
+            error_constant,
+        }),
         E::Move { from_user, var } => {
             let annotation = if from_user {
                 MoveOpAnnotation::FromUser
@@ -2212,7 +2218,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Annotate(_, _)
         | E::BorrowLocal(_, _)
         | E::Constant(_, _)
-        | E::ErrorConstant(_)
+        | E::ErrorConstant { .. }
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
@@ -3163,10 +3169,15 @@ fn freeze_single(sp!(sloc, s): H::SingleType) -> H::SingleType {
 
 fn gen_unused_warnings(
     context: &mut Context,
-    is_source_module: bool,
+    target_kind: TargetKind,
     structs: &UniqueMap<DatatypeName, H::StructDefinition>,
 ) {
-    if !is_source_module {
+    if !matches!(
+        target_kind,
+        TargetKind::Source {
+            is_root_package: true
+        }
+    ) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass

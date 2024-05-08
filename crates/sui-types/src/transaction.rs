@@ -2250,6 +2250,13 @@ impl SenderSignedData {
             .any(|sig| sig.is_upgraded_multisig())
     }
 
+    pub fn uses_randomness(&self) -> bool {
+        self.transaction_data()
+            .shared_input_objects()
+            .iter()
+            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
+    }
+
     #[cfg(test)]
     pub fn intent_message_mut_for_testing(&mut self) -> &mut IntentMessage<TransactionData> {
         &mut self.inner_mut().intent_message
@@ -2274,24 +2281,9 @@ impl SenderSignedData {
     }
 
     /// Validate untrusted user transaction, including its size, input count, command count, etc.
-    pub fn validity_check(&self, config: &ProtocolConfig) -> SuiResult {
-        // Enforce overall transaction size limit.
-        let tx_size = self.serialized_size()?;
-        let max_tx_size_bytes = config.max_tx_size_bytes();
-
-        fp_ensure!(
-            tx_size as u64 <= max_tx_size_bytes,
-            SuiError::UserInputError {
-                error: UserInputError::SizeLimitExceeded {
-                    limit: format!(
-                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
-                    ),
-                    value: tx_size.to_string(),
-                }
-            }
-        );
-
+    pub fn validity_check(&self, config: &ProtocolConfig, epoch: EpochId) -> SuiResult {
         // SenderSignedData must contain exactly one transaction.
+        // Many operations assume this invariant, so it is safest to check this one before anything else.
         fp_ensure!(
             self.inner_transactions().len() == 1,
             SuiError::UserInputError {
@@ -2301,14 +2293,38 @@ impl SenderSignedData {
             }
         );
 
+        // CRITICAL!!
         // Users cannot send system transactions.
-        let tx_data = &self.intent_message().value;
+        let tx_data = &self.transaction_data();
         fp_ensure!(
             !tx_data.is_system_tx(),
             SuiError::UserInputError {
                 error: UserInputError::Unsupported(
                     "SenderSignedData must not contain system transaction".to_string()
                 )
+            }
+        );
+
+        // Checks to see if the transaction has expired
+        if match &tx_data.expiration() {
+            TransactionExpiration::None => false,
+            TransactionExpiration::Epoch(exp_poch) => *exp_poch < epoch,
+        } {
+            return Err(SuiError::TransactionExpired);
+        }
+
+        // Enforce overall transaction size limit.
+        let tx_size = self.serialized_size()?;
+        let max_tx_size_bytes = config.max_tx_size_bytes();
+        fp_ensure!(
+            tx_size as u64 <= max_tx_size_bytes,
+            SuiError::UserInputError {
+                error: UserInputError::SizeLimitExceeded {
+                    limit: format!(
+                        "serialized transaction size exceeded maximum of {max_tx_size_bytes}"
+                    ),
+                    value: tx_size.to_string(),
+                }
             }
         );
 
@@ -2417,11 +2433,6 @@ impl<S> Envelope<SenderSignedData, S> {
 
     pub fn is_sponsored_tx(&self) -> bool {
         self.data().intent_message().value.is_sponsored_tx()
-    }
-
-    pub fn is_randomness_reader(&self) -> bool {
-        self.shared_input_objects()
-            .any(|obj| obj.id() == SUI_RANDOMNESS_STATE_OBJECT_ID)
     }
 }
 
@@ -2799,6 +2810,8 @@ pub enum ObjectReadResultKind {
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
+    // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
+    CancelledTransactionSharedObject(SequenceNumber),
 }
 
 impl From<Object> for ObjectReadResultKind {
@@ -2817,6 +2830,14 @@ impl ObjectReadResult {
             panic!("only shared objects can be DeletedSharedObject");
         }
 
+        if let (
+            InputObjectKind::ImmOrOwnedMoveObject(_),
+            ObjectReadResultKind::CancelledTransactionSharedObject(_),
+        ) = (&input_object_kind, &object)
+        {
+            panic!("only shared objects can be CancelledTransactionSharedObject");
+        }
+
         Self {
             input_object_kind,
             object,
@@ -2831,6 +2852,7 @@ impl ObjectReadResult {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
             ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+            ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
         }
     }
 
@@ -2851,6 +2873,10 @@ impl ObjectReadResult {
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
+            ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_),
             ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
         }
@@ -2889,6 +2915,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
             ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_),
+            ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { .. }, _) => None,
         }
     }
@@ -2908,14 +2938,18 @@ impl ObjectReadResult {
                 ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
                     SharedInput::Deleted((id, *seq, mutable, *digest))
                 }
+                ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
+                    SharedInput::Cancelled((id, *seq))
+                }
             }),
         }
     }
 
-    pub fn get_previous_transaction(&self) -> TransactionDigest {
+    pub fn get_previous_transaction(&self) -> Option<TransactionDigest> {
         match &self.object {
-            ObjectReadResultKind::Object(obj) => obj.previous_transaction,
-            ObjectReadResultKind::DeletedSharedObject(_, digest) => *digest,
+            ObjectReadResultKind::Object(obj) => Some(obj.previous_transaction),
+            ObjectReadResultKind::DeletedSharedObject(_, digest) => Some(*digest),
+            ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
         }
     }
 }
@@ -2984,6 +3018,26 @@ impl InputObjects {
             .any(|obj| obj.is_deleted_shared_object())
     }
 
+    pub fn get_congested_objects(&self) -> Option<Vec<ObjectID>> {
+        let mut contains_cancelled_read = false;
+        let mut congested_objects = Vec::new();
+        for obj in &self.objects {
+            if let ObjectReadResultKind::CancelledTransactionSharedObject(version) = obj.object {
+                contains_cancelled_read = true;
+                if version == SequenceNumber::CONGESTED {
+                    congested_objects.push(obj.id());
+                }
+            }
+        }
+
+        if !congested_objects.is_empty() {
+            Some(congested_objects)
+        } else {
+            assert!(!contains_cancelled_read);
+            None
+        }
+    }
+
     pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
         let owned_objects: Vec<_> = self
             .objects
@@ -3013,7 +3067,7 @@ impl InputObjects {
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
         self.objects
             .iter()
-            .map(|obj| obj.get_previous_transaction())
+            .filter_map(|obj| obj.get_previous_transaction())
             .collect()
     }
 
@@ -3057,6 +3111,16 @@ impl InputObjects {
                             None
                         }
                     }
+                    (
+                        InputObjectKind::ImmOrOwnedMoveObject(_),
+                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                    ) => {
+                        unreachable!()
+                    }
+                    (
+                        InputObjectKind::SharedMoveObject { .. },
+                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                    ) => None,
                 },
             )
             .collect()
@@ -3074,6 +3138,7 @@ impl InputObjects {
                     object.data.try_as_move().map(MoveObject::version)
                 }
                 ObjectReadResultKind::DeletedSharedObject(v, _) => Some(*v),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
             })
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 

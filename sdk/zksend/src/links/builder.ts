@@ -51,6 +51,10 @@ export interface CreateZkSendLinkOptions {
 
 export class ZkSendLinkBuilder {
 	objectIds = new Set<string>();
+	objectRefs: {
+		ref: TransactionObjectArgument;
+		type: string;
+	}[] = [];
 	balances = new Map<string, bigint>();
 	sender: string;
 	#host: string;
@@ -94,6 +98,10 @@ export class ZkSendLinkBuilder {
 
 	addClaimableObject(id: string) {
 		this.objectIds.add(id);
+	}
+
+	addClaimableObjectRef(ref: TransactionObjectArgument, type: string) {
+		this.objectRefs.push({ ref, type });
 	}
 
 	getLink(): string {
@@ -151,34 +159,48 @@ export class ZkSendLinkBuilder {
 		});
 	}
 
+	async createSendToAddressTransaction({
+		transactionBlock = new TransactionBlock(),
+		address,
+	}: CreateZkSendLinkOptions & {
+		address: string;
+	}) {
+		const objectsToTransfer = (await this.#objectsToTransfer(transactionBlock)).map(
+			(obj) => obj.ref,
+		);
+
+		transactionBlock.setSenderIfNotSet(this.sender);
+		transactionBlock.transferObjects(objectsToTransfer, address);
+
+		return transactionBlock;
+	}
+
 	async #objectsToTransfer(txb: TransactionBlock) {
 		const objectIDs = [...this.objectIds];
-		const refsWithType: {
-			ref: TransactionObjectArgument;
-			type: string;
-		}[] = (
-			await this.#client.multiGetObjects({
-				ids: objectIDs,
-				options: {
-					showType: true,
-				},
-			})
-		).map((res, i) => {
-			if (!res.data || res.error) {
-				throw new Error(`Failed to load object ${objectIDs[i]} (${res.error?.code})`);
-			}
+		const refsWithType = this.objectRefs.concat(
+			(objectIDs.length > 0
+				? await this.#client.multiGetObjects({
+						ids: objectIDs,
+						options: {
+							showType: true,
+						},
+				  })
+				: []
+			).map((res, i) => {
+				if (!res.data || res.error) {
+					throw new Error(`Failed to load object ${objectIDs[i]} (${res.error?.code})`);
+				}
 
-			return {
-				ref: txb.objectRef({
-					version: res.data.version,
-					digest: res.data.digest,
-					objectId: res.data.objectId,
-				}),
-				type: res.data.type!,
-			};
-		});
-
-		txb.setSenderIfNotSet(this.sender);
+				return {
+					ref: txb.objectRef({
+						version: res.data.version,
+						digest: res.data.digest,
+						objectId: res.data.objectId,
+					}),
+					type: res.data.type!,
+				};
+			}),
+		);
 
 		for (const [coinType, amount] of this.balances) {
 			if (coinType === SUI_COIN_TYPE) {
@@ -196,7 +218,7 @@ export class ZkSendLinkBuilder {
 				const [split] = txb.splitCoins(coins[0], [amount]);
 				refsWithType.push({
 					ref: split,
-					type: `0x2::coin:Coin<${coinType}>`,
+					type: `0x2::coin::Coin<${coinType}>`,
 				});
 			}
 		}
@@ -302,12 +324,14 @@ export class ZkSendLinkBuilder {
 
 		const coinsByType = new Map<string, CoinStruct[]>();
 		const allIds = links.flatMap((link) => [...link.objectIds]);
+		const sender = links[0].sender;
+		transactionBlock.setSenderIfNotSet(sender);
 
 		await Promise.all(
 			[...new Set(links.flatMap((link) => [...link.balances.keys()]))].map(async (coinType) => {
 				const coins = await client.getCoins({
 					coinType,
-					owner: links[0].sender,
+					owner: sender,
 				});
 
 				coinsByType.set(
@@ -378,6 +402,13 @@ export class ZkSendLinkBuilder {
 		for (const link of links) {
 			const receiver = link.keypair.toSuiAddress();
 			contract.new(transactionBlock, { arguments: [store, receiver] });
+
+			link.objectRefs.forEach(({ ref, type }) => {
+				contract.add(transactionBlock, {
+					arguments: [store, receiver, ref],
+					typeArguments: [type],
+				});
+			});
 
 			link.objectIds.forEach((id) => {
 				const object = objectRefs.get(id);

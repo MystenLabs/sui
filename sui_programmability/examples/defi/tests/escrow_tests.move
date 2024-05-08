@@ -48,20 +48,20 @@ module defi::escrow_tests {
         let scenario = &mut scenario_val;
 
         // The third party returns item A to Alice, item B to Bob
-        test_scenario::next_tx(scenario, THIRD_PARTY_ADDRESS);
+        scenario.next_tx(THIRD_PARTY_ADDRESS);
         {
-            let item_a = test_scenario::take_from_sender<EscrowedObj<ItemA, ItemB>>(scenario);
+            let item_a = scenario.take_from_sender<EscrowedObj<ItemA, ItemB>>();
             escrow::return_to_sender<ItemA, ItemB>(item_a);
 
-            let item_b = test_scenario::take_from_sender<EscrowedObj<ItemB, ItemA>>(scenario);
+            let item_b = scenario.take_from_sender<EscrowedObj<ItemB, ItemA>>();
             escrow::return_to_sender<ItemB, ItemA>(item_b);
         };
-        test_scenario::next_tx(scenario, THIRD_PARTY_ADDRESS);
+        scenario.next_tx(THIRD_PARTY_ADDRESS);
         // Alice now owns item A, and Bob now owns item B
         assert!(owns_object<ItemA>(ALICE_ADDRESS), EReturnTransferFailed);
         assert!(owns_object<ItemB>(BOB_ADDRESS), EReturnTransferFailed);
 
-        test_scenario::end(scenario_val);
+        scenario_val.end();
     }
 
     #[test]
@@ -71,7 +71,7 @@ module defi::escrow_tests {
         // for a different object than Bob's
         let mut scenario = send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, true, false);
         swap(&mut scenario, THIRD_PARTY_ADDRESS);
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     #[test]
@@ -81,17 +81,17 @@ module defi::escrow_tests {
         // recipient than Bob
         let mut scenario = send_to_escrow_with_overrides(ALICE_ADDRESS, BOB_ADDRESS, false, true);
         swap(&mut scenario, THIRD_PARTY_ADDRESS);
-        test_scenario::end(scenario);
+        scenario.end();
     }
 
     fun swap(scenario: &mut Scenario, third_party: address) {
-        test_scenario::next_tx(scenario, third_party);
+        scenario.next_tx(third_party);
         {
             let item_a = test_scenario::take_from_sender<EscrowedObj<ItemA, ItemB>>(scenario);
             let item_b = test_scenario::take_from_sender<EscrowedObj<ItemB, ItemA>>(scenario);
             escrow::swap(item_a, item_b);
         };
-        test_scenario::next_tx(scenario, third_party);
+        scenario.next_tx(third_party);
     }
 
     fun send_to_escrow(
@@ -109,23 +109,23 @@ module defi::escrow_tests {
     ): Scenario {
         let mut new_scenario = test_scenario::begin(alice);
         let scenario = &mut new_scenario;
-        let ctx = test_scenario::ctx(scenario);
+        let ctx = scenario.ctx();
         let item_a_versioned_id = object::new(ctx);
 
-        test_scenario::next_tx(scenario, bob);
-        let ctx = test_scenario::ctx(scenario);
+        scenario.next_tx(bob);
+        let ctx = scenario.ctx();
         let item_b_versioned_id = object::new(ctx);
 
-        let item_a_id = object::uid_to_inner(&item_a_versioned_id);
-        let mut item_b_id = object::uid_to_inner(&item_b_versioned_id);
+        let item_a_id = item_a_versioned_id.uid_to_inner();
+        let mut item_b_id = item_b_versioned_id.uid_to_inner();
         if (override_exchange_for) {
             item_b_id = object::id_from_address(RANDOM_ADDRESS);
         };
 
         // Alice sends item A to the third party
-        test_scenario::next_tx(scenario, alice);
+        scenario.next_tx(alice);
         {
-            let ctx = test_scenario::ctx(scenario);
+            let ctx = scenario.ctx();
             let escrowed = ItemA {
                 id: item_a_versioned_id
             };
@@ -143,9 +143,9 @@ module defi::escrow_tests {
         };
 
         // Bob sends item B to the third party
-        test_scenario::next_tx(scenario, BOB_ADDRESS);
+        scenario.next_tx(BOB_ADDRESS);
         {
-            let ctx = test_scenario::ctx(scenario);
+            let ctx = scenario.ctx();
             let escrowed = ItemB {
                 id: item_b_versioned_id
             };
@@ -157,7 +157,7 @@ module defi::escrow_tests {
                 ctx
             );
         };
-        test_scenario::next_tx(scenario, BOB_ADDRESS);
+        scenario.next_tx(BOB_ADDRESS);
         new_scenario
     }
 

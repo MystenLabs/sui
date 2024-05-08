@@ -330,6 +330,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use async_trait::async_trait;

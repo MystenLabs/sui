@@ -1,5 +1,33 @@
 # @mysten/zksend
 
+## 0.7.0
+
+### Minor Changes
+
+- 879421a5ac: Add support for creating links from objects created in the same transaction block
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+  - @mysten/sui.js@0.53.0
+  - @mysten/wallet-standard@0.11.4
+
+## 0.6.0
+
+### Minor Changes
+
+- 905bc99e88: Add `createSendToAddressTransaction` method
+
+### Patch Changes
+
+- 9a9ff3cde1: Fix assets extracted from transactionBlocks using type instead of objectType from object changes"
+
+## 0.5.0
+
+### Minor Changes
+
+- 44ba140be0: Add `getSentTransactionBlocksWithLinks` helper
+
 ## 0.4.4
 
 ### Patch Changes

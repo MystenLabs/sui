@@ -630,8 +630,8 @@ mod tests {
         error::ConsensusError,
     };
 
-    #[tokio::test]
-    async fn test_sign_and_verify() {
+    #[test]
+    fn test_sign_and_verify() {
         let (context, key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 

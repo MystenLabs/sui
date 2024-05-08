@@ -368,7 +368,7 @@ impl CompiledPackage {
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap(); // safe because package built successfully
+                m.serialize_with_version(m.version, &mut bytes).unwrap(); // safe because package built successfully
                 bytes
             })
             .collect()

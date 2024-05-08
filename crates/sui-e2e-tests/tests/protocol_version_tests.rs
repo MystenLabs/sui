@@ -56,7 +56,7 @@ mod sim_only_tests {
 
     use super::*;
     use fastcrypto::encoding::Base64;
-    use move_binary_format::CompiledModule;
+    use move_binary_format::{file_format_common::VERSION_MAX, CompiledModule};
     use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -193,7 +193,7 @@ mod sim_only_tests {
         // verify that the node that didn't support the new version shut itself down.
         for v in test_cluster.swarm.validator_nodes() {
             if !v
-                .config
+                .config()
                 .supported_protocol_versions
                 .unwrap()
                 .is_version_supported(ProtocolVersion::new(FINISH))
@@ -1003,6 +1003,7 @@ mod sim_only_tests {
             &sui_system_modules(fixture),
             TransactionDigest::genesis_marker(),
             u64::MAX,
+            VERSION_MAX,
             &[
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
                 BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)

@@ -1003,6 +1003,8 @@ impl TxContext {
 impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
+    pub const CANCELLED_READ: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
+    pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1049,6 +1051,14 @@ impl SequenceNumber {
         assert_ne!(max_input.0, u64::MAX);
 
         SequenceNumber(max_input.0 + 1)
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self == &SequenceNumber::CANCELLED_READ || self == &SequenceNumber::CONGESTED
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self < &SequenceNumber::MAX
     }
 }
 

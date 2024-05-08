@@ -81,7 +81,7 @@ fn setup_test_storage<'a>(
     {
         let module_id = module.self_id();
         let mut module_bytes = Vec::new();
-        module.serialize(&mut module_bytes)?;
+        module.serialize_with_version(module.version, &mut module_bytes)?;
         storage.publish_or_overwrite_module(module_id, module_bytes);
     }
 

@@ -132,7 +132,7 @@ pub(crate) use debug_print_internal;
 
 /// Macro for a small DSL for compactling printing debug information based on the provided flag.
 ///
-///  ```
+///  ```text
 ///  debug_print!(
 ///      context.debug_flags.match_compilation,
 ///      ("subject" => subject),

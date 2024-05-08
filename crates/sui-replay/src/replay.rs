@@ -37,6 +37,7 @@ use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsA
 use sui_protocol_config::{Chain, ProtocolConfig};
 use sui_sdk::{SuiClient, SuiClientBuilder};
 use sui_types::in_memory_storage::InMemoryStorage;
+use sui_types::message_envelope::Message;
 use sui_types::storage::{get_module, PackageObject};
 use sui_types::transaction::TransactionKind::ProgrammableTransaction;
 use sui_types::{
@@ -709,45 +710,18 @@ impl LocalExec {
             unreachable!("Transaction was valid so gas status must be valid");
         };
 
-        trace!(target: "replay_gas_info", "{}", Pretty(&gas_status));
-
-        let skip_checks = true;
-        if let ProgrammableTransaction(ref pt) = transaction_kind {
-            let full_ptb = FullPTB {
-                ptb: pt.clone(),
-                results: transform_command_results_to_annotated(
-                    &executor,
-                    &self.clone(),
-                    executor
-                        .dev_inspect_transaction(
-                            &self,
-                            protocol_config,
-                            metrics,
-                            expensive_checks,
-                            &certificate_deny_set,
-                            &tx_info.executed_epoch,
-                            tx_info.epoch_start_timestamp,
-                            CheckedInputObjects::new_for_replay(input_objects),
-                            tx_info.gas.clone(),
-                            SuiGasStatus::new(
-                                tx_info.gas_budget,
-                                tx_info.gas_price,
-                                tx_info.reference_gas_price,
-                                protocol_config,
-                            )?,
-                            transaction_kind.clone(),
-                            tx_info.sender,
-                            *tx_digest,
-                            skip_checks,
-                        )
-                        .3
-                        .unwrap_or_else(|e| {
-                            panic!("Error executing this transaction in dev-inspect mode, {e}")
-                        }),
-                )?,
-            };
-            trace!(target: "replay_ptb_info", "{}", Pretty(&full_ptb))
-        };
+        if let Err(err) = self.pretty_print_for_tracing(
+            &gas_status,
+            &executor,
+            tx_info,
+            &transaction_kind,
+            protocol_config,
+            metrics,
+            expensive_checks,
+            input_objects.clone(),
+        ) {
+            error!("Failed to pretty print for tracing: {:?}", err);
+        }
 
         let all_required_objects = self.storage.all_objects();
 
@@ -762,6 +736,58 @@ impl LocalExec {
             local_exec_status: Some(result),
             pre_exec_diag: self.diag.clone(),
         })
+    }
+
+    fn pretty_print_for_tracing(
+        &self,
+        gas_status: &SuiGasStatus,
+        executor: &Arc<dyn Executor + Send + Sync>,
+        tx_info: &OnChainTransactionInfo,
+        transaction_kind: &TransactionKind,
+        protocol_config: &ProtocolConfig,
+        metrics: Arc<LimitsMetrics>,
+        expensive_checks: bool,
+        input_objects: InputObjects,
+    ) -> anyhow::Result<()> {
+        trace!(target: "replay_gas_info", "{}", Pretty(gas_status));
+
+        let skip_checks = true;
+        if let ProgrammableTransaction(pt) = transaction_kind {
+            trace!(
+                target: "replay_ptb_info",
+                "{}",
+                Pretty(&FullPTB {
+                    ptb: pt.clone(),
+                    results: transform_command_results_to_annotated(
+                        executor,
+                        &self.clone(),
+                        executor.dev_inspect_transaction(
+                            &self,
+                            protocol_config,
+                            metrics,
+                            expensive_checks,
+                            &HashSet::new(),
+                            &tx_info.executed_epoch,
+                            tx_info.epoch_start_timestamp,
+                            CheckedInputObjects::new_for_replay(input_objects),
+                            tx_info.gas.clone(),
+                            SuiGasStatus::new(
+                                tx_info.gas_budget,
+                                tx_info.gas_price,
+                                tx_info.reference_gas_price,
+                                protocol_config,
+                            )?,
+                            transaction_kind.clone(),
+                            tx_info.sender,
+                            tx_info.sender_signed_data.digest(),
+                            skip_checks,
+                        )
+                        .3
+                        .unwrap_or_default(),
+                    )?,
+            }));
+        }
+        Ok(())
     }
 
     /// Must be called after `init_for_execution`
@@ -1553,6 +1579,7 @@ impl LocalExec {
         // Add shared objects
         in_objs.extend(shared_inputs);
 
+        // TODO(Zhe): Account for cancelled transaction assigned version here, and tests.
         let resolved_input_objs = tx_info
             .input_objects
             .iter()

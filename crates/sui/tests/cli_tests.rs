@@ -4,8 +4,10 @@
 use std::collections::BTreeSet;
 use std::io::Read;
 use std::os::unix::prelude::FileExt;
-use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
+
+#[cfg(not(msim))]
+use std::str::FromStr;
 
 use expect_test::expect;
 use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};

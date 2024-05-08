@@ -8,11 +8,9 @@
 
 mod abstract_state;
 
-use crate::{
-    absint::{AbstractInterpreter, FunctionContext, TransferFunctions},
-    locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST},
-};
+use crate::locals_safety::abstract_state::{RET_PER_LOCAL_COST, STEP_BASE_COST};
 use abstract_state::{AbstractState, LocalState};
+use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeOffset},

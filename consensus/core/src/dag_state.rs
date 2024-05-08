@@ -164,7 +164,17 @@ impl DagState {
         }
         self.update_block_metadata(&block);
         self.blocks_to_write.push(block);
-        self.context.metrics.node_metrics.accepted_blocks.inc();
+        let source = if self.context.own_index == block_ref.author {
+            "own"
+        } else {
+            "others"
+        };
+        self.context
+            .metrics
+            .node_metrics
+            .accepted_blocks
+            .with_label_values(&[source])
+            .inc();
     }
 
     /// Updates internal metadata for a block.
@@ -736,14 +746,14 @@ mod test {
     use parking_lot::RwLock;
 
     use super::*;
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         storage::{mem_store::MemStore, WriteBatch},
-        test_dag::build_dag,
     };
 
-    #[tokio::test]
-    async fn test_get_blocks() {
+    #[test]
+    fn test_get_blocks() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -848,8 +858,8 @@ mod test {
             .is_empty());
     }
 
-    #[tokio::test]
-    async fn test_ancestors_at_uncommitted_round() {
+    #[test]
+    fn test_ancestors_at_uncommitted_round() {
         // Initialize DagState.
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1005,8 +1015,8 @@ mod test {
         );
     }
 
-    #[tokio::test]
-    async fn test_contains_blocks_in_cache_or_store() {
+    #[test]
+    fn test_contains_blocks_in_cache_or_store() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
@@ -1064,8 +1074,8 @@ mod test {
         assert_eq!(result, expected.clone());
     }
 
-    #[tokio::test]
-    async fn test_contains_cached_block_at_slot() {
+    #[test]
+    fn test_contains_cached_block_at_slot() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
@@ -1128,9 +1138,9 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[test]
     #[should_panic(expected = "Attempted to check for slot A8 that is <= the last evicted round 8")]
-    async fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
+    fn test_contains_cached_block_at_slot_panics_when_ask_out_of_range() {
         /// Only keep elements up to 2 rounds before the last committed round
         const CACHED_ROUNDS: Round = 2;
 
@@ -1169,8 +1179,8 @@ mod test {
             dag_state.contains_cached_block_at_slot(Slot::new(8, AuthorityIndex::new_for_test(0)));
     }
 
-    #[tokio::test]
-    async fn test_get_blocks_in_cache_or_store() {
+    #[test]
+    fn test_get_blocks_in_cache_or_store() {
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -1227,8 +1237,8 @@ mod test {
         assert_eq!(result, expected);
     }
 
-    #[tokio::test]
-    async fn test_flush_and_recovery() {
+    #[test]
+    fn test_flush_and_recovery() {
         let num_authorities: u32 = 4;
         let (context, _) = Context::new_for_test(num_authorities as usize);
         let context = Arc::new(context);
@@ -1325,8 +1335,8 @@ mod test {
         assert_eq!(dag_state.last_commit_index(), 5);
     }
 
-    #[tokio::test]
-    async fn test_get_cached_blocks() {
+    #[test]
+    fn test_get_cached_blocks() {
         let (mut context, _) = Context::new_for_test(4);
         context.parameters.dag_state_cached_rounds = 5;
 
@@ -1380,8 +1390,8 @@ mod test {
         assert_eq!(cached_blocks[0].round(), 12);
     }
 
-    #[tokio::test]
-    async fn test_get_cached_last_block_per_authority() {
+    #[test]
+    fn test_get_cached_last_block_per_authority() {
         // GIVEN
         const CACHED_ROUNDS: Round = 2;
         let (mut context, _) = Context::new_for_test(4);
@@ -1429,11 +1439,11 @@ mod test {
         assert_eq!(last_blocks[3].round(), 2);
     }
 
-    #[tokio::test]
+    #[test]
     #[should_panic(
         expected = "Attempted to request for blocks of rounds < 2, when the last evicted round is 1 for authority C"
     )]
-    async fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
+    fn test_get_cached_last_block_per_authority_requesting_out_of_round_range() {
         // GIVEN
         const CACHED_ROUNDS: Round = 1;
         let (mut context, _) = Context::new_for_test(4);
@@ -1476,8 +1486,8 @@ mod test {
         dag_state.get_last_cached_block_per_authority(end_round);
     }
 
-    #[tokio::test]
-    async fn test_last_quorum() {
+    #[test]
+    fn test_last_quorum() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1493,7 +1503,16 @@ mod test {
 
         // WHEN a fully connected DAG up to round 4 is created, then round 4 blocks should be returned as quorum
         {
-            let round_4_blocks = build_dag(context, dag_state.clone(), None, 4);
+            let mut dag_builder = DagBuilder::new(context.clone());
+            dag_builder
+                .layers(1..=4)
+                .build()
+                .persist_layers(dag_state.clone());
+            let round_4_blocks: Vec<_> = dag_builder
+                .blocks(4..=4)
+                .into_iter()
+                .map(|block| block.reference())
+                .collect();
 
             let last_quorum = dag_state.read().last_quorum();
 
@@ -1519,8 +1538,8 @@ mod test {
         }
     }
 
-    #[tokio::test]
-    async fn test_last_block_for_authority() {
+    #[test]
+    fn test_last_block_for_authority() {
         // GIVEN
         let (context, _) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -1546,7 +1565,11 @@ mod test {
         // WHEN adding some blocks for authorities, only the last ones should be returned
         {
             // add blocks up to round 4
-            build_dag(context.clone(), dag_state.clone(), None, 4);
+            let mut dag_builder = DagBuilder::new(context.clone());
+            dag_builder
+                .layers(1..=4)
+                .build()
+                .persist_layers(dag_state.clone());
 
             // add block 5 for authority 0
             let block = VerifiedBlock::new_for_test(TestBlock::new(5, 0).build());

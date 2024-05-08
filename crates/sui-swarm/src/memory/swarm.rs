@@ -464,7 +464,7 @@ impl Swarm {
     pub fn validator_nodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| node.config.consensus_config.is_some())
+            .filter(|node| node.config().consensus_config.is_some())
     }
 
     pub fn validator_node_handles(&self) -> Vec<SuiNodeHandle> {
@@ -487,7 +487,7 @@ impl Swarm {
     pub fn fullnodes(&self) -> impl Iterator<Item = &Node> {
         self.nodes
             .values()
-            .filter(|node| node.config.consensus_config.is_none())
+            .filter(|node| node.config().consensus_config.is_none())
     }
 
     pub async fn spawn_new_node(&mut self, config: NodeConfig) -> SuiNodeHandle {

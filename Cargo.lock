@@ -1799,6 +1799,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc0455254eb5c6964c4545d8bac815e1a1be4f3afe0ae695ea539c12d728d44b"
 
 [[package]]
+name = "bin-version"
+version = "1.25.0"
+dependencies = [
+ "const-str",
+ "git-version",
+]
+
+[[package]]
 name = "bincode"
 version = "1.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6567,6 +6575,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 
 [[package]]
+name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
+name = "move-abstract-interpreter-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -6616,6 +6640,7 @@ dependencies = [
 name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6638,6 +6663,7 @@ dependencies = [
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6651,6 +6677,7 @@ dependencies = [
 name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6664,6 +6691,7 @@ dependencies = [
 name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6766,6 +6794,7 @@ dependencies = [
  "petgraph 0.5.1",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",
@@ -6806,6 +6835,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -6824,6 +6854,7 @@ dependencies = [
  "clap",
  "colored",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -6868,6 +6899,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -11695,18 +11727,17 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
+ "bin-version",
  "bip32",
  "camino",
  "clap",
  "colored",
- "const-str",
  "csv",
  "datatest-stable",
  "expect-test",
  "fastcrypto",
  "fastcrypto-zkp",
  "fs_extra",
- "git-version",
  "im",
  "inquire",
  "insta",
@@ -12061,6 +12092,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-storage",
+ "sui-surfer",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
@@ -12083,13 +12115,12 @@ dependencies = [
  "axum",
  "backoff",
  "bcs",
+ "bin-version",
  "clap",
- "const-str",
  "ethers",
  "eyre",
  "fastcrypto",
  "futures",
- "git-version",
  "hex-literal 0.3.4",
  "lru 0.10.0",
  "move-core-types",
@@ -12455,6 +12486,8 @@ name = "sui-execution"
 version = "0.1.0"
 dependencies = [
  "cargo_metadata 0.15.4",
+ "move-abstract-interpreter",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
@@ -12560,7 +12593,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "git-version",
+ "bin-version",
  "serde",
  "serde_json",
  "sui-framework",
@@ -12638,6 +12671,7 @@ dependencies = [
  "async-trait",
  "axum",
  "bcs",
+ "bin-version",
  "chrono",
  "clap",
  "const-str",
@@ -12648,7 +12682,6 @@ dependencies = [
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "git-version",
  "hex",
  "http",
  "hyper",
@@ -13021,11 +13054,10 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "better_any",
+ "bin-version",
  "clap",
  "colored",
- "const-str",
  "futures",
- "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
  "move-binary-format",
@@ -13208,12 +13240,11 @@ dependencies = [
  "anyhow",
  "arc-swap",
  "axum",
+ "bin-version",
  "clap",
- "const-str",
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "git-version",
  "humantime",
  "move-vm-profiler",
  "mysten-common",
@@ -13391,11 +13422,11 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-server",
+ "bin-version",
  "bytes",
  "clap",
  "const-str",
  "fastcrypto",
- "git-version",
  "hex",
  "http-body",
  "hyper",
@@ -13747,11 +13778,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bin-version",
  "clap",
- "const-str",
  "expect-test",
  "fs_extra",
- "git-version",
  "hyper",
  "jsonrpsee",
  "move-compiler",
@@ -13985,15 +14015,14 @@ dependencies = [
  "anemo-cli",
  "anyhow",
  "bcs",
+ "bin-version",
  "clap",
  "colored",
  "comfy-table",
- "const-str",
  "diesel",
  "eyre",
  "fastcrypto",
  "futures",
- "git-version",
  "hex",
  "indicatif",
  "itertools 0.10.5",
@@ -14193,6 +14222,7 @@ dependencies = [
 name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
@@ -14291,7 +14321,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "0.1.9"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "axum",
