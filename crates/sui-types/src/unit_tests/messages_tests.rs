@@ -59,7 +59,7 @@ fn test_signed_values() {
         ),
         vec![&sender_sec],
     )
-    .try_into_verified_testing(committee.epoch(), &Default::default())
+    .try_into_verified_for_testing(committee.epoch(), &Default::default())
     .unwrap();
 
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
@@ -80,7 +80,9 @@ fn test_signed_values() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(v.try_into_verified_for_testing(&committee, &Default::default()).is_ok());
+    assert!(v
+        .try_into_verified_for_testing(&committee, &Default::default())
+        .is_ok());
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -142,7 +144,7 @@ fn test_certificates() {
         ),
         vec![&sender_sec],
     )
-    .try_into_verified(committee.epoch(), &Default::default())
+    .try_into_verified_for_testing(committee.epoch(), &Default::default())
     .unwrap();
 
     let v1 = SignedTransaction::new(
@@ -482,7 +484,7 @@ fn test_digest_caching() {
         ),
         vec![&ssec2],
     )
-    .try_into_verified(committee.epoch(), &Default::default())
+    .try_into_verified_for_testing(committee.epoch(), &Default::default())
     .unwrap();
 
     let mut signed_tx = SignedTransaction::new(
@@ -492,7 +494,7 @@ fn test_digest_caching() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(signed_tx
-        .verify_signatures_authenticated(&committee, &Default::default())
+        .verify_signatures_authenticated_for_testing(&committee, &Default::default())
         .is_ok());
 
     let initial_digest = *signed_tx.digest();
@@ -606,7 +608,7 @@ fn test_user_signature_committed_in_signed_transactions() {
         gas_price,
     );
     let transaction_a = Transaction::from_data_and_signer(tx_data.clone(), vec![&sender_sec])
-        .try_into_verified(epoch, &Default::default())
+        .try_into_verified_for_testing(epoch, &Default::default())
         .unwrap();
     // transaction_b intentionally invalid (sender does not match signer).
     let transaction_b = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
@@ -709,7 +711,7 @@ fn test_sponsored_transaction_message() {
         tx_data.clone(),
         vec![sender_sig.clone(), sponsor_sig.clone()],
     )
-    .try_into_verified(epoch, &Default::default())
+    .try_into_verified_for_testing(epoch, &Default::default())
     .unwrap();
 
     assert_eq!(
@@ -725,13 +727,13 @@ fn test_sponsored_transaction_message() {
         tx_data.clone(),
         vec![sponsor_sig.clone(), sender_sig.clone()],
     )
-    .try_into_verified(epoch, &Default::default())
+    .try_into_verified_for_testing(epoch, &Default::default())
     .unwrap();
 
     // Test incomplete signature lists (missing sponsor sig)
     assert!(matches!(
         Transaction::from_generic_sig_data(tx_data.clone(), vec![sender_sig.clone()],)
-            .try_into_verified(epoch, &Default::default())
+            .try_into_verified_for_testing(epoch, &Default::default())
             .unwrap_err(),
         SuiError::SignerSignatureNumberMismatch { .. }
     ));
@@ -739,7 +741,7 @@ fn test_sponsored_transaction_message() {
     // Test incomplete signature lists (missing sender sig)
     assert!(matches!(
         Transaction::from_generic_sig_data(tx_data.clone(), vec![sponsor_sig.clone()],)
-            .try_into_verified(epoch, &Default::default())
+            .try_into_verified_for_testing(epoch, &Default::default())
             .unwrap_err(),
         SuiError::SignerSignatureNumberMismatch { .. }
     ));
@@ -753,7 +755,7 @@ fn test_sponsored_transaction_message() {
             tx_data.clone(),
             vec![sender_sig, sponsor_sig.clone(), third_party_sig.clone()],
         )
-        .try_into_verified(epoch, &Default::default())
+        .try_into_verified_for_testing(epoch, &Default::default())
         .unwrap_err(),
         SuiError::SignerSignatureNumberMismatch { .. }
     ));
@@ -761,7 +763,7 @@ fn test_sponsored_transaction_message() {
     // Test irrelevant sigs
     assert!(matches!(
         Transaction::from_generic_sig_data(tx_data, vec![sponsor_sig, third_party_sig],)
-            .try_into_verified(epoch, &Default::default())
+            .try_into_verified_for_testing(epoch, &Default::default())
             .unwrap_err(),
         SuiError::SignerSignatureAbsent { .. }
     ));

@@ -82,7 +82,9 @@ fn test_authority_signature_intent() {
     );
     let tx = Transaction::from_data(data, vec![signature]);
     let tx1 = tx.clone();
-    assert!(tx.try_into_verified_for_testing(epoch, &Default::default()).is_ok());
+    assert!(tx
+        .try_into_verified_for_testing(epoch, &Default::default())
+        .is_ok());
 
     // Create an intent with signed data.
     let intent_bcs = bcs::to_bytes(tx1.intent_message()).unwrap();

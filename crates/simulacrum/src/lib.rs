@@ -174,8 +174,8 @@ impl<R, S: store::SimulatorStore> Simulacrum<R, S> {
         &mut self,
         transaction: Transaction,
     ) -> anyhow::Result<(TransactionEffects, Option<ExecutionError>)> {
-        let transaction =
-            transaction.try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
+        let transaction = transaction
+            .try_into_verified_for_testing(self.epoch_state.epoch(), &VerifyParams::default())?;
 
         let (inner_temporary_store, _, effects, execution_error_opt) = self
             .epoch_state

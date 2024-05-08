@@ -2651,8 +2651,7 @@ impl Transaction {
 }
 
 impl SignedTransaction {
-    // used for testing only.
-    pub fn verify_signatures_authenticated(
+    pub fn verify_signatures_authenticated_for_testing(
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
@@ -2671,13 +2670,12 @@ impl SignedTransaction {
         )
     }
 
-    // used for testing only.
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
+        self.verify_signatures_authenticated_for_testing(committee, verify_params)?;
         Ok(VerifiedSignedTransaction::new_from_verified(self))
     }
 }
