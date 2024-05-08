@@ -1,5 +1,17 @@
 # @mysten/zksend
 
+## 0.7.0
+
+### Minor Changes
+
+- 879421a5ac: Add support for creating links from objects created in the same transaction block
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+  - @mysten/sui.js@0.53.0
+  - @mysten/wallet-standard@0.11.4
+
 ## 0.6.0
 
 ### Minor Changes

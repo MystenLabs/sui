@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.53.0
+
+### Minor Changes
+
+- 774bfb41a8: Add MultiSigSigner class to simplify multisig signing
+
 ## 0.52.0
 
 ### Minor Changes
