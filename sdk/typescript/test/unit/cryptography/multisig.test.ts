@@ -11,7 +11,7 @@ import { PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
-import { MultiSigPublicKey, parsePartialSignatures } from '../../../src/multisig';
+import { MultiSigPublicKey, MultiSigSigner, parsePartialSignatures } from '../../../src/multisig';
 import { TransactionBlock } from '../../../src/transactions';
 import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 import { toZkLoginPublicIdentifier } from '../../../src/zklogin/publickey';
@@ -637,8 +637,8 @@ describe('MultisigKeypair', () => {
 			publicKeys: pubkeyWeightPairs,
 		});
 
-		const signer = publicKey.getSigner([k3]);
-		const signer2 = publicKey.getSigner([k1, k2]);
+		const signer = publicKey.getSigner(k3);
+		const signer2 = new MultiSigSigner(publicKey, [k1, k2]);
 
 		const multisig = await signer.signTransactionBlock(bytes);
 		const multisig2 = await signer2.signTransactionBlock(bytes);
@@ -688,8 +688,8 @@ describe('MultisigKeypair', () => {
 			publicKeys: pubkeyWeightPairs,
 		});
 
-		const signer = publicKey.getSigner([k3]);
-		const signer2 = publicKey.getSigner([k1, k2]);
+		const signer = publicKey.getSigner(k3);
+		const signer2 = new MultiSigSigner(publicKey, [k1, k2]);
 
 		const multisig = await signer.signPersonalMessage(bytes);
 		const multisig2 = await signer2.signPersonalMessage(bytes);
@@ -737,7 +737,7 @@ describe('MultisigKeypair', () => {
 			publicKeys: pubkeyWeightPairs,
 		});
 
-		expect(() => publicKey.getSigner([k1, k1])).toThrow(
+		expect(() => new MultiSigSigner(publicKey, [k1, k1])).toThrow(
 			new Error(`Can't create MultiSigSigner with duplicate signers`),
 		);
 	});
@@ -772,7 +772,7 @@ describe('MultisigKeypair', () => {
 			publicKeys: pubkeyWeightPairs,
 		});
 
-		expect(() => publicKey.getSigner([k1])).toThrow(
+		expect(() => publicKey.getSigner(k1)).toThrow(
 			new Error(`Combined weight of signers is less than threshold`),
 		);
 	});
@@ -796,7 +796,7 @@ describe('MultisigKeypair', () => {
 			publicKeys: pubkeyWeightPairs,
 		});
 
-		expect(() => publicKey.getSigner([k2])).toThrow(
+		expect(() => publicKey.getSigner(k2)).toThrow(
 			new Error(`Signer ${pk2.toSuiAddress()} is not part of the MultiSig public key`),
 		);
 	});
