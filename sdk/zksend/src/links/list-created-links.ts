@@ -79,6 +79,7 @@ export async function listCreatedLinks({
 	path?: string;
 	client?: SuiClient;
 	fetch?: typeof fetch;
+	claimApi?: string;
 }) {
 	const gqlClient = new SuiGraphQLClient({
 		url:
