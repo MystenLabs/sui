@@ -43,7 +43,8 @@ pub fn known_filters() -> (Option<Symbol>, Vec<WarningFilter>) {
 pub fn linter_visitors(level: LintLevel) -> Vec<Visitor> {
     match level {
         LintLevel::None => vec![],
-        LintLevel::Default | LintLevel::All => {
+        LintLevel::Default => vec![],
+        LintLevel::All => {
             vec![constant_naming::ConstantNamingVisitor::visitor(
                 ConstantNamingVisitor,
             )]

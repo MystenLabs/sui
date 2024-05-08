@@ -1,4 +1,3 @@
-#[allow(lint(constant_naming))]
 module 0x42::M {
     // Incorrectly named constants
     const Another_BadName: u64 = 42; // Should trigger a warning
