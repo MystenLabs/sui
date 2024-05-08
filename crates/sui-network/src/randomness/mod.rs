@@ -151,6 +151,7 @@ struct RandomnessEventLoop {
     pending_tasks: BTreeSet<(EpochId, RandomnessRound)>,
     send_tasks: BTreeMap<(EpochId, RandomnessRound), tokio::task::JoinHandle<()>>,
     round_request_time: BTreeMap<(EpochId, RandomnessRound), time::Instant>,
+    future_epoch_partial_sigs: BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<Vec<u8>>>,
     received_partial_sigs:
         BTreeMap<(EpochId, RandomnessRound, PeerId), Vec<RandomnessPartialSignature>>,
     completed_sigs: BTreeSet<(EpochId, RandomnessRound)>,
@@ -268,6 +269,12 @@ impl RandomnessEventLoop {
         // Aggregate any sigs received early from the new epoch.
         // (We can't call `maybe_aggregate_partial_signatures` directly while iterating,
         // because it takes `&mut self`, so we store in a Vec first.)
+        for ((epoch, round, peer_id), sig_bytes) in
+            std::mem::take(&mut self.future_epoch_partial_sigs)
+        {
+            // We can fully validate these now that we have current epoch DKG output.
+            self.receive_partial_signatures(peer_id, epoch, round, sig_bytes);
+        }
         let mut aggregate_rounds = BTreeSet::new();
         for (epoch, round, _) in self.received_partial_sigs.keys() {
             if *epoch < new_epoch {
@@ -336,13 +343,7 @@ impl RandomnessEventLoop {
         round: RandomnessRound,
         sig_bytes: Vec<Vec<u8>>,
     ) {
-        // Big slate of validity checks on received partial signatures.
-        let peer_share_ids = if let Some(peer_share_ids) = &self.peer_share_ids {
-            peer_share_ids
-        } else {
-            debug!("can't accept partial signatures until DKG has completed");
-            return;
-        };
+        // Basic validity checks.
         if epoch < self.epoch {
             debug!(
                 "skipping received partial sigs, we are already up to epoch {}",
@@ -361,6 +362,23 @@ impl RandomnessEventLoop {
             debug!("skipping received partial sigs, we already have completed this sig");
             return;
         }
+
+        // If sigs are for a future epoch, we can't fully verify them without DKG output.
+        // Save them for later use.
+        if epoch != self.epoch || self.peer_share_ids.is_none() {
+            if round.0 >= self.config.max_partial_sigs_rounds_ahead() {
+                debug!("skipping received partial sigs for future epoch, round too far ahead",);
+                return;
+            }
+
+            debug!("saving partial sigs from future epoch for later use");
+            self.future_epoch_partial_sigs
+                .insert((epoch, round, peer_id), sig_bytes);
+            return;
+        }
+
+        // Verify shape of sigs matches what we expect for the peer.
+        let peer_share_ids = self.peer_share_ids.as_ref().expect("checked above");
         let expected_share_ids = if let Some(expected_share_ids) = peer_share_ids.get(&peer_id) {
             expected_share_ids
         } else {
