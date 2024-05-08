@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import "openzeppelin-foundry-upgrades/Options.sol";
 import {ERC1967Utils} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils.sol";
 import "./mocks/MockSuiBridgeV2.sol";
 import "../contracts/BridgeCommittee.sol";
@@ -32,12 +33,16 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         uint8[] memory _supportedDestinationChains = new uint8[](1);
         _supportedDestinationChains[0] = 0;
 
+        Options memory opts;
+        opts.unsafeSkipAllChecks = true;
+
         // deploy bridge committee
         address _committee = Upgrades.deployUUPSProxy(
             "BridgeCommittee.sol",
             abi.encodeCall(
                 BridgeCommittee.initialize, (_committeeMembers, _stake, minStakeRequired)
-            )
+            ),
+            opts
         );
 
         committee = BridgeCommittee(_committee);
@@ -48,7 +53,8 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
             abi.encodeCall(
                 BridgeConfig.initialize,
                 (_committee, _chainID, supportedTokens, tokenPrices, _supportedDestinationChains)
-            )
+            ),
+            opts
         );
 
         committee.initializeConfig(_config);
@@ -56,7 +62,8 @@ contract CommitteeUpgradeableTest is BridgeBaseTest {
         // deploy sui bridge
         address _bridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
-            abi.encodeCall(SuiBridge.initialize, (_committee, address(0), address(0)))
+            abi.encodeCall(SuiBridge.initialize, (_committee, address(0), address(0))),
+            opts
         );
 
         bridge = SuiBridge(_bridge);

@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 // import "openzeppelin-foundry-upgrades/Upgrades.sol";
 import {Upgrades} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+import "openzeppelin-foundry-upgrades/Options.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 import "../contracts/BridgeCommittee.sol";
 import "../contracts/BridgeVault.sol";
@@ -79,6 +80,9 @@ contract DeployBridge is Script {
             committeeMemberStake[i] = uint16(deployConfig.committeeMemberStake[i]);
         }
 
+        Options memory opts;
+        opts.unsafeSkipAllChecks = true;
+
         address bridgeCommittee = Upgrades.deployUUPSProxy(
             "BridgeCommittee.sol",
             abi.encodeCall(
@@ -88,7 +92,8 @@ contract DeployBridge is Script {
                     committeeMemberStake,
                     uint16(deployConfig.minCommitteeStakeRequired)
                 )
-            )
+            ),
+            opts
         );
 
         // deploy bridge config =====================================================================
@@ -110,7 +115,8 @@ contract DeployBridge is Script {
                     tokenPrices,
                     supportedChainIDs
                 )
-            )
+            ),
+            opts
         );
 
         // initialize config in the bridge committee
@@ -133,7 +139,8 @@ contract DeployBridge is Script {
             "BridgeLimiter.sol",
             abi.encodeCall(
                 BridgeLimiter.initialize, (bridgeCommittee, supportedChainIDs, chainLimits)
-            )
+            ),
+            opts
         );
 
         uint8[] memory _destinationChains = new uint8[](1);
@@ -143,7 +150,8 @@ contract DeployBridge is Script {
 
         address suiBridge = Upgrades.deployUUPSProxy(
             "SuiBridge.sol",
-            abi.encodeCall(SuiBridge.initialize, (bridgeCommittee, address(vault), limiter))
+            abi.encodeCall(SuiBridge.initialize, (bridgeCommittee, address(vault), limiter)),
+            opts
         );
 
         // transfer vault ownership to bridge
