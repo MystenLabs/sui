@@ -24,18 +24,23 @@ impl ProjectType {
         // make sure we're in suiops
         ensure_in_suiops_repo()?;
         // inquire params from user
-        let project_name = project_name.unwrap_or_else(|| {
-            Text::new("project name:")
-                .prompt()
-                .expect("couldn't get project name")
-        });
+        let project_name = project_name
+            .unwrap_or_else(|| {
+                Text::new("project name:")
+                    .prompt()
+                    .expect("couldn't get project name")
+            })
+            .trim()
+            .to_string();
         // create dir
         let project_subdir = match self {
             Self::App | Self::CronJob => "apps".to_owned(),
             Self::Service => "services".to_owned(),
             Self::Basic => Text::new("project subdir (under sui-operations/pulumi/):")
                 .prompt()
-                .expect("couldn't get subdir"),
+                .expect("couldn't get subdir")
+                .trim()
+                .to_string(),
         };
         let project_dir = get_pulumi_dir()?.join(project_subdir).join(&project_name);
         let mut project_opts = vec![];
@@ -196,6 +201,20 @@ fn run_pulumi_preview(project_dir_str: &str) -> Result<()> {
     Ok(())
 }
 
+fn set_pulumi_env(project_dir: &PathBuf) -> Result<()> {
+    let project_dir_str = project_dir.to_str().expect("project dir to str");
+    let cmd = &format!(
+        "cd {} && pulumi config env add gcp-app-env --yes",
+        project_dir_str
+    );
+    info!(
+        "setting up pulumi environment in {}",
+        project_dir_str.bright_purple()
+    );
+    run_cmd(vec!["bash", "-c", cmd], None)?;
+    Ok(())
+}
+
 fn remove_project_dir(project_dir: &PathBuf) -> Result<()> {
     fs::remove_dir_all(project_dir).context("removing project dir")
 }
@@ -262,6 +281,8 @@ fn create_basic_project(
     })?;
     // run go mod tidy to make sure all dependencies are installed
     run_go_mod_tidy(project_dir_str)?;
+    // set pulumi env
+    set_pulumi_env(project_dir)?;
     // try a pulumi preview to make sure it's good
     run_pulumi_preview(project_dir_str)
 }
@@ -287,9 +308,12 @@ fn create_mysten_k8s_project(
             e
         })?;
     // run go mod tidy to make sure all dependencies are installed
-    run_go_mod_tidy(project_dir_str)
+    run_go_mod_tidy(project_dir_str)?;
     // we don't run preview for templated apps because the user
     // has to give the repo dir (improvements to this coming soon)
+
+    // set pulumi env
+    set_pulumi_env(project_dir)
 }
 
 #[derive(Serialize, Deserialize)]
