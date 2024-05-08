@@ -3979,12 +3979,22 @@ type Validator {
 	The validator's current staking pool object, used to track the amount of stake
 	and to compound staking rewards.
 	"""
-	stakingPool: MoveObject
+	stakingPool: MoveObject @deprecated(reason: "The staking pool is a wrapped object. Access its fields directly on the `Validator` type.")
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
 	"""
 	The validator's current exchange object. The exchange rate is used to determine
 	the amount of SUI tokens that each past SUI staker can withdraw in the future.
 	"""
-	exchangeRates: MoveObject
+	exchangeRates: MoveObject @deprecated(reason: "The exchange object is a wrapped object. Access its dynamic fields through the `exchangeRatesTable` query.")
+	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch
+	number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
+	of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Owner
 	"""
 	Number of exchange rates in the table.
 	"""
