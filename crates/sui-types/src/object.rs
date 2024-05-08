@@ -926,17 +926,9 @@ impl Object {
         Self::immutable_with_id_for_testing(IMMUTABLE_OBJECT_ID.with(|id| *id))
     }
 
-    /// Make a test shared object. Note that this function returns the same object called from the same thread.
+    /// Make a new random test shared object.
     pub fn shared_for_testing() -> Object {
-        thread_local! {
-            static SHARED_OBJECT_ID: ObjectID = ObjectID::random();
-        }
-
-        Object::with_id_shared_for_testing(SHARED_OBJECT_ID.with(|id| *id))
-    }
-
-    /// Make a new test sahred object.
-    pub fn with_id_shared_for_testing(id: ObjectID) -> Object {
+        let id = ObjectID::random();
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),
