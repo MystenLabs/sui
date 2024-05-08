@@ -166,19 +166,6 @@ const VALUE_STARTS: &[Tok] = &[
 
 pub static VALUE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(VALUE_STARTS));
 
-const NAME_ACCESS_CHAIN_ENTRY_STARTS: &[Tok] = &[
-    Tok::Identifier,
-    Tok::RestrictedIdentifier,
-    Tok::Mut,
-    Tok::Match,
-    Tok::For,
-    Tok::Enum,
-    Tok::Type,
-];
-
-pub static NAME_ACCESS_CHAIN_ENTRY_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(NAME_ACCESS_CHAIN_ENTRY_STARTS));
-
-
 //**************************************************************************************************
 // IMPLS
 //**************************************************************************************************
