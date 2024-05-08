@@ -37,7 +37,7 @@ module slot_machine::tests {
         example::create(coin, ts.ctx());
         ts.next_tx(user1);
         let mut game = ts.take_shared<example::Game>();
-        assert!(game.balance() == 100, 1);
+        assert!(game.balance() == 1000, 1);
         assert!(game.epoch() == 0, 1);
 
         // Play 4 turns (everything here is deterministic)
