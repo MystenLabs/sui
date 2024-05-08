@@ -55,21 +55,21 @@ module raffles::tests {
         let coin: Coin<SUI> = ts.take_from_sender();
         let t1 = game.buy_ticket(coin, &clock, ts.ctx());
         assert!(game.participants() == 1, 1);
-        t1.destroy_ticket(); // loser
+        t1.destroy(); // loser
 
         ts.next_tx(user2);
         mint(user2, 10, &mut ts);
         let coin: Coin<SUI> = ts.take_from_sender();
         let t2 = game.buy_ticket(coin, &clock, ts.ctx());
         assert!(game.participants() == 2, 1);
-        t2.destroy_ticket(); // loser
+        t2.destroy(); // loser
 
         ts.next_tx(user3);
         mint(user3, 10, &mut ts);
         let coin: Coin<SUI> = ts.take_from_sender();
         let t3 = game.buy_ticket(coin, &clock, ts.ctx());
         assert!(game.participants() == 3, 1);
-        t3.destroy_ticket(); // loser
+        t3.destroy(); // loser
 
         ts.next_tx(user4);
         mint(user4, 10, &mut ts);

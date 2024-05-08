@@ -94,6 +94,7 @@ module raffles::example1 {
         reward
     }
 
+    public use fun destroy_ticket as Ticket.destroy;
     public fun destroy_ticket(ticket: Ticket) {
         let Ticket { id, game_id: _, participant_index: _ } = ticket;
         object::delete(id);
