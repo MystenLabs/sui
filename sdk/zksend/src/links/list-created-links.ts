@@ -77,6 +77,7 @@ export async function listCreatedLinks({
 	// Link options:
 	host?: string;
 	path?: string;
+	claimApi?: string;
 	client?: SuiClient;
 	fetch?: typeof fetch;
 }) {
