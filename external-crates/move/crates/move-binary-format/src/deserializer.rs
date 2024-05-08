@@ -1778,7 +1778,8 @@ impl<'a, 'b> VersionedBinary<'a, 'b> {
                     .with_message("Bad binary header".to_string()));
             }
         };
-        if version == 0 || version > u32::min(binary_config.max_binary_format_version, VERSION_MAX)
+        if version < binary_config.min_binary_format_version
+            || version > u32::min(binary_config.max_binary_format_version, VERSION_MAX)
         {
             return Err(PartialVMError::new(StatusCode::UNKNOWN_VERSION));
         }
