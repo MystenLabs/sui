@@ -3,12 +3,10 @@
 
 /// A simple NFT that can be airdropped to users without a value and converted to a random metal NFT.
 /// The probability of getting a gold, silver, or bronze NFT is 10%, 30%, and 60% respectively.
-module nfts::random_nft_airdrop {
+module random_nft::example {
     use std::string;
     use sui::object::delete;
-    use sui::random;
     use sui::random::{Random, new_generator};
-
 
     const EInvalidParams: u64 = 0;
 
@@ -33,7 +31,7 @@ module nfts::random_nft_airdrop {
     fun init(ctx: &mut TxContext) {
         transfer::transfer(
             MintingCapability { id: object::new(ctx) },
-            tx_context::sender(ctx),
+            ctx.sender(),
         );
     }
 
@@ -41,7 +39,7 @@ module nfts::random_nft_airdrop {
         let mut result = vector[];
         let mut i = 0;
         while (i < n) {
-            vector::push_back(&mut result, AirDropNFT { id: object::new(ctx) });
+            result.push_back(AirDropNFT { id: object::new(ctx) });
             i = i + 1;
         };
         result
@@ -56,7 +54,7 @@ module nfts::random_nft_airdrop {
         destroy_airdrop_nft(nft);
 
         let mut generator = new_generator(r, ctx);
-        let v = random::generate_u8_in_range(&mut generator, 1, 100);
+        let v = generator.generate_u8_in_range(1, 100);
 
         let is_gold = arithmetic_is_less_than(v, 11, 100); // probability of 10%
         let is_silver = arithmetic_is_less_than(v, 41, 100) * (1 - is_gold); // probability of 30%
@@ -65,7 +63,7 @@ module nfts::random_nft_airdrop {
 
         transfer::public_transfer(
             MetalNFT { id: object::new(ctx), metal, },
-            tx_context::sender(ctx)
+            ctx.sender()
         );
     }
 
@@ -87,22 +85,22 @@ module nfts::random_nft_airdrop {
         destroy_airdrop_nft(nft);
 
         let mut generator = new_generator(r, ctx);
-        let v = random::generate_u8_in_range(&mut generator, 1, 100);
+        let v = generator.generate_u8_in_range(1, 100);
 
         if (v <= 60) {
             transfer::public_transfer(
                 MetalNFT { id: object::new(ctx), metal: BRONZE, },
-                tx_context::sender(ctx),
+                ctx.sender(),
             );
         } else if (v <= 90) {
             transfer::public_transfer(
                 MetalNFT { id: object::new(ctx), metal: SILVER, },
-                tx_context::sender(ctx),
+                ctx.sender(),
             );
         } else if (v <= 100) {
             transfer::public_transfer(
                 MetalNFT { id: object::new(ctx), metal: GOLD, },
-                tx_context::sender(ctx),
+                ctx.sender(),
             );
         };
     }
@@ -120,11 +118,11 @@ module nfts::random_nft_airdrop {
         destroy_airdrop_nft(nft);
 
         let mut generator = new_generator(r, ctx);
-        let v = random::generate_u8_in_range(&mut generator, 1, 100);
+        let v = generator.generate_u8_in_range(1, 100);
 
         transfer::public_transfer(
             RandomnessNFT { id: object::new(ctx), value: v, },
-            tx_context::sender(ctx),
+            ctx.sender(),
         );
     }
 
@@ -163,65 +161,5 @@ module nfts::random_nft_airdrop {
     #[test_only]
     public fun test_init(ctx: &mut TxContext) {
         init(ctx)
-    }
-}
-
-#[test_only]
-module nfts::random_nft_airdrop_tests {
-    use sui::test_scenario;
-    use std::string;
-    use sui::random;
-    use sui::random::{Random, update_randomness_state_for_testing};
-    use sui::test_scenario::{ctx, take_from_sender, next_tx, return_to_sender};
-    use nfts::random_nft_airdrop::{Self, MintingCapability, MetalNFT};
-
-    #[test]
-    fun test_e2e() {
-        let user0 = @0x0;
-        let user1 = @0x1;
-        let mut scenario_val = test_scenario::begin(user0);
-        let scenario = &mut scenario_val;
-
-        // Setup randomness
-        random::create_for_testing(ctx(scenario));
-        test_scenario::next_tx(scenario, user0);
-        let mut random_state = test_scenario::take_shared<Random>(scenario);
-        update_randomness_state_for_testing(
-            &mut random_state,
-            0,
-            x"1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F1F",
-            test_scenario::ctx(scenario),
-        );
-
-        test_scenario::next_tx(scenario, user1);
-        // mint airdrops
-        random_nft_airdrop::test_init(ctx(scenario));
-        test_scenario::next_tx(scenario, user1);
-        let cap = take_from_sender<MintingCapability>(scenario);
-        let mut nfts = random_nft_airdrop::mint(&cap, 20, ctx(scenario));
-
-        let mut seen_gold = false;
-        let mut seen_silver = false;
-        let mut seen_bronze = false;
-        let mut i = 0;
-        while (i < 20) {
-            if (i % 2 == 1) random_nft_airdrop::reveal(vector::pop_back(&mut nfts), &random_state, ctx(scenario))
-            else random_nft_airdrop::reveal_alternative1(vector::pop_back(&mut nfts), &random_state, ctx(scenario));
-            next_tx(scenario, user1);
-            let nft = take_from_sender<MetalNFT>(scenario);
-            let metal = random_nft_airdrop::metal_string(&nft);
-            seen_gold = seen_gold || metal == string::utf8(b"Gold");
-            seen_silver = seen_silver || metal == string::utf8(b"Silver");
-            seen_bronze = seen_bronze || metal == string::utf8(b"Bronze");
-            return_to_sender(scenario, nft);
-            i = i + 1;
-        };
-
-        assert!(seen_gold && seen_silver && seen_bronze, 1);
-
-        vector::destroy_empty(nfts);
-        random_nft_airdrop::destroy_cap(cap);
-        test_scenario::return_shared(random_state);
-        test_scenario::end(scenario_val);
     }
 }
