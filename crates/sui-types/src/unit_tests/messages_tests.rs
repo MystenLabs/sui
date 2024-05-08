@@ -59,7 +59,7 @@ fn test_signed_values() {
         ),
         vec![&sender_sec],
     )
-    .try_into_verified(committee.epoch(), &Default::default())
+    .try_into_verified_testing(committee.epoch(), &Default::default())
     .unwrap();
 
     let bad_transaction = VerifiedTransaction::new_unchecked(Transaction::from_data_and_signer(
@@ -80,7 +80,7 @@ fn test_signed_values() {
         &sec1,
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
-    assert!(v.try_into_verified(&committee, &Default::default()).is_ok());
+    assert!(v.try_into_verified_for_testing(&committee, &Default::default()).is_ok());
 
     let v = SignedTransaction::new(
         committee.epoch(),
@@ -89,7 +89,7 @@ fn test_signed_values() {
         AuthorityPublicKeyBytes::from(sec2.public()),
     );
     assert!(v
-        .try_into_verified(&committee, &Default::default())
+        .try_into_verified_for_testing(&committee, &Default::default())
         .is_err());
 
     let v = SignedTransaction::new(
@@ -99,7 +99,7 @@ fn test_signed_values() {
         AuthorityPublicKeyBytes::from(sec3.public()),
     );
     assert!(v
-        .try_into_verified(&committee, &Default::default())
+        .try_into_verified_for_testing(&committee, &Default::default())
         .is_err());
 
     let v = SignedTransaction::new(
@@ -109,7 +109,7 @@ fn test_signed_values() {
         AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(v
-        .try_into_verified(&committee, &Default::default())
+        .try_into_verified_for_testing(&committee, &Default::default())
         .is_err());
 }
 
@@ -175,7 +175,11 @@ fn test_certificates() {
     let c =
         CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee).unwrap();
     assert!(c
-        .verify_signatures_authenticated(&committee, &Default::default(), None)
+        .verify_signatures_authenticated(
+            &committee,
+            &Default::default(),
+            Arc::new(VerifiedDigestCache::new_for_testing())
+        )
         .is_ok());
 
     let sigs = vec![v1.auth_sig().clone(), v3.auth_sig().clone()];
@@ -919,7 +923,7 @@ fn verify_sender_signature_correctly_with_flag() {
     tx_data_3.gas_data_mut().owner = tx_data_3.sender();
 
     let transaction = Transaction::from_data_and_signer(tx_data, vec![&sender_kp])
-        .try_into_verified(committee.epoch(), &Default::default())
+        .try_into_verified_for_testing(committee.epoch(), &Default::default())
         .unwrap();
 
     // create tx also signed by authority
@@ -948,7 +952,7 @@ fn verify_sender_signature_correctly_with_flag() {
         .is_ok());
 
     let transaction_1 = Transaction::from_data_and_signer(tx_data_2, vec![&sender_kp_2])
-        .try_into_verified(committee.epoch(), &Default::default())
+        .try_into_verified_for_testing(committee.epoch(), &Default::default())
         .unwrap();
 
     let signed_tx_1 = SignedTransaction::new(
@@ -991,10 +995,10 @@ fn verify_sender_signature_correctly_with_flag() {
 
     // r1 signature tx verifies ok
     assert!(tx_3
-        .try_into_verified(committee.epoch(), &Default::default())
+        .try_into_verified_for_testing(committee.epoch(), &Default::default())
         .is_ok());
     let verified_tx_3 = tx_31
-        .try_into_verified(committee.epoch(), &Default::default())
+        .try_into_verified_for_testing(committee.epoch(), &Default::default())
         .unwrap();
     // r1 signature verified and accepted by authority
     let signed_tx_3 = SignedTransaction::new(
@@ -1281,7 +1285,7 @@ fn test_certificate_digest() {
             ),
             vec![&sender_sec],
         )
-        .try_into_verified(committee.epoch(), &Default::default())
+        .try_into_verified_for_testing(committee.epoch(), &Default::default())
         .unwrap()
     };
 
@@ -1306,8 +1310,12 @@ fn test_certificate_digest() {
 
         let cert = CertifiedTransaction::new(transaction.clone().into_message(), sigs, &committee)
             .unwrap();
-        cert.verify_signatures_authenticated(&committee, &Default::default(), None)
-            .unwrap();
+        cert.verify_signatures_authenticated(
+            &committee,
+            &Default::default(),
+            Arc::new(VerifiedDigestCache::new_for_testing()),
+        )
+        .unwrap();
         cert
     };
 

@@ -110,7 +110,7 @@ impl AuthenticatorTrait for MultiSigLegacy {
         value: &IntentMessage<T>,
         author: SuiAddress,
         aux_verify_data: &VerifyParams,
-        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> Result<(), SuiError>
     where
         T: Serialize,

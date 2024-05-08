@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use crate::config::ZkLoginConfig;
 use crate::error::Error;
 use crate::server::watermark_task::Watermark;
@@ -19,6 +21,7 @@ use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::{DynamicFieldType, Field};
 use sui_types::signature::GenericSignature;
 use sui_types::signature::VerifyParams;
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::TransactionData;
 use sui_types::{TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS};
 use tracing::warn;
@@ -130,8 +133,13 @@ pub(crate) async fn verify_zklogin_signature(
                 return Err(Error::Client("Tx sender mismatch author".to_string()));
             }
             let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
-            match sig.verify_authenticator(&intent_msg, tx_sender, curr_epoch, &verify_params, None)
-            {
+            match sig.verify_authenticator(
+                &intent_msg,
+                tx_sender,
+                curr_epoch,
+                &verify_params,
+                Arc::new(VerifiedDigestCache::new_for_testing()),
+            ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
                     errors: vec![],
@@ -159,7 +167,7 @@ pub(crate) async fn verify_zklogin_signature(
                 author.into(),
                 curr_epoch,
                 &verify_params,
-                None,
+                Arc::new(VerifiedDigestCache::new_for_testing()),
             ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,

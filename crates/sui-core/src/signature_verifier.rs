@@ -302,7 +302,7 @@ impl SignatureVerifier {
         let zklogin_inputs_cache = self.zklogin_inputs_cache.clone();
         Handle::current()
             .spawn_blocking(move || {
-                Self::process_queue_sync(committee, metrics, buffer, Some(zklogin_inputs_cache))
+                Self::process_queue_sync(committee, metrics, buffer, zklogin_inputs_cache)
             })
             .await
             .expect("Spawn blocking should not fail");
@@ -312,7 +312,7 @@ impl SignatureVerifier {
         committee: Arc<Committee>,
         metrics: Arc<SignatureVerifierMetrics>,
         buffer: CertBuffer,
-        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) {
         let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
 
@@ -378,7 +378,7 @@ impl SignatureVerifier {
                     signed_tx,
                     self.committee.epoch(),
                     &verify_params,
-                    Some(self.zklogin_inputs_cache.clone()),
+                    self.zklogin_inputs_cache.clone(),
                 )
             },
             || Ok(()),
@@ -519,7 +519,7 @@ pub fn batch_verify_all_certificates_and_checkpoints(
 pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[CertifiedTransaction],
-    zk_login_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
+    zk_login_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
     let verify_params = VerifyParams::default();

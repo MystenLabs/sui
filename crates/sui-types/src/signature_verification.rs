@@ -93,6 +93,15 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
         let mut inner = self.inner.write();
         inner.clear();
     }
+
+    // Initialize an empty cache when the cache is not needed (in testing scenarios, graphql and rosetta initialization). 
+    pub fn new_for_testing() -> Self {
+        Self::new(
+            IntCounter::new("test_cache_hits", "test cache hits").unwrap(),
+            IntCounter::new("test_cache_misses", "test cache misses").unwrap(),
+            IntCounter::new("test_cache_evictions", "test cache evictions").unwrap(),
+        )
+    }
 }
 
 /// Does crypto validation for a transaction which may be user-provided, or may be from a checkpoint.
@@ -100,7 +109,7 @@ pub fn verify_sender_signed_data_message_signatures(
     txn: &SenderSignedData,
     current_epoch: EpochId,
     verify_params: &VerifyParams,
-    zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
+    zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 ) -> SuiResult {
     let intent_message = txn.intent_message();
     assert_eq!(intent_message.intent, Intent::sui_transaction());

@@ -4613,7 +4613,7 @@ async fn make_test_transaction(
             CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
         {
             return cert
-                .try_into_verified(&committee, &Default::default())
+                .try_into_verified_for_testing(&committee, &Default::default())
                 .unwrap();
         }
     }

@@ -2627,8 +2627,7 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 impl Transaction {
-    // this is used in simulacrum and unit test only.
-    pub fn verify_signature(
+    pub fn verify_signature_for_testing(
         &self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
@@ -2637,17 +2636,16 @@ impl Transaction {
             self.data(),
             current_epoch,
             verify_params,
-            None,
+            Arc::new(VerifiedDigestCache::new_for_testing()),
         )
     }
 
-    // this is used in simulacrum and unit test only.
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedTransaction> {
-        self.verify_signature(current_epoch, verify_params)?;
+        self.verify_signature_for_testing(current_epoch, verify_params)?;
         Ok(VerifiedTransaction::new_from_verified(self))
     }
 }
@@ -2663,7 +2661,7 @@ impl SignedTransaction {
             self.data(),
             committee.epoch(),
             verify_params,
-            None,
+            Arc::new(VerifiedDigestCache::new_for_testing()),
         )?;
 
         self.auth_sig().verify_secure(
@@ -2704,7 +2702,7 @@ impl CertifiedTransaction {
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
-        zklogin_inputs_cache: Option<Arc<VerifiedDigestCache<ZKLoginInputsDigest>>>,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),
@@ -2719,13 +2717,16 @@ impl CertifiedTransaction {
         )
     }
 
-    // used for testing only.
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(committee, verify_params, None)?;
+        self.verify_signatures_authenticated(
+            committee,
+            verify_params,
+            Arc::new(VerifiedDigestCache::new_for_testing()),
+        )?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }
 
