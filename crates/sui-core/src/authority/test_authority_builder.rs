@@ -303,12 +303,15 @@ impl<'a> TestAuthorityBuilder<'a> {
                 randomness::Handle::new_stub(),
                 config.protocol_key_pair(),
             )
-            .await
-            .unwrap();
-            epoch_store
-                .set_randomness_manager(randomness_manager)
-                .await
-                .unwrap();
+            .await;
+            if let Some(randomness_manager) = randomness_manager {
+                // Randomness might fail if test configuration does not permit DKG init.
+                // In that case, skip setting it up.
+                epoch_store
+                    .set_randomness_manager(randomness_manager)
+                    .await
+                    .unwrap();
+            }
         }
 
         // For any type of local testing that does not actually spawn a node, the checkpoint executor
