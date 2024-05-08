@@ -50,10 +50,6 @@
 			"import": "./dist/esm/graphql/index.js",
 			"require": "./dist/cjs/graphql/index.js"
 		},
-		"./graphql/schemas/2024-01": {
-			"import": "./dist/esm/graphql/schemas/2024-01/index.js",
-			"require": "./dist/cjs/graphql/schemas/2024-01/index.js"
-		},
 		"./keypairs/ed25519": {
 			"import": "./dist/esm/keypairs/ed25519/index.js",
 			"require": "./dist/cjs/keypairs/ed25519/index.js"
@@ -85,6 +81,14 @@
 		"./zklogin": {
 			"import": "./dist/esm/zklogin/index.js",
 			"require": "./dist/cjs/zklogin/index.js"
+		},
+		"./graphql/schemas/2024.1": {
+			"import": "./dist/esm/graphql/schemas/2024.1/index.js",
+			"require": "./dist/cjs/graphql/schemas/2024.1/index.js"
+		},
+		"./graphql/schemas/2024.4": {
+			"import": "./dist/esm/graphql/schemas/2024.4/index.js",
+			"require": "./dist/cjs/graphql/schemas/2024.4/index.js"
 		}
 	},
 	"scripts": {
@@ -107,7 +111,9 @@
 		"eslint:check": "eslint --max-warnings=0 .",
 		"eslint:fix": "pnpm run eslint:check --fix",
 		"lint": "pnpm run eslint:check && pnpm run prettier:check",
-		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix"
+		"lint:fix": "pnpm run eslint:fix && pnpm run prettier:fix",
+		"update-schemas": "pnpm tsx scripts/update-graphql-schemas.ts",
+		"generate-schema": "gql.tada generate-output"
 	},
 	"bugs": {
 		"url": "https://github.com/MystenLabs/sui/issues/new"
@@ -128,6 +134,7 @@
 		"@types/tmp": "^0.2.3",
 		"@types/ws": "^8.5.9",
 		"cross-env": "^7.0.3",
+		"gql.tada": "^1.4.1",
 		"graphql-config": "^5.0.3",
 		"msw": "^1.2.2",
 		"tmp": "^0.2.1",
@@ -147,7 +154,6 @@
 		"@scure/bip39": "^1.2.1",
 		"@suchipi/femver": "^1.0.0",
 		"bech32": "^2.0.0",
-		"gql.tada": "^1.4.1",
 		"graphql": "^16.8.1",
 		"superstruct": "^1.0.3",
 		"tweetnacl": "^1.0.3"

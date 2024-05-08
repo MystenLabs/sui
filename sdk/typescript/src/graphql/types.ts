@@ -1,10 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { initGraphQLTada } from 'gql.tada';
-
-import type { introspection } from '../../generated/2024-01/tada-env.js';
-
 export type MoveData =
 	| { Address: string }
 	| { UID: string }
@@ -77,20 +73,14 @@ export type OpenMoveTypeSignatureBody =
 	  }
 	| { typeParameter: number };
 
-export const graphql = initGraphQLTada<{
-	introspection: introspection;
-	scalars: {
-		BigInt: string;
-		Base64: string;
-		DateTime: string;
-		JSON: unknown;
-		MoveData: MoveData;
-		MoveTypeLayout: MoveTypeLayout;
-		MoveTypeSignature: MoveTypeSignature;
-		OpenMoveTypeSignature: OpenMoveTypeSignature;
-		SuiAddress: string;
-	};
-}>();
-
-export type { FragmentOf, ResultOf, VariablesOf } from 'gql.tada';
-export { readFragment } from 'gql.tada';
+export interface CustomScalars {
+	BigInt: string;
+	Base64: string;
+	DateTime: string;
+	JSON: unknown;
+	MoveData: MoveData;
+	MoveTypeLayout: MoveTypeLayout;
+	MoveTypeSignature: MoveTypeSignature;
+	OpenMoveTypeSignature: OpenMoveTypeSignature;
+	SuiAddress: string;
+}

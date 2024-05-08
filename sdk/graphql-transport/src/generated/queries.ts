@@ -3598,15 +3598,6 @@ export type SharedInput = {
   mutable: Scalars['Boolean']['output'];
 };
 
-/** The transaction accpeted a shared object as input, but its execution was cancelled. */
-export type SharedObjectCancelled = {
-  __typename?: 'SharedObjectCancelled';
-  /** ID of the shared object. */
-  address: Scalars['SuiAddress']['output'];
-  /** The assigned shared object version. It is a special version indicating transaction cancellation reason. */
-  version: Scalars['Int']['output'];
-};
-
 /**
  * The transaction accepted a shared object as input, but it was deleted before the transaction
  * executed.
@@ -4248,11 +4239,7 @@ export type TransactionBlockEffects = {
   dependencies: DependencyConnection;
   /** The epoch this transaction was finalized in. */
   epoch?: Maybe<Epoch>;
-  /**
-   * The reason for a transaction failure, if it did fail.
-   * If the error is a Move abort, the error message will be resolved to a human-readable form if
-   * possible, otherwise it will fall back to displaying the abort code and location.
-   */
+  /** The reason for a transaction failure, if it did fail. */
   errors?: Maybe<Scalars['String']['output']>;
   /** Events emitted by this transaction block. */
   events: EventConnection;
@@ -4413,7 +4400,7 @@ export type TypeOrigin = {
  * the shared object as input, consensus must schedule it and pick the version that is actually
  * used.
  */
-export type UnchangedSharedObject = SharedObjectCancelled | SharedObjectDelete | SharedObjectRead;
+export type UnchangedSharedObject = SharedObjectDelete | SharedObjectRead;
 
 export type UnchangedSharedObjectConnection = {
   __typename?: 'UnchangedSharedObjectConnection';
