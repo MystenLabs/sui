@@ -5,14 +5,11 @@
 
 //# publish
 module Test::M1 {
-   use sui::tx_context::TxContext;
    fun init(_ctx: &mut TxContext) { }
 }
 
 module Test::M2 {
-    use sui::tx_context::TxContext;
     fun init(_ctx: &mut TxContext) { }
 }
 
 //# view-object 1,0
- 

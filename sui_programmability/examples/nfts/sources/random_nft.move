@@ -5,12 +5,10 @@
 /// The probability of getting a gold, silver, or bronze NFT is 10%, 30%, and 60% respectively.
 module nfts::random_nft_airdrop {
     use std::string;
-    use std::vector;
-    use sui::object::{Self, UID, delete};
+    use sui::object::delete;
     use sui::random;
     use sui::random::{Random, new_generator};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+
 
     const EInvalidParams: u64 = 0;
 
@@ -18,16 +16,16 @@ module nfts::random_nft_airdrop {
     const SILVER: u8 = 2;
     const BRONZE: u8 = 3;
 
-    struct AirDropNFT has key, store {
+    public struct AirDropNFT has key, store {
         id: UID,
     }
 
-    struct MetalNFT has key, store {
+    public struct MetalNFT has key, store {
         id: UID,
         metal: u8,
     }
 
-    struct MintingCapability has key {
+    public struct MintingCapability has key {
         id: UID,
     }
 
@@ -40,8 +38,8 @@ module nfts::random_nft_airdrop {
     }
 
     public fun mint(_cap: &MintingCapability, n: u16, ctx: &mut TxContext): vector<AirDropNFT> {
-        let result = vector[];
-        let i = 0;
+        let mut result = vector[];
+        let mut i = 0;
         while (i < n) {
             vector::push_back(&mut result, AirDropNFT { id: object::new(ctx) });
             i = i + 1;
@@ -57,7 +55,7 @@ module nfts::random_nft_airdrop {
     entry fun reveal(nft: AirDropNFT, r: &Random, ctx: &mut TxContext) {
         destroy_airdrop_nft(nft);
 
-        let generator = new_generator(r, ctx);
+        let mut generator = new_generator(r, ctx);
         let v = random::generate_u8_in_range(&mut generator, 1, 100);
 
         let is_gold = arithmetic_is_less_than(v, 11, 100); // probability of 10%
@@ -88,7 +86,7 @@ module nfts::random_nft_airdrop {
     entry fun reveal_alternative1(nft: AirDropNFT, r: &Random, ctx: &mut TxContext) {
         destroy_airdrop_nft(nft);
 
-        let generator = new_generator(r, ctx);
+        let mut generator = new_generator(r, ctx);
         let v = random::generate_u8_in_range(&mut generator, 1, 100);
 
         if (v <= 60) {
@@ -113,7 +111,7 @@ module nfts::random_nft_airdrop {
     /// An alternative implementation of reveal that uses two steps to determine the metal of the NFT.
     /// reveal_alternative2_step1 retrieves the random value, and reveal_alternative2_step2 determines the metal.
 
-    struct RandomnessNFT has key, store {
+    public struct RandomnessNFT has key, store {
         id: UID,
         value: u8,
     }
@@ -121,7 +119,7 @@ module nfts::random_nft_airdrop {
     entry fun reveal_alternative2_step1(nft: AirDropNFT, r: &Random, ctx: &mut TxContext) {
         destroy_airdrop_nft(nft);
 
-        let generator = new_generator(r, ctx);
+        let mut generator = new_generator(r, ctx);
         let v = random::generate_u8_in_range(&mut generator, 1, 100);
 
         transfer::public_transfer(
@@ -172,7 +170,6 @@ module nfts::random_nft_airdrop {
 module nfts::random_nft_airdrop_tests {
     use sui::test_scenario;
     use std::string;
-    use std::vector;
     use sui::random;
     use sui::random::{Random, update_randomness_state_for_testing};
     use sui::test_scenario::{ctx, take_from_sender, next_tx, return_to_sender};
@@ -182,13 +179,13 @@ module nfts::random_nft_airdrop_tests {
     fun test_e2e() {
         let user0 = @0x0;
         let user1 = @0x1;
-        let scenario_val = test_scenario::begin(user0);
+        let mut scenario_val = test_scenario::begin(user0);
         let scenario = &mut scenario_val;
 
         // Setup randomness
         random::create_for_testing(ctx(scenario));
         test_scenario::next_tx(scenario, user0);
-        let random_state = test_scenario::take_shared<Random>(scenario);
+        let mut random_state = test_scenario::take_shared<Random>(scenario);
         update_randomness_state_for_testing(
             &mut random_state,
             0,
@@ -201,12 +198,12 @@ module nfts::random_nft_airdrop_tests {
         random_nft_airdrop::test_init(ctx(scenario));
         test_scenario::next_tx(scenario, user1);
         let cap = take_from_sender<MintingCapability>(scenario);
-        let nfts = random_nft_airdrop::mint(&cap, 20, ctx(scenario));
+        let mut nfts = random_nft_airdrop::mint(&cap, 20, ctx(scenario));
 
-        let seen_gold = false;
-        let seen_silver = false;
-        let seen_bronze = false;
-        let i = 0;
+        let mut seen_gold = false;
+        let mut seen_silver = false;
+        let mut seen_bronze = false;
+        let mut i = 0;
         while (i < 20) {
             if (i % 2 == 1) random_nft_airdrop::reveal(vector::pop_back(&mut nfts), &random_state, ctx(scenario))
             else random_nft_airdrop::reveal_alternative1(vector::pop_back(&mut nfts), &random_state, ctx(scenario));

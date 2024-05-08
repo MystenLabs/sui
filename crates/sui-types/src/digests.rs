@@ -160,7 +160,7 @@ pub struct ChainIdentifier(CheckpointDigest);
 pub static MAINNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 pub static TESTNET_CHAIN_IDENTIFIER: OnceCell<ChainIdentifier> = OnceCell::new();
 
-/// For testing purposes or bootstrapping regenesis chaing configuration, you can set
+/// For testing purposes or bootstrapping regenesis chain configuration, you can set
 /// this environment variable to force protocol config to use a specific Chain.
 const SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE_ENV_VAR_NAME: &str = "SUI_PROTOCOL_CONFIG_CHAIN_OVERRIDE";
 
@@ -342,7 +342,11 @@ impl std::str::FromStr for CheckpointDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(CheckpointDigest::new(result))
     }
 }
@@ -423,7 +427,11 @@ impl std::str::FromStr for CheckpointContentsDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(CheckpointContentsDigest::new(result))
     }
 }
@@ -593,7 +601,11 @@ impl std::str::FromStr for TransactionDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(TransactionDigest::new(result))
     }
 }
@@ -732,7 +744,11 @@ impl std::str::FromStr for TransactionEventsDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(Self::new(result))
     }
 }
@@ -786,7 +802,11 @@ impl std::str::FromStr for EffectsAuxDataDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(Self::new(result))
     }
 }
@@ -910,7 +930,11 @@ impl std::str::FromStr for ObjectDigest {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut result = [0; 32];
-        result.copy_from_slice(&Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?);
+        let buffer = Base58::decode(s).map_err(|e| anyhow::anyhow!(e))?;
+        if buffer.len() != 32 {
+            return Err(anyhow::anyhow!("Invalid digest length. Expected 32 bytes"));
+        }
+        result.copy_from_slice(&buffer);
         Ok(ObjectDigest::new(result))
     }
 }

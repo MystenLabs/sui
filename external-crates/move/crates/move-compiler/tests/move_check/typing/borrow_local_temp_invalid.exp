@@ -30,8 +30,8 @@ error[E04004]: expected a single non-reference type
   │
 9 │         &(&0);
   │         ^^^^^
-  │         ││
-  │         │Expected a single non-reference type, but found: '&u64'
+  │         │ │
+  │         │ Expected a single non-reference type, but found: '&u64'
   │         Invalid borrow
 
 error[E04004]: expected a single non-reference type
@@ -39,8 +39,8 @@ error[E04004]: expected a single non-reference type
    │
 10 │         &(&mut 1);
    │         ^^^^^^^^^
-   │         ││
-   │         │Expected a single non-reference type, but found: '&mut u64'
+   │         │ │
+   │         │ Expected a single non-reference type, but found: '&mut u64'
    │         Invalid borrow
 
 error[E04004]: expected a single non-reference type

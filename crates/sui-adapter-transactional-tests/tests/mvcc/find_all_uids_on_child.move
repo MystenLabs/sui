@@ -8,10 +8,6 @@
 //# publish
 
 module test::m {
-    use std::option::{Self, Option};
-    use std::vector;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
     use sui::dynamic_field as field;
 
     public struct Parent has key, store {

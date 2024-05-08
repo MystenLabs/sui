@@ -19,7 +19,7 @@ mod test {
         util::get_ed25519_keypair_from_keystore,
         LocalValidatorAggregatorProxy, ValidatorProxy,
     };
-    use sui_config::genesis::Genesis;
+    use sui_config::node::AuthorityOverloadConfig;
     use sui_config::{AUTHORITIES_DB_NAME, SUI_KEYSTORE_FILENAME};
     use sui_core::authority::authority_store_tables::AuthorityPerpetualTables;
     use sui_core::authority::framework_injection;
@@ -34,11 +34,11 @@ mod test {
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
-    use sui_types::base_types::{ObjectRef, SuiAddress};
+    use sui_surfer::default_surf_strategy::DefaultSurfStrategy;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_cluster::{TestCluster, TestClusterBuilder};
-    use tracing::{error, info};
+    use tracing::{error, info, trace};
     use typed_store::traits::Map;
 
     struct DeadValidator {
@@ -76,7 +76,7 @@ mod test {
     async fn test_simulated_load_with_reconfig() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(4, 1000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        test_simulated_load(test_cluster, 60).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -88,26 +88,26 @@ mod test {
         //register_fail_point_if("correlated-crash-process-certificate", || true);
 
         let test_cluster = build_test_cluster(4, 10000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        test_simulated_load(test_cluster, 60).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_basic() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
         let test_cluster = build_test_cluster(7, 0).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 15).await;
+        test_simulated_load(test_cluster, 15).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_restarts() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 0).await);
+        let test_cluster = build_test_cluster(4, 0).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(test_cluster, 120).await;
     }
 
     #[ignore("Disabled due to flakiness - re-enable when failure is fixed")]
@@ -116,13 +116,13 @@ mod test {
         // TODO added to invalidate a failing test seed in CI. Remove me
         tokio::time::sleep(Duration::from_secs(1)).await;
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = Arc::new(build_test_cluster(4, 1000).await);
+        let test_cluster = build_test_cluster(4, 1000).await;
         let node_restarter = test_cluster
             .random_node_restarter()
             .with_kill_interval_secs(5, 15)
             .with_restart_delay_secs(1, 10);
         node_restarter.run();
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(test_cluster, 120).await;
     }
 
     /// Get a list of nodes that we don't want to kill in the crash recovery tests.
@@ -148,9 +148,11 @@ mod test {
     fn handle_failpoint(
         dead_validator: Arc<Mutex<Option<DeadValidator>>>,
         keep_alive_nodes: HashSet<sui_simulator::task::NodeId>,
+        grace_period: Arc<Mutex<Option<Instant>>>,
         probability: f64,
     ) {
         let mut dead_validator = dead_validator.lock().unwrap();
+        let mut grace_period = grace_period.lock().unwrap();
         let cur_node = sui_simulator::current_simnode_id();
 
         if keep_alive_nodes.contains(&cur_node) {
@@ -167,16 +169,36 @@ mod test {
         // otherwise, possibly fail the current node
         let mut rng = thread_rng();
         if rng.gen_range(0.0..1.0) < probability {
-            error!("Matched probability threshold for failpoint. Failing...");
+            // clear grace period if expired
+            if let Some(t) = *grace_period {
+                if t < Instant::now() {
+                    *grace_period = None;
+                }
+            }
+
+            // check if any node is in grace period
+            if grace_period.is_some() {
+                trace!(?cur_node, "grace period in effect, not failing node");
+                return;
+            }
+
             let restart_after = Duration::from_millis(rng.gen_range(10000..20000));
+            let dead_until = Instant::now() + restart_after;
+
+            // Prevent the same node from being restarted again rapidly.
+            let alive_until = dead_until + Duration::from_millis(rng.gen_range(5000..30000));
+            *grace_period = Some(alive_until);
+
+            error!(?cur_node, ?dead_until, ?alive_until, "killing node");
 
             *dead_validator = Some(DeadValidator {
                 node_id: cur_node,
-                dead_until: Instant::now() + restart_after,
+                dead_until,
             });
 
             // must manually release lock before calling kill_current_node, which panics
             // and would poison the lock.
+            drop(grace_period);
             drop(dead_validator);
 
             sui_simulator::task::kill_current_node(Some(restart_after));
@@ -223,7 +245,7 @@ mod test {
             handle_failpoint_prune_and_compact(node_state.clone(), 0.5)
         });
 
-        test_simulated_load(TestInitData::new(&test_cluster).await, 60).await;
+        test_simulated_load(test_cluster, 60).await;
         // The fail point holds a reference to `node_state`, which we need to release before the test ends.
         clear_fail_point("prune-and-compact");
     }
@@ -231,13 +253,21 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
-        let test_cluster = build_test_cluster(4, 1000).await;
+
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(4, 1000)
+                .with_num_unpruned_validators(4)
+                .build()
+                .await,
+        );
 
         let dead_validator_orig: Arc<Mutex<Option<DeadValidator>>> = Default::default();
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
                 "batch-write-before",
@@ -250,40 +280,77 @@ mod test {
                 "highest-executed-checkpoint",
             ],
             move || {
-                handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.02);
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
+                    0.02,
+                );
             },
         );
 
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_point_async("crash", move || {
             let dead_validator = dead_validator.clone();
             let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
+            let grace_period_clone = grace_period_clone.clone();
             async move {
-                handle_failpoint(dead_validator.clone(), keep_alive_nodes_clone.clone(), 0.01);
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
+                    0.01,
+                );
             }
         });
 
-        // Narwhal fail points.
+        // Narwhal & Consensus 2.0 fail points.
         let dead_validator = dead_validator_orig.clone();
         let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
         register_fail_points(
             &[
                 "narwhal-rpc-response",
                 "narwhal-store-before-write",
                 "narwhal-store-after-write",
+                "consensus-store-before-write",
+                "consensus-store-after-write",
+                "consensus-after-propose",
             ],
             move || {
                 handle_failpoint(
                     dead_validator.clone(),
                     keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
                     0.001,
                 );
             },
         );
         register_fail_point_async("narwhal-delay", || delay_failpoint(10..20, 0.001));
 
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        let dead_validator = dead_validator_orig.clone();
+        let keep_alive_nodes_clone = keep_alive_nodes.clone();
+        let grace_period_clone = grace_period.clone();
+        register_fail_point_async("consensus-rpc-response", move || {
+            let dead_validator = dead_validator.clone();
+            let keep_alive_nodes_clone = keep_alive_nodes_clone.clone();
+            let grace_period_clone = grace_period_clone.clone();
+            async move {
+                handle_failpoint(
+                    dead_validator.clone(),
+                    keep_alive_nodes_clone.clone(),
+                    grace_period_clone.clone(),
+                    0.001,
+                );
+            }
+        });
+        register_fail_point_async("consensus-delay", || delay_failpoint(10..20, 0.001));
+
+        register_fail_point_async("writeback-cache-commit", || delay_failpoint(10..20, 0.001));
+
+        test_simulated_load(test_cluster, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
@@ -293,16 +360,22 @@ mod test {
 
         let dead_validator: Arc<Mutex<Option<DeadValidator>>> = Default::default();
         let keep_alive_nodes = get_keep_alive_nodes(&test_cluster);
+        let grace_period: Arc<Mutex<Option<Instant>>> = Default::default();
         register_fail_points(&["before-open-new-epoch-store"], move || {
-            handle_failpoint(dead_validator.clone(), keep_alive_nodes.clone(), 1.0);
+            handle_failpoint(
+                dead_validator.clone(),
+                keep_alive_nodes.clone(),
+                grace_period.clone(),
+                1.0,
+            );
         });
-        test_simulated_load(TestInitData::new(&test_cluster).await, 120).await;
+        test_simulated_load(test_cluster, 120).await;
     }
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_checkpoint_pruning() {
         let test_cluster = build_test_cluster(4, 1000).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
+        test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
         let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
@@ -322,11 +395,13 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();
-        let test_cluster = init_test_cluster_builder(4, 1000)
-            .with_data_ingestion_dir(path.clone())
-            .build()
-            .await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 10).await;
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(4, 1000)
+                .with_data_ingestion_dir(path.clone())
+                .build()
+                .await,
+        );
+        test_simulated_load(test_cluster, 10).await;
 
         let checkpoint_files = std::fs::read_dir(path)
             .map(|entries| {
@@ -353,7 +428,7 @@ mod test {
     async fn test_simulated_load_pruning() {
         let epoch_duration_ms = 5000;
         let test_cluster = build_test_cluster(4, epoch_duration_ms).await;
-        test_simulated_load(TestInitData::new(&test_cluster).await, 30).await;
+        test_simulated_load(test_cluster.clone(), 30).await;
 
         let swarm_dir = test_cluster.swarm.dir().join(AUTHORITIES_DB_NAME);
         let random_validator_path = std::fs::read_dir(swarm_dir).unwrap().next().unwrap();
@@ -402,22 +477,22 @@ mod test {
 
         let init_framework =
             sui_framework_snapshot::load_bytecode_snapshot(starting_version).unwrap();
-        let mut test_cluster = init_test_cluster_builder(7, 5000)
-            .with_protocol_version(ProtocolVersion::new(starting_version))
-            .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
-                starting_version,
-                starting_version,
-            ))
-            .with_fullnode_supported_protocol_versions_config(
-                SupportedProtocolVersions::new_for_testing(starting_version, max_ver),
-            )
-            .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
-            .with_stake_subsidy_start_epoch(10)
-            .build()
-            .await;
-
-        let test_init_data = TestInitData::new(&test_cluster).await;
-        let test_init_data_clone = test_init_data.clone();
+        let test_cluster = Arc::new(
+            init_test_cluster_builder(4, 15000)
+                .with_protocol_version(ProtocolVersion::new(starting_version))
+                .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
+                    starting_version,
+                    starting_version,
+                ))
+                .with_fullnode_supported_protocol_versions_config(
+                    SupportedProtocolVersions::new_for_testing(starting_version, max_ver),
+                )
+                .with_objects(init_framework.into_iter().map(|p| p.genesis_object()))
+                .with_stake_subsidy_start_epoch(10)
+                .build()
+                .await,
+        );
+        let test_cluster_clone = test_cluster.clone();
 
         let finished = Arc::new(AtomicBool::new(false));
         let finished_clone = finished.clone();
@@ -465,7 +540,7 @@ mod test {
             finished_clone.store(true, Ordering::SeqCst);
         });
 
-        test_simulated_load(test_init_data_clone, 150).await;
+        test_simulated_load(test_cluster_clone, 150).await;
         for _ in 0..150 {
             if finished.load(Ordering::Relaxed) {
                 break;
@@ -476,13 +551,81 @@ mod test {
         assert!(finished.load(Ordering::SeqCst));
     }
 
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_partial_sig_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as f+1 nodes (in this case 3/6) are sending partial signatures.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(3)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-send-partial-signatures", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(test_cluster, 60).await
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_randomness_dkg_failures() {
+        sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+        let test_cluster = build_test_cluster(6, 20_000).await;
+
+        // Network should continue as long as nodes are participating in DKG representing
+        // stake equal to 2f+1 PLUS proprotion of stake represented by the
+        // `random_beacon_reduction_allowed_delta` ProtocolConfig option.
+        // In this case we make sure it still works with 5/6 validators.
+        let eligible_nodes: HashSet<_> = test_cluster
+            .swarm
+            .validator_nodes()
+            .take(1)
+            .map(|v| v.get_node_handle().unwrap().with(|n| n.get_sim_node_id()))
+            .collect();
+
+        register_fail_point_if("rb-dkg", move || {
+            handle_bool_failpoint(&eligible_nodes, 1.0)
+        });
+
+        test_simulated_load(test_cluster, 60).await
+    }
+
+    fn handle_bool_failpoint(
+        eligible_nodes: &HashSet<sui_simulator::task::NodeId>, // only given eligible nodes may fail
+        probability: f64,
+    ) -> bool {
+        if !eligible_nodes.contains(&sui_simulator::current_simnode_id()) {
+            return false; // don't fail ineligible nodes
+        }
+        let mut rng = thread_rng();
+        if rng.gen_range(0.0..1.0) < probability {
+            true
+        } else {
+            false
+        }
+    }
+
     async fn build_test_cluster(
         default_num_validators: usize,
         default_epoch_duration_ms: u64,
-    ) -> TestCluster {
+    ) -> Arc<TestCluster> {
         init_test_cluster_builder(default_num_validators, default_epoch_duration_ms)
+            .with_authority_overload_config(AuthorityOverloadConfig {
+                // Disable system overload checks for the test - during tests with crashes,
+                // it is possible for overload protection to trigger due to validators
+                // having queued certs which are missing dependencies.
+                check_system_overload_at_execution: false,
+                check_system_overload_at_signing: false,
+                ..Default::default()
+            })
+            .with_submit_delay_step_override_millis(3000)
             .build()
             .await
+            .into()
     }
 
     fn init_test_cluster_builder(
@@ -503,38 +646,16 @@ mod test {
         builder
     }
 
-    #[derive(Clone)]
-    struct TestInitData {
-        keystore_path: PathBuf,
-        genesis: Genesis,
-        pub primary_gas: ObjectRef,
-        pub sender: SuiAddress,
-    }
-
-    impl TestInitData {
-        pub async fn new(test_cluster: &TestCluster) -> Self {
-            let sender = test_cluster.get_address_0();
-            Self {
-                keystore_path: test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME),
-                genesis: test_cluster.swarm.config().genesis.clone(),
-                primary_gas: test_cluster
-                    .wallet
-                    .get_one_gas_object_owned_by_address(sender)
-                    .await
-                    .unwrap()
-                    .unwrap(),
-                sender,
-            }
-        }
-    }
-
-    async fn test_simulated_load(init_data: TestInitData, test_duration_secs: u64) {
-        let TestInitData {
-            keystore_path,
-            genesis,
-            primary_gas,
-            sender,
-        } = init_data;
+    async fn test_simulated_load(test_cluster: Arc<TestCluster>, test_duration_secs: u64) {
+        let sender = test_cluster.get_address_0();
+        let keystore_path = test_cluster.swarm.dir().join(SUI_KEYSTORE_FILENAME);
+        let genesis = test_cluster.swarm.config().genesis.clone();
+        let primary_gas = test_cluster
+            .wallet
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
 
         let ed25519_keypair =
             Arc::new(get_ed25519_keypair_from_keystore(keystore_path, &sender).unwrap());
@@ -610,32 +731,62 @@ mod test {
         .await
         .unwrap();
 
-        let driver = BenchDriver::new(5, false);
-
-        // Use 0 for unbounded
         let test_duration_secs = get_var("SIM_STRESS_TEST_DURATION_SECS", test_duration_secs);
         let test_duration = if test_duration_secs == 0 {
             Duration::MAX
         } else {
             Duration::from_secs(test_duration_secs)
         };
-        let interval = Interval::Time(test_duration);
 
-        let show_progress = interval.is_unbounded();
-        let (benchmark_stats, _) = driver
-            .run(
-                vec![proxy],
-                workloads,
-                system_state_observer,
-                &registry,
-                show_progress,
-                interval,
+        let bench_task = tokio::spawn(async move {
+            let driver = BenchDriver::new(5, false);
+
+            // Use 0 for unbounded
+            let interval = Interval::Time(test_duration);
+
+            let show_progress = interval.is_unbounded();
+            let (benchmark_stats, _) = driver
+                .run(
+                    vec![proxy],
+                    workloads,
+                    system_state_observer,
+                    &registry,
+                    show_progress,
+                    interval,
+                )
+                .await
+                .unwrap();
+
+            // TODO: make this stricter (== 0) when we have reliable error retrying on the client.
+            tracing::info!("end of test {:?}", benchmark_stats);
+            assert!(benchmark_stats.num_error_txes < 100);
+        });
+
+        let surfer_task = tokio::spawn(async move {
+            // now do a sui-surfer test
+            let mut test_packages_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+            test_packages_dir.extend(["..", "..", "crates", "sui-surfer", "tests"]);
+            let test_package_paths: Vec<PathBuf> = std::fs::read_dir(test_packages_dir)
+                .unwrap()
+                .flat_map(|entry| {
+                    let entry = entry.unwrap();
+                    entry.metadata().unwrap().is_dir().then_some(entry.path())
+                })
+                .collect();
+            info!("using sui_surfer test packages: {test_package_paths:?}");
+
+            let results = sui_surfer::run_with_test_cluster::<DefaultSurfStrategy>(
+                test_duration,
+                test_package_paths,
+                test_cluster,
+                1, // skip first account for use by bench_task
             )
-            .await
-            .unwrap();
+            .await;
+            info!("sui_surfer test complete with results: {results:?}");
+            assert!(results.num_successful_transactions > 0);
+            assert!(!results.unique_move_functions_called.is_empty());
+        });
 
-        // TODO: make this stricter (== 0) when we have reliable error retrying on the client.
-        tracing::info!("end of test {:?}", benchmark_stats);
-        assert!(benchmark_stats.num_error_txes < 100);
+        let _ = futures::join!(bench_task, surfer_task);
     }
 }

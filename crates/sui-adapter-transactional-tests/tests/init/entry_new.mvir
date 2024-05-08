@@ -1,0 +1,18 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+// init with entry is no longer allowed
+
+//# init --addresses test=0x0
+
+//# publish
+module 0x0.m {
+    import 0x2.tx_context;
+    entry init(ctx: &mut tx_context.TxContext) {
+        label l0:
+        return;
+    }
+}
+
+// TODO double check this error
+//# run test::m::init

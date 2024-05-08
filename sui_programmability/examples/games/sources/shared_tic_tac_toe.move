@@ -15,12 +15,7 @@
 // As we can see, by using shared object, the implementation is much
 // simpler than the other implementation.
 module games::shared_tic_tac_toe {
-    use std::vector;
-
-    use sui::object::{Self, ID, UID};
     use sui::event;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     // Game status
     const IN_PROGRESS: u8 = 0;
@@ -43,7 +38,7 @@ module games::shared_tic_tac_toe {
     /// The cell to place a new mark at is already oocupied.
     const ECellOccupied: u64 = 3;
 
-    struct TicTacToe has key {
+    public struct TicTacToe has key {
         id: UID,
         gameboard: vector<vector<u8>>,
         cur_turn: u8,
@@ -52,11 +47,11 @@ module games::shared_tic_tac_toe {
         o_address: address,
     }
 
-    struct Trophy has key {
+    public struct Trophy has key {
         id: UID,
     }
 
-    struct GameEndEvent has copy, drop {
+    public struct GameEndEvent has copy, drop {
         // The Object ID of the game object
         game_id: ID,
     }
@@ -86,14 +81,14 @@ module games::shared_tic_tac_toe {
     public entry fun place_mark(game: &mut TicTacToe, row: u8, col: u8, ctx: &mut TxContext) {
         assert!(row < 3 && col < 3, EInvalidLocation);
         assert!(game.game_status == IN_PROGRESS, EGameEnded);
-        let addr = get_cur_turn_address(game);
-        assert!(addr == tx_context::sender(ctx), EInvalidTurn);
+        let addr = game.get_cur_turn_address();
+        assert!(addr == ctx.sender(), EInvalidTurn);
 
-        let cell = vector::borrow_mut(vector::borrow_mut(&mut game.gameboard, (row as u64)), (col as u64));
+        let cell = &mut game.gameboard[row as u64][col as u64];
         assert!(*cell == MARK_EMPTY, ECellOccupied);
 
         *cell = game.cur_turn % 2;
-        update_winner(game);
+        game.update_winner();
         game.cur_turn = game.cur_turn + 1;
 
         if (game.game_status != IN_PROGRESS) {
@@ -130,7 +125,7 @@ module games::shared_tic_tac_toe {
     }
 
     fun get_cell(game: &TicTacToe, row: u64, col: u64): u8 {
-        *vector::borrow(vector::borrow(&game.gameboard, row), col)
+        game.gameboard[row][col]
     }
 
     fun update_winner(game: &mut TicTacToe) {
@@ -165,9 +160,9 @@ module games::shared_tic_tac_toe {
     }
 
     fun get_winner_if_all_equal(game: &TicTacToe, row1: u64, col1: u64, row2: u64, col2: u64, row3: u64, col3: u64): u8 {
-        let cell1 = get_cell(game, row1, col1);
-        let cell2 = get_cell(game, row2, col2);
-        let cell3 = get_cell(game, row3, col3);
+        let cell1 = game.get_cell(row1, col1);
+        let cell2 = game.get_cell(row2, col2);
+        let cell3 = game.get_cell(row3, col3);
         if (cell1 == cell2 && cell1 == cell3) cell1 else MARK_EMPTY
     }
 }

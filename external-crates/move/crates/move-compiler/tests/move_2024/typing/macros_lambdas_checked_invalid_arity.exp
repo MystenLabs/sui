@@ -1,3 +1,27 @@
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:2:73
+   │
+ 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                                         ^^^^^^^^
+   │                                                                         │
+   │                                                                         Invalid type annotation
+   │                                                                         Expected expression list of length 2: '(vector<u8>, vector<u8>)'
+   ·
+32 │             || (b"hello", b"world", b"!"), // invalid
+   │                -------------------------- Given expression list of length 3: '(vector<u8>, vector<u8>, vector<u8>)'
+
+error[E04007]: incompatible types
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:2:73
+   │
+ 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
+   │                                                                         ^^^^^^^^
+   │                                                                         │
+   │                                                                         Invalid type annotation
+   │                                                                         Expected: '(vector<u8>, vector<u8>)'
+   ·
+37 │             || b"hello", // invalid
+   │                -------- Given: 'vector<u8>'
+
 error[E04017]: too many arguments
   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:3:9
   │
@@ -66,15 +90,15 @@ error[E04010]: cannot infer type
    │                    ^^^^^^^^ Could not infer this type. Try adding an annotation
 
 error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:20:17
+   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:19:19
    │
 19 │         foo!<u64, vector<u8>>(
-   │                   ---------- Expected: 'vector<u8>'
+   │                   ^^^^^^^^^^
+   │                   │
+   │                   Invalid type annotation
+   │                   Expected: 'vector<u8>'
 20 │             |_| (vector<u8>[], vector<u8>[]), // invalid
-   │                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │                 │
-   │                 Invalid type annotation
-   │                 Given: '(vector<u8>, vector<u8>)'
+   │                 ---------------------------- Given: '(vector<u8>, vector<u8>)'
 
 error[E04007]: incompatible types
    ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:24:9
@@ -89,28 +113,4 @@ error[E04007]: incompatible types
 27 │ │             || (b"hello", b"world"),
 28 │ │         );
    │ ╰─────────^ Invalid call of 'a::m::foo'. Invalid argument for parameter '$g'
-
-error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:32:16
-   │
- 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
-   │                                                                         -------- Expected expression list of length 2: '(vector<u8>, vector<u8>)'
-   ·
-32 │             || (b"hello", b"world", b"!"), // invalid
-   │                ^^^^^^^^^^^^^^^^^^^^^^^^^^
-   │                │
-   │                Invalid type annotation
-   │                Given expression list of length 3: '(vector<u8>, vector<u8>, vector<u8>)'
-
-error[E04007]: incompatible types
-   ┌─ tests/move_2024/typing/macros_lambdas_checked_invalid_arity.move:37:16
-   │
- 2 │     macro fun foo<$T, $U>($f: |$T| -> $U, $g: |$T, $T| -> $U, $h: || -> ($U, $U)) {
-   │                                                                         -------- Expected: '(vector<u8>, vector<u8>)'
-   ·
-37 │             || b"hello", // invalid
-   │                ^^^^^^^^
-   │                │
-   │                Invalid type annotation
-   │                Given: 'vector<u8>'
 

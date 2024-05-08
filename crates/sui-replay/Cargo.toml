@@ -34,6 +34,7 @@ move-binary-format.workspace = true
 move-bytecode-utils.workspace = true
 move-core-types.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 tabled.workspace = true
 
 shared-crypto.workspace = true
@@ -47,4 +48,5 @@ sui-json-rpc-types.workspace = true
 sui-protocol-config.workspace = true
 sui-sdk.workspace = true
 sui-storage.workspace = true
+sui-transaction-checks.workspace = true
 sui-types.workspace = true

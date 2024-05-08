@@ -1,0 +1,90 @@
+name: GitHub Issues and External PRs Monitor
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs: 
+  external_pr:
+    name: Check if the PR's author is not from Mysten
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      run_pr_slack_job: ${{ steps.step1.run_pr_slack_job }}
+    steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # pin v4.0.2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-west-2
+
+    - name: Check if PR author is external
+      id: step1
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        export author=${{ github.event.pull_request.user.login }}
+        export slack_id=$(aws s3 cp s3://mysten-employees-dir/employees.json - | jq --arg AUTHOR "${author}" '.[] | if .github_handle == $AUTHOR then .slack_id else empty end')
+
+        # if we don't have the slack id or the author is not part of Mysten org, then we slack this PR in a next job
+        if [ -z "$slack_id" ]; then
+          echo "run_pr_slack_job=true" >> $GITHUB_ENV
+        else
+          echo "run_pr_slack_job=false" >> $GITHUB_ENV
+        fi
+
+  send-pr-to-slack:
+    name: Send PR to Slack
+    needs: [external_pr]
+    runs-on: ubuntu-latest
+    steps:
+    - name: Post to a Slack channel
+      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+        RUN_JOB: ${{needs.external_pr.outputs.run_pr_slack_job}}
+      if:  ${{needs.external_pr.outputs.run_pr_slack_job == 'true'}}
+      with:
+        channel-id: '#github-new-issues'
+        payload: |
+          {
+            "text": "New PR *${{ github.event.pull_request.number }}* opened by *${{ github.event.pull_request.user.login }}*",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "New external PR <https://github.com/MystenLabs/sui/pull/${{ github.event.pull_request.number }}|${{ github.event.pull_request.number }}> opened by <https://github.com/${{ github.event.pull_request.user.login }}|${{ github.event.pull_request.user.login }}>. \n\n Please assign this PR to a team member on GitHub and mark this Slack message with :white_check_mark: once done."
+                }
+              }
+            ]
+          }
+      
+  post-new-issue-to-slack:
+    name: Post new issue to Slack channel
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Post to a Slack channel
+      uses: slackapi/slack-github-action@34c3fd73326693ef04728f8611669d918a2d781d # pin@v1.19.0
+      env:
+        SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      with:
+        channel-id: '#github-new-issues'
+        payload: |
+          {
+            "text": "New Issue *${{ github.event.issue.number }}* opened by *${{ github.event.issue.user.login }}*",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "New issue *<https://github.com/MystenLabs/sui/issues/${{ github.event.issue.number }}|${{ github.event.issue.number }}>* opened by <https://github.com/${{ github.event.issue.user.login }}|${{ github.event.issue.user.login }}>. \n\n Please assign this issue to a team member on GitHub and mark this Slack message with :white_check_mark: once done."
+                }
+              }
+            ]
+          }
+

@@ -7,7 +7,7 @@ module sui::zklogin_verified_id {
 
     const EFunctionDisabled: u64 = 0;
 
-    /// Posession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
+    /// Possession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
     public struct VerifiedID has key {
         /// The ID of this VerifiedID
         id: UID,

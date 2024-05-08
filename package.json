@@ -6,7 +6,6 @@
 		"test": "turbo run test",
 		"test:dev": "turbo run test -- --run",
 		"icons": "pnpm --filter ./apps/icons",
-		"explorer": "turbo --filter sui-explorer",
 		"wallet": "turbo --filter ./apps/wallet",
 		"sdk": "turbo --filter ./sdk/typescript",
 		"bcs": "turbo --filter ./sdk/bcs",

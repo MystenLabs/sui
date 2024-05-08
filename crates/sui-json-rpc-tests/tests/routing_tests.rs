@@ -20,11 +20,11 @@ use sui_open_rpc_macros::open_rpc;
 
 #[tokio::test]
 async fn test_rpc_backward_compatibility() {
-    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
+    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new(), None, None);
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
-    let _handle = builder.start(address, None, None).await.unwrap();
+    let _handle = builder.start(address, None, None, None).await.unwrap();
     let url = format!("http://0.0.0.0:{}", address.port());
 
     // Test with un-versioned client
@@ -99,11 +99,11 @@ async fn test_rpc_backward_compatibility() {
 async fn test_disable_routing() {
     env::set_var("DISABLE_BACKWARD_COMPATIBILITY", "true");
 
-    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
+    let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new(), None, None);
     builder.register_module(TestApiModule).unwrap();
 
     let address = local_ip_utils::new_local_tcp_socket_for_testing();
-    let _handle = builder.start(address, None, None).await.unwrap();
+    let _handle = builder.start(address, None, None, None).await.unwrap();
     let url = format!("http://0.0.0.0:{}", address.port());
 
     // try to access old method directly should fail
@@ -134,7 +134,12 @@ async fn test_disable_routing() {
 // TODO(chris): clean up this after March 27th, 2023
 // #[tokio::test]
 // async fn test_rpc_backward_compatibility_batched_request() {
-//     let mut builder = JsonRpcServerBuilder::new("1.5", &Registry::new());
+//     let mut builder = JsonRpcServerBuilder::new(
+//          "1.5", &Registry::new(), None, None,
+//     );
+//     let mut builder = JsonRpcServerBuilder::new(
+//          "1.5", &Registry::new(), None, None,
+//     );
 //     builder.register_module(TestApiModule).unwrap();
 
 //     let port = get_available_port("0.0.0.0");

@@ -86,20 +86,18 @@ impl Hash for MultiSigLegacy {
 }
 
 impl AuthenticatorTrait for MultiSigLegacy {
-    fn verify_user_authenticator_epoch(&self, _: EpochId) -> Result<(), SuiError> {
-        Ok(())
-    }
-
-    fn verify_uncached_checks<T>(
+    fn verify_user_authenticator_epoch(
         &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _aux_verify_data: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        Ok(())
+        epoch_id: EpochId,
+        max_epoch_upper_bound_delta: Option<u64>,
+    ) -> Result<(), SuiError> {
+        let multisig: MultiSig =
+            self.clone()
+                .try_into()
+                .map_err(|_| SuiError::InvalidSignature {
+                    error: "Invalid legacy multisig".to_string(),
+                })?;
+        multisig.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
     }
 
     fn verify_claims<T>(
@@ -118,25 +116,6 @@ impl AuthenticatorTrait for MultiSigLegacy {
                     error: "Invalid legacy multisig".to_string(),
                 })?;
         multisig.verify_claims(value, author, aux_verify_data)
-    }
-
-    fn verify_authenticator<T>(
-        &self,
-        value: &IntentMessage<T>,
-        author: SuiAddress,
-        epoch: Option<EpochId>,
-        aux_verify_data: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        let multisig: MultiSig =
-            self.clone()
-                .try_into()
-                .map_err(|_| SuiError::InvalidSignature {
-                    error: "Invalid legacy multisig".to_string(),
-                })?;
-        multisig.verify_authenticator(value, author, epoch, aux_verify_data)
     }
 }
 

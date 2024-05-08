@@ -42,60 +42,57 @@ module games::drand_based_lottery_tests {
         let user3 = @0x2;
         let user4 = @0x3;
 
-        let scenario_val = test_scenario::begin(user1);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(user1);
 
-        drand_based_lottery::create(10, test_scenario::ctx(scenario));
-        test_scenario::next_tx(scenario, user1);
-        let game_val = test_scenario::take_shared<Game>(scenario);
+        drand_based_lottery::create(10, scenario.ctx());
+        scenario.next_tx(user1);
+        let mut game_val = scenario.take_shared<Game>();
         let game = &mut game_val;
 
         // User1 buys a ticket.
-        test_scenario::next_tx(scenario, user1);
-        drand_based_lottery::participate(game, test_scenario::ctx(scenario));
+        scenario.next_tx(user1);
+        game.participate(scenario.ctx());
         // User2 buys a ticket.
-        test_scenario::next_tx(scenario, user2);
-        drand_based_lottery::participate(game, test_scenario::ctx(scenario));
+        scenario.next_tx(user2);
+        game.participate(scenario.ctx());
         // User3 buys a tcket
-        test_scenario::next_tx(scenario, user3);
-        drand_based_lottery::participate(game, test_scenario::ctx(scenario));
+        scenario.next_tx(user3);
+        game.participate(scenario.ctx());
         // User4 buys a tcket
-        test_scenario::next_tx(scenario, user4);
-        drand_based_lottery::participate(game, test_scenario::ctx(scenario));
+        scenario.next_tx(user4);
+        game.participate(scenario.ctx());
 
         // User 2 closes the game.
-        test_scenario::next_tx(scenario, user2);
+        scenario.next_tx(user2);
         // Taken from the output of
         // curl https://drand.cloudflare.com/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/8
-        drand_based_lottery::close(
-            game,
+        game.close(
             x"a0c06b9964123d2e6036aa004c140fc301f4edd3ea6b8396a15dfd7dfd70cc0dce0b4a97245995767ab72cf59de58c47",
         );
 
         // User3 completes the game.
-        test_scenario::next_tx(scenario, user3);
+        scenario.next_tx(user3);
         // Taken from theoutput of
         // curl https://drand.cloudflare.com/52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971/public/10
-        drand_based_lottery::complete(
-            game,
+        game.complete(
             x"ac415e508c484053efed1c6c330e3ae0bf20185b66ed088864dac1ff7d6f927610824986390d3239dac4dd73e6f865f5",
         );
 
         // User2 is the winner since the mod of the hash results in 1.
-        test_scenario::next_tx(scenario, user2);
+        scenario.next_tx(user2);
         assert!(!test_scenario::has_most_recent_for_address<GameWinner>(user2), 1);
-        let ticket = test_scenario::take_from_address<Ticket>(scenario, user2);
-        let ticket_game_id = *drand_based_lottery::get_ticket_game_id(&ticket);
-        drand_based_lottery::redeem(&ticket, &game_val, test_scenario::ctx(scenario));
-        drand_based_lottery::delete_ticket(ticket);
+        let ticket = scenario.take_from_address<Ticket>(user2);
+        let ticket_game_id = *ticket.get_ticket_game_id();
+        ticket.redeem(&game_val, scenario.ctx());
+        ticket.delete_ticket();
 
         // Make sure User2 now has a winner ticket for the right game id.
-        test_scenario::next_tx(scenario, user2);
-        let ticket = test_scenario::take_from_address<GameWinner>(scenario, user2);
-        assert!(drand_based_lottery::get_game_winner_game_id(&ticket) == &ticket_game_id, 1);
+        scenario.next_tx(user2);
+        let ticket = scenario.take_from_address<GameWinner>(user2);
+        assert!(ticket.get_game_winner_game_id() == &ticket_game_id, 1);
         test_scenario::return_to_address(user2, ticket);
 
         test_scenario::return_shared(game_val);
-        test_scenario::end(scenario_val);
+        scenario.end();
     }
 }

@@ -5,8 +5,6 @@
 
 //# publish --upgradeable --sender A
 module A0::m {
-    use sui::object::UID;
-
     public struct Canary has key {
         id: UID,
         addr: vector<u8>,
@@ -18,8 +16,6 @@ module A0::m {
 
 //# upgrade --package A0 --upgrade-capability 1,1 --sender A
 module A1::m {
-    use sui::object::UID;
-
     public struct Canary has key {
         id: UID,
         addr: vector<u8>,
@@ -33,9 +29,6 @@ module A1::m {
 module A2::m {
     use std::ascii;
     use std::type_name;
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     public struct Canary has key {
         id: UID,

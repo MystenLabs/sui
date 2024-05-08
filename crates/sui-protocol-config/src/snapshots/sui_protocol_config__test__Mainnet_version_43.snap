@@ -41,6 +41,7 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
+  zklogin_max_epoch_upper_bound_delta: 30
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
@@ -104,6 +105,7 @@ max_back_edges_per_function: 10000
 max_back_edges_per_module: 10000
 max_verifier_meter_ticks_per_function: 16000000
 max_meter_ticks_per_module: 16000000
+max_meter_ticks_per_package: 16000000
 object_runtime_max_num_cached_objects: 1000
 object_runtime_max_num_cached_objects_system_tx: 16000
 object_runtime_max_num_store_entries: 1000

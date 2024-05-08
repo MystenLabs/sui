@@ -17,18 +17,17 @@ use log::warn;
 use num::{BigUint, Num};
 
 use builder::module_builder::ModuleBuilder;
-use move_binary_format::{
-    access::ModuleAccess,
-    file_format::{CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex},
+use move_binary_format::file_format::{
+    CompiledModule, FunctionDefinitionIndex, StructDefinitionIndex,
 };
 use move_compiler::{
     self,
     compiled_unit::{self, AnnotatedCompiledUnit},
     diagnostics::{Diagnostics, WarningFilters},
-    expansion::ast::{self as E, ModuleIdent, ModuleIdent_},
-    parser::ast::{self as P},
+    expansion::ast::{self as E, ModuleIdent, ModuleIdent_, TargetKind},
+    parser::ast as P,
     shared::{parse_named_address, unique_map::UniqueMap, NumericalAddress, PackagePaths},
-    typing::ast::{self as T},
+    typing::ast as T,
     Compiler, Flags, PASS_COMPILATION, PASS_EXPANSION, PASS_PARSER, PASS_TYPING,
 };
 use move_core_types::account_address::AccountAddress;
@@ -110,10 +109,11 @@ pub fn run_model_builder_with_options_and_compilation_flags<
     env.set_extension(options);
 
     // Step 1: parse the program to get comments and a separation of targets and dependencies.
-    let (files, comments_and_compiler_res) = Compiler::from_package_paths(move_sources, deps)?
-        .set_flags(flags)
-        .set_warning_filter(warning_filter)
-        .run::<PASS_PARSER>()?;
+    let (files, comments_and_compiler_res) =
+        Compiler::from_package_paths(None, move_sources, deps)?
+            .set_flags(flags)
+            .set_warning_filter(warning_filter)
+            .run::<PASS_PARSER>()?;
     let (comment_map, compiler) = match comments_and_compiler_res {
         Err((_pass, diags)) => {
             // Add source files so that the env knows how to translate locations of parse errors
@@ -235,7 +235,9 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let E::Program { modules } = expansion_ast;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });
@@ -246,7 +248,9 @@ pub fn run_model_builder_with_options_and_compilation_flags<
         let T::Program_ { modules } = inner;
         let modules = modules.filter_map(|mident, mut mdef| {
             visited_modules.contains(&mident.value).then(|| {
-                mdef.is_source_module = true;
+                mdef.target_kind = TargetKind::Source {
+                    is_root_package: true,
+                };
                 mdef
             })
         });

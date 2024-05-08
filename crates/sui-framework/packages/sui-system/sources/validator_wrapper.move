@@ -6,8 +6,6 @@ module sui_system::validator_wrapper {
     use sui_system::validator::Validator;
     use sui::versioned;
 
-    /* friend sui_system::validator_set; */
-
     const EInvalidVersion: u64 = 0;
 
     public struct ValidatorWrapper has store {

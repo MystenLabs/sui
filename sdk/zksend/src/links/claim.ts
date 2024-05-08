@@ -4,7 +4,12 @@
 import type { PureArg } from '@mysten/sui.js/bcs';
 import { bcs } from '@mysten/sui.js/bcs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type { CoinStruct, SuiTransaction } from '@mysten/sui.js/client';
+import type {
+	CoinStruct,
+	SuiObjectData,
+	SuiTransaction,
+	SuiTransactionBlockResponse,
+} from '@mysten/sui.js/client';
 import type { Keypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
@@ -62,6 +67,7 @@ export class ZkSendLink {
 	creatorAddress?: string;
 	assets?: LinkAssets;
 	claimed?: boolean;
+	bagObject?: SuiObjectData | null;
 
 	#client: SuiClient;
 	#contract?: ZkBag<ZkBagContractOptions>;
@@ -163,11 +169,20 @@ export class ZkSendLink {
 		return link;
 	}
 
-	async loadAssets() {
+	async loadClaimedStatus() {
+		await this.#loadBag({ loadAssets: false });
+	}
+
+	async loadAssets(
+		options: {
+			transactionBlock?: SuiTransactionBlockResponse;
+			loadClaimedAssets?: boolean;
+		} = {},
+	) {
 		if (this.#contract) {
-			await this.#loadBag();
+			await this.#loadBag(options);
 		} else {
-			await this.#loadOwnedObjects();
+			await this.#loadOwnedObjects(options);
 		}
 	}
 
@@ -299,7 +314,31 @@ export class ZkSendLink {
 		};
 	}
 
-	async #loadBag() {
+	async #loadBagObject() {
+		if (!this.#contract) {
+			throw new Error('Cannot load bag object for non-contract based links');
+		}
+		const bagField = await this.#client.getDynamicFieldObject({
+			parentId: this.#contract.ids.bagStoreTableId,
+			name: {
+				type: 'address',
+				value: this.address,
+			},
+		});
+
+		this.bagObject = bagField.data;
+		this.claimed = !bagField.data;
+	}
+
+	async #loadBag({
+		transactionBlock,
+		loadAssets = true,
+		loadClaimedAssets = loadAssets,
+	}: {
+		transactionBlock?: SuiTransactionBlockResponse;
+		loadAssets?: boolean;
+		loadClaimedAssets?: boolean;
+	} = {}) {
 		if (!this.#contract) {
 			return;
 		}
@@ -310,27 +349,37 @@ export class ZkSendLink {
 			coins: [],
 		};
 
-		const bagField = await this.#client.getDynamicFieldObject({
-			parentId: this.#contract.ids.bagStoreTableId,
-			name: {
-				type: 'address',
-				value: this.address,
-			},
-		});
-
-		if (!bagField.data) {
-			this.claimed = true;
-			await this.#loadClaimedAssets();
-
-			return;
-		} else {
-			this.claimed = false;
+		if (!this.bagObject || !this.claimed) {
+			await this.#loadBagObject();
 		}
 
-		const itemIds: string[] | undefined = (bagField as any).data?.content?.fields?.value?.fields
+		if (!loadAssets) {
+			return;
+		}
+
+		if (!this.bagObject) {
+			if (loadClaimedAssets) {
+				await this.#loadClaimedAssets();
+			}
+			return;
+		}
+
+		const bagId = (this.bagObject as any).content.fields.value.fields?.id?.id;
+
+		if (bagId && transactionBlock?.balanceChanges && transactionBlock.objectChanges) {
+			this.assets = getAssetsFromTxnBlock({
+				transactionBlock,
+				address: bagId,
+				isSent: false,
+			});
+
+			return;
+		}
+
+		const itemIds: string[] | undefined = (this.bagObject as any)?.content?.fields?.value?.fields
 			?.item_ids.fields.contents;
 
-		this.creatorAddress = (bagField as any).data?.content?.fields?.value?.fields?.owner;
+		this.creatorAddress = (this.bagObject as any)?.content?.fields?.value?.fields?.owner;
 
 		if (!itemIds) {
 			throw new Error('Invalid bag field');
@@ -618,7 +667,11 @@ export class ZkSendLink {
 		return txb;
 	}
 
-	async #loadOwnedObjects() {
+	async #loadOwnedObjects({
+		loadClaimedAssets = true,
+	}: {
+		loadClaimedAssets?: boolean;
+	} = {}) {
 		this.assets = {
 			nfts: [],
 			balances: [],
@@ -676,7 +729,7 @@ export class ZkSendLink {
 		if (this.#hasSui || this.#ownedObjects.length > 0) {
 			this.claimed = false;
 			this.assets = await this.#listNonContractClaimableAssets();
-		} else if (result.data[0]) {
+		} else if (result.data[0] && loadClaimedAssets) {
 			this.claimed = true;
 			await this.#loadClaimedAssets();
 		}

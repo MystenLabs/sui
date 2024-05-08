@@ -4,20 +4,17 @@
 module tutorial::trusted_swap {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
     use sui::sui::SUI;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     const MIN_FEE: u64 = 1000;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         scarcity: u8,
         style: u8,
     }
 
-    struct ObjectWrapper has key {
+    public struct ObjectWrapper has key {
         id: UID,
         original_owner: address,
         to_swap: Object,
@@ -58,7 +55,7 @@ module tutorial::trusted_swap {
             id: id1,
             original_owner: original_owner1,
             to_swap: object1,
-            fee: fee1,
+            fee: mut fee1,
         } = wrapper1;
 
         let ObjectWrapper {

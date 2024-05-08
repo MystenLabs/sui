@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.22.0"
+    "version": "1.25.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "43",
+              "maxSupportedProtocolVersion": "46",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1707,6 +1707,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_accumulated_txn_cost_per_object_in_checkpoint": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -1761,6 +1762,7 @@
                 "max_meter_ticks_per_module": {
                   "u64": "6000000"
                 },
+                "max_meter_ticks_per_package": null,
                 "max_modules_in_publish": {
                   "u32": "128"
                 },
@@ -1897,6 +1899,7 @@
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
                 "random_beacon_dkg_timeout_round": null,
+                "random_beacon_min_round_interval_ms": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
@@ -5316,6 +5319,14 @@
         "type": "string"
       },
       "BigInt_for_uint64": {
+        "type": "string"
+      },
+      "Bn254FqElement": {
+        "description": "A struct that stores a Bn254 Fq field element as 32 bytes.",
+        "type": "string"
+      },
+      "Bn254FrElement": {
+        "description": "A struct that stores a Bn254 Fr field element as 32 bytes.",
         "type": "string"
       },
       "Checkpoint": {
@@ -10948,7 +10959,7 @@
         ],
         "properties": {
           "addressSeed": {
-            "type": "string"
+            "$ref": "#/components/schemas/Bn254FrElement"
           },
           "headerBase64": {
             "type": "string"
@@ -10973,7 +10984,7 @@
           "a": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           },
           "b": {
@@ -10981,14 +10992,14 @@
             "items": {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/components/schemas/Bn254FqElement"
               }
             }
           },
           "c": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           }
         }

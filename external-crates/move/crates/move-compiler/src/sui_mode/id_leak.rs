@@ -16,9 +16,9 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
-    expansion::ast::AbilitySet,
+    expansion::ast::{AbilitySet, TargetKind},
     hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
-    parser::ast::{Ability_, StructName},
+    parser::ast::{Ability_, DatatypeName},
     shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
     sui_mode::{OBJECT_NEW, TEST_SCENARIO_MODULE_NAME, TS_NEW_OBJECT},
 };
@@ -64,7 +64,7 @@ pub const FUNCTIONS_TO_SKIP: &[(Symbol, Symbol, Symbol)] = &[
 
 pub struct IDLeakVerifier;
 pub struct IDLeakVerifierAI<'a> {
-    declared_abilities: &'a UniqueMap<StructName, AbilitySet>,
+    declared_abilities: &'a UniqueMap<DatatypeName, AbilitySet>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
@@ -105,7 +105,12 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             // Skip if not sui
             return None;
         }
-        if config.is_dependency || !mdef.is_source_module {
+        if !matches!(
+            mdef.target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Skip non-source, dependency modules
             return None;
         }
@@ -119,7 +124,7 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             }
         }
 
-        let declared_abilities = context.struct_declared_abilities.get(module).unwrap();
+        let declared_abilities = context.datatype_declared_abilities.get(module).unwrap();
         Some(IDLeakVerifierAI { declared_abilities })
     }
 }
@@ -155,7 +160,7 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
         let E::Pack(s, _tys, fields) = e__ else {
             return None;
         };
-        let abilities = self.declared_abilities.get(s).unwrap();
+        let abilities = self.declared_abilities.get(s)?;
         if !abilities.has_ability_(Ability_::Key) {
             return None;
         }

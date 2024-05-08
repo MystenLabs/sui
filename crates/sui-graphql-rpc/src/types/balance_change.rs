@@ -24,7 +24,7 @@ impl BalanceChange {
         match self.stored.owner {
             O::AddressOwner(addr) | O::ObjectOwner(addr) => Some(Owner {
                 address: SuiAddress::from(addr),
-                checkpoint_viewed_at: Some(self.checkpoint_viewed_at),
+                checkpoint_viewed_at: self.checkpoint_viewed_at,
             }),
 
             O::Shared { .. } | O::Immutable => None,
@@ -44,9 +44,8 @@ impl BalanceChange {
 
 impl BalanceChange {
     /// `checkpoint_viewed_at` represents the checkpoint sequence number at which this
-    /// `BalanceChange` was queried for, or `None` if the data was requested at the latest
-    /// checkpoint. This is stored on `BalanceChange` so that when viewing that entity's state, it
-    /// will be as if it was read at the same checkpoint.
+    /// `BalanceChange` was queried for. This is stored on `BalanceChange` so that when viewing that
+    /// entity's state, it will be as if it was read at the same checkpoint.
     pub(crate) fn read(bytes: &[u8], checkpoint_viewed_at: u64) -> Result<Self, Error> {
         let stored = bcs::from_bytes(bytes)
             .map_err(|e| Error::Internal(format!("Error deserializing BalanceChange: {e}")))?;

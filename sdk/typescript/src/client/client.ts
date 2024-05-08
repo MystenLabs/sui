@@ -12,6 +12,7 @@ import {
 	normalizeSuiAddress,
 	normalizeSuiObjectId,
 } from '../utils/sui-types.js';
+import { normalizeSuiNSName } from '../utils/suins.js';
 import { SuiHTTPTransport } from './http-transport.js';
 import type { SuiTransport } from './http-transport.js';
 import type {
@@ -738,13 +739,23 @@ export class SuiClient {
 		});
 	}
 
-	async resolveNameServiceNames(
-		input: ResolveNameServiceNamesParams,
-	): Promise<ResolvedNameServiceNames> {
-		return await this.transport.request({
-			method: 'suix_resolveNameServiceNames',
-			params: [input.address, input.cursor, input.limit],
-		});
+	async resolveNameServiceNames({
+		format = 'dot',
+		...input
+	}: ResolveNameServiceNamesParams & {
+		format?: 'at' | 'dot';
+	}): Promise<ResolvedNameServiceNames> {
+		const { nextCursor, hasNextPage, data }: ResolvedNameServiceNames =
+			await this.transport.request({
+				method: 'suix_resolveNameServiceNames',
+				params: [input.address, input.cursor, input.limit],
+			});
+
+		return {
+			hasNextPage,
+			nextCursor,
+			data: data.map((name) => normalizeSuiNSName(name, format)),
+		};
 	}
 
 	async getProtocolConfig(input?: GetProtocolConfigParams): Promise<ProtocolConfig> {

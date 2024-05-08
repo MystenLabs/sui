@@ -47,18 +47,14 @@ Next, use the [Sui Client CLI](references/cli/client.mdx) to generate a new Move
 sui move new counter
 ```
 
-This creates a new, empty Move package in a new `move/counter` directory with a [Move.toml](references/move/move-toml.mdx) file, and an empty `sources` directory.
+This creates a new, empty Move package in a new `move/counter` directory with a [Move.toml](https://move-book.com/concepts/manifest.html) file, and an empty `sources` directory.
 
 Add your Move code under `sources` by creating a new `counter.move` file:
 
 ```move
 module counter::counter {
-    use sui::transfer;
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-
     /// A shared counter.
-    struct Counter has key {
+    public struct Counter has key {
         id: UID,
         owner: address,
         value: u64
@@ -68,7 +64,7 @@ module counter::counter {
     public fun create(ctx: &mut TxContext) {
         transfer::share_object(Counter {
             id: object::new(ctx),
-            owner: tx_context::sender(ctx),
+            owner: ctx.sender(),
             value: 0
         })
     }
@@ -80,7 +76,7 @@ module counter::counter {
 
     /// Set value (only runnable by the Counter owner)
     public fun set_value(counter: &mut Counter, value: u64, ctx: &TxContext) {
-        assert!(counter.owner == tx_context::sender(ctx), 0);
+        assert!(counter.owner == ctx.sender(), 0);
         counter.value = value;
     }
 }

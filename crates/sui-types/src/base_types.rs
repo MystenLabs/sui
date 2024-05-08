@@ -35,7 +35,6 @@ use crate::sui_serde::Readable;
 use crate::sui_serde::{to_sui_struct_tag_string, HexAccountAddress};
 use crate::transaction::Transaction;
 use crate::transaction::VerifiedTransaction;
-use crate::zk_login_authenticator::AddressSeed;
 use crate::zk_login_authenticator::ZkLoginAuthenticator;
 use crate::MOVE_STDLIB_ADDRESS;
 use crate::SUI_CLOCK_OBJECT_ID;
@@ -47,8 +46,8 @@ use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::hash::HashFunction;
 use fastcrypto::traits::AllowedRng;
 use fastcrypto_zkp::bn254::zk_login::ZkLoginInputs;
-use move_binary_format::binary_views::BinaryIndexedView;
 use move_binary_format::file_format::SignatureToken;
+use move_binary_format::CompiledModule;
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
@@ -612,10 +611,7 @@ impl SuiAddress {
         let iss_bytes = inputs.get_iss().as_bytes();
         hasher.update([iss_bytes.len() as u8]);
         hasher.update(iss_bytes);
-
-        let address_seed = AddressSeed::from_str(inputs.get_address_seed())
-            .map_err(|_| SuiError::InvalidAddress)?;
-        hasher.update(address_seed.unpadded());
+        hasher.update(inputs.get_address_seed().unpadded());
         Ok(SuiAddress(hasher.finalize().digest))
     }
 }
@@ -919,7 +915,7 @@ impl TxContext {
     }
 
     /// Returns whether the type signature is &mut TxContext, &TxContext, or none of the above.
-    pub fn kind(view: &BinaryIndexedView<'_>, s: &SignatureToken) -> TxContextKind {
+    pub fn kind(view: &CompiledModule, s: &SignatureToken) -> TxContextKind {
         use SignatureToken as S;
         let (kind, s) = match s {
             S::MutableReference(s) => (TxContextKind::Mutable, s),

@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::transfer_policy`
 ---
@@ -17,7 +16,7 @@ hot potato or transaction will fail.
 - Type owner (creator) can set any Rules as long as the ecosystem supports
 them. All of the Rules need to be resolved within a single transaction (eg
 pay royalty and pay fixed commission). Once required actions are performed,
-the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confimed" via <code>confirm_request</code> call.
+the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferRequest">TransferRequest</a></code> can be "confirmed" via <code>confirm_request</code> call.
 
 - <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code> aims to be the main interface for creators to control trades
 of their types and collect profits if a fee is required on sales. Custom
@@ -346,12 +345,12 @@ Attempting to create a Rule that is already set.
 
 
 
-<a name="0x2_transfer_policy_EUnknownRequrement"></a>
+<a name="0x2_transfer_policy_EUnknownRequirement"></a>
 
 A Rule is not set.
 
 
-<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequrement">EUnknownRequrement</a>: u64 = 2;
+<pre><code><b>const</b> <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>: u64 = 2;
 </code></pre>
 
 
@@ -429,7 +428,7 @@ available for use, the type can not be traded in kiosks.
 
 ## Function `default`
 
-Initialize the Tranfer Policy in the default scenario: Create and share
+Initialize the Transfer Policy in the default scenario: Create and share
 the <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a></code>, transfer <code><a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a></code> to the transaction
 sender.
 
@@ -659,7 +658,7 @@ Add some <code>SUI</code> to the balance of a <code><a href="transfer_policy.md#
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_add_to_balance">add_to_balance</a>&lt;T, Rule: drop&gt;(
     _: Rule, policy: &<b>mut</b> <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="coin.md#0x2_coin">coin</a>: Coin&lt;SUI&gt;
 ) {
-    <b>assert</b>!(<a href="transfer_policy.md#0x2_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequrement">EUnknownRequrement</a>);
+    <b>assert</b>!(<a href="transfer_policy.md#0x2_transfer_policy_has_rule">has_rule</a>&lt;T, Rule&gt;(policy), <a href="transfer_policy.md#0x2_transfer_policy_EUnknownRequirement">EUnknownRequirement</a>);
     <a href="coin.md#0x2_coin_put">coin::put</a>(&<b>mut</b> policy.<a href="balance.md#0x2_balance">balance</a>, <a href="coin.md#0x2_coin">coin</a>)
 }
 </code></pre>

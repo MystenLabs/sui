@@ -8,9 +8,7 @@
 /// - [ ] test withdraw methods
 module sui::kiosk_tests {
     use sui::kiosk_test_utils::{Self as test, Asset};
-    use sui::transfer_policy as policy;
     use sui::sui::SUI;
-    use sui::kiosk;
     use sui::coin;
 
     const AMT: u64 = 10_000;
@@ -20,13 +18,13 @@ module sui::kiosk_tests {
         let ctx = &mut test::ctx();
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        let old_owner = kiosk::owner(&kiosk);
-        kiosk::set_owner(&mut kiosk, &owner_cap, ctx);
-        assert!(kiosk::owner(&kiosk) == old_owner, 0);
+        let old_owner = kiosk.owner();
+        kiosk.set_owner(&owner_cap, ctx);
+        assert!(kiosk.owner() == old_owner, 0);
 
-        kiosk::set_owner_custom(&mut kiosk, &owner_cap, @0xA11CE);
-        assert!(kiosk::owner(&kiosk) != old_owner, 0);
-        assert!(kiosk::owner(&kiosk) == @0xA11CE, 0);
+        kiosk.set_owner_custom(&owner_cap, @0xA11CE);
+        assert!(kiosk.owner() != old_owner, 0);
+        assert!(kiosk.owner() == @0xA11CE, 0);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
     }
@@ -38,11 +36,11 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, policy_cap) = test::get_policy(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
+        kiosk.place(&owner_cap, asset);
 
-        assert!(kiosk::has_item(&kiosk, item_id), 0);
-        let asset = kiosk::take(&mut kiosk, &owner_cap, item_id);
-        assert!(!kiosk::has_item(&kiosk, item_id), 0);
+        assert!(kiosk.has_item(item_id), 0);
+        let asset = kiosk.take(&owner_cap, item_id);
+        assert!(!kiosk.has_item(item_id), 0);
 
         test::return_policy(policy, policy_cap, ctx);
         test::return_kiosk(kiosk, owner_cap, ctx);
@@ -57,8 +55,8 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, _policy_cap) = test::get_policy(ctx);
 
-        kiosk::lock(&mut kiosk, &owner_cap, &policy, asset);
-        let _asset = kiosk::take<Asset>(&mut kiosk, &owner_cap, item_id);
+        kiosk.lock(&owner_cap, &policy, asset);
+        let _asset = kiosk.take<Asset>(&owner_cap, item_id);
         abort 1337
     }
 
@@ -69,12 +67,12 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, policy_cap) = test::get_policy(ctx);
 
-        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
-        assert!(kiosk::is_listed(&kiosk, item_id), 0);
+        kiosk.place_and_list(&owner_cap, asset, AMT);
+        assert!(kiosk.is_listed(item_id), 0);
         let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        let (asset, request) = kiosk::purchase(&mut kiosk, item_id, payment);
-        assert!(!kiosk::is_listed(&kiosk, item_id), 0);
-        policy::confirm_request(&policy, request);
+        let (asset, request) = kiosk.purchase(item_id, payment);
+        assert!(!kiosk.is_listed(item_id), 0);
+        policy.confirm_request(request);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_assets(vector[ asset ]);
@@ -88,11 +86,11 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, policy_cap) = test::get_policy(ctx);
 
-        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
-        assert!(kiosk::is_listed(&kiosk, item_id), 0);
-        kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
-        assert!(!kiosk::is_listed(&kiosk, item_id), 0);
-        let asset = kiosk::take(&mut kiosk, &owner_cap, item_id);
+        kiosk.place_and_list(&owner_cap, asset, AMT);
+        assert!(kiosk.is_listed(item_id), 0);
+        kiosk.delist<Asset>(&owner_cap, item_id);
+        assert!(!kiosk.is_listed(item_id), 0);
+        let asset = kiosk.take(&owner_cap, item_id);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_assets(vector[ asset ]);
@@ -106,8 +104,8 @@ module sui::kiosk_tests {
         let (asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
-        kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
+        kiosk.place(&owner_cap, asset);
+        kiosk.delist<Asset>(&owner_cap, item_id);
 
         abort 1337
     }
@@ -119,12 +117,10 @@ module sui::kiosk_tests {
         let (asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
-        let _cap = kiosk::list_with_purchase_cap<Asset>(
-            &mut kiosk, &owner_cap, item_id, 100, ctx
-        );
+        kiosk.place(&owner_cap, asset);
+        let _cap = kiosk.list_with_purchase_cap<Asset>(&owner_cap, item_id, 100, ctx);
 
-        kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
+        kiosk.delist<Asset>(&owner_cap, item_id);
         abort 1337
     }
 
@@ -138,8 +134,8 @@ module sui::kiosk_tests {
         let (asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
-        kiosk::delist<WrongAsset>(&mut kiosk, &owner_cap, item_id);
+        kiosk.place(&owner_cap, asset);
+        kiosk.delist<WrongAsset>(&owner_cap, item_id);
 
         abort 1337
     }
@@ -151,7 +147,7 @@ module sui::kiosk_tests {
         let (_asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::delist<Asset>(&mut kiosk, &owner_cap, item_id);
+        kiosk.delist<Asset>(&owner_cap, item_id);
 
         abort 1337
     }
@@ -164,10 +160,10 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, _policy_cap) = test::get_policy(ctx);
 
-        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
+        kiosk.place_and_list(&owner_cap, asset, AMT);
         let payment = coin::mint_for_testing<SUI>(AMT + 1, ctx);
-        let (_asset, request) = kiosk::purchase(&mut kiosk, item_id, payment);
-        policy::confirm_request(&policy, request);
+        let (_asset, request) = kiosk.purchase(item_id, payment);
+        policy.confirm_request(request);
 
         abort 1337
     }
@@ -179,13 +175,13 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, policy_cap) = test::get_policy(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap(&mut kiosk, &owner_cap, item_id, AMT, ctx);
+        kiosk.place(&owner_cap, asset);
+        let purchase_cap = kiosk.list_with_purchase_cap(&owner_cap, item_id, AMT, ctx);
         let payment = coin::mint_for_testing<SUI>(AMT, ctx);
-        assert!(kiosk::is_listed_exclusively(&kiosk, item_id), 0);
-        let (asset, request) = kiosk::purchase_with_cap(&mut kiosk, purchase_cap, payment);
-        assert!(!kiosk::is_listed_exclusively(&kiosk, item_id), 0);
-        policy::confirm_request(&policy, request);
+        assert!(kiosk.is_listed_exclusively(item_id), 0);
+        let (asset, request) = kiosk.purchase_with_cap(purchase_cap, payment);
+        assert!(!kiosk.is_listed_exclusively(item_id), 0);
+        policy.confirm_request(request);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_assets(vector[ asset ]);
@@ -199,10 +195,10 @@ module sui::kiosk_tests {
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
         let (policy, policy_cap) = test::get_policy(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap<test::Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
-        kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
-        let asset = kiosk::take(&mut kiosk, &owner_cap, item_id);
+        kiosk.place(&owner_cap, asset);
+        let purchase_cap = kiosk.list_with_purchase_cap<test::Asset>(&owner_cap, item_id, AMT, ctx);
+        kiosk.return_purchase_cap(purchase_cap);
+        let asset = kiosk.take(&owner_cap, item_id);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
         test::return_assets(vector[ asset ]);
@@ -216,7 +212,7 @@ module sui::kiosk_tests {
         let (_asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::list<Asset>(&mut kiosk, &owner_cap, item_id, AMT);
+        kiosk.list<Asset>(&owner_cap, item_id, AMT);
 
         abort 1337
     }
@@ -228,7 +224,7 @@ module sui::kiosk_tests {
         let (_asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        let _purchase_cap = kiosk::list_with_purchase_cap<Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
+        let _purchase_cap = kiosk.list_with_purchase_cap<Asset>(&owner_cap, item_id, AMT, ctx);
 
         abort 1337
     }
@@ -240,8 +236,8 @@ module sui::kiosk_tests {
         let (asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::place_and_list(&mut kiosk, &owner_cap, asset, AMT);
-        let _purchase_cap = kiosk::list_with_purchase_cap<test::Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
+        kiosk.place_and_list(&owner_cap, asset, AMT);
+        let _purchase_cap = kiosk.list_with_purchase_cap<test::Asset>(&owner_cap, item_id, AMT, ctx);
 
         abort 1337
     }
@@ -253,10 +249,10 @@ module sui::kiosk_tests {
         let (asset, item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
-        let purchase_cap = kiosk::list_with_purchase_cap<test::Asset>(&mut kiosk, &owner_cap, item_id, AMT, ctx);
-        kiosk::list<test::Asset>(&mut kiosk, &owner_cap, item_id, AMT);
-        kiosk::return_purchase_cap(&mut kiosk, purchase_cap);
+        kiosk.place(&owner_cap, asset);
+        let purchase_cap = kiosk.list_with_purchase_cap<test::Asset>(&owner_cap, item_id, AMT, ctx);
+        kiosk.list<test::Asset>(&owner_cap, item_id, AMT);
+        kiosk.return_purchase_cap(purchase_cap);
 
         abort 1337
     }
@@ -269,7 +265,7 @@ module sui::kiosk_tests {
         let (asset, _item_id) = test::get_asset(ctx);
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::place(&mut kiosk, &owner_cap, asset);
+        kiosk.place(&owner_cap, asset);
         test::return_kiosk(kiosk, owner_cap, ctx);
 
         abort 1337
@@ -279,9 +275,9 @@ module sui::kiosk_tests {
     fun test_withdraw_default() {
         let ctx = &mut test::ctx();
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
-        let profits = kiosk::withdraw(&mut kiosk, &owner_cap, std::option::none(), ctx);
+        let profits = kiosk.withdraw(&owner_cap, option::none(), ctx);
 
-        coin::burn_for_testing(profits);
+        profits.burn_for_testing();
         test::return_kiosk(kiosk, owner_cap, ctx);
     }
 
@@ -290,7 +286,7 @@ module sui::kiosk_tests {
     fun test_withdraw_more_than_there_is() {
         let ctx = &mut test::ctx();
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
-        let _profits = kiosk::withdraw(&mut kiosk, &owner_cap, std::option::some(100), ctx);
+        let _profits = kiosk.withdraw(&owner_cap, option::some(100), ctx);
 
         abort 1337
     }
@@ -300,8 +296,8 @@ module sui::kiosk_tests {
         let ctx = &mut test::ctx();
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
-        let _uid_mut = kiosk::uid_mut_as_owner(&mut kiosk, &owner_cap);
+        kiosk.set_allow_extensions(&owner_cap, false);
+        let _uid_mut = kiosk.uid_mut_as_owner(&owner_cap);
         test::return_kiosk(kiosk, owner_cap, ctx);
     }
 
@@ -310,7 +306,7 @@ module sui::kiosk_tests {
         let ctx = &mut test::ctx();
         let (kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        let uid = kiosk::uid(&kiosk);
+        let uid = kiosk.uid();
         assert!(sui::object::uid_to_inner(uid) == sui::object::id(&kiosk), 0);
 
         test::return_kiosk(kiosk, owner_cap, ctx);
@@ -322,8 +318,8 @@ module sui::kiosk_tests {
         let ctx = &mut test::ctx();
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
-        let _ = kiosk::uid_mut(&mut kiosk);
+        kiosk.set_allow_extensions(&owner_cap, false);
+        let _ = kiosk.uid_mut();
 
         abort 1337
     }
@@ -333,8 +329,8 @@ module sui::kiosk_tests {
         let ctx = &mut test::ctx();
         let (mut kiosk, owner_cap) = test::get_kiosk(ctx);
 
-        kiosk::set_allow_extensions(&mut kiosk, &owner_cap, false);
-        let _ = kiosk::uid(&kiosk);
+        kiosk.set_allow_extensions(&owner_cap, false);
+        let _ = kiosk.uid();
 
         test::return_kiosk(kiosk, owner_cap, ctx);
     }

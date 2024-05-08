@@ -16,8 +16,8 @@ BUILDING A
 The following changes will be made.
 ============================================================
 
---- sources/mut_name.move
-+++ sources/mut_name.move
+--- ./sources/mut_name.move
++++ ./sources/mut_name.move
 @@ -3 +3 @@
 -    fun dumpster_fire(mut x: u64, mut: u64): u64 {
 +    fun dumpster_fire(mut x: u64, `mut`: u64): u64 {
@@ -30,7 +30,7 @@ The following changes will be made.
 
 ============================================================
 Apply changes? (Y/n) 
-Updating "sources/mut_name.move" . . .
+Updating "./sources/mut_name.move" . . .
 
 Changes complete
 Wrote patchfile out to: ./migration.patch

@@ -3,7 +3,6 @@
 
 #[test_only]
 module sui::versioned_tests {
-    use sui::tx_context;
     use sui::versioned;
 
     #[test]

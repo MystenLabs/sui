@@ -1,0 +1,54 @@
+accounts:
+- address: '0xd59d79516a4ed5b6825e80826c075a12bdd2759aaeb901df2f427f5f880c8f60'
+  gas_amounts:
+  - 750000000000000000
+  - 750000000000000000
+- address: '0x160ef6ce4f395208a12119c5011bf8d8ceb760e3159307c819bd0197d154d384'
+  gas_amounts:
+  - 20000000000000000
+  - 20000000000000000
+  - 20000000000000000
+  - 20000000000000000
+  - 20000000000000000
+parameters:
+  allow_insertion_of_extra_objects: false
+  epoch_duration_ms: 120000
+validator_config_info:
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator1
+  narwhal_primary_address: /dns/validator1/udp/8081
+  narwhal_worker_address: /dns/validator1/udp/8082
+  network_address: /dns/validator1/tcp/8080/http
+  p2p_address: /dns/validator1/udp/8084
+  stake: 20000000000000000
+  genesis:
+    genesis-file-location: /opt/sui/genesis.blob
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator2
+  narwhal_primary_address: /dns/validator2/udp/8081
+  narwhal_worker_address: /dns/validator2/udp/8082
+  network_address: /dns/validator2/tcp/8080/http
+  p2p_address: /dns/validator2/udp/8084
+  stake: 20000000000000000
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator3
+  narwhal_primary_address: /dns/validator3/udp/8081
+  narwhal_worker_address: /dns/validator3/udp/8082
+  network_address: /dns/validator3/tcp/8080/http
+  p2p_address: /dns/validator3/udp/8084
+  stake: 20000000000000000
+- commission_rate: 0
+  consensus_address: /ip4/127.0.0.1/tcp/8083/http
+  gas_price: 1000
+  name: validator4
+  narwhal_primary_address: /dns/validator4/udp/8081
+  narwhal_worker_address: /dns/validator4/udp/8082
+  network_address: /dns/validator4/tcp/8080/http
+  p2p_address: /dns/validator4/udp/8084
+  stake: 20000000000000000

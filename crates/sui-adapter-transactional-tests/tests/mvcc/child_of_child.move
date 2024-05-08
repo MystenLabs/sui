@@ -8,9 +8,6 @@
 //# publish
 
 module test::m {
-    use std::option::{Self, Option};
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
     use sui::dynamic_object_field as ofield;
 
     public struct Obj has key, store {

@@ -4,13 +4,10 @@
 module utils::locked_coin {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
     use utils::epoch_time_lock::{Self, EpochTimeLock};
 
     /// A coin of type `T` locked until `locked_until_epoch`.
-    struct LockedCoin<phantom T> has key {
+    public struct LockedCoin<phantom T> has key {
         id: UID,
         balance: Balance<T>,
         locked_until_epoch: EpochTimeLock

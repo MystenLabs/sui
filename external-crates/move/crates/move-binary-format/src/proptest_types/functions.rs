@@ -822,7 +822,7 @@ impl BytecodeGen {
                 type_arguments
                     .iter()
                     .all(BytecodeGen::check_signature_token)
-            },
+            }
             Reference(_) | MutableReference(_) => false,
         }
     }

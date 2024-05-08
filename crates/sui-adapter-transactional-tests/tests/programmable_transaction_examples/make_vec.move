@@ -5,11 +5,7 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use std::vector;
     use std::string::{Self, String};
-    use std::option::{Self, Option};
 
     public struct CoolMarker has key, store { id: UID }
 

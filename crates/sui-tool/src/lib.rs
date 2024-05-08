@@ -21,12 +21,14 @@ use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_core::execution_cache::ExecutionCache;
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
+use sui_sdk::SuiClient;
 use sui_sdk::SuiClientBuilder;
 use sui_storage::object_store::http::HttpDownloaderBuilder;
 use sui_storage::object_store::util::Manifest;
 use sui_storage::object_store::util::PerEpochManifest;
 use sui_storage::object_store::util::MANIFEST_FILENAME;
 use sui_types::accumulator::Accumulator;
+use sui_types::committee::QUORUM_THRESHOLD;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_grpc::LayoutGenerationOption;
 use sui_types::multiaddr::Multiaddr;
@@ -71,51 +73,33 @@ pub mod pkg_dump;
 
 // This functions requires at least one of genesis or fullnode_rpc to be `Some`.
 async fn make_clients(
-    genesis: Option<PathBuf>,
-    fullnode_rpc: Option<String>,
+    sui_client: &Arc<SuiClient>,
 ) -> Result<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>> {
     let mut net_config = default_mysten_network_config();
     net_config.connect_timeout = Some(Duration::from_secs(5));
     let mut authority_clients = BTreeMap::new();
 
-    if let Some(fullnode_rpc) = fullnode_rpc {
-        let sui_client = SuiClientBuilder::default().build(fullnode_rpc).await?;
-        let active_validators = sui_client
-            .governance_api()
-            .get_latest_sui_system_state()
-            .await?
-            .active_validators;
+    let active_validators = sui_client
+        .governance_api()
+        .get_latest_sui_system_state()
+        .await?
+        .active_validators;
 
-        for validator in active_validators {
-            let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
-            let channel = net_config
-                .connect_lazy(&net_addr)
-                .map_err(|err| anyhow!(err.to_string()))?;
-            let client = NetworkAuthorityClient::new(channel);
-            let public_key_bytes =
-                AuthorityPublicKeyBytes::from_bytes(&validator.protocol_pubkey_bytes)?;
-            authority_clients.insert(public_key_bytes, (net_addr.clone(), client));
-        }
-    } else {
-        if genesis.is_none() {
-            return Err(anyhow!("Either genesis or fullnode_rpc must be specified"));
-        }
-        let genesis = Genesis::load(genesis.unwrap())?;
-        for validator in genesis.validator_set_for_tooling() {
-            let metadata = validator.verified_metadata();
-            let channel = net_config
-                .connect_lazy(&metadata.net_address)
-                .map_err(|err| anyhow!(err.to_string()))?;
-            let client = NetworkAuthorityClient::new(channel);
-            let public_key_bytes = metadata.sui_pubkey_bytes();
-            authority_clients.insert(public_key_bytes, (metadata.net_address.clone(), client));
-        }
+    for validator in active_validators {
+        let net_addr = Multiaddr::try_from(validator.net_address).unwrap();
+        let channel = net_config
+            .connect_lazy(&net_addr)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(channel);
+        let public_key_bytes =
+            AuthorityPublicKeyBytes::from_bytes(&validator.protocol_pubkey_bytes)?;
+        authority_clients.insert(public_key_bytes, (net_addr.clone(), client));
     }
 
     Ok(authority_clients)
 }
 
-type ObjectVersionResponses = Vec<(Option<SequenceNumber>, Result<ObjectInfoResponse>, f64)>;
+type ObjectVersionResponses = (Option<SequenceNumber>, Result<ObjectInfoResponse>, f64);
 pub struct ObjectData {
     requested_id: ObjectID,
     responses: Vec<(AuthorityName, Multiaddr, ObjectVersionResponses)>,
@@ -174,83 +158,107 @@ impl std::fmt::Display for OwnerOutput {
     }
 }
 
-pub struct GroupedObjectOutput(pub ObjectData);
+#[allow(clippy::type_complexity)]
+pub struct GroupedObjectOutput {
+    pub grouped_results: BTreeMap<
+        Option<(
+            Option<SequenceNumber>,
+            ObjectDigest,
+            TransactionDigest,
+            Owner,
+            Option<TransactionDigest>,
+        )>,
+        Vec<AuthorityName>,
+    >,
+    pub voting_power: Vec<(
+        Option<(
+            Option<SequenceNumber>,
+            ObjectDigest,
+            TransactionDigest,
+            Owner,
+            Option<TransactionDigest>,
+        )>,
+        u64,
+    )>,
+    pub available_voting_power: u64,
+    pub fully_locked: bool,
+}
+
+impl GroupedObjectOutput {
+    pub fn new(
+        object_data: ObjectData,
+        committee: Arc<BTreeMap<AuthorityPublicKeyBytes, u64>>,
+    ) -> Self {
+        let mut grouped_results = BTreeMap::new();
+        let mut voting_power = BTreeMap::new();
+        let mut available_voting_power = 0;
+        for (name, _, (version, resp, _elapsed)) in &object_data.responses {
+            let stake = committee.get(name).unwrap();
+            let key = match resp {
+                Ok(r) => {
+                    let obj_digest = r.object.compute_object_reference().2;
+                    let parent_tx_digest = r.object.previous_transaction;
+                    let owner = r.object.owner;
+                    let lock = r.lock_for_debugging.as_ref().map(|lock| *lock.digest());
+                    if lock.is_none() {
+                        available_voting_power += stake;
+                    }
+                    Some((*version, obj_digest, parent_tx_digest, owner, lock))
+                }
+                Err(_) => None,
+            };
+            let entry = grouped_results.entry(key).or_insert_with(Vec::new);
+            entry.push(*name);
+            let entry: &mut u64 = voting_power.entry(key).or_default();
+            *entry += stake;
+        }
+        let voting_power = voting_power
+            .into_iter()
+            .sorted_by(|(_, v1), (_, v2)| Ord::cmp(v2, v1))
+            .collect::<Vec<_>>();
+        let mut fully_locked = false;
+        if !voting_power.is_empty()
+            && voting_power.first().unwrap().1 + available_voting_power < QUORUM_THRESHOLD
+        {
+            fully_locked = true;
+        }
+        Self {
+            grouped_results,
+            voting_power,
+            available_voting_power,
+            fully_locked,
+        }
+    }
+}
 
 #[allow(clippy::format_in_format_args)]
 impl std::fmt::Display for GroupedObjectOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let responses = self
-            .0
-            .responses
-            .iter()
-            .flat_map(|(name, multiaddr, resp)| {
-                resp.iter().map(|(seq_num, r, timespent)| {
-                    (
-                        *name,
-                        multiaddr.clone(),
-                        seq_num,
-                        r,
-                        timespent,
-                        r.as_ref().err(),
-                    )
-                })
-            })
-            .sorted_by(|a, b| {
-                Ord::cmp(&b.2, &a.2)
-                    .then_with(|| Ord::cmp(&format!("{:?}", &b.5), &format!("{:?}", &a.5)))
-            })
-            .group_by(|(_, _, seq_num, _r, _ts, _)| **seq_num);
-        for (seq_num, group) in &responses {
-            writeln!(f, "seq num: {}", seq_num.opt_debug("latest-seq-num"))?;
-            let cur_version_resp = group.group_by(|(_, _, _, r, _, _)| match r {
-                Ok(result) => {
-                    let parent_tx_digest = result.object.previous_transaction;
-                    let obj_digest = result.object.compute_object_reference().2;
-                    let lock = result
-                        .lock_for_debugging
-                        .as_ref()
-                        .map(|lock| *lock.digest());
-                    let owner = result.object.owner;
-                    Some((parent_tx_digest, obj_digest, lock, owner))
+        writeln!(f, "available stake: {}", self.available_voting_power)?;
+        writeln!(f, "fully locked: {}", self.fully_locked)?;
+        writeln!(f, "{:<100}\n", "-".repeat(100))?;
+        for (key, stake) in &self.voting_power {
+            let val = self.grouped_results.get(key).unwrap();
+            writeln!(f, "total stake: {stake}")?;
+            match key {
+                Some((_version, obj_digest, parent_tx_digest, owner, lock)) => {
+                    let lock = lock.opt_debug("no-known-lock");
+                    writeln!(f, "obj ref: {obj_digest}")?;
+                    writeln!(f, "parent tx: {parent_tx_digest}")?;
+                    writeln!(f, "owner: {owner}")?;
+                    writeln!(f, "lock: {lock}")?;
+                    for (i, name) in val.iter().enumerate() {
+                        writeln!(f, "        {:<4} {:<20}", i, name.concise(),)?;
+                    }
                 }
-                Err(_) => None,
-            });
-            for (result, group) in &cur_version_resp {
-                match result {
-                    Some((parent_tx_digest, obj_digest, lock, owner)) => {
-                        let lock = lock.opt_debug("no-known-lock");
-                        writeln!(f, "obj ref: {obj_digest}")?;
-                        writeln!(f, "parent tx: {parent_tx_digest}")?;
-                        writeln!(f, "owner: {owner}")?;
-                        writeln!(f, "lock: {lock}")?;
-                        for (i, (name, multiaddr, _, _, timespent, _)) in group.enumerate() {
-                            writeln!(
-                                f,
-                                "        {:<4} {:<20} {:<56} ({:.3}s)",
-                                i,
-                                name.concise(),
-                                format!("{}", multiaddr),
-                                timespent
-                            )?;
-                        }
+                None => {
+                    writeln!(f, "ERROR")?;
+                    for (i, name) in val.iter().enumerate() {
+                        writeln!(f, "        {:<4} {:<20}", i, name.concise(),)?;
                     }
-                    None => {
-                        writeln!(f, "ERROR")?;
-                        for (i, (name, multiaddr, _, resp, timespent, _)) in group.enumerate() {
-                            writeln!(
-                                f,
-                                "        {:<4} {:<20} {:<56} ({:.3}s) {:?}",
-                                i,
-                                name.concise(),
-                                format!("{}", multiaddr),
-                                timespent,
-                                resp
-                            )?;
-                        }
-                    }
-                };
-                writeln!(f, "{:<100}\n", "-".repeat(100))?;
-            }
+                }
+            };
+            writeln!(f, "{:<100}\n", "-".repeat(100))?;
         }
         Ok(())
     }
@@ -269,29 +277,27 @@ impl ConciseObjectOutput {
 
 impl std::fmt::Display for ConciseObjectOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for (name, _multi_addr, versions) in &self.0.responses {
-            for (version, resp, _time_elapsed) in versions {
-                write!(
+        for (name, _multi_addr, (version, resp, _time_elapsed)) in &self.0.responses {
+            write!(
+                f,
+                "{:<20} {:<8}",
+                format!("{:?}", name.concise()),
+                version.map(|s| s.value()).opt_debug("-")
+            )?;
+            match resp {
+                Err(_) => writeln!(
                     f,
-                    "{:<20} {:<8}",
-                    format!("{:?}", name.concise()),
-                    version.map(|s| s.value()).opt_debug("-")
-                )?;
-                match resp {
-                    Err(_) => writeln!(
-                        f,
-                        "{:<66} {:<45} {:<51}",
-                        "object-fetch-failed", "no-cert-available", "no-owner-available"
-                    )?,
-                    Ok(resp) => {
-                        let obj_digest = resp.object.compute_object_reference().2;
-                        let parent = resp.object.previous_transaction;
-                        let owner = resp.object.owner;
-                        write!(f, " {:<66} {:<45} {:<51}", obj_digest, parent, owner)?;
-                    }
+                    "{:<66} {:<45} {:<51}",
+                    "object-fetch-failed", "no-cert-available", "no-owner-available"
+                )?,
+                Ok(resp) => {
+                    let obj_digest = resp.object.compute_object_reference().2;
+                    let parent = resp.object.previous_transaction;
+                    let owner = resp.object.owner;
+                    write!(f, " {:<66} {:<45} {:<51}", obj_digest, parent, owner)?;
                 }
-                writeln!(f)?;
             }
+            writeln!(f)?;
         }
         Ok(())
     }
@@ -303,46 +309,43 @@ impl std::fmt::Display for VerboseObjectOutput {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Object: {}", self.0.requested_id)?;
 
-        for (name, multiaddr, versions) in &self.0.responses {
+        for (name, multiaddr, (version, resp, timespent)) in &self.0.responses {
             writeln!(f, "validator: {:?}, addr: {:?}", name.concise(), multiaddr)?;
+            writeln!(
+                f,
+                "-- version: {} ({:.3}s)",
+                version.opt_debug("<version not available>"),
+                timespent,
+            )?;
 
-            for (version, resp, timespent) in versions {
-                writeln!(
-                    f,
-                    "-- version: {} ({:.3}s)",
-                    version.opt_debug("<version not available>"),
-                    timespent,
-                )?;
-
-                match resp {
-                    Err(e) => writeln!(f, "Error fetching object: {}", e)?,
-                    Ok(resp) => {
+            match resp {
+                Err(e) => writeln!(f, "Error fetching object: {}", e)?,
+                Ok(resp) => {
+                    writeln!(
+                        f,
+                        "  -- object digest: {}",
+                        resp.object.compute_object_reference().2
+                    )?;
+                    if resp.object.is_package() {
+                        writeln!(f, "  -- object: <Move Package>")?;
+                    } else if let Some(layout) = &resp.layout {
                         writeln!(
                             f,
-                            "  -- object digest: {}",
-                            resp.object.compute_object_reference().2
-                        )?;
-                        if resp.object.is_package() {
-                            writeln!(f, "  -- object: <Move Package>")?;
-                        } else if let Some(layout) = &resp.layout {
-                            writeln!(
-                                f,
-                                "  -- object: Move Object: {}",
-                                resp.object
-                                    .data
-                                    .try_as_move()
-                                    .unwrap()
-                                    .to_move_struct(layout)
-                                    .unwrap()
-                            )?;
-                        }
-                        writeln!(f, "  -- owner: {}", resp.object.owner)?;
-                        writeln!(
-                            f,
-                            "  -- locked by: {}",
-                            resp.lock_for_debugging.opt_debug("<not locked>")
+                            "  -- object: Move Object: {}",
+                            resp.object
+                                .data
+                                .try_as_move()
+                                .unwrap()
+                                .to_move_struct(layout)
+                                .unwrap()
                         )?;
                     }
+                    writeln!(f, "  -- owner: {}", resp.object.owner)?;
+                    writeln!(
+                        f,
+                        "  -- locked by: {}",
+                        resp.lock_for_debugging.opt_debug("<not locked>")
+                    )?;
                 }
             }
         }
@@ -354,11 +357,8 @@ pub async fn get_object(
     obj_id: ObjectID,
     version: Option<u64>,
     validator: Option<AuthorityName>,
-    genesis: Option<PathBuf>,
-    fullnode_rpc: Option<String>,
+    clients: Arc<BTreeMap<AuthorityName, (Multiaddr, NetworkAuthorityClient)>>,
 ) -> Result<ObjectData> {
-    let clients = make_clients(genesis, fullnode_rpc).await?;
-
     let responses = join_all(
         clients
             .iter()
@@ -370,8 +370,8 @@ pub async fn get_object(
                 }
             })
             .map(|(name, (address, client))| async {
-                let object_versions = get_object_impl(client, obj_id, version).await;
-                (*name, address.clone(), object_versions)
+                let object_version = get_object_impl(client, obj_id, version).await;
+                (*name, address.clone(), object_version)
             }),
     )
     .await;
@@ -384,11 +384,11 @@ pub async fn get_object(
 
 pub async fn get_transaction_block(
     tx_digest: TransactionDigest,
-    genesis: Option<PathBuf>,
     show_input_tx: bool,
-    fullnode_rpc: Option<String>,
+    fullnode_rpc: String,
 ) -> Result<String> {
-    let clients = make_clients(genesis, fullnode_rpc).await?;
+    let sui_client = Arc::new(SuiClientBuilder::default().build(fullnode_rpc).await?);
+    let clients = make_clients(&sui_client).await?;
     let timer = Instant::now();
     let responses = join_all(clients.iter().map(|(name, (address, client))| async {
         let result = client
@@ -483,14 +483,11 @@ pub async fn get_transaction_block(
     Ok(s)
 }
 
-// Keep the return type a vector in case we need support for lamport versions in the near future
 async fn get_object_impl(
     client: &NetworkAuthorityClient,
     id: ObjectID,
     version: Option<u64>,
-) -> Vec<(Option<SequenceNumber>, Result<ObjectInfoResponse>, f64)> {
-    let mut ret = Vec::new();
-
+) -> (Option<SequenceNumber>, Result<ObjectInfoResponse>, f64) {
     let start = Instant::now();
     let resp = client
         .handle_object_info_request(ObjectInfoRequest {
@@ -506,9 +503,7 @@ async fn get_object_impl(
     let elapsed = start.elapsed().as_secs_f64();
 
     let resp_version = resp.as_ref().ok().map(|r| r.object.version().value());
-    ret.push((resp_version.map(SequenceNumber::from), resp, elapsed));
-
-    ret
+    (resp_version.map(SequenceNumber::from), resp, elapsed)
 }
 
 pub(crate) fn make_anemo_config() -> anemo_cli::Config {
@@ -1183,124 +1178,4 @@ pub async fn verify_archive_by_checksum(
     concurrency: usize,
 ) -> Result<()> {
     verify_archive_with_checksums(remote_store_config, concurrency).await
-}
-
-pub async fn state_sync_from_archive(
-    path: &Path,
-    genesis: &Path,
-    remote_store_config: ObjectStoreConfig,
-    concurrency: usize,
-) -> Result<()> {
-    let genesis = Genesis::load(genesis).unwrap();
-    let genesis_committee = genesis.committee()?;
-
-    let checkpoint_store = Arc::new(CheckpointStore::open_tables_read_write(
-        path.join("checkpoints"),
-        MetricConf::default(),
-        None,
-        None,
-    ));
-    // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
-    if checkpoint_store
-        .get_checkpoint_by_digest(genesis.checkpoint().digest())
-        .unwrap()
-        .is_none()
-    {
-        checkpoint_store.insert_checkpoint_contents(genesis.checkpoint_contents().clone())?;
-        checkpoint_store.insert_verified_checkpoint(&genesis.checkpoint())?;
-        checkpoint_store.update_highest_synced_checkpoint(&genesis.checkpoint())?;
-    }
-
-    let perpetual_db = Arc::new(AuthorityPerpetualTables::open(&path.join("store"), None));
-
-    let committee_store = Arc::new(CommitteeStore::new(
-        path.join("epochs"),
-        &genesis_committee,
-        None,
-    ));
-
-    let store = AuthorityStore::open(
-        perpetual_db,
-        &genesis,
-        usize::MAX,
-        false,
-        &Registry::default(),
-    )
-    .await?;
-
-    let latest_checkpoint = checkpoint_store
-        .get_highest_synced_checkpoint()?
-        .map(|c| c.sequence_number)
-        .unwrap_or(0);
-    let state_sync_store = RocksDbStore::new(
-        Arc::new(ExecutionCache::new_for_tests(store, &Registry::default())),
-        committee_store,
-        checkpoint_store.clone(),
-    );
-    let archive_reader_config = ArchiveReaderConfig {
-        remote_store_config,
-        download_concurrency: NonZeroUsize::new(concurrency).unwrap(),
-        use_for_pruning_watermark: false,
-    };
-    let metrics = ArchiveReaderMetrics::new(&Registry::default());
-    let archive_reader = ArchiveReader::new(archive_reader_config, &metrics)?;
-    archive_reader.sync_manifest_once().await?;
-    let latest_checkpoint_in_archive = archive_reader.latest_available_checkpoint().await?;
-    info!(
-        "Latest available checkpoint in archive store: {}",
-        latest_checkpoint_in_archive
-    );
-    info!("Highest synced checkpoint in db: {latest_checkpoint}");
-    if latest_checkpoint_in_archive <= latest_checkpoint {
-        return Ok(());
-    }
-    let progress_bar = ProgressBar::new(latest_checkpoint_in_archive).with_style(
-        ProgressStyle::with_template("[{elapsed_precise}] {wide_bar} {pos}/{len}({msg})").unwrap(),
-    );
-    let txn_counter = Arc::new(AtomicU64::new(0));
-    let checkpoint_counter = Arc::new(AtomicU64::new(0));
-    let cloned_progress_bar = progress_bar.clone();
-    let cloned_checkpoint_store = checkpoint_store.clone();
-    let cloned_counter = txn_counter.clone();
-    let instant = Instant::now();
-    tokio::spawn(async move {
-        loop {
-            let curr_latest_checkpoint = cloned_checkpoint_store
-                .get_highest_synced_checkpoint()
-                .unwrap()
-                .map(|c| c.sequence_number)
-                .unwrap_or(0);
-            let total_checkpoints_per_sec = (curr_latest_checkpoint - latest_checkpoint) as f64
-                / instant.elapsed().as_secs_f64();
-            let total_txns_per_sec =
-                cloned_counter.load(Ordering::Relaxed) as f64 / instant.elapsed().as_secs_f64();
-            cloned_progress_bar.set_position(curr_latest_checkpoint);
-            cloned_progress_bar.set_message(format!(
-                "checkpoints/s: {}, txns/s: {}",
-                total_checkpoints_per_sec, total_txns_per_sec
-            ));
-            tokio::time::sleep(Duration::from_secs(1)).await;
-        }
-    });
-    let start = latest_checkpoint
-        .checked_add(1)
-        .context("Checkpoint overflow")
-        .map_err(|_| anyhow!("Failed to increment checkpoint"))?;
-    info!("Starting syncing checkpoints from checkpoint seq num: {start}");
-    archive_reader
-        .read(
-            state_sync_store,
-            start..u64::MAX,
-            txn_counter,
-            checkpoint_counter,
-            true,
-        )
-        .await?;
-    let end = checkpoint_store
-        .get_highest_synced_checkpoint()?
-        .map(|c| c.sequence_number)
-        .unwrap_or(0);
-    progress_bar.finish_and_clear();
-    info!("Highest synced checkpoint after sync: {end}");
-    Ok(())
 }

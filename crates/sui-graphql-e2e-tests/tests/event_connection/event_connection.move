@@ -14,9 +14,6 @@
 //# publish
 module Test::M1 {
     use sui::event;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
 
     public struct EventA has copy, drop {
         new_value: u64
@@ -51,9 +48,6 @@ module Test::M1 {
 
 module Test::M2 {
     use sui::event;
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-    use sui::transfer;
 
     public struct EventA has copy, drop {
         new_value: u64

@@ -65,7 +65,7 @@ pub async fn certify_transaction(
     let committee = authority.clone_committee_for_testing();
     let certificate = CertifiedTransaction::new(transaction.into_message(), vec![vote], &committee)
         .unwrap()
-        .verify_authenticated(&committee, &Default::default())
+        .try_into_verified(&committee, &Default::default())
         .unwrap();
     Ok(certificate)
 }
@@ -93,7 +93,8 @@ pub async fn execute_certificate_with_execution_error(
         .epoch_store_for_testing()
         .protocol_config()
         .simplified_unwrap_then_delete();
-    let mut state = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let mut state =
+        state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
 
     if with_shared {
         send_consensus(authority, &certificate).await;
@@ -105,7 +106,8 @@ pub async fn execute_certificate_with_execution_error(
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
     let (result, execution_error_opt) = authority.try_execute_for_test(&certificate).await?;
-    let state_after = state_acc.accumulate_live_object_set(include_wrapped_tombstone);
+    let state_after =
+        state_acc.accumulate_cached_live_object_set_for_testing(include_wrapped_tombstone);
     let effects_acc = state_acc.accumulate_effects(
         vec![result.inner().data().clone()],
         epoch_store.protocol_config(),
@@ -303,7 +305,7 @@ pub fn init_certified_transaction(
         epoch_store.committee(),
     )
     .unwrap()
-    .verify_authenticated(epoch_store.committee(), &Default::default())
+    .try_into_verified(epoch_store.committee(), &Default::default())
     .unwrap()
 }
 
@@ -323,7 +325,7 @@ pub async fn certify_shared_obj_transaction_no_execution(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify_authenticated(&committee, &Default::default())
+            .try_into_verified(&committee, &Default::default())
             .unwrap();
 
     send_consensus_no_execution(authority, &certificate).await;
@@ -372,7 +374,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
-            &authority.metrics.skipped_consensus_txns,
+            &authority.metrics,
         )
         .await
         .unwrap();
@@ -395,10 +397,38 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
             vec![transaction],
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
-            &authority.metrics.skipped_consensus_txns,
+            &authority.metrics,
         )
         .await
         .unwrap();
+}
+
+pub async fn send_batch_consensus_no_execution(
+    authority: &AuthorityState,
+    certificates: &[VerifiedCertificate],
+) -> Vec<VerifiedExecutableTransaction> {
+    let transactions = certificates
+        .iter()
+        .map(|cert| {
+            SequencedConsensusTransaction::new_test(ConsensusTransaction::new_certificate_message(
+                &authority.name,
+                cert.clone().into_inner(),
+            ))
+        })
+        .collect();
+
+    // Call process_consensus_transaction() instead of handle_consensus_transaction(), to avoid actually executing cert.
+    // This allows testing cert execution independently.
+    authority
+        .epoch_store_for_testing()
+        .process_consensus_transactions_for_tests(
+            transactions,
+            &Arc::new(CheckpointServiceNoop {}),
+            authority.get_cache_reader().as_ref(),
+            &authority.metrics,
+        )
+        .await
+        .unwrap()
 }
 
 pub fn build_test_modules_with_dep_addr(

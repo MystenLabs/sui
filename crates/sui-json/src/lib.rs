@@ -7,10 +7,8 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, bail};
 use fastcrypto::encoding::{Encoding, Hex};
-use move_binary_format::{
-    access::ModuleAccess, binary_config::BinaryConfig, binary_views::BinaryIndexedView,
-    file_format::SignatureToken,
-};
+use move_binary_format::CompiledModule;
+use move_binary_format::{binary_config::BinaryConfig, file_format::SignatureToken};
 use move_bytecode_utils::resolve_struct;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::annotated_value::MoveFieldLayout;
@@ -35,6 +33,7 @@ use sui_types::base_types::{
 };
 use sui_types::id::{ID, RESOLVED_SUI_ID};
 use sui_types::move_package::MovePackage;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::transfer::RESOLVED_RECEIVING_STRUCT;
 use sui_types::MOVE_STDLIB_ADDRESS;
 
@@ -154,7 +153,7 @@ impl SuiJsonValue {
             if let Some(s) = try_parse_string(layout, bytes) {
                 json!(s)
             } else {
-                let result = bcs::from_bytes_seed(layout, bytes).map_or_else(
+                let result = BoundedVisitor::deserialize_value(bytes, layout).map_or_else(
                     |_| {
                         // fallback to array[u8] if fail to convert to json.
                         JsonValue::Array(
@@ -551,7 +550,7 @@ fn check_valid_homogeneous_rec(curr_q: &mut VecDeque<&JsonValue>) -> Result<(), 
 /// can be signature tokens that represent primitives but that do not have corresponding
 /// MoveTypeLayout (e.g., SignatureToken::StructInstantiation).
 pub fn primitive_type(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_args: &[TypeTag],
     param: &SignatureToken,
 ) -> (bool, Option<MoveTypeLayout>) {
@@ -707,7 +706,7 @@ fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID
 }
 
 fn resolve_call_arg(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_args: &[TypeTag],
     idx: usize,
     arg: &SuiJsonValue,
@@ -777,7 +776,7 @@ fn resolve_call_arg(
     }
 }
 
-pub fn is_receiving_argument(view: &BinaryIndexedView, arg_type: &SignatureToken) -> bool {
+pub fn is_receiving_argument(view: &CompiledModule, arg_type: &SignatureToken) -> bool {
     use SignatureToken as ST;
 
     // Progress down into references to determine if the underlying type is a receiving
@@ -794,7 +793,7 @@ pub fn is_receiving_argument(view: &BinaryIndexedView, arg_type: &SignatureToken
 }
 
 fn resolve_call_args(
-    view: &BinaryIndexedView,
+    view: &CompiledModule,
     type_args: &[TypeTag],
     json_args: &[SuiJsonValue],
     parameter_types: &[SignatureToken],
@@ -835,11 +834,11 @@ pub fn resolve_move_function_args(
     let function_signature = module.function_handle_at(fdef.function);
     let parameters = &module.signature_at(function_signature.parameters).0;
 
-    let view = BinaryIndexedView::Module(&module);
-
     // Lengths have to match, less one, due to TxContext
     let expected_len = match parameters.last() {
-        Some(param) if TxContext::kind(&view, param) != TxContextKind::None => parameters.len() - 1,
+        Some(param) if TxContext::kind(&module, param) != TxContextKind::None => {
+            parameters.len() - 1
+        }
         _ => parameters.len(),
     };
     if combined_args_json.len() != expected_len {
@@ -850,7 +849,7 @@ pub fn resolve_move_function_args(
         );
     }
     // Check that the args are valid and convert to the correct format
-    let call_args = resolve_call_args(&view, type_args, &combined_args_json, parameters)?;
+    let call_args = resolve_call_args(&module, type_args, &combined_args_json, parameters)?;
     let tupled_call_args = call_args
         .into_iter()
         .zip(parameters.iter())

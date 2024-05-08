@@ -7,13 +7,10 @@
 module nfts::devnet_nft {
     use sui::url::{Self, Url};
     use std::string;
-    use sui::object::{Self, ID, UID};
     use sui::event;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
-    struct DevNetNFT has key, store {
+    public struct DevNetNFT has key, store {
         id: UID,
         /// Name for the token
         name: string::String,
@@ -24,7 +21,7 @@ module nfts::devnet_nft {
         // TODO: allow custom attributes
     }
 
-    struct MintNFTEvent has copy, drop {
+    public struct MintNFTEvent has copy, drop {
         // The Object ID of the NFT
         object_id: ID,
         // The creator of the NFT
@@ -89,7 +86,6 @@ module nfts::devnet_nft {
 module nfts::devnet_nftTests {
     use nfts::devnet_nft::{Self, DevNetNFT};
     use sui::test_scenario as ts;
-    use sui::transfer;
     use std::string;
 
     #[test]
@@ -97,7 +93,7 @@ module nfts::devnet_nftTests {
         let addr1 = @0xA;
         let addr2 = @0xB;
         // create the NFT
-        let scenario = ts::begin(addr1);
+        let mut scenario = ts::begin(addr1);
         {
             devnet_nft::mint(b"test", b"a test", b"https://www.sui.io", ts::ctx(&mut scenario))
         };
@@ -110,7 +106,7 @@ module nfts::devnet_nftTests {
         // update its description
         ts::next_tx(&mut scenario, addr2);
         {
-            let nft = ts::take_from_sender<DevNetNFT>(&scenario);
+            let mut nft = ts::take_from_sender<DevNetNFT>(&scenario);
             devnet_nft::update_description(&mut nft, b"a new description") ;
             assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
             ts::return_to_sender(&scenario, nft);

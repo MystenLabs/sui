@@ -89,7 +89,7 @@ type Address implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this address. These grant the owner the capability to
 	manage the associated domain.
@@ -481,7 +481,7 @@ type Coin implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -640,7 +640,7 @@ type CoinMetadata implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -825,6 +825,11 @@ type DisplayEntry {
 	An error string describing why the template could not be rendered.
 	"""
 	error: String
+}
+
+enum DomainFormat {
+	AT
+	DOT
 }
 
 type DryRunEffect {
@@ -1438,7 +1443,7 @@ interface IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the capability to manage the associated domain.
 	"""
@@ -1772,7 +1777,7 @@ type MoveObject implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -1952,7 +1957,7 @@ type MovePackage implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this package. These grant the owner the capability to
 	manage the associated domain.
@@ -2283,7 +2288,7 @@ type Object implements IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -2493,18 +2498,14 @@ input ObjectKey {
 
 enum ObjectKind {
 	"""
-	The object is loaded from serialized data, such as the contents of a transaction.
+	The object is loaded from serialized data, such as the contents of a transaction that hasn't
+	been indexed yet.
 	"""
 	NOT_INDEXED
 	"""
-	The object is currently live and is not deleted or wrapped.
+	The object is fetched from the index.
 	"""
-	LIVE
-	"""
-	The object is referenced at some version, and thus is fetched from the snapshot or
-	historical objects table.
-	"""
-	HISTORICAL
+	INDEXED
 	"""
 	The object is deleted or wrapped and only partial information can be loaded from the
 	indexer.
@@ -2628,7 +2629,7 @@ type Owner implements IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object or address.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object or address. These grant the owner the
 	capability to manage the associated domain.
@@ -3250,7 +3251,7 @@ type StakedSui implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3452,7 +3453,7 @@ type SuinsRegistration implements IMoveObject & IObject & IOwner {
 	"""
 	The domain explicitly configured as the default domain pointing to this object.
 	"""
-	defaultSuinsName: String
+	defaultSuinsName(format: DomainFormat): String
 	"""
 	The SuinsRegistration NFTs owned by this object. These grant the owner the capability to
 	manage the associated domain.
@@ -3712,6 +3713,8 @@ type TransactionBlockEffects {
 	lamportVersion: Int!
 	"""
 	The reason for a transaction failure, if it did fail.
+	If the error is a Move abort, the error message will be resolved to a human-readable form if
+	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
 	"""

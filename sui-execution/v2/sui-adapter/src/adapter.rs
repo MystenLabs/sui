@@ -10,9 +10,9 @@ mod checked {
     use std::{collections::BTreeMap, sync::Arc};
 
     use anyhow::Result;
-    use move_binary_format::{access::ModuleAccess, file_format::CompiledModule};
-    use move_bytecode_verifier::meter::Meter;
+    use move_binary_format::file_format::CompiledModule;
     use move_bytecode_verifier::verify_module_with_config_metered;
+    use move_bytecode_verifier_meter::Meter;
     use move_core_types::account_address::AccountAddress;
     use move_vm_config::{
         runtime::{VMConfig, VMRuntimeLimitsConfig},
@@ -24,7 +24,7 @@ mod checked {
     };
     use sui_move_natives::object_runtime;
     use sui_types::metrics::BytecodeVerifierMetrics;
-    use sui_verifier::{check_for_verifier_timeout, default_verifier_config};
+    use sui_verifier::check_for_verifier_timeout;
     use tracing::instrument;
 
     use sui_move_natives::{object_runtime::ObjectRuntime, NativesCostTable};
@@ -55,10 +55,7 @@ mod checked {
         MoveVM::new_with_config(
             natives,
             VMConfig {
-                verifier: default_verifier_config(
-                    protocol_config,
-                    false, /* we do not enable metering in execution*/
-                ),
+                verifier: protocol_config.verifier_config(/* for_signing */ false),
                 max_binary_format_version: protocol_config.move_binary_format_version(),
                 runtime_limits_config: VMRuntimeLimitsConfig {
                     vector_len_max: protocol_config.max_move_vector_len(),
@@ -150,7 +147,7 @@ mod checked {
     pub fn run_metered_move_bytecode_verifier(
         modules: &[CompiledModule],
         verifier_config: &VerifierConfig,
-        meter: &mut impl Meter,
+        meter: &mut (impl Meter + ?Sized),
         metrics: &Arc<BytecodeVerifierMetrics>,
     ) -> Result<(), SuiError> {
         // run the Move verifier

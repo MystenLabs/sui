@@ -14,6 +14,7 @@ use mysten_metrics::histogram::Histogram;
 use mysten_metrics::{monitored_future, spawn_monitored_task, GaugeGuard};
 use mysten_network::config::Config;
 use std::convert::AsRef;
+use std::net::SocketAddr;
 use sui_authority_aggregation::ReduceOutput;
 use sui_authority_aggregation::{quorum_map_then_reduce_with_timeout, AsyncResult};
 use sui_config::genesis::Genesis;
@@ -26,7 +27,7 @@ use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::quorum_driver_types::GroupedErrors;
+use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
@@ -41,7 +42,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -51,7 +52,8 @@ use sui_types::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, LayoutGenerationOption, ObjectInfoRequest, TransactionInfoRequest,
+    HandleCertificateRequestV3, HandleCertificateResponseV3, LayoutGenerationOption,
+    ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tokio::time::{sleep, timeout};
@@ -405,25 +407,40 @@ struct ProcessCertificateState {
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
     retryable: bool,
+
+    // collection of extended data returned from the validators.
+    // Not all validators will be asked to return this data so we need to hold onto it when one
+    // validator has provided it
+    events: Option<TransactionEvents>,
+    input_objects: Option<Vec<Object>>,
+    output_objects: Option<Vec<Object>>,
+    auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
 pub enum ProcessTransactionResult {
-    Certified(CertifiedTransaction),
+    Certified {
+        certificate: CertifiedTransaction,
+        /// Whether this certificate is newly created by aggregating 2f+1 signatures.
+        /// If a validator returned a cert directly, this will be false.
+        /// This is used to inform the quorum driver, which could make better decisions on telemetry
+        /// such as settlement latency.
+        newly_formed: bool,
+    },
     Executed(VerifiedCertifiedTransactionEffects, TransactionEvents),
 }
 
 impl ProcessTransactionResult {
     pub fn into_cert_for_testing(self) -> CertifiedTransaction {
         match self {
-            Self::Certified(cert) => cert,
+            Self::Certified { certificate, .. } => certificate,
             Self::Executed(..) => panic!("Wrong type"),
         }
     }
 
     pub fn into_effects_for_testing(self) -> VerifiedCertifiedTransactionEffects {
         match self {
-            Self::Certified(..) => panic!("Wrong type"),
+            Self::Certified { .. } => panic!("Wrong type"),
             Self::Executed(effects, ..) => effects,
         }
     }
@@ -1009,6 +1026,7 @@ where
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<ProcessTransactionResult, AggregatorProcessTransactionError> {
         // Now broadcast the transaction to all authorities.
         let tx_digest = transaction.digest();
@@ -1048,7 +1066,7 @@ where
                     Box::pin(
                         async move {
                             let _guard = GaugeGuard::acquire(&self.metrics.inflight_transaction_requests);
-                            client.handle_transaction(transaction_ref.clone()).await
+                            client.handle_transaction(transaction_ref.clone(), client_addr).await
                         },
                     )
                 },
@@ -1332,10 +1350,13 @@ where
             }
             InsertResult::Failed { error } => Err(error),
             InsertResult::QuorumReached(cert_sig) => {
-                let ct =
+                let certificate =
                     CertifiedTransaction::new_from_data_and_sig(plain_tx.into_data(), cert_sig);
-                ct.verify_committee_sigs_only(&self.committee)?;
-                Ok(Some(ProcessTransactionResult::Certified(ct)))
+                certificate.verify_committee_sigs_only(&self.committee)?;
+                Ok(Some(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed: true,
+                }))
             }
         }
     }
@@ -1352,7 +1373,10 @@ where
                 // If we get a certificate in the same epoch, then we use it.
                 // A certificate in a past epoch does not guarantee finality
                 // and validators may reject to process it.
-                Ok(Some(ProcessTransactionResult::Certified(certificate)))
+                Ok(Some(ProcessTransactionResult::Certified {
+                    certificate,
+                    newly_formed: false,
+                }))
             }
             _ => {
                 // If we get 2f+1 effects, it's a proof that the transaction
@@ -1460,23 +1484,39 @@ where
 
     pub async fn process_certificate(
         &self,
-        certificate: CertifiedTransaction,
-    ) -> Result<
-        (VerifiedCertifiedTransactionEffects, TransactionEvents),
-        AggregatorProcessCertificateError,
-    > {
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<QuorumDriverResponse, AggregatorProcessCertificateError> {
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(self.committee.clone()),
             non_retryable_stake: 0,
             non_retryable_errors: vec![],
             retryable_errors: vec![],
             retryable: true,
+            events: None,
+            input_objects: None,
+            output_objects: None,
+            auxiliary_data: None,
         };
 
-        let tx_digest = *certificate.digest();
+        // create a set of validators that we should sample to request input/output objects from
+        let validators_to_sample =
+            if request.include_input_objects || request.include_output_objects {
+                // Always at least ask 1 validator
+                let number_to_sample = std::cmp::max(1, self.committee.num_members() / 2);
+
+                self.committee
+                    .choose_multiple_weighted_iter(number_to_sample)
+                    .cloned()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+        let tx_digest = *request.certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
-        let cert_ref = certificate;
+        let request_ref = request;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
@@ -1499,12 +1539,42 @@ where
             move |name, client| {
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
-                    client
-                        .handle_certificate_v2(cert_ref)
-                        .instrument(
-                            tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                        )
-                        .await
+                    if request_ref.include_input_objects || request_ref.include_output_objects {
+
+                        // adjust the request to validators we aren't planning on sampling
+                        let req = if validators_to_sample.contains(&name) {
+                            request_ref
+                        } else {
+                            HandleCertificateRequestV3 {
+                                include_events: false,
+                                include_input_objects: false,
+                                include_output_objects: false,
+                                include_auxiliary_data: false,
+                                ..request_ref
+                            }
+                        };
+
+                        client
+                            .handle_certificate_v3(req, client_addr)
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                    } else {
+                        client
+                            .handle_certificate_v2(request_ref.certificate, client_addr)
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                            .map(|response| HandleCertificateResponseV3 {
+                                effects: response.signed_effects,
+                                events: Some(response.events),
+                                input_objects: None,
+                                output_objects: None,
+                                auxiliary_data: None,
+                            })
+                    }
                 })
             },
             move |mut state, name, weight, response| {
@@ -1630,20 +1700,39 @@ where
         committee: Arc<Committee>,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
-        response: SuiResult<HandleCertificateResponseV2>,
+        response: SuiResult<HandleCertificateResponseV3>,
         name: AuthorityName,
-    ) -> SuiResult<Option<(VerifiedCertifiedTransactionEffects, TransactionEvents)>> {
+    ) -> SuiResult<Option<QuorumDriverResponse>> {
         match response {
-            Ok(HandleCertificateResponseV2 {
-                signed_effects,
+            Ok(HandleCertificateResponseV3 {
+                effects: signed_effects,
                 events,
-                ..
+                input_objects,
+                output_objects,
+                auxiliary_data,
             }) => {
                 debug!(
                     ?tx_digest,
                     name = ?name.concise(),
                     "Validator handled certificate successfully",
                 );
+
+                if events.is_some() && state.events.is_none() {
+                    state.events = events;
+                }
+
+                if input_objects.is_some() && state.input_objects.is_none() {
+                    state.input_objects = input_objects;
+                }
+
+                if output_objects.is_some() && state.output_objects.is_none() {
+                    state.output_objects = output_objects;
+                }
+
+                if auxiliary_data.is_some() && state.auxiliary_data.is_none() {
+                    state.auxiliary_data = auxiliary_data;
+                }
+
                 let effects_digest = *signed_effects.digest();
                 // Note: here we aggregate votes by the hash of the effects structure
                 match state.effects_map.insert(
@@ -1674,7 +1763,13 @@ where
                         );
                         ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
-                            Some((ct, events))
+                            Some(QuorumDriverResponse {
+                                effects_cert: ct,
+                                events: state.events.take(),
+                                input_objects: state.input_objects.take(),
+                                output_objects: state.output_objects.take(),
+                                auxiliary_data: state.auxiliary_data.take(),
+                            })
                         })
                     }
                 }
@@ -1686,14 +1781,15 @@ where
     pub async fn execute_transaction_block(
         &self,
         transaction: &Transaction,
+        client_addr: Option<SocketAddr>,
     ) -> Result<VerifiedCertifiedTransactionEffects, anyhow::Error> {
         let tx_guard = GaugeGuard::acquire(&self.metrics.inflight_transactions);
         let result = self
-            .process_transaction(transaction.clone())
+            .process_transaction(transaction.clone(), client_addr)
             .instrument(tracing::debug_span!("process_tx"))
             .await?;
         let cert = match result {
-            ProcessTransactionResult::Certified(cert) => cert,
+            ProcessTransactionResult::Certified { certificate, .. } => certificate,
             ProcessTransactionResult::Executed(effects, _) => {
                 return Ok(effects);
             }
@@ -1703,11 +1799,20 @@ where
 
         let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
-            .process_certificate(cert.clone())
+            .process_certificate(
+                HandleCertificateRequestV3 {
+                    certificate: cert.clone(),
+                    include_events: true,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                    include_auxiliary_data: false,
+                },
+                client_addr,
+            )
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok(response.0)
+        Ok(response.effects_cert)
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from

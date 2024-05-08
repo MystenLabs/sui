@@ -8,6 +8,8 @@ use std::{
     time::Duration,
 };
 
+use anemo::rpc::Status;
+use anemo::types::response::StatusCode;
 use anemo::{types::PeerInfo, PeerId, Response};
 use anemo_tower::{
     auth::{AllowedPeers, RequireAuthorizationLayer},
@@ -21,6 +23,7 @@ use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
 use prometheus::HistogramTimer;
+use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, warn};
 
@@ -32,13 +35,13 @@ use super::{
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
     metrics::NetworkRouteMetrics,
-    FetchBlocksRequest, FetchBlocksResponse, NetworkClient, NetworkManager, NetworkService,
-    SendBlockRequest, SendBlockResponse,
+    BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
     context::Context,
     error::{ConsensusError, ConsensusResult},
+    CommitIndex, Round,
 };
 
 /// Implements Anemo RPC client for Consensus.
@@ -99,7 +102,7 @@ impl AnemoClient {
                         if let Some(peer) = network.peer(peer_id) {
                             return Ok(ConsensusRpcClient::new(peer));
                         }
-                        error!("Peer {} should be connected.", peer_id)
+                        warn!("Peer {} should be connected.", peer_id)
                     }
                     Err(RecvError::Closed) => return Err(ConsensusError::Shutdown),
                     Err(RecvError::Lagged(_)) => {
@@ -122,6 +125,8 @@ impl AnemoClient {
 
 #[async_trait]
 impl NetworkClient for AnemoClient {
+    const SUPPORT_STREAMING: bool = false;
+
     async fn send_block(
         &self,
         peer: AuthorityIndex,
@@ -139,10 +144,20 @@ impl NetworkClient for AnemoClient {
         Ok(())
     }
 
+    async fn subscribe_blocks(
+        &self,
+        _peer: AuthorityIndex,
+        _last_received: Round,
+        _timeout: Duration,
+    ) -> ConsensusResult<BlockStream> {
+        unimplemented!("Unimplemented")
+    }
+
     async fn fetch_blocks(
         &self,
         peer: AuthorityIndex,
         block_refs: Vec<BlockRef>,
+        highest_accepted_rounds: Vec<Round>,
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>> {
         let mut client = self.get_client(peer, timeout).await?;
@@ -157,12 +172,37 @@ impl NetworkClient for AnemoClient {
                     }
                 })
                 .collect(),
+            highest_accepted_rounds,
         };
         let response = client
             .fetch_blocks(anemo::Request::new(request).with_timeout(timeout))
             .await
+            .map_err(|e: Status| {
+                if e.status() == StatusCode::RequestTimeout {
+                    ConsensusError::NetworkRequestTimeout(format!("fetch_blocks timeout: {e:?}"))
+                } else {
+                    ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}"))
+                }
+            })?;
+        let body = response.into_body();
+        Ok(body.blocks)
+    }
+
+    async fn fetch_commits(
+        &self,
+        peer: AuthorityIndex,
+        start: CommitIndex,
+        end: CommitIndex,
+        timeout: Duration,
+    ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
+        let mut client = self.get_client(peer, timeout).await?;
+        let request = FetchCommitsRequest { start, end };
+        let response = client
+            .fetch_commits(anemo::Request::new(request).with_timeout(timeout))
+            .await
             .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
-        Ok(response.into_body().blocks)
+        let response = response.into_body();
+        Ok((response.commits, response.certifier_blocks))
     }
 }
 
@@ -233,8 +273,8 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 "peer not found",
             )
         })?;
-        let block_refs = request
-            .into_body()
+        let body = request.into_body();
+        let block_refs = body
             .block_refs
             .into_iter()
             .filter_map(|serialized| match bcs::from_bytes(&serialized) {
@@ -245,9 +285,12 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 }
             })
             .collect();
+
+        let highest_accepted_rounds = body.highest_accepted_rounds;
+
         let blocks = self
             .service
-            .handle_fetch_blocks(*index, block_refs)
+            .handle_fetch_blocks(*index, block_refs, highest_accepted_rounds)
             .await
             .map_err(|e| {
                 anemo::rpc::Status::new_with_message(
@@ -256,6 +299,47 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
                 )
             })?;
         Ok(Response::new(FetchBlocksResponse { blocks }))
+    }
+
+    async fn fetch_commits(
+        &self,
+        request: anemo::Request<FetchCommitsRequest>,
+    ) -> Result<anemo::Response<FetchCommitsResponse>, anemo::rpc::Status> {
+        let Some(peer_id) = request.peer_id() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer_id not found",
+            ));
+        };
+        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+            anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer not found",
+            )
+        })?;
+        let request = request.into_body();
+        let (commits, certifier_blocks) = self
+            .service
+            .handle_fetch_commits(*index, request.start, request.end)
+            .await
+            .map_err(|e| {
+                anemo::rpc::Status::new_with_message(
+                    anemo::types::response::StatusCode::InternalServerError,
+                    format!("{e}"),
+                )
+            })?;
+        let commits = commits
+            .into_iter()
+            .map(|c| c.serialized().clone())
+            .collect();
+        let certifier_blocks = certifier_blocks
+            .into_iter()
+            .map(|b| b.serialized().clone())
+            .collect();
+        Ok(Response::new(FetchCommitsResponse {
+            commits,
+            certifier_blocks,
+        }))
     }
 }
 
@@ -344,7 +428,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 inbound_network_metrics,
-                self.context.parameters.anemo.excessive_message_size(),
+                self.context.parameters.anemo.excessive_message_size,
             )))
             .layer(SetResponseHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -360,7 +444,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
             )
             .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
                 outbound_network_metrics,
-                self.context.parameters.anemo.excessive_message_size(),
+                self.context.parameters.anemo.excessive_message_size,
             )))
             .layer(SetRequestHeaderLayer::overriding(
                 EPOCH_HEADER_KEY.parse().unwrap(),
@@ -488,6 +572,42 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     }
 }
 
+/// Network message types.
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct SendBlockRequest {
+    // Serialized SignedBlock.
+    block: Bytes,
+}
+
+#[derive(Clone, Serialize, Deserialize, prost::Message)]
+pub(crate) struct SendBlockResponse {}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchBlocksRequest {
+    block_refs: Vec<Vec<u8>>,
+    highest_accepted_rounds: Vec<Round>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchBlocksResponse {
+    // Serialized SignedBlock.
+    blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchCommitsRequest {
+    start: CommitIndex,
+    end: CommitIndex,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchCommitsResponse {
+    // Serialized consecutive Commit.
+    commits: Vec<Bytes>,
+    // Serialized SignedBlock that certify the last commit from above.
+    certifier_blocks: Vec<Bytes>,
+}
+
 #[derive(Clone)]
 pub(crate) struct MetricsMakeCallbackHandler {
     metrics: Arc<NetworkRouteMetrics>,
@@ -604,56 +724,19 @@ impl Drop for MetricsResponseHandler {
 mod test {
     use std::{sync::Arc, time::Duration};
 
-    use async_trait::async_trait;
-    use bytes::Bytes;
-    use consensus_config::AuthorityIndex;
     use parking_lot::Mutex;
     use tokio::time::sleep;
 
     use crate::{
-        block::{BlockRef, TestBlock, VerifiedBlock},
+        block::{TestBlock, VerifiedBlock},
         context::Context,
-        error::ConsensusResult,
-        network::{anemo_network::AnemoManager, NetworkClient, NetworkManager, NetworkService},
+        network::{
+            anemo_network::AnemoManager, test_network::TestService, NetworkClient, NetworkManager,
+        },
     };
 
-    struct TestService {
-        handle_send_block: Vec<(AuthorityIndex, Bytes)>,
-        handle_fetch_blocks: Vec<(AuthorityIndex, Vec<BlockRef>)>,
-    }
-
-    impl TestService {
-        pub(crate) fn new() -> Self {
-            Self {
-                handle_send_block: Vec::new(),
-                handle_fetch_blocks: Vec::new(),
-            }
-        }
-    }
-
-    #[async_trait]
-    impl NetworkService for Mutex<TestService> {
-        async fn handle_send_block(
-            &self,
-            peer: AuthorityIndex,
-            block: Bytes,
-        ) -> ConsensusResult<()> {
-            self.lock().handle_send_block.push((peer, block));
-            Ok(())
-        }
-
-        async fn handle_fetch_blocks(
-            &self,
-            peer: AuthorityIndex,
-            block_refs: Vec<BlockRef>,
-        ) -> ConsensusResult<Vec<Bytes>> {
-            self.lock().handle_fetch_blocks.push((peer, block_refs));
-            Ok(vec![])
-        }
-    }
-
     #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn anemo_basics() {
+    async fn anemo_send_block() {
         let (context, keys) = Context::new_for_test(4);
 
         let context_0 = Arc::new(

@@ -3,9 +3,6 @@
 
 #[test_only]
 module sui::id_tests {
-    use sui::object;
-    use sui::tx_context;
-
     const EIdBytesMismatch: u64 = 0;
 
     public struct Object has key {
@@ -16,10 +13,10 @@ module sui::id_tests {
     fun test_get_id() {
         let mut ctx = tx_context::dummy();
         let id = object::new(&mut ctx);
-        let obj_id = object::uid_to_inner(&id);
+        let obj_id = id.to_inner();
         let obj = Object { id };
         assert!(object::id(&obj) == obj_id, EIdBytesMismatch);
         let Object { id } = obj;
-        object::delete(id);
+        id.delete();
     }
 }

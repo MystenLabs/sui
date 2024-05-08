@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module bridge::message {
-    use std::vector;
-
     use sui::bcs;
     use sui::bcs::BCS;
 
@@ -22,13 +20,13 @@ module bridge::message {
     #[test_only]
     use sui::test_scenario;
 
-    struct USDC has drop {}
+    public struct USDC has drop {}
 
     const CURRENT_MESSAGE_VERSION: u8 = 1;
 
     const ETrailingBytes: u64 = 0;
 
-    struct BridgeMessage has copy, drop, store {
+    public struct BridgeMessage has copy, drop, store {
         message_type: u8,
         message_version: u8,
         seq_num: u64,
@@ -36,13 +34,13 @@ module bridge::message {
         payload: vector<u8>
     }
 
-    struct BridgeMessageKey has copy, drop, store {
+    public struct BridgeMessageKey has copy, drop, store {
         source_chain: u8,
         message_type: u8,
         bridge_seq_num: u64
     }
 
-    struct TokenPayload has drop {
+    public struct TokenPayload has drop {
         sender_address: vector<u8>,
         target_chain: u8,
         target_address: vector<u8>,
@@ -50,7 +48,7 @@ module bridge::message {
         amount: u64
     }
 
-    struct EmergencyOp has drop {
+    public struct EmergencyOp has drop {
         op_type: u8
     }
 
@@ -59,7 +57,7 @@ module bridge::message {
     // Therefore their length can be represented by a single byte.
     // See `create_token_bridge_message` for the actual encoding rule.
     public fun extract_token_bridge_payload(message: &BridgeMessage): TokenPayload {
-        let bcs = bcs::new(message.payload);
+        let mut bcs = bcs::new(message.payload);
         let sender_address = bcs::peel_vec_u8(&mut bcs);
         let target_chain = bcs::peel_u8(&mut bcs);
         let target_address = bcs::peel_vec_u8(&mut bcs);
@@ -92,7 +90,7 @@ module bridge::message {
             payload
         } = message;
 
-        let message = vector[];
+        let mut message = vector[];
         vector::push_back(&mut message, message_type);
         vector::push_back(&mut message, message_version);
         // bcs serializes u64 as 8 bytes
@@ -123,7 +121,7 @@ module bridge::message {
         token_type: u8,
         amount: u64
     ): BridgeMessage {
-        let payload = vector[];
+        let mut payload = vector[];
         // sender address should be less than 255 bytes so can fit into u8
         vector::push_back(&mut payload, (vector::length(&sender_address) as u8));
         vector::append(&mut payload, sender_address);
@@ -207,13 +205,13 @@ module bridge::message {
         self.op_type
     }
 
-    fun reverse_bytes(bytes: vector<u8>): vector<u8> {
+    fun reverse_bytes(mut bytes: vector<u8>): vector<u8> {
         vector::reverse(&mut bytes);
         bytes
     }
 
     fun peel_u64_be(bcs: &mut BCS): u64 {
-        let (value, i) = (0u64, 64u8);
+        let (mut value, mut i) = (0u64, 64u8);
         while (i > 0) {
             i = i - 8;
             let byte = (bcs::peel_u8(bcs) as u64);
@@ -224,7 +222,7 @@ module bridge::message {
 
     #[test_only]
     public fun deserialize_message(message: vector<u8>): BridgeMessage {
-        let bcs = bcs::new(message);
+        let mut bcs = bcs::new(message);
         BridgeMessage {
             message_type: bcs::peel_u8(&mut bcs),
             message_version: bcs::peel_u8(&mut bcs),
@@ -237,7 +235,7 @@ module bridge::message {
     #[test]
     fun test_message_serialization_sui_to_eth() {
         let sender_address = address::from_u256(100);
-        let scenario = test_scenario::begin(sender_address);
+        let mut scenario = test_scenario::begin(sender_address);
         let ctx = test_scenario::ctx(&mut scenario);
 
         let coin = coin::mint_for_testing<USDC>(12345, ctx);
@@ -279,7 +277,7 @@ module bridge::message {
     #[test]
     fun test_message_serialization_eth_to_sui() {
         let address_1 = address::from_u256(100);
-        let scenario = test_scenario::begin(address_1);
+        let mut scenario = test_scenario::begin(address_1);
         let ctx = test_scenario::ctx(&mut scenario);
 
         let coin = coin::mint_for_testing<USDC>(12345, ctx);
@@ -329,7 +327,7 @@ module bridge::message {
     fun test_peel_u64_be() {
         let input = hex::decode(b"0000000000003039");
         let expected = 12345u64;
-        let bcs = bcs::new(input);
+        let mut bcs = bcs::new(input);
         assert!(peel_u64_be(&mut bcs) == expected, 0)
     }
 }

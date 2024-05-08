@@ -28,6 +28,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::NetworkKeyPair;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
 
 use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::multiaddr::Multiaddr;
@@ -171,6 +172,13 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub run_with_range: Option<RunWithRange>,
+
+    // For killswitch use None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub policy_config: Option<PolicyConfig>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub firewall_config: Option<RemoteFirewallConfig>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -192,11 +200,13 @@ pub fn default_zklogin_oauth_providers() -> BTreeMap<Chain, BTreeSet<String>> {
         "Kakao".to_string(),
         "Apple".to_string(),
         "Slack".to_string(),
+        "TestIssuer".to_string(),
     ]);
     let providers = BTreeSet::from([
         "Google".to_string(),
         "Facebook".to_string(),
         "Twitch".to_string(),
+        "Apple".to_string(),
     ]);
     map.insert(Chain::Mainnet, providers.clone());
     map.insert(Chain::Testnet, providers);
@@ -257,6 +267,10 @@ pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
 
 pub fn bool_true() -> bool {
     true
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 impl Config for NodeConfig {}
@@ -568,6 +582,8 @@ pub struct AuthorityStorePruningConfig {
     /// disables object tombstone pruning. We don't serialize it if it is the default value, false.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub killswitch_tombstone_pruning: bool,
+    #[serde(default = "default_smoothing", skip_serializing_if = "is_true")]
+    pub smooth: bool,
 }
 
 fn default_num_latest_epoch_dbs_to_retain() -> usize {
@@ -586,6 +602,10 @@ fn default_max_checkpoints_in_batch() -> usize {
     10
 }
 
+fn default_smoothing() -> bool {
+    cfg!(not(test))
+}
+
 impl Default for AuthorityStorePruningConfig {
     fn default() -> Self {
         Self {
@@ -598,6 +618,7 @@ impl Default for AuthorityStorePruningConfig {
             periodic_compaction_threshold_days: None,
             num_epochs_to_retain_for_checkpoints: if cfg!(msim) { Some(2) } else { None },
             killswitch_tombstone_pruning: false,
+            smooth: true,
         }
     }
 }
@@ -729,8 +750,16 @@ pub struct AuthorityOverloadConfig {
     // is overloaded.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub check_system_overload_at_execution: bool,
-    // TODO: Move other thresholds here as well, including `MAX_TM_QUEUE_LENGTH`
-    // and `MAX_PER_OBJECT_QUEUE_LENGTH`.
+
+    // Reject a transaction if transaction manager queue length is above this threshold.
+    // 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
+    #[serde(default = "default_max_transaction_manager_queue_length")]
+    pub max_transaction_manager_queue_length: usize,
+
+    // Reject a transaction if the number of pending transactions depending on the object
+    // is above the threshold.
+    #[serde(default = "default_max_transaction_manager_per_object_queue_length")]
+    pub max_transaction_manager_per_object_queue_length: usize,
 }
 
 fn default_max_txn_age_in_queue() -> Duration {
@@ -765,6 +794,14 @@ fn default_check_system_overload_at_signing() -> bool {
     true
 }
 
+fn default_max_transaction_manager_queue_length() -> usize {
+    100_000
+}
+
+fn default_max_transaction_manager_per_object_queue_length() -> usize {
+    100
+}
+
 impl Default for AuthorityOverloadConfig {
     fn default() -> Self {
         Self {
@@ -778,6 +815,9 @@ impl Default for AuthorityOverloadConfig {
             safe_transaction_ready_rate: default_safe_transaction_ready_rate(),
             check_system_overload_at_signing: true,
             check_system_overload_at_execution: false,
+            max_transaction_manager_queue_length: default_max_transaction_manager_queue_length(),
+            max_transaction_manager_per_object_queue_length:
+                default_max_transaction_manager_per_object_queue_length(),
         }
     }
 }

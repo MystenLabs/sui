@@ -393,8 +393,6 @@ pub enum SuiError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSigs,
-    #[error("System Transaction not accepted")]
-    InvalidSystemTransaction,
 
     // Account access
     #[error("Invalid authenticator")]
@@ -557,8 +555,8 @@ pub enum SuiError {
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]
     ValidatorHaltedAtEpochEnd,
-    #[error("Validator has stopped operations for this epoch")]
-    EpochEnded,
+    #[error("Operations for epoch {0} have ended")]
+    EpochEnded(EpochId),
     #[error("Error when advancing epoch: {:?}", error)]
     AdvanceEpochError { error: String },
 
@@ -569,6 +567,9 @@ pub enum SuiError {
     // Tonic::Status
     #[error("{1} - {0}")]
     RpcError(String, String),
+
+    #[error("Method not allowed")]
+    InvalidRpcMethodError,
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
@@ -620,6 +621,9 @@ pub enum SuiError {
 
     #[error("Validator cannot handle the request at the moment. Please retry after at least {retry_after_secs} seconds.")]
     ValidatorOverloadedRetryAfter { retry_after_secs: u64 },
+
+    #[error("Too many requests")]
+    TooManyRequests,
 }
 
 #[repr(u64)]
@@ -664,6 +668,10 @@ impl From<ExecutionError> for SuiError {
 
 impl From<Status> for SuiError {
     fn from(status: Status) -> Self {
+        if status.message() == "Too many requests" {
+            return Self::TooManyRequests;
+        }
+
         let result = bcs::from_bytes::<SuiError>(status.details());
         if let Ok(sui_error) = result {
             sui_error
@@ -779,6 +787,11 @@ impl SuiError {
             SuiError::TxAlreadyFinalizedWithDifferentUserSigs => false,
             SuiError::FailedToVerifyTxCertWithExecutedEffects { .. } => false,
             SuiError::ObjectLockConflict { .. } => false,
+
+            // NB: This is not an internal overload, but instead an imposed rate
+            // limit / blocking of a client. It must be non-retryable otherwise
+            // we will make the threat worse through automatic retries.
+            SuiError::TooManyRequests => false,
 
             // For all un-categorized errors, return here with categorized = false.
             _ => return (false, false),

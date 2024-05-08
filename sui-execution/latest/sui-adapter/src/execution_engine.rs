@@ -29,7 +29,6 @@ mod checked {
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
-    use move_binary_format::access::ModuleAccess;
     use move_core_types::ident_str;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{

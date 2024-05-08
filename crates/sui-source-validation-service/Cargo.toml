@@ -31,8 +31,7 @@ sui-sdk.workspace = true
 sui-source-validation.workspace = true
 
 axum.workspace = true
-const-str.workspace = true
-git-version.workspace = true
+bin-version.workspace = true
 move-package.workspace = true
 move-compiler.workspace = true
 move-core-types.workspace = true

@@ -87,8 +87,12 @@ pub struct BytecodeVerifierMetrics {
 }
 
 impl BytecodeVerifierMetrics {
+    /// DEPRECATED in latest metered verifier, which only report overall success or timeout.
     pub const MOVE_VERIFIER_TAG: &'static str = "move_verifier";
+
+    /// DEPRECATED in latest metered verifier, which only report overall success or timeout.
     pub const SUI_VERIFIER_TAG: &'static str = "sui_verifier";
+
     pub const OVERALL_TAG: &'static str = "overall";
     pub const SUCCESS_TAG: &'static str = "success";
     pub const TIMEOUT_TAG: &'static str = "failed";

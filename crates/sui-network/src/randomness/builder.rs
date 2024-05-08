@@ -124,7 +124,7 @@ impl UnstartedRandomness {
 
                 epoch: 0,
                 authority_info: Arc::new(HashMap::new()),
-                peer_share_counts: None,
+                peer_share_ids: None,
                 dkg_output: None,
                 aggregation_threshold: 0,
                 pending_tasks: BTreeSet::new(),
@@ -133,6 +133,7 @@ impl UnstartedRandomness {
                 received_partial_sigs: BTreeMap::new(),
                 completed_sigs: BTreeSet::new(),
                 completed_rounds: BTreeSet::new(),
+                recovered_last_completed_round: None,
             },
             handle,
         )
