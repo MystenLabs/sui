@@ -18,15 +18,15 @@ use crate::{
 };
 
 use super::{
-    LinterDiagCategory, LinterDiagCode, LINT_WARNING_PREFIX, RANDOM_GENERATOR_STRUCT_NAME,
-    RANDOM_MOD_NAME, RANDOM_STRUCT_NAME, SUI_PKG_NAME,
+    LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
+    RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME, SUI_PKG_NAME,
 };
 
 const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::Sui as u8,
-    LinterDiagCode::PublicRandom as u8,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::PublicRandom as u8,
     "Risky use of 'sui::random'",
 );
 

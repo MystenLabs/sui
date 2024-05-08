@@ -17,7 +17,7 @@ pub enum LintLevel {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum LinterDiagCategory {
+pub enum LinterDiagnosticCategory {
     Correctness,
     Complexity,
     Suspicious,

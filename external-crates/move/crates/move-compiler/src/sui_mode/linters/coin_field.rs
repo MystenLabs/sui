@@ -15,15 +15,15 @@ use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
 use super::{
-    LinterDiagCategory, LinterDiagCode, COIN_MOD_NAME, COIN_STRUCT_NAME, LINT_WARNING_PREFIX,
-    SUI_PKG_NAME,
+    LinterDiagnosticCategory, LinterDiagnosticCode, COIN_MOD_NAME, COIN_STRUCT_NAME,
+    LINT_WARNING_PREFIX, SUI_PKG_NAME,
 };
 
 const COIN_FIELD_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::Sui as u8,
-    LinterDiagCode::CoinField as u8,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::CoinField as u8,
     "sub-optimal 'sui::coin::Coin' field type",
 );
 
