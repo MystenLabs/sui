@@ -17,8 +17,7 @@ use tracing::info;
 use crate::surfer_state::SurfStatistics;
 use crate::surfer_task::SurferTask;
 
-pub mod default_surf_strategy;
-mod surf_strategy;
+pub mod surf_strategy;
 mod surfer_state;
 mod surfer_task;
 
@@ -27,7 +26,7 @@ const VALIDATOR_COUNT: usize = 7;
 const ACCOUNT_NUM: usize = 20;
 const GAS_OBJECT_COUNT: usize = 3;
 
-pub async fn run<S: SurfStrategy + Default>(
+pub async fn run(
     run_duration: Duration,
     epoch_duration: Duration,
     package_paths: Vec<PathBuf>,
@@ -49,10 +48,10 @@ pub async fn run<S: SurfStrategy + Default>(
         VALIDATOR_COUNT,
         epoch_duration.as_millis()
     );
-    run_with_test_cluster::<S>(run_duration, package_paths, cluster.into(), 0).await
+    run_with_test_cluster(run_duration, package_paths, cluster.into(), 0).await
 }
 
-pub async fn run_with_test_cluster<S: SurfStrategy + Default>(
+pub async fn run_with_test_cluster(
     run_duration: Duration,
     package_paths: Vec<PathBuf>,
     cluster: Arc<TestCluster>,
@@ -61,16 +60,17 @@ pub async fn run_with_test_cluster<S: SurfStrategy + Default>(
     skip_accounts: usize,
 ) -> SurfStatistics {
     run_with_test_cluster_and_strategy(
-        Box::<S>::default(),
+        SurfStrategy::default(),
         run_duration,
         package_paths,
         cluster,
         skip_accounts,
     )
+    .await
 }
 
 pub async fn run_with_test_cluster_and_strategy(
-    surf_strategy: Box<dyn SurfStrategy>,
+    surf_strategy: SurfStrategy,
     run_duration: Duration,
     package_paths: Vec<PathBuf>,
     cluster: Arc<TestCluster>,

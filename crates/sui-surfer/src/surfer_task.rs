@@ -20,7 +20,7 @@ use crate::{
 
 pub struct SurferTask {
     pub state: SurferState,
-    pub surf_strategy: Box<dyn SurfStrategy>,
+    pub surf_strategy: SurfStrategy,
     pub exit_rcv: watch::Receiver<()>,
 }
 
@@ -30,7 +30,7 @@ impl SurferTask {
         seed: u64,
         exit_rcv: watch::Receiver<()>,
         skip_accounts: usize,
-        surf_strategy: Box<dyn SurfStrategy>,
+        surf_strategy: SurfStrategy,
     ) -> Vec<SurferTask> {
         let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
@@ -119,7 +119,7 @@ impl SurferTask {
                 );
                 SurferTask {
                     state,
-                    surf_strategy: Box::clone(&surf_strategy),
+                    surf_strategy: surf_strategy.clone(),
                     exit_rcv: exit_rcv.clone(),
                 }
             })
