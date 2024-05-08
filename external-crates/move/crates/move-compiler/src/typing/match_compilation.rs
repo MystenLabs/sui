@@ -4,7 +4,6 @@
 use crate::{
     diag,
     expansion::ast::{Fields, ModuleIdent, Mutability, Value, Value_},
-    hlir::translate::Context,
     ice, ice_assert,
     naming::ast::{self as N, BuiltinTypeName_, Type, UseFuns, Var},
     parser::ast::{BinOp_, ConstantName, DatatypeName, Field, VariantName},
@@ -14,6 +13,7 @@ use crate::{
         unique_map::UniqueMap,
     },
     typing::ast::{self as T, MatchArm_, MatchPattern, UnannotatedPat_ as TP},
+    typing::core::Context,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -22,10 +22,61 @@ use std::{
     fmt::Display,
 };
 
+use super::visitor::TypingVisitorContext;
+
 //**************************************************************************************************
 // Description
 //**************************************************************************************************
 // This mostly follows the classical Maranget (2008) implementation toward optimal decision trees.
+
+//**************************************************************************************************
+// Entry and Visitor
+//**************************************************************************************************
+
+struct MatchCompiler<'ctx, 'env> {
+    context: &'ctx mut Context<'env>,
+}
+
+impl TypingVisitorContext for MatchCompiler<'_, '_> {
+    fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
+        use T::UnannotatedExp_ as E;
+        if let E::Match(_, _) = &exp.exp.value {
+            let E::Match(mut subject, arms) =
+                std::mem::replace(&mut exp.exp.value, E::UnresolvedError)
+            else {
+                unreachable!()
+            };
+            self.visit_exp(&mut subject);
+            debug_print!(self.context.debug.match_translation,
+                ("subject" => subject),
+                (lines "arms" => &arms.value)
+            );
+            let _ = std::mem::replace(exp, compile_match(self.context, &exp.ty, *subject, arms));
+            debug_print!(self.context.debug.match_translation, ("compiled" => exp));
+            true
+        } else {
+            false
+        }
+    }
+
+    fn add_warning_filter_scope(&mut self, filter: crate::diagnostics::WarningFilters) {
+        self.context.env.add_warning_filter_scope(filter);
+    }
+
+    fn pop_warning_filter_scope(&mut self) {
+        self.context.env.pop_warning_filter_scope();
+    }
+}
+
+pub fn function_body_(context: &mut Context, b_: &mut T::FunctionBody_) {
+    match b_ {
+        T::FunctionBody_::Native | T::FunctionBody_::Macro => (),
+        T::FunctionBody_::Defined(es) => {
+            let mut compiler = MatchCompiler { context };
+            compiler.visit_seq(es);
+        }
+    }
+}
 
 //**************************************************************************************************
 // Match Trees
@@ -422,6 +473,14 @@ impl PatternMatrix {
 
     fn patterns_empty(&self) -> bool {
         !self.patterns.is_empty() && self.patterns.iter().all(|pat| pat.pattern_empty())
+    }
+
+    fn all_errors(&self) -> bool {
+        self.patterns.iter().all(|arm| {
+            arm.pats
+                .iter()
+                .all(|pat| matches!(pat.pat.value, TP::ErrorPat))
+        })
     }
 
     fn wild_arm_opt(&mut self, fringe: &VecDeque<FringeEntry>) -> Option<Vec<ArmResult>> {
@@ -1233,8 +1292,8 @@ fn compile_match_head(
     }
 }
 
-pub fn order_fields_by_decl<T>(
-    decl_fields: Option<&UniqueMap<Field, usize>>,
+pub fn order_fields_by_decl<T: std::fmt::Debug>(
+    decl_fields: Option<UniqueMap<Field, usize>>,
     fields: Fields<T>,
 ) -> Vec<(usize, Field, T)> {
     let mut texp_fields: Vec<(usize, Field, T)> = if let Some(field_map) = decl_fields {
@@ -1350,7 +1409,7 @@ fn resolve_result(
                     blocks.push((v, rest_result));
                 }
             }
-            let out_exp = T::UnannotatedExp_::VariantMatch(make_var_ref(subject), e, blocks);
+            let out_exp = T::UnannotatedExp_::VariantMatch(make_var_ref(subject), (m, e), blocks);
             let body_exp = T::exp(context.output_type(), sp(context.arms_loc(), out_exp));
             make_copy_bindings(bindings, body_exp)
         }
@@ -2272,13 +2331,31 @@ fn find_counterexample(
     matrix: PatternMatrix,
     has_guards: bool,
 ) -> bool {
+    // If the matrix is only errors (or empty), it was all error or something else went wrong; no
+    // counterexample is required.
+    if !matrix.is_empty() && !matrix.patterns_empty() && matrix.all_errors() {
+        debug_print!(context.debug.match_counterexample, (msg "errors"), ("matrix" => matrix; dbg));
+        assert!(context.env.has_errors());
+        return true;
+    }
+
+    find_counterexample_impl(context, loc, matrix, has_guards)
+}
+
+/// Returns true if it found a counter-example.
+fn find_counterexample_impl(
+    context: &mut Context,
+    loc: Loc,
+    matrix: PatternMatrix,
+    has_guards: bool,
+) -> bool {
     fn make_wildcards(n: usize) -> Vec<CounterExample> {
         std::iter::repeat(CounterExample::Wildcard)
             .take(n)
             .collect()
     }
 
-    fn find_counterexample_bool(
+    fn counterexample_bool(
         context: &mut Context,
         matrix: PatternMatrix,
         arity: u32,
@@ -2290,7 +2367,7 @@ fn find_counterexample(
             // Saturated
             for lit in literals {
                 if let Some(counterexample) =
-                    find_counterexample(context, matrix.specialize_literal(&lit).1, arity - 1, ndx)
+                    counterexample_rec(context, matrix.specialize_literal(&lit).1, arity - 1, ndx)
                 {
                     let lit_str = format!("{}", lit);
                     let result = [CounterExample::Literal(lit_str)]
@@ -2303,7 +2380,7 @@ fn find_counterexample(
             None
         } else {
             let (_, default) = matrix.specialize_default();
-            if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
+            if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                 if literals.is_empty() {
                     let result = [CounterExample::Wildcard]
                         .into_iter()
@@ -2330,7 +2407,7 @@ fn find_counterexample(
         }
     }
 
-    fn find_counterexample_builtin(
+    fn counterexample_builtin(
         context: &mut Context,
         matrix: PatternMatrix,
         arity: u32,
@@ -2340,7 +2417,7 @@ fn find_counterexample(
         // saturated.
         let literals = matrix.first_lits();
         let (_, default) = matrix.specialize_default();
-        if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx) {
+        if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
             if literals.is_empty() {
                 let result = [CounterExample::Wildcard]
                     .into_iter()
@@ -2378,7 +2455,7 @@ fn find_counterexample(
         }
     }
 
-    fn find_counterexample_datatype(
+    fn counterexample_datatype(
         context: &mut Context,
         matrix: PatternMatrix,
         arity: u32,
@@ -2408,7 +2485,7 @@ fn find_counterexample(
                     .collect::<Vec<_>>();
                 let (_, inner_matrix) = matrix.specialize_struct(context, bind_tys);
                 if let Some(mut counterexample) =
-                    find_counterexample(context, inner_matrix, ctor_arity + arity - 1, ndx)
+                    counterexample_rec(context, inner_matrix, ctor_arity + arity - 1, ndx)
                 {
                     let ctor_args = counterexample
                         .drain(0..(ctor_arity as usize))
@@ -2430,8 +2507,7 @@ fn find_counterexample(
             } else {
                 let (_, default) = matrix.specialize_default();
                 // `_` is a reasonable counterexample since we never unpacked this struct
-                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
-                {
+                if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     // If we didn't match any head constructor, `_` is a reasonable
                     // counter-example entry.
                     let mut result = vec![CounterExample::Wildcard];
@@ -2467,7 +2543,7 @@ fn find_counterexample(
                         .collect::<Vec<_>>();
                     let (_, inner_matrix) = matrix.specialize_variant(context, &ctor, bind_tys);
                     if let Some(mut counterexample) =
-                        find_counterexample(context, inner_matrix, ctor_arity + arity - 1, ndx)
+                        counterexample_rec(context, inner_matrix, ctor_arity + arity - 1, ndx)
                     {
                         let ctor_args = counterexample
                             .drain(0..(ctor_arity as usize))
@@ -2491,8 +2567,7 @@ fn find_counterexample(
                 None
             } else {
                 let (_, default) = matrix.specialize_default();
-                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
-                {
+                if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     if ctors.is_empty() {
                         // If we didn't match any head constructor, `_` is a reasonable
                         // counter-example entry.
@@ -2534,7 +2609,7 @@ fn find_counterexample(
     }
 
     // \mathcal{I} from Maranget. Warning for pattern matching. 1992.
-    fn find_counterexample(
+    fn counterexample_rec(
         context: &mut Context,
         matrix: PatternMatrix,
         arity: u32,
@@ -2545,21 +2620,20 @@ fn find_counterexample(
             None
         } else if let Some(ty) = matrix.tys.first() {
             if let Some(sp!(_, BuiltinTypeName_::Bool)) = ty.value.unfold_to_builtin_type_name() {
-                find_counterexample_bool(context, matrix, arity, ndx)
+                counterexample_bool(context, matrix, arity, ndx)
             } else if let Some(_builtin) = ty.value.unfold_to_builtin_type_name() {
-                find_counterexample_builtin(context, matrix, arity, ndx)
+                counterexample_builtin(context, matrix, arity, ndx)
             } else if let Some((mident, datatype_name)) = ty
                 .value
                 .unfold_to_type_name()
                 .and_then(|sp!(_, name)| name.datatype_name())
             {
                 // This will need to also support structs if and when we add matching for them.
-                find_counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
+                counterexample_datatype(context, matrix, arity, ndx, mident, datatype_name)
             } else {
                 // This can only be a binding or wildcard, so we act accordingly.
                 let (_, default) = matrix.specialize_default();
-                if let Some(counterexample) = find_counterexample(context, default, arity - 1, ndx)
-                {
+                if let Some(counterexample) = counterexample_rec(context, default, arity - 1, ndx) {
                     let result = [CounterExample::Wildcard]
                         .into_iter()
                         .chain(counterexample)
@@ -2578,7 +2652,8 @@ fn find_counterexample(
     }
 
     let mut ndx = 0;
-    if let Some(mut counterexample) = find_counterexample(context, matrix, 1, &mut ndx) {
+
+    if let Some(mut counterexample) = counterexample_rec(context, matrix, 1, &mut ndx) {
         debug_print!(
             context.debug.match_counterexample,
             ("counterexamples #" => counterexample.len(); fmt),

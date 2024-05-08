@@ -9,7 +9,8 @@ use crate::{
         Diagnostic,
     },
     editions::FeatureGate,
-    expansion::ast::{AbilitySet, ModuleIdent, ModuleIdent_, Mutability, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, ModuleIdent_, Mutability, Visibility},
+    hlir::translate::{MATCH_TEMP_PREFIX_SYMBOL, NEW_NAME_DELIM},
     ice,
     naming::ast::{
         self as N, BlockLabel, BuiltinTypeName_, Color, DatatypeTypeParameter, EnumDefinition,
@@ -20,6 +21,7 @@ use crate::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
     shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
+    typing::match_compilation,
     FullyCompiledProgram,
 };
 use move_ir_types::location::*;
@@ -71,10 +73,22 @@ pub enum MacroExpansion {
     Argument { scope_color: Color },
 }
 
+pub(super) struct TypingDebugFlags {
+    pub(super) match_translation: bool,
+    pub(super) match_specialization: bool,
+    pub(super) match_counterexample: bool,
+    pub(super) match_work_queue: bool,
+    pub(super) match_constant_conversion: bool,
+}
+
 pub struct Context<'env> {
     pub modules: NamingProgramInfo,
     macros: UniqueMap<ModuleIdent, UniqueMap<FunctionName, N::Sequence>>,
     pub env: &'env mut CompilationEnv,
+    pub(super) debug: TypingDebugFlags,
+
+    // for generating new variables during match compilation
+    next_match_var_id: usize,
 
     use_funs: Vec<UseFunsScope>,
     pub current_package: Option<Symbol>,
@@ -158,6 +172,13 @@ impl<'env> Context<'env> {
         info: NamingProgramInfo,
     ) -> Self {
         let global_use_funs = UseFunsScope::global(&info);
+        let debug = TypingDebugFlags {
+            match_translation: false,
+            match_specialization: false,
+            match_counterexample: false,
+            match_work_queue: false,
+            match_constant_conversion: false,
+        };
         Context {
             use_funs: vec![global_use_funs],
             subst: Subst::empty(),
@@ -173,6 +194,8 @@ impl<'env> Context<'env> {
             macros: UniqueMap::new(),
             named_block_map: BTreeMap::new(),
             env,
+            debug,
+            next_match_var_id: 0,
             new_friends: BTreeSet::new(),
             used_module_members: BTreeMap::new(),
             macro_expansion: vec![],
@@ -672,6 +695,165 @@ impl<'env> Context<'env> {
             color,
         );
         *max_variable_color = color;
+    }
+
+    //********************************************
+    // Match Compilation Helpers
+    //********************************************
+
+    pub fn is_struct(&self, module: &ModuleIdent, datatype_name: &DatatypeName) -> bool {
+        matches!(
+            self.datatype_kind(module, datatype_name),
+            DatatypeKind::Struct
+        )
+    }
+
+    pub fn struct_fields(
+        &self,
+        module: &ModuleIdent,
+        struct_name: &DatatypeName,
+    ) -> Option<UniqueMap<Field, usize>> {
+        let fields = match &self.struct_definition(module, struct_name).fields {
+            N::StructFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
+            N::StructFields::Native(_) => None,
+        };
+        assert!(fields.is_some() || self.env.has_errors());
+        fields
+    }
+
+    /// Indicates if the struct is positional. Returns false on native.
+    pub fn struct_is_positional(&self, module: &ModuleIdent, struct_name: &DatatypeName) -> bool {
+        match self.modules.struct_definition(module, struct_name).fields {
+            N::StructFields::Defined(is_positional, _) => is_positional,
+            N::StructFields::Native(_) => false,
+        }
+    }
+
+    /// Returns the enum variant names in sorted order.
+    pub fn enum_variants(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+    ) -> Vec<VariantName> {
+        let mut names = self
+            .enum_definition(module, enum_name)
+            .variants
+            .ref_map(|_, vdef| vdef.index)
+            .clone()
+            .into_iter()
+            .collect::<Vec<_>>();
+        names.sort_by(|(_, ndx0), (_, ndx1)| ndx0.cmp(ndx1));
+        names.into_iter().map(|(name, _ndx)| name).collect()
+    }
+
+    pub fn enum_variant_fields(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> Option<UniqueMap<Field, usize>> {
+        let Some(variant) = self
+            .enum_definition(module, enum_name)
+            .variants
+            .get(variant_name)
+        else {
+            assert!(self.env.has_errors());
+            return None;
+        };
+        match &variant.fields {
+            N::VariantFields::Defined(_, fields) => Some(fields.ref_map(|_, (ndx, _)| *ndx)),
+            N::VariantFields::Empty => Some(UniqueMap::new()),
+        }
+    }
+
+    /// Indicates if the enum variant is positional. Returns false on empty or missing.
+    pub fn enum_variant_is_positional(
+        &self,
+        module: &ModuleIdent,
+        enum_name: &DatatypeName,
+        variant_name: &VariantName,
+    ) -> bool {
+        let vdef = self
+            .enum_definition(module, enum_name)
+            .variants
+            .get(variant_name)
+            .expect("ICE should have failed during naming");
+        match &vdef.fields {
+            N::VariantFields::Empty => false,
+            N::VariantFields::Defined(is_positional, _m) => *is_positional,
+        }
+    }
+
+    pub fn make_imm_ref_match_binders(
+        &mut self,
+        pattern_loc: Loc,
+        arg_types: Fields<N::Type>,
+    ) -> Vec<(Field, N::Var, N::Type)> {
+        fn make_imm_ref_ty(ty: N::Type) -> N::Type {
+            match ty {
+                sp!(_, N::Type_::Ref(false, _)) => ty,
+                sp!(loc, N::Type_::Ref(true, inner)) => sp(loc, N::Type_::Ref(false, inner)),
+                ty => {
+                    let loc = ty.loc;
+                    sp(loc, N::Type_::Ref(false, Box::new(ty)))
+                }
+            }
+        }
+
+        let fields = match_compilation::order_fields_by_decl(None, arg_types.clone());
+        fields
+            .into_iter()
+            .map(|(_, field_name, field_type)| {
+                (
+                    field_name,
+                    self.new_match_var(field_name.to_string(), pattern_loc),
+                    make_imm_ref_ty(field_type),
+                )
+            })
+            .collect::<Vec<_>>()
+    }
+
+    pub fn make_unpack_binders(
+        &mut self,
+        pattern_loc: Loc,
+        arg_types: Fields<N::Type>,
+    ) -> Vec<(Field, N::Var, N::Type)> {
+        let fields = match_compilation::order_fields_by_decl(None, arg_types.clone());
+        fields
+            .into_iter()
+            .map(|(_, field_name, field_type)| {
+                (
+                    field_name,
+                    self.new_match_var(field_name.to_string(), pattern_loc),
+                    field_type,
+                )
+            })
+            .collect::<Vec<_>>()
+    }
+
+    /// Makes a new `naming/ast.rs` variable. Does _not_ record it as a function local, since this
+    /// should only be called in match expansion, which will have its body processed in HLIR
+    /// translation after type expansion.
+    pub fn new_match_var(&mut self, name: String, loc: Loc) -> N::Var {
+        let id = self.next_match_var_id();
+        let name = format!(
+            "{}{NEW_NAME_DELIM}{name}{NEW_NAME_DELIM}{id}",
+            *MATCH_TEMP_PREFIX_SYMBOL,
+        )
+        .into();
+        sp(
+            loc,
+            N::Var_ {
+                name,
+                id: id as u16,
+                color: 1,
+            },
+        )
+    }
+
+    fn next_match_var_id(&mut self) -> usize {
+        self.next_match_var_id += 1;
+        self.next_match_var_id
     }
 }
 

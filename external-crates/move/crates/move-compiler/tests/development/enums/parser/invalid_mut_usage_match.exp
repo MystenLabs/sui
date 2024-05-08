@@ -1,3 +1,9 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/development/enums/parser/invalid_mut_usage_match.move:9:15
+  │
+9 │        match (o) {
+  │               ^ Pattern 'Option::None' not covered
+
 error[E04016]: too few arguments
    ┌─ tests/development/enums/parser/invalid_mut_usage_match.move:10:10
    │
