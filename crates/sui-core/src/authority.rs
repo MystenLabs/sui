@@ -4795,13 +4795,21 @@ impl RandomnessRoundReceiver {
             // Wait for transaction execution in a separate task, to avoid deadlock in case of
             // out-of-order randomness generation. (Each RandomnessStateUpdate depends on the
             // output of the RandomnessStateUpdate from the previous round.)
-            let Ok(mut effects) = authority_state
-                .execution_cache
-                .notify_read_executed_effects(&[digest])
-                .await
-            else {
+            //
+            // We set a very long timeout so that in case this gets stuck for some reason, the
+            // validator will eventually crash rather than continuing in a zombie mode.
+            const RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
+            let Ok(mut effects) = tokio::time::timeout(
+                RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
+                authority_state
+                    .execution_cache
+                    .notify_read_executed_effects(&[digest]),
+            )
+            .await
+            .expect("randomness state update transaction execution timed out") else {
                 panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
             };
+
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
                 panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
