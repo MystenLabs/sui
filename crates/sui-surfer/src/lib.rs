@@ -60,16 +60,35 @@ pub async fn run_with_test_cluster<S: SurfStrategy + Default>(
     // processes that also need gas.
     skip_accounts: usize,
 ) -> SurfStatistics {
+    run_with_test_cluster_and_strategy(
+        Box::<S>::default(),
+        run_duration,
+        package_paths,
+        cluster,
+        skip_accounts,
+    )
+}
+
+pub async fn run_with_test_cluster_and_strategy(
+    surf_strategy: Box<dyn SurfStrategy>,
+    run_duration: Duration,
+    package_paths: Vec<PathBuf>,
+    cluster: Arc<TestCluster>,
+    // Skips the first N accounts, for use in case this is running concurrently with other
+    // processes that also need gas.
+    skip_accounts: usize,
+) -> SurfStatistics {
     let seed = rand::thread_rng().gen::<u64>();
     info!("Initial Seed: {:?}", seed);
     let mut rng = StdRng::seed_from_u64(seed);
     let (exit_sender, exit_rcv) = watch::channel(());
 
-    let mut tasks = SurferTask::create_surfer_tasks::<S>(
+    let mut tasks = SurferTask::create_surfer_tasks(
         cluster.clone(),
         rng.gen::<u64>(),
         exit_rcv,
         skip_accounts,
+        surf_strategy,
     )
     .await;
     info!("Created {} surfer tasks", tasks.len());

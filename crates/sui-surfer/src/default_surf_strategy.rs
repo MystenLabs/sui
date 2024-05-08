@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::{Duration, Instant};
+
 use async_trait::async_trait;
 use move_binary_format::normalized::Type;
 use move_core_types::language_storage::StructTag;
@@ -23,8 +25,16 @@ enum InputObjectPassKind {
     MutRef,
 }
 
-#[derive(Default)]
-pub struct DefaultSurfStrategy {}
+#[derive(Clone, Default)]
+pub struct DefaultSurfStrategy {
+    min_tx_interval: Duration,
+}
+
+impl DefaultSurfStrategy {
+    fn new(min_tx_interval: Duration) -> Self {
+        Self { min_tx_interval }
+    }
+}
 
 #[async_trait]
 impl SurfStrategy for DefaultSurfStrategy {
@@ -36,6 +46,7 @@ impl SurfStrategy for DefaultSurfStrategy {
     ) {
         entry_functions.shuffle(&mut state.rng);
         for entry in entry_functions {
+            let next_tx_time = Instant::now() + self.min_tx_interval;
             let Some(args) = Self::choose_function_call_args(state, entry.parameters).await else {
                 debug!(
                     "Failed to choose arguments for Move function {:?}::{:?}",
@@ -49,6 +60,7 @@ impl SurfStrategy for DefaultSurfStrategy {
             if exit.has_changed().unwrap() {
                 return;
             }
+            tokio::time::sleep_until(next_tx_time).await;
         }
     }
 }
