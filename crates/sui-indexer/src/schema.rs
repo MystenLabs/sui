@@ -57,7 +57,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    events (tx_sequence_number, event_sequence_number) {
+    events (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
         tx_sequence_number -> Int8,
         event_sequence_number -> Int8,
         transaction_digest -> Bytea,
@@ -66,6 +66,27 @@ diesel::table! {
         package -> Bytea,
         module -> Text,
         event_type -> Text,
+        event_type_package -> Bytea,
+        event_type_module -> Text,
+        event_type_name -> Text,
+        timestamp_ms -> Int8,
+        bcs -> Bytea,
+    }
+}
+
+diesel::table! {
+    events_partition_0 (tx_sequence_number, event_sequence_number, checkpoint_sequence_number) {
+        tx_sequence_number -> Int8,
+        event_sequence_number -> Int8,
+        transaction_digest -> Bytea,
+        checkpoint_sequence_number -> Int8,
+        senders -> Array<Nullable<Bytea>>,
+        package -> Bytea,
+        module -> Text,
+        event_type -> Text,
+        event_type_package -> Bytea,
+        event_type_module -> Text,
+        event_type_name -> Text,
         timestamp_ms -> Int8,
         bcs -> Bytea,
     }
@@ -80,6 +101,9 @@ diesel::table! {
         owner_type -> Int2,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
         serialized_object -> Bytea,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
@@ -100,6 +124,9 @@ diesel::table! {
         owner_type -> Nullable<Int2>,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
         serialized_object -> Nullable<Bytea>,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
@@ -120,6 +147,9 @@ diesel::table! {
         owner_type -> Nullable<Int2>,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
         serialized_object -> Nullable<Bytea>,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
@@ -140,6 +170,9 @@ diesel::table! {
         owner_type -> Nullable<Int2>,
         owner_id -> Nullable<Bytea>,
         object_type -> Nullable<Text>,
+        object_type_package -> Nullable<Bytea>,
+        object_type_module -> Nullable<Text>,
+        object_type_name -> Nullable<Text>,
         serialized_object -> Nullable<Bytea>,
         coin_type -> Nullable<Text>,
         coin_balance -> Nullable<Int8>,
@@ -190,7 +223,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_calls (package, tx_sequence_number) {
+    tx_calls (package, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         package -> Bytea,
         module -> Text,
@@ -199,28 +233,40 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_changed_objects (object_id, tx_sequence_number) {
+    tx_changed_objects (object_id, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         object_id -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_input_objects (object_id, tx_sequence_number) {
+    tx_digests (tx_digest) {
+        tx_digest -> Bytea,
+        cp_sequence_number -> Int8,
+        tx_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
+    tx_input_objects (object_id, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         object_id -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_recipients (recipient, tx_sequence_number) {
+    tx_recipients (recipient, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         recipient -> Bytea,
     }
 }
 
 diesel::table! {
-    tx_senders (sender, tx_sequence_number) {
+    tx_senders (sender, tx_sequence_number, cp_sequence_number) {
+        cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         sender -> Bytea,
     }
@@ -231,6 +277,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     display,
     epochs,
     events,
+    events_partition_0,
     objects,
     objects_history,
     objects_history_partition_0,
@@ -240,6 +287,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     transactions_partition_0,
     tx_calls,
     tx_changed_objects,
+    tx_digests,
     tx_input_objects,
     tx_recipients,
     tx_senders,
