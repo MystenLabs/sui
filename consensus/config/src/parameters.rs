@@ -82,7 +82,7 @@ impl Parameters {
             // and spending too much time in consensus can lead to starvation elsewhere.
             Duration::from_millis(200)
         } else {
-            Duration::from_millis(100)
+            Duration::from_millis(50)
         }
     }
 
