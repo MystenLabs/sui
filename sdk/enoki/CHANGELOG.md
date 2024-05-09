@@ -1,5 +1,13 @@
 # @mysten/enoki
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+  - @mysten/zklogin@0.6.3
+
 ## 0.2.6
 
 ### Patch Changes
