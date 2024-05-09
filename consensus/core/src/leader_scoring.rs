@@ -421,8 +421,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_reputation_score_calculator() {
+    #[tokio::test]
+    async fn test_reputation_score_calculator() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = Arc::new(LeaderSchedule::new(
@@ -504,9 +504,9 @@ mod tests {
         assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "Attempted to calculate scores with no unscored subdags")]
-    fn test_reputation_score_calculator_no_subdags() {
+    async fn test_reputation_score_calculator_no_subdags() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = Arc::new(LeaderSchedule::new(
@@ -535,9 +535,9 @@ mod tests {
         calculator.calculate();
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(expected = "Attempted to create UnscoredSubdag with no blocks")]
-    fn test_reputation_score_calculator_no_subdag_blocks() {
+    async fn test_reputation_score_calculator_no_subdag_blocks() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = Arc::new(LeaderSchedule::new(
@@ -572,8 +572,8 @@ mod tests {
         calculator.calculate();
     }
 
-    #[test]
-    fn test_scoring_with_missing_block_in_subdag() {
+    #[tokio::test]
+    async fn test_scoring_with_missing_block_in_subdag() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = Arc::new(LeaderSchedule::new(
