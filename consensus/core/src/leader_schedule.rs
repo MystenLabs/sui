@@ -82,7 +82,8 @@ impl LeaderSchedule {
             "Unscored committed subdags count exceeds the number of commits per schedule"
         );
         self.num_commits_per_schedule
-            .saturating_sub(unscored_committed_subdags_count) as usize
+            .checked_sub(unscored_committed_subdags_count)
+            .unwrap() as usize
     }
 
     pub(crate) fn update_leader_schedule(

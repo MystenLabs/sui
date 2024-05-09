@@ -109,7 +109,7 @@ pub(crate) struct NodeMetrics {
     pub(crate) leader_timeout_total: IntCounterVec,
     pub(crate) missing_blocks_total: IntCounter,
     pub(crate) missing_blocks_after_fetch_total: IntCounter,
-    pub num_of_bad_nodes: IntGauge,
+    pub(crate) num_of_bad_nodes: IntGauge,
     pub(crate) quorum_receive_latency: Histogram,
     pub(crate) reputation_scores: IntGaugeVec,
     pub(crate) scope_processing_time: HistogramVec,

@@ -484,6 +484,7 @@ impl Core {
                 );
             }
 
+            // TODO: refcount subdags
             let subdags = self.commit_observer.handle_commit(committed_leaders)?;
             self.dag_state
                 .write()
@@ -501,6 +502,8 @@ impl Core {
                 );
                 self.leader_schedule
                     .update_leader_schedule(self.dag_state.clone(), &self.committer);
+            } else {
+                break;
             }
         }
 
@@ -1194,9 +1197,10 @@ mod test {
         for round in 1..=30 {
             let mut this_round_blocks = Vec::new();
 
+            // Wait for min round delay to allow blocks to be proposed.
+            sleep(default_params.min_round_delay).await;
+
             for (core, signal_receivers, block_receiver, _, _) in &mut cores {
-                // Wait for min round delay to allow blocks to be proposed.
-                sleep(default_params.min_round_delay).await;
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
                 core.add_blocks(last_round_blocks.clone()).unwrap();
@@ -1293,9 +1297,10 @@ mod test {
         for round in 1..=10 {
             let mut this_round_blocks = Vec::new();
 
+            // Wait for min round delay to allow blocks to be proposed.
+            sleep(default_params.min_round_delay).await;
+
             for (core, signal_receivers, block_receiver, _, _) in &mut cores {
-                // Wait for min round delay to allow blocks to be proposed.
-                sleep(default_params.min_round_delay).await;
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
                 core.add_blocks(last_round_blocks.clone()).unwrap();
