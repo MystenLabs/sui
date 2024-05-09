@@ -42,7 +42,7 @@ fn run_deepbook_tests() {
 
 #[test]
 #[cfg_attr(msim, ignore)]
-fn run_sui_framework_examples_move_unit_tests() {
+fn run_sui_programmability_examples_move_unit_tests() {
     for example in [
         "basics",
         "capy",
