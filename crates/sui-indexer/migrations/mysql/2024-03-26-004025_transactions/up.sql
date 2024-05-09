@@ -2,9 +2,9 @@ CREATE TABLE transactions (
                               tx_sequence_number          BIGINT       NOT NULL,
                               transaction_digest          BLOB        NOT NULL,
     -- bcs serialized SenderSignedData bytes
-                              raw_transaction             BLOB        NOT NULL,
+                              raw_transaction             MEDIUMBLOB        NOT NULL,
     -- bcs serialized TransactionEffects bytes
-                              raw_effects                 BLOB        NOT NULL,
+                              raw_effects                 MEDIUMBLOB        NOT NULL,
                               checkpoint_sequence_number  BIGINT       NOT NULL,
                               timestamp_ms                BIGINT       NOT NULL,
     -- array of bcs serialized IndexedObjectChange bytes
@@ -20,7 +20,7 @@ CREATE TABLE transactions (
                               success_command_count       smallint     NOT NULL,
                               CONSTRAINT transactions_pkey PRIMARY KEY (tx_sequence_number, checkpoint_sequence_number)
 ) PARTITION BY RANGE (checkpoint_sequence_number) (
-    PARTITION p0 VALUES LESS THAN MAXVALUE
+    PARTITION transactions_partition_0 VALUES LESS THAN MAXVALUE
 );
 
 CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest(255));

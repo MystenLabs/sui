@@ -17,7 +17,7 @@ CREATE TABLE checkpoints
     storage_rebate                      BIGINT       NOT NULL,
     non_refundable_storage_fee          BIGINT       NOT NULL,
     -- bcs serialized Vec<CheckpointCommitment> bytes
-    checkpoint_commitments              blob         NOT NULL,
+    checkpoint_commitments              MEDIUMBLOB         NOT NULL,
     -- bcs serialized AggregateAuthoritySignature bytes
     validator_signature                 blob         NOT NULL,
     -- bcs serialzied EndOfEpochData bytes, if the checkpoint marks end of an epoch

@@ -68,7 +68,7 @@ CREATE TABLE objects_history (
                                  df_object_id                blob,
                                  CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id(128), object_version)
 ) PARTITION BY RANGE (checkpoint_sequence_number) (
-    PARTITION p0 VALUES LESS THAN MAXVALUE
+    PARTITION objects_history_partition_0 VALUES LESS THAN MAXVALUE
 );
 CREATE INDEX objects_history_id_version ON objects_history (object_id(128), object_version, checkpoint_sequence_number);
 CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id(128));
