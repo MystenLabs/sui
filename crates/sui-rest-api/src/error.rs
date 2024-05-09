@@ -11,10 +11,10 @@ pub struct RestError {
 }
 
 impl RestError {
-    pub fn new(status: StatusCode, message: String) -> Self {
+    pub fn new<T: Into<String>>(status: StatusCode, message: T) -> Self {
         Self {
             status,
-            message: Some(message),
+            message: Some(message.into()),
         }
     }
 }
