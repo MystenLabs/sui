@@ -20,6 +20,7 @@ use crate::{
     block::{BlockAPI, BlockRef, BlockTimestampMs, Round, Slot, VerifiedBlock},
     leader_scoring::ReputationScores,
     storage::Store,
+    ConsensusOutput,
 };
 
 /// Index of a commit among all consensus commits.
@@ -383,7 +384,7 @@ pub fn load_committed_subdag_from_store(
 
 pub struct CommitConsumer {
     // A channel to send the committed sub dags through
-    pub sender: UnboundedSender<CommittedSubDag>,
+    pub sender: UnboundedSender<ConsensusOutput>,
     // Leader round of the last commit that the consumer has processed.
     pub last_processed_commit_round: Round,
     // Index of the last commit that the consumer has processed. This is useful for
@@ -395,7 +396,7 @@ pub struct CommitConsumer {
 
 impl CommitConsumer {
     pub fn new(
-        sender: UnboundedSender<CommittedSubDag>,
+        sender: UnboundedSender<ConsensusOutput>,
         last_processed_commit_round: Round,
         last_processed_commit_index: CommitIndex,
     ) -> Self {
@@ -486,6 +487,16 @@ impl Display for LeaderStatus {
 pub(crate) struct CommitInfo {
     pub(crate) committed_rounds: Vec<Round>,
     pub(crate) reputation_scores: ReputationScores,
+}
+
+impl CommitInfo {
+    // Returns a new CommitInfo.
+    pub(crate) fn new(committed_rounds: Vec<Round>, reputation_scores: ReputationScores) -> Self {
+        CommitInfo {
+            committed_rounds,
+            reputation_scores,
+        }
+    }
 }
 
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)

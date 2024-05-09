@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{sync::Arc, time::Instant};
+use std::{fmt, sync::Arc, time::Instant};
 
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use parking_lot::RwLock;
@@ -14,6 +14,7 @@ use crate::{
     block_manager::BlockManager,
     block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
+    commit::CommittedSubDag,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitVoteMonitor},
     context::{Clock, Context},
@@ -40,6 +41,21 @@ use crate::{
 pub enum ConsensusAuthority {
     WithAnemo(AuthorityNode<AnemoManager>),
     WithTonic(AuthorityNode<TonicManager>),
+}
+
+pub struct ConsensusOutput {
+    pub commit: CommittedSubDag,
+    pub reputation_scores: Vec<(AuthorityIndex, u64)>,
+}
+
+impl fmt::Display for ConsensusOutput {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}; ReputationScores: {:?}",
+            self.commit, self.reputation_scores
+        )
+    }
 }
 
 impl ConsensusAuthority {
@@ -201,17 +217,18 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
+
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
-
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
 
         let core = Core::new(
             context.clone(),
@@ -611,12 +628,12 @@ mod tests {
         for receiver in &mut output_receivers {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
-                let committed_subdag =
+                let consensus_output =
                     tokio::time::timeout(Duration::from_secs(1), receiver.recv())
                         .await
                         .unwrap()
                         .unwrap();
-                for b in committed_subdag.blocks {
+                for b in consensus_output.commit.blocks {
                     for txn in b.transactions().iter().map(|t| t.data().to_vec()) {
                         assert!(
                             expected_transactions.remove(&txn),
@@ -625,6 +642,7 @@ mod tests {
                         );
                     }
                 }
+                assert_eq!(consensus_output.reputation_scores, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }

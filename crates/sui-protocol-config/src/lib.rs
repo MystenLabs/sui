@@ -122,6 +122,7 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 44: Enable consensus fork detection on mainnet.
 //             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
 // Version 45: Use tonic networking for Mysticeti consensus.
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -417,6 +418,10 @@ struct FeatureFlags {
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     zklogin_max_epoch_upper_bound_delta: Option<u64>,
+
+    // Controls leader scoring & schedule change in Mysticeti consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_leader_scoring_and_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1283,6 +1288,10 @@ impl ProtocolConfig {
     pub fn consensus_network(&self) -> ConsensusNetwork {
         self.feature_flags.consensus_network
     }
+
+    pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
+        self.feature_flags.mysticeti_leader_scoring_and_schedule
+    }
 }
 
 #[cfg(not(msim))]
@@ -2140,6 +2149,11 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
+
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.mysticeti_leader_scoring_and_schedule = true;
+                    }
+
                     // Also bumps framework snapshot to fix binop issue.
                 }
                 // Use this template when making changes:
@@ -2302,6 +2316,10 @@ impl ProtocolConfig {
 
     pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
+    }
+
+    pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
+        self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
 }
 

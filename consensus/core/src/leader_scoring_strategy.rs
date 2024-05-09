@@ -307,13 +307,13 @@ mod tests {
     use super::*;
     use crate::{
         block::{BlockTimestampMs, TestBlock, VerifiedBlock},
+        commit::CommittedSubDag,
         context::Context,
         dag_state::DagState,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         leader_scoring::ReputationScoreCalculator,
         storage::mem_store::MemStore,
         universal_committer::universal_committer_builder::UniversalCommitterBuilder,
-        CommittedSubDag,
     };
 
     #[test]

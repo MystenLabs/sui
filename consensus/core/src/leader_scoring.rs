@@ -14,12 +14,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{BlockAPI, BlockDigest, BlockRef, Slot, VerifiedBlock},
-    commit::CommitRange,
+    commit::{CommitRange, CommittedSubDag},
     context::Context,
     leader_scoring_strategy::ScoringStrategy,
     stake_aggregator::{QuorumThreshold, StakeAggregator},
     universal_committer::UniversalCommitter,
-    CommittedSubDag, Round,
+    Round,
 };
 
 pub(crate) struct ReputationScoreCalculator<'a> {

@@ -506,12 +506,12 @@ pub struct MysticetiConsensusHandler {
 impl MysticetiConsensusHandler {
     pub fn new(
         mut consensus_handler: ConsensusHandler<CheckpointService>,
-        mut receiver: tokio::sync::mpsc::UnboundedReceiver<consensus_core::CommittedSubDag>,
+        mut receiver: tokio::sync::mpsc::UnboundedReceiver<consensus_core::ConsensusOutput>,
     ) -> Self {
         let handle = spawn_monitored_task!(async move {
-            while let Some(committed_subdag) = receiver.recv().await {
+            while let Some(consensus_output) = receiver.recv().await {
                 consensus_handler
-                    .handle_consensus_output_internal(committed_subdag)
+                    .handle_consensus_output_internal(consensus_output)
                     .await;
             }
         });

@@ -211,16 +211,17 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         let _block_receiver = signal_receivers.block_broadcast_receiver();
         let (sender, _receiver) = unbounded_channel();
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
+            context.clone(),
+            dag_state.clone(),
+        ));
         let commit_observer = CommitObserver::new(
             context.clone(),
             CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store,
+            leader_schedule.clone(),
         );
-        let leader_schedule = Arc::new(LeaderSchedule::from_store(
-            context.clone(),
-            dag_state.clone(),
-        ));
         let core = Core::new(
             context.clone(),
             leader_schedule,
