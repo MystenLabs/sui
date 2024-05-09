@@ -168,7 +168,7 @@ impl TransactionBlockEffects {
         };
 
         let transactions = TransactionBlock::multi_query(
-            ctx.data_unchecked(),
+            ctx,
             dependencies[fst.ix..=lst.ix]
                 .iter()
                 .map(|d| Digest::from(*d))

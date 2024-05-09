@@ -1,18 +1,21 @@
-use std::collections::{BTreeMap, BTreeSet};
-
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
+    dataloader::Loader,
     *,
 };
-use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
+use diesel::{BoolExpressionMethods, ExpressionMethods, JoinOnDsl, QueryDsl, SelectableHelper};
 use fastcrypto::encoding::{Base58, Encoding};
 use serde::{Deserialize, Serialize};
 use sui_indexer::{
     models::transactions::StoredTransaction,
     schema::{
-        transactions, tx_calls, tx_changed_objects, tx_input_objects, tx_recipients, tx_senders,
+        transactions, tx_calls, tx_changed_objects, tx_digests, tx_input_objects, tx_recipients,
+        tx_senders,
     },
 };
 use sui_types::{
@@ -28,7 +31,7 @@ use sui_types::{
 
 use crate::{
     consistency::Checkpointed,
-    data::{self, Db, DbConnection, QueryExecutor},
+    data::{self, DataLoader, Db, DbConnection, QueryExecutor},
     error::Error,
     server::watermark_task::Watermark,
     types::intersect,
@@ -125,6 +128,14 @@ pub(crate) struct TransactionBlockCursor {
     /// The checkpoint sequence number when the transaction was finalized.
     #[serde(rename = "tc")]
     pub tx_checkpoint_number: u64,
+}
+
+/// DataLoader key for fetching a `TransactionBlock` by its digest, optionally constrained by a
+/// consistency cursor.
+#[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
+struct DigestKey {
+    pub digest: Digest,
+    pub checkpoint_viewed_at: u64,
 }
 
 #[Object]
@@ -243,31 +254,17 @@ impl TransactionBlock {
     /// is being viewed at the `checkpoint_viewed_at` (e.g. the state of all relevant addresses will
     /// be at that checkpoint).
     pub(crate) async fn query(
-        db: &Db,
+        ctx: &Context<'_>,
         digest: Digest,
         checkpoint_viewed_at: u64,
     ) -> Result<Option<Self>, Error> {
-        use transactions::dsl;
-
-        let stored: Option<StoredTransaction> = db
-            .execute_repeatable(move |conn| {
-                conn.result(move || {
-                    dsl::transactions.filter(dsl::transaction_digest.eq(digest.to_vec()))
-                })
-                .optional()
+        let DataLoader(loader) = ctx.data_unchecked();
+        loader
+            .load_one(DigestKey {
+                digest,
+                checkpoint_viewed_at,
             })
             .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch transaction: {e}")))?;
-
-        let Some(stored) = stored else {
-            return Ok(None);
-        };
-
-        let inner = TransactionBlockInner::try_from(stored)?;
-        Ok(Some(TransactionBlock {
-            inner,
-            checkpoint_viewed_at,
-        }))
     }
 
     /// Look up multiple `TransactionBlock`s by their digests. Returns a map from those digests to
@@ -275,36 +272,19 @@ impl TransactionBlock {
     /// because the order of results from the DB is not otherwise guaranteed to match the order that
     /// digests were passed into `multi_query`.
     pub(crate) async fn multi_query(
-        db: &Db,
+        ctx: &Context<'_>,
         digests: Vec<Digest>,
         checkpoint_viewed_at: u64,
     ) -> Result<BTreeMap<Digest, Self>, Error> {
-        use transactions::dsl;
-        let digests: Vec<_> = digests.into_iter().map(|d| d.to_vec()).collect();
-
-        let stored: Vec<StoredTransaction> = db
-            .execute(move |conn| {
-                conn.results(move || {
-                    dsl::transactions.filter(dsl::transaction_digest.eq_any(digests.clone()))
-                })
-            })
-            .await
-            .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
-
-        let mut transactions = BTreeMap::new();
-        for tx in stored {
-            let digest = Digest::try_from(&tx.transaction_digest[..])
-                .map_err(|e| Error::Internal(format!("Bad digest for transaction: {e}")))?;
-
-            let inner = TransactionBlockInner::try_from(tx)?;
-            let transaction = TransactionBlock {
-                inner,
+        let DataLoader(loader) = ctx.data_unchecked();
+        let result = loader
+            .load_many(digests.into_iter().map(|digest| DigestKey {
+                digest,
                 checkpoint_viewed_at,
-            };
-            transactions.insert(digest, transaction);
-        }
+            }))
+            .await?;
 
-        Ok(transactions)
+        Ok(result.into_iter().map(|(k, v)| (k.digest, v)).collect())
     }
 
     /// Query the database for a `page` of TransactionBlocks. The page uses `tx_sequence_number` and
@@ -505,6 +485,71 @@ impl Target<Cursor> for StoredTransaction {
 impl Checkpointed for Cursor {
     fn checkpoint_viewed_at(&self) -> u64 {
         self.checkpoint_viewed_at
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<DigestKey> for Db {
+    type Value = TransactionBlock;
+    type Error = Error;
+
+    async fn load(
+        &self,
+        keys: &[DigestKey],
+    ) -> Result<HashMap<DigestKey, TransactionBlock>, Error> {
+        use transactions::dsl as tx;
+        use tx_digests::dsl as ds;
+
+        let digests: Vec<_> = keys.iter().map(|k| k.digest.to_vec()).collect();
+
+        let transactions: Vec<StoredTransaction> = self
+            .execute(move |conn| {
+                conn.results(move || {
+                    let join = ds::cp_sequence_number
+                        .eq(tx::checkpoint_sequence_number)
+                        .and(ds::tx_sequence_number.eq(tx::tx_sequence_number));
+
+                    tx::transactions
+                        .inner_join(ds::tx_digests.on(join))
+                        .select(StoredTransaction::as_select())
+                        .filter(ds::tx_digest.eq_any(digests.clone()))
+                })
+            })
+            .await
+            .map_err(|e| Error::Internal(format!("Failed to fetch transactions: {e}")))?;
+
+        let transaction_digest_to_stored: BTreeMap<_, _> = transactions
+            .into_iter()
+            .map(|tx| (tx.transaction_digest.clone(), tx))
+            .collect();
+
+        let mut results = HashMap::new();
+        for key in keys {
+            let Some(stored) = transaction_digest_to_stored
+                .get(key.digest.as_slice())
+                .cloned()
+            else {
+                continue;
+            };
+
+            // Filter by key's checkpoint viewed at here. Doing this in memory because it should be
+            // quite rare that this query actually filters something, but encoding it in SQL is
+            // complicated.
+            if key.checkpoint_viewed_at < stored.checkpoint_sequence_number as u64 {
+                continue;
+            }
+
+            let inner = TransactionBlockInner::try_from(stored)?;
+            results.insert(
+                *key,
+                TransactionBlock {
+                    inner,
+                    checkpoint_viewed_at: key.checkpoint_viewed_at,
+                },
+            );
+        }
+
+        Ok(results)
     }
 }
 
