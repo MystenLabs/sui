@@ -4,42 +4,42 @@
 import type { Output } from 'valibot';
 import { parse, safeParse } from 'valibot';
 
-import { withResolvers } from '../utils/withResolvers.js';
-import type { ZkSendRequestData, ZkSendResponsePayload, ZkSendResponseTypes } from './events.js';
-import { ZkSendRequest, ZkSendResponse } from './events.js';
+import { withResolvers } from '../../utils/withResolvers.js';
+import type { StashedRequestData, StashedResponsePayload, StashedResponseTypes } from './events.js';
+import { StashedRequest, StashedResponse } from './events.js';
 
-export const DEFAULT_ZKSEND_ORIGIN = 'https://zksend.com';
+export const DEFAULT_STASHED_ORIGIN = 'https://getstashed.com';
 
-export { ZkSendRequest, ZkSendResponse };
+export { StashedRequest, StashedResponse };
 
-interface ZkSendPopupOptions {
+interface StashedPopupOptions {
 	origin?: string;
 	name: string;
 }
 
-export class ZkSendPopup {
+export class StashedPopup {
 	#id: string;
 	#origin: string;
 	#name: string;
 
 	#close?: () => void;
 
-	constructor({ origin = DEFAULT_ZKSEND_ORIGIN, name }: ZkSendPopupOptions) {
+	constructor({ origin = DEFAULT_STASHED_ORIGIN, name }: StashedPopupOptions) {
 		this.#id = crypto.randomUUID();
 		this.#origin = origin;
 		this.#name = name;
 	}
 
-	async createRequest<T extends ZkSendRequestData>(
+	async createRequest<T extends StashedRequestData>(
 		request: T,
-	): Promise<ZkSendResponseTypes[T['type']]> {
+	): Promise<StashedResponseTypes[T['type']]> {
 		const popup = window.open('about:blank', '_blank');
 
 		if (!popup) {
 			throw new Error('Failed to open new window');
 		}
 
-		const { promise, resolve, reject } = withResolvers<ZkSendResponseTypes[T['type']]>();
+		const { promise, resolve, reject } = withResolvers<StashedResponseTypes[T['type']]>();
 
 		let interval: NodeJS.Timer | null = null;
 
@@ -54,7 +54,7 @@ export class ZkSendPopup {
 			if (event.origin !== this.#origin) {
 				return;
 			}
-			const { success, output } = safeParse(ZkSendResponse, event.data);
+			const { success, output } = safeParse(StashedResponse, event.data);
 			if (!success || output.id !== this.#id) return;
 
 			cleanup();
@@ -62,7 +62,7 @@ export class ZkSendPopup {
 			if (output.payload.type === 'reject') {
 				reject(new Error('User rejected the request'));
 			} else if (output.payload.type === 'resolve') {
-				resolve(output.payload.data as ZkSendResponseTypes[T['type']]);
+				resolve(output.payload.data as StashedResponseTypes[T['type']]);
 			}
 		};
 
@@ -87,7 +87,7 @@ export class ZkSendPopup {
 			try {
 				if (popup?.closed) {
 					cleanup();
-					reject(new Error('User closed the zkSend window'));
+					reject(new Error('User closed the Stashed window'));
 				}
 			} catch {
 				// This can error during the login flow, but that's fine.
@@ -102,13 +102,13 @@ export class ZkSendPopup {
 	}
 }
 
-export class ZkSendHost {
-	#request: Output<typeof ZkSendRequest>;
+export class StashedHost {
+	#request: Output<typeof StashedRequest>;
 
-	constructor(request: Output<typeof ZkSendRequest>) {
+	constructor(request: Output<typeof StashedRequest>) {
 		if (typeof window === 'undefined' || !window.opener) {
 			throw new Error(
-				'ZkSendHost can only be used in a window opened through `window.open`. `window.opener` is not available.',
+				'StashedHost can only be used in a window opened through `window.open`. `window.opener` is not available.',
 			);
 		}
 
@@ -127,7 +127,7 @@ export class ZkSendHost {
 			  )
 			: {};
 
-		const request = parse(ZkSendRequest, {
+		const request = parse(StashedRequest, {
 			id: parsed.searchParams.get('id'),
 			origin: parsed.searchParams.get('origin'),
 			name: parsed.searchParams.get('name'),
@@ -137,25 +137,25 @@ export class ZkSendHost {
 			},
 		});
 
-		return new ZkSendHost(request);
+		return new StashedHost(request);
 	}
 
 	getRequestData() {
 		return this.#request;
 	}
 
-	sendMessage(payload: ZkSendResponsePayload) {
+	sendMessage(payload: StashedResponsePayload) {
 		window.opener.postMessage(
 			{
 				id: this.#request.id,
 				source: 'zksend-channel',
 				payload,
-			} satisfies ZkSendResponse,
+			} satisfies StashedResponse,
 			this.#request.origin,
 		);
 	}
 
-	close(payload?: ZkSendResponsePayload) {
+	close(payload?: StashedResponsePayload) {
 		if (payload) {
 			this.sendMessage(payload);
 		}

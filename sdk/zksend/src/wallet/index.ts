@@ -21,24 +21,24 @@ import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wa
 import type { Emitter } from 'mitt';
 import mitt from 'mitt';
 
-import { DEFAULT_ZKSEND_ORIGIN, ZkSendPopup } from './channel/index.js';
+import { DEFAULT_STASHED_ORIGIN, StashedPopup } from './channel/index.js';
 
 type WalletEventsMap = {
 	[E in keyof StandardEventsListeners]: Parameters<StandardEventsListeners[E]>[0];
 };
 
-const ZKSEND_RECENT_ADDRESS_KEY = 'zksend:recentAddress';
+const STASHED_RECENT_ADDRESS_KEY = 'stashed:recentAddress';
 
-export const ZKSEND_WALLET_NAME = 'zkSend' as const;
+export const STASHED_WALLET_NAME = 'Stashed' as const;
 
-export class ZkSendWallet implements Wallet {
+export class StashedWallet implements Wallet {
 	#events: Emitter<WalletEventsMap>;
 	#accounts: ReadonlyWalletAccount[];
 	#origin: string;
 	#name: string;
 
 	get name() {
-		return ZKSEND_WALLET_NAME;
+		return STASHED_WALLET_NAME;
 	}
 
 	get icon() {
@@ -89,7 +89,7 @@ export class ZkSendWallet implements Wallet {
 	constructor({
 		name,
 		address,
-		origin = DEFAULT_ZKSEND_ORIGIN,
+		origin = DEFAULT_STASHED_ORIGIN,
 	}: {
 		origin?: string;
 		address?: string | null;
@@ -110,7 +110,7 @@ export class ZkSendWallet implements Wallet {
 
 		const data = transactionBlock.serialize();
 
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
+		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest({
 			type: 'sign-transaction-block',
 			data,
@@ -125,7 +125,7 @@ export class ZkSendWallet implements Wallet {
 
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
+		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest({
 			type: 'sign-personal-message',
 			bytes,
@@ -150,12 +150,12 @@ export class ZkSendWallet implements Wallet {
 					address,
 					chains: [SUI_MAINNET_CHAIN],
 					features: ['sui:signTransactionBlock', 'sui:signPersonalMessage'],
-					// NOTE: zkSend doesn't support getting public keys, and zkLogin accounts don't have meaningful public keys anyway
+					// NOTE: Stashed doesn't support getting public keys, and zkLogin accounts don't have meaningful public keys anyway
 					publicKey: new Uint8Array(),
 				}),
 			];
 
-			localStorage.setItem(ZKSEND_RECENT_ADDRESS_KEY, address);
+			localStorage.setItem(STASHED_RECENT_ADDRESS_KEY, address);
 		} else {
 			this.#accounts = [];
 		}
@@ -165,7 +165,7 @@ export class ZkSendWallet implements Wallet {
 
 	#connect: StandardConnectMethod = async (input) => {
 		if (input?.silent) {
-			const address = localStorage.getItem(ZKSEND_RECENT_ADDRESS_KEY);
+			const address = localStorage.getItem(STASHED_RECENT_ADDRESS_KEY);
 
 			if (address) {
 				this.#setAccount(address);
@@ -174,7 +174,7 @@ export class ZkSendWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new ZkSendPopup({ name: this.#name, origin: this.#origin });
+		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
 		const response = await popup.createRequest({
 			type: 'connect',
 		});
@@ -188,12 +188,12 @@ export class ZkSendWallet implements Wallet {
 	};
 
 	#disconnect: StandardDisconnectMethod = async () => {
-		localStorage.removeItem(ZKSEND_RECENT_ADDRESS_KEY);
+		localStorage.removeItem(STASHED_RECENT_ADDRESS_KEY);
 		this.#setAccount();
 	};
 }
 
-export function registerZkSendWallet(
+export function registerStashedWallet(
 	name: string,
 	{
 		origin,
@@ -206,12 +206,12 @@ export function registerZkSendWallet(
 	let addressFromRedirect: string | null = null;
 	try {
 		const params = new URLSearchParams(window.location.search);
-		addressFromRedirect = params.get('zksend_address');
+		addressFromRedirect = params.get('stashed_address') || params.get('zksend_address');
 	} catch {
 		// Ignore errors
 	}
 
-	const wallet = new ZkSendWallet({
+	const wallet = new StashedWallet({
 		name,
 		origin,
 		address: addressFromRedirect,

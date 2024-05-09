@@ -4,7 +4,7 @@
 import type { Output } from 'valibot';
 import { literal, object, optional, string, url, uuid, variant } from 'valibot';
 
-export const ZkSendRequestData = variant('type', [
+export const StashedRequestData = variant('type', [
 	object({
 		type: literal('connect'),
 	}),
@@ -19,18 +19,18 @@ export const ZkSendRequestData = variant('type', [
 		address: string('`address` is required'),
 	}),
 ]);
-export type ZkSendRequestData = Output<typeof ZkSendRequestData>;
+export type StashedRequestData = Output<typeof StashedRequestData>;
 
-export const ZkSendRequest = object({
+export const StashedRequest = object({
 	id: string('`id` is required', [uuid()]),
 	origin: string([url('`origin` must be a valid URL')]),
 	name: optional(string()),
-	payload: ZkSendRequestData,
+	payload: StashedRequestData,
 });
 
-export type ZkSendRequest = Output<typeof ZkSendRequest>;
+export type StashedRequest = Output<typeof StashedRequest>;
 
-export const ZkSendResponseData = variant('type', [
+export const StashedResponseData = variant('type', [
 	object({
 		type: literal('connect'),
 		address: string(),
@@ -46,30 +46,30 @@ export const ZkSendResponseData = variant('type', [
 		signature: string(),
 	}),
 ]);
-export type ZkSendResponseData = Output<typeof ZkSendResponseData>;
+export type StashedResponseData = Output<typeof StashedResponseData>;
 
-export const ZkSendResponsePayload = variant('type', [
+export const StashedResponsePayload = variant('type', [
 	object({
 		type: literal('reject'),
 	}),
 	object({
 		type: literal('resolve'),
-		data: ZkSendResponseData,
+		data: StashedResponseData,
 	}),
 ]);
-export type ZkSendResponsePayload = Output<typeof ZkSendResponsePayload>;
+export type StashedResponsePayload = Output<typeof StashedResponsePayload>;
 
-export const ZkSendResponse = object({
+export const StashedResponse = object({
 	id: string([uuid()]),
 	source: literal('zksend-channel'),
-	payload: ZkSendResponsePayload,
+	payload: StashedResponsePayload,
 });
-export type ZkSendResponse = Output<typeof ZkSendResponse>;
+export type StashedResponse = Output<typeof StashedResponse>;
 
-export type ZkSendRequestTypes = Record<string, any> & {
-	[P in ZkSendRequestData as P['type']]: P;
+export type StashedRequestTypes = Record<string, any> & {
+	[P in StashedRequestData as P['type']]: P;
 };
 
-export type ZkSendResponseTypes = {
-	[P in ZkSendResponseData as P['type']]: P;
+export type StashedResponseTypes = {
+	[P in StashedResponseData as P['type']]: P;
 };

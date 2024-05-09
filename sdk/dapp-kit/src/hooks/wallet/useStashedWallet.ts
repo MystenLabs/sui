@@ -1,22 +1,22 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { ZkSendWallet } from '@mysten/zksend';
-import { registerZkSendWallet } from '@mysten/zksend';
+import type { StashedWallet } from '@mysten/zksend';
+import { registerStashedWallet } from '@mysten/zksend';
 import { useEffect, useLayoutEffect, useState } from 'react';
 
 import { useAutoConnectWallet } from './useAutoConnectWallet.js';
 import { useConnectWallet } from './useConnectWallet.js';
 
-export interface ZkSendWalletConfig {
+export interface StashedWalletConfig {
 	name: string;
 	origin?: string;
 }
 
-export function useZkSendWallet(config?: ZkSendWalletConfig) {
+export function useStashedWallet(config?: StashedWalletConfig) {
 	const status = useAutoConnectWallet();
 	const [address, setAddress] = useState<string | null>(null);
-	const [wallet, setWallet] = useState<ZkSendWallet | null>(null);
+	const [wallet, setWallet] = useState<StashedWallet | null>(null);
 	const { mutate: connect } = useConnectWallet();
 
 	useEffect(() => {
@@ -35,7 +35,7 @@ export function useZkSendWallet(config?: ZkSendWalletConfig) {
 			return;
 		}
 
-		const { wallet, unregister, addressFromRedirect } = registerZkSendWallet(config.name, {
+		const { wallet, unregister, addressFromRedirect } = registerStashedWallet(config.name, {
 			origin: config.origin,
 		});
 
