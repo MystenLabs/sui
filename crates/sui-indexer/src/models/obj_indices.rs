@@ -8,6 +8,9 @@ use crate::schema::objects_version;
 use super::objects::StoredDeletedObject;
 use super::objects::StoredObject;
 
+/// Model types related to tables that support efficient execution of queries on the `objects`,
+/// `objects_history` and `objects_snapshot` tables.
+
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
 #[diesel(table_name = objects_version, primary_key(object_id, object_version))]
 pub struct StoredObjectVersion {
