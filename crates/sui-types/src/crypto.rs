@@ -148,6 +148,14 @@ impl SuiKeyPair {
             SuiKeyPair::Secp256r1(kp) => PublicKey::Secp256r1(kp.public().into()),
         }
     }
+
+    pub fn copy(&self) -> Self {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256k1(kp) => kp.copy().into(),
+            SuiKeyPair::Secp256r1(kp) => kp.copy().into(),
+        }
+    }
 }
 
 impl Signer<Signature> for SuiKeyPair {
@@ -211,6 +219,15 @@ impl SuiKeyPair {
             _ => Err(eyre!("Invalid bytes")),
         }
     }
+
+    pub fn to_bytes_no_flag(&self) -> Vec<u8> {
+        match self {
+            SuiKeyPair::Ed25519(kp) => kp.as_bytes().to_vec(),
+            SuiKeyPair::Secp256k1(kp) => kp.as_bytes().to_vec(),
+            SuiKeyPair::Secp256r1(kp) => kp.as_bytes().to_vec(),
+        }
+    }
+
     /// Encode a SuiKeyPair as `flag || privkey` in Bech32 starting with "suiprivkey" to a string. Note that the pubkey is not encoded.
     pub fn encode(&self) -> Result<String, eyre::Report> {
         Bech32::encode(self.to_bytes(), SUI_PRIV_KEY_PREFIX).map_err(|e| eyre!(e))

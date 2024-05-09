@@ -43,5 +43,5 @@ async fn main() -> anyhow::Result<()> {
         .with_prom_registry(&prometheus_registry)
         .init();
 
-    run_bridge_node(config).await
+    Ok(run_bridge_node(config).await?.await?)
 }

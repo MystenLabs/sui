@@ -2,15 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #![allow(clippy::inconsistent_digit_grouping)]
-
 use crate::{
     crypto::BridgeAuthorityPublicKeyBytes,
     error::BridgeError,
     server::handler::{BridgeRequestHandler, BridgeRequestHandlerTrait},
     types::{
-        AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, BridgeAction,
-        BridgeChainId, EmergencyAction, EmergencyActionType, EvmContractUpgradeAction,
-        LimitUpdateAction, SignedBridgeAction, TokenId,
+        AddTokensOnEvmAction, AddTokensOnSuiAction, AssetPriceUpdateAction,
+        BlocklistCommitteeAction, BlocklistType, BridgeAction, EmergencyAction,
+        EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction, SignedBridgeAction,
     },
 };
 use axum::{
@@ -23,8 +22,9 @@ use fastcrypto::{
     encoding::{Encoding, Hex},
     traits::ToFromBytes,
 };
-use std::net::SocketAddr;
 use std::sync::Arc;
+use std::{net::SocketAddr, str::FromStr};
+use sui_types::{bridge::BridgeChainId, TypeTag};
 
 pub mod governance_verifier;
 pub mod handler;
@@ -48,12 +48,20 @@ pub const EVM_CONTRACT_UPGRADE_PATH_WITH_CALLDATA: &str =
     "/sign/upgrade_evm_contract/:chain_id/:nonce/:proxy_address/:new_impl_address/:calldata";
 pub const EVM_CONTRACT_UPGRADE_PATH: &str =
     "/sign/upgrade_evm_contract/:chain_id/:nonce/:proxy_address/:new_impl_address";
+pub const ADD_TOKENS_ON_SUI_PATH: &str =
+    "/sign/add_tokens_on_sui/:chain_id/:nonce/:native/:token_ids/:token_type_names/:token_prices";
+pub const ADD_TOKENS_ON_EVM_PATH: &str =
+    "/sign/add_tokens_on_evm/:chain_id/:nonce/:native/:token_ids/:token_addresses/:token_sui_decimals/:token_prices";
 
-pub async fn run_server(socket_address: &SocketAddr, handler: BridgeRequestHandler) {
-    axum::Server::bind(socket_address)
-        .serve(make_router(Arc::new(handler)).into_make_service())
-        .await
-        .unwrap();
+pub fn run_server(
+    socket_address: &SocketAddr,
+    handler: BridgeRequestHandler,
+) -> tokio::task::JoinHandle<()> {
+    let service = axum::Server::bind(socket_address)
+        .serve(make_router(Arc::new(handler)).into_make_service());
+    tokio::spawn(async move {
+        service.await.unwrap();
+    })
 }
 
 pub(crate) fn make_router(
@@ -78,6 +86,8 @@ pub(crate) fn make_router(
             EVM_CONTRACT_UPGRADE_PATH_WITH_CALLDATA,
             get(handle_evm_contract_upgrade_with_calldata),
         )
+        .route(ADD_TOKENS_ON_SUI_PATH, get(handle_add_tokens_on_sui))
+        .route(ADD_TOKENS_ON_EVM_PATH, get(handle_add_tokens_on_evm))
         .with_state(handler)
 }
 
@@ -199,9 +209,6 @@ async fn handle_asset_price_update_action(
     let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
         BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
     })?;
-    let token_id = TokenId::try_from(token_id).map_err(|err| {
-        BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
-    })?;
     let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
         chain_id,
         nonce,
@@ -262,8 +269,159 @@ async fn handle_evm_contract_upgrade(
     Ok(sig)
 }
 
+async fn handle_add_tokens_on_sui(
+    Path((chain_id, nonce, native, token_ids, token_type_names, token_prices)): Path<(
+        u8,
+        u64,
+        u8,
+        String,
+        String,
+        String,
+    )>,
+    State(handler): State<Arc<impl BridgeRequestHandlerTrait + Sync + Send>>,
+) -> Result<Json<SignedBridgeAction>, BridgeError> {
+    let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+        BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+    })?;
+
+    if !chain_id.is_sui_chain() {
+        return Err(BridgeError::InvalidBridgeClientRequest(
+            "handle_add_tokens_on_sui only expects Sui chain id".to_string(),
+        ));
+    }
+
+    let native = match native {
+        1 => true,
+        0 => false,
+        _ => {
+            return Err(BridgeError::InvalidBridgeClientRequest(format!(
+                "Invalid native flag: {}",
+                native
+            )))
+        }
+    };
+    let token_ids = token_ids
+        .split(',')
+        .map(|s| {
+            s.parse::<u8>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_type_names = token_type_names
+        .split(',')
+        .map(|s| {
+            TypeTag::from_str(s).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!(
+                    "Invalid token type name: {:?}",
+                    err
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_prices = token_prices
+        .split(',')
+        .map(|s| {
+            s.parse::<u64>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token price: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+        chain_id,
+        nonce,
+        native,
+        token_ids,
+        token_type_names,
+        token_prices,
+    });
+    let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+    Ok(sig)
+}
+
+async fn handle_add_tokens_on_evm(
+    Path((chain_id, nonce, native, token_ids, token_addresses, token_sui_decimals, token_prices)): Path<(
+        u8,
+        u64,
+        u8,
+        String,
+        String,
+        String,
+        String,
+    )>,
+    State(handler): State<Arc<impl BridgeRequestHandlerTrait + Sync + Send>>,
+) -> Result<Json<SignedBridgeAction>, BridgeError> {
+    let chain_id = BridgeChainId::try_from(chain_id).map_err(|err| {
+        BridgeError::InvalidBridgeClientRequest(format!("Invalid chain id: {:?}", err))
+    })?;
+    if chain_id.is_sui_chain() {
+        return Err(BridgeError::InvalidBridgeClientRequest(
+            "handle_add_tokens_on_evm does not expect Sui chain id".to_string(),
+        ));
+    }
+
+    let native = match native {
+        1 => true,
+        0 => false,
+        _ => {
+            return Err(BridgeError::InvalidBridgeClientRequest(format!(
+                "Invalid native flag: {}",
+                native
+            )))
+        }
+    };
+    let token_ids = token_ids
+        .split(',')
+        .map(|s| {
+            s.parse::<u8>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token id: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_addresses = token_addresses
+        .split(',')
+        .map(|s| {
+            EthAddress::from_str(s).map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token address: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_sui_decimals = token_sui_decimals
+        .split(',')
+        .map(|s| {
+            s.parse::<u8>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!(
+                    "Invalid token sui decimals: {:?}",
+                    err
+                ))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let token_prices = token_prices
+        .split(',')
+        .map(|s| {
+            s.parse::<u64>().map_err(|err| {
+                BridgeError::InvalidBridgeClientRequest(format!("Invalid token price: {:?}", err))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let action = BridgeAction::AddTokensOnEvmAction(AddTokensOnEvmAction {
+        chain_id,
+        nonce,
+        native,
+        token_ids,
+        token_addresses,
+        token_sui_decimals,
+        token_prices,
+    });
+    let sig: Json<SignedBridgeAction> = handler.handle_governance_action(action).await?;
+    Ok(sig)
+}
+
 #[cfg(test)]
 mod tests {
+    use sui_types::bridge::TOKEN_ID_BTC;
+
     use super::*;
     use crate::client::bridge_client::BridgeClient;
     use crate::server::mock_handler::BridgeRequestMockHandler;
@@ -281,7 +439,7 @@ mod tests {
         .unwrap();
         let action = BridgeAction::BlocklistCommitteeAction(BlocklistCommitteeAction {
             nonce: 129,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             blocklist_type: BlocklistType::Blocklist,
             blocklisted_members: vec![pub_key_bytes.clone()],
         });
@@ -294,7 +452,7 @@ mod tests {
 
         let action = BridgeAction::EmergencyAction(EmergencyAction {
             nonce: 55,
-            chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
             action_type: EmergencyActionType::Pause,
         });
         client.request_sign_bridge_action(action).await.unwrap();
@@ -306,8 +464,8 @@ mod tests {
 
         let action = BridgeAction::LimitUpdateAction(LimitUpdateAction {
             nonce: 15,
-            chain_id: BridgeChainId::SuiLocalTest,
-            sending_chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::SuiCustom,
+            sending_chain_id: BridgeChainId::EthCustom,
             new_usd_limit: 1_000_000_0000, // $1M USD
         });
         client.request_sign_bridge_action(action).await.unwrap();
@@ -319,8 +477,8 @@ mod tests {
 
         let action = BridgeAction::AssetPriceUpdateAction(AssetPriceUpdateAction {
             nonce: 266,
-            chain_id: BridgeChainId::SuiLocalTest,
-            token_id: TokenId::BTC,
+            chain_id: BridgeChainId::SuiCustom,
+            token_id: TOKEN_ID_BTC,
             new_usd_price: 100_000_0000, // $100k USD
         });
         client.request_sign_bridge_action(action).await.unwrap();
@@ -332,7 +490,7 @@ mod tests {
 
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![],
@@ -341,10 +499,49 @@ mod tests {
 
         let action = BridgeAction::EvmContractUpgradeAction(EvmContractUpgradeAction {
             nonce: 123,
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             proxy_address: EthAddress::repeat_byte(6),
             new_impl_address: EthAddress::repeat_byte(9),
             call_data: vec![12, 34, 56],
+        });
+        client.request_sign_bridge_action(action).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_bridge_server_handle_add_tokens_on_sui_action_path() {
+        let client = setup();
+
+        let action = BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {
+            nonce: 266,
+            chain_id: BridgeChainId::SuiCustom,
+            native: false,
+            token_ids: vec![100, 101, 102],
+            token_type_names: vec![
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin1").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin2").unwrap(),
+                TypeTag::from_str("0x0000000000000000000000000000000000000000000000000000000000000abc::my_coin::MyCoin3").unwrap(),
+            ],
+            token_prices: vec![100_000_0000, 200_000_0000, 300_000_0000],
+        });
+        client.request_sign_bridge_action(action).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_bridge_server_handle_add_tokens_on_evm_action_path() {
+        let client = setup();
+
+        let action = BridgeAction::AddTokensOnEvmAction(crate::types::AddTokensOnEvmAction {
+            nonce: 0,
+            chain_id: BridgeChainId::EthCustom,
+            native: false,
+            token_ids: vec![99, 100, 101],
+            token_addresses: vec![
+                EthAddress::repeat_byte(1),
+                EthAddress::repeat_byte(2),
+                EthAddress::repeat_byte(3),
+            ],
+            token_sui_decimals: vec![5, 6, 7],
+            token_prices: vec![1_000_000_000, 2_000_000_000, 3_000_000_000],
         });
         client.request_sign_bridge_action(action).await.unwrap();
     }

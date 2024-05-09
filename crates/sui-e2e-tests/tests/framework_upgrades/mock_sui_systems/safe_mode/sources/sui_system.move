@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui_system::sui_system {
+    use std::vector;
+
     use sui::balance::Balance;
     use sui::object::UID;
     use sui::sui::SUI;
@@ -65,6 +67,10 @@ module sui_system::sui_system {
             computation_reward,
             storage_rebate,
         )
+    }
+
+    public fun active_validator_addresses(wrapper: &mut SuiSystemState): vector<address> {
+        vector::empty()
     }
 
     fun load_system_state_mut(self: &mut SuiSystemState): &mut SuiSystemStateInner {

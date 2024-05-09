@@ -2,7 +2,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{base_types::*, error::*};
+use super::{base_types::*, error::*, SUI_BRIDGE_OBJECT_ID};
 use crate::authenticator_state::ActiveJwk;
 use crate::committee::{Committee, EpochId, ProtocolVersion};
 use crate::crypto::{
@@ -11,7 +11,7 @@ use crate::crypto::{
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
-use crate::digests::{ConsensusCommitDigest, ZKLoginInputsDigest};
+use crate::digests::{ChainIdentifier, ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::SharedInput;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
@@ -297,6 +297,8 @@ pub enum EndOfEpochTransactionKind {
     AuthenticatorStateExpire(AuthenticatorStateExpire),
     RandomnessStateCreate,
     DenyListStateCreate,
+    BridgeStateCreate(ChainIdentifier),
+    BridgeCommitteeInit(SequenceNumber),
 }
 
 impl EndOfEpochTransactionKind {
@@ -344,6 +346,14 @@ impl EndOfEpochTransactionKind {
         Self::DenyListStateCreate
     }
 
+    pub fn new_bridge_create(chain_identifier: ChainIdentifier) -> Self {
+        Self::BridgeStateCreate(chain_identifier)
+    }
+
+    pub fn init_bridge_committee(bridge_shared_version: SequenceNumber) -> Self {
+        Self::BridgeCommitteeInit(bridge_shared_version)
+    }
+
     fn input_objects(&self) -> Vec<InputObjectKind> {
         match self {
             Self::ChangeEpoch(_) => {
@@ -363,20 +373,50 @@ impl EndOfEpochTransactionKind {
             }
             Self::RandomnessStateCreate => vec![],
             Self::DenyListStateCreate => vec![],
+            Self::BridgeStateCreate(_) => vec![],
+            Self::BridgeCommitteeInit(bridge_version) => vec![
+                InputObjectKind::SharedMoveObject {
+                    id: SUI_BRIDGE_OBJECT_ID,
+                    initial_shared_version: *bridge_version,
+                    mutable: true,
+                },
+                InputObjectKind::SharedMoveObject {
+                    id: SUI_SYSTEM_STATE_OBJECT_ID,
+                    initial_shared_version: SUI_SYSTEM_STATE_OBJECT_SHARED_VERSION,
+                    mutable: true,
+                },
+            ],
         }
     }
 
     fn shared_input_objects(&self) -> impl Iterator<Item = SharedInputObject> + '_ {
         match self {
-            Self::ChangeEpoch(_) => Either::Left(iter::once(SharedInputObject::SUI_SYSTEM_OBJ)),
-            Self::AuthenticatorStateExpire(expire) => Either::Left(iter::once(SharedInputObject {
-                id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
-                initial_shared_version: expire.authenticator_obj_initial_shared_version(),
-                mutable: true,
-            })),
+            Self::ChangeEpoch(_) => {
+                Either::Left(vec![SharedInputObject::SUI_SYSTEM_OBJ].into_iter())
+            }
+            Self::AuthenticatorStateExpire(expire) => Either::Left(
+                vec![SharedInputObject {
+                    id: SUI_AUTHENTICATOR_STATE_OBJECT_ID,
+                    initial_shared_version: expire.authenticator_obj_initial_shared_version(),
+                    mutable: true,
+                }]
+                .into_iter(),
+            ),
             Self::AuthenticatorStateCreate => Either::Right(iter::empty()),
             Self::RandomnessStateCreate => Either::Right(iter::empty()),
             Self::DenyListStateCreate => Either::Right(iter::empty()),
+            Self::BridgeStateCreate(_) => Either::Right(iter::empty()),
+            Self::BridgeCommitteeInit(bridge_version) => Either::Left(
+                vec![
+                    SharedInputObject {
+                        id: SUI_BRIDGE_OBJECT_ID,
+                        initial_shared_version: *bridge_version,
+                        mutable: true,
+                    },
+                    SharedInputObject::SUI_SYSTEM_OBJ,
+                ]
+                .into_iter(),
+            ),
         }
     }
 
@@ -394,6 +434,10 @@ impl EndOfEpochTransactionKind {
             Self::DenyListStateCreate => {
                 // Transaction should have been rejected earlier (or never formed).
                 assert!(config.enable_coin_deny_list());
+            }
+            Self::BridgeStateCreate(_) | Self::BridgeCommitteeInit(_) => {
+                // Transaction should have been rejected earlier (or never formed).
+                assert!(config.enable_bridge());
             }
         }
         Ok(())
@@ -474,6 +518,20 @@ impl VersionedProtocolMessage for TransactionKind {
                                 if !protocol_config.enable_coin_deny_list() {
                                     return Err(SuiError::UnsupportedFeatureError {
                                         error: "coin deny list not enabled".to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::BridgeStateCreate(_) => {
+                                if !protocol_config.enable_bridge() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "bridge not enabled".to_string(),
+                                    });
+                                }
+                            }
+                            EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
+                                if !protocol_config.enable_bridge() {
+                                    return Err(SuiError::UnsupportedFeatureError {
+                                        error: "bridge not enabled".to_string(),
                                     });
                                 }
                             }
@@ -1315,7 +1373,18 @@ impl TransactionKind {
                 }]
             }
             Self::EndOfEpochTransaction(txns) => {
-                txns.iter().flat_map(|txn| txn.input_objects()).collect()
+                // Dedup since transactions may have a overlap in input objects.
+                // Note: it's critical to ensure the order of inputs are deterministic.
+                let before_dedup: Vec<_> =
+                    txns.iter().flat_map(|txn| txn.input_objects()).collect();
+                let mut has_seen = HashSet::new();
+                let mut after_dedup = vec![];
+                for obj in before_dedup {
+                    if has_seen.insert(obj) {
+                        after_dedup.push(obj);
+                    }
+                }
+                after_dedup
             }
             Self::ProgrammableTransaction(p) => return p.input_objects(),
         };
@@ -2751,7 +2820,7 @@ pub trait VersionedProtocolMessage {
     fn check_version_supported(&self, protocol_config: &ProtocolConfig) -> SuiResult;
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize, PartialOrd, Ord, Hash)]
 pub enum InputObjectKind {
     // A Move package, must be immutable.
     MovePackage(ObjectID),
