@@ -775,7 +775,7 @@ mod test {
                 .collect();
             info!("using sui_surfer test packages: {test_package_paths:?}");
 
-            let surf_strategy = SurfStrategy::new(Duration::from_millis(250));
+            let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
             let results = sui_surfer::run_with_test_cluster_and_strategy(
                 surf_strategy,
                 test_duration,
