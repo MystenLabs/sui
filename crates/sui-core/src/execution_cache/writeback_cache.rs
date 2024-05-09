@@ -77,7 +77,7 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, info, instrument, trace, warn};
 
 use super::ExecutionCacheAPI;
 use super::{
@@ -275,6 +275,34 @@ impl CachedCommittedData {
             executed_effects_digests,
             _transaction_objects: transaction_objects,
         }
+    }
+
+    fn clear_and_assert_empty(&self) {
+        self.object_cache.invalidate_all();
+        self.marker_cache.invalidate_all();
+        self.transactions.invalidate_all();
+        self.transaction_effects.invalidate_all();
+        self.transaction_events.invalidate_all();
+        self.executed_effects_digests.invalidate_all();
+        self._transaction_objects.invalidate_all();
+
+        assert_empty(&self.object_cache);
+        assert_empty(&self.marker_cache);
+        assert_empty(&self.transactions);
+        assert_empty(&self.transaction_effects);
+        assert_empty(&self.transaction_events);
+        assert_empty(&self.executed_effects_digests);
+        assert_empty(&self._transaction_objects);
+    }
+}
+
+fn assert_empty<K, V>(cache: &MokaCache<K, V>)
+where
+    K: std::hash::Hash + std::cmp::Eq + std::cmp::PartialEq + Send + Sync + 'static,
+    V: std::clone::Clone + std::marker::Send + std::marker::Sync + 'static,
+{
+    if cache.iter().next().is_some() {
+        panic!("cache should be empty");
     }
 }
 
@@ -638,7 +666,13 @@ impl WritebackCache {
                 .get(tx)
                 .map(|o| o.clone())
             else {
-                panic!("Attempt to commit unknown transaction {:?}", tx);
+                // This can happen in the following rare case:
+                // All transactions in the checkpoint are committed to the db (by commit_transaction_outputs,
+                // called in CheckpointExecutor::process_executed_transactions), but the process crashes before
+                // the checkpoint water mark is bumped. We will then re-commit thhe checkpoint at startup,
+                // despite that all transactions are already executed.
+                warn!("Attempt to commit unknown transaction {:?}", tx);
+                continue;
             };
             all_outputs.push(outputs);
         }
@@ -870,12 +904,11 @@ impl WritebackCache {
         Ok(())
     }
 
-    #[cfg(test)]
-    pub fn clear_caches(&self) {
-        self.cached.object_cache.invalidate_all();
+    pub fn clear_caches_and_assert_empty(&self) {
+        info!("clearing caches");
+        self.cached.clear_and_assert_empty();
         self.packages.invalidate_all();
-        self.cached.marker_cache.invalidate_all();
-        self.cached._transaction_objects.invalidate_all();
+        assert_empty(&self.packages);
     }
 }
 

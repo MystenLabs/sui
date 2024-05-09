@@ -2676,7 +2676,7 @@ impl AuthorityState {
         &self.execution_cache_trait_pointers.cache_commit
     }
 
-    pub fn database_for_testing(&self) -> &Arc<AuthorityStore> {
+    pub fn database_for_testing(&self) -> Arc<AuthorityStore> {
         self.execution_cache_trait_pointers
             .testing_api
             .database_for_testing()
@@ -2853,6 +2853,11 @@ impl AuthorityState {
                 )?;
             }
         }
+
+        self.get_reconfig_api()
+            .reconfigure_cache(&epoch_start_configuration)
+            .await;
+
         let new_epoch = new_committee.epoch;
         let new_epoch_store = self
             .reopen_epoch_db(

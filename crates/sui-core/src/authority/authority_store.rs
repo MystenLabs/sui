@@ -840,6 +840,13 @@ impl AuthorityStore {
         fail_point_async!("crash");
 
         write_batch.write()?;
+        trace!(
+            "committed transactions: {:?}",
+            tx_outputs
+                .iter()
+                .map(|tx| tx.transaction.digest())
+                .collect::<Vec<_>>()
+        );
 
         // test crashing before notifying
         fail_point_async!("crash");
