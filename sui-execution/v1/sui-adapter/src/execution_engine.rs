@@ -618,6 +618,14 @@ mod checked {
                         EndOfEpochTransactionKind::DenyListStateCreate => {
                             panic!("EndOfEpochTransactionKind::CoinDenyListStateCreate should not exist in v1");
                         }
+                        EndOfEpochTransactionKind::BridgeStateCreate(_) => {
+                            panic!(
+                                "EndOfEpochTransactionKind::BridgeStateCreate should not exist in v1"
+                            );
+                        }
+                        EndOfEpochTransactionKind::BridgeCommitteeInit(_) => {
+                            panic!("EndOfEpochTransactionKind::BridgeCommitteeInit should not exist in v1");
+                        }
                     }
                 }
                 unreachable!("EndOfEpochTransactionKind::ChangeEpoch should be the last transaction in the list")

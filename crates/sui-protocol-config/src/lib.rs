@@ -124,6 +124,9 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 45: Use tonic networking for Mysticeti consensus.
 //             Enable random beacon protocol on testnet.
 //             Set min Move binary format version to 6.
+//             Enable transactions to be signed with zkLogin inside multisig signature.
+//             Add native bridge.
+//             Enable native bridge in devnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -347,6 +350,10 @@ struct FeatureFlags {
     // Enable random beacon protocol
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
+
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
 
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
@@ -1222,6 +1229,15 @@ impl ProtocolConfig {
 
     pub fn random_beacon(&self) -> bool {
         self.feature_flags.random_beacon
+    }
+
+    pub fn enable_bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // bridge required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
     }
 
     pub fn enable_effects_v2(&self) -> bool {
@@ -2153,7 +2169,13 @@ impl ProtocolConfig {
                         cfg.random_beacon_min_round_interval_ms = Some(150);
                     }
                     cfg.min_move_binary_format_version = Some(6);
+                    cfg.feature_flags.accept_zklogin_in_multisig = true;
                     // Also bumps framework snapshot to fix binop issue.
+
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -2315,6 +2337,9 @@ impl ProtocolConfig {
 
     pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
+    }
+    pub fn set_disable_bridge_for_testing(&mut self) {
+        self.feature_flags.bridge = false
     }
 }
 

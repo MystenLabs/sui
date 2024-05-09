@@ -22,6 +22,7 @@ use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_types::base_types::{
     ExecutionDigests, ObjectID, SequenceNumber, SuiAddress, TransactionDigest, TxContext,
 };
+use sui_types::bridge::{BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_MODULE_NAME};
 use sui_types::committee::Committee;
 use sui_types::crypto::{
     AuthorityKeyPair, AuthorityPublicKeyBytes, AuthoritySignInfo, AuthoritySignInfoTrait,
@@ -34,8 +35,10 @@ use sui_types::epoch_data::EpochData;
 use sui_types::gas::SuiGasStatus;
 use sui_types::gas_coin::GasCoin;
 use sui_types::governance::StakedSui;
+use sui_types::id::UID;
 use sui_types::in_memory_storage::InMemoryStorage;
 use sui_types::inner_temporary_store::InnerTemporaryStore;
+use sui_types::is_system_package;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
     CertifiedCheckpointSummary, CheckpointContents, CheckpointSummary,
@@ -47,7 +50,7 @@ use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState, SuiSyste
 use sui_types::transaction::{
     CallArg, CheckedInputObjects, Command, InputObjectKind, ObjectReadResult, Transaction,
 };
-use sui_types::{SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
+use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS};
 use tracing::trace;
 use validator_info::{GenesisValidatorInfo, GenesisValidatorMetadata, ValidatorInfo};
 
@@ -319,6 +322,11 @@ impl Builder {
         assert_eq!(
             protocol_config.random_beacon(),
             unsigned_genesis.has_randomness_state_object()
+        );
+
+        assert_eq!(
+            protocol_config.enable_bridge(),
+            unsigned_genesis.has_bridge_object()
         );
 
         assert_eq!(
@@ -735,9 +743,13 @@ fn build_unsigned_genesis_data(
     // Get the correct system packages for our protocol version. If we cannot find the snapshot
     // that means that we must be at the latest version and we should use the latest version of the
     // framework.
-    let system_packages =
+    let mut system_packages =
         sui_framework_snapshot::load_bytecode_snapshot(parameters.protocol_version.as_u64())
             .unwrap_or_else(|_| BuiltInFramework::iter_system_packages().cloned().collect());
+
+    // if system packages are provided in `objects`, update them with the provided bytes.
+    // This is a no-op under normal conditions and only an issue with certain tests.
+    update_system_packages_from_objects(&mut system_packages, objects);
 
     let mut genesis_ctx = create_genesis_context(
         &epoch_data,
@@ -775,6 +787,45 @@ fn build_unsigned_genesis_data(
         effects: genesis_effects,
         events: genesis_events,
         objects,
+    }
+}
+
+// Some tests provide an override of the system packages via objects to the genesis builder.
+// When that happens we need to update the system packages with the new bytes provided.
+// Mock system packages in protocol config tests are an example of that (today the only
+// example).
+// The problem here arises from the fact that if regular system packages are pushed first
+// *AND* if any of them is loaded in the loader cache, there is no way to override them
+// with the provided object (no way to mock properly).
+// System packages are loaded only from internal dependencies (a system package depending on
+// some other), and in that case they would be loaded in the VM/loader cache.
+// The Bridge is an example of that and what led to this code. The bridge depends
+// on `sui_system` which is mocked in some tests, but would be in the loader
+// cache courtesy of the Bridge, thus causing the problem.
+fn update_system_packages_from_objects(
+    system_packages: &mut Vec<SystemPackage>,
+    objects: &[Object],
+) {
+    // Filter `objects` for system packages, and make `SystemPackage`s out of them.
+    let system_package_overrides: BTreeMap<ObjectID, Vec<Vec<u8>>> = objects
+        .iter()
+        .filter_map(|obj| {
+            let pkg = obj.data.try_as_package()?;
+            is_system_package(pkg.id()).then(|| {
+                (
+                    pkg.id(),
+                    pkg.serialized_module_map().values().cloned().collect(),
+                )
+            })
+        })
+        .collect();
+
+    // Replace packages in `system_packages` that are present in `objects` with their counterparts
+    // from the previous step.
+    for package in system_packages {
+        if let Some(overrides) = system_package_overrides.get(&package.id).cloned() {
+            package.bytes = overrides;
+        }
     }
 }
 
@@ -1073,6 +1124,22 @@ pub fn generate_genesis_system_object(
                 vec![],
                 vec![],
             )?;
+        }
+
+        if protocol_config.enable_bridge() {
+            let bridge_uid = builder
+                .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
+                .unwrap();
+            // TODO(bridge): this needs to be passed in as a parameter for next testnet regenesis
+            // Hardcoding chain id to SuiCustom
+            let bridge_chain_id = builder.pure(BridgeChainId::SuiCustom).unwrap();
+            builder.programmable_move_call(
+                BRIDGE_ADDRESS.into(),
+                BRIDGE_MODULE_NAME.to_owned(),
+                BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
+                vec![],
+                vec![bridge_uid, bridge_chain_id],
+            );
         }
 
         // Step 4: Mint the supply of SUI.

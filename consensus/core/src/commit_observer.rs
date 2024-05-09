@@ -63,6 +63,14 @@ impl CommitObserver {
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
     ) -> ConsensusResult<Vec<CommittedSubDag>> {
+        let _s = self
+            .context
+            .metrics
+            .node_metrics
+            .scope_processing_time
+            .with_label_values(&["CommitObserver::handle_commit"])
+            .start_timer();
+
         let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         let mut sent_sub_dags = vec![];
 

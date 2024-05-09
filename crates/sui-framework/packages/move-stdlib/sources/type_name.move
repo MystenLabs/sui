@@ -4,7 +4,7 @@
 #[allow(implicit_const_copy)]
 /// Functionality for converting Move types into values. Use with care!
 module std::type_name {
-    use std::ascii::String;
+    use std::ascii::{Self, String};
     use std::address;
 
     /// ASCII Character code for the `:` (colon) symbol.
@@ -84,7 +84,17 @@ module std::type_name {
 
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
-        self.name.substring(0, len)
+        let str_bytes = self.name.as_bytes();
+        let mut addr_bytes = vector[];
+        let mut i = 0;
+
+        // Read `len` bytes from the type name and push them to addr_bytes.
+        while (i < len) {
+            addr_bytes.push_back(str_bytes[i]);
+            i = i + 1;
+        };
+
+        ascii::string(addr_bytes)
     }
 
     /// Get name of the module.
@@ -107,7 +117,7 @@ module std::type_name {
             }
         };
 
-        module_name.to_ascii_string()
+        ascii::string(module_name)
     }
 
     /// Convert `self` into its inner String

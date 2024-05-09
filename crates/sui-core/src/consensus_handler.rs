@@ -841,7 +841,8 @@ mod tests {
     pub async fn test_consensus_handler() {
         // GIVEN
         let mut objects = test_gas_objects();
-        objects.push(Object::shared_for_testing());
+        let shared_object = Object::shared_for_testing();
+        objects.push(shared_object.clone());
 
         let latest_protocol_config = &latest_protocol_version();
 
@@ -876,7 +877,7 @@ mod tests {
 
         // AND
         // Create test transactions
-        let transactions = test_certificates(&state).await;
+        let transactions = test_certificates(&state, shared_object).await;
         let mut certificates = Vec::new();
         let mut batches = Vec::new();
 

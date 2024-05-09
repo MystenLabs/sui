@@ -4,6 +4,7 @@
 //! A mock implementation of Sui JSON-RPC client.
 
 use crate::error::{BridgeError, BridgeResult};
+use crate::test_utils::DUMMY_MUTALBE_BRIDGE_OBJECT_ARG;
 use async_trait::async_trait;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -11,15 +12,17 @@ use sui_json_rpc_types::SuiTransactionBlockResponse;
 use sui_json_rpc_types::{EventFilter, EventPage, SuiEvent};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
+use sui_types::bridge::BridgeSummary;
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::Owner;
+use sui_types::transaction::ObjectArg;
 use sui_types::transaction::Transaction;
 use sui_types::Identifier;
 
 use crate::sui_client::SuiClientInner;
-use crate::types::{BridgeAction, BridgeActionDigest, BridgeActionStatus, MoveTypeBridgeCommittee};
+use crate::types::{BridgeAction, BridgeActionStatus};
 
 /// Mock client used in test environments.
 #[allow(clippy::type_complexity)]
@@ -28,15 +31,15 @@ pub struct SuiMockClient {
     // the top two fields do not change during tests so we don't need them to be Arc<Mutex>>
     chain_identifier: String,
     latest_checkpoint_sequence_number: u64,
-    events: Arc<Mutex<HashMap<(ObjectID, Identifier, EventID), EventPage>>>,
-    past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, EventID)>>>,
+    events: Arc<Mutex<HashMap<(ObjectID, Identifier, Option<EventID>), EventPage>>>,
+    past_event_query_params: Arc<Mutex<VecDeque<(ObjectID, Identifier, Option<EventID>)>>>,
     events_by_tx_digest:
         Arc<Mutex<HashMap<TransactionDigest, Result<Vec<SuiEvent>, sui_sdk::error::Error>>>>,
     transaction_responses:
         Arc<Mutex<HashMap<TransactionDigest, BridgeResult<SuiTransactionBlockResponse>>>>,
     wildcard_transaction_response: Arc<Mutex<Option<BridgeResult<SuiTransactionBlockResponse>>>>,
     get_object_info: Arc<Mutex<HashMap<ObjectID, (GasCoin, ObjectRef, Owner)>>>,
-    onchain_status: Arc<Mutex<HashMap<BridgeActionDigest, BridgeActionStatus>>>,
+    onchain_status: Arc<Mutex<HashMap<(u8, u64), BridgeActionStatus>>>,
 
     requested_transactions_tx: tokio::sync::broadcast::Sender<TransactionDigest>,
 }
@@ -67,7 +70,7 @@ impl SuiMockClient {
         self.events
             .lock()
             .unwrap()
-            .insert((package, module, cursor), events);
+            .insert((package, module, Some(cursor)), events);
     }
 
     pub fn add_events_by_tx_digest(&self, tx_digest: TransactionDigest, events: Vec<SuiEvent>) {
@@ -99,7 +102,7 @@ impl SuiMockClient {
         self.onchain_status
             .lock()
             .unwrap()
-            .insert(action.digest(), status);
+            .insert((action.chain_id() as u8, action.seq_number()), status);
     }
 
     pub fn set_wildcard_transaction_response(
@@ -132,7 +135,7 @@ impl SuiClientInner for SuiMockClient {
     async fn query_events(
         &self,
         query: EventFilter,
-        cursor: EventID,
+        cursor: Option<EventID>,
     ) -> Result<EventPage, Self::Error> {
         let events = self.events.lock().unwrap();
         match query {
@@ -180,21 +183,46 @@ impl SuiClientInner for SuiMockClient {
         Ok(self.latest_checkpoint_sequence_number)
     }
 
-    async fn get_bridge_committee(&self) -> Result<MoveTypeBridgeCommittee, Self::Error> {
-        unimplemented!()
+    async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error> {
+        Ok(DUMMY_MUTALBE_BRIDGE_OBJECT_ARG)
+    }
+
+    async fn get_bridge_summary(&self) -> Result<BridgeSummary, Self::Error> {
+        Ok(BridgeSummary {
+            bridge_version: 0,
+            message_version: 0,
+            chain_id: 0,
+            sequence_nums: vec![],
+            bridge_records_id: ObjectID::random(),
+            is_frozen: false,
+            limiter: Default::default(),
+            committee: Default::default(),
+            treasury: Default::default(),
+        })
     }
 
     async fn get_token_transfer_action_onchain_status(
         &self,
-        action: &BridgeAction,
+        _bridge_object_arg: ObjectArg,
+        source_chain_id: u8,
+        seq_number: u64,
     ) -> Result<BridgeActionStatus, BridgeError> {
         Ok(self
             .onchain_status
             .lock()
             .unwrap()
-            .get(&action.digest())
+            .get(&(source_chain_id, seq_number))
             .cloned()
             .unwrap_or(BridgeActionStatus::Pending))
+    }
+
+    async fn get_token_transfer_action_onchain_signatures(
+        &self,
+        _bridge_object_arg: ObjectArg,
+        _source_chain_id: u8,
+        _seq_number: u64,
+    ) -> Result<Option<Vec<Vec<u8>>>, BridgeError> {
+        unimplemented!()
     }
 
     async fn execute_transaction_block_with_effects(

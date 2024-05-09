@@ -70,6 +70,7 @@ use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData};
+use sui_types::bridge::Bridge;
 use sui_types::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
@@ -1368,6 +1369,10 @@ impl ExecutionCacheRead for WritebackCache {
             },
         )?;
         Ok(())
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        todo!()
     }
 }
 

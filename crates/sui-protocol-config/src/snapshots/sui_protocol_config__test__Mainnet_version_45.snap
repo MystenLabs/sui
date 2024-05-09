@@ -36,6 +36,7 @@ feature_flags:
   narwhal_certificate_v2: true
   verify_legacy_zklogin_address: true
   recompute_has_public_transfer_in_execution: true
+  accept_zklogin_in_multisig: true
   include_consensus_digest_in_prologue: true
   hardened_otw_check: true
   allow_receiving_object_id: true

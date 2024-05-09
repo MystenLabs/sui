@@ -30,6 +30,7 @@ use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
+use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
@@ -1852,6 +1853,7 @@ pub async fn build_http_server(
             server.register_module(TransactionBuilderApi::new(state.clone()))?;
         }
         server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
+        server.register_module(BridgeReadApi::new(state.clone(), metrics.clone()))?;
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
             server.register_module(TransactionExecutionApi::new(

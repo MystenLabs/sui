@@ -45,6 +45,7 @@ jobs:
     outputs:
       isRust: ${{ steps.diff.outputs.isRust }}
       isMove: ${{ steps.diff.outputs.isMove }}
+      isSolidity: ${{ steps.diff.outputs.isSolidity }}
       isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
       isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
     steps:
@@ -108,7 +109,7 @@ jobs:
 
   test:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
@@ -128,6 +129,10 @@ jobs:
         uses: pierotofy/set-swap-space@master
         with:
           swap-size-gb: 256
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: cargo test
         run: |
           cargo nextest run --profile ci
@@ -221,7 +226,7 @@ jobs:
 
   simtest:
     needs: diff
-    if: needs.diff.outputs.isRust == 'true'
+    if: needs.diff.outputs.isRust == 'true' || needs.diff.outputs.isSolidity == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     env:
@@ -465,3 +470,27 @@ jobs:
         env:
           POSTGRES_HOST: localhost
           POSTGRES_PORT: 5432
+
+  bridge-evm:
+    name: bridge-evm-tests
+    needs: diff
+    if: needs.diff.outputs.isSolidity == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
+      - name: Install Dependencies
+        working-directory: bridge/evm
+        run: |  
+          forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
+      - name: Check Bridge EVM Unit Tests
+        shell: bash
+        working-directory: bridge/evm
+        env:
+          INFURA_API_KEY: ${{ secrets.INFURA_API_KEY }}
+        run: |
+          forge clean
+          forge test --ffi

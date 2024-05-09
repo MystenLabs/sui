@@ -39,6 +39,9 @@ module sui::object {
     /// The hardcoded ID for the singleton DenyList.
     const SUI_DENY_LIST_OBJECT_ID: address = @0x403;
 
+    /// The hardcoded ID for the Bridge Object.
+    const SUI_BRIDGE_ID: address = @0x9;
+
     /// Sender is not @0x0 the system address.
     const ENotSystemAddress: u64 = 0;
 
@@ -129,6 +132,15 @@ module sui::object {
     public(package) fun sui_deny_list_object_id(): UID {
         UID {
             id: ID { bytes: SUI_DENY_LIST_OBJECT_ID }
+        }
+    }
+
+    #[allow(unused_function)]
+    /// Create the `UID` for the singleton `Bridge` object.
+    /// This should only be called once from `bridge`.
+    fun bridge(): UID {
+        UID {
+            id: ID { bytes: SUI_BRIDGE_ID }
         }
     }
 

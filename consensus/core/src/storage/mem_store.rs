@@ -9,10 +9,13 @@ use std::{
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
-use super::{CommitInfo, Store, WriteBatch};
+use super::{Store, WriteBatch};
 use crate::{
     block::{BlockAPI as _, BlockDigest, BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
+    commit::{
+        CommitAPI as _, CommitDigest, CommitIndex, CommitInfo, CommitRange, CommitRef,
+        TrustedCommit,
+    },
     error::ConsensusResult,
 };
 
@@ -72,11 +75,10 @@ impl Store for MemStore {
                 .insert((commit.index(), commit.digest()), commit);
         }
 
-        // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
-        if let Some((commit_ref, last_commit_info)) = write_batch.last_commit_info {
+        for (commit_ref, commit_info) in write_batch.commit_info {
             inner
                 .commit_info
-                .insert((commit_ref.index, commit_ref.digest), last_commit_info);
+                .insert((commit_ref.index, commit_ref.digest), commit_info);
         }
 
         Ok(())
