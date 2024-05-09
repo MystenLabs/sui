@@ -4,12 +4,9 @@
 use crate::functional_group::FunctionalGroup;
 use crate::types::big_int::BigInt;
 use async_graphql::*;
-use axum::headers::Origin;
-use chrono::Datelike;
 use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
-use sui_graphql_rpc_headers::VERSION_HEADER;
 use sui_json_rpc::name_service::NameServiceConfig;
 // TODO: calculate proper cost limits
 
@@ -45,8 +42,6 @@ pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 10;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
 pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;
-
-pub(crate) const VERSION_MONTHS: [&str; 4] = ["1", "4", "7", "10"];
 
 /// The combination of all configurations for the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
@@ -85,6 +80,9 @@ pub struct ConnectionConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
     #[serde(default)]
+    pub(crate) versions: Versions,
+
+    #[serde(default)]
     pub(crate) limits: Limits,
 
     #[serde(default)]
@@ -101,6 +99,13 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) zklogin: ZkLoginConfig,
+}
+
+#[derive(Default, Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Versions {
+    #[serde(default)]
+    pub(crate) versions: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -243,52 +248,14 @@ impl ServiceConfig {
 
     /// List the available versions for this GraphQL service.
     async fn available_versions(&self, ctx: &Context<'_>) -> Vec<String> {
-        let origin: &Origin = ctx.data_unchecked();
-        let origin = match origin.port() {
-            Some(port) => format!("{}://{}:{}", origin.scheme(), origin.hostname(), port),
-            None => format!("{}://{}", origin.scheme(), origin.hostname()),
-        };
-        let current_date = chrono::Utc::now().date_naive();
-        let year = current_date.year();
-
-        let mut versions = vec![];
-        let client = reqwest::Client::new();
-        // check if the versions are actually available on the path
-        // we check two paths host/ and host/graphql and this year and prev year
-        for year in [year - 1, year].iter() {
-            for month in VERSION_MONTHS.iter() {
-                let v = format!("{}.{}", year, month);
-                let resp = if let Ok(resp) = client.get(&format!("{}/{}", origin, v)).send().await {
-                    Ok(resp)
-                } else {
-                    client
-                        .get(&format!("{}/graphql/{}", origin, v))
-                        .send()
-                        .await
-                };
-
-                if let Ok(resp) = resp {
-                    match resp.headers().get(&VERSION_HEADER) {
-                        Some(version) => {
-                            if let Ok(version) = version.to_str() {
-                                let parts = version.split('-').collect::<Vec<_>>();
-                                let version = parts[0].split('.').collect::<Vec<_>>();
-                                versions
-                                    .push(format!("{}.{}-{}", version[0], version[1], parts[1]));
-                            }
-                        }
-                        None => {}
-                    }
-                }
-            }
+        if self.versions.versions.is_empty() {
+            let default_version: &Version = ctx.data_unchecked();
+            return vec![format!(
+                "{}.{}",
+                default_version.year, default_version.month
+            )];
         }
-        if versions.is_empty() {
-            versions.push(
-                "Could not determine the available versions. Please check the docs of the RPC provider."
-                    .to_string(),
-            );
-        }
-        versions
+        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.

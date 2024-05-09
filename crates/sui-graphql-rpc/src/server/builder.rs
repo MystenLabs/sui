@@ -415,7 +415,10 @@ impl ServerBuilder {
             None
         };
 
+        let version = version.clone();
+
         builder = builder
+            .context_data(version)
             .context_data(config.service.clone())
             .context_data(loader)
             .context_data(db)
