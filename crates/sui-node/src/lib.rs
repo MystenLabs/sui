@@ -1896,10 +1896,17 @@ pub async fn build_http_server(
     router = router.merge(json_rpc_router);
 
     if config.enable_experimental_rest_api {
-        let rest_router =
-            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version)
-                .into_router();
-        router = router.nest("/rest", rest_router);
+        let mut rest_service =
+            sui_rest_api::RestService::new(Arc::new(store.clone()), chain_id, software_version);
+
+        if let Some(transaction_orchestrator) = transaction_orchestrator {
+            rest_service.with_executor(transaction_orchestrator.clone())
+        }
+
+        let rest_router = rest_service.into_router();
+        router = router
+            .nest("/rest", rest_router.clone())
+            .nest("/v2", rest_router);
     }
 
     let server = axum::Server::bind(&config.json_rpc_address)
