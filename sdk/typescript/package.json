@@ -134,7 +134,6 @@
 		"@types/tmp": "^0.2.3",
 		"@types/ws": "^8.5.9",
 		"cross-env": "^7.0.3",
-		"gql.tada": "^1.4.1",
 		"graphql-config": "^5.0.3",
 		"msw": "^1.2.2",
 		"tmp": "^0.2.1",
@@ -154,6 +153,7 @@
 		"@scure/bip39": "^1.2.1",
 		"@suchipi/femver": "^1.0.0",
 		"bech32": "^2.0.0",
+		"gql.tada": "^1.7.0",
 		"graphql": "^16.8.1",
 		"superstruct": "^1.0.3",
 		"tweetnacl": "^1.0.3"
