@@ -13,7 +13,7 @@ module sui::deny_list {
     const ENotSystemAddress: u64 = 0;
     /// The specified address to be removed is not already in the deny list.
     const ENotDenied: u64 = 1;
-    /// The specified address is cannot be added to the deny list.
+    /// The specified address cannot be added to the deny list.
     const EInvalidAddress: u64 = 1;
 
     /// The index into the deny list vector for the `sui::coin::Coin` type.
@@ -21,7 +21,7 @@ module sui::deny_list {
 
     /// These addresses are reserved and cannot be added to the deny list.
     /// The addresses listed are well known package and object addresses. So it would be
-    /// meaningless to add them to the deny list. As such, they are reserved for internal use.
+    /// meaningless to add them to the deny list.
     const RESERVED: vector<address> = vector[
         @0x0,
         @0x1,
