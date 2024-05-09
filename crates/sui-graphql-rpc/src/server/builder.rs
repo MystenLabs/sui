@@ -414,7 +414,6 @@ impl ServerBuilder {
         };
 
         builder = builder
-            .context_data(*version)
             .context_data(config.service.clone())
             .context_data(loader)
             .context_data(db)

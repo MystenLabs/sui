@@ -101,9 +101,12 @@ pub struct ServiceConfig {
     pub(crate) zklogin: ZkLoginConfig,
 }
 
-#[derive(Default, Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
-pub struct Versions(pub Vec<String>);
+pub struct Versions {
+    #[serde(default)]
+    versions: Vec<String>,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
 #[serde(rename_all = "kebab-case")]
@@ -244,15 +247,8 @@ impl ServiceConfig {
     }
 
     /// List the available versions for this GraphQL service.
-    async fn available_versions(&self, ctx: &Context<'_>) -> Vec<String> {
-        if self.versions.0.is_empty() {
-            let default_version: &Version = ctx.data_unchecked();
-            return vec![format!(
-                "{}.{}",
-                default_version.year, default_version.month
-            )];
-        }
-        self.versions.0.clone()
+    async fn available_versions(&self) -> Vec<String> {
+        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -440,6 +436,18 @@ impl BackgroundTasksConfig {
     pub fn test_defaults() -> Self {
         Self {
             watermark_update_ms: 100, // Set to 100ms for testing
+        }
+    }
+}
+
+impl Default for Versions {
+    fn default() -> Self {
+        Self {
+            versions: vec![format!(
+                "{}.{}",
+                env!("CARGO_PKG_VERSION_MAJOR").to_string(),
+                env!("CARGO_PKG_VERSION_MINOR")
+            )],
         }
     }
 }
