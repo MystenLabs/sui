@@ -13,6 +13,7 @@ pub mod content_type;
 mod error;
 mod health;
 mod info;
+mod metrics;
 mod objects;
 mod response;
 pub mod transactions;
@@ -20,6 +21,8 @@ pub mod types;
 
 pub use client::Client;
 pub use error::{RestError, Result};
+pub use metrics::RestMetrics;
+use mysten_network::callback::CallbackLayer;
 use std::sync::Arc;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::storage::ReadStore;
@@ -36,6 +39,7 @@ pub struct RestService {
     executor: Option<Arc<dyn TransactionExecutor>>,
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
+    metrics: Option<Arc<RestMetrics>>,
 }
 
 impl RestService {
@@ -49,6 +53,7 @@ impl RestService {
             executor: None,
             chain_id,
             software_version,
+            metrics: None,
         }
     }
 
@@ -63,6 +68,10 @@ impl RestService {
         self.executor = Some(executor);
     }
 
+    pub fn with_metrics(&mut self, metrics: RestMetrics) {
+        self.metrics = Some(Arc::new(metrics));
+    }
+
     pub fn chain_id(&self) -> sui_types::digests::ChainIdentifier {
         self.chain_id
     }
@@ -72,6 +81,9 @@ impl RestService {
     }
 
     pub fn into_router(self) -> Router {
+        let executor = self.executor.clone();
+        let metrics = self.metrics.clone();
+
         rest_router(self.store.clone())
             .merge(
                 Router::new()
@@ -79,7 +91,7 @@ impl RestService {
                     .with_state(self.clone()),
             )
             .pipe(|router| {
-                if let Some(executor) = self.executor.clone() {
+                if let Some(executor) = executor {
                     router.merge(execution_router(executor))
                 } else {
                     router
@@ -89,6 +101,15 @@ impl RestService {
                 self,
                 response::append_info_headers,
             ))
+            .pipe(|router| {
+                if let Some(metrics) = metrics {
+                    router.layer(CallbackLayer::new(
+                        metrics::RestMetricsMakeCallbackHandler::new(metrics),
+                    ))
+                } else {
+                    router
+                }
+            })
     }
 
     pub async fn start_service(self, socket_address: std::net::SocketAddr, base: Option<String>) {
