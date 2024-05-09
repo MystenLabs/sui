@@ -161,7 +161,9 @@ pub fn build_execution_cache(
     )
 }
 
-pub fn build_execution_cache_for_tests(
+/// Should only be used for sui-tool or tests. Nodes must use build_execution_cache which
+/// uses the epoch_start_config to prevent cache impl from switching except at epoch boundaries.
+pub fn build_execution_cache_from_env(
     prometheus_registry: &Registry,
     store: &Arc<AuthorityStore>,
 ) -> ExecutionCacheTraitPointers {
