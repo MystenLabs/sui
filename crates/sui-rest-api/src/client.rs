@@ -32,11 +32,11 @@ impl Client {
         let response = self
             .inner
             .get(url)
-            .header(reqwest::header::ACCEPT, crate::APPLICATION_JSON)
+            .header(reqwest::header::ACCEPT, crate::APPLICATION_BCS)
             .send()
             .await?;
 
-        self.json(response).await
+        self.bcs(response).await
     }
 
     pub async fn get_full_checkpoint(

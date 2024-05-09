@@ -37,6 +37,10 @@ bcs_convert_impl!(
     CheckpointSummary
 );
 bcs_convert_impl!(
+    crate::messages_checkpoint::CertifiedCheckpointSummary,
+    SignedCheckpointSummary
+);
+bcs_convert_impl!(
     crate::messages_checkpoint::CheckpointContents,
     CheckpointContents
 );
@@ -267,5 +271,17 @@ pub fn struct_tag_sdk_to_core(value: StructTag) -> move_core_types::language_sto
         module,
         name,
         type_params,
+    }
+}
+
+impl From<crate::messages_checkpoint::CheckpointDigest> for CheckpointDigest {
+    fn from(value: crate::messages_checkpoint::CheckpointDigest) -> Self {
+        Self::new(value.into_inner())
+    }
+}
+
+impl From<CheckpointDigest> for crate::messages_checkpoint::CheckpointDigest {
+    fn from(value: CheckpointDigest) -> Self {
+        Self::new(value.into_inner())
     }
 }
