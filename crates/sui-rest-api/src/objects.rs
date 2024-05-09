@@ -1,11 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{accept::AcceptFormat, response::ResponseContent, types::JsonObject, Result};
+use crate::{accept::AcceptFormat, response::ResponseContent, Result};
 use axum::extract::{Path, State};
+use sui_sdk2::types::Object;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber},
-    object::Object,
     storage::ReadStore,
 };
 use tap::Pipe;
@@ -16,13 +16,14 @@ pub async fn get_object<S: ReadStore>(
     Path(object_id): Path<ObjectID>,
     accept: AcceptFormat,
     State(state): State<S>,
-) -> Result<ResponseContent<Object, JsonObject>> {
+) -> Result<ResponseContent<Object>> {
     let object = state
         .get_object(&object_id)?
-        .ok_or_else(|| ObjectNotFoundError::new(object_id))?;
+        .ok_or_else(|| ObjectNotFoundError::new(object_id))?
+        .into();
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(JsonObject::from_object(&object)),
+        AcceptFormat::Json => ResponseContent::Json(object),
         AcceptFormat::Bcs => ResponseContent::Bcs(object),
     }
     .pipe(Ok)
@@ -34,13 +35,14 @@ pub async fn get_object_with_version<S: ReadStore>(
     Path((object_id, version)): Path<(ObjectID, SequenceNumber)>,
     accept: AcceptFormat,
     State(state): State<S>,
-) -> Result<ResponseContent<Object, JsonObject>> {
+) -> Result<ResponseContent<Object>> {
     let object = state
         .get_object_by_key(&object_id, version)?
-        .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?;
+        .ok_or_else(|| ObjectNotFoundError::new_with_version(object_id, version))?
+        .into();
 
     match accept {
-        AcceptFormat::Json => ResponseContent::Json(JsonObject::from_object(&object)),
+        AcceptFormat::Json => ResponseContent::Json(object),
         AcceptFormat::Bcs => ResponseContent::Bcs(object),
     }
     .pipe(Ok)

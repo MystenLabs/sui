@@ -17,6 +17,7 @@ serde_json.workspace = true
 serde_with.workspace = true
 tap.workspace = true
 thiserror.workspace = true
+sui-sdk2.workspace = true
 
 fastcrypto.workspace = true
 sui-types.workspace = true
