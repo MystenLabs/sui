@@ -22,10 +22,10 @@ CREATE TABLE events
     -- timestamp of the checkpoint when the event was emitted
     timestamp_ms                BIGINT       NOT NULL,
     -- bcs of the Event contents (Event.contents)
-    bcs                         blob        NOT NULL,
+    bcs                         MEDIUMBLOB        NOT NULL,
     PRIMARY KEY(tx_sequence_number, event_sequence_number, checkpoint_sequence_number)
 ) PARTITION BY RANGE (checkpoint_sequence_number) (
-    PARTITION p0 VALUES LESS THAN MAXVALUE
+    PARTITION events_partition_0 VALUES LESS THAN MAXVALUE
 );
 CREATE INDEX events_package ON events (package(255), tx_sequence_number, event_sequence_number);
 CREATE INDEX events_package_module ON events (package(255), module(255), tx_sequence_number, event_sequence_number);
