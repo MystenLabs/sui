@@ -295,8 +295,7 @@ pub struct CommittedSubDag {
     /// index incremented by 1.
     pub commit_index: CommitIndex,
     /// Optional scores that are provided as part of the consensus output to Sui
-    /// then can then be used by Sui for future submission to consensus.
-    // TODO: change to option and only submit new scores to Sui
+    /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores: Vec<(AuthorityIndex, u64)>,
 }
 

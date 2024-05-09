@@ -37,7 +37,10 @@ impl LeaderSchedule {
     /// The window where the schedule change takes place in consensus. It represents
     /// number of committed sub dags.
     /// TODO: move this to protocol config
+    #[cfg(not(msim))]
     const CONSENSUS_COMMITS_PER_SCHEDULE: u64 = 300;
+    #[cfg(msim)]
+    const CONSENSUS_COMMITS_PER_SCHEDULE: u64 = 10;
 
     pub(crate) fn new(context: Arc<Context>, leader_swap_table: LeaderSwapTable) -> Self {
         Self {

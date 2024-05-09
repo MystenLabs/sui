@@ -74,17 +74,17 @@ impl CommitObserver {
 
         let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         let mut sent_sub_dags = vec![];
-
+        let reputation_scores = self
+            .leader_schedule
+            .leader_swap_table
+            .read()
+            .reputation_scores
+            .authorities_by_score_desc(self.context.clone());
         for mut committed_sub_dag in committed_sub_dags.into_iter() {
+            // TODO: Only update scores after a leader schedule change
             // On handle commit the current scores that were used to elect the
             // leader of the subdag will be added to the subdag and sent to sui.
-            committed_sub_dag.update_scores(
-                self.leader_schedule
-                    .leader_swap_table
-                    .read()
-                    .reputation_scores
-                    .authorities_by_score_desc(self.context.clone()),
-            );
+            committed_sub_dag.update_scores(reputation_scores.clone());
             // Failures in sender.send() are assumed to be permanent
             if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
                 tracing::error!(
@@ -130,22 +130,25 @@ impl CommitObserver {
         // Resend all the committed subdags to the consensus output channel
         // for all the commits above the last processed index.
         let mut last_sent_commit_index = last_processed_commit_index;
-        for commit in unsent_commits {
+        let num_unsent_commits = unsent_commits.len();
+        for (index, commit) in unsent_commits.into_iter().enumerate() {
             // Commit index must be continuous.
             assert_eq!(commit.index(), last_sent_commit_index + 1);
             let mut committed_sub_dag =
                 load_committed_subdag_from_store(self.store.as_ref(), commit);
 
             // On recovery leader schedule will be updated with the current scores
-            // and the scores will be passed along with each of the commits sent to
+            // and the scores will be passed along with the last commit sent to
             // sui so that the current scores are available for submission.
-            committed_sub_dag.update_scores(
-                self.leader_schedule
-                    .leader_swap_table
-                    .read()
-                    .reputation_scores
-                    .authorities_by_score_desc(self.context.clone()),
-            );
+            if index == num_unsent_commits - 1 {
+                committed_sub_dag.update_scores(
+                    self.leader_schedule
+                        .leader_swap_table
+                        .read()
+                        .reputation_scores
+                        .authorities_by_score_desc(self.context.clone()),
+                );
+            }
             self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
                 panic!(
                     "Failed to send commit during recovery, probably due to shutdown: {:?}",

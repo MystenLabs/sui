@@ -491,32 +491,29 @@ impl Core {
                     )
                     .collect::<Vec<_>>();
 
-                if sequenced_leaders.is_empty() {
+                let Some(last) = sequenced_leaders.last() else {
                     break;
-                }
+                };
 
-                if let Some(last) = sequenced_leaders.last() {
-                    self.last_decided_leader = last.get_decided_slot();
-                    self.context
-                        .metrics
-                        .node_metrics
-                        .last_decided_leader_round
-                        .set(self.last_decided_leader.round as i64);
-                }
+                self.last_decided_leader = last.get_decided_slot();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .last_decided_leader_round
+                    .set(self.last_decided_leader.round as i64);
 
                 let committed_leaders = sequenced_leaders
                     .into_iter()
                     .filter_map(|leader| leader.into_committed_block())
                     .collect::<Vec<_>>();
-                if !committed_leaders.is_empty() {
-                    debug!(
-                        "Committing leaders: {}",
-                        committed_leaders
-                            .iter()
-                            .map(|b| b.reference().to_string())
-                            .join(",")
-                    );
-                }
+
+                debug!(
+                    "Committing leaders: {}",
+                    committed_leaders
+                        .iter()
+                        .map(|b| b.reference().to_string())
+                        .join(",")
+                );
 
                 // TODO: refcount subdags
                 let subdags = self.commit_observer.handle_commit(committed_leaders)?;
