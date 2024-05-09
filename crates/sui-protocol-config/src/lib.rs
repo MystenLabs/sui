@@ -2171,8 +2171,7 @@ impl ProtocolConfig {
                     cfg.min_move_binary_format_version = Some(6);
                     cfg.feature_flags.accept_zklogin_in_multisig = true;
                     // Also bumps framework snapshot to fix binop issue.
-                }
-                46 => {
+
                     // enable bridge in devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.bridge = true;
