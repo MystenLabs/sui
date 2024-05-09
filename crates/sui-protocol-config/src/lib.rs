@@ -122,6 +122,7 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 44: Enable consensus fork detection on mainnet.
 //             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
 // Version 45: Use tonic networking for Mysticeti consensus.
+//             Enable random beacon protocol on testnet.
 //             Set min Move binary format version to 6.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -2143,6 +2144,13 @@ impl ProtocolConfig {
                     // Use tonic networking for consensus, in tests and devnet.
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
+                    }
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(150);
                     }
                     cfg.min_move_binary_format_version = Some(6);
                     // Also bumps framework snapshot to fix binop issue.
