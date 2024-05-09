@@ -6,6 +6,7 @@ use axum::{routing::get, Router};
 pub mod accept;
 mod checkpoints;
 mod client;
+pub mod content_type;
 mod error;
 mod health;
 mod info;
