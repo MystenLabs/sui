@@ -51,10 +51,10 @@ use sui_types::error::SuiResult;
 use sui_types::gas::GasCostSummary;
 use sui_types::message_envelope::Message;
 use sui_types::messages_checkpoint::{
-    CertifiedCheckpointSummary, CheckpointContents, CheckpointResponseV2, CheckpointSequenceNumber,
-    CheckpointSignatureMessage, CheckpointSummary, CheckpointSummaryResponse, CheckpointTimestamp,
-    EndOfEpochData, FullCheckpointContents, TrustedCheckpoint, VerifiedCheckpoint,
-    VerifiedCheckpointContents,
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointDiff, CheckpointResponseV2,
+    CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointSummary,
+    CheckpointSummaryResponse, CheckpointTimestamp, EndOfEpochData, FullCheckpointContents,
+    TrustedCheckpoint, VerifiedCheckpoint, VerifiedCheckpointContents,
 };
 use sui_types::messages_checkpoint::{CheckpointRequestV2, SignedCheckpointSummary};
 use sui_types::messages_consensus::ConsensusTransactionKey;
@@ -421,10 +421,13 @@ impl CheckpointStore {
         verified_checkpoint: &VerifiedCheckpoint,
     ) {
         if local_checkpoint != verified_checkpoint.data() {
-            let verified_contents = self
-                .get_checkpoint_contents(&verified_checkpoint.content_digest)
+            let verified_contents =
+                self.get_checkpoint_contents(&verified_checkpoint.content_digest);
+            let verified_contents_string = verified_contents
+                .as_ref()
                 .map(|opt_contents| {
                     opt_contents
+                        .as_ref()
                         .map(|contents| format!("{:?}", contents))
                         .unwrap_or_else(|| {
                             format!(
@@ -441,10 +444,12 @@ impl CheckpointStore {
                 })
                 .unwrap_or_else(|err_msg| err_msg);
 
-            let local_contents = self
-                .get_checkpoint_contents(&local_checkpoint.content_digest)
+            let local_contents = self.get_checkpoint_contents(&local_checkpoint.content_digest);
+            let local_contents_string = local_contents
+                .as_ref()
                 .map(|opt_contents| {
                     opt_contents
+                        .as_ref()
                         .map(|contents| format!("{:?}", contents))
                         .unwrap_or_else(|| {
                             format!(
@@ -461,13 +466,27 @@ impl CheckpointStore {
                 })
                 .unwrap_or_else(|err_msg| err_msg);
 
+            let checkpoint_diff = if let (Ok(Some(verified_contents)), Ok(Some(local_contents))) =
+                (&verified_contents, &local_contents)
+            {
+                Some(CheckpointDiff::new(
+                    verified_checkpoint.data(),
+                    verified_contents,
+                    local_checkpoint,
+                    local_contents,
+                ))
+            } else {
+                None
+            };
+
             // checkpoint contents may be too large for panic message.
             error!(
                 verified_checkpoint = ?verified_checkpoint.data(),
-                ?verified_contents,
+                ?verified_contents_string,
                 ?local_checkpoint,
-                ?local_contents,
-                "Local checkpoint fork detected!",
+                ?local_contents_string,
+                "Local checkpoint fork detected! diff: {:#?}",
+                checkpoint_diff
             );
             panic!(
                 "Local checkpoint fork detected for sequence number: {}",
