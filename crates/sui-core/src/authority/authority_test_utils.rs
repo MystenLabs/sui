@@ -65,7 +65,7 @@ pub async fn certify_transaction(
     let committee = authority.clone_committee_for_testing();
     let certificate = CertifiedTransaction::new(transaction.into_message(), vec![vote], &committee)
         .unwrap()
-        .try_into_verified(&committee, &Default::default())
+        .try_into_verified_for_testing(&committee, &Default::default())
         .unwrap();
     Ok(certificate)
 }
@@ -305,7 +305,7 @@ pub fn init_certified_transaction(
         epoch_store.committee(),
     )
     .unwrap()
-    .try_into_verified(epoch_store.committee(), &Default::default())
+    .try_into_verified_for_testing(epoch_store.committee(), &Default::default())
     .unwrap()
 }
 
@@ -325,7 +325,7 @@ pub async fn certify_shared_obj_transaction_no_execution(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .try_into_verified(&committee, &Default::default())
+            .try_into_verified_for_testing(&committee, &Default::default())
             .unwrap();
 
     send_consensus_no_execution(authority, &certificate).await;

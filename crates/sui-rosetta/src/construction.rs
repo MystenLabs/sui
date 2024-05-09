@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use axum::extract::State;
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
@@ -18,7 +20,9 @@ use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{DefaultHash, SignatureScheme, ToFromBytes};
 use sui_types::error::SuiError;
 use sui_types::signature::{GenericSignature, VerifyParams};
-use sui_types::signature_verification::verify_sender_signed_data_message_signatures;
+use sui_types::signature_verification::{
+    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+};
 use sui_types::transaction::{Transaction, TransactionData, TransactionDataAPI};
 
 use crate::errors::Error;
@@ -119,6 +123,7 @@ pub async fn combine(
         &signed_tx,
         place_holder_epoch,
         &VerifyParams::default(),
+        Arc::new(VerifiedDigestCache::new_empty()), // no need to use cache in rosetta
     )?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 

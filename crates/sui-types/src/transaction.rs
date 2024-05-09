@@ -10,8 +10,8 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::digests::{ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::SharedInput;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
@@ -19,7 +19,9 @@ use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologue
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{GenericSignature, VerifyParams};
-use crate::signature_verification::verify_sender_signed_data_message_signatures;
+use crate::signature_verification::{
+    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+};
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
@@ -38,6 +40,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -2624,26 +2627,31 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 impl Transaction {
-    pub fn verify_signature(
+    pub fn verify_signature_for_testing(
         &self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
     ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(self.data(), current_epoch, verify_params)
+        verify_sender_signed_data_message_signatures(
+            self.data(),
+            current_epoch,
+            verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
     }
 
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedTransaction> {
-        self.verify_signature(current_epoch, verify_params)?;
+        self.verify_signature_for_testing(current_epoch, verify_params)?;
         Ok(VerifiedTransaction::new_from_verified(self))
     }
 }
 
 impl SignedTransaction {
-    pub fn verify_signatures_authenticated(
+    pub fn verify_signatures_authenticated_for_testing(
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
@@ -2652,6 +2660,7 @@ impl SignedTransaction {
             self.data(),
             committee.epoch(),
             verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
         )?;
 
         self.auth_sig().verify_secure(
@@ -2661,12 +2670,12 @@ impl SignedTransaction {
         )
     }
 
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
+        self.verify_signatures_authenticated_for_testing(committee, verify_params)?;
         Ok(VerifiedSignedTransaction::new_from_verified(self))
     }
 }
@@ -2691,11 +2700,13 @@ impl CertifiedTransaction {
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),
             committee.epoch(),
             verify_params,
+            zklogin_inputs_cache,
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -2704,12 +2715,16 @@ impl CertifiedTransaction {
         )
     }
 
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
+        self.verify_signatures_authenticated(
+            committee,
+            verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }
 
