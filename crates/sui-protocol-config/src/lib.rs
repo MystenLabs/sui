@@ -124,6 +124,7 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 45: Use tonic networking for Mysticeti consensus.
 //             Enable random beacon protocol on testnet.
 //             Set min Move binary format version to 6.
+//             Enable transactions to be signed with zkLogin inside multisig signature.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2153,6 +2154,7 @@ impl ProtocolConfig {
                         cfg.random_beacon_min_round_interval_ms = Some(150);
                     }
                     cfg.min_move_binary_format_version = Some(6);
+                    cfg.feature_flags.accept_zklogin_in_multisig = true;
                     // Also bumps framework snapshot to fix binop issue.
                 }
                 // Use this template when making changes:
