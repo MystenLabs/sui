@@ -207,6 +207,10 @@ impl ExecutionCacheRead for ProxyCache {
         delegate_method!(self.get_sui_system_state_object_unsafe())
     }
 
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        delegate_method!(self.get_bridge_object_unsafe())
+    }
+
     fn get_marker_value(
         &self,
         object_id: &ObjectID,
