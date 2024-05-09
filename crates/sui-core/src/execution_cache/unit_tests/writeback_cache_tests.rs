@@ -359,7 +359,7 @@ impl Scenario {
     }
 
     pub fn evict_caches(&self) {
-        self.cache.clear_caches();
+        self.cache.clear_caches_and_assert_empty();
     }
 
     pub fn reset_cache(&mut self) {
