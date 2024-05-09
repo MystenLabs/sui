@@ -131,14 +131,14 @@ module std::ascii_tests {
 
     #[test]
     fun test_to_uppercase() {
-        let str = b"hello_world_!".to_ascii_string();
-        assert!(str.to_uppercase() == b"HELLO_WORLD_!".to_ascii_string(), 0);
+        let str = b"azhello_world_!".to_ascii_string();
+        assert!(str.to_uppercase() == b"AZHELLO_WORLD_!".to_ascii_string(), 0);
     }
 
     #[test]
     fun test_to_lowercase() {
-        let str = b"HELLO_WORLD_!".to_ascii_string();
-        assert!(str.to_lowercase() == b"hello_world_!".to_ascii_string(), 0);
+        let str = b"AZHELLO_WORLD_!".to_ascii_string();
+        assert!(str.to_lowercase() == b"azhello_world_!".to_ascii_string(), 0);
     }
 
     #[test]

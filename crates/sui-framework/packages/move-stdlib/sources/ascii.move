@@ -166,19 +166,13 @@ module std::ascii {
     /// Returns the length of the `string` if the `substr` is not found.
     /// Returns 0 if the `substr` is empty.
     public fun index_of(string: &String, substr: &String): u64 {
-        let (mut i, mut j) = (0, 0);
+        let mut i = 0;
         let (n, m) = (string.length(), substr.length());
-        if (m == 0) return 0;
-        while (i < n) {
-            if (string.bytes[i] == substr.bytes[j]) {
-                j = j + 1;
-                if (j == m) {
-                    return (i + 1) - m
-                }
-            } else {
-                i = i - j;
-                j = 0;
-            };
+        if (n < m) return n;
+        while (i <= n - m) {
+            let mut j = 0;
+            while (j < m && string.bytes[i + j] == substr.bytes[j]) j = j + 1;
+            if (j == m) return i;
             i = i + 1;
         };
         n

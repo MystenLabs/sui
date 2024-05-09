@@ -625,6 +625,7 @@ Convert a <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> 
 
 Computes the index of the first occurrence of the <code>substr</code> in the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code>.
 Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">string</a></code> if the <code>substr</code> is not found.
+Returns 0 if the <code>substr</code> is empty.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_index_of">index_of</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>, substr: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a>): u64
@@ -637,17 +638,13 @@ Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">st
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_index_of">index_of</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, substr: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): u64 {
-    <b>let</b> (<b>mut</b> i, <b>mut</b> j) = (0, 0);
+    <b>let</b> <b>mut</b> i = 0;
     <b>let</b> (n, m) = (<a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), substr.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>());
-    <b>while</b> (i &lt; n) {
-        <b>if</b> (<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i] == substr.bytes[j]) {
-            j = j + 1;
-            <b>if</b> (j == m) {
-                <b>return</b> (i + 1) - m
-            }
-        } <b>else</b> {
-            j = 0;
-        };
+    <b>if</b> (n &lt; m) <b>return</b> n;
+    <b>while</b> (i &lt;= n - m) {
+        <b>let</b> <b>mut</b> j = 0;
+        <b>while</b> (j &lt; m && <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i + j] == substr.bytes[j]) j = j + 1;
+        <b>if</b> (j == m) <b>return</b> i;
         i = i + 1;
     };
     n
