@@ -84,18 +84,20 @@ module std::ascii {
 
     /// Append the `other` string to the end of `string`.
     public fun append(string: &mut String, other: String) {
-        string.bytes.append(other.bytes)
+        string.bytes.append(other.into_bytes())
     }
 
     /// Insert the `other` string at the `at` index of `string`.
     public fun insert(s: &mut String, at: u64, o: String) {
         assert!(at <= s.length(), EInvalidIndex);
-        let l = s.length();
-        let mut front = s.substring(0, at);
-        let end = s.substring(at, l);
-        front.append(o);
-        front.append(end);
-        *s = front;
+        let mut tail = vector[];
+        while (s.length() > at) {
+            tail.push_back(s.bytes.pop_back());
+        };
+        s.append(o);
+        while (!tail.is_empty()) {
+            s.bytes.push_back(tail.pop_back());
+        };
     }
 
     /// Copy the slice of the `string` from `i` to `j` into a new `String`.
