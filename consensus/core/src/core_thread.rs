@@ -188,7 +188,7 @@ mod test {
         context::Context,
         core::CoreSignals,
         dag_state::DagState,
-        leader_schedule::{LeaderSchedule, LeaderSwapTable},
+        leader_schedule::LeaderSchedule,
         storage::mem_store::MemStore,
         transaction::{TransactionClient, TransactionConsumer},
         CommitConsumer,
@@ -217,9 +217,9 @@ mod test {
             dag_state.clone(),
             store,
         );
-        let leader_schedule = Arc::new(LeaderSchedule::new(
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
-            LeaderSwapTable::default(),
+            dag_state.clone(),
         ));
         let core = Core::new(
             context.clone(),
