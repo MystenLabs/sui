@@ -410,8 +410,8 @@ mod tests {
     // Tests shared object version assignment for cancelled transaction.
     #[tokio::test]
     async fn test_assign_versions_from_consensus_with_cancellation() {
-        let shared_object_1 = Object::with_id_shared_for_testing(ObjectID::random());
-        let shared_object_2 = Object::with_id_shared_for_testing(ObjectID::random());
+        let shared_object_1 = Object::shared_for_testing();
+        let shared_object_2 = Object::shared_for_testing();
         let id1 = shared_object_1.id();
         let id2 = shared_object_2.id();
         let init_shared_version_1 = match shared_object_1.owner {

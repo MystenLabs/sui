@@ -193,8 +193,8 @@ async fn transaction_manager_object_dependency() {
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect();
-    let shared_object = Object::with_id_shared_for_testing(ObjectID::random());
-    let shared_object_2 = Object::with_id_shared_for_testing(ObjectID::random());
+    let shared_object = Object::shared_for_testing();
+    let shared_object_2 = Object::shared_for_testing();
 
     let state = init_state_with_objects(
         [
@@ -723,8 +723,8 @@ async fn transaction_manager_with_cancelled_transactions() {
     // Initialize an authority state, with gas objects and 3 shared objects.
     let (owner, _keypair) = deterministic_random_account_key();
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
-    let shared_object_1 = Object::with_id_shared_for_testing(ObjectID::random());
-    let shared_object_2 = Object::with_id_shared_for_testing(ObjectID::random());
+    let shared_object_1 = Object::shared_for_testing();
+    let shared_object_2 = Object::shared_for_testing();
     let owned_object = Object::with_id_owner_for_testing(ObjectID::random(), owner);
 
     let state = init_state_with_objects(vec![
