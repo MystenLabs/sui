@@ -13569,9 +13569,11 @@ name = "sui-rest-api"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
  "bcs",
  "fastcrypto",
+ "itertools 0.10.5",
  "mime",
  "rand 0.8.5",
  "reqwest",
