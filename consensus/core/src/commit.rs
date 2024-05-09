@@ -633,7 +633,7 @@ mod tests {
     }
 
     #[tokio::test]
-    fn test_commit_range() {
+    async fn test_commit_range() {
         let range1 = CommitRange::new(1..6);
         let range2 = CommitRange::new(2..6);
         let range3 = CommitRange::new(5..10);
