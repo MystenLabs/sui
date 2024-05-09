@@ -1,23 +1,30 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, post},
+    Router,
+};
 
 pub mod accept;
 mod checkpoints;
-mod client;
+pub mod client;
 pub mod content_type;
 mod error;
 mod health;
 mod info;
 mod objects;
 mod response;
+pub mod transactions;
 pub mod types;
 
 pub use client::Client;
 pub use error::{RestError, Result};
+use std::sync::Arc;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
 use sui_types::storage::ReadStore;
+use tap::Pipe;
+pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
 
 pub const TEXT_PLAIN_UTF_8: &str = "text/plain; charset=utf-8";
 pub const APPLICATION_BCS: &str = "application/bcs";
@@ -25,29 +32,35 @@ pub const APPLICATION_JSON: &str = "application/json";
 
 #[derive(Clone)]
 pub struct RestService {
-    store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+    store: Arc<dyn ReadStore + Send + Sync>,
+    executor: Option<Arc<dyn TransactionExecutor>>,
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
 }
 
 impl RestService {
     pub fn new(
-        store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+        store: Arc<dyn ReadStore + Send + Sync>,
         chain_id: sui_types::digests::ChainIdentifier,
         software_version: &'static str,
     ) -> Self {
         Self {
             store,
+            executor: None,
             chain_id,
             software_version,
         }
     }
 
     pub fn new_without_version(
-        store: std::sync::Arc<dyn ReadStore + Send + Sync>,
+        store: Arc<dyn ReadStore + Send + Sync>,
         chain_id: sui_types::digests::ChainIdentifier,
     ) -> Self {
         Self::new(store, chain_id, "unknown")
+    }
+
+    pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
+        self.executor = Some(executor);
     }
 
     pub fn chain_id(&self) -> sui_types::digests::ChainIdentifier {
@@ -65,6 +78,13 @@ impl RestService {
                     .route("/", get(info::node_info))
                     .with_state(self.clone()),
             )
+            .pipe(|router| {
+                if let Some(executor) = self.executor.clone() {
+                    router.merge(execution_router(executor))
+                } else {
+                    router
+                }
+            })
             .layer(axum::middleware::map_response_with_state(
                 self,
                 response::append_info_headers,
@@ -109,4 +129,13 @@ where
             get(objects::get_object_with_version::<S>),
         )
         .with_state(state)
+}
+
+fn execution_router(executor: Arc<dyn TransactionExecutor>) -> Router {
+    Router::new()
+        .route(
+            transactions::POST_EXECUTE_TRANSACTION_PATH,
+            post(transactions::execute_transaction),
+        )
+        .with_state(executor)
 }
