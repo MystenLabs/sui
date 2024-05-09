@@ -106,7 +106,7 @@ fn zklogin_sign_personal_message() {
         user_address,
         0,
         &aux_verify_data,
-        Arc::new(VerifiedDigestCache::new_for_testing()),
+        Arc::new(VerifiedDigestCache::new_empty()),
     );
     // Verify passes.
     assert!(res.is_ok());

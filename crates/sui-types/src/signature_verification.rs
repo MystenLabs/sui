@@ -95,7 +95,7 @@ impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
     }
 
     // Initialize an empty cache when the cache is not needed (in testing scenarios, graphql and rosetta initialization).
-    pub fn new_for_testing() -> Self {
+    pub fn new_empty() -> Self {
         Self::new(
             IntCounter::new("test_cache_hits", "test cache hits").unwrap(),
             IntCounter::new("test_cache_misses", "test cache misses").unwrap(),

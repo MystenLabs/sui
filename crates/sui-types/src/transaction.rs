@@ -2636,7 +2636,7 @@ impl Transaction {
             self.data(),
             current_epoch,
             verify_params,
-            Arc::new(VerifiedDigestCache::new_for_testing()),
+            Arc::new(VerifiedDigestCache::new_empty()),
         )
     }
 
@@ -2660,7 +2660,7 @@ impl SignedTransaction {
             self.data(),
             committee.epoch(),
             verify_params,
-            Arc::new(VerifiedDigestCache::new_for_testing()),
+            Arc::new(VerifiedDigestCache::new_empty()),
         )?;
 
         self.auth_sig().verify_secure(
@@ -2723,7 +2723,7 @@ impl CertifiedTransaction {
         self.verify_signatures_authenticated(
             committee,
             verify_params,
-            Arc::new(VerifiedDigestCache::new_for_testing()),
+            Arc::new(VerifiedDigestCache::new_empty()),
         )?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }

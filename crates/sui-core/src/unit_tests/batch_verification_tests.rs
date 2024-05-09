@@ -100,7 +100,7 @@ async fn test_batch_verify() {
         let results = batch_verify_certificates(
             &committee,
             &certs,
-            Arc::new(VerifiedDigestCache::new_for_testing()),
+            Arc::new(VerifiedDigestCache::new_empty()),
         );
         results[i].as_ref().unwrap_err();
         for (_, r) in results.iter().enumerate().filter(|(j, _)| *j != i) {

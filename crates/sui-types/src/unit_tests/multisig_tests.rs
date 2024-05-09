@@ -423,7 +423,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         intent_msg,
         multisig_address,
         &aux_verify_data,
-        Arc::new(VerifiedDigestCache::new_for_testing()),
+        Arc::new(VerifiedDigestCache::new_empty()),
     );
     // since the zklogin inputs is crafted, it is expected that the proof verify failed, but all checks before passes.
     assert!(
@@ -463,7 +463,7 @@ fn zklogin_in_multisig_works_with_both_addresses() {
         intent_msg_padded,
         multisig_address_padded,
         &aux_verify_data,
-        Arc::new(VerifiedDigestCache::new_for_testing()),
+        Arc::new(VerifiedDigestCache::new_empty()),
     );
     assert!(
         matches!(res, Err(crate::error::SuiError::InvalidSignature { error }) if error.contains("General cryptographic error: Groth16 proof verify failed"))

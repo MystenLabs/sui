@@ -136,7 +136,7 @@ fn batch_verification_bench(c: &mut Criterion) {
                         batch_verify_certificates(
                             &committee,
                             &certs,
-                            Arc::new(VerifiedDigestCache::new_for_testing()),
+                            Arc::new(VerifiedDigestCache::new_empty()),
                         );
                     })
                 },

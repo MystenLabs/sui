@@ -138,7 +138,7 @@ pub(crate) async fn verify_zklogin_signature(
                 tx_sender,
                 curr_epoch,
                 &verify_params,
-                Arc::new(VerifiedDigestCache::new_for_testing()),
+                Arc::new(VerifiedDigestCache::new_empty()),
             ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
@@ -167,7 +167,7 @@ pub(crate) async fn verify_zklogin_signature(
                 author.into(),
                 curr_epoch,
                 &verify_params,
-                Arc::new(VerifiedDigestCache::new_for_testing()),
+                Arc::new(VerifiedDigestCache::new_empty()),
             ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,

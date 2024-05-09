@@ -180,7 +180,7 @@ fn test_certificates() {
         .verify_signatures_authenticated(
             &committee,
             &Default::default(),
-            Arc::new(VerifiedDigestCache::new_for_testing())
+            Arc::new(VerifiedDigestCache::new_empty())
         )
         .is_ok());
 
@@ -1315,7 +1315,7 @@ fn test_certificate_digest() {
         cert.verify_signatures_authenticated(
             &committee,
             &Default::default(),
-            Arc::new(VerifiedDigestCache::new_for_testing()),
+            Arc::new(VerifiedDigestCache::new_empty()),
         )
         .unwrap();
         cert

@@ -470,7 +470,7 @@ pub fn make_cert_with_large_committee(
     cert.verify_signatures_authenticated(
         committee,
         &Default::default(),
-        Arc::new(VerifiedDigestCache::new_for_testing()),
+        Arc::new(VerifiedDigestCache::new_empty()),
     )
     .unwrap();
     cert

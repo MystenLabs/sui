@@ -123,7 +123,7 @@ pub async fn combine(
         &signed_tx,
         place_holder_epoch,
         &VerifyParams::default(),
-        Arc::new(VerifiedDigestCache::new_for_testing()), // no need to use cache in rosetta
+        Arc::new(VerifiedDigestCache::new_empty()), // no need to use cache in rosetta
     )?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 
