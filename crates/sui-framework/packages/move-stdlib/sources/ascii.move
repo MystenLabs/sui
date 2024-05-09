@@ -173,7 +173,7 @@ module std::ascii {
             if (string.bytes[i] == substr.bytes[j]) {
                 j = j + 1;
                 if (j == m) {
-                    return i - m + 1
+                    return (i + 1) - m
                 }
             } else {
                 j = 0;

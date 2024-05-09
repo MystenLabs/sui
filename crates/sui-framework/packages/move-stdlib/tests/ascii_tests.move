@@ -161,6 +161,17 @@ module std::ascii_tests {
         assert!(str.substring(0, 0).is_empty(), 0);
     }
 
+    #[test]
+    fun test_index_of() {
+        let str = b"hello world".to_ascii_string();
+        assert!(str.index_of(&b"hello".to_ascii_string()) == 0, 0);
+        assert!(str.index_of(&b"world".to_ascii_string()) == 6, 1);
+        assert!(str.index_of(&b"o".to_ascii_string()) == 4, 2);
+        assert!(str.index_of(&b"z".to_ascii_string()) == str.length(), 3);
+        assert!(str.index_of(&b"o ".to_ascii_string()) == 4, 4);
+        assert!(str.index_of(&b"or".to_ascii_string()) == 7, 4);
+    }
+
     #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
     fun test_substring_i_out_of_bounds_fail() {
         let str = b"hello world".to_ascii_string();
