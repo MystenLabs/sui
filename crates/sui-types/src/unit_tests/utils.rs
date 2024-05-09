@@ -186,6 +186,12 @@ mod zk_login {
         }
         res
     }
+    pub fn get_one_zklogin_inputs(path: &str) -> String {
+        let file = std::fs::File::open(path).expect("Unable to open file");
+
+        let test_data: Vec<TestData> = serde_json::from_reader(file).unwrap();
+        test_data[1].zklogin_inputs.clone()
+    }
 
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {

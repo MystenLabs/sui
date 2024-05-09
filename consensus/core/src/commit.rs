@@ -498,8 +498,8 @@ impl CommitInfo {
     }
 }
 
-/// CommitRange stores a range of CommitIndex. The range contains the start and
-/// end commit indices and can be ordered for use as the key of a table.
+/// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
+/// and end (exclusive) commit indices and can be ordered for use as the key of a table.
 /// Note: If used as a key for a table it is useful to ensure the key ranges don't
 /// intersect using the provided helper methods so that ordering becomes clear.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -511,10 +511,12 @@ impl CommitRange {
         Self(range)
     }
 
+    // Inclusive
     pub(crate) fn start(&self) -> CommitIndex {
         self.0.start
     }
 
+    // Exclusive
     pub(crate) fn end(&self) -> CommitIndex {
         self.0.end
     }
@@ -522,13 +524,7 @@ impl CommitRange {
     /// Check if the provided range is sequentially after this range with the same
     /// range length.
     pub(crate) fn is_next_range(&self, other: &Self) -> bool {
-        self.0.len() == other.0.len() && self.end() + 1 == other.start()
-    }
-
-    /// Check if two CommitRange intersect. An intersection is true if any point
-    /// of the range intersects inclusive of the start and end indices.
-    pub(crate) fn has_intersection(&self, other: &Self) -> bool {
-        self.start() <= other.end() && self.end() >= other.start()
+        self.0.len() == other.0.len() && self.end() == other.start()
     }
 }
 
@@ -563,8 +559,8 @@ mod tests {
         storage::{mem_store::MemStore, WriteBatch},
     };
 
-    #[test]
-    fn test_new_subdag_from_commit() {
+    #[tokio::test]
+    async fn test_new_subdag_from_commit() {
         let store = Arc::new(MemStore::new());
         let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
@@ -636,24 +632,16 @@ mod tests {
         assert_eq!(subdag.commit_index, commit_index);
     }
 
-    #[test]
-    fn test_commit_range() {
-        let range1 = CommitRange::new(1..5);
+    #[tokio::test]
+    async fn test_commit_range() {
+        let range1 = CommitRange::new(1..6);
         let range2 = CommitRange::new(2..6);
         let range3 = CommitRange::new(5..10);
-        let range4 = CommitRange::new(6..10);
+        let range4 = CommitRange::new(6..11);
         let range5 = CommitRange::new(6..9);
 
         assert_eq!(range1.start(), 1);
-        assert_eq!(range1.end(), 5);
-
-        // Test range intersection check
-        assert!(range1.has_intersection(&range2));
-        assert!(range1.has_intersection(&range3));
-        assert!(range3.has_intersection(&range1));
-        assert!(range3.has_intersection(&range4));
-        assert!(!range1.has_intersection(&range4));
-        assert!(!range4.has_intersection(&range1));
+        assert_eq!(range1.end(), 6);
 
         // Test next range check
         assert!(!range1.is_next_range(&range2));

@@ -187,7 +187,7 @@ impl BuildConfig {
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-    let (filtered_diags_num, filtered_categories) =
+    let (filtered_diags_num, unique) =
         warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
     if let Some(f) = files {
         report_warnings(f, warning_diags);
@@ -196,7 +196,7 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceT
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
     }
 }
 

@@ -1,3 +1,9 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/development/enums/matching/invalid_binding_var.move:8:16
+  │
+8 │         match (opt) {
+  │                ^^^ Pattern 'Option::Some(_)' not covered
+
 error[E02010]: invalid name
   ┌─ tests/development/enums/matching/invalid_binding_var.move:9:26
   │

@@ -10,7 +10,6 @@
 //! - the handles in struct and function definitions point to the self module index
 //! - all struct and function handles pointing to the self module index have a definition
 use move_binary_format::{
-
     errors::{verification_error, Location, PartialVMResult, VMResult},
     file_format::{
         CompiledModule, Constant, FunctionHandle, FunctionHandleIndex, FunctionInstantiation,

@@ -24,5 +24,20 @@ move-clippy = [
     "-Aclippy::new_without_default",
 ]
 
+mysql-clippy = [
+    "clippy",
+    "--package",
+    "sui-indexer",
+    "--features",
+    "mysql-feature",
+    "--no-default-features",
+    "--",
+    "-Wclippy::all",
+    "-Wclippy::disallowed_methods",
+    "-Aclippy::upper_case_acronyms",
+    "-Aclippy::type_complexity",
+    "-Aclippy::new_without_default",
+]
+
 [build]
 rustflags = ["-C", "force-frame-pointers=yes", "-C", "force-unwind-tables=yes"]

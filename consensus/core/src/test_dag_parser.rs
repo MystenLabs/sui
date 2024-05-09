@@ -282,8 +282,8 @@ mod tests {
     use super::*;
     use crate::block::BlockAPI;
 
-    #[test]
-    fn test_dag_parsing() {
+    #[tokio::test]
+    async fn test_dag_parsing() {
         telemetry_subscribers::init_for_testing();
         let dag_str = "DAG { 
             Round 0 : { 4 },
@@ -374,8 +374,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_genesis_round_parsing() {
+    #[tokio::test]
+    async fn test_genesis_round_parsing() {
         let dag_str = "Round 0 : { 4 }";
         let result = parse_genesis(dag_str);
         assert!(result.is_ok());
@@ -384,8 +384,8 @@ mod tests {
         assert_eq!(num_authorities, 4);
     }
 
-    #[test]
-    fn test_slot_parsing() {
+    #[tokio::test]
+    async fn test_slot_parsing() {
         let dag_str = "A0";
         let result = parse_slot(dag_str);
         assert!(result.is_ok());
@@ -395,8 +395,8 @@ mod tests {
         assert_eq!(slot.round, 0);
     }
 
-    #[test]
-    fn test_all_round_parsing() {
+    #[tokio::test]
+    async fn test_all_round_parsing() {
         let dag_str = "Round 1 : { * }";
         let context = Arc::new(Context::new_for_test(4).0);
         let dag_builder = DagBuilder::new(context);
@@ -411,8 +411,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_specific_round_parsing() {
+    #[tokio::test]
+    async fn test_specific_round_parsing() {
         let dag_str = "Round 1 : {
             A -> [A0, B0, C0, D0],
             B -> [*, A0],
@@ -444,8 +444,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_parse_author_and_connections() {
+    #[tokio::test]
+    async fn test_parse_author_and_connections() {
         let expected_authority = str_to_authority_index("A").unwrap();
 
         // case 1: all authorities
@@ -483,8 +483,8 @@ mod tests {
         // TODO: case 5: byzantine case of multiple blocks per slot; [*]; timestamp=1
     }
 
-    #[test]
-    fn test_str_to_authority_index() {
+    #[tokio::test]
+    async fn test_str_to_authority_index() {
         assert_eq!(
             str_to_authority_index("A"),
             Some(AuthorityIndex::new_for_test(0))

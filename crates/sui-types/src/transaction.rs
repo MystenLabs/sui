@@ -10,8 +10,8 @@ use crate::crypto::{
     AuthorityStrongQuorumSignInfo, DefaultHash, Ed25519SuiSignature, EmptySignInfo,
     RandomnessRound, Signature, Signer, SuiSignatureInner, ToFromBytes,
 };
-use crate::digests::ConsensusCommitDigest;
 use crate::digests::{CertificateDigest, SenderSignedDataDigest};
+use crate::digests::{ConsensusCommitDigest, ZKLoginInputsDigest};
 use crate::execution::SharedInput;
 use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::messages_checkpoint::CheckpointTimestamp;
@@ -19,7 +19,9 @@ use crate::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologue
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use crate::signature::{GenericSignature, VerifyParams};
-use crate::signature_verification::verify_sender_signed_data_message_signatures;
+use crate::signature_verification::{
+    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+};
 use crate::{
     SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_AUTHENTICATOR_STATE_OBJECT_SHARED_VERSION,
     SUI_CLOCK_OBJECT_ID, SUI_CLOCK_OBJECT_SHARED_VERSION, SUI_FRAMEWORK_PACKAGE_ID,
@@ -38,6 +40,7 @@ use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
 use std::fmt::Write;
 use std::fmt::{Debug, Display, Formatter};
 use std::iter::once;
+use std::sync::Arc;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::Hash,
@@ -2624,26 +2627,31 @@ pub type SignedTransaction = Envelope<SenderSignedData, AuthoritySignInfo>;
 pub type VerifiedSignedTransaction = VerifiedEnvelope<SenderSignedData, AuthoritySignInfo>;
 
 impl Transaction {
-    pub fn verify_signature(
+    pub fn verify_signature_for_testing(
         &self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
     ) -> SuiResult {
-        verify_sender_signed_data_message_signatures(self.data(), current_epoch, verify_params)
+        verify_sender_signed_data_message_signatures(
+            self.data(),
+            current_epoch,
+            verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )
     }
 
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         current_epoch: EpochId,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedTransaction> {
-        self.verify_signature(current_epoch, verify_params)?;
+        self.verify_signature_for_testing(current_epoch, verify_params)?;
         Ok(VerifiedTransaction::new_from_verified(self))
     }
 }
 
 impl SignedTransaction {
-    pub fn verify_signatures_authenticated(
+    pub fn verify_signatures_authenticated_for_testing(
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
@@ -2652,6 +2660,7 @@ impl SignedTransaction {
             self.data(),
             committee.epoch(),
             verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
         )?;
 
         self.auth_sig().verify_secure(
@@ -2661,12 +2670,12 @@ impl SignedTransaction {
         )
     }
 
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedSignedTransaction> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
+        self.verify_signatures_authenticated_for_testing(committee, verify_params)?;
         Ok(VerifiedSignedTransaction::new_from_verified(self))
     }
 }
@@ -2691,11 +2700,13 @@ impl CertifiedTransaction {
         &self,
         committee: &Committee,
         verify_params: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> SuiResult {
         verify_sender_signed_data_message_signatures(
             self.data(),
             committee.epoch(),
             verify_params,
+            zklogin_inputs_cache,
         )?;
         self.auth_sig().verify_secure(
             self.data(),
@@ -2704,12 +2715,16 @@ impl CertifiedTransaction {
         )
     }
 
-    pub fn try_into_verified(
+    pub fn try_into_verified_for_testing(
         self,
         committee: &Committee,
         verify_params: &VerifyParams,
     ) -> SuiResult<VerifiedCertificate> {
-        self.verify_signatures_authenticated(committee, verify_params)?;
+        self.verify_signatures_authenticated(
+            committee,
+            verify_params,
+            Arc::new(VerifiedDigestCache::new_empty()),
+        )?;
         Ok(VerifiedCertificate::new_from_verified(self))
     }
 
@@ -2810,6 +2825,8 @@ pub enum ObjectReadResultKind {
     // The version of the object that the transaction intended to read, and the digest of the tx
     // that deleted it.
     DeletedSharedObject(SequenceNumber, TransactionDigest),
+    // A shared object in a cancelled transaction. The sequence number embeds cancellation reason.
+    CancelledTransactionSharedObject(SequenceNumber),
 }
 
 impl From<Object> for ObjectReadResultKind {
@@ -2828,6 +2845,14 @@ impl ObjectReadResult {
             panic!("only shared objects can be DeletedSharedObject");
         }
 
+        if let (
+            InputObjectKind::ImmOrOwnedMoveObject(_),
+            ObjectReadResultKind::CancelledTransactionSharedObject(_),
+        ) = (&input_object_kind, &object)
+        {
+            panic!("only shared objects can be CancelledTransactionSharedObject");
+        }
+
         Self {
             input_object_kind,
             object,
@@ -2842,6 +2867,7 @@ impl ObjectReadResult {
         match &self.object {
             ObjectReadResultKind::Object(object) => Some(object),
             ObjectReadResultKind::DeletedSharedObject(_, _) => None,
+            ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
         }
     }
 
@@ -2862,6 +2888,10 @@ impl ObjectReadResult {
             (
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
+            ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_),
             ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { mutable, .. }, _) => *mutable,
         }
@@ -2900,6 +2930,10 @@ impl ObjectReadResult {
                 InputObjectKind::ImmOrOwnedMoveObject(_),
                 ObjectReadResultKind::DeletedSharedObject(_, _),
             ) => unreachable!(),
+            (
+                InputObjectKind::ImmOrOwnedMoveObject(_),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_),
+            ) => unreachable!(),
             (InputObjectKind::SharedMoveObject { .. }, _) => None,
         }
     }
@@ -2919,14 +2953,18 @@ impl ObjectReadResult {
                 ObjectReadResultKind::DeletedSharedObject(seq, digest) => {
                     SharedInput::Deleted((id, *seq, mutable, *digest))
                 }
+                ObjectReadResultKind::CancelledTransactionSharedObject(seq) => {
+                    SharedInput::Cancelled((id, *seq))
+                }
             }),
         }
     }
 
-    pub fn get_previous_transaction(&self) -> TransactionDigest {
+    pub fn get_previous_transaction(&self) -> Option<TransactionDigest> {
         match &self.object {
-            ObjectReadResultKind::Object(obj) => obj.previous_transaction,
-            ObjectReadResultKind::DeletedSharedObject(_, digest) => *digest,
+            ObjectReadResultKind::Object(obj) => Some(obj.previous_transaction),
+            ObjectReadResultKind::DeletedSharedObject(_, digest) => Some(*digest),
+            ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
         }
     }
 }
@@ -2995,6 +3033,26 @@ impl InputObjects {
             .any(|obj| obj.is_deleted_shared_object())
     }
 
+    pub fn get_congested_objects(&self) -> Option<Vec<ObjectID>> {
+        let mut contains_cancelled_read = false;
+        let mut congested_objects = Vec::new();
+        for obj in &self.objects {
+            if let ObjectReadResultKind::CancelledTransactionSharedObject(version) = obj.object {
+                contains_cancelled_read = true;
+                if version == SequenceNumber::CONGESTED {
+                    congested_objects.push(obj.id());
+                }
+            }
+        }
+
+        if !congested_objects.is_empty() {
+            Some(congested_objects)
+        } else {
+            assert!(!contains_cancelled_read);
+            None
+        }
+    }
+
     pub fn filter_owned_objects(&self) -> Vec<ObjectRef> {
         let owned_objects: Vec<_> = self
             .objects
@@ -3024,7 +3082,7 @@ impl InputObjects {
     pub fn transaction_dependencies(&self) -> BTreeSet<TransactionDigest> {
         self.objects
             .iter()
-            .map(|obj| obj.get_previous_transaction())
+            .filter_map(|obj| obj.get_previous_transaction())
             .collect()
     }
 
@@ -3068,6 +3126,16 @@ impl InputObjects {
                             None
                         }
                     }
+                    (
+                        InputObjectKind::ImmOrOwnedMoveObject(_),
+                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                    ) => {
+                        unreachable!()
+                    }
+                    (
+                        InputObjectKind::SharedMoveObject { .. },
+                        ObjectReadResultKind::CancelledTransactionSharedObject(_),
+                    ) => None,
                 },
             )
             .collect()
@@ -3085,6 +3153,7 @@ impl InputObjects {
                     object.data.try_as_move().map(MoveObject::version)
                 }
                 ObjectReadResultKind::DeletedSharedObject(v, _) => Some(*v),
+                ObjectReadResultKind::CancelledTransactionSharedObject(_) => None,
             })
             .chain(receiving_objects.iter().map(|object_ref| object_ref.1));
 

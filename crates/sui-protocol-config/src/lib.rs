@@ -122,6 +122,8 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 44: Enable consensus fork detection on mainnet.
 //             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
 // Version 45: Use tonic networking for Mysticeti consensus.
+//             Enable random beacon protocol on testnet.
+//             Set min Move binary format version to 6.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -573,6 +575,8 @@ pub struct ProtocolConfig {
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
+    min_move_binary_format_version: Option<u32>,
+
     /// Configuration controlling binary tables size.
     binary_module_handles: Option<u16>,
     binary_struct_handles: Option<u16>,
@@ -1039,9 +1043,13 @@ pub struct ProtocolConfig {
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
 
-    // The max accumulated txn execution cost per object in a checkpoint. Transactions
-    // in a checkpoint will be deferred once their touch shared objects hit this limit.
+    /// The max accumulated txn execution cost per object in a checkpoint. Transactions
+    /// in a checkpoint will be deferred once their touch shared objects hit this limit.
     max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+
+    /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
+    /// Transactions will be cancelled after this many rounds.
+    max_deferral_rounds_for_congestion_control: Option<u64>,
 }
 
 // feature flags
@@ -1415,6 +1423,7 @@ impl ProtocolConfig {
             max_pure_argument_size: Some(16 * 1024),
             max_programmable_tx_commands: Some(1024),
             move_binary_format_version: Some(6),
+            min_move_binary_format_version: None,
             binary_module_handles: None,
             binary_struct_handles: None,
             binary_function_handles: None,
@@ -1720,6 +1729,8 @@ impl ProtocolConfig {
             consensus_max_transactions_in_block_bytes: None,
 
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
+
+            max_deferral_rounds_for_congestion_control: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2134,6 +2145,14 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(150);
+                    }
+                    cfg.min_move_binary_format_version = Some(6);
                     // Also bumps framework snapshot to fix binop issue.
                 }
                 // Use this template when making changes:
@@ -2288,6 +2307,10 @@ impl ProtocolConfig {
 
     pub fn set_max_accumulated_txn_cost_per_object_in_checkpoint(&mut self, val: u64) {
         self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
+    }
+
+    pub fn set_max_deferral_rounds_for_congestion_control(&mut self, val: u64) {
+        self.max_deferral_rounds_for_congestion_control = Some(val);
     }
 
     pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {

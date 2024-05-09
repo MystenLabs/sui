@@ -39,8 +39,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     Coin, DryRunTransactionBlockResponse, DynamicFieldPage, ObjectChange, SuiCoinMetadata, SuiData,
     SuiExecutionStatus, SuiObjectData, SuiObjectDataOptions, SuiObjectResponse,
-    SuiObjectResponseQuery, SuiParsedData, SuiRawData, SuiTransactionBlockEffectsAPI,
-    SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
+    SuiObjectResponseQuery, SuiParsedData, SuiProtocolConfigValue, SuiRawData,
+    SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
 use sui_keys::keystore::AccountKeystore;
 use sui_move_build::{
@@ -48,7 +48,7 @@ use sui_move_build::{
     gather_published_ids, BuildConfig, CompiledPackage, PackageDependencies, PublishedAtError,
 };
 use sui_package_management::LockCommand;
-use sui_replay::{ReplayToolCommand, SandboxFileFormat};
+use sui_replay::ReplayToolCommand;
 use sui_sdk::{
     apis::ReadApi,
     sui_client_config::{SuiClientConfig, SuiEnv},
@@ -755,7 +755,6 @@ impl SuiClientCommands {
                     terminate_early,
                     num_tasks: 16,
                     persist_path: None,
-                    sandbox_format: SandboxFileFormat::Json,
                 };
                 let rpc = context.config.get_active_env()?.rpc.clone();
                 let _command_result =
@@ -2215,6 +2214,53 @@ pub(crate) async fn compile_package(
         run_bytecode_verifier,
         print_diags_to_stderr,
     )?;
+    let protocol_config = read_api.get_protocol_config(None).await?;
+
+    // Check that the package's Move version is compatible with the chain's
+    if let Some(Some(SuiProtocolConfigValue::U32(min_version))) = protocol_config
+        .attributes
+        .get("min_move_binary_format_version")
+    {
+        for module in compiled_package.get_modules_and_deps() {
+            if module.version() < *min_version {
+                return Err(SuiError::ModulePublishFailure {
+                    error: format!(
+                        "Module {} has a version {} that is \
+                         lower than the minimum version {min_version} supported by the chain.",
+                        module.self_id(),
+                        module.version(),
+                    ),
+                }
+                .into());
+            }
+        }
+    }
+
+    // Check that the package's Move version is compatible with the chain's
+    if let Some(Some(SuiProtocolConfigValue::U32(max_version))) =
+        protocol_config.attributes.get("move_binary_format_version")
+    {
+        for module in compiled_package.get_modules_and_deps() {
+            if module.version() > *max_version {
+                let help_msg = if module.version() == 7 {
+                    "This is because you used enums in your Move package but tried to publish it to \
+                    a chain that does not yet support enums in Move."
+                } else {
+                    ""
+                };
+                return Err(SuiError::ModulePublishFailure {
+                    error: format!(
+                        "Module {} has a version {} that is \
+                         higher than the maximum version {max_version} supported by the chain.{help_msg}",
+                        module.self_id(),
+                        module.version(),
+                    ),
+                }
+                .into());
+            }
+        }
+    }
+
     if !compiled_package.is_system_package() {
         if let Some(already_published) = compiled_package.published_root_module() {
             return Err(SuiError::ModulePublishFailure {

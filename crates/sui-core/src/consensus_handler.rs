@@ -333,7 +333,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
             .with_label_values(&[&leader_author.to_string()])
             .inc();
 
-        let mut bytes = 0usize;
         {
             let span = trace_span!("process_consensus_certs");
             let _guard = span.enter();
@@ -343,11 +342,15 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                     .stats
                     .inc_num_messages(authority_index as usize);
                 for (serialized_transaction, transaction) in authority_transactions {
-                    bytes += serialized_transaction.len();
+                    let kind = classify(&transaction);
                     self.metrics
                         .consensus_handler_processed
-                        .with_label_values(&[classify(&transaction)])
+                        .with_label_values(&[kind])
                         .inc();
+                    self.metrics
+                        .consensus_handler_transaction_sizes
+                        .with_label_values(&[kind])
+                        .observe(serialized_transaction.len() as f64);
                     if matches!(
                         &transaction.kind,
                         ConsensusTransactionKind::UserTransaction(_)
@@ -383,9 +386,6 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 .with_label_values(&[hostname])
                 .set(self.last_consensus_stats.stats.get_num_user_transactions(i) as i64);
         }
-        self.metrics
-            .consensus_handler_processed_bytes
-            .inc_by(bytes as u64);
 
         let mut all_transactions = Vec::new();
         {

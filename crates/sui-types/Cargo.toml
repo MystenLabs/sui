@@ -70,6 +70,7 @@ derive_more.workspace = true
 proptest.workspace = true
 proptest-derive.workspace = true
 better_any.workspace = true
+lru.workspace = true
 
 [dev-dependencies]
 bincode.workspace = true

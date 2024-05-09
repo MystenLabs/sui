@@ -249,7 +249,7 @@ impl Query {
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
         let Watermark { checkpoint, .. } = *ctx.data()?;
-        TransactionBlock::query(ctx.data_unchecked(), digest, checkpoint)
+        TransactionBlock::query(ctx, digest, checkpoint)
             .await
             .extend()
     }

@@ -94,6 +94,9 @@ pub(crate) use debug_print_format;
 /// See `debug_print_format` for different `fmt` options.
 macro_rules! debug_print_internal {
     () => {};
+    ((msg $msg:expr)) => {
+        println!("{}", $msg);
+    };
     (($name:expr => $val:expr $(; $fmt:ident)?)) => {
         {
         print!("{}: ", $name);

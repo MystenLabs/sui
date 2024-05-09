@@ -1,5 +1,27 @@
 # @mysten/sui.js
 
+## 0.54.1
+
+### Patch Changes
+
+- 99b112178c: Fix gql.tada dependency issue
+
+## 0.54.0
+
+### Minor Changes
+
+- b7f673dbd9: Update versioned graphql schema imports
+
+### Patch Changes
+
+- 123b42c75c: Only accept 1 keypair on getSigner method of MultiSigPubKey
+
+## 0.53.0
+
+### Minor Changes
+
+- 774bfb41a8: Add MultiSigSigner class to simplify multisig signing
+
 ## 0.52.0
 
 ### Minor Changes

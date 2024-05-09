@@ -346,6 +346,7 @@ mod tests {
         sync::{broadcast, mpsc::unbounded_channel},
         time::sleep,
     };
+    use typed_store::DBMetrics;
 
     use super::*;
     use crate::{
@@ -542,10 +543,13 @@ mod tests {
 
     // TODO: build AuthorityFixture.
     #[rstest]
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
         #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
+        let db_registry = Registry::new();
+        DBMetrics::init(&db_registry);
+
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
 
@@ -634,13 +638,13 @@ mod tests {
         // Stop authority 1.
         let index = committee.to_authority_index(1).unwrap();
         authorities.remove(index.value()).stop().await;
-        sleep(Duration::from_secs(30)).await;
+        sleep(Duration::from_secs(15)).await;
 
         // Restart authority 1 and let it run.
         let (authority, receiver) = make_authority(index).await;
         output_receivers[index] = receiver;
         authorities.insert(index.value(), authority);
-        sleep(Duration::from_secs(30)).await;
+        sleep(Duration::from_secs(15)).await;
 
         // Stop all authorities and exit.
         for authority in authorities {

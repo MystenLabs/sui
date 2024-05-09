@@ -302,8 +302,8 @@ mod tests {
     use super::*;
     use crate::commit::CommitRange;
 
-    #[test]
-    fn test_elect_leader() {
+    #[tokio::test]
+    async fn test_elect_leader() {
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = LeaderSchedule::new(context, LeaderSwapTable::default());
 
@@ -326,8 +326,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_elect_leader_stake_based() {
+    #[tokio::test]
+    async fn test_elect_leader_stake_based() {
         let context = Arc::new(Context::new_for_test(4).0);
         let leader_schedule = LeaderSchedule::new(context, LeaderSwapTable::default());
 
@@ -350,14 +350,14 @@ mod tests {
         );
     }
 
-    #[test]
-    fn test_leader_swap_table() {
+    #[tokio::test]
+    async fn test_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(0..10),
+            CommitRange::new(0..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -374,14 +374,14 @@ mod tests {
             .contains_key(&AuthorityIndex::new_for_test(0)));
     }
 
-    #[test]
-    fn test_leader_swap_table_swap() {
+    #[tokio::test]
+    async fn test_leader_swap_table_swap() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(0..10),
+            CommitRange::new(0..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -402,8 +402,8 @@ mod tests {
         assert_eq!(swapped_leader, None);
     }
 
-    #[test]
-    fn test_leader_swap_table_retrieve_first_nodes() {
+    #[tokio::test]
+    async fn test_leader_swap_table_retrieve_first_nodes() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
@@ -440,30 +440,30 @@ mod tests {
         )));
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(
         expected = "The swap_stake_threshold (34) should be in range [0 - 33], out of bounds parameter detected"
     )]
-    fn test_leader_swap_table_swap_stake_threshold_out_of_bounds() {
+    async fn test_leader_swap_table_swap_stake_threshold_out_of_bounds() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 34;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(0..10),
+            CommitRange::new(0..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         LeaderSwapTable::new(context, reputation_scores, swap_stake_threshold);
     }
 
-    #[test]
-    fn test_update_leader_swap_table() {
+    #[tokio::test]
+    async fn test_update_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(1..10),
+            CommitRange::new(1..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -475,7 +475,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(11..20),
+            CommitRange::new(11..21),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -485,17 +485,17 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
     }
 
-    #[test]
+    #[tokio::test]
     #[should_panic(
-        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..20) vs new LeaderSwapTable CommitRange(21..25)"
+        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..21) vs new LeaderSwapTable CommitRange(21..26)"
     )]
-    fn test_update_bad_leader_swap_table() {
+    async fn test_update_bad_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(1..10),
+            CommitRange::new(1..11),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -507,7 +507,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(11..20),
+            CommitRange::new(11..21),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -517,7 +517,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            CommitRange::new(21..25),
+            CommitRange::new(21..26),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =

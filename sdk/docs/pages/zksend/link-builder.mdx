@@ -63,6 +63,36 @@ method takes the following params:
 - **`id`** (required) - The ID of the object. This must be owned by the `sender` you configured when
   creating the link.
 
+#### Adding objects created in the same transaction
+
+You can create objects to add to links in the same transaction the link is created in by using
+`link.addClaimableObjectRef()`
+
+- **`ref`** (required) - The reference to the object you want to add to the link.
+- **`type`** (required) - The move type of the object you are adding
+
+```ts
+const txb = new TransactionBlock();
+
+const link = new ZkSendLinkBuilder({
+	sender: '0x...',
+});
+
+const newObject = txb.moveCall({
+	target: `${PACKAGE_ID}::your_module::mint`,
+});
+
+link.addClaimableObjectRef({
+	ref: newObject,
+	type: `${PACKAGE_ID}::your_module::YourType`,
+});
+
+// Adds the link creation transactions to the transaction block
+link.createSendTransaction({
+	transactionBlock: txb,
+});
+```
+
 #### Getting the link URL
 
 At any time, you can get the URL for the link by calling `link.getLink()`.
