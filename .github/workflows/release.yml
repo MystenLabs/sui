@@ -42,10 +42,11 @@ jobs:
       matrix:
         os:
           [
-            windows-ghcloud,
-            ubuntu-ghcloud,
-            macos-latest-xl,
-            macos-arm64-self-hosted
+            ubuntu-latest
+            # windows-ghcloud,
+            # ubuntu-ghcloud,
+            # macos-latest-xl,
+            # macos-arm64-self-hosted
           ]
       fail-fast: false
     runs-on: ${{ matrix.os }}
@@ -141,166 +142,163 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
+
+          for binary in $(cat ./binary-list.json | jq -r '.[]'); do
+            mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }} || true  
+          done
+
           [ -f ./target/debug/sui${{ env.extention }} ] && mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
-          [ -f ./target/release/sui${{ env.extention }} ] && mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui${{ env.extention }}
-          [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
-          [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
-          [ -f ./target/release/sui-faucet${{ env.extention }} ] && mv ./target/release/sui-faucet${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-faucet${{ env.extention }}
-          [ -f ./target/release/sui-test-validator${{ env.extention }} ] && mv ./target/release/sui-test-validator${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-test-validator${{ env.extention }}
-          [ -f ./target/release/sui-data-ingestion${{ env.extention }} ] && mv ./target/release/sui-data-ingestion${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-data-ingestion${{ env.extention }}
-          [ -f ./target/release/sui-bridge${{ env.extention }} ] && mv ./target/release/sui-bridge${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-bridge${{ env.extention }}
-          [ -f ./target/release/sui-graphql-rpc${{ env.extention }} ] && mv ./target/release/sui-graphql-rpc${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-graphql-rpc${{ env.extention }}
           [ -f ./external-crates/move/target/release/move-analyzer${{ env.extention }} ] && mv ./external-crates/move/target/release/move-analyzer${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/move-analyzer${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
-      - name: "Publish Windows sui binary to Chocolately"
-        if: ${{ matrix.os == 'windows-ghcloud' && contains( env.sui_tag, 'testnet') }}
-        working-directory: chocolatey
-        continue-on-error: true
-        shell: bash
-        run: |
-          choco install checksum
-          export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
+  #     - name: "Publish Windows sui binary to Chocolately"
+  #       if: ${{ matrix.os == 'windows-ghcloud' && contains( env.sui_tag, 'testnet') }}
+  #       working-directory: chocolatey
+  #       continue-on-error: true
+  #       shell: bash
+  #       run: |
+  #         choco install checksum
+  #         export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
 
-          cat <<EOF >>VERIFICATION.txt
-          Sui Binary verification steps
-          1. Go to https://github.com/MystenLabs/sui/releases/download/${{ env.sui_tag }}/sui-${{ env.sui_tag }}-windows-x86_64.tgz
-          2. Extract sui-windows-x86_64.exe
-          3. checksum.exe -t sha256 sui-windows-x86_64.exe: ${sui_sha}
+  #         cat <<EOF >>VERIFICATION.txt
+  #         Sui Binary verification steps
+  #         1. Go to https://github.com/MystenLabs/sui/releases/download/${{ env.sui_tag }}/sui-${{ env.sui_tag }}-windows-x86_64.tgz
+  #         2. Extract sui-windows-x86_64.exe
+  #         3. checksum.exe -t sha256 sui-windows-x86_64.exe: ${sui_sha}
 
-          File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
-          EOF
+  #         File 'LICENSE.txt' is obtained from: https://github.com/MystenLabs/sui/blob/main/LICENSE
+  #         EOF
 
-          choco pack --version ${{ env.sui_version }} configuration=release
-          choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
-          choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
+  #         choco pack --version ${{ env.sui_version }} configuration=release
+  #         choco apikey --api-key ${{ secrets.CHOCO_API_KEY }} --source https://push.chocolatey.org/
+  #         choco push sui.${{ env.sui_version }}.nupkg --source https://push.chocolatey.org/
 
-      - name: Upload release artifacts for ${{ matrix.os }} platform
-        uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
-        with:
-          name: sui-binaries-${{ matrix.os }}
-          if-no-files-found: error
-          path: |
-            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+  #     - name: Upload release artifacts for ${{ matrix.os }} platform
+  #       uses: actions/upload-artifact@a8a3f3ad30e3422c9c7b888a15615d19a852ae32 # pin@v3
+  #       with:
+  #         name: sui-binaries-${{ matrix.os }}
+  #         if-no-files-found: error
+  #         path: |
+  #           ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
-      - name: Attach artifacts to ${{ env.sui_tag }} release in GH
-        uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
-        with:
-          tag_name: ${{ env.sui_tag }}
-          files: |
-            ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
+  #     - name: Attach artifacts to ${{ env.sui_tag }} release in GH
+  #       uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # pin@v1
+  #       with:
+  #         tag_name: ${{ env.sui_tag }}
+  #         files: |
+  #           ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz
 
-  update-homebrew-formula:
-    name: Run brew bump-formula-pr for sui on testnet releases
-    needs: release-build
-    runs-on: ubuntu-latest
-    # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
-    steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: |
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
-          echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
-      - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
-        with:
-          formula-name: sui
-          create-pullrequest: true
-          tag-name: "${{ env.sui_tag }}"
-          commit-message: |
-            {{formulaName}} ${{ env.versionless_tag }}
+  # update-homebrew-formula:
+  #   name: Run brew bump-formula-pr for sui on testnet releases
+  #   needs: release-build
+  #   runs-on: ubuntu-latest
+  #   # releasing sui cli on testnet releases because it lags `main` less than mainnet, but is more likely to be stable than devnet
+  #   if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
+  #   steps:
+  #     - name: Clean up tag name ${{ env.TAG_NAME }}
+  #       shell: bash
+  #       run: |
+  #         echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+  #         echo "versionless_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'// | sed s/'testnet\-v'//)" >> $GITHUB_ENV
+  #     - uses: mislav/bump-homebrew-formula-action@b3327118b2153c82da63fd9cbf58942146ee99f0 # pin@v3
+  #       with:
+  #         formula-name: sui
+  #         create-pullrequest: true
+  #         tag-name: "${{ env.sui_tag }}"
+  #         commit-message: |
+  #           {{formulaName}} ${{ env.versionless_tag }}
 
-            Created by https://github.com/mislav/bump-homebrew-formula-action
+  #           Created by https://github.com/mislav/bump-homebrew-formula-action
 
-            From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        env:
-          # https://github.com/settings/tokens/new?scopes=public_repo,workflow
-          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
+  #           From release: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+  #       env:
+  #         # https://github.com/settings/tokens/new?scopes=public_repo,workflow
+  #         COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GH_FORMULA_BUMP }}
 
-  update-homebrew-tap:
-    name: Update mysten-tap sui.rb file
-    needs: release-build
-    runs-on: ubuntu-latest
-    if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
-    steps:
-      - name: Clean up tag name ${{ env.TAG_NAME }}
-        shell: bash
-        run: |
-          echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
+  # update-homebrew-tap:
+  #   name: Update mysten-tap sui.rb file
+  #   needs: release-build
+  #   runs-on: ubuntu-latest
+  #   if: ${{ contains( inputs.sui_tag, 'testnet') || contains( github.ref, 'testnet') }}
+  #   steps:
+  #     - name: Clean up tag name ${{ env.TAG_NAME }}
+  #       shell: bash
+  #       run: |
+  #         echo "sui_tag=$(echo ${{ env.TAG_NAME }} | sed s/'refs\/tags\/'//)" >> $GITHUB_ENV
 
-      # Checkout MystenLabs/homebrew-tap
-      - name: Checkout Target Repository
-        uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
-        with:
-          repository: MystenLabs/homebrew-tap
-          # @john's PAT, needs to be rotated jan 5 2025
-          token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
-          ref: main
-          fetch-depth: 0
+  #     # Checkout MystenLabs/homebrew-tap
+  #     - name: Checkout Target Repository
+  #       uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
+  #       with:
+  #         repository: MystenLabs/homebrew-tap
+  #         # @john's PAT, needs to be rotated jan 5 2025
+  #         token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
+  #         ref: main
+  #         fetch-depth: 0
 
-      # Download all artifacts from the previous job
-      - name: Download all artifacts
-        uses: actions/download-artifact@cbed621e49e4c01b044d60f6c80ea4ed6328b281 # pin@v2
+  #     # Download all artifacts from the previous job
+  #     - name: Download all artifacts
+  #       uses: actions/download-artifact@cbed621e49e4c01b044d60f6c80ea4ed6328b281 # pin@v2
 
-      - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
-        shell: bash
-        run: |
-          echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ env.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ env.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
-          echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
+  #     - name: Fetch Ubuntu x86_64 Binary and Compute SHA256
+  #       shell: bash
+  #       run: |
+  #         echo "sha256_ubuntu_release=$(sha256sum sui-binaries-ubuntu-ghcloud/sui-${{ env.sui_tag }}-ubuntu-x86_64.tgz | awk '{print $1}')" >> $GITHUB_ENV
+  #         echo "sha256_macos_x86_release=$(sha256sum sui-binaries-macos-latest-xl/sui-${{ env.sui_tag }}-macos-x86_64.tgz  | awk '{print $1}')" >> $GITHUB_ENV
+  #         echo "sha256_macos_arm_release=$(sha256sum sui-binaries-macos-arm64-self-hosted/sui-${{ env.sui_tag }}-macos-arm64.tgz | awk '{print $1}' )" >> $GITHUB_ENV
 
-      # Install Jinja2 for templating
-      - name: Install Jinja2
-        run: pip install jinja2
+  #     # Install Jinja2 for templating
+  #     - name: Install Jinja2
+  #       run: pip install jinja2
 
-      - name: Apply Jinja2 Template and Update Formula
-        run: |
-          python3 - <<EOF
-          import jinja2
-          import os
+  #     - name: Apply Jinja2 Template and Update Formula
+  #       run: |
+  #         python3 - <<EOF
+  #         import jinja2
+  #         import os
 
-          # Load the template
-          template_loader = jinja2.FileSystemLoader(searchpath="./template")
-          template_env = jinja2.Environment(loader=template_loader)
-          template = template_env.get_template("sui.rb.j2")
+  #         # Load the template
+  #         template_loader = jinja2.FileSystemLoader(searchpath="./template")
+  #         template_env = jinja2.Environment(loader=template_loader)
+  #         template = template_env.get_template("sui.rb.j2")
 
-          version = "${{ env.sui_tag }}".removeprefix("testnet-v")
+  #         version = "${{ env.sui_tag }}".removeprefix("testnet-v")
 
-          # Render the template with variables
-          output = template.render(
-              version=version,
-              linux_sha256="${sha256_ubuntu_release}",
-              macos_intel_sha256="${sha256_macos_x86_release}",
-              macos_arm_sha256="${sha256_macos_arm_release}"
-          )
+  #         # Render the template with variables
+  #         output = template.render(
+  #             version=version,
+  #             linux_sha256="${sha256_ubuntu_release}",
+  #             macos_intel_sha256="${sha256_macos_x86_release}",
+  #             macos_arm_sha256="${sha256_macos_arm_release}"
+  #         )
 
-          # Write the output to the formula file
-          with open("Formula/sui.rb", "w") as file:
-            file.write(output)
-          EOF
+  #         # Write the output to the formula file
+  #         with open("Formula/sui.rb", "w") as file:
+  #           file.write(output)
+  #         EOF
 
-      # Commit and Push to Target Repository
-      - name: Commit and Push to Target Repository
-        uses: github-actions-x/commit@722d56b8968bf00ced78407bbe2ead81062d8baa # pin@v2.9
-        with:
-          github-token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
-          commit-message: "Update Homebrew formula for release ${{ env.sui_tag }}"
-          files: Formula/sui.rb
-          push-branch: main
-          rebase: 'true'
-          force-add: 'true'
-          name: ${{ github.triggering_actor }}
-          email: ${{ github.triggering_actor }}@users.noreply.github.com
+  #     # Commit and Push to Target Repository
+  #     - name: Commit and Push to Target Repository
+  #       uses: github-actions-x/commit@722d56b8968bf00ced78407bbe2ead81062d8baa # pin@v2.9
+  #       with:
+  #         github-token: ${{ secrets.HOMEBREW_TAP_REPO_READ_WRITE }}
+  #         commit-message: "Update Homebrew formula for release ${{ env.sui_tag }}"
+  #         files: Formula/sui.rb
+  #         push-branch: main
+  #         rebase: 'true'
+  #         force-add: 'true'
+  #         name: ${{ github.triggering_actor }}
+  #         email: ${{ github.triggering_actor }}@users.noreply.github.com
 
-  # Tag all sui images with release tag, so that they can be easily found
-  tag-docker-hub-images:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
-        uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
-        with:
-          repository: MystenLabs/sui-operations
-          token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
-          event-type: tag-docker-images
-          client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.TAG_NAME }}"}'
+  # # Tag all sui images with release tag, so that they can be easily found
+  # tag-docker-hub-images:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Dispatch Tagging of images in DockerHub, in MystenLabs/sui-operations
+  #       uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
+  #       with:
+  #         repository: MystenLabs/sui-operations
+  #         token: ${{ secrets.DOCKER_BINARY_BUILDS_DISPATCH }}
+  #         event-type: tag-docker-images
+  #         client-payload: '{"sui_commit": "${{ github.sha }}", "repo_name": "all", "tag": "${{ env.TAG_NAME }}"}'
