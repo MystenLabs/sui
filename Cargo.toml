@@ -420,7 +420,7 @@ reqwest = { version = "0.11.20", default_features = false, features = [
   "json",
   "rustls-tls",
 ] }
-roaring = "0.10.1"
+roaring = "=0.10.3"
 rocksdb = { version = "0.21.0", features = [
   "snappy",
   "lz4",
@@ -576,6 +576,9 @@ anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2
 anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
 anemo-cli = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
 anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
+
+# core-types with json format for REST api
+sui-sdk2 = { package = "sui-sdk", git = "https://github.com/mystenlabs/sui-rust-sdk.git", rev = "e9e013221c65b0ebe2c1a375719babeb8c546e56", features = ["serde"] }
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }

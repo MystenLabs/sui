@@ -1380,6 +1380,10 @@ impl<T> SizeOneVec<T> {
         &mut self.e
     }
 
+    pub fn into_inner(self) -> T {
+        self.e
+    }
+
     pub fn iter(&self) -> std::iter::Once<&T> {
         std::iter::once(&self.e)
     }

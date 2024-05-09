@@ -73,6 +73,8 @@ proptest-derive.workspace = true
 better_any.workspace = true
 lru.workspace = true
 
+sui-sdk2.workspace = true
+
 [dev-dependencies]
 bincode.workspace = true
 criterion.workspace = true

@@ -73,6 +73,7 @@ pub mod randomness_state;
 pub mod signature;
 pub mod signature_verification;
 pub mod storage;
+pub mod sui_sdk2_conversions;
 pub mod sui_serde;
 pub mod sui_system_state;
 pub mod traffic_control;

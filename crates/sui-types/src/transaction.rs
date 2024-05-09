@@ -2305,6 +2305,10 @@ impl SenderSignedData {
         self.0.element()
     }
 
+    pub fn into_inner(self) -> SenderSignedTransaction {
+        self.0.into_inner()
+    }
+
     pub fn inner_mut(&mut self) -> &mut SenderSignedTransaction {
         self.0.element_mut()
     }
