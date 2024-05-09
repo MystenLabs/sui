@@ -1,13 +1,19 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::binary_config::{BinaryConfig, TableConfig};
+use move_binary_format::{
+    binary_config::{BinaryConfig, TableConfig},
+    file_format_common::VERSION_1,
+};
 use sui_protocol_config::ProtocolConfig;
 
 /// Build a `BinaryConfig` from a `ProtocolConfig`
 pub fn to_binary_config(protocol_config: &ProtocolConfig) -> BinaryConfig {
     BinaryConfig::new(
         protocol_config.move_binary_format_version(),
+        protocol_config
+            .min_move_binary_format_version_as_option()
+            .unwrap_or(VERSION_1),
         protocol_config.no_extraneous_module_bytes(),
         TableConfig {
             module_handles: protocol_config

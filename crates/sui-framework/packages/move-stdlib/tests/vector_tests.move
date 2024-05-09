@@ -5,8 +5,6 @@
 
 #[test_only]
 module std::vector_tests {
-    use std::vector;
-
     public struct R has store { }
     public struct Droppable has drop {}
     public struct NotDroppable {}
@@ -235,14 +233,14 @@ module std::vector_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = vector::EINDEX_OUT_OF_BOUNDS)]
+    #[expected_failure(abort_code = vector::EIndexOutOfBounds)]
     fun remove_empty_vector() {
         let mut v = vector<u64>[];
         v.remove(0);
     }
 
     #[test]
-    #[expected_failure(abort_code = vector::EINDEX_OUT_OF_BOUNDS)]
+    #[expected_failure(abort_code = vector::EIndexOutOfBounds)]
     fun remove_out_of_bound_index() {
         let mut v = vector<u64>[];
         v.push_back(0);
@@ -326,7 +324,7 @@ module std::vector_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS)]
+    #[expected_failure(abort_code = std::vector::EIndexOutOfBounds)]
     fun swap_remove_empty() {
         let mut v = vector<u64>[];
         v.swap_remove(0);
@@ -541,7 +539,7 @@ module std::vector_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = std::vector::EINDEX_OUT_OF_BOUNDS)]
+    #[expected_failure(abort_code = std::vector::EIndexOutOfBounds)]
     fun insert_out_of_range() {
         let mut v = vector[7];
         v.insert(6, 2);

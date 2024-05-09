@@ -155,8 +155,8 @@ mod tests {
         storage::mem_store::MemStore,
     };
 
-    #[test]
-    fn test_handle_commit() {
+    #[tokio::test]
+    async fn test_handle_commit() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);
@@ -200,8 +200,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_handle_already_committed() {
+    #[tokio::test]
+    async fn test_handle_already_committed() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);

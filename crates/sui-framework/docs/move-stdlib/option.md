@@ -65,24 +65,24 @@ zero or one because Move bytecode does not have ADTs.
 ## Constants
 
 
-<a name="0x1_option_EOPTION_IS_SET"></a>
+<a name="0x1_option_EOptionIsSet"></a>
 
 The <code><a href="../move-stdlib/option.md#0x1_option_Option">Option</a></code> is in an invalid state for the operation attempted.
 The <code><a href="../move-stdlib/option.md#0x1_option_Option">Option</a></code> is <code>Some</code> while it should be <code>None</code>.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/option.md#0x1_option_EOPTION_IS_SET">EOPTION_IS_SET</a>: u64 = 262144;
+<pre><code><b>const</b> <a href="../move-stdlib/option.md#0x1_option_EOptionIsSet">EOptionIsSet</a>: u64 = 262144;
 </code></pre>
 
 
 
-<a name="0x1_option_EOPTION_NOT_SET"></a>
+<a name="0x1_option_EOptionNotSet"></a>
 
 The <code><a href="../move-stdlib/option.md#0x1_option_Option">Option</a></code> is in an invalid state for the operation attempted.
 The <code><a href="../move-stdlib/option.md#0x1_option_Option">Option</a></code> is <code>None</code> while it should be <code>Some</code>.
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>: u64 = 262145;
+<pre><code><b>const</b> <a href="../move-stdlib/option.md#0x1_option_EOptionNotSet">EOptionNotSet</a>: u64 = 262145;
 </code></pre>
 
 
@@ -231,7 +231,7 @@ Aborts if <code>t</code> does not hold a value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_borrow">borrow</a>&lt;Element&gt;(t: &<a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;): &Element {
-    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>);
+    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOptionNotSet">EOptionNotSet</a>);
     &t.vec[0]
 }
 </code></pre>
@@ -319,7 +319,7 @@ Aborts if <code>t</code> already holds a value
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_fill">fill</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;, e: Element) {
     <b>let</b> vec_ref = &<b>mut</b> t.vec;
     <b>if</b> (vec_ref.is_empty()) vec_ref.push_back(e)
-    <b>else</b> <b>abort</b> <a href="../move-stdlib/option.md#0x1_option_EOPTION_IS_SET">EOPTION_IS_SET</a>
+    <b>else</b> <b>abort</b> <a href="../move-stdlib/option.md#0x1_option_EOptionIsSet">EOptionIsSet</a>
 }
 </code></pre>
 
@@ -345,7 +345,7 @@ Aborts if <code>t</code> does not hold a value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_extract">extract</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;): Element {
-    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>);
+    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOptionNotSet">EOptionNotSet</a>);
     t.vec.pop_back()
 }
 </code></pre>
@@ -372,7 +372,7 @@ Aborts if <code>t</code> does not hold a value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_borrow_mut">borrow_mut</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;): &<b>mut</b> Element {
-    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>);
+    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOptionNotSet">EOptionNotSet</a>);
     &<b>mut</b> t.vec[0]
 }
 </code></pre>
@@ -399,7 +399,7 @@ Aborts if <code>t</code> does not hold a value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_swap">swap</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;, e: Element): Element {
-    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>);
+    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOptionNotSet">EOptionNotSet</a>);
     <b>let</b> vec_ref = &<b>mut</b> t.vec;
     <b>let</b> old_value = vec_ref.pop_back();
     vec_ref.push_back(e);
@@ -487,7 +487,7 @@ Aborts if <code>t</code> does not hold a value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_destroy_some">destroy_some</a>&lt;Element&gt;(t: <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;): Element {
-    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>);
+    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOptionNotSet">EOptionNotSet</a>);
     <b>let</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a> { <b>mut</b> vec } = t;
     <b>let</b> elem = vec.pop_back();
     vec.destroy_empty();
@@ -517,7 +517,7 @@ Aborts if <code>t</code> holds a value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_destroy_none">destroy_none</a>&lt;Element&gt;(t: <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;) {
-    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_none">is_none</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_IS_SET">EOPTION_IS_SET</a>);
+    <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_none">is_none</a>(), <a href="../move-stdlib/option.md#0x1_option_EOptionIsSet">EOptionIsSet</a>);
     <b>let</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a> { vec } = t;
     vec.destroy_empty()
 }

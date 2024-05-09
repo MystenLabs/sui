@@ -131,7 +131,7 @@ In many cases this is not an issue, like when selecting a raffle winner, lottery
     - Use [profile-transaction](../../../references/cli/client.mdx#profile-a-transaction) on Testnet transactions to verify the costs of different flows.
 - Split the logic in two: one function that fetches a random value and stores it in an object, and another function that reads that stored value and completes the operation. The latter function might indeed fail, but now the random value is fixed and cannot be modified using repeated calls.
 
-See [random_nft.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/random_nft.move) for examples.
+See [random_nft](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft) for examples.
 
 Other limited resources per transaction are:
 
@@ -155,6 +155,6 @@ txb.moveCall({
 
 - [Sui Framework Reference](../../../references/framework)
 	- <a href="/references/framework/sui-framework/random" data-noBrokenLinkCheck='true'>random.move</a>
-- [Randomness example](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/random_nft.move)
-- [Raffle example](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/raffles.move)
+- [Randomness NFT example](https://github.com/MystenLabs/sui/blob/main/examples/move/random/random_nft)
+- [Raffle example](https://github.com/MystenLabs/sui/blob/main/examples/move/random/raffles)
 - [Sui Client CLI](../../../references/cli/client)

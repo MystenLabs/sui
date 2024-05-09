@@ -39,7 +39,7 @@ pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
 pub(crate) const DEFAULT_SERVER_CONNECTION_HOST: &str = "127.0.0.1";
 pub(crate) const DEFAULT_SERVER_DB_URL: &str =
     "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
-pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
+pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 10;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
 pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;

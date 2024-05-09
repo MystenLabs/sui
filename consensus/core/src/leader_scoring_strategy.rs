@@ -317,8 +317,8 @@ mod tests {
         CommittedSubDag,
     };
 
-    #[test]
-    fn test_certificate_scoring_strategy() {
+    #[tokio::test]
+    async fn test_certificate_scoring_strategy() {
         let (context, committer, unscored_subdags) = basic_setup();
 
         let mut calculator = ReputationScoreCalculator::new(
@@ -332,8 +332,8 @@ mod tests {
         assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
-    #[test]
-    fn test_vote_scoring_strategy() {
+    #[tokio::test]
+    async fn test_vote_scoring_strategy() {
         let (context, committer, unscored_subdags) = basic_setup();
 
         let mut calculator = ReputationScoreCalculator::new(
@@ -347,8 +347,8 @@ mod tests {
         assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
-    #[test]
-    fn test_certified_vote_scoring_strategy_v1() {
+    #[tokio::test]
+    async fn test_certified_vote_scoring_strategy_v1() {
         let (context, committer, unscored_subdags) = basic_setup();
 
         let mut calculator = ReputationScoreCalculator::new(
@@ -362,8 +362,8 @@ mod tests {
         assert_eq!(scores.commit_range, CommitRange::new(1..2));
     }
 
-    #[test]
-    fn test_certified_vote_scoring_strategy_v2() {
+    #[tokio::test]
+    async fn test_certified_vote_scoring_strategy_v2() {
         let (context, committer, unscored_subdags) = basic_setup();
 
         let mut calculator = ReputationScoreCalculator::new(

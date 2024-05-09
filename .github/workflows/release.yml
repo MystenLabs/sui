@@ -161,7 +161,7 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          export sui_sha=$(checksum -t sha256 .${{ env.TMP_BUILD_DIR }}/sui.exe)
+          export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps

@@ -28,6 +28,7 @@ use sui_types::crypto::{
 use sui_types::crypto::{AuthorityKeyPair, Signer};
 use sui_types::effects::{SignedTransactionEffects, TestEffectsBuilder};
 use sui_types::error::SuiError;
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::ObjectArg;
 use sui_types::transaction::{
     CallArg, SignedTransaction, Transaction, TransactionData, TEST_ONLY_GAS_UNIT_FOR_TRANSFER,
@@ -71,7 +72,7 @@ pub async fn send_and_confirm_transaction(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .try_into_verified(&committee, &Default::default())
+            .try_into_verified_for_testing(&committee, &Default::default())
             .unwrap();
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -466,7 +467,11 @@ pub fn make_cert_with_large_committee(
         .collect();
 
     let cert = CertifiedTransaction::new(transaction.clone().into_data(), sigs, committee).unwrap();
-    cert.verify_signatures_authenticated(committee, &Default::default())
-        .unwrap();
+    cert.verify_signatures_authenticated(
+        committee,
+        &Default::default(),
+        Arc::new(VerifiedDigestCache::new_empty()),
+    )
+    .unwrap();
     cert
 }

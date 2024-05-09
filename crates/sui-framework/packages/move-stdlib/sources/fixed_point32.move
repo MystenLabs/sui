@@ -21,15 +21,15 @@ module std::fixed_point32 {
     const MAX_U64: u128 = 18446744073709551615;
 
     /// The denominator provided was zero
-    const EDENOMINATOR: u64 = 0x10001;
+    const EDenominatorIsZero: u64 = 0x10001;
     /// The quotient value would be too large to be held in a `u64`
-    const EDIVISION: u64 = 0x20002;
+    const EDivValueTooLarge: u64 = 0x20002;
     /// The multiplied value would be too large to be held in a `u64`
-    const EMULTIPLICATION: u64 = 0x20003;
+    const EMulValueTooLarge: u64 = 0x20003;
     /// A division by zero was encountered
-    const EDIVISION_BY_ZERO: u64 = 0x10004;
+    const EDivisionByZero: u64 = 0x10004;
     /// The computed ratio when converting to a `FixedPoint32` would be unrepresentable
-    const ERATIO_OUT_OF_RANGE: u64 = 0x20005;
+    const ERatioOutOfRange: u64 = 0x20005;
 
     /// Multiply a u64 integer by a fixed-point number, truncating any
     /// fractional part of the product. This will abort if the product
@@ -43,7 +43,7 @@ module std::fixed_point32 {
         // so rescale it by shifting away the low bits.
         let product = unscaled_product >> 32;
         // Check whether the value is too large.
-        assert!(product <= MAX_U64, EMULTIPLICATION);
+        assert!(product <= MAX_U64, EMulValueTooLarge);
         product as u64
     }
 
@@ -52,13 +52,13 @@ module std::fixed_point32 {
     /// is zero or if the quotient overflows.
     public fun divide_u64(val: u64, divisor: FixedPoint32): u64 {
         // Check for division by zero.
-        assert!(divisor.value != 0, EDIVISION_BY_ZERO);
+        assert!(divisor.value != 0, EDivisionByZero);
         // First convert to 128 bits and then shift left to
         // add 32 fractional zero bits to the dividend.
         let scaled_value = val as u128 << 32;
         let quotient = scaled_value / (divisor.value as u128);
         // Check whether the value is too large.
-        assert!(quotient <= MAX_U64, EDIVISION);
+        assert!(quotient <= MAX_U64, EDivValueTooLarge);
         // the value may be too large, which will cause the cast to fail
         // with an arithmetic error.
         quotient as u64
@@ -81,12 +81,12 @@ module std::fixed_point32 {
         // fractional bits.
         let scaled_numerator = numerator as u128 << 64;
         let scaled_denominator = denominator as u128 << 32;
-        assert!(scaled_denominator != 0, EDENOMINATOR);
+        assert!(scaled_denominator != 0, EDenominatorIsZero);
         let quotient = scaled_numerator / scaled_denominator;
-        assert!(quotient != 0 || numerator == 0, ERATIO_OUT_OF_RANGE);
+        assert!(quotient != 0 || numerator == 0, ERatioOutOfRange);
         // Return the quotient as a fixed-point number. We first need to check whether the cast
         // can succeed.
-        assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
+        assert!(quotient <= MAX_U64, ERatioOutOfRange);
         FixedPoint32 { value: quotient as u64 }
     }
 

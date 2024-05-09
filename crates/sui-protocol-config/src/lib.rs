@@ -122,6 +122,8 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 44: Enable consensus fork detection on mainnet.
 //             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
 // Version 45: Use tonic networking for Mysticeti consensus.
+//             Enable random beacon protocol on testnet.
+//             Set min Move binary format version to 6.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -573,6 +575,8 @@ pub struct ProtocolConfig {
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
+    min_move_binary_format_version: Option<u32>,
+
     /// Configuration controlling binary tables size.
     binary_module_handles: Option<u16>,
     binary_struct_handles: Option<u16>,
@@ -1419,6 +1423,7 @@ impl ProtocolConfig {
             max_pure_argument_size: Some(16 * 1024),
             max_programmable_tx_commands: Some(1024),
             move_binary_format_version: Some(6),
+            min_move_binary_format_version: None,
             binary_module_handles: None,
             binary_struct_handles: None,
             binary_function_handles: None,
@@ -2140,6 +2145,14 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(150);
+                    }
+                    cfg.min_move_binary_format_version = Some(6);
                     // Also bumps framework snapshot to fix binop issue.
                 }
                 // Use this template when making changes:

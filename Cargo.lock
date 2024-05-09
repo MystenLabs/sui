@@ -14151,6 +14151,7 @@ dependencies = [
  "indexmap 2.1.0",
  "itertools 0.10.5",
  "jsonrpsee",
+ "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",

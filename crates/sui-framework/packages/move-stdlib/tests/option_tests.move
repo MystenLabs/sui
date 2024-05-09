@@ -5,8 +5,6 @@
 
 #[test_only]
 module std::option_tests {
-    use std::option;
-
     #[test]
     fun option_none_is_none() {
         let none = option::none<u64>();
@@ -41,7 +39,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+    #[expected_failure(abort_code = option::EOptionNotSet)]
     fun option_borrow_none() {
         option::none<u64>().borrow();
     }
@@ -55,7 +53,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+    #[expected_failure(abort_code = option::EOptionNotSet)]
     fun borrow_mut_none() {
         option::none<u64>().borrow_mut();
     }
@@ -84,7 +82,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+    #[expected_failure(abort_code = option::EOptionNotSet)]
     fun extract_none() {
         option::none<u64>().extract();
     }
@@ -111,7 +109,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+    #[expected_failure(abort_code = option::EOptionNotSet)]
     fun swap_none() {
         option::none<u64>().swap(1);
     }
@@ -125,7 +123,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_IS_SET)]
+    #[expected_failure(abort_code = option::EOptionIsSet)]
     fun fill_some() {
         option::some(3).fill(0);
     }
@@ -142,7 +140,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_NOT_SET)]
+    #[expected_failure(abort_code = option::EOptionNotSet)]
     fun destroy_some_none() {
         option::none<u64>().destroy_some();
     }
@@ -153,7 +151,7 @@ module std::option_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = option::EOPTION_IS_SET)]
+    #[expected_failure(abort_code = option::EOptionIsSet)]
     fun destroy_none_some() {
         option::some<u64>(0).destroy_none();
     }
