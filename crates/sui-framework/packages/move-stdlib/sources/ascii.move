@@ -164,9 +164,11 @@ module std::ascii {
 
     /// Computes the index of the first occurrence of the `substr` in the `string`.
     /// Returns the length of the `string` if the `substr` is not found.
+    /// Returns 0 if the `substr` is empty.
     public fun index_of(string: &String, substr: &String): u64 {
         let (mut i, mut j) = (0, 0);
         let (n, m) = (string.length(), substr.length());
+        if (m == 0) return 0;
         while (i < n) {
             if (string.bytes[i] == substr.bytes[j]) {
                 j = j + 1;
@@ -174,6 +176,7 @@ module std::ascii {
                     return (i + 1) - m
                 }
             } else {
+                i = i - j;
                 j = 0;
             };
             i = i + 1;

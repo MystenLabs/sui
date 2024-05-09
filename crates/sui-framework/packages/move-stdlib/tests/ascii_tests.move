@@ -163,13 +163,21 @@ module std::ascii_tests {
 
     #[test]
     fun test_index_of() {
-        let str = b"hello world".to_ascii_string();
+        let str = b"hello world orwell".to_ascii_string();
         assert!(str.index_of(&b"hello".to_ascii_string()) == 0, 0);
         assert!(str.index_of(&b"world".to_ascii_string()) == 6, 1);
         assert!(str.index_of(&b"o".to_ascii_string()) == 4, 2);
         assert!(str.index_of(&b"z".to_ascii_string()) == str.length(), 3);
         assert!(str.index_of(&b"o ".to_ascii_string()) == 4, 4);
         assert!(str.index_of(&b"or".to_ascii_string()) == 7, 4);
+        assert!(str.index_of(&b"".to_ascii_string()) == 0, 4);
+        assert!(str.index_of(&b"orwell".to_ascii_string()) == 12, 4);
+        assert!(
+            b"ororwell"
+                .to_ascii_string()
+                .index_of(&b"orwell".to_ascii_string()) == 2,
+            0
+        );
     }
 
     #[test, expected_failure(abort_code = ascii::EInvalidIndex)]
