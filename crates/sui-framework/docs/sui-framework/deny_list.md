@@ -135,7 +135,7 @@ The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 <a name="0x2_deny_list_EInvalidAddress"></a>
 
-The specified address is cannot be added to the deny list.
+The specified address cannot be added to the deny list.
 
 
 <pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_EInvalidAddress">EInvalidAddress</a>: u64 = 1;
@@ -157,7 +157,7 @@ The specified address to be removed is not already in the deny list.
 
 These addresses are reserved and cannot be added to the deny list.
 The addresses listed are well known package and object addresses. So it would be
-meaningless to add them to the deny list. As such, they are reserved for internal use.
+meaningless to add them to the deny list.
 
 
 <pre><code><b>const</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_RESERVED">RESERVED</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<b>address</b>&gt; = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 1027, 57065];
