@@ -1,8 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Bug Reports & Feature Requests
-    url: https://github.com/OpenZeppelin/openzeppelin-contracts/issues/new/choose
-    about: Visit the OpenZeppelin Contracts repository
-  - name: Questions & Support Requests
-    url: https://forum.openzeppelin.com/c/support/contracts/18
-    about: Ask in the OpenZeppelin Forum

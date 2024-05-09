@@ -1,8 +1,0 @@
-version: 2.0.0
-tags: []
-layout:
-  sol_sources: .
-  build_dir: build
-dependencies: {}
-ignore: []
-name: ethereum-stringutils
