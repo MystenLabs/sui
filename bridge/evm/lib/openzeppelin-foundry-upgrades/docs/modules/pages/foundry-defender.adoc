@@ -1,0 +1,174 @@
+= OpenZeppelin Defender integration
+
+OpenZeppelin Foundry Upgrades can be used for performing deployments through https://docs.openzeppelin.com/defender/[OpenZeppelin Defender], which allows for features such as gas pricing estimation, resubmissions, and automated bytecode and source code verification.
+
+WARNING: Defender deployments are **always** broadcast to a live network, regardless of whether you are using the `broadcast` cheatcode.
+The recommended pattern is to separate Defender scripts from scripts that rely on network forking and simulations, to avoid mixing simulation and live network data.
+
+== Installation
+
+See xref:foundry-upgrades#installation[Using with Foundry - Installation].
+
+== Prerequisites
+1. Install https://nodejs.org/[Node.js].
+
+2. Configure your `foundry.toml` to enable ffi, ast, build info and storage layout:
+
+[source,json]
+----
+[profile.default]
+ffi = true
+ast = true
+build_info = true
+extra_output = ["storageLayout"]
+----
+
+NOTE: Metadata must also be included in the compiler output, which it is by default.  
+
+[start=3]
+3. Set the following environment variables in your `.env` file at your project root, using your Team API key and secret from OpenZeppelin Defender:
+
+[source]
+----
+DEFENDER_KEY=<Your API key>
+DEFENDER_SECRET<Your API secret>
+----
+
+== Network Selection
+
+The network that is used with OpenZeppelin Defender is determined by the network that Foundry is connected to.
+If you want to ensure that a specific network is used with Defender, set the `DEFENDER_NETWORK` environment variable in your `.env` file, for example:
+
+[source]
+----
+DEFENDER_NETWORK=my-mainnet-fork
+----
+If set, this must be the name of a public, private or forked network in Defender. If Foundry is connected to a different network while this is set, the deployment will not occur and will throw an error instead.
+
+NOTE: This is required if you have multiple forked networks in Defender with the same chainId, in which case the one with name matching the `DEFENDER_NETWORK` environment variable will be used.
+
+== Usage
+
+=== Upgradeable Contracts
+
+If you are deploying upgradeable contracts, use the `Upgrades` library as described in xref:foundry-upgrades#installation[Using with Foundry - Installation] but set the option `defender.useDefenderDeploy = true` when calling functions to cause all deployments to occur through OpenZeppelin Defender.
+
+**Example 1 - Deploying a proxy**:
+To deploy a UUPS proxy, create a script called `Defender.s.sol` like the following:
+[source,solidity]
+----
+pragma solidity ^0.8.20;
+
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+
+import {Defender, ApprovalProcessResponse} from "openzeppelin-foundry-upgrades/Defender.sol";
+import {Upgrades, Options} from "openzeppelin-foundry-upgrades/Upgrades.sol";
+
+import {MyContract} from "../src/MyContract.sol";
+
+contract DefenderScript is Script {
+    function setUp() public {}
+
+    function run() public {
+        ApprovalProcessResponse memory upgradeApprovalProcess = Defender.getUpgradeApprovalProcess();
+
+        if (upgradeApprovalProcess.via == address(0)) {
+            revert(string.concat("Upgrade approval process with id ", upgradeApprovalProcess.approvalProcessId, " has no assigned address"));
+        }
+
+        Options memory opts;
+        opts.defender.useDefenderDeploy = true;
+
+        address proxy = Upgrades.deployUUPSProxy(
+            "MyContract.sol",
+            abi.encodeCall(MyContract.initialize, ("Hello World", upgradeApprovalProcess.via)),
+            opts
+        );
+
+        console.log("Deployed proxy to address", proxy);
+    }
+}
+----
+
+Then run the following command:
+[source,console]
+----
+forge script <path to the script you created above> --force --rpc-url <RPC URL for the network you want to use>
+----
+
+The above example assumes the implementation contract takes an initial owner address as an argument for its `initialize` function. The script retrieves the address associated with the upgrade approval process configured in Defender (such as a multisig address), and uses that address as the initial owner so that it can have upgrade rights for the proxy.
+
+This example calls the `Upgrades.deployUUPSProxy` function with the `defender.useDefenderDeploy` option to deploy both the implementation contract and a UUPS proxy to the connected network using Defender. The function waits for the deployments to complete, which may take a few minutes per contract, then returns with the deployed proxy address. While the function is waiting, you can monitor your deployment status in OpenZeppelin Defender's https://defender.openzeppelin.com/v2/#/deploy[Deploy module].
+
+NOTE: If using an EOA or Safe to deploy, you must submit the pending deployments in Defender while the script is running. The script waits for each deployment to complete before it continues.
+
+**Example 2 - Proposing an upgrade to a proxy**:
+To propose an upgrade through Defender, create a script like the following:
+[source,solidity]
+----
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+
+import {MyContractV2} from "../src/MyContractV2.sol";
+
+import {ProposeUpgradeResponse, Defender, Options} from "openzeppelin-foundry-upgrades/Defender.sol";
+
+contract DefenderScript is Script {
+    function setUp() public {}
+
+    function run() public {
+        Options memory opts;
+        ProposeUpgradeResponse memory response = Defender.proposeUpgrade(
+            <MY_PROXY_ADDRESS>,
+            "MyContractV2.sol",
+            opts
+        );
+        console.log("Proposal id", response.proposalId);
+        console.log("Url", response.url);
+    }
+}
+----
+
+Then run the script as in Example 1, and go the resulting URL to review and approve the upgrade proposal.
+
+=== Non-Upgradeable Contracts
+
+If you are deploying non-upgradeable contracts, import the `Defender` library from `Defender.sol` and use its functions to deploy contracts through OpenZeppelin Defender.
+
+**Example:**
+
+To deploy a non-upgradeable contract, create a script called `Defender.s.sol` like the following:
+[source,solidity]
+----
+pragma solidity ^0.8.20;
+
+import {Script} from "forge-std/Script.sol";
+import {console} from "forge-std/console.sol";
+
+import {MyContract} from "../src/MyContract.sol";
+
+import {Defender} from "openzeppelin-foundry-upgrades/Defender.sol";
+
+contract DefenderScript is Script {
+    function setUp() public {}
+
+    function run() public {
+        address deployed = Defender.deployContract("MyContract.sol", abi.encode("arguments for the constructor"));
+        console.log("Deployed contract to address", deployed);
+    }
+}
+----
+
+Then run the following command:
+[source,console]
+----
+forge script <path to the script you created above> --force --rpc-url <RPC URL for the network you want to use>
+----
+
+The above example calls the `Defender.deployContract` function to deploy the specified contract to the connected network using Defender. The function waits for the deployment to complete, which may take a few minutes, then returns with the deployed contract address. While the function is waiting, you can monitor your deployment status in OpenZeppelin Defender's https://defender.openzeppelin.com/v2/#/deploy[Deploy module].
+
+NOTE: If using an EOA or Safe to deploy, you must submit the pending deployment in Defender while the script is running. The script waits for the deployment to complete before it continues.

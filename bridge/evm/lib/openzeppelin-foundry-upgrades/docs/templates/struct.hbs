@@ -1,0 +1,15 @@
+[[{{anchor}}]]
+=== `++{{name}}++` link:https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades/blob/main/{{__item_context.file.absolutePath}}[{github-icon},role=heading-link]
+
+[.hljs-theme-light.nopadding]
+```solidity
+import { {{name}} } from "openzeppelin-foundry-upgrades/{{__item_context.file.relativePath}}";
+```
+
+```solidity
+struct {{name}} {
+{{#each members}}
+  {{{typeName.typeDescriptions.typeString}}} {{name}};
+{{/each}}
+}
+```

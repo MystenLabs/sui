@@ -1,0 +1,28 @@
+{
+  "name": "openzeppelin-foundry-upgrades",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "clean": "forge clean && hardhat clean",
+    "compile": "forge build",
+    "test": "npm run forge:test && npm run forge:script",
+    "forge:test": "forge test -vvv --ffi --force",
+    "forge:script": "forge script test/Upgrades.s.sol --ffi --force",
+    "lint": "prettier --log-level warn --ignore-path .gitignore '{src,test}/**/*.sol' --check && solhint 'src/**/*.sol'",
+    "lint:fix": "prettier --log-level warn --ignore-path .gitignore '{src,test}/**/*.sol' --write",
+    "docgen": "hardhat clean && hardhat compile && hardhat docgen && mv docs/modules/api/pages/.adoc docs/modules/api/pages/api-foundry-upgrades.adoc",
+    "docgen:test": "yarn docgen && git diff --exit-code docs/modules/api/pages/api-foundry-upgrades.adoc"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-foundry": "^1.1.1",
+    "@openzeppelin/contracts": "^5.0.2",
+    "@openzeppelin/defender-deploy-client-cli": "0.0.1-alpha.7",
+    "@openzeppelin/upgrades-core": "^1.32.3",
+    "hardhat": "^2.21.0",
+    "prettier": "^3.0.0",
+    "prettier-plugin-solidity": "^1.1.0",
+    "solhint": "^3.3.6",
+    "solhint-plugin-openzeppelin": "file:scripts/solhint-custom",
+    "solidity-docgen": "^0.6.0-beta.36"
+  }
+}

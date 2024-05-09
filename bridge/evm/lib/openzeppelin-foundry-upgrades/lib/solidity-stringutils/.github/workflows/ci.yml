@@ -1,0 +1,14 @@
+name: "CI"
+on: "push"
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2.3.4
+      - uses: cachix/install-nix-action@v13
+      - name: Install dapp
+        run: nix-env -iA dapp -f $(curl -sS https://api.github.com/repos/dapphub/dapptools/releases/latest | jq -r .tarball_url)
+      - name: Fetch submodules
+        run: git submodule update --init
+      - name: Run tests
+        run: make test
