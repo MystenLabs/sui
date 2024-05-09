@@ -295,7 +295,7 @@ task 25 'run'. lines 183-188:
 Response: {
   "data": {
     "serviceConfig": {
-      "versions": [
+      "availableVersions": [
         "2024.7"
       ]
     }
