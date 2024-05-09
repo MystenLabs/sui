@@ -35,12 +35,12 @@ vectors are growable. This module has many native functions.
 ## Constants
 
 
-<a name="0x1_vector_EINDEX_OUT_OF_BOUNDS"></a>
+<a name="0x1_vector_EIndexOutOfBounds"></a>
 
 The index into the vector is out of bounds
 
 
-<pre><code><b>const</b> <a href="../move-stdlib/vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>: u64 = 131072;
+<pre><code><b>const</b> <a href="../move-stdlib/vector.md#0x1_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>: u64 = 131072;
 </code></pre>
 
 
@@ -432,7 +432,7 @@ Aborts if <code>i</code> is out of bounds.
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_remove">remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Element&gt;, <b>mut</b> i: u64): Element {
     <b>let</b> <b>mut</b> len = v.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>();
     // i out of bounds; <b>abort</b>
-    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../move-stdlib/vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>if</b> (i &gt;= len) <b>abort</b> <a href="../move-stdlib/vector.md#0x1_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>;
 
     len = len - 1;
     <b>while</b> (i &lt; len) v.<a href="../move-stdlib/vector.md#0x1_vector_swap">swap</a>(i, { i = i + 1; i });
@@ -467,7 +467,7 @@ Aborts if <code>i &gt; v.<a href="../move-stdlib/vector.md#0x1_vector_length">le
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_insert">insert</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Element&gt;, e: Element, <b>mut</b> i: u64) {
     <b>let</b> len = v.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>();
     // i too big <b>abort</b>
-    <b>if</b> (i &gt; len) <b>abort</b> <a href="../move-stdlib/vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>;
+    <b>if</b> (i &gt; len) <b>abort</b> <a href="../move-stdlib/vector.md#0x1_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>;
 
     v.<a href="../move-stdlib/vector.md#0x1_vector_push_back">push_back</a>(e);
     <b>while</b> (i &lt; len) {
@@ -500,7 +500,7 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/vector.md#0x1_vector_swap_remove">swap_remove</a>&lt;Element&gt;(v: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Element&gt;, i: u64): Element {
-    <b>assert</b>!(!v.<a href="../move-stdlib/vector.md#0x1_vector_is_empty">is_empty</a>(), <a href="../move-stdlib/vector.md#0x1_vector_EINDEX_OUT_OF_BOUNDS">EINDEX_OUT_OF_BOUNDS</a>);
+    <b>assert</b>!(!v.<a href="../move-stdlib/vector.md#0x1_vector_is_empty">is_empty</a>(), <a href="../move-stdlib/vector.md#0x1_vector_EIndexOutOfBounds">EIndexOutOfBounds</a>);
     <b>let</b> last_idx = v.<a href="../move-stdlib/vector.md#0x1_vector_length">length</a>() - 1;
     v.<a href="../move-stdlib/vector.md#0x1_vector_swap">swap</a>(i, last_idx);
     v.<a href="../move-stdlib/vector.md#0x1_vector_pop_back">pop_back</a>()

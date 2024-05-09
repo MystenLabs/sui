@@ -21,7 +21,7 @@ module std::vector {
     public use fun std::ascii::try_string as vector.try_to_ascii_string;
 
     /// The index into the vector is out of bounds
-    const EINDEX_OUT_OF_BOUNDS: u64 = 0x20000;
+    const EIndexOutOfBounds: u64 = 0x20000;
 
     #[bytecode_instruction]
     /// Create an empty vector.
@@ -125,7 +125,7 @@ module std::vector {
     public fun remove<Element>(v: &mut vector<Element>, mut i: u64): Element {
         let mut len = v.length();
         // i out of bounds; abort
-        if (i >= len) abort EINDEX_OUT_OF_BOUNDS;
+        if (i >= len) abort EIndexOutOfBounds;
 
         len = len - 1;
         while (i < len) v.swap(i, { i = i + 1; i });
@@ -140,7 +140,7 @@ module std::vector {
     public fun insert<Element>(v: &mut vector<Element>, e: Element, mut i: u64) {
         let len = v.length();
         // i too big abort
-        if (i > len) abort EINDEX_OUT_OF_BOUNDS;
+        if (i > len) abort EIndexOutOfBounds;
 
         v.push_back(e);
         while (i < len) {
@@ -153,7 +153,7 @@ module std::vector {
     /// This is O(1), but does not preserve ordering of elements in the vector.
     /// Aborts if `i` is out of bounds.
     public fun swap_remove<Element>(v: &mut vector<Element>, i: u64): Element {
-        assert!(!v.is_empty(), EINDEX_OUT_OF_BOUNDS);
+        assert!(!v.is_empty(), EIndexOutOfBounds);
         let last_idx = v.length() - 1;
         v.swap(i, last_idx);
         v.pop_back()

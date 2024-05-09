@@ -282,17 +282,7 @@ Aborts if given a primitive type.
 
     // Base16 (<a href="../move-stdlib/string.md#0x1_string">string</a>) representation of an <b>address</b> <b>has</b> 2 symbols per byte.
     <b>let</b> len = <a href="../move-stdlib/address.md#0x1_address_length">address::length</a>() * 2;
-    <b>let</b> str_bytes = self.name.as_bytes();
-    <b>let</b> <b>mut</b> addr_bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
-    <b>let</b> <b>mut</b> i = 0;
-
-    // Read `len` bytes from the type name and push them <b>to</b> addr_bytes.
-    <b>while</b> (i &lt; len) {
-        addr_bytes.push_back(str_bytes[i]);
-        i = i + 1;
-    };
-
-    <a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(addr_bytes)
+    self.name.substring(0, len)
 }
 </code></pre>
 
@@ -335,7 +325,7 @@ Aborts if given a primitive type.
         }
     };
 
-    <a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(module_name)
+    module_name.to_ascii_string()
 }
 </code></pre>
 
