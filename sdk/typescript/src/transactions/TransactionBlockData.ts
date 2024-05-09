@@ -203,36 +203,48 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 		return { Input: index, type, $kind: 'Input' as const };
 	}
 
-	mapArguments(fn: (arg: Argument) => Argument) {
+	getInputUses(index: number, fn: (arg: Argument, tx: Transaction) => void) {
+		this.mapArguments((arg, tx) => {
+			if (arg.$kind === 'Input' && arg.Input === index) {
+				fn(arg, tx);
+			}
+
+			return arg;
+		});
+	}
+
+	mapArguments(fn: (arg: Argument, tx: Transaction) => Argument) {
 		for (const tx of this.transactions) {
 			switch (tx.$kind) {
 				case 'MoveCall':
-					tx.MoveCall.arguments = tx.MoveCall.arguments.map((arg) => fn(arg));
+					tx.MoveCall.arguments = tx.MoveCall.arguments.map((arg) => fn(arg, tx));
 					break;
 				case 'TransferObjects':
-					tx.TransferObjects.objects = tx.TransferObjects.objects.map((arg) => fn(arg));
-					tx.TransferObjects.address = fn(tx.TransferObjects.address);
+					tx.TransferObjects.objects = tx.TransferObjects.objects.map((arg) => fn(arg, tx));
+					tx.TransferObjects.address = fn(tx.TransferObjects.address, tx);
 					break;
 				case 'SplitCoins':
-					tx.SplitCoins.coin = fn(tx.SplitCoins.coin);
-					tx.SplitCoins.amounts = tx.SplitCoins.amounts.map((arg) => fn(arg));
+					tx.SplitCoins.coin = fn(tx.SplitCoins.coin, tx);
+					tx.SplitCoins.amounts = tx.SplitCoins.amounts.map((arg) => fn(arg, tx));
 					break;
 				case 'MergeCoins':
-					tx.MergeCoins.destination = fn(tx.MergeCoins.destination);
-					tx.MergeCoins.sources = tx.MergeCoins.sources.map((arg) => fn(arg));
+					tx.MergeCoins.destination = fn(tx.MergeCoins.destination, tx);
+					tx.MergeCoins.sources = tx.MergeCoins.sources.map((arg) => fn(arg, tx));
 					break;
 				case 'MakeMoveVec':
-					tx.MakeMoveVec.objects = tx.MakeMoveVec.objects.map((arg) => fn(arg));
+					tx.MakeMoveVec.elements = tx.MakeMoveVec.elements.map((arg) => fn(arg, tx));
 					break;
 				case 'Upgrade':
-					tx.Upgrade.ticket = fn(tx.Upgrade.ticket);
+					tx.Upgrade.ticket = fn(tx.Upgrade.ticket, tx);
 					break;
-				case 'Intent':
-					const inputs = tx.Intent.inputs;
-					tx.Intent.inputs = {};
+				case '$Intent':
+					const inputs = tx.$Intent.inputs;
+					tx.$Intent.inputs = {};
 
 					for (const [key, value] of Object.entries(inputs)) {
-						tx.Intent.inputs[key] = Array.isArray(value) ? value.map((arg) => fn(arg)) : fn(value);
+						tx.$Intent.inputs[key] = Array.isArray(value)
+							? value.map((arg) => fn(arg, tx))
+							: fn(value, tx);
 					}
 
 					break;

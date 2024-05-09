@@ -72,9 +72,9 @@ transaction. Sui supports following transactions:
   Sui Move call returns.
   - Example:
     `txb.moveCall({ target: '0x2::devnet_nft::mint', arguments: [txb.pure.string(name), txb.pure.string(description), txb.pure.string(image)] })`
-- `txb.makeMoveVec({ type, objects })` - Constructs a vector of objects that can be passed into a
+- `txb.makeMoveVec({ type, elements })` - Constructs a vector of objects that can be passed into a
   `moveCall`. This is required as there’s no way to define a vector as an input.
-  - Example: `txb.makeMoveVec({ objects: [txb.object(id1), txb.object(id2)] })`
+  - Example: `txb.makeMoveVec({ elements: [txb.object(id1), txb.object(id2)] })`
 - `txb.publish(modules, dependencies)` - Publishes a Move package. Returns the upgrade capability
   object.
 

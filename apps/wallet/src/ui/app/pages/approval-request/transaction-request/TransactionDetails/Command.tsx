@@ -74,7 +74,7 @@ function convertCommandToString(command: TransactionType) {
 			normalizedCommand = {
 				kind: 'MakeMoveVec',
 				type: command.MakeMoveVec.type,
-				objects: command.MakeMoveVec.objects,
+				elements: command.MakeMoveVec.elements,
 			};
 			break;
 		case 'MergeCoins':
@@ -114,7 +114,7 @@ function convertCommandToString(command: TransactionType) {
 				ticket: command.Upgrade.ticket,
 			};
 			break;
-		case 'Intent': {
+		case '$Intent': {
 			throw new Error('TransactionIntent is not supported');
 		}
 	}

@@ -31,8 +31,8 @@ export function coinWithBalance({
 		const coinType = type === 'gas' ? type : normalizeStructTag(type);
 
 		return txb.add({
-			$kind: 'Intent',
-			Intent: {
+			$kind: '$Intent',
+			$Intent: {
 				name: COIN_WITH_BALANCE,
 				inputs: {},
 				data: {
@@ -62,8 +62,8 @@ async function resolveCoinBalance(
 	}
 
 	for (const transaction of blockData.transactions) {
-		if (transaction.$kind === 'Intent' && transaction.Intent.name === COIN_WITH_BALANCE) {
-			const { type, balance } = parse(CoinWithBalanceData, transaction.Intent.data);
+		if (transaction.$kind === '$Intent' && transaction.$Intent.name === COIN_WITH_BALANCE) {
+			const { type, balance } = parse(CoinWithBalanceData, transaction.$Intent.data);
 
 			if (type !== 'gas') {
 				coinTypes.add(type);
@@ -105,11 +105,11 @@ async function resolveCoinBalance(
 	mergedCoins.set('gas', { $kind: 'GasCoin', GasCoin: true });
 
 	for (const [index, transaction] of blockData.transactions.entries()) {
-		if (transaction.$kind !== 'Intent' || transaction.Intent.name !== COIN_WITH_BALANCE) {
+		if (transaction.$kind !== '$Intent' || transaction.$Intent.name !== COIN_WITH_BALANCE) {
 			continue;
 		}
 
-		const { type, balance } = transaction.Intent.data as {
+		const { type, balance } = transaction.$Intent.data as {
 			type: string;
 			balance: bigint;
 		};
