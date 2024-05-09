@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::fmt::Display;
 
-use crate::consensus_types::AuthorityIndex;
 use consensus_core::BlockAPI;
 use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
 use sui_types::{digests::ConsensusCommitDigest, messages_consensus::ConsensusTransaction};
+
+use crate::consensus_types::AuthorityIndex;
 
 /// A list of tuples of:
 /// (certificate origin authority index, all transactions corresponding to the certificate).
@@ -104,8 +105,16 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
 
 impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        // TODO: Implement this in Mysticeti.
-        None
+        if !self.reputation_scores.is_empty() {
+            Some(
+                self.reputation_scores
+                    .iter()
+                    .map(|(id, score)| (id.value() as AuthorityIndex, *score))
+                    .collect(),
+            )
+        } else {
+            None
+        }
     }
 
     fn leader_round(&self) -> u64 {

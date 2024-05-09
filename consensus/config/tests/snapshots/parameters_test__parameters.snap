@@ -8,7 +8,7 @@ leader_timeout:
   nanos: 250000000
 min_round_delay:
   secs: 0
-  nanos: 100000000
+  nanos: 50000000
 max_forward_time_drift:
   secs: 0
   nanos: 500000000
