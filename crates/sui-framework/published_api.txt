@@ -3799,7 +3799,7 @@ to_ascii
 try_utf8
 	public fun
 	0x1::string
-bytes
+as_bytes
 	public fun
 	0x1::string
 into_bytes
@@ -3820,7 +3820,7 @@ append_utf8
 insert
 	public fun
 	0x1::string
-sub_string
+substring
 	public fun
 	0x1::string
 index_of
@@ -3837,6 +3837,12 @@ internal_sub_string
 	0x1::string
 internal_index_of
 	fun
+	0x1::string
+bytes
+	public fun
+	0x1::string
+sub_string
+	public fun
 	0x1::string
 length
 	public fun

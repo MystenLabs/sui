@@ -46,11 +46,8 @@ module std::string {
         }
     }
 
-    /// Alias to align the API with `ASCII`.
-    public use fun bytes as String.as_bytes;
-
     /// Returns a reference to the underlying byte vector.
-    public fun bytes(s: &String): &vector<u8> {
+    public fun as_bytes(s: &String): &vector<u8> {
         &s.bytes
     }
 
@@ -96,14 +93,11 @@ module std::string {
         *s = front;
     }
 
-    /// Alias to align the API with `ASCII` and standardize naming.
-    public use fun sub_string as String.substring;
-
     /// Returns a sub-string using the given byte indices, where `i` is the first
     /// byte position and `j` is the start of the first byte not included (or the
     /// length of the string). The indices must be at valid utf8 char boundaries,
     /// guaranteeing that the result is valid utf8.
-    public fun sub_string(s: &String, i: u64, j: u64): String {
+    public fun substring(s: &String, i: u64, j: u64): String {
         let bytes = &s.bytes;
         let l = bytes.length();
         assert!(
@@ -128,4 +122,16 @@ module std::string {
     native fun internal_is_char_boundary(v: &vector<u8>, i: u64): bool;
     native fun internal_sub_string(v: &vector<u8>, i: u64, j: u64): vector<u8>;
     native fun internal_index_of(v: &vector<u8>, r: &vector<u8>): u64;
+
+    // === Deprecated ===
+
+    /// [DEPRECATED]
+    public fun bytes(s: &String): &vector<u8> {
+        s.as_bytes()
+    }
+
+    /// [DEPRECATED]
+    public fun sub_string(s: &String, i: u64, j: u64): String {
+        s.substring(i, j)
+    }
 }
