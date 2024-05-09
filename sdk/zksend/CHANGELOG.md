@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.8.0
+
+### Minor Changes
+
+- 807262f394: Update zkSend Wallet references to Stashed.
+
 ## 0.7.2
 
 ### Patch Changes
