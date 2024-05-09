@@ -1,5 +1,16 @@
 # @mysten/graphql-transport
 
+## 0.1.0
+
+### Minor Changes
+
+- 0ef821f074: Added a new field for `min_move_binary_format_version` to the protocol config
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+
 ## 0.0.7
 
 ### Patch Changes

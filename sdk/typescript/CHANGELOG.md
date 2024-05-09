@@ -1,5 +1,11 @@
 # @mysten/sui.js
 
+## 0.54.1
+
+### Patch Changes
+
+- 99b112178c: Fix gql.tada dependency issue
+
 ## 0.54.0
 
 ### Minor Changes
