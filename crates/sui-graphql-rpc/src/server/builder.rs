@@ -34,12 +34,10 @@ use async_graphql::{extensions::ExtensionFactory, Schema, SchemaBuilder};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
 use axum::extract::FromRef;
 use axum::extract::{connect_info::IntoMakeServiceWithConnectInfo, ConnectInfo, State};
-use axum::headers::Origin;
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self};
 use axum::response::IntoResponse;
 use axum::routing::{post, MethodRouter, Route};
-use axum::TypedHeader;
 use axum::{headers::Header, Router};
 use http::{HeaderValue, Method, Request};
 use hyper::server::conn::AddrIncoming as HyperAddrIncoming;
@@ -470,7 +468,6 @@ pub fn export_schema() -> String {
 /// if set in the request headers, and the watermark as set by the background task.
 async fn graphql_handler(
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
-    TypedHeader(origin): TypedHeader<Origin>,
     schema: axum::Extension<SuiGraphQLSchema>,
     axum::Extension(watermark_lock): axum::Extension<WatermarkLock>,
     headers: HeaderMap,
@@ -481,7 +478,6 @@ async fn graphql_handler(
     if headers.contains_key(ShowUsage::name()) {
         req.data.insert(ShowUsage)
     }
-    req.data.insert(origin);
     // Capture the IP address of the client
     // Note: if a load balancer is used it must be configured to forward the client IP address
     req.data.insert(addr);

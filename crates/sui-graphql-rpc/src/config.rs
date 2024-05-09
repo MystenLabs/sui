@@ -103,10 +103,7 @@ pub struct ServiceConfig {
 
 #[derive(Default, Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
-pub struct Versions {
-    #[serde(default)]
-    pub(crate) versions: Vec<String>,
-}
+pub struct Versions(pub Vec<String>);
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
 #[serde(rename_all = "kebab-case")]
@@ -248,14 +245,14 @@ impl ServiceConfig {
 
     /// List the available versions for this GraphQL service.
     async fn available_versions(&self, ctx: &Context<'_>) -> Vec<String> {
-        if self.versions.versions.is_empty() {
+        if self.versions.0.is_empty() {
             let default_version: &Version = ctx.data_unchecked();
             return vec![format!(
                 "{}.{}",
                 default_version.year, default_version.month
             )];
         }
-        self.versions.versions.clone()
+        self.versions.0.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
