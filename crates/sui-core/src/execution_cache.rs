@@ -4,7 +4,7 @@
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{ExecutionLockWriteGuard, SuiLockResult};
 use crate::authority::epoch_start_configuration::EpochFlag;
-use crate::authority::epoch_start_configuration::{EpochStartConfigTrait, EpochStartConfiguration};
+use crate::authority::epoch_start_configuration::EpochStartConfiguration;
 use crate::authority::AuthorityStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
@@ -40,9 +40,11 @@ use tracing::instrument;
 pub(crate) mod cache_types;
 mod object_locks;
 pub mod passthrough_cache;
+pub mod proxy_cache;
 pub mod writeback_cache;
 
 pub use passthrough_cache::PassthroughCache;
+pub use proxy_cache::ProxyCache;
 pub use writeback_cache::WritebackCache;
 
 pub struct ExecutionCacheMetrics {
@@ -154,17 +156,9 @@ pub fn build_execution_cache(
     store: &Arc<AuthorityStore>,
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
-
-    let cache = epoch_start_config.execution_cache_type();
-    tracing::info!("using cache impl {:?}", cache);
-    match cache {
-        ExecutionCacheConfigType::WritebackCache => ExecutionCacheTraitPointers::new(
-            WritebackCache::new(store.clone(), execution_cache_metrics).into(),
-        ),
-        ExecutionCacheConfigType::PassthroughCache => ExecutionCacheTraitPointers::new(
-            PassthroughCache::new(store.clone(), execution_cache_metrics).into(),
-        ),
-    }
+    ExecutionCacheTraitPointers::new(
+        ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
+    )
 }
 
 pub fn build_execution_cache_for_tests(
@@ -699,6 +693,14 @@ pub trait ExecutionCacheReconfigAPI: Send + Sync {
         cur_epoch_store: &AuthorityPerEpochStore,
         new_protocol_version: ProtocolVersion,
     );
+
+    /// Reconfigure the cache itself.
+    /// TODO: this is only needed for ProxyCache to switch between cache impls. It can be removed
+    /// once WritebackCache is the sole cache impl.
+    fn reconfigure_cache<'a>(
+        &'a self,
+        epoch_start_config: &'a EpochStartConfiguration,
+    ) -> BoxFuture<'a, ()>;
 }
 
 // StateSyncAPI is for writing any data that was not the result of transaction execution,
@@ -718,7 +720,7 @@ pub trait StateSyncAPI: Send + Sync {
 }
 
 pub trait TestingAPI: Send + Sync {
-    fn database_for_testing(&self) -> &Arc<AuthorityStore>;
+    fn database_for_testing(&self) -> Arc<AuthorityStore>;
 }
 
 macro_rules! implement_storage_traits {
@@ -895,6 +897,20 @@ macro_rules! implement_passthrough_traits {
                 self.store
                     .maybe_reaccumulate_state_hash(cur_epoch_store, new_protocol_version)
             }
+
+            fn reconfigure_cache<'a>(
+                &'a self,
+                _: &'a EpochStartConfiguration,
+            ) -> BoxFuture<'a, ()> {
+                // If we call this method instead of ProxyCache::reconfigure_cache, it's a bug.
+                // Such a bug would almost certainly cause other test failures before reaching this
+                // point, but if it somehow slipped through it is better to crash than risk forking
+                // because ProxyCache::reconfigure_cache was not called.
+                panic!(
+                    "reconfigure_cache should not be called on a {}",
+                    stringify!($implementor)
+                );
+            }
         }
 
         impl StateSyncAPI for $implementor {
@@ -919,8 +935,8 @@ macro_rules! implement_passthrough_traits {
         }
 
         impl TestingAPI for $implementor {
-            fn database_for_testing(&self) -> &Arc<AuthorityStore> {
-                &self.store
+            fn database_for_testing(&self) -> Arc<AuthorityStore> {
+                self.store.clone()
             }
         }
     };
@@ -930,6 +946,7 @@ use implement_passthrough_traits;
 
 implement_storage_traits!(PassthroughCache);
 implement_storage_traits!(WritebackCache);
+implement_storage_traits!(ProxyCache);
 
 pub trait ExecutionCacheAPI:
     ExecutionCacheRead
