@@ -20,8 +20,8 @@ use crate::{
 };
 
 /// Commit one leader.
-#[test]
-fn direct_commit() {
+#[tokio::test]
+async fn direct_commit() {
     let mut test_setup = basic_dag_builder_test_setup();
 
     // Build fully connected dag with empty blocks adding up to voting round of
@@ -58,8 +58,8 @@ fn direct_commit() {
 }
 
 /// Ensure idempotent replies.
-#[test]
-fn idempotence() {
+#[tokio::test]
+async fn idempotence() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // note: waves & rounds are zero-indexed.
@@ -135,8 +135,8 @@ fn idempotence() {
 }
 
 /// Commit one by one each leader as the dag progresses in ideal conditions.
-#[test]
-fn multiple_direct_commit() {
+#[tokio::test]
+async fn multiple_direct_commit() {
     let (context, dag_state, committer) = basic_test_setup();
 
     let mut ancestors = None;
@@ -173,8 +173,8 @@ fn multiple_direct_commit() {
 }
 
 /// Commit 10 leaders in a row (calling the committer after adding them).
-#[test]
-fn direct_commit_late_call() {
+#[tokio::test]
+async fn direct_commit_late_call() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // note: waves & rounds are zero-indexed.
@@ -206,8 +206,8 @@ fn direct_commit_late_call() {
 }
 
 /// Do not commit anything if we are still in the first wave.
-#[test]
-fn no_genesis_commit() {
+#[tokio::test]
+async fn no_genesis_commit() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // note: waves & rounds are zero-indexed.
@@ -224,8 +224,8 @@ fn no_genesis_commit() {
 }
 
 /// We directly skip the leader if there are enough non-votes (blames).
-#[test]
-fn direct_skip_no_leader_votes() {
+#[tokio::test]
+async fn direct_skip_no_leader_votes() {
     let mut test_setup = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the leader round of wave 1.
@@ -272,8 +272,8 @@ fn direct_skip_no_leader_votes() {
 }
 
 /// We directly skip the leader if it is missing.
-#[test]
-fn direct_skip_missing_leader_block() {
+#[tokio::test]
+async fn direct_skip_missing_leader_block() {
     let mut test_setup = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the decision round of wave 0
@@ -323,8 +323,8 @@ fn direct_skip_missing_leader_block() {
 }
 
 /// Indirect-commit the first leader.
-#[test]
-fn indirect_commit() {
+#[tokio::test]
+async fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
     // Dag Notes:
     // - Fully connected up to the leader round of wave 1.
@@ -398,8 +398,8 @@ fn indirect_commit() {
 }
 
 /// Commit the first leader, skip the 2nd, and commit the 3rd leader.
-#[test]
-fn indirect_skip() {
+#[tokio::test]
+async fn indirect_skip() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader of wave 2
@@ -498,8 +498,8 @@ fn indirect_skip() {
 }
 
 /// If there is no leader with enough support nor blame, we commit nothing.
-#[test]
-fn undecided() {
+#[tokio::test]
+async fn undecided() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader of wave 1.
@@ -557,8 +557,8 @@ fn undecided() {
 // This test scenario has one authority that is acting in a byzantine manner. It
 // will be sending multiple different blocks to different validators for a round.
 // The commit rule should handle this and correctly commit the expected blocks.
-#[test]
-fn test_byzantine_direct_commit() {
+#[tokio::test]
+async fn test_byzantine_direct_commit() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach leader round of wave 4
