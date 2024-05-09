@@ -90,13 +90,9 @@ module std::ascii {
     /// Insert the `other` string at the `at` index of `string`.
     public fun insert(s: &mut String, at: u64, o: String) {
         assert!(at <= s.length(), EInvalidIndex);
-        let mut tail = vector[];
-        while (s.length() > at) {
-            tail.push_back(s.bytes.pop_back());
-        };
-        s.append(o);
-        while (!tail.is_empty()) {
-            s.bytes.push_back(tail.pop_back());
+        let mut bytes = o.into_bytes();
+        while (!bytes.is_empty()) {
+            s.bytes.insert(bytes.pop_back(), at);
         };
     }
 
