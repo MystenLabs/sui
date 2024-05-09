@@ -445,7 +445,7 @@ impl Default for Versions {
         Self {
             versions: vec![format!(
                 "{}.{}",
-                env!("CARGO_PKG_VERSION_MAJOR").to_string(),
+                env!("CARGO_PKG_VERSION_MAJOR"),
                 env!("CARGO_PKG_VERSION_MINOR")
             )],
         }
