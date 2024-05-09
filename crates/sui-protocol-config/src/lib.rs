@@ -2148,6 +2148,9 @@ impl ProtocolConfig {
                     // Enable random beacon on testnet.
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(150);
                     }
                     cfg.min_move_binary_format_version = Some(6);
                     // Also bumps framework snapshot to fix binop issue.
