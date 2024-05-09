@@ -228,6 +228,67 @@ describe('Contract links', () => {
 	);
 
 	test(
+		'reclaim links',
+		async () => {
+			const linkKp = new Ed25519Keypair();
+
+			const link = new ZkSendLinkBuilder({
+				keypair: linkKp,
+				client,
+				contract: ZK_BAG_CONFIG,
+				sender: keypair.toSuiAddress(),
+			});
+
+			const bears = await createBears(3);
+
+			for (const bear of bears) {
+				link.addClaimableObject(bear.objectId);
+			}
+
+			link.addClaimableMist(100n);
+
+			const { digest } = await link.create({
+				signer: keypair,
+				waitForTransactionBlock: true,
+			});
+
+			await client.waitForTransactionBlock({ digest });
+
+			const {
+				data: [
+					{
+						links: [lostLink],
+					},
+				],
+			} = await getSentTransactionBlocksWithLinks({
+				address: keypair.toSuiAddress(),
+				network: 'testnet',
+				contract: ZK_BAG_CONFIG,
+			});
+
+			const { digest: claimDigest } = await lostLink.claimAssets(keypair.toSuiAddress(), {
+				reclaim: true,
+				sign: async (txb) => (await keypair.signTransactionBlock(txb)).signature,
+			});
+
+			const result = await client.waitForTransactionBlock({
+				digest: claimDigest,
+				options: { showObjectChanges: true, showEffects: true },
+			});
+
+			expect(result.objectChanges?.length).toEqual(
+				3 + // bears,
+					1 + // coin
+					1 + // gas
+					1, // bag
+			);
+		},
+		{
+			timeout: 30_000,
+		},
+	);
+
+	test(
 		'bulk link creation',
 		async () => {
 			const bears = await createBears(3);

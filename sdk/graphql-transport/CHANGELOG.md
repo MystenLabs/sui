@@ -1,5 +1,14 @@
 # @mysten/graphql-transport
 
+## 0.0.7
+
+### Patch Changes
+
+- f37f592fa8: Fix dynamic fields queries
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/sui.js@0.54.0
+
 ## 0.0.6
 
 ### Patch Changes

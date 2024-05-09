@@ -1,3 +1,9 @@
+error[E04036]: non-exhaustive pattern
+  ┌─ tests/development/enums/matching/invalid_mut_2.move:9:16
+  │
+9 │         match (m) {
+  │                ^ Pattern 'Maybe::Nothing' not covered
+
 error[E02010]: invalid name
    ┌─ tests/development/enums/matching/invalid_mut_2.move:10:13
    │
