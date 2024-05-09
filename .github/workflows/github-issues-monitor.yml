@@ -16,16 +16,14 @@ jobs:
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
         with: 
           repository: MystenLabs/sui-operations
-          author: ${{github.event.pull_request.user.login}}
-          event_name: "issue"
-          pull_request_number: ${{github.event.pull_request.number}}
+          event-type: github-issues-external-prs-monitor
+          client-payload: '{"author": "${{github.event.pull_request.user.login}}", "event_name": "pull_request", "pull_request_number": "${{github.event.pull_request.number}}"}'
 
       - name: Dispatch github-issues-external-prs-monitor in MystenLabs/sui-operations
         if: ${{github.event_name == 'issues'}}
         uses: peter-evans/repository-dispatch@ff45666b9427631e3450c54a1bcbee4d9ff4d7c0 # pin@v3.0.0
         with: 
           repository: MystenLabs/sui-operations
-          author: ${{github.event.issue.user.login}}
-          event_name: "issue"
-          issue_number: ${{github.event.issue.number}}
+          event-type: github-issues-external-prs-monitor
+          client-payload: '{"author": "${{github.event.issue.user.login}}", "event_name": "issue", "issue_number": "${{github.event.issue.number}}"}'
 
