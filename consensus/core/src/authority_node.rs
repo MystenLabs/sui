@@ -640,8 +640,6 @@ mod tests {
         authorities.remove(index.value()).stop().await;
         sleep(Duration::from_secs(15)).await;
 
-        println!("Restarting now authority 1");
-
         // Restart authority 1 and let it run.
         let (authority, receiver) = make_authority(index).await;
         output_receivers[index] = receiver;
