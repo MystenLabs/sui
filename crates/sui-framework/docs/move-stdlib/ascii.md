@@ -336,7 +336,7 @@ Append the <code>other</code> string to the end of <code><a href="../move-stdlib
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, other: <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>) {
-    <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(other.bytes)
+    <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(other.<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">into_bytes</a>())
 }
 </code></pre>
 
@@ -362,12 +362,10 @@ Insert the <code>other</code> string at the <code>at</code> index of <code><a hr
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(s: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, at: u64, o: <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>) {
     <b>assert</b>!(at &lt;= s.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(), <a href="../move-stdlib/ascii.md#0x1_ascii_EInvalidIndex">EInvalidIndex</a>);
-    <b>let</b> l = s.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
-    <b>let</b> <b>mut</b> front = s.<a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(0, at);
-    <b>let</b> end = s.<a href="../move-stdlib/ascii.md#0x1_ascii_substring">substring</a>(at, l);
-    front.<a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(o);
-    front.<a href="../move-stdlib/ascii.md#0x1_ascii_append">append</a>(end);
-    *s = front;
+    <b>let</b> <b>mut</b> bytes = o.<a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">into_bytes</a>();
+    <b>while</b> (!bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_is_empty">is_empty</a>()) {
+        s.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_insert">insert</a>(bytes.pop_back(), at);
+    };
 }
 </code></pre>
 
@@ -645,7 +643,7 @@ Returns the length of the <code><a href="../move-stdlib/string.md#0x1_string">st
         <b>if</b> (<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i] == substr.bytes[j]) {
             j = j + 1;
             <b>if</b> (j == m) {
-                <b>return</b> i - m + 1
+                <b>return</b> (i + 1) - m
             }
         } <b>else</b> {
             j = 0;
