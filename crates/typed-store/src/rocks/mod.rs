@@ -20,6 +20,7 @@ use crate::{
 use bincode::Options;
 use collectable::TryExtend;
 use itertools::Itertools;
+use librocksdb_sys::rocksdb_column_family_handle_t;
 use prometheus::{Histogram, HistogramTimer};
 use rocksdb::{
     checkpoint::Checkpoint, BlockBasedOptions, BottommostLevelCompaction, Cache, CompactOptions,
@@ -31,6 +32,7 @@ use rocksdb::{
     WriteBatch, WriteBatchWithTransaction, WriteOptions,
 };
 use serde::{de::DeserializeOwned, Serialize};
+use std::cmp::Ordering;
 use std::ops::Bound;
 use std::{
     borrow::Borrow,
@@ -392,6 +394,13 @@ impl RocksDB {
         writeopts: &WriteOptions,
     ) -> Result<(), TypedStoreError> {
         fail_point!("batch-write-before");
+
+        let batch = if let RocksDBBatch::SortingRocksDBBatch(sorting_batch) = batch {
+            sorting_batch.into_inner_batch_type()
+        } else {
+            batch
+        };
+
         let ret = match (self, batch) {
             (RocksDB::DBWithThreadMode(db), RocksDBBatch::Regular(batch)) => {
                 db.underlying
@@ -623,14 +632,125 @@ impl<'a> RocksDBSnapshot<'a> {
 pub enum RocksDBBatch {
     Regular(rocksdb::WriteBatch),
     Transactional(rocksdb::WriteBatchWithTransaction<true>),
+    SortingRocksDBBatch(SortingRocksDBBatch),
 }
 
 macro_rules! delegate_batch_call {
     ($self:ident.$method:ident($($args:ident),*)) => {
         match $self {
-            Self::Regular(b) => b.$method($($args),*),
-            Self::Transactional(b) => b.$method($($args),*),
+            RocksDBBatch::Regular(b) => b.$method($($args),*),
+            RocksDBBatch::Transactional(b) => b.$method($($args),*),
+            RocksDBBatch::SortingRocksDBBatch(b) => b.$method($($args),*),
         }
+    }
+}
+
+pub struct SortingRocksDBBatch {
+    inner: Box<RocksDBBatch>,
+    operations: BTreeMap<CfWrapper, Vec<BatchOperation>>,
+}
+
+#[derive(Ord, PartialOrd, Eq, PartialEq)]
+struct CfWrapper(*mut rocksdb_column_family_handle_t);
+
+unsafe impl Send for CfWrapper {}
+
+impl<T> From<&T> for CfWrapper
+where
+    T: AsColumnFamilyRef,
+{
+    fn from(cf: &T) -> Self {
+        Self(cf.inner())
+    }
+}
+
+impl AsColumnFamilyRef for CfWrapper {
+    fn inner(&self) -> *mut rocksdb_column_family_handle_t {
+        self.0
+    }
+}
+
+impl SortingRocksDBBatch {
+    fn new(inner: RocksDBBatch) -> Self {
+        Self {
+            inner: Box::new(inner),
+            operations: Default::default(),
+        }
+    }
+
+    fn into_inner_batch_type(mut self) -> RocksDBBatch {
+        let inner = &mut *self.inner;
+
+        for (cf, operations) in self.operations.iter_mut() {
+            // stable sort is required so that inserts/deletes of the same key are not re-ordered
+            // relative to each other
+            operations.sort();
+
+            for op in operations {
+                match op {
+                    BatchOperation::Delete { key } => {
+                        delegate_batch_call!(inner.delete_cf(cf, key))
+                    }
+                    BatchOperation::Put { key, value } => {
+                        delegate_batch_call!(inner.put_cf(cf, key, value))
+                    }
+                    BatchOperation::Merge { key, value } => {
+                        delegate_batch_call!(inner.merge_cf(cf, key, value))
+                    }
+                }
+            }
+        }
+
+        *self.inner
+    }
+
+    fn get_vec(&mut self, cf: CfWrapper) -> &mut Vec<BatchOperation> {
+        self.operations
+            .entry(cf)
+            // reserve a large capacity, as there is no benefit to using a sorted batch
+            // with a small number of operations
+            .or_insert_with(|| Vec::with_capacity(1024))
+    }
+
+    fn size_in_bytes(&self) -> usize {
+        self.operations
+            .values()
+            .map(|v| v.iter().map(|op| op.size_in_bytes()).sum::<usize>())
+            .sum()
+    }
+
+    fn delete_cf<K: AsRef<[u8]>>(&mut self, cf: &impl AsColumnFamilyRef, key: K) {
+        self.get_vec(cf.into()).push(BatchOperation::Delete {
+            key: key.as_ref().to_vec(),
+        });
+    }
+
+    fn put_cf<K, V>(&mut self, cf: &impl AsColumnFamilyRef, key: K, value: V)
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        self.get_vec(cf.into()).push(BatchOperation::Put {
+            key: key.as_ref().to_vec(),
+            value: value.as_ref().to_vec(),
+        });
+    }
+
+    fn merge_cf<K, V>(&mut self, cf: &impl AsColumnFamilyRef, key: K, value: V)
+    where
+        K: AsRef<[u8]>,
+        V: AsRef<[u8]>,
+    {
+        self.get_vec(cf.into()).push(BatchOperation::Merge {
+            key: key.as_ref().to_vec(),
+            value: value.as_ref().to_vec(),
+        });
+    }
+
+    fn delete_range_cf<K: AsRef<[u8]>>(&mut self, _: &impl AsColumnFamilyRef, _: K, _: K) {
+        // TODO: this probably could be supported if we need it, but it requires better understanding of how
+        // delete_range interacts with the memtable
+        unimplemented!("delete_range_cf not supported for SortingRocksDBBatch")
     }
 }
 
@@ -666,12 +786,11 @@ impl RocksDBBatch {
         to: K,
     ) -> Result<(), TypedStoreError> {
         match self {
-            Self::Regular(batch) => {
-                batch.delete_range_cf(cf, from, to);
-                Ok(())
-            }
+            Self::Regular(batch) => batch.delete_range_cf(cf, from, to),
             Self::Transactional(_) => panic!(),
+            Self::SortingRocksDBBatch(sorting) => sorting.delete_range_cf(cf, from, to),
         }
+        Ok(())
     }
 }
 
@@ -831,6 +950,25 @@ impl<K, V> DBMap<K, V> {
         DBBatch::new(
             &self.rocksdb,
             batch,
+            self.opts.writeopts(),
+            &self.db_metrics,
+            &self.write_sample_interval,
+        )
+    }
+
+    pub fn sorted_batch(&self) -> DBBatch {
+        let inner_batch = match *self.rocksdb {
+            RocksDB::DBWithThreadMode(_) => RocksDBBatch::Regular(WriteBatch::default()),
+            RocksDB::OptimisticTransactionDB(_) => {
+                RocksDBBatch::Transactional(WriteBatchWithTransaction::<true>::default())
+            }
+        };
+
+        let wrapper = RocksDBBatch::SortingRocksDBBatch(SortingRocksDBBatch::new(inner_batch));
+
+        DBBatch::new(
+            &self.rocksdb,
+            wrapper,
             self.opts.writeopts(),
             &self.db_metrics,
             &self.write_sample_interval,
@@ -1475,6 +1613,45 @@ impl DBBatch {
                 Ok(())
             })?;
         Ok(self)
+    }
+}
+
+#[derive(PartialEq, Eq)]
+enum BatchOperation {
+    Put { key: Vec<u8>, value: Vec<u8> },
+    Delete { key: Vec<u8> },
+    Merge { key: Vec<u8>, value: Vec<u8> },
+}
+
+impl BatchOperation {
+    fn key(&self) -> &[u8] {
+        match self {
+            BatchOperation::Put { key, .. } => key,
+            BatchOperation::Delete { key } => key,
+            BatchOperation::Merge { key, .. } => key,
+        }
+    }
+
+    fn size_in_bytes(&self) -> usize {
+        match self {
+            BatchOperation::Put { key, value } => key.len() + value.len(),
+            BatchOperation::Delete { key } => key.len(),
+            BatchOperation::Merge { key, value } => key.len() + value.len(),
+        }
+    }
+}
+
+impl Ord for BatchOperation {
+    fn cmp(&self, other: &Self) -> Ordering {
+        // TODO: this will break if user sets a custom comparator,
+        // but there is no reason why we would do that
+        self.key().cmp(other.key())
+    }
+}
+
+impl PartialOrd for BatchOperation {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
     }
 }
 
@@ -2228,6 +2405,8 @@ pub struct ReadWriteOptions {
     pub ignore_range_deletions: bool,
     // Whether to sync to disk on every write.
     sync_to_disk: bool,
+
+    memtable_insert_hint_per_batch: bool,
 }
 
 impl ReadWriteOptions {
@@ -2240,6 +2419,7 @@ impl ReadWriteOptions {
     pub fn writeopts(&self) -> WriteOptions {
         let mut opts = WriteOptions::default();
         opts.set_sync(self.sync_to_disk);
+        opts.set_memtable_insert_hint_per_batch(self.memtable_insert_hint_per_batch);
         opts
     }
 
@@ -2254,6 +2434,7 @@ impl Default for ReadWriteOptions {
         Self {
             ignore_range_deletions: true,
             sync_to_disk: std::env::var("SUI_DB_SYNC_TO_DISK").map_or(false, |v| v != "0"),
+            memtable_insert_hint_per_batch: false,
         }
     }
 }
@@ -2266,6 +2447,11 @@ pub struct DBOptions {
 }
 
 impl DBOptions {
+    pub fn optimize_for_sequential_batches(mut self) -> DBOptions {
+        self.rw_options.memtable_insert_hint_per_batch = false;
+        self
+    }
+
     // Optimize lookup perf for tables where no scans are performed.
     // If non-trivial number of values can be > 512B in size, it is beneficial to also
     // specify optimize_for_large_values_no_scan().
@@ -2273,6 +2459,11 @@ impl DBOptions {
         // NOTE: this overwrites the block options.
         self.options
             .optimize_for_point_lookup(block_cache_size_mb as u64);
+        self
+    }
+
+    pub fn set_write_buffer_size(mut self, size: usize) -> DBOptions {
+        self.options.set_write_buffer_size(size);
         self
     }
 

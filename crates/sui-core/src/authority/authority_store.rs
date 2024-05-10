@@ -832,7 +832,7 @@ impl AuthorityStore {
 
         let _locks = self.acquire_read_locks_for_indirect_objects(&written).await;
 
-        let mut write_batch = self.perpetual_tables.transactions.batch();
+        let mut write_batch = self.perpetual_tables.transactions.sorted_batch();
 
         {
             let _span = tracing::trace_span!("batch_build");

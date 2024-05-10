@@ -428,6 +428,7 @@ rocksdb = { version = "0.21.0", features = [
   "zlib",
   "multi-threaded-cf",
 ], default-features = false }
+librocksdb-sys = { version = "0.11" }
 ron = "0.8.0"
 rstest = "0.16.0"
 rusoto_core = { version = "0.48.0", default_features = false, features = [

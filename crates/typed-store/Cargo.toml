@@ -19,6 +19,7 @@ tap.workspace = true
 prometheus.workspace = true
 hdrhistogram.workspace = true
 rocksdb.workspace = true
+librocksdb-sys.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["full", "test-util"] }

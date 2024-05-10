@@ -82,6 +82,7 @@ pub struct AuthorityPerpetualTables {
     /// doesn't say anything about the execution status of the transaction on this node. When we wait for transactions
     /// to be executed, we wait for them to appear in this table. When we revert transactions, we remove them from both
     /// tables.
+    #[default_options_override_fn = "effects_table_default_config"]
     pub(crate) executed_effects: DBMap<TransactionDigest, TransactionEffectsDigest>,
 
     // Currently this is needed in the validator for returning events during process certificates.
@@ -124,6 +125,7 @@ pub struct AuthorityPerpetualTables {
     /// objects (since they are not locked by the transaction manager) and for tracking shared
     /// objects that have been deleted. This table is meant to be pruned per-epoch, and all
     /// previous epochs other than the current epoch may be pruned safely.
+    #[default_options_override_fn = "object_per_epoch_marker_table_default_config"]
     pub(crate) object_per_epoch_marker_table: DBMap<(EpochId, ObjectKey), MarkerValue>,
 }
 
@@ -133,11 +135,14 @@ impl AuthorityPerpetualTables {
     }
 
     pub fn open(parent_path: &Path, db_options: Option<Options>) -> Self {
+        let mut db_options = db_options.unwrap_or_default();
+        db_options.set_allow_concurrent_memtable_write(false);
+
         Self::open_tables_read_write(
             Self::path(parent_path),
             MetricConf::new("perpetual")
                 .with_sampling(SamplingInterval::new(Duration::from_secs(60), 0)),
-            db_options,
+            Some(db_options),
             None,
         )
     }
@@ -572,6 +577,7 @@ fn owned_object_transaction_locks_table_default_config() -> DBOptions {
         options: default_db_options()
             .optimize_for_write_throughput()
             .optimize_for_read(read_size_from_env(ENV_VAR_LOCKS_BLOCK_CACHE_SIZE).unwrap_or(1024))
+            .optimize_for_sequential_batches()
             .options,
         rw_options: ReadWriteOptions::default().set_ignore_range_deletions(false),
     }
@@ -581,6 +587,7 @@ fn objects_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
         .optimize_for_read(read_size_from_env(ENV_VAR_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(5 * 1024))
+        .optimize_for_sequential_batches()
 }
 
 fn transactions_table_default_config() -> DBOptions {
@@ -589,6 +596,7 @@ fn transactions_table_default_config() -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_TRANSACTIONS_BLOCK_CACHE_SIZE).unwrap_or(512),
         )
+        .optimize_for_sequential_batches()
 }
 
 fn effects_table_default_config() -> DBOptions {
@@ -597,12 +605,20 @@ fn effects_table_default_config() -> DBOptions {
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_EFFECTS_BLOCK_CACHE_SIZE).unwrap_or(1024),
         )
+        .optimize_for_sequential_batches()
 }
 
 fn events_table_default_config() -> DBOptions {
     default_db_options()
         .optimize_for_write_throughput()
         .optimize_for_read(read_size_from_env(ENV_VAR_EVENTS_BLOCK_CACHE_SIZE).unwrap_or(1024))
+        .optimize_for_sequential_batches()
+}
+
+fn object_per_epoch_marker_table_default_config() -> DBOptions {
+    default_db_options()
+        .optimize_for_write_throughput()
+        .optimize_for_sequential_batches()
 }
 
 fn indirect_move_objects_table_default_config() -> DBOptions {
@@ -610,7 +626,8 @@ fn indirect_move_objects_table_default_config() -> DBOptions {
         .optimize_for_write_throughput()
         .optimize_for_point_lookup(
             read_size_from_env(ENV_VAR_INDIRECT_OBJECTS_BLOCK_CACHE_SIZE).unwrap_or(512),
-        );
+        )
+        .optimize_for_sequential_batches();
     options.options.set_merge_operator(
         "refcount operator",
         reference_count_merge_operator,

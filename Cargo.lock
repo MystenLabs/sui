@@ -15520,6 +15520,7 @@ dependencies = [
  "fdlimit",
  "hdrhistogram",
  "itertools 0.10.5",
+ "librocksdb-sys",
  "msim",
  "once_cell",
  "ouroboros",
