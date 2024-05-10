@@ -868,6 +868,10 @@ impl<'env> Context<'env> {
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
     pub fn find_all_methods(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
+        if !self.env.supports_feature(self.current_package(), FeatureGate::DotCall) {
+            debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
+            return BTreeSet::new();
+        }
         let cur_color = self.use_funs.last().unwrap().color;
         let mut result = BTreeSet::new();
         self.use_funs.iter().rev().for_each(|scope| {
