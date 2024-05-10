@@ -77,7 +77,7 @@ use sui_core::consensus_manager::{ConsensusManager, ConsensusManagerTrait};
 use sui_core::consensus_throughput_calculator::{
     ConsensusThroughputCalculator, ConsensusThroughputProfiler, ThroughputProfileRanges,
 };
-use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
+// use sui_core::consensus_validator::{SuiTxValidator, SuiTxValidatorMetrics};
 use sui_core::db_checkpoint_handler::DBCheckpointHandler;
 use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
@@ -135,7 +135,8 @@ use crate::metrics::{GrpcMetrics, SuiNodeMetrics};
 pub mod admin;
 mod handle;
 pub mod metrics;
-
+type SuiTxValidatorMetrics = sui_core::scalaris::ScalarisTxValidatorMetrics;
+type SuiTxValidator = sui_core::scalaris::ScalarisTxValidator;
 pub struct ValidatorComponents {
     validator_server_handle: JoinHandle<Result<()>>,
     validator_overload_monitor_handle: Option<JoinHandle<()>>,

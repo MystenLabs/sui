@@ -44,7 +44,7 @@ pub trait ConsensusManagerTrait {
         node_config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
-        tx_validator: SuiTxValidator,
+        tx_validator: impl narwhal_worker::TransactionValidator + consensus_core::TransactionVerifier, //tx_validator: SuiTxValidator,
     );
 
     async fn shutdown(&self);
@@ -195,7 +195,8 @@ impl ConsensusManagerTrait for ConsensusManager {
         node_config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
-        tx_validator: SuiTxValidator,
+        //tx_validator: SuiTxValidator,
+        tx_validator: impl narwhal_worker::TransactionValidator + consensus_core::TransactionVerifier,
     ) {
         let protocol_manager = {
             let mut active = self.active.lock();

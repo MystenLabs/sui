@@ -96,7 +96,8 @@ impl ConsensusManagerTrait for NarwhalManager {
         config: &NodeConfig,
         epoch_store: Arc<AuthorityPerEpochStore>,
         consensus_handler_initializer: ConsensusHandlerInitializer,
-        tx_validator: SuiTxValidator,
+        tx_validator: impl narwhal_worker::TransactionValidator,
+        // tx_validator: SuiTxValidator,
     ) {
         let system_state = epoch_store.epoch_start_state();
         let epoch = epoch_store.epoch();
