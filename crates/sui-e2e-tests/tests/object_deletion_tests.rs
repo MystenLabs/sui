@@ -5,7 +5,6 @@
 mod sim_only_tests {
     use std::path::PathBuf;
     use std::time::Duration;
-    use sui_core::authority::authority_store_tables::LiveObject;
     use sui_json_rpc_types::{SuiTransactionBlockEffects, SuiTransactionBlockEffectsAPI};
     use sui_macros::sim_test;
     use sui_node::SuiNode;

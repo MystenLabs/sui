@@ -50,7 +50,7 @@ impl SurferTask {
         let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
                 .get_accumulator_store()
-                .iter_live_object_set(false)
+                .iter_cached_live_object_set_for_testing(false)
                 .collect()
         });
         for obj in all_live_objects {
