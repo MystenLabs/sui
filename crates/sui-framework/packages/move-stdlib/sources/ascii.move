@@ -4,13 +4,13 @@
 /// The `ASCII` module defines basic string and char newtypes in Move that verify
 /// that characters are valid ASCII, and that strings consist of only valid ASCII characters.
 module std::ascii {
-    use std::option::{Self, Option};
-
     // Allows calling `.to_string()` to convert an `ascii::String` into as `string::String`
     public use fun std::string::from_ascii as String.to_string;
 
     /// An invalid ASCII character was encountered when creating an ASCII string.
-    const EINVALID_ASCII_CHARACTER: u64 = 0x10000;
+    const EInvalidASCIICharacter: u64 = 0x10000;
+    /// An invalid index was encountered when creating a substring.
+    const EInvalidIndex: u64 = 0x10001;
 
     /// The `String` struct holds a vector of bytes that all represent
     /// valid ASCII characters. Note that these ASCII characters may not all
@@ -28,7 +28,7 @@ module std::ascii {
 
     /// Convert a `byte` into a `Char` that is checked to make sure it is valid ASCII.
     public fun char(byte: u8): Char {
-        assert!(is_valid_char(byte), EINVALID_ASCII_CHARACTER);
+        assert!(is_valid_char(byte), EInvalidASCIICharacter);
         Char { byte }
     }
 
@@ -36,7 +36,7 @@ module std::ascii {
     /// `bytes` contains non-ASCII characters.
     public fun string(bytes: vector<u8>): String {
        let x = try_string(bytes);
-       assert!(x.is_some(), EINVALID_ASCII_CHARACTER);
+       assert!(x.is_some(), EInvalidASCIICharacter);
        x.destroy_some()
     }
 
@@ -67,16 +67,44 @@ module std::ascii {
         true
     }
 
+    /// Push a `Char` to the end of the `string`.
     public fun push_char(string: &mut String, char: Char) {
         string.bytes.push_back(char.byte);
     }
 
+    /// Pop a `Char` from the end of the `string`.
     public fun pop_char(string: &mut String): Char {
         Char { byte: string.bytes.pop_back() }
     }
 
+    /// Returns the length of the `string` in bytes.
     public fun length(string: &String): u64 {
         string.as_bytes().length()
+    }
+
+    /// Append the `other` string to the end of `string`.
+    public fun append(string: &mut String, other: String) {
+        string.bytes.append(other.into_bytes())
+    }
+
+    /// Insert the `other` string at the `at` index of `string`.
+    public fun insert(s: &mut String, at: u64, o: String) {
+        assert!(at <= s.length(), EInvalidIndex);
+        let mut bytes = o.into_bytes();
+        while (!bytes.is_empty()) {
+            s.bytes.insert(bytes.pop_back(), at);
+        };
+    }
+
+    /// Copy the slice of the `string` from `i` to `j` into a new `String`.
+    public fun substring(string: &String, mut i: u64, j: u64): String {
+        assert!(i <= j && j <= string.length(), EInvalidIndex);
+        let mut bytes = vector[];
+        while (i < j) {
+            bytes.push_back(string.bytes[i]);
+            i = i + 1;
+        };
+        String { bytes }
     }
 
     /// Get the inner bytes of the `string` as a reference
@@ -90,20 +118,81 @@ module std::ascii {
        bytes
     }
 
-    /// Unpack the `char` into its underlying byte.
+    /// Unpack the `char` into its underlying bytes.
     public fun byte(char: Char): u8 {
        let Char { byte } = char;
        byte
     }
 
-    /// Returns `true` if `b` is a valid ASCII character. Returns `false` otherwise.
+    /// Returns `true` if `b` is a valid ASCII character.
+    /// Returns `false` otherwise.
     public fun is_valid_char(b: u8): bool {
        b <= 0x7F
     }
 
-    /// Returns `true` if `byte` is an printable ASCII character. Returns `false` otherwise.
+    /// Returns `true` if `byte` is an printable ASCII character.
+    /// Returns `false` otherwise.
     public fun is_printable_char(byte: u8): bool {
        byte >= 0x20 && // Disallow metacharacters
        byte <= 0x7E // Don't allow DEL metacharacter
+    }
+
+    /// Returns `true` if `string` is empty.
+    public fun is_empty(string: &String): bool {
+        string.bytes.is_empty()
+    }
+
+    /// Convert a `string` to its uppercase equivalent.
+    public fun to_uppercase(string: &String): String {
+        let (mut i, mut bytes) = (0, vector[]);
+        while (i < string.length()) {
+            bytes.push_back(char_to_uppercase(string.bytes[i]));
+            i = i + 1;
+        };
+        String { bytes }
+    }
+
+    /// Convert a `string` to its lowercase equivalent.
+    public fun to_lowercase(string: &String): String {
+        let (mut i, mut bytes) = (0, vector[]);
+        while (i < string.length()) {
+            bytes.push_back(char_to_lowercase(string.bytes[i]));
+            i = i + 1;
+        };
+        String { bytes }
+    }
+
+    /// Computes the index of the first occurrence of the `substr` in the `string`.
+    /// Returns the length of the `string` if the `substr` is not found.
+    /// Returns 0 if the `substr` is empty.
+    public fun index_of(string: &String, substr: &String): u64 {
+        let mut i = 0;
+        let (n, m) = (string.length(), substr.length());
+        if (n < m) return n;
+        while (i <= n - m) {
+            let mut j = 0;
+            while (j < m && string.bytes[i + j] == substr.bytes[j]) j = j + 1;
+            if (j == m) return i;
+            i = i + 1;
+        };
+        n
+    }
+
+    /// Convert a `char` to its lowercase equivalent.
+    fun char_to_uppercase(byte: u8): u8 {
+        if (byte >= 0x61 && byte <= 0x7A) {
+            byte - 0x20
+        } else {
+            byte
+        }
+    }
+
+    /// Convert a `char` to its lowercase equivalent.
+    fun char_to_lowercase(byte: u8): u8 {
+        if (byte >= 0x41 && byte <= 0x5A) {
+            byte + 0x20
+        } else {
+            byte
+        }
     }
 }
