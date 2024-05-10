@@ -70,11 +70,11 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    let n = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
-        // Test that IP forwarding works through this policy
-        spam_policy_type: PolicyType::TestInspectIp,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
@@ -89,26 +89,27 @@ async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         .build()
         .await;
 
-    assert_traffic_control_dry_run(test_cluster).await
+    assert_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    let n = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
         channel_capacity: 100,
         dry_run: true,
-        ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
         .build()
         .await;
-    assert_traffic_control_dry_run(test_cluster).await
+    assert_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
@@ -420,11 +421,10 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
 /// are allowed to proceed.
 async fn assert_traffic_control_dry_run(
     mut test_cluster: TestCluster,
+    txn_count: usize,
 ) -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
-
-    let txn_count = 4;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,

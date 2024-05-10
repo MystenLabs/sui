@@ -131,8 +131,34 @@ impl TrafficController {
         }
     }
 
-    /// Returns true if the connection is allowed, false if it is blocked
+    /// Handle check with dry-run mode considered
     pub async fn check(&self, connection_ip: Option<IpAddr>, proxy_ip: Option<IpAddr>) -> bool {
+        match (
+            self.check_impl(connection_ip, proxy_ip).await,
+            self.dry_run_mode(),
+        ) {
+            // check succeeded
+            (true, _) => true,
+            // check failed while in dry-run mode
+            (false, true) => {
+                debug!(
+                    "Dry run mode: Blocked request from connection IP {:?}, proxy IP: {:?}",
+                    connection_ip, proxy_ip
+                );
+                self.metrics.num_dry_run_blocked_requests.inc();
+                true
+            }
+            // check failed
+            (false, false) => false,
+        }
+    }
+
+    /// Returns true if the connection is allowed, false if it is blocked
+    pub async fn check_impl(
+        &self,
+        connection_ip: Option<IpAddr>,
+        proxy_ip: Option<IpAddr>,
+    ) -> bool {
         let connection_check = self.check_and_clear_blocklist(
             connection_ip,
             self.blocklists.connection_ips.clone(),
