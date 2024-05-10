@@ -82,7 +82,7 @@ mod tests {
             .unwrap();
 
         // The alice does not pass validation
-        verifier
+        let err = verifier
             .verify_server_cert(
                 &random_cert_alice.rustls_certificate(),
                 &[],
@@ -92,6 +92,10 @@ mod tests {
                 std::time::SystemTime::now(),
             )
             .unwrap_err();
+        assert!(
+            matches!(err, rustls::Error::General(_)),
+            "Actual error: {err:?}"
+        );
     }
 
     #[test]
@@ -127,23 +131,31 @@ mod tests {
             .unwrap();
 
         // The disallowed cert fails validation
-        verifier
+        let err = verifier
             .verify_client_cert(
                 &disallowed_cert.rustls_certificate(),
                 &[],
                 std::time::SystemTime::now(),
             )
             .unwrap_err();
+        assert!(
+            matches!(err, rustls::Error::General(_)),
+            "Actual error: {err:?}"
+        );
 
         // After removing the allowed public key from the set it now fails validation
         allowlist.inner_mut().write().unwrap().clear();
-        verifier
+        let err = verifier
             .verify_client_cert(
                 &allowed_cert.rustls_certificate(),
                 &[],
                 std::time::SystemTime::now(),
             )
             .unwrap_err();
+        assert!(
+            matches!(err, rustls::Error::General(_)),
+            "Actual error: {err:?}"
+        );
     }
 
     #[test]
@@ -165,17 +177,24 @@ mod tests {
             .insert(public_key.clone());
 
         // Allowed public key but the server-name in the cert is not the required "sui"
-        client_verifier
+        let err = client_verifier
             .verify_client_cert(
                 &cert.rustls_certificate(),
                 &[],
                 std::time::SystemTime::now(),
             )
             .unwrap_err();
+        assert_eq!(
+            err,
+            rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName),
+            "Actual error: {err:?}"
+        );
 
         let server_verifier =
             ServerCertVerifier::new(public_key, SUI_VALIDATOR_SERVER_NAME.to_string());
-        server_verifier
+
+        // Allowed public key but the server-name in the cert is not the required "sui"
+        let err = server_verifier
             .verify_server_cert(
                 &cert.rustls_certificate(),
                 &[],
@@ -185,6 +204,11 @@ mod tests {
                 std::time::SystemTime::now(),
             )
             .unwrap_err();
+        assert_eq!(
+            err,
+            rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName),
+            "Actual error: {err:?}"
+        );
     }
 
     #[tokio::test]

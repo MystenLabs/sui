@@ -131,6 +131,7 @@ impl<A: Allower> rustls::server::ClientCertVerifier for ClientCertVerifier<A> {
             &self.name,
             now,
         )
+        .map(|_| rustls::server::ClientCertVerified::assertion())
     }
 }
 
@@ -200,7 +201,7 @@ fn verify_self_signed_cert(
     usage: webpki::KeyUsage,
     name: &str,
     now: std::time::SystemTime,
-) -> Result<rustls::server::ClientCertVerified, rustls::Error> {
+) -> Result<(), rustls::Error> {
     // Check we're receiving correctly signed data with the expected key
     // Step 1: prepare arguments
     let (cert, chain, trustroots) = prepare_for_self_signed(end_entity, intermediates)?;
@@ -217,7 +218,6 @@ fn verify_self_signed_cert(
         .map_err(|_| rustls::Error::UnsupportedNameType)?;
     cert.verify_is_valid_for_subject_name(dns_nameref)
         .map_err(pki_error)
-        .map(|_| rustls::server::ClientCertVerified::assertion())
 }
 
 type CertChainAndRoots<'a> = (
@@ -253,6 +253,9 @@ fn pki_error(error: webpki::Error) -> rustls::Error {
         | UnsupportedSignatureAlgorithm
         | UnsupportedSignatureAlgorithmForPublicKey => {
             rustls::Error::InvalidCertificate(rustls::CertificateError::BadSignature)
+        }
+        CertNotValidForName => {
+            rustls::Error::InvalidCertificate(rustls::CertificateError::NotValidForName)
         }
         e => rustls::Error::General(format!("invalid peer certificate: {e}")),
     }
