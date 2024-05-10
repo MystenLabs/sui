@@ -35,7 +35,7 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::task::JoinHandle;
-use tracing::{debug, error, error_span, info, Instrument};
+use tracing::{error, error_span, info, Instrument};
 
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::{
@@ -167,7 +167,6 @@ pub struct ValidatorServiceMetrics {
     connection_ip_not_found: IntCounter,
     forwarded_header_parse_error: IntCounter,
     forwarded_header_invalid: IntCounter,
-    num_dry_run_blocked_requests: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -255,12 +254,6 @@ impl ValidatorServiceMetrics {
             forwarded_header_invalid: register_int_counter_with_registry!(
                 "validator_service_forwarded_header_invalid",
                 "Number of times x-forwarded-for header was invalid",
-                registry,
-            )
-            .unwrap(),
-            num_dry_run_blocked_requests: register_int_counter_with_registry!(
-                "validator_service_num_dry_run_blocked_requests",
-                "Number of requests blocked in dry run mode",
                 registry,
             )
             .unwrap(),
@@ -746,16 +739,7 @@ impl ValidatorService {
             let proxy = proxy_ip.map(|ip| ip.ip());
             if !traffic_controller.check(connection, proxy).await {
                 // Entity in blocklist
-                if traffic_controller.dry_run_mode() {
-                    debug!(
-                        "Dry run mode: Blocked request from connection IP {:?}, proxy IP {:?}",
-                        connection_ip, proxy_ip
-                    );
-                    self.metrics.num_dry_run_blocked_requests.inc();
-                    Ok(())
-                } else {
-                    Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
-                }
+                Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
             } else {
                 Ok(())
             }
