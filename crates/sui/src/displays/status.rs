@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_ptb::displays::Pretty;
+use crate::displays::Pretty;
 use std::fmt::{Display, Formatter};
 use sui_json_rpc_types::SuiExecutionStatus::{self, Failure, Success};
 

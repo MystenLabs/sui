@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_ptb::{displays::Pretty, ptb::Summary};
+use crate::{client_ptb::ptb::Summary, displays::Pretty};
 use std::fmt::{Display, Formatter};
 
 use tabled::{

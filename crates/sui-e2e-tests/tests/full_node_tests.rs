@@ -595,10 +595,12 @@ async fn do_test_full_node_sync_flood() {
                     .unwrap()
                 };
 
-                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
+                owned_tx_digest = if let SuiClientCommandResult::TransactionBlock(resp) = res {
                     Some(resp.digest)
                 } else {
-                    panic!("transfer command did not return WalletCommandResult::Transfer");
+                    panic!(
+                        "SplitCoin command did not return SuiClientCommandResult::TransactionBlock"
+                    );
                 };
 
                 let context = &context.lock().await;
