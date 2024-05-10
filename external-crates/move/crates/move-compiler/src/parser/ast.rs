@@ -371,6 +371,8 @@ pub struct NamePath {
 pub enum NameAccessChain_ {
     Single(PathEntry),
     Path(NamePath),
+    GlobalAutocomplete(),
+    PathAutocomplete(NamePath),
 }
 pub type NameAccessChain = Spanned<NameAccessChain_>;
 

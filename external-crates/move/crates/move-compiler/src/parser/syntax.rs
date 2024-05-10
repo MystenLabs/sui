@@ -741,7 +741,17 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
         false
     };
 
-    let ln = parse_leading_name_access_(context, global_name, &item_description)?;
+    let ln = match parse_leading_name_access_(context, global_name, &item_description) {
+        Ok(name) => name,
+        Err(_) if global_name && context.env.ide_mode() => {
+            context.add_diag(*unexpected_token_error(
+                context.tokens,
+                "an identifier or address",
+            ));
+            return Ok(NameAccessChain_::GlobalAutocomplete())
+        },
+        Err(e) => return Err(e),
+    };
 
     let (mut is_macro, mut tys) =
         parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, ln.loc);
@@ -824,7 +834,17 @@ fn parse_name_access_chain_<'a, F: Fn() -> &'a str>(
             context.tokens.start_loc(),
             " after an address in a module access chain",
         )?;
-        let name = parse_identifier(context)?;
+        let name = match parse_identifier(context) {
+            Ok(name) => name,
+            Err(_e) if context.env.ide_mode() => {
+                context.add_diag(*unexpected_token_error(
+                    context.tokens,
+                    "an identifier",
+                ));
+                return Ok(NameAccessChain_::MultiAutocomplete(path));
+            }
+            Err(e) => return Err(e),
+        };
         let (mut is_macro, mut tys) =
             parse_macro_opt_and_tyargs_opt(context, tyargs_whitespace_allowed, name.loc);
         if let Some(loc) = &is_macro {

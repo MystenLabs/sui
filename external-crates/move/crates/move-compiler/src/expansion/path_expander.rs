@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 /// Name access chain (path) resolution. This is driven by the trait PathExpander, which works over
 /// a DefnContext and resolves according to the rules of the selected expander.
 use crate::{
@@ -20,7 +22,7 @@ use crate::{
     ice, ice_assert,
     parser::{
         ast::{self as P, ModuleName, NameAccess, NamePath, PathEntry, Type},
-        syntax::make_loc,
+        syntax::make_loc, P::NameAccessChain_::Path,
     },
     shared::*,
 };
@@ -124,6 +126,7 @@ macro_rules! access_result {
 }
 
 pub(crate) use access_result;
+use move_symbol_pool::Symbol;
 
 use super::alias_map_builder::UnnecessaryAlias;
 
@@ -143,6 +146,8 @@ enum AccessChainNameResult {
     ModuleIdent(Loc, E::ModuleIdent),
     UnresolvedName(Loc, Name),
     ResolutionFailure(Box<AccessChainNameResult>, AccessChainFailure),
+    GlobalAutocomplete(Loc, BTreeSet<Symbol>),
+    PathAutocomplete(Loc, Box<AccessChainNameResult>),
 }
 
 struct AccessChainResult {
@@ -334,6 +339,34 @@ impl Move2024PathExpander {
         }
 
         match chain {
+            PN::GlobalAutocomplete() => {
+                let names = context
+                    .named_address_mapping
+                    .expect("ICE no named address mapping")
+                    .keys()
+                    .map(|k| k.clone())
+                    .collect::<BTreeSet<_>>();
+                AccessChainResult {
+                    result: AccessChainNameResult::GlobalAutocomplete(loc, names),
+                    ptys_opt: None,
+                    is_macro: None
+                }
+            },
+            PN::PathAutocomplete(inner) => {
+                let inner_path = PN::Path(inner);
+                let AccessChainResult { result, ptys_opt, is_macro } = self.resolve_name_access_chain(context, access, sp(loc, inner_path));
+                match result {
+                    NR::ModuleAccess(_, _, _) |
+                    NR::Address(_, _) |
+                    NR::ModuleIdent(_, _) =>
+
+                    NR::UnresolvedName(_, _) => todo!(),
+                    NR::Variant(_, _, _) => todo!(),
+                    NR::ResolutionFailure(_, _) => todo!(),
+                    NR::GlobalAutocomplete(_, _) => todo!(),
+                    NR::PathAutocomplete(_, _) => todo!(),
+                }
+            },
             PN::Single(path_entry!(name, ptys_opt, is_macro)) => {
                 use crate::naming::ast::BuiltinFunction_;
                 use crate::naming::ast::BuiltinTypeName_;

@@ -284,7 +284,7 @@ pub enum ModuleAccess_ {
     ModuleAccess(ModuleIdent, Name),
     Variant(Spanned<(ModuleIdent, Name)>, Name),
 }
-pub type ModuleAccess = Spanned<ModuleAccess_>;
+tpub type ModuleAccess = Spanned<ModuleAccess_>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
