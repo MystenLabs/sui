@@ -83,6 +83,7 @@ pub(super) struct TypingDebugFlags {
     pub(super) match_work_queue: bool,
     pub(super) match_constant_conversion: bool,
     pub(super) autocomplete_resolution: bool,
+    pub(super) function_translation: bool,
 }
 
 pub struct Context<'env> {
@@ -183,6 +184,7 @@ impl<'env> Context<'env> {
             match_work_queue: false,
             match_constant_conversion: false,
             autocomplete_resolution: false,
+            function_translation: false,
         };
         Context {
             use_funs: vec![global_use_funs],
@@ -868,7 +870,10 @@ impl<'env> Context<'env> {
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
     pub fn find_all_methods(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
-        if !self.env.supports_feature(self.current_package(), FeatureGate::DotCall) {
+        if !self
+            .env
+            .supports_feature(self.current_package(), FeatureGate::DotCall)
+        {
             debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
             return BTreeSet::new();
         }

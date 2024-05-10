@@ -23,6 +23,7 @@ use crate::{
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
+        string_utils::debug_print,
         unique_map::UniqueMap,
         *,
     },
@@ -316,6 +317,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     let mut b_ = match nb_ {
         N::FunctionBody_::Native => T::FunctionBody_::Native,
         N::FunctionBody_::Defined(es) => {
+            debug_print!(context.debug.function_translation, ("input" => es));
             let seq = sequence(context, es);
             let ety = sequence_type(&seq);
             let ret_ty = context.return_type.clone().unwrap();
@@ -334,6 +336,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     core::solve_constraints(context);
     expand::function_body_(context, &mut b_);
     match_compilation::function_body_(context, &mut b_);
+    debug_print!(context.debug.function_translation, ("output" => b_));
     sp(loc, b_)
 }
 
@@ -3107,31 +3110,42 @@ fn process_exp_dotted(
         }
         N::ExpDotted_::Dot(ndot, field) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
+            if inner.for_autocomplete {
+                return inner;
+            }
             let inner_ty = inner.last_type();
             let field_type = resolve_field(context, dloc, inner_ty, &field);
+            debug_print!(context.debug.autocomplete_resolution, ("field type" => field_type));
             inner.loc = dloc;
-            inner
-                .accessors
-                .push(ExpDottedAccess::Field(field, field_type));
+            if matches!(&field_type.value, Type_::UnresolvedError) && context.env.ide_mode() {
+                // If we failed to resolve a field, mark this as for_autocomplete to provide
+                // suggestions at the error location.
+                inner.for_autocomplete = true;
+            } else {
+                inner
+                    .accessors
+                    .push(ExpDottedAccess::Field(field, field_type));
+            }
             inner
         }
         N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
+            if inner.for_autocomplete {
+                return inner;
+            }
             if !context.env.ide_mode() {
                 context
                     .env
                     .add_diag(ice!((dloc, "Found autocomplete form outside of IDE mode")));
-            };
-            if inner.for_autocomplete {
-                context
-                    .env
-                    .add_diag(ice!((dloc, "Found second autocomplete form")));
             };
             inner.for_autocomplete = true;
             inner
         }
         N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
+            if inner.for_autocomplete {
+                return inner;
+            }
             let inner_ty = inner.last_type();
             let args_ = exp_vec(context, nargs_);
             let (syntax_methods, result_type) =
@@ -3235,6 +3249,7 @@ fn resolve_exp_dotted(
 
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
     let for_autocomplete = edotted.for_autocomplete;
+    debug_print!(context.debug.autocomplete_resolution, ("autocompleting" => edotted; dbg));
 
     let result = match usage {
         DottedUsage::Move(loc) => {

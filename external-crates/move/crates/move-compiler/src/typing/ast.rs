@@ -835,9 +835,11 @@ impl AstDebug for UnannotatedExp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::AutocompleteDotAccess(e, _) => {
+            E::AutocompleteDotAccess(e, ns) => {
                 e.ast_debug(w);
-                w.write(".");
+                w.write(".{");
+                w.comma(ns, |w, n| w.write(format!("{n}")));
+                w.write("}");
             }
             E::UnresolvedError => w.write("_|_"),
             E::ErrorConstant {
