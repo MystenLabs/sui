@@ -836,6 +836,8 @@ mod checked {
         protocol_config: &ProtocolConfig,
         metrics: Arc<LimitsMetrics>,
     ) -> Result<(), ExecutionError> {
+        use crate::adapter::new_move_vm;
+        use sui_move_natives::all_natives;
         let params = AdvanceEpochParams {
             epoch: change_epoch.epoch,
             next_protocol_version: change_epoch.protocol_version,
@@ -890,6 +892,13 @@ mod checked {
             }
         }
 
+        let new_vm = new_move_vm(
+            all_natives(/* silent */ true),
+            protocol_config,
+            /* enable_profiler */ None,
+        )
+        .expect("Failed to create new MoveVM");
+
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -910,7 +919,7 @@ mod checked {
                 programmable_transactions::execution::execute::<execution_mode::System>(
                     protocol_config,
                     metrics.clone(),
-                    move_vm,
+                    &new_vm,
                     temporary_store,
                     tx_ctx,
                     gas_charger,
