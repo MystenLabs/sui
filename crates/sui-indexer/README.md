@@ -59,3 +59,26 @@ Run this command under `sui/crates/sui-indexer`, which will wipe DB; In case of 
 ```sh
 diesel database reset --database-url="<DATABASE_URL>"
 ```
+### Local Development(TiDB)
+1.Run TiDB
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+tiup playground
+```
+2.Verify tidb is running by connecting to it using the mysql client, create database `test`
+```sh
+mysql --comments --host 127.0.0.1 --port 4000 -u root
+create database test;
+``` 
+3.DB setup, under `sui/crates/sui-indexer` run:
+```sh
+# an example DATABASE_URL is "mysql://root:password@127.0.0.1:4000/test"
+diesel setup --database-url="<DATABASE_URL> --migration-dir='migrations/mysql'"
+diesel database reset --database-url="<DATABASE_URL> --migration-dir='migrations/mysql'"
+```
+Note that you'll need an existing database for the above to work. Replace `test` with the name of the database created.
+4. run indexer as a writer, which pulls data from fullnode and writes data to DB
+```sh
+# Change the RPC_CLIENT_URL to http://0.0.0.0:9000 to run indexer against local validator & fullnode
+cargo run --bin sui-indexer --features mysql-feature --no-default-features -- --db-url "<DATABASE_URL>" --rpc-client-url "https://fullnode.devnet.sui.io:443" --fullnode-sync-worker --reset-db
+```
