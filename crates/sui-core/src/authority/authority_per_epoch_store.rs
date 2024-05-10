@@ -2788,7 +2788,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ExecutionCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
-        randomness_roots: &mut BTreeSet<TransactionKey>,
+        _randomness_roots: &mut BTreeSet<TransactionKey>,
         previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
@@ -2868,14 +2868,14 @@ impl AuthorityPerEpochStore {
                         .entry(deferral_key)
                         .or_default()
                         .push(tx.clone());
-                    if let Some(txn_key) =
+                    if let Some(_txn_key) =
                         tx.0.transaction
                             .executable_transaction_digest()
                             .map(TransactionKey::Digest)
                     {
                         // Filter out roots of any deferred tx.
-                        roots.remove(&txn_key);
-                        randomness_roots.remove(&txn_key);
+                        // roots.remove(&txn_key);
+                        // randomness_roots.remove(&txn_key);
 
                         // Notify consensus adapter that the consensus handler has received the transaction.
                         notifications.push(key.clone());
