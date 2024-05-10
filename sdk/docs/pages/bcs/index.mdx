@@ -147,7 +147,15 @@ const struct = MyStruct.serialize({ id: 1, name: 'name' }).toBytes();
 const tuple = bcs.tuple([bcs.u8(), bcs.string()]).serialize([1, 'name']).toBytes();
 
 // Map
-const map = bcs.map(bcs.u8(), bcs.string()).serialize(new Map([[1, 'one'], [2, 'two']])).toBytes();
+const map = bcs
+	.map(bcs.u8(), bcs.string())
+	.serialize(
+		new Map([
+			[1, 'one'],
+			[2, 'two'],
+		]),
+	)
+	.toBytes();
 
 // Parsing data back into original types
 
