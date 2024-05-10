@@ -4746,8 +4746,8 @@ async fn test_consensus_commit_prologue_generation() {
         make_test_transaction(
             &sender,
             &sender_key,
-            shared_object_id,
-            initial_shared_version,
+            &[],
+            &[(shared_object_id, initial_shared_version, true)],
             &gas_objects[1].compute_object_reference(),
             &[&authority_state],
             0,
@@ -6022,19 +6022,19 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     certificates.shuffle(&mut rand::thread_rng());
 
     // Sends all transactions to consensus. Expect first 2 rounds with 1 transaction per round going through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
     assert_eq!(scheduled_txns.len(), 1);
     for cert in scheduled_txns.iter() {
         assert!(cert.data().transaction_data().gas_price() == 2000);
     }
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
     assert_eq!(scheduled_txns.len(), 1);
     for cert in scheduled_txns.iter() {
         assert!(cert.data().transaction_data().gas_price() == 2000);
     }
 
     // Run consensus round 3. 2 transactions will come out with 1 transaction being cancelled.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
     assert_eq!(scheduled_txns.len(), 2);
     assert!(authority
         .epoch_store_for_testing()

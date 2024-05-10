@@ -2884,7 +2884,7 @@ impl AuthorityPerEpochStore {
                 ConsensusCertificateResult::Cancelled((cert, reason)) => {
                     notifications.push(key.clone());
                     assert!(cancelled_txns.insert(*cert.digest(), reason).is_none());
-                    verified_certificates.push(cert);
+                    verified_certificates.push_back(cert);
                 }
                 ConsensusCertificateResult::RandomnessConsensusMessage => {
                     randomness_state_updated = true;
