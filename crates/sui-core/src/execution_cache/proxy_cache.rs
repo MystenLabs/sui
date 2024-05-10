@@ -292,6 +292,13 @@ impl AccumulatorStore for ProxyCache {
     ) -> Box<dyn Iterator<Item = crate::authority::authority_store_tables::LiveObject> + '_> {
         delegate_method!(self.iter_live_object_set(include_wrapped_tombstone))
     }
+
+    fn iter_cached_live_object_set_for_testing(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Box<dyn Iterator<Item = crate::authority::authority_store_tables::LiveObject> + '_> {
+        delegate_method!(self.iter_cached_live_object_set_for_testing(include_wrapped_tombstone))
+    }
 }
 
 impl ExecutionCacheCommit for ProxyCache {
