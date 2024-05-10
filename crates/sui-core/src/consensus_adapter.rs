@@ -184,7 +184,7 @@ impl ConsensusAdapterMetrics {
 pub trait SubmitToConsensus: Sync + Send + 'static {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult;
 }
@@ -193,7 +193,7 @@ pub trait SubmitToConsensus: Sync + Send + 'static {
 impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Channel> {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let transactions_bytes = transactions
@@ -222,7 +222,7 @@ impl SubmitToConsensus for TransactionsClient<sui_network::tonic::transport::Cha
 impl SubmitToConsensus for LazyNarwhalClient {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let transactions = transactions
@@ -788,7 +788,7 @@ impl ConsensusAdapter {
                 let mut retries: u32 = 0;
                 while let Err(e) = self
                     .consensus_client
-                    .submit_to_consensus(&transactions, epoch_store)
+                    .submit_to_consensus(&transactions[..], epoch_store)
                     .await
                 {
                     // This can happen during reconfig, or when consensus has full internal buffers
@@ -1104,10 +1104,10 @@ impl<'a> Drop for InflightDropGuard<'a> {
 impl SubmitToConsensus for Arc<ConsensusAdapter> {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
-        self.submit_batch(&transactions[..], None, epoch_store)
+        self.submit_batch(transactions, None, epoch_store)
             .map(|_| ())
     }
 }

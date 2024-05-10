@@ -752,12 +752,10 @@ mod tests {
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
                 .expect_submit_to_consensus()
-                .withf(
-                    move |transactions: &Vec<ConsensusTransaction>, _epoch_store| {
-                        tx_consensus.try_send(transactions.clone()).unwrap();
-                        true
-                    },
-                )
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
+                    true
+                })
                 .returning(|_, _| Ok(()));
 
             let state = TestAuthorityBuilder::new()
@@ -877,12 +875,10 @@ mod tests {
             let tx_consensus = tx_consensus.clone();
             mock_consensus_client
                 .expect_submit_to_consensus()
-                .withf(
-                    move |transactions: &Vec<ConsensusTransaction>, _epoch_store| {
-                        tx_consensus.try_send(transactions.clone()).unwrap();
-                        true
-                    },
-                )
+                .withf(move |transactions: &[ConsensusTransaction], _epoch_store| {
+                    tx_consensus.try_send(transactions.to_vec()).unwrap();
+                    true
+                })
                 .returning(|_, _| Ok(()));
 
             let state = TestAuthorityBuilder::new()

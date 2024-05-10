@@ -74,7 +74,7 @@ impl LazyMysticetiClient {
 impl SubmitToConsensus for LazyMysticetiClient {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         // TODO(mysticeti): confirm comment is still true

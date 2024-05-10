@@ -300,7 +300,7 @@ impl ConsensusClient {
 impl SubmitToConsensus for ConsensusClient {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
         let client = self.get().await;

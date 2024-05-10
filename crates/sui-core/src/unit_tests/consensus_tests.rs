@@ -128,7 +128,7 @@ async fn submit_transaction_to_consensus_adapter() {
     impl SubmitToConsensus for SubmitDirectly {
         async fn submit_to_consensus(
             &self,
-            transactions: &Vec<ConsensusTransaction>,
+            transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
             let sequenced_transactions = transactions
