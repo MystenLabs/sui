@@ -160,7 +160,7 @@ pub fn build_execution_cache(
 ) -> ExecutionCacheTraitPointers {
     let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(prometheus_registry));
     ExecutionCacheTraitPointers::new(
-        ProxyCache::new(epoch_start_config, store.clone(), execution_cache_metrics).into(),
+        WritebackCache::new(store.clone(), execution_cache_metrics).into(),
     )
 }
 
