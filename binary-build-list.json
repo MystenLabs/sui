@@ -1,11 +1,20 @@
-[
-    "sui",
-    "sui-node",
-    "sui-tool",
-    "sui-faucet",
-    "sui-test-validator",
-    "sui-data-ingestion",
-    "sui-bridge",
-    "sui-bridge-cli",
-    "sui-graphql-rpc"
-]
+{
+    "release_binaries": [
+        "sui",
+        "sui-node",
+        "sui-tool",
+        "sui-faucet",
+        "sui-test-validator",
+        "sui-data-ingestion",
+        "sui-bridge",
+        "sui-bridge-cli",
+        "sui-graphql-rpc"
+    ],
+    "internal_binaries": [
+        "stress",
+        "sui-proxy",
+        "sui-metric-checker",
+        "sui-analytics-indexer",
+        "sui-security-watchdog"
+    ]
+}
