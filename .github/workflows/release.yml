@@ -42,9 +42,8 @@ jobs:
       matrix:
         os:
           [
-            ubuntu-latest
             # windows-ghcloud,
-            # ubuntu-ghcloud,
+            ubuntu-ghcloud,
             # macos-latest-xl,
             # macos-arm64-self-hosted
           ]
