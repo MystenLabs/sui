@@ -13,7 +13,7 @@ use crate::{
     ice,
     naming::ast::{
         self as N, BlockLabel, DatatypeTypeParameter, IndexSyntaxMethods, TParam, TParamID, Type,
-        TypeName_, Type_,
+        TypeName, TypeName_, Type_,
     },
     parser::ast::{
         Ability_, BinOp, BinOp_, ConstantName, DatatypeName, Field, FunctionName, UnaryOp_,
@@ -477,11 +477,7 @@ mod check_valid_constant {
             //*****************************************
             // Error cases handled elsewhere
             //*****************************************
-            E::Use(_)
-            | E::Continue(_)
-            | E::Give(_, _)
-            | E::UnresolvedError
-            | E::InvalidAccess(_) => return,
+            E::Use(_) | E::Continue(_) | E::Give(_, _) | E::UnresolvedError => return,
 
             //*****************************************
             // Valid cases
@@ -526,6 +522,10 @@ mod check_valid_constant {
             E::ModuleCall(call) => {
                 exp(context, &call.arguments);
                 "Module calls are"
+            }
+            E::AutocompleteDotAccess(inner, _) => {
+                exp(context, inner);
+                "Partial dot access paths are"
             }
             E::Builtin(b, args) => {
                 exp(context, args);
@@ -3033,7 +3033,6 @@ enum ExpDottedAccess {
         args: Spanned<Vec<T::Exp>>,
         base_type: Type, /* base (non-ref) return type */
     },
-    UnresolvedError(/* dot's location */ Loc), // whatever came after dot could not be parsed
 }
 
 #[derive(Debug)]
@@ -3054,6 +3053,8 @@ struct ExpDotted {
     // if a constant appears plainly in a `use`/`copy` position, and suppresses constant usage
     // warning if so.
     warn_on_constant: bool,
+    // This should only be used in IDE mode, and should only occur on the outer-most parse form.
+    for_autocomplete: bool,
 }
 
 impl ExpDotted {
@@ -3062,7 +3063,6 @@ impl ExpDotted {
             match accessor {
                 ExpDottedAccess::Field(_, ty) => ty.clone(),
                 ExpDottedAccess::Index { base_type, .. } => base_type.clone(),
-                ExpDottedAccess::UnresolvedError(_) => sp(Loc::invalid(), Type_::UnresolvedError),
             }
         } else {
             self.base_type.clone()
@@ -3102,6 +3102,7 @@ fn process_exp_dotted(
                 base_type,
                 accessors,
                 warn_on_constant: true,
+                for_autocomplete: false,
             }
         }
         N::ExpDotted_::Dot(ndot, field) => {
@@ -3114,9 +3115,19 @@ fn process_exp_dotted(
                 .push(ExpDottedAccess::Field(field, field_type));
             inner
         }
-        N::ExpDotted_::DotUnresolved(loc, ndot) => {
+        N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
             let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
-            inner.accessors.push(ExpDottedAccess::UnresolvedError(loc));
+            if !context.env.ide_mode() {
+                context
+                    .env
+                    .add_diag(ice!((dloc, "Found autocomplete form outside of IDE mode")));
+            };
+            if inner.for_autocomplete {
+                context
+                    .env
+                    .add_diag(ice!((dloc, "Found second autocomplete form")));
+            };
+            inner.for_autocomplete = true;
             inner
         }
         N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
@@ -3158,7 +3169,7 @@ fn exp_dotted_usage(
     let constraint_verb = match &ndotted.value {
         N::ExpDotted_::Exp(_) => None,
         _ if matches!(usage, DottedUsage::Borrow(_)) => Some("borrow"),
-        N::ExpDotted_::Dot(_, _) | N::ExpDotted_::DotUnresolved(_, _) => Some("dot access"),
+        N::ExpDotted_::Dot(_, _) | N::ExpDotted_::DotAutocomplete(_, _) => Some("dot access"),
         N::ExpDotted_::Index(_, _) => Some("index"),
     };
     let edotted = process_exp_dotted(context, constraint_verb, ndotted);
@@ -3186,25 +3197,27 @@ fn exp_dotted_expression(
 // expression and the usage requested, we might do significantly different things with the base
 // expression.
 //
-// | USAGE  | BASE     | ACCESSORS | RESULT          | Diagnostic
-// |--------|----------+-----------+-----------------+----------------------------------------------
-// | MOVE   | Use(x)   | NO        |  Move(x)        |
-// | MOVE   | Const    | NO        |  Error Val      | "can't move const"
-// | MOVE   | Error    | NO        |  Error Val      |
-// | MOVE   | <Any>    | NO        |  Error Val      | "invalid move path"
-// | MOVE   | <Any>    | YES       |  Error Val      | if Move20204 "can't move with a path"
-// |--------+----------+-----------+-----------------+----------------------------------------------
-// | COPY   | Use(x)   | NO        |  Copy(x)        | Copy ability constraint
-// | COPY   | Const    | NO        |  Const()        | Copy ability constraint
-// | COPY   | Error    | NO        |  Error Val      |
-// | COPY   | <Any>    | NO        |  Error Val      | "invalid copy path"
-// | COPY   | <Any>    | YES       |  Val ~> Owned   | Copy ability constraint
-// |--------+----------+-----------+-----------------+----------------------------------------------
-// | USE    | <Any>    | NO        |  <Any>          | Warns if base is a constant
-// | USE    | <Any>    | YES       |  Val ~> Owned   | Warns if base is a constant
-// |--------+----------+-----------+-----------------+----------------------------------------------
-// | BORROW | <Any>    | <Any>     | Val ~> Borrow   | Ensures agreeable mutability
-// |--------+----------+-----------+-----------------+----------------------------------------------
+// | USAGE  | BASE     | ACCESSORS | AUTO  | RESULT          | Diagnostic
+// |--------|----------+-----------+-------+-----------------+--------------------------------------
+// | ANY    | ANY      | ANY       | YES   |  Autocmomplete  |
+// |--------|----------+-----------+-------+-----------------+--------------------------------------
+// | MOVE   | Use(x)   | NO        | NO    |  Move(x)        |
+// | MOVE   | Const    | NO        | NO    |  Error Val      | "can't move const"
+// | MOVE   | Error    | NO        | NO    |  Error Val      |
+// | MOVE   | <Any>    | NO        | NO    |  Error Val      | "invalid move path"
+// | MOVE   | <Any>    | YES       | NO    |  Error Val      | if Move20204 "can't move with a path"
+// |--------+----------+-----------+-------+-----------------+--------------------------------------
+// | COPY   | Use(x)   | NO        | NO    |  Copy(x)        | Copy ability constraint
+// | COPY   | Const    | NO        | NO    |  Const()        | Copy ability constraint
+// | COPY   | Error    | NO        | NO    |  Error Val      |
+// | COPY   | <Any>    | NO        | NO    |  Error Val      | "invalid copy path"
+// | COPY   | <Any>    | YES       | NO    |  Val ~> Owned   | Copy ability constraint
+// |--------+----------+-----------+-------+-----------------+--------------------------------------
+// | USE    | <Any>    | NO        | NO    |  <Any>          | Warns if base is a constant
+// | USE    | <Any>    | YES       | NO    |  Val ~> Owned   | Warns if base is a constant
+// |--------+----------+-----------+-------+-----------------+--------------------------------------
+// | BORROW | <Any>    | <Any>     | NO    | Val ~> Borrow   | Ensures agreeable mutability
+// |--------+----------+-----------+-------+-----------------+--------------------------------------
 //
 // See `borrow_exp_dotted` and `exp_dotted_to_owned` for more details on how those translations
 // proceed.
@@ -3220,7 +3233,10 @@ fn resolve_exp_dotted(
     let make_exp = |ty, exp_| Box::new(T::exp(ty, sp(eloc, exp_)));
     let make_error = |context: &mut Context| make_error_exp(context, eloc);
 
-    match usage {
+    let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
+    let for_autocomplete = edotted.for_autocomplete;
+
+    let result = match usage {
         DottedUsage::Move(loc) => {
             match edotted.base.exp.value {
                 TE::Use(var) if edotted.accessors.is_empty() => make_exp(
@@ -3320,6 +3336,23 @@ fn resolve_exp_dotted(
             edotted.loc = eloc;
             borrow_exp_dotted(context, mut_, edotted)
         }
+    };
+
+    // Even if for_autocomplete is set, we process the inner dot path to report any additional
+    // errors that may detect or report.
+    if for_autocomplete {
+        let Some(tn) = type_to_type_name(context, &edotted_ty, eloc, "autocompletion".to_string())
+        else {
+            return make_error_exp(context, eloc);
+        };
+        let mut possible_methods = context.find_all_methods(&tn);
+        let mut possible_fields = context.find_all_fields(&tn);
+        possible_methods.append(&mut possible_fields);
+        let e_ = TE::AutocompleteDotAccess(result, possible_methods);
+        let ty = sp(eloc, Type_::UnresolvedError);
+        Box::new(T::exp(ty, sp(eloc, e_)))
+    } else {
+        result
     }
 }
 
@@ -3351,6 +3384,8 @@ fn resolve_exp_dotted(
 //
 
 fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T::Exp> {
+    use T::UnannotatedExp_ as TE;
+
     fn check_mut(context: &mut Context, loc: Loc, cur_type: Type, expected_mut: bool) {
         let sp!(tyloc, cur_exp_type) = core::unfold_type(&context.subst, cur_type);
         let cur_mut = match cur_exp_type {
@@ -3370,7 +3405,6 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
         }
     }
 
-    use T::UnannotatedExp_ as TE;
     let ExpDotted {
         loc,
         base,
@@ -3378,6 +3412,7 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
         base_kind,
         accessors,
         mut warn_on_constant,
+        for_autocomplete: _,
     } = ed;
 
     // If we have accessors, we are definitely going to actually borrow and that means we'll copy
@@ -3452,13 +3487,9 @@ fn borrow_exp_dotted(context: &mut Context, mut_: bool, ed: ExpDotted) -> Box<T:
                 }
                 exp = Box::new(T::exp(ret_ty, sp(index_loc, e_)));
             }
-            ExpDottedAccess::UnresolvedError(loc) => {
-                let t = sp(Loc::invalid(), Type_::UnresolvedError);
-                exp = Box::new(T::exp(t, sp(loc, T::UnannotatedExp_::InvalidAccess(exp))));
-                break;
-            }
         }
     }
+
     exp
 }
 
@@ -3485,10 +3516,6 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
             ExpDottedAccess::Index { base_type, .. } => {
                 ("index result".to_string(), base_type.clone())
             }
-            ExpDottedAccess::UnresolvedError(_) => (
-                "unresolved field".to_string(),
-                sp(Loc::invalid(), Type_::UnresolvedError),
-            ),
         }
     } else {
         context.env.add_diag(ice!((
@@ -3525,6 +3552,8 @@ fn exp_dotted_to_owned(context: &mut Context, usage: DottedUsage, ed: ExpDotted)
         edotted.warn_on_constant = false;
     }
     let borrow_exp = borrow_exp_dotted(context, false, edotted);
+    // If we're in an autoborrow, bail.
+    // if matches!(&borrow_exp.exp.value, TE::AutocompleteAccess(..)) { return borrow_exp; }
     let eloc = borrow_exp.exp.loc;
     context.add_ability_constraint(
         eloc,
@@ -3630,32 +3659,61 @@ fn method_call_resolve(
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
 ) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType, T::Exp)> {
-    use TypeName_ as TN;
-    use Type_ as Ty;
-
     let mut edotted = edotted;
 
     edotted.loc = loc;
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
 
-    let tn = match &edotted_ty.value {
-        Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => tn,
+    let Some(tn) = type_to_type_name(context, &edotted_ty, loc, "method call".to_string()) else {
+        return None;
+    };
+    let (m, f, fty) =
+        core::make_method_call_type(context, loc, &edotted_ty, &tn, method, ty_args_opt)?;
+
+    let usage = match &fty.params[0].1.value {
+        Type_::Ref(true, _) => DottedUsage::Borrow(true),
+        Type_::Ref(false, _) => DottedUsage::Borrow(false),
+        _ => DottedUsage::Use,
+    };
+    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
+    Some((m, f, fty, first_arg))
+}
+
+fn type_to_type_name(
+    context: &mut Context,
+    ty: &Type,
+    loc: Loc,
+    error_msg: String,
+) -> Option<TypeName> {
+    use TypeName_ as TN;
+    use Type_ as Ty;
+    fn make_ascii_titlecase(in_s: &str) -> String {
+        let mut s = in_s.to_string();
+        if let Some(c) = s.get_mut(0..1) {
+            c.make_ascii_uppercase();
+        }
+        s
+    }
+    match &ty.value {
+        Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(tn.clone()),
         t => {
             let msg = match t {
                 Ty::Anything => {
-                    "Unable to infer type for method call. Try annotating this type".to_owned()
+                    format!("Unable to infer type for {error_msg}. Try annotating this type")
                 }
                 Ty::Unit | Ty::Apply(_, sp!(_, TN::Multiple(_)), _) | Ty::Fun(_, _) => {
+                    let titlecase_msg = make_ascii_titlecase(&error_msg);
                     let tsubst = core::error_format_(t, &context.subst);
                     format!(
-                        "Method calls are only supported on single types. \
-                          Got an expression of type: {tsubst}",
+                        "{titlecase_msg}s are only supported on single types. \
+                          Got an expression of type: {tsubst}"
                     )
                 }
                 Ty::Param(_) => {
+                    let titlecase_msg = make_ascii_titlecase(&error_msg);
                     let tsubst = core::error_format_(t, &context.subst);
                     format!(
-                        "Method calls are not supported on type parameters. \
+                        "{titlecase_msg}s are not supported on type parameters. \
                         Got an expression of type: {tsubst}",
                     )
                 }
@@ -3668,22 +3726,12 @@ fn method_call_resolve(
             };
             context.env.add_diag(diag!(
                 TypeSafety::InvalidMethodCall,
-                (loc, "Invalid method call"),
-                (edotted_ty.loc, msg),
+                (loc, format!("Invalid {error_msg}")),
+                (ty.loc, msg),
             ));
-            return None;
+            None
         }
-    };
-    let (m, f, fty) =
-        core::make_method_call_type(context, loc, &edotted_ty, tn, method, ty_args_opt)?;
-
-    let usage = match &fty.params[0].1.value {
-        Type_::Ref(true, _) => DottedUsage::Borrow(true),
-        Type_::Ref(false, _) => DottedUsage::Borrow(false),
-        _ => DottedUsage::Use,
-    };
-    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
-    Some((m, f, fty, first_arg))
+    }
 }
 
 fn module_call(

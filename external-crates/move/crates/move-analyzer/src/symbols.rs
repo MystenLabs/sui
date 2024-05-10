@@ -2806,7 +2806,7 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
             }
-            E::InvalidAccess(e) => {
+            E::AutocompleteDotAccess(e, _) => {
                 self.exp_symbols(e, scope);
             }
             _ => (),

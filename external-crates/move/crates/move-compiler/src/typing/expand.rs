@@ -271,7 +271,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         | E::UnaryExp(_, er)
         | E::Borrow(_, er, _)
         | E::TempBorrow(_, er)
-        | E::InvalidAccess(er) => exp(context, er),
+        | E::AutocompleteDotAccess(er, _) => exp(context, er),
         E::Mutate(el, er) => {
             exp(context, el);
             exp(context, er)

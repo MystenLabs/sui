@@ -238,8 +238,8 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, Box<Type>),
     Annotate(Box<Exp>, Box<Type>),
 
-    // unfinished dot access (e.g. `some_field.`)
-    InvalidAccess(Box<Exp>),
+    // unfinished dot access (e.g. `some_field.`) with autocomplete information on it.
+    AutocompleteDotAccess(Box<Exp>, BTreeSet<Symbol>),
 
     ErrorConstant {
         line_number_loc: Loc,
@@ -835,7 +835,7 @@ impl AstDebug for UnannotatedExp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::InvalidAccess(e) => {
+            E::AutocompleteDotAccess(e, _) => {
                 e.ast_debug(w);
                 w.write(".");
             }
