@@ -62,6 +62,7 @@ impl MockConsensusClient {
                             &checkpoint_service,
                             validator.get_cache_reader().as_ref(),
                             &authority_metrics,
+                            true,
                         )
                         .await
                         .unwrap();
