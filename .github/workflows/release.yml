@@ -141,15 +141,12 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
+
+          for binary in $(cat ./binary-build-list.json | jq -r '.[]'); do
+            mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
+          done
+
           [ -f ./target/debug/sui${{ env.extention }} ] && mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
-          [ -f ./target/release/sui${{ env.extention }} ] && mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui${{ env.extention }}
-          [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
-          [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
-          [ -f ./target/release/sui-faucet${{ env.extention }} ] && mv ./target/release/sui-faucet${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-faucet${{ env.extention }}
-          [ -f ./target/release/sui-test-validator${{ env.extention }} ] && mv ./target/release/sui-test-validator${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-test-validator${{ env.extention }}
-          [ -f ./target/release/sui-data-ingestion${{ env.extention }} ] && mv ./target/release/sui-data-ingestion${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-data-ingestion${{ env.extention }}
-          [ -f ./target/release/sui-bridge${{ env.extention }} ] && mv ./target/release/sui-bridge${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-bridge${{ env.extention }}
-          [ -f ./target/release/sui-graphql-rpc${{ env.extention }} ] && mv ./target/release/sui-graphql-rpc${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-graphql-rpc${{ env.extention }}
           [ -f ./external-crates/move/target/release/move-analyzer${{ env.extention }} ] && mv ./external-crates/move/target/release/move-analyzer${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/move-analyzer${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
