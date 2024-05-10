@@ -1336,6 +1336,7 @@ impl AuthorityStore {
         objects: &[ObjectRef],
         is_force_reset: bool,
     ) -> SuiResult {
+        /*
         trace!(?objects, "initialize_locks");
 
         let locks = live_object_marker_table.multi_get(objects)?;
@@ -1362,6 +1363,7 @@ impl AuthorityStore {
                 });
             }
         }
+        */
 
         write_batch.insert_batch(
             live_object_marker_table,
