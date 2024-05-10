@@ -880,13 +880,7 @@ impl SuiClientCommands {
                     .await?;
 
                 let result = dry_run_or_execute_or_serialize(
-                    sender,
-                    tx_kind,
-                    context,
-                    None,
-                    None,
-                    Some(opts),
-                    None::<Opts>,
+                    sender, tx_kind, context, None, None, opts.gas, opts.rest,
                 )
                 .await?;
 
@@ -954,13 +948,7 @@ impl SuiClientCommands {
                     )
                     .await?;
                 let result = dry_run_or_execute_or_serialize(
-                    sender,
-                    tx_kind,
-                    context,
-                    None,
-                    None,
-                    Some(opts),
-                    None::<Opts>,
+                    sender, tx_kind, context, None, None, opts.gas, opts.rest,
                 )
                 .await?;
 
@@ -1137,16 +1125,14 @@ impl SuiClientCommands {
                     .await?;
 
                 let sender = context.try_get_object_owner(&opts.gas).await?;
-                let sender = sender.unwrap_or(context.active_address()?);
+                let sender = if let Some(sender) = sender {
+                    sender
+                } else {
+                    context.active_address()?
+                };
 
                 dry_run_or_execute_or_serialize(
-                    sender,
-                    tx_kind,
-                    context,
-                    None,
-                    gas_price,
-                    Some(opts),
-                    None::<Opts>,
+                    sender, tx_kind, context, None, gas_price, opts.gas, opts.rest,
                 )
                 .await?
             }
@@ -1164,13 +1150,7 @@ impl SuiClientCommands {
                     .transfer_object_tx_kind(object_id, to)
                     .await?;
                 dry_run_or_execute_or_serialize(
-                    signer,
-                    tx_kind,
-                    context,
-                    None,
-                    None,
-                    Some(opts),
-                    None::<Opts>,
+                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
                 )
                 .await?
             }
@@ -1187,18 +1167,14 @@ impl SuiClientCommands {
                 let tx_kind = client
                     .transaction_builder()
                     .transfer_sui_tx_kind(to, amount);
-                let opts = OptsWithGas {
-                    gas: Some(object_id),
-                    rest: opts,
-                };
                 dry_run_or_execute_or_serialize(
                     signer,
                     tx_kind,
                     context,
                     None,
                     None,
-                    Some(opts),
-                    None::<Opts>,
+                    Some(object_id),
+                    opts,
                 )
                 .await?
             }
@@ -1225,7 +1201,6 @@ impl SuiClientCommands {
                         amounts.len()
                     ),
                 );
-                let OptsWithGas { gas, rest: _ } = opts;
                 let recipients = recipients
                     .into_iter()
                     .map(|x| get_identity_address(Some(x), context))
@@ -1238,20 +1213,14 @@ impl SuiClientCommands {
                     .pay_tx_kind(input_coins.clone(), recipients.clone(), amounts.clone())
                     .await?;
 
-                if let Some(gas) = gas {
+                if let Some(gas) = opts.gas {
                     if input_coins.contains(&gas) {
                         bail!("Gas coin is in input coins of Pay transaction, use PaySui transaction instead!");
                     }
                 }
 
                 dry_run_or_execute_or_serialize(
-                    signer,
-                    tx_kind,
-                    context,
-                    None,
-                    None,
-                    Some(opts),
-                    None::<Opts>,
+                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
                 )
                 .await?
             }
@@ -1295,8 +1264,8 @@ impl SuiClientCommands {
                     context,
                     Some(input_coins),
                     None,
-                    None::<OptsWithGas>,
-                    Some(opts),
+                    None,
+                    opts,
                 )
                 .await?
             }
@@ -1320,8 +1289,8 @@ impl SuiClientCommands {
                     context,
                     Some(input_coins),
                     None,
-                    None::<OptsWithGas>,
-                    Some(opts),
+                    None,
+                    opts,
                 )
                 .await?
             }
@@ -1441,13 +1410,7 @@ impl SuiClientCommands {
                     .await?;
                 let signer = context.get_object_owner(&coin_id).await?;
                 dry_run_or_execute_or_serialize(
-                    signer,
-                    tx_kind,
-                    context,
-                    None,
-                    None,
-                    Some(opts),
-                    None::<Opts>,
+                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
                 )
                 .await?
             }
@@ -1464,13 +1427,7 @@ impl SuiClientCommands {
                     .await?;
 
                 dry_run_or_execute_or_serialize(
-                    signer,
-                    tx_kind,
-                    context,
-                    None,
-                    None,
-                    Some(opts),
-                    None::<Opts>,
+                    signer, tx_kind, context, None, None, opts.gas, opts.rest,
                 )
                 .await?
             }
@@ -2605,30 +2562,15 @@ pub(crate) async fn dry_run_or_execute_or_serialize(
     context: &mut WalletContext,
     gas_payment: Option<Vec<ObjectID>>,
     gas_price: Option<u64>,
-    opts_with_gas: Option<OptsWithGas>,
-    opts: Option<Opts>,
+    gas: Option<ObjectID>,
+    opts: Opts,
 ) -> Result<SuiClientCommandResult, anyhow::Error> {
-    let (dry_run, gas, gas_budget, serialize_unsigned_transaction, serialize_signed_transaction) = {
-        match opts_with_gas {
-            Some(opts) => (
-                opts.rest.dry_run,
-                opts.gas,
-                opts.rest.gas_budget,
-                opts.rest.serialize_unsigned_transaction,
-                opts.rest.serialize_signed_transaction,
-            ),
-            None => match opts {
-                Some(opts) => (
-                    opts.dry_run,
-                    None,
-                    opts.gas_budget,
-                    opts.serialize_unsigned_transaction,
-                    opts.serialize_signed_transaction,
-                ),
-                None => (false, None, None, false, false),
-            },
-        }
-    };
+    let (dry_run, gas_budget, serialize_unsigned_transaction, serialize_signed_transaction) = (
+        opts.dry_run,
+        opts.gas_budget,
+        opts.serialize_unsigned_transaction,
+        opts.serialize_signed_transaction,
+    );
     assert!(
         !serialize_unsigned_transaction || !serialize_signed_transaction,
         "Cannot specify both --serialize-unsigned-transaction and --serialize-signed-transaction"

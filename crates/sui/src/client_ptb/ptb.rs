@@ -156,13 +156,7 @@ impl PTB {
         };
 
         let transaction_response = dry_run_or_execute_or_serialize(
-            sender,
-            tx_kind,
-            context,
-            None,
-            None,
-            Some(opts),
-            None::<Opts>,
+            sender, tx_kind, context, None, None, opts.gas, opts.rest,
         )
         .await?;
 
