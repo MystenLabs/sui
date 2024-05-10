@@ -3650,6 +3650,12 @@ fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
 // Calls
 //**************************************************************************************************
 
+enum ResolvedMethodCall {
+    Resolved(Box<ModuleIdent>, FunctionName, ResolvedFunctionType, DottedUsage),
+    InvalidBaseType,
+    UnknownName,
+}
+
 fn method_call(
     context: &mut Context,
     loc: Loc,
@@ -3660,7 +3666,21 @@ fn method_call(
     mut args: Vec<T::Exp>,
 ) -> Option<(Type, T::UnannotatedExp_)> {
     use T::UnannotatedExp_ as TE;
-    let (m, f, fty, first_arg) = method_call_resolve(context, loc, edotted, method, ty_args_opt)?;
+    let mut edotted = edotted;
+    let (m, f, fty, usage) =
+        match method_call_resolve(context, loc, &mut edotted, method, ty_args_opt) {
+            ResolvedMethodCall::Resolved(m, f, fty, usage) => (*m, f, fty, usage),
+            ResolvedMethodCall::UnknownName if context.env.ide_mode() => {
+                // If the method name fails to resolve, we do autocomplete for the dotted expression.
+                edotted.for_autocomplete = true;
+                let err_ty = context.error_type(loc);
+                let dot_output =
+                    resolve_exp_dotted(context, DottedUsage::Borrow(false), loc, edotted);
+                return Some((err_ty, dot_output.exp.value));
+            }
+            ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
+        };
+    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
     args.insert(0, first_arg);
     let (mut call, ret_ty) = module_call_impl(context, loc, m, f, fty, argloc, args);
     call.method_name = Some(method);
@@ -3670,28 +3690,27 @@ fn method_call(
 fn method_call_resolve(
     context: &mut Context,
     loc: Loc,
-    edotted: ExpDotted,
+    edotted: &mut ExpDotted,
     method: Name,
     ty_args_opt: Option<Vec<Type>>,
-) -> Option<(ModuleIdent, FunctionName, ResolvedFunctionType, T::Exp)> {
-    let mut edotted = edotted;
-
+) -> ResolvedMethodCall {
     edotted.loc = loc;
     let edotted_ty = core::unfold_type(&context.subst, edotted.last_type());
 
     let Some(tn) = type_to_type_name(context, &edotted_ty, loc, "method call".to_string()) else {
-        return None;
+        return ResolvedMethodCall::InvalidBaseType;
     };
-    let (m, f, fty) =
-        core::make_method_call_type(context, loc, &edotted_ty, &tn, method, ty_args_opt)?;
-
+    let Some((m, f, fty)) =
+        core::make_method_call_type(context, loc, &edotted_ty, &tn, method, ty_args_opt)
+    else {
+        return ResolvedMethodCall::UnknownName;
+    };
     let usage = match &fty.params[0].1.value {
         Type_::Ref(true, _) => DottedUsage::Borrow(true),
         Type_::Ref(false, _) => DottedUsage::Borrow(false),
         _ => DottedUsage::Use,
     };
-    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
-    Some((m, f, fty, first_arg))
+    ResolvedMethodCall::Resolved(Box::new(m), f, fty, usage)
 }
 
 fn type_to_type_name(
@@ -4132,7 +4151,21 @@ fn macro_method_call(
     argloc: Loc,
     nargs: Vec<N::Exp>,
 ) -> Option<(Type, T::UnannotatedExp_)> {
-    let (m, f, fty, first_arg) = method_call_resolve(context, loc, edotted, method, ty_args_opt)?;
+    let mut edotted = edotted;
+    let (m, f, fty, usage) =
+        match method_call_resolve(context, loc, &mut edotted, method, ty_args_opt) {
+            ResolvedMethodCall::Resolved(m, f, fty, usage) => (*m, f, fty, usage),
+            ResolvedMethodCall::UnknownName if context.env.ide_mode() => {
+                // If the method name fails to resolve, we do autocomplete for the dotted expression.
+                edotted.for_autocomplete = true;
+                let err_ty = context.error_type(loc);
+                let dot_output =
+                    resolve_exp_dotted(context, DottedUsage::Borrow(false), loc, edotted);
+                return Some((err_ty, dot_output.exp.value));
+            }
+            ResolvedMethodCall::InvalidBaseType | ResolvedMethodCall::UnknownName => return None,
+        };
+    let first_arg = *resolve_exp_dotted(context, usage, loc, edotted);
     let mut args = vec![macro_expand::EvalStrategy::ByValue(first_arg)];
     args.extend(
         nargs
