@@ -142,7 +142,7 @@ jobs:
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
 
-          for binary in $(cat ./binary-list.json | jq -r '.[]'); do
+          for binary in $(cat ./binary-build-list.json | jq -r '.[]'); do
             mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
           done
 
