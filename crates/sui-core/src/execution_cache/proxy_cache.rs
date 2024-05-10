@@ -18,6 +18,7 @@ use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::VerifiedExecutionData;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::bridge::Bridge;
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult};
@@ -29,8 +30,8 @@ use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
 
 use super::{
     CheckpointCache, ExecutionCacheCommit, ExecutionCacheConfigType, ExecutionCacheMetrics,
-    ExecutionCacheRead, ExecutionCacheReconfigAPI, ExecutionCacheWrite, PassthroughCache,
-    StateSyncAPI, TestingAPI, WritebackCache,
+    ExecutionCacheReconfigAPI, ExecutionCacheWrite, ObjectCacheRead, PassthroughCache,
+    StateSyncAPI, TestingAPI, TransactionCacheRead, WritebackCache,
 };
 
 macro_rules! delegate_method {
@@ -94,7 +95,7 @@ impl ProxyCache {
     }
 }
 
-impl ExecutionCacheRead for ProxyCache {
+impl ObjectCacheRead for ProxyCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         delegate_method!(self.get_package_object(package_id))
     }
@@ -168,6 +169,33 @@ impl ExecutionCacheRead for ProxyCache {
         delegate_method!(self.check_owned_objects_are_live(owned_object_refs))
     }
 
+    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
+        delegate_method!(self.get_sui_system_state_object_unsafe())
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        delegate_method!(self.get_bridge_object_unsafe())
+    }
+
+    fn get_marker_value(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<MarkerValue>> {
+        delegate_method!(self.get_marker_value(object_id, version, epoch_id))
+    }
+
+    fn get_latest_marker(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+        delegate_method!(self.get_latest_marker(object_id, epoch_id))
+    }
+}
+
+impl TransactionCacheRead for ProxyCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
@@ -201,31 +229,6 @@ impl ExecutionCacheRead for ProxyCache {
         event_digests: &[TransactionEventsDigest],
     ) -> SuiResult<Vec<Option<TransactionEvents>>> {
         delegate_method!(self.multi_get_events(event_digests))
-    }
-
-    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
-        delegate_method!(self.get_sui_system_state_object_unsafe())
-    }
-
-    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
-        delegate_method!(self.get_bridge_object_unsafe())
-    }
-
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
-        delegate_method!(self.get_marker_value(object_id, version, epoch_id))
-    }
-
-    fn get_latest_marker(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        delegate_method!(self.get_latest_marker(object_id, epoch_id))
     }
 }
 

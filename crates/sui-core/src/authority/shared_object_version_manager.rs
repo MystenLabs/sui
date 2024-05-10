@@ -491,7 +491,7 @@ mod tests {
             assigned_versions,
         } = SharedObjVerManager::assign_versions_from_consensus(
             &epoch_store,
-            authority.get_cache_reader().as_ref(),
+            authority.get_object_cache_reader().as_ref(),
             &certs,
             None,
             &cancelled_txns,

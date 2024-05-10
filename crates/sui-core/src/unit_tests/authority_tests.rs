@@ -6060,7 +6060,7 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     );
 
     // Load shared objects.
-    let input_loader = TransactionInputLoader::new(authority.get_cache_reader().clone());
+    let input_loader = TransactionInputLoader::new(authority.get_object_cache_reader().clone());
     let input_objects = input_loader
         .read_objects_for_execution(
             authority.epoch_store_for_testing().as_ref(),
