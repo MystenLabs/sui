@@ -4865,7 +4865,7 @@ impl RandomnessRoundReceiver {
                     .notify_read_executed_effects(&[digest]),
             )
             .await
-            .expect("randomness state update transaction execution timed out") else {
+            .expect(format!("randomness state update transaction execution timed out at epoch {epoch}, round {round}").as_str()) else {
                 panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
             };
 
