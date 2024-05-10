@@ -12,7 +12,6 @@ use sui_indexer::db::ConnectionPoolConfig;
 use sui_indexer::{apis::GovernanceReadApi, indexer_reader::IndexerReader};
 use sui_json_rpc_types::Stake as RpcStakedSui;
 use sui_types::{
-    base_types::SuiAddress as NativeSuiAddress,
     governance::StakedSui as NativeStakedSui,
     sui_system_state::sui_system_state_summary::{
         SuiSystemStateSummary as NativeSuiSystemStateSummary, SuiValidatorSummary,
@@ -72,13 +71,18 @@ impl PgManager {
             .spawn_blocking(move |this| this.get_latest_sui_system_state())
             .await?;
 
-        if epoch_id.is_some_and(|id| id == latest_sui_system_state.epoch) {
-            Ok(latest_sui_system_state)
-        } else {
-            Ok(self
-                .inner
-                .spawn_blocking(move |this| this.get_epoch_sui_system_state(epoch_id))
-                .await?)
+        match epoch_id {
+            Some(epoch_id) => {
+                if epoch_id == latest_sui_system_state.epoch {
+                    Ok(latest_sui_system_state)
+                } else {
+                    Ok(self
+                        .inner
+                        .spawn_blocking(move |this| this.get_epoch_sui_system_state(Some(epoch_id)))
+                        .await?)
+                }
+            }
+            None => Ok(latest_sui_system_state),
         }
     }
 
@@ -115,27 +119,16 @@ impl PgManager {
 /// `SuiValidatorSummary` was queried for. Each `Validator` will inherit this checkpoint, so that
 /// when viewing the `Validator`'s state, it will be as if it was read at the same checkpoint.
 pub(crate) fn convert_to_validators(
-    validators: Vec<SuiValidatorSummary>,
-    system_state: Option<NativeSuiSystemStateSummary>,
+    system_state_at_requested_epoch: NativeSuiSystemStateSummary,
     checkpoint_viewed_at: u64,
 ) -> Vec<Validator> {
-    let (at_risk, reports) = if let Some(NativeSuiSystemStateSummary {
-        at_risk_validators,
-        validator_report_records,
-        ..
-    }) = system_state
-    {
-        (
-            BTreeMap::from_iter(at_risk_validators),
-            BTreeMap::from_iter(validator_report_records),
-        )
-    } else {
-        Default::default()
-    };
-
-    validators
+    let requested_for_epoch = system_state_at_requested_epoch.epoch;
+    let at_risk = BTreeMap::from_iter(system_state_at_requested_epoch.at_risk_validators);
+    let reports = BTreeMap::from_iter(system_state_at_requested_epoch.validator_report_records);
+    system_state_at_requested_epoch
+        .active_validators
         .into_iter()
-        .map(|validator_summary| {
+        .map(move |validator_summary| {
             let at_risk = at_risk.get(&validator_summary.sui_address).copied();
             let report_records = reports.get(&validator_summary.sui_address).map(|addrs| {
                 addrs
@@ -153,6 +146,7 @@ pub(crate) fn convert_to_validators(
                 at_risk,
                 report_records,
                 checkpoint_viewed_at,
+                requested_for_epoch,
             }
         })
         .collect()
