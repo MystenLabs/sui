@@ -296,7 +296,7 @@ Response: {
   "data": {
     "serviceConfig": {
       "availableVersions": [
-        "2024.7"
+        "2024.4"
       ]
     }
   }
