@@ -9,7 +9,9 @@ pub const SUI_VALIDATOR_SERVER_NAME: &str = "sui";
 
 pub use acceptor::{TlsAcceptor, TlsConnectionInfo};
 pub use certgen::SelfSignedCertificate;
-pub use verifier::{AllowAll, Allower, CertVerifier, HashSetAllow, ValidatorAllowlist};
+pub use verifier::{
+    AllowAll, Allower, ClientCertVerifier, HashSetAllow, ServerCertVerifier, ValidatorAllowlist,
+};
 
 pub use rustls;
 
@@ -18,7 +20,8 @@ mod tests {
     use super::*;
     use fastcrypto::ed25519::Ed25519KeyPair;
     use fastcrypto::traits::KeyPair;
-    use rustls::server::ClientCertVerifier;
+    use rustls::client::ServerCertVerifier as _;
+    use rustls::server::ClientCertVerifier as _;
 
     #[test]
     fn verify_allowall() {
@@ -30,7 +33,7 @@ mod tests {
         let random_cert_alice =
             SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
-        let verifier = CertVerifier::new(AllowAll);
+        let verifier = ClientCertVerifier::new(AllowAll, SUI_VALIDATOR_SERVER_NAME.to_string());
 
         // The bob passes validation
         verifier
@@ -52,6 +55,45 @@ mod tests {
     }
 
     #[test]
+    fn verify_server_cert() {
+        let mut rng = rand::thread_rng();
+        let allowed = Ed25519KeyPair::generate(&mut rng);
+        let disallowed = Ed25519KeyPair::generate(&mut rng);
+        let allowed_public_key = allowed.public().to_owned();
+        let random_cert_bob =
+            SelfSignedCertificate::new(allowed.private(), SUI_VALIDATOR_SERVER_NAME);
+        let random_cert_alice =
+            SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
+
+        let verifier =
+            ServerCertVerifier::new(allowed_public_key, SUI_VALIDATOR_SERVER_NAME.to_string());
+
+        // The bob passes validation
+        verifier
+            .verify_server_cert(
+                &random_cert_bob.rustls_certificate(),
+                &[],
+                &rustls::ServerName::try_from("example.com").unwrap(),
+                &mut Vec::<&[u8]>::new().iter().cloned(),
+                &[],
+                std::time::SystemTime::now(),
+            )
+            .unwrap();
+
+        // The alice does not pass validation
+        verifier
+            .verify_server_cert(
+                &random_cert_alice.rustls_certificate(),
+                &[],
+                &rustls::ServerName::try_from("example.com").unwrap(),
+                &mut Vec::<&[u8]>::new().iter().cloned(),
+                &[],
+                std::time::SystemTime::now(),
+            )
+            .unwrap_err();
+    }
+
+    #[test]
     fn verify_hashset() {
         let mut rng = rand::thread_rng();
         let allowed = Ed25519KeyPair::generate(&mut rng);
@@ -64,7 +106,8 @@ mod tests {
             SelfSignedCertificate::new(disallowed.private(), SUI_VALIDATOR_SERVER_NAME);
 
         let mut allowlist = HashSetAllow::new();
-        let verifier = CertVerifier::new(allowlist.clone());
+        let verifier =
+            ClientCertVerifier::new(allowlist.clone(), SUI_VALIDATOR_SERVER_NAME.to_string());
 
         // Add our public key to the allower
         allowlist
@@ -110,15 +153,33 @@ mod tests {
         let cert = SelfSignedCertificate::new(keypair.private(), "not-sui");
 
         let mut allowlist = HashSetAllow::new();
-        let verifier = CertVerifier::new(allowlist.clone());
+        let client_verifier =
+            ClientCertVerifier::new(allowlist.clone(), SUI_VALIDATOR_SERVER_NAME.to_string());
 
         // Add our public key to the allower
-        allowlist.inner_mut().write().unwrap().insert(public_key);
+        allowlist
+            .inner_mut()
+            .write()
+            .unwrap()
+            .insert(public_key.clone());
 
         // Allowed public key but the server-name in the cert is not the required "sui"
-        verifier
+        client_verifier
             .verify_client_cert(
                 &cert.rustls_certificate(),
+                &[],
+                std::time::SystemTime::now(),
+            )
+            .unwrap_err();
+
+        let server_verifier =
+            ServerCertVerifier::new(public_key, SUI_VALIDATOR_SERVER_NAME.to_string());
+        server_verifier
+            .verify_server_cert(
+                &cert.rustls_certificate(),
+                &[],
+                &rustls::ServerName::try_from("example.com").unwrap(),
+                &mut Vec::<&[u8]>::new().iter().cloned(),
                 &[],
                 std::time::SystemTime::now(),
             )
@@ -146,12 +207,13 @@ mod tests {
             .unwrap();
 
         let mut allowlist = HashSetAllow::new();
-        let tls_config = CertVerifier::new(allowlist.clone())
-            .rustls_server_config(
-                vec![server_certificate.rustls_certificate()],
-                server_certificate.rustls_private_key(),
-            )
-            .unwrap();
+        let tls_config =
+            ClientCertVerifier::new(allowlist.clone(), SUI_VALIDATOR_SERVER_NAME.to_string())
+                .rustls_server_config(
+                    vec![server_certificate.rustls_certificate()],
+                    server_certificate.rustls_private_key(),
+                )
+                .unwrap();
 
         async fn handler(tls_info: axum::Extension<TlsConnectionInfo>) -> String {
             tls_info.public_key().unwrap().to_string()
