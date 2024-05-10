@@ -12,7 +12,9 @@ use sui_sdk::SuiClient;
 use sui_types::transaction::{TransactionData, TransactionKind};
 use sui_types::{gas_coin::GAS, transaction::TransactionDataAPI, TypeTag};
 
-use super::move_package::{self, MovePackage, MovePackageCheckpointFilter};
+use super::move_package::{
+    self, MovePackage, MovePackageCheckpointFilter, MovePackageVersionFilter,
+};
 use super::suins_registration::NameService;
 use super::uint53::UInt53;
 use super::{
@@ -453,6 +455,27 @@ impl Query {
 
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         MovePackage::paginate_by_checkpoint(ctx.data_unchecked(), page, filter, checkpoint)
+            .await
+            .extend()
+    }
+
+    /// Fetch all versions of package at `address` (packages that share this package's original ID),
+    /// optionally bounding the versions exclusively from below with `afterVersion`, or from above
+    /// with `beforeVersion`.
+    async fn package_versions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<move_package::Cursor>,
+        last: Option<u64>,
+        before: Option<move_package::Cursor>,
+        address: SuiAddress,
+        filter: Option<MovePackageVersionFilter>,
+    ) -> Result<Connection<String, MovePackage>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+        MovePackage::paginate_by_version(ctx.data_unchecked(), page, address, filter, checkpoint)
             .await
             .extend()
     }

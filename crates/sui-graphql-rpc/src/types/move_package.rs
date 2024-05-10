@@ -58,6 +58,18 @@ pub(crate) struct MovePackageCheckpointFilter {
     pub before_checkpoint: Option<UInt53>,
 }
 
+/// Filter for paginating versions of a given `MovePackage`.
+#[derive(InputObject, Debug, Default, Clone)]
+pub(crate) struct MovePackageVersionFilter {
+    /// Fetch versions of this package that are strictly newer than this version. Omitting this
+    /// fetches versions since the original version.
+    pub after_version: Option<UInt53>,
+
+    /// Fetch versions of this package that are strictly older than this version. Omitting this
+    /// fetches versions up to the latest version (inclusive).
+    pub before_version: Option<UInt53>,
+}
+
 /// Filter for a point query of a MovePackage, supporting querying different versions of a package
 /// by their version. Note that different versions of the same user package exist at different IDs
 /// to each other, so this is different from looking up the historical version of an object.
@@ -350,6 +362,31 @@ impl MovePackage {
             ctx,
             self.super_.address,
             MovePackage::by_version(version, self.checkpoint_viewed_at_impl()),
+        )
+        .await
+        .extend()
+    }
+
+    /// Fetch all versions of this package (packages that share this package's original ID),
+    /// optionally bounding the versions exclusively from below with `afterVersion`, or from above
+    /// with `beforeVersion`.
+    async fn package_versions(
+        &self,
+        ctx: &Context<'_>,
+        first: Option<u64>,
+        after: Option<Cursor>,
+        last: Option<u64>,
+        before: Option<Cursor>,
+        filter: Option<MovePackageVersionFilter>,
+    ) -> Result<Connection<String, MovePackage>> {
+        let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
+
+        MovePackage::paginate_by_version(
+            ctx.data_unchecked(),
+            page,
+            self.super_.address,
+            filter,
+            self.checkpoint_viewed_at_impl(),
         )
         .await
         .extend()
@@ -690,6 +727,55 @@ impl MovePackage {
         Ok(conn)
     }
 
+    /// Query the database for a `page` of Move packages. The Page uses the checkpoint sequence
+    /// number the package was created at, its original ID, and its version as the cursor. The query
+    /// is filtered by the ID of a package and will only return packages from the same family
+    /// (sharing the same original ID as the package whose ID was given), and can optionally be
+    /// filtered by an upper and lower bound on package version.
+    ///
+    /// The `checkpoint_viewed_at` parameter represents the checkpoint sequence number at which this
+    /// page was queried. Each entity returned in the connection will inherit this checkpoint, so
+    /// that when viewing that entity's state, it will be as if it is being viewed at this
+    /// checkpoint.
+    ///
+    /// The cursors in `page` may also include checkpoint viewed at fields. If these are set, they
+    /// take precedence over the checkpoint that pagination is being conducted in.
+    pub(crate) async fn paginate_by_version(
+        db: &Db,
+        page: Page<Cursor>,
+        package: SuiAddress,
+        filter: Option<MovePackageVersionFilter>,
+        checkpoint_viewed_at: u64,
+    ) -> Result<Connection<String, MovePackage>, Error> {
+        let cursor_viewed_at = page.validate_cursor_consistency()?;
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
+        let (prev, next, results) = db
+            .execute(move |conn| {
+                page.paginate_raw_query::<StoredHistoryPackage>(
+                    conn,
+                    checkpoint_viewed_at,
+                    if is_system_package(package) {
+                        system_package_version_query(package, filter)
+                    } else {
+                        user_package_version_query(package, filter)
+                    },
+                )
+            })
+            .await?;
+
+        let mut conn = Connection::new(prev, next);
+
+        // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
+        for stored in results {
+            let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
+            let package =
+                MovePackage::try_from_stored_history_object(stored.object, checkpoint_viewed_at)?;
+            conn.edges.push(Edge::new(cursor, package));
+        }
+
+        Ok(conn)
+    }
+
     /// `checkpoint_viewed_at` points to the checkpoint snapshot that this `MovePackage` came from.
     /// This is stored in the `MovePackage` so that related fields from the package are read from
     /// the same checkpoint (consistently).
@@ -719,9 +805,9 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
             format!(
                 "o.checkpoint_sequence_number > {cp} OR (\
                  o.checkpoint_sequence_number = {cp} AND
-                 p.original_id > '\\x{id}'::bytea OR (\
-                 p.original_id = '\\x{id}'::bytea AND \
-                 p.package_version >= {pv}\
+                 original_id > '\\x{id}'::bytea OR (\
+                 original_id = '\\x{id}'::bytea AND \
+                 o.object_version >= {pv}\
                  ))",
                 cp = cursor.checkpoint_sequence_number,
                 id = hex::encode(&cursor.original_id),
@@ -736,9 +822,9 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
             format!(
                 "o.checkpoint_sequence_number < {cp} OR (\
                  o.checkpoint_sequence_number = {cp} AND
-                 p.original_id < '\\x{id}'::bytea OR (\
-                 p.original_id = '\\x{id}'::bytea AND \
-                 p.package_version <= {pv}\
+                 original_id < '\\x{id}'::bytea OR (\
+                 original_id = '\\x{id}'::bytea AND \
+                 o.object_version <= {pv}\
                  ))",
                 cp = cursor.checkpoint_sequence_number,
                 id = hex::encode(&cursor.original_id),
@@ -751,13 +837,13 @@ impl RawPaginated<Cursor> for StoredHistoryPackage {
         if asc {
             query
                 .order_by("o.checkpoint_sequence_number ASC")
-                .order_by("p.original_id ASC")
-                .order_by("p.package_version ASC")
+                .order_by("original_id ASC")
+                .order_by("o.object_version ASC")
         } else {
             query
                 .order_by("o.checkpoint_sequence_number DESC")
-                .order_by("p.original_id DESC")
-                .order_by("p.package_version DESC")
+                .order_by("original_id DESC")
+                .order_by("o.object_version DESC")
         }
     }
 }
@@ -917,4 +1003,95 @@ impl TryFrom<&Object> for MovePackage {
             Err(MovePackageDowncastError)
         }
     }
+}
+
+/// Query for fetching all the versions of a system package (assumes that `package` has already been
+/// verified as a system package). This is an `objects_history` query disguised as a package query.
+fn system_package_version_query(
+    package: SuiAddress,
+    filter: Option<MovePackageVersionFilter>,
+) -> RawQuery {
+    // Query uses a left join to force the query planner to use `objects_version` in the outer loop.
+    let mut q = query!(
+        r#"
+            SELECT
+                    o.object_id AS original_id,
+                    o.*
+            FROM
+                    objects_version v
+            LEFT JOIN
+                    objects_history o
+            ON
+                    v.object_id = o.object_id
+            AND     v.object_version = o.object_version
+            AND     v.cp_sequence_number = o.checkpoint_sequence_number
+        "#
+    );
+
+    q = filter!(
+        q,
+        format!(
+            "v.object_id = '\\x{}'::bytea",
+            hex::encode(package.into_vec())
+        )
+    );
+
+    if let Some(after) = filter.as_ref().and_then(|f| f.after_version) {
+        let a: u64 = after.into();
+        q = filter!(q, format!("v.object_version > {a}"));
+    }
+
+    if let Some(before) = filter.as_ref().and_then(|f| f.before_version) {
+        let b: u64 = before.into();
+        q = filter!(q, format!("v.object_version < {b}"));
+    }
+
+    q
+}
+
+/// Query for fetching all the versions of a non-system package (assumes that `package` has already
+/// been verified as a system package)
+fn user_package_version_query(
+    package: SuiAddress,
+    filter: Option<MovePackageVersionFilter>,
+) -> RawQuery {
+    let mut q = query!(
+        r#"
+            SELECT
+                    p.original_id,
+                    o.*
+            FROM
+                    packages q
+            INNER JOIN
+                    packages p
+            ON
+                    q.original_id = p.original_id
+            INNER JOIN
+                    objects_history o
+            ON
+                    p.package_id = o.object_id
+            AND     p.package_version = o.object_version
+            AND     p.checkpoint_sequence_number = o.checkpoint_sequence_number
+        "#
+    );
+
+    q = filter!(
+        q,
+        format!(
+            "q.package_id = '\\x{}'::bytea",
+            hex::encode(package.into_vec())
+        )
+    );
+
+    if let Some(after) = filter.as_ref().and_then(|f| f.after_version) {
+        let a: u64 = after.into();
+        q = filter!(q, format!("p.package_version > {a}"));
+    }
+
+    if let Some(before) = filter.as_ref().and_then(|f| f.before_version) {
+        let b: u64 = before.into();
+        q = filter!(q, format!("p.package_version < {b}"));
+    }
+
+    q
 }
