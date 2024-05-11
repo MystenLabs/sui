@@ -359,7 +359,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block((_, seq)) => tail_block(context, seq),
+        E::Block((_, seq), _) => tail_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -478,7 +478,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block((_, seq)) => value_block(context, seq),
+        E::Block((_, seq), _) => value_block(context, seq),
 
         // -----------------------------------------------------------------------------------------
         //  calls and nested expressions
@@ -678,7 +678,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
                 body_result
             }
         }
-        E::Block((_, seq)) => statement_block(
+        E::Block((_, seq), _) => statement_block(
             context, seq, /* stmt_pos */ true, /* skip_last */ false,
         ),
         E::Return(rhs) => {

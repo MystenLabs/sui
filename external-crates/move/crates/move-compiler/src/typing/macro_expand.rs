@@ -37,6 +37,7 @@ struct Context<'a, 'b> {
     by_name_args: ArgMap,
     tparam_subst: TParamSubst,
     macro_color: Color,
+    lambda_labels: u16,
 }
 
 pub struct ExpandedMacro {
@@ -176,6 +177,7 @@ pub(crate) fn call(
         by_name_args,
         tparam_subst,
         macro_color: next_color,
+        lambda_labels: 0,
     };
     block(&mut context, &mut macro_body);
     context.report_unused_arguments();
@@ -1048,8 +1050,24 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 })
                 .collect();
             result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
+
+            // mark blocks representing lambdas with a special label
+            let label = sp(
+                argloc,
+                N::Var_ {
+                    name: N::BlockLabel::LAMBDA_LABEL_SYMBOL,
+                    id: context.macro_color,
+                    color: context.lambda_labels,
+                },
+            );
+            context.lambda_labels += 1;
+            let lambda_label = BlockLabel {
+                label,
+                is_implicit: true,
+            };
+
             *e_ = N::Exp_::Block(N::Block {
-                name: None,
+                name: Some(lambda_label),
                 from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });

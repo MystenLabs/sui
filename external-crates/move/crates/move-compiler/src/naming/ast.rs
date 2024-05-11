@@ -971,6 +971,7 @@ impl BlockLabel {
     // base symbol to used when making names for unnamed loops or lambdas
     pub const IMPLICIT_LABEL_SYMBOL: Symbol = symbol!("%implicit");
     pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("%macro");
+    pub const LAMBDA_LABEL_SYMBOL: Symbol = symbol!("%lambda");
 }
 
 impl Value_ {

@@ -486,7 +486,7 @@ mod check_valid_constant {
             // Valid cases
             //*****************************************
             E::Unit { .. } | E::Value(_) | E::Move { .. } | E::Copy { .. } => return,
-            E::Block(seq) => {
+            E::Block(seq, _) => {
                 sequence(context, seq);
                 return;
             }
@@ -1624,7 +1624,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 };
                 (sp(eloc, final_type.value), TE::NamedBlock(name, seq))
             } else {
-                (seq_ty, TE::Block(seq))
+                (seq_ty, TE::Block(seq, /* not an inlined macro */ None))
             };
             context.maybe_exit_macro_argument(eloc, from_macro_argument);
             res
@@ -4256,6 +4256,7 @@ fn macro_method_call(
         loc,
         m,
         f,
+        Some(method),
         type_arguments,
         args,
         return_ty,
@@ -4279,7 +4280,7 @@ fn macro_module_call(
         .collect();
     let (type_arguments, args, return_ty) =
         macro_call_impl(context, loc, m, f, macro_call_loc, fty, argloc, args);
-    expand_macro(context, loc, m, f, type_arguments, args, return_ty)
+    expand_macro(context, loc, m, f, None, type_arguments, args, return_ty)
 }
 
 fn macro_call_impl(
@@ -4409,20 +4410,29 @@ fn expected_by_name_arg_type(
 fn expand_macro(
     context: &mut core::Context,
     call_loc: Loc,
-    m: ModuleIdent,
+    mod_ident: ModuleIdent,
     f: FunctionName,
+    m: Option<Name>,
     type_args: Vec<N::Type>,
     args: Vec<macro_expand::Arg>,
     return_ty: Type,
 ) -> (Type, T::UnannotatedExp_) {
     use T::{SequenceItem_ as TS, UnannotatedExp_ as TE};
 
-    let valid = context.add_macro_expansion(m, f, call_loc);
+    let valid = context.add_macro_expansion(mod_ident, f, call_loc);
     if !valid {
         assert!(context.env.has_errors());
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
-    let res = match macro_expand::call(context, call_loc, m, f, type_args, args, return_ty) {
+    let res = match macro_expand::call(
+        context,
+        call_loc,
+        mod_ident,
+        f,
+        type_args.clone(),
+        args,
+        return_ty,
+    ) {
         None => {
             assert!(context.env.has_errors());
             (context.error_type(call_loc), TE::UnresolvedError)
@@ -4450,16 +4460,33 @@ fn expand_macro(
                     sp(b.loc, TS::Bind(b, lvalue_ty, Box::new(e)))
                 })
                 .collect();
+            let by_value_num = seq.len();
             // add the body
             let body = exp(context, body);
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let use_funs = N::UseFuns::new(context.current_call_color());
-            let e_ = TE::Block((use_funs, seq));
+            let e_ = TE::Block(
+                (use_funs, seq),
+                /* inlined macro */
+                Some((
+                    mod_ident.clone(),
+                    f.clone(),
+                    m,
+                    type_args
+                        .into_iter()
+                        .map(|mut t| {
+                            expand::type_(context, &mut t);
+                            t
+                        })
+                        .collect::<Vec<_>>(),
+                    by_value_num,
+                )),
+            );
             (ty, e_)
         }
     };
-    if context.pop_macro_expansion(call_loc, &m, &f) {
+    if context.pop_macro_expansion(call_loc, &mod_ident, &f) {
         res
     } else {
         (context.error_type(call_loc), TE::UnresolvedError)

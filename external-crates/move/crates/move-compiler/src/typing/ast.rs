@@ -209,7 +209,17 @@ pub enum UnannotatedExp_ {
         body: Box<Exp>,
     },
     NamedBlock(BlockLabel, Sequence),
-    Block(Sequence),
+    Block(
+        Sequence,
+        /* if representing inlined macro */
+        Option<(
+            ModuleIdent,
+            FunctionName,
+            /* method name */ Option<Name>,
+            /* type params */ Vec<Type>,
+            /* num by-value-args */ usize,
+        )>,
+    ),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -745,7 +755,7 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(": ");
                 seq.ast_debug(w)
             }
-            E::Block(seq) => seq.ast_debug(w),
+            E::Block(seq, _) => seq.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

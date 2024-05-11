@@ -257,7 +257,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         }
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
-        E::Block(seq) => sequence(context, seq),
+        E::Block(seq, _) => sequence(context, seq),
         E::Assign(assigns, tys, er) => {
             lvalues(context, assigns);
             expected_types(context, tys);
