@@ -481,17 +481,30 @@ impl Core {
                 // before a change is triggered. Calling into leader schedule will get you
                 // how many commits till next leader change. We will loop back and recalculate
                 // any discarded leaders with the new schedule.
-                let sequenced_leaders = self
-                    .committer
-                    .try_commit(self.last_decided_leader)
+                if self
+                    .leader_schedule
+                    .commits_until_leader_schedule_update(self.dag_state.clone())
+                    == 0
+                {
+                    let last_commit_index = self.dag_state.read().last_commit_index();
+                    tracing::info!(
+                        "Leader schedule change triggered at commit index {last_commit_index}"
+                    );
+                    self.leader_schedule
+                        .update_leader_schedule(self.dag_state.clone(), &self.committer);
+                }
+
+                let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
+                let num_commits_left = self
+                    .leader_schedule
+                    .commits_until_leader_schedule_update(self.dag_state.clone());
+                tracing::debug!("Sequenced {} leaders and {num_commits_left} commits can be made before next leader schedule change",sequenced_leaders.len());
+                let filtered_sequenced_leaders = sequenced_leaders
                     .into_iter()
-                    .take(
-                        self.leader_schedule
-                            .commits_until_leader_schedule_update(self.dag_state.clone()),
-                    )
+                    .take(num_commits_left)
                     .collect::<Vec<_>>();
 
-                let Some(last) = sequenced_leaders.last() else {
+                let Some(last) = filtered_sequenced_leaders.last() else {
                     break;
                 };
 
@@ -502,7 +515,7 @@ impl Core {
                     .last_decided_leader_round
                     .set(self.last_decided_leader.round as i64);
 
-                let committed_leaders = sequenced_leaders
+                let committed_leaders = filtered_sequenced_leaders
                     .into_iter()
                     .filter_map(|leader| leader.into_committed_block())
                     .collect::<Vec<_>>();
@@ -521,21 +534,6 @@ impl Core {
                     .write()
                     .add_unscored_committed_subdags(subdags.clone());
                 committed_subdags.extend(subdags);
-
-                if self
-                    .leader_schedule
-                    .commits_until_leader_schedule_update(self.dag_state.clone())
-                    == 0
-                {
-                    let last_commit_index = self.dag_state.read().last_commit_index();
-                    tracing::info!(
-                        "Leader schedule change triggered at commit index {last_commit_index}"
-                    );
-                    self.leader_schedule
-                        .update_leader_schedule(self.dag_state.clone(), &self.committer);
-                } else {
-                    break;
-                }
             }
 
             Ok(committed_subdags)

@@ -78,11 +78,11 @@ impl<'a> ReputationScoreCalculator<'a> {
 
         for leader_round in scoring_round_range {
             for committer in self.committer.get_committers() {
-                tracing::info!(
+                tracing::debug!(
                     "Electing leader for round {leader_round} with committer {committer}"
                 );
                 if let Some(leader_slot) = committer.elect_leader(leader_round) {
-                    tracing::info!("Calculating score for leader {leader_slot}");
+                    tracing::debug!("Calculating score for leader {leader_slot}");
                     self.add_scores(self.scoring_strategy.calculate_scores_for_leader(
                         &self.unscored_subdag,
                         leader_slot,
@@ -263,7 +263,7 @@ impl UnscoredSubdag {
                 }
             } else {
                 // TODO: Add unit test for this case once dagbuilder is ready.
-                tracing::info!(
+                tracing::debug!(
                     "Potential vote's ancestor block not found in unscored committed subdags: {:?}",
                     ancestor
                 );

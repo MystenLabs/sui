@@ -71,6 +71,12 @@ impl LeaderSchedule {
                 )
             },
         );
+
+        tracing::debug!(
+            "LeaderSchedule recovered using {leader_swap_table:?}. There are {} pending unscored subdags in DagState.",
+            dag_state.read().unscored_committed_subdags_count(),
+        );
+
         // create the schedule
         Self::new(context, leader_swap_table)
     }
