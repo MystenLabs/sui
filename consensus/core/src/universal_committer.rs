@@ -35,8 +35,8 @@ pub(crate) struct UniversalCommitter {
 }
 
 impl UniversalCommitter {
-    /// Try to commit part of the dag. This function is idempotent and returns a list of
-    /// ordered decided leaders.
+    /// Try to commit part of the dag. This function is idempotent and returns an ordered list of
+    /// decided slots.
     #[tracing::instrument(skip_all, fields(last_decided = %last_decided))]
     pub(crate) fn try_commit(&self, last_decided: Slot) -> Vec<LeaderStatus> {
         let highest_accepted_round = self.dag_state.read().highest_accepted_round();
