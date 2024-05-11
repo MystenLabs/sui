@@ -512,7 +512,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
-            context.clock.timestamp_utc_ms(),
+            leader_timestamp,
             leader_ref,
             blocks
                 .iter()
@@ -560,7 +560,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
-            context.clock.timestamp_utc_ms(),
+            leader_timestamp,
             leader_ref,
             blocks
                 .iter()
@@ -622,7 +622,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
-            context.clock.timestamp_utc_ms(),
+            leader_timestamp,
             leader_ref,
             blocks
                 .iter()
@@ -680,7 +680,7 @@ mod tests {
         let last_commit = TrustedCommit::new_for_test(
             last_commit_index,
             CommitDigest::MIN,
-            context.clock.timestamp_utc_ms(),
+            leader_timestamp,
             leader_ref,
             blocks
                 .iter()
