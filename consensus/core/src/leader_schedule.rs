@@ -72,7 +72,7 @@ impl LeaderSchedule {
             },
         );
 
-        tracing::debug!(
+        tracing::info!(
             "LeaderSchedule recovered using {leader_swap_table:?}. There are {} pending unscored subdags in DagState.",
             dag_state.read().unscored_committed_subdags_count(),
         );
@@ -111,13 +111,13 @@ impl LeaderSchedule {
         let mut dag_state = dag_state.write();
         let unscored_subdags = dag_state.take_unscored_committed_subdags();
 
+        // TODO: move to initialization.
         // TODO: remove this once scoring strategy is finalized
         let scoring_strategy =
             if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
                 tracing::info!(
                     "Using scoring strategy {scoring_strategy} for ReputationScoreCalculator"
                 );
-
                 let scoring_strategy: Box<dyn ScoringStrategy> = match scoring_strategy.as_str() {
                     "vote" => Box::new(VoteScoringStrategy {}),
                     "certified_vote_v1" => Box::new(CertifiedVoteScoringStrategyV1 {}),
@@ -128,7 +128,7 @@ impl LeaderSchedule {
                 scoring_strategy
             } else {
                 tracing::info!(
-                    "Using scoring strategy VoteScoringStrategy for ReputationScoreCalculator"
+                    "Using scoring strategy vote for ReputationScoreCalculator"
                 );
                 Box::new(VoteScoringStrategy {})
             };
@@ -319,7 +319,7 @@ impl LeaderSwapTable {
             );
         });
 
-        tracing::debug!("Scores used for new LeaderSwapTable: {reputation_scores:?}");
+        tracing::info!("Scores used for new LeaderSwapTable: {reputation_scores:?}");
 
         Self {
             good_nodes,

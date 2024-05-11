@@ -613,8 +613,8 @@ impl DagState {
         assert!(self.unscored_committed_subdags.is_empty());
 
         let commit_info = CommitInfo {
-            reputation_scores,
             committed_rounds: self.last_committed_rounds.clone(),
+            reputation_scores,
         };
         let last_commit = self
             .last_commit
@@ -717,11 +717,16 @@ impl DagState {
             return;
         }
         debug!(
-            "Flushing {} blocks ({}) and {} commits ({}) to storage.",
+            "Flushing {} blocks ({}), {} commits ({}) and {} commit info ({}) to storage.",
             blocks.len(),
             blocks.iter().map(|b| b.reference().to_string()).join(","),
             commits.len(),
             commits.iter().map(|c| c.reference().to_string()).join(","),
+            commit_info_to_write.len(),
+            commit_info_to_write
+                .iter()
+                .map(|(commit_ref, _)| commit_ref.to_string())
+                .join(","),
         );
         self.store
             .write(WriteBatch::new(blocks, commits, commit_info_to_write))

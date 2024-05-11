@@ -78,11 +78,11 @@ impl<'a> ReputationScoreCalculator<'a> {
 
         for leader_round in scoring_round_range {
             for committer in self.committer.get_committers() {
-                tracing::debug!(
+                tracing::trace!(
                     "Electing leader for round {leader_round} with committer {committer}"
                 );
                 if let Some(leader_slot) = committer.elect_leader(leader_round) {
-                    tracing::debug!("Calculating score for leader {leader_slot}");
+                    tracing::trace!("Calculating score for leader {leader_slot}");
                     self.add_scores(self.scoring_strategy.calculate_scores_for_leader(
                         &self.unscored_subdag,
                         leader_slot,
