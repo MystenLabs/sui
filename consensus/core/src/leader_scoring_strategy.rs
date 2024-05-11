@@ -10,7 +10,7 @@ use crate::{
     stake_aggregator::{QuorumThreshold, StakeAggregator},
 };
 
-pub(crate) trait ScoringStrategy {
+pub(crate) trait ScoringStrategy: Send + Sync {
     fn calculate_scores_for_leader(
         &self,
         subdag: &UnscoredSubdag,
@@ -319,12 +319,12 @@ mod tests {
     #[tokio::test]
     async fn test_certificate_scoring_strategy() {
         let (context, committer, unscored_subdags) = basic_setup();
-
+        let scoring_strategy = CertificateScoringStrategy {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(CertificateScoringStrategy {}),
+            &scoring_strategy,
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![2, 1, 1, 1]);
@@ -334,12 +334,12 @@ mod tests {
     #[tokio::test]
     async fn test_vote_scoring_strategy() {
         let (context, committer, unscored_subdags) = basic_setup();
-
+        let scoring_strategy = VoteScoringStrategy {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(VoteScoringStrategy {}),
+            &scoring_strategy,
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
@@ -349,12 +349,12 @@ mod tests {
     #[tokio::test]
     async fn test_certified_vote_scoring_strategy_v1() {
         let (context, committer, unscored_subdags) = basic_setup();
-
+        let scoring_strategy = CertifiedVoteScoringStrategyV1 {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(CertifiedVoteScoringStrategyV1 {}),
+            &scoring_strategy,
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![1, 1, 1, 1]);
@@ -364,12 +364,12 @@ mod tests {
     #[tokio::test]
     async fn test_certified_vote_scoring_strategy_v2() {
         let (context, committer, unscored_subdags) = basic_setup();
-
+        let scoring_strategy = CertifiedVoteScoringStrategyV2 {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(CertifiedVoteScoringStrategyV2 {}),
+            &scoring_strategy,
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![5, 5, 5, 5]);

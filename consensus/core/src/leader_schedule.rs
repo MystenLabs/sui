@@ -31,6 +31,7 @@ pub(crate) struct LeaderSchedule {
     pub leader_swap_table: Arc<RwLock<LeaderSwapTable>>,
     context: Arc<Context>,
     num_commits_per_schedule: u64,
+    scoring_strategy: Arc<dyn ScoringStrategy>,
 }
 
 impl LeaderSchedule {
@@ -47,6 +48,7 @@ impl LeaderSchedule {
             context,
             num_commits_per_schedule: Self::CONSENSUS_COMMITS_PER_SCHEDULE,
             leader_swap_table: Arc::new(RwLock::new(leader_swap_table)),
+            scoring_strategy: Self::choose_scoring_strategy(),
         }
     }
 
@@ -81,6 +83,26 @@ impl LeaderSchedule {
         Self::new(context, leader_swap_table)
     }
 
+    // TODO: remove this once scoring strategy is finalized
+    fn choose_scoring_strategy() -> Arc<dyn ScoringStrategy> {
+        if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
+            tracing::info!(
+                "Using scoring strategy {scoring_strategy} for ReputationScoreCalculator"
+            );
+            let scoring_strategy: Arc<dyn ScoringStrategy> = match scoring_strategy.as_str() {
+                "vote" => Arc::new(VoteScoringStrategy {}),
+                "certified_vote_v1" => Arc::new(CertifiedVoteScoringStrategyV1 {}),
+                "certified_vote_v2" => Arc::new(CertifiedVoteScoringStrategyV2 {}),
+                "certificate" => Arc::new(CertificateScoringStrategy {}),
+                _ => Arc::new(VoteScoringStrategy {}),
+            };
+            scoring_strategy
+        } else {
+            tracing::info!("Using scoring strategy vote for ReputationScoreCalculator");
+            Arc::new(VoteScoringStrategy {})
+        }
+    }
+
     pub(crate) fn commits_until_leader_schedule_update(
         &self,
         dag_state: Arc<RwLock<DagState>>,
@@ -111,28 +133,6 @@ impl LeaderSchedule {
         let mut dag_state = dag_state.write();
         let unscored_subdags = dag_state.take_unscored_committed_subdags();
 
-        // TODO: move to initialization.
-        // TODO: remove this once scoring strategy is finalized
-        let scoring_strategy =
-            if let Ok(scoring_strategy) = std::env::var("CONSENSUS_SCORING_STRATEGY") {
-                tracing::info!(
-                    "Using scoring strategy {scoring_strategy} for ReputationScoreCalculator"
-                );
-                let scoring_strategy: Box<dyn ScoringStrategy> = match scoring_strategy.as_str() {
-                    "vote" => Box::new(VoteScoringStrategy {}),
-                    "certified_vote_v1" => Box::new(CertifiedVoteScoringStrategyV1 {}),
-                    "certified_vote_v2" => Box::new(CertifiedVoteScoringStrategyV2 {}),
-                    "certificate" => Box::new(CertificateScoringStrategy {}),
-                    _ => Box::new(VoteScoringStrategy {}),
-                };
-                scoring_strategy
-            } else {
-                tracing::info!(
-                    "Using scoring strategy vote for ReputationScoreCalculator"
-                );
-                Box::new(VoteScoringStrategy {})
-            };
-
         let score_calculation_timer = self
             .context
             .metrics
@@ -144,7 +144,7 @@ impl LeaderSchedule {
             self.context.clone(),
             committer,
             &unscored_subdags,
-            scoring_strategy,
+            self.scoring_strategy.as_ref(),
         )
         .calculate();
         drop(score_calculation_timer);

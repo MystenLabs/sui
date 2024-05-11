@@ -37,7 +37,7 @@ pub(crate) struct ReputationScoreCalculator<'a> {
     // and the `ReputationScoreCalculator` is responsible for applying the strategy.
     // For now this is dynamic while we are experimenting but eventually we can
     // replace this with the final strategy that works best.
-    scoring_strategy: Box<dyn ScoringStrategy>,
+    scoring_strategy: &'a dyn ScoringStrategy,
     // We use the `UniversalCommitter` to elect the leaders from the `UnscoredSubdag`
     // that need to be scored.
     committer: &'a UniversalCommitter,
@@ -48,7 +48,7 @@ impl<'a> ReputationScoreCalculator<'a> {
         context: Arc<Context>,
         committer: &'a UniversalCommitter,
         unscored_subdags: &Vec<CommittedSubDag>,
-        scoring_strategy: Box<dyn ScoringStrategy>,
+        scoring_strategy: &'a dyn ScoringStrategy,
     ) -> Self {
         let num_authorities = context.committee.size();
         let scores_per_authority = vec![0_u64; num_authorities];
@@ -490,11 +490,12 @@ mod tests {
             context.clock.timestamp_utc_ms(),
             commit_index,
         )];
+        let scoring_strategy = VoteScoringStrategy {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(VoteScoringStrategy {}),
+            &scoring_strategy,
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
@@ -523,11 +524,12 @@ mod tests {
         .build();
 
         let unscored_subdags = vec![];
+        let scoring_strategy = VoteScoringStrategy {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(VoteScoringStrategy {}),
+            &scoring_strategy,
         );
         calculator.calculate();
     }
@@ -560,11 +562,12 @@ mod tests {
             context.clock.timestamp_utc_ms(),
             1,
         )];
+        let scoring_strategy = VoteScoringStrategy {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(VoteScoringStrategy {}),
+            &scoring_strategy,
         );
         calculator.calculate();
     }
@@ -643,11 +646,12 @@ mod tests {
             context.clock.timestamp_utc_ms(),
             commit_index,
         )];
+        let scoring_strategy = VoteScoringStrategy {};
         let mut calculator = ReputationScoreCalculator::new(
             context.clone(),
             &committer,
             &unscored_subdags,
-            Box::new(VoteScoringStrategy {}),
+            &scoring_strategy,
         );
         let scores = calculator.calculate();
         assert_eq!(scores.scores_per_authority, vec![3, 2, 2, 2]);
