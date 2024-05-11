@@ -252,6 +252,8 @@ pub enum SuiClientCommands {
         rpc: String,
         #[clap(long, value_hint = ValueHint::Url)]
         ws: Option<String>,
+        #[clap(long, help = "Basic auth in the format of username:password")]
+        basic_auth: Option<String>,
     },
 
     /// Get object info
@@ -1497,13 +1499,23 @@ impl SuiClientCommands {
                 let response = context.execute_transaction_may_fail(transaction).await?;
                 SuiClientCommandResult::TransactionBlock(response)
             }
-            SuiClientCommands::NewEnv { alias, rpc, ws } => {
+            SuiClientCommands::NewEnv {
+                alias,
+                rpc,
+                ws,
+                basic_auth,
+            } => {
                 if context.config.envs.iter().any(|env| env.alias == alias) {
                     return Err(anyhow!(
                         "Environment config with name [{alias}] already exists."
                     ));
                 }
-                let env = SuiEnv { alias, rpc, ws };
+                let env = SuiEnv {
+                    alias,
+                    rpc,
+                    ws,
+                    basic_auth,
+                };
 
                 // Check urls are valid and server is reachable
                 env.create_rpc_client(None, None).await?;
