@@ -156,6 +156,14 @@ async fn main() -> anyhow::Result<()> {
 
             return Ok(());
         }
+
+        BridgeValidatorCommand::Client { config_path, cmd } => {
+            let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
+            let config = LoadedBridgeCliConfig::load(config).await?;
+            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
+            cmd.handle(&config, sui_bridge_client).await?;
+            return Ok(());
+        }
     }
 
     Ok(())

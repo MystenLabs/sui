@@ -94,6 +94,10 @@ impl SuiBridgeClient {
         self_.describe().await?;
         Ok(self_)
     }
+
+    pub fn sui_client(&self) -> &SuiSdkClient {
+        &self.inner
+    }
 }
 
 impl<P> SuiClient<P>

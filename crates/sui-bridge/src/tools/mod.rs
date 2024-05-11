@@ -1,9 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::EthSuiBridge;
+use crate::abi::{eth_sui_bridge, EthSuiBridge};
 use crate::config::read_key;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::error::BridgeResult;
+use crate::sui_client::SuiBridgeClient;
 use crate::types::{
     AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
     EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
@@ -16,16 +18,25 @@ use ethers::types::Address as EthAddress;
 use fastcrypto::encoding::Encoding;
 use fastcrypto::encoding::Hex;
 use fastcrypto::hash::{HashFunction, Keccak256};
+use move_core_types::ident_str;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use shared_crypto::intent::Intent;
+use shared_crypto::intent::IntentMessage;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
+use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_sdk::SuiClientBuilder;
-use sui_types::base_types::ObjectRef;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::BridgeChainId;
-use sui_types::crypto::SuiKeyPair;
+use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::bridge::{BridgeChainId, BRIDGE_MODULE_NAME};
+use sui_types::crypto::{Signature, SuiKeyPair};
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
+use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
+use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
+use tracing::info;
 
 use crate::types::BridgeAction;
 
@@ -63,6 +74,15 @@ pub enum BridgeValidatorCommand {
         chain_id: u8,
         #[clap(subcommand)]
         cmd: GovernanceClientCommands,
+    },
+    /// Client to facilitate and execute Bridge actions
+    #[clap(name = "client")]
+    Client {
+        /// Path of BridgeCliConfig
+        #[clap(long = "config-path")]
+        config_path: PathBuf,
+        #[clap(subcommand)]
+        cmd: BridgeClientCommands,
     },
 }
 
@@ -370,6 +390,172 @@ impl LoadedBridgeCliConfig {
         println!("Using Gas object: {}", gas.coin_object_id);
         Ok((self.sui_key.copy(), sui_client_address, gas.object_ref()))
     }
+}
+#[derive(Parser)]
+#[clap(rename_all = "kebab-case")]
+pub enum BridgeClientCommands {
+    #[clap(name = "deposit-on-sui")]
+    DepositOnSui {
+        #[clap(long)]
+        coin_object_id: ObjectID,
+        #[clap(long)]
+        coin_type: String,
+        #[clap(long)]
+        target_chain: u8,
+        #[clap(long)]
+        recipient_address: EthAddress,
+    },
+    #[clap(name = "claim-on-eth")]
+    ClaimOnEth {
+        #[clap(long)]
+        seq_num: u64,
+    },
+}
+
+impl BridgeClientCommands {
+    pub async fn handle(
+        self,
+        config: &LoadedBridgeCliConfig,
+        sui_bridge_client: SuiBridgeClient,
+    ) -> anyhow::Result<()> {
+        match self {
+            BridgeClientCommands::ClaimOnEth { seq_num } => {
+                claim_on_eth(seq_num, config, sui_bridge_client)
+                    .await
+                    .map_err(|e| anyhow!("{:?}", e))
+            }
+            BridgeClientCommands::DepositOnSui {
+                coin_object_id,
+                coin_type,
+                target_chain,
+                recipient_address,
+            } => {
+                let target_chain = BridgeChainId::try_from(target_chain).expect("Invalid chain id");
+                let coin_type = TypeTag::from_str(&coin_type).expect("Invalid coin type");
+                deposit_on_sui(
+                    coin_object_id,
+                    coin_type,
+                    target_chain,
+                    recipient_address,
+                    config,
+                    sui_bridge_client,
+                )
+                .await
+            }
+        }
+    }
+}
+
+async fn deposit_on_sui(
+    coin_object_id: ObjectID,
+    coin_type: TypeTag,
+    target_chain: BridgeChainId,
+    recipient_address: EthAddress,
+    config: &LoadedBridgeCliConfig,
+    sui_bridge_client: SuiBridgeClient,
+) -> anyhow::Result<()> {
+    let target_chain = target_chain as u8;
+    let sui_client = sui_bridge_client.sui_client();
+    let bridge_object_arg = sui_bridge_client
+        .get_mutable_bridge_object_arg_must_succeed()
+        .await;
+    let rgp = sui_client
+        .governance_api()
+        .get_reference_gas_price()
+        .await
+        .unwrap();
+    let sender = SuiAddress::from(&config.sui_key.public());
+    let gas_obj_ref = sui_client
+        .coin_read_api()
+        .select_coins(sender, None, 1_000_000_000, vec![])
+        .await?
+        .first()
+        .ok_or(anyhow!("No coin found for address {}", sender))?
+        .object_ref();
+    let coin_obj_ref = sui_client
+        .read_api()
+        .get_object_with_options(coin_object_id, SuiObjectDataOptions::default())
+        .await?
+        .data
+        .unwrap()
+        .object_ref();
+
+    let mut builder = ProgrammableTransactionBuilder::new();
+    let arg_target_chain = builder.pure(target_chain).unwrap();
+    let arg_target_address = builder.pure(recipient_address.as_bytes()).unwrap();
+    let arg_token = builder
+        .obj(ObjectArg::ImmOrOwnedObject(coin_obj_ref))
+        .unwrap();
+    let arg_bridge = builder.obj(bridge_object_arg).unwrap();
+
+    builder.programmable_move_call(
+        BRIDGE_PACKAGE_ID,
+        BRIDGE_MODULE_NAME.to_owned(),
+        ident_str!("send_token").to_owned(),
+        vec![coin_type],
+        vec![arg_bridge, arg_target_chain, arg_target_address, arg_token],
+    );
+    let pt = builder.finish();
+    let tx_data =
+        TransactionData::new_programmable(sender, vec![gas_obj_ref], pt, 500_000_000, rgp);
+    let sig = Signature::new_secure(
+        &IntentMessage::new(Intent::sui_transaction(), tx_data.clone()),
+        &config.sui_key,
+    );
+    let signed_tx = Transaction::from_data(tx_data, vec![sig]);
+    let tx_digest = *signed_tx.digest();
+    info!(?tx_digest, "Sending deposit transction to Sui.");
+    let resp = sui_bridge_client
+        .execute_transaction_block_with_effects(signed_tx)
+        .await
+        .expect("Failed to execute transaction block");
+    if !resp.status_ok().unwrap() {
+        return Err(anyhow!("Transaction {:?} failed: {:?}", tx_digest, resp));
+    }
+    let events = resp.events.unwrap();
+    info!(
+        ?tx_digest,
+        "Deposit transaction succeeded. Events: {:?}", events
+    );
+    Ok(())
+}
+
+async fn claim_on_eth(
+    seq_num: u64,
+    config: &LoadedBridgeCliConfig,
+    sui_bridge_client: SuiBridgeClient,
+) -> BridgeResult<()> {
+    let sui_chain_id = sui_bridge_client.get_bridge_summary().await?.chain_id;
+    let parsed_message = sui_bridge_client
+        .get_parsed_token_transfer_message(sui_chain_id, seq_num)
+        .await?;
+    if parsed_message.is_none() {
+        println!("No record found for seq_num: {seq_num}, chain id: {sui_chain_id}");
+        return Ok(());
+    }
+    let parsed_message = parsed_message.unwrap();
+    let sigs = sui_bridge_client
+        .get_token_transfer_action_onchain_signatures_until_success(sui_chain_id, seq_num)
+        .await;
+    if sigs.is_none() {
+        println!("No signatures found for seq_num: {seq_num}, chain id: {sui_chain_id}");
+        return Ok(());
+    }
+    let signatures = sigs
+        .unwrap()
+        .into_iter()
+        .map(|sig: Vec<u8>| ethers::types::Bytes::from(sig))
+        .collect::<Vec<_>>();
+
+    let eth_sui_bridge = EthSuiBridge::new(
+        config.eth_bridge_proxy_address,
+        Arc::new(config.eth_signer().clone()),
+    );
+    let message = eth_sui_bridge::Message::from(parsed_message);
+    let tx = eth_sui_bridge.transfer_bridged_tokens_with_signatures(signatures, message);
+    let _eth_claim_tx_receipt = tx.send().await.unwrap().await.unwrap().unwrap();
+    info!("Sui to Eth bridge transfer claimed");
+    Ok(())
 }
 
 #[cfg(test)]
