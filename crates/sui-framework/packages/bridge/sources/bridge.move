@@ -17,7 +17,8 @@ module bridge::bridge {
     use bridge::limiter::{Self, TransferLimiter};
     use bridge::message::{
         Self, BridgeMessage, BridgeMessageKey, EmergencyOp, UpdateAssetPrice,
-        UpdateBridgeLimit, AddTokenOnSui
+        UpdateBridgeLimit, AddTokenOnSui, ParsedTokenTransferMessage,
+        to_parsed_token_transfer_message,
     };
     use bridge::message_types;
     use bridge::treasury::{Self, BridgeTreasury};
@@ -29,6 +30,8 @@ module bridge::bridge {
     const TRANSFER_STATUS_APPROVED: u8 = 1;
     const TRANSFER_STATUS_CLAIMED: u8 = 2;
     const TRANSFER_STATUS_NOT_FOUND: u8 = 3;
+
+    const EVM_ADDRESS_LENGTH: u64 = 20;
 
     //////////////////////////////////////////////////////
     // Types
@@ -93,6 +96,7 @@ module bridge::bridge {
     const ETokenAlreadyClaimed: u64 = 15;
     const EInvalidBridgeRoute: u64 = 16;
     const EMustBeTokenMessage: u64 = 17;
+    const EInvalidEvmAddress: u64 = 18;
 
     const CURRENT_VERSION: u64 = 1;
 
@@ -199,6 +203,8 @@ module bridge::bridge {
         let inner = load_inner_mut(bridge);
         assert!(!inner.paused, EBridgeUnavailable);
         assert!(chain_ids::is_valid_route(inner.chain_id, target_chain), EInvalidBridgeRoute);
+        assert!(target_address.length() == EVM_ADDRESS_LENGTH, EInvalidEvmAddress);
+
         let amount = token.balance().value();
 
         let bridge_seq_num = inner.get_current_seq_num_and_increment(message_types::token());
@@ -380,7 +386,12 @@ module bridge::bridge {
         };
     }
 
-    public fun get_token_transfer_action_status(
+    //////////////////////////////////////////////////////
+    // DevInspect Functions for Read
+    //
+
+    #[allow(unused_function)]
+    fun get_token_transfer_action_status(
         bridge: &Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
@@ -406,6 +417,27 @@ module bridge::bridge {
         };
 
         TRANSFER_STATUS_PENDING
+    }
+
+    #[allow(unused_function)]
+    fun get_token_transfer_action_signatures(
+        bridge: &Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): Option<vector<vector<u8>>> {
+        let inner = load_inner(bridge);
+        let key = message::create_key(
+            source_chain,
+            message_types::token(),
+            bridge_seq_num
+        );
+
+        if (!inner.token_transfer_records.contains(key)) {
+            return option::none()
+        };
+
+        let record = &inner.token_transfer_records[key];
+        record.verified_signatures
     }
 
     //////////////////////////////////////////////////////
@@ -579,11 +611,11 @@ module bridge::bridge {
     }
 
     #[allow(unused_function)]
-    fun get_token_transfer_action_signatures(
+    fun get_parsed_token_transfer_message(
         bridge: &Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
-    ): Option<vector<vector<u8>>> {
+    ): Option<ParsedTokenTransferMessage> {
         let inner = load_inner(bridge);
         let key = message::create_key(
             source_chain,
@@ -596,7 +628,8 @@ module bridge::bridge {
         };
 
         let record = &inner.token_transfer_records[key];
-        record.verified_signatures
+        let message = &record.message;
+        option::some(to_parsed_token_transfer_message(message))
     }
 
     //////////////////////////////////////////////////////
@@ -674,12 +707,30 @@ module bridge::bridge {
     }
 
     #[test_only]
+    public fun test_get_token_transfer_action_status(
+        bridge: &mut Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): u8 {
+        bridge.get_token_transfer_action_status(source_chain, bridge_seq_num)
+    }
+        
+    #[test_only]
     public fun test_get_token_transfer_action_signatures(
         bridge: &mut Bridge,
         source_chain: u8,
         bridge_seq_num: u64,
     ): Option<vector<vector<u8>>> {
         bridge.get_token_transfer_action_signatures(source_chain, bridge_seq_num)
+    }
+
+    #[test_only]
+    public fun test_get_parsed_token_transfer_message(
+        bridge: &Bridge,
+        source_chain: u8,
+        bridge_seq_num: u64,
+    ): Option<ParsedTokenTransferMessage> {
+        bridge.get_parsed_token_transfer_message(source_chain, bridge_seq_num)
     }
 
     #[test_only]
