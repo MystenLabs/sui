@@ -696,7 +696,7 @@ impl ConsensusAdapter {
                     tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
                     let total_wait = i * WARN_DELAY_S;
                     warn!(
-                        "Still waiting {} seconds for transaction {:?} to commit in narwhal",
+                        "Still waiting {} seconds for transaction {:?} to commit in consensus",
                         total_wait, transaction_key
                     );
                 }

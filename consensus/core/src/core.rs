@@ -481,61 +481,71 @@ impl Core {
                 // before a change is triggered. Calling into leader schedule will get you
                 // how many commits till next leader change. We will loop back and recalculate
                 // any discarded leaders with the new schedule.
-                let sequenced_leaders = self
-                    .committer
-                    .try_commit(self.last_decided_leader)
-                    .into_iter()
-                    .take(
-                        self.leader_schedule
-                            .commits_until_leader_schedule_update(self.dag_state.clone()),
-                    )
-                    .collect::<Vec<_>>();
-
-                let Some(last) = sequenced_leaders.last() else {
-                    break;
-                };
-
-                self.last_decided_leader = last.get_decided_slot();
-                self.context
-                    .metrics
-                    .node_metrics
-                    .last_decided_leader_round
-                    .set(self.last_decided_leader.round as i64);
-
-                let committed_leaders = sequenced_leaders
-                    .into_iter()
-                    .filter_map(|leader| leader.into_committed_block())
-                    .collect::<Vec<_>>();
-
-                debug!(
-                    "Committing leaders: {}",
-                    committed_leaders
-                        .iter()
-                        .map(|b| b.reference().to_string())
-                        .join(",")
-                );
-
-                // TODO: refcount subdags
-                let subdags = self.commit_observer.handle_commit(committed_leaders)?;
-                self.dag_state
-                    .write()
-                    .add_unscored_committed_subdags(subdags.clone());
-                committed_subdags.extend(subdags);
-
-                if self
+                let mut commits_until_update = self
                     .leader_schedule
-                    .commits_until_leader_schedule_update(self.dag_state.clone())
-                    == 0
-                {
+                    .commits_until_leader_schedule_update(self.dag_state.clone());
+                if commits_until_update == 0 {
                     let last_commit_index = self.dag_state.read().last_commit_index();
                     tracing::info!(
                         "Leader schedule change triggered at commit index {last_commit_index}"
                     );
                     self.leader_schedule
                         .update_leader_schedule(self.dag_state.clone(), &self.committer);
+                    commits_until_update = self
+                        .leader_schedule
+                        .commits_until_leader_schedule_update(self.dag_state.clone());
+                }
+                assert!(commits_until_update > 0);
+
+                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length
+                // is reduced.
+                let decided_leaders = self.committer.try_commit(self.last_decided_leader);
+
+                let Some(last_decided) = decided_leaders.last().cloned() else {
+                    break;
+                };
+                tracing::info!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
+
+                let mut sequenced_leaders = decided_leaders
+                    .into_iter()
+                    .filter_map(|leader| leader.into_committed_block())
+                    .collect::<Vec<_>>();
+
+                // If the sequenced leaders are truncated to fit the leader schedule, use the last sequenced leader
+                // as the last decided leader. Otherwise, use the last decided leader from try_commit().
+                let sequenced_leaders = if sequenced_leaders.len() >= commits_until_update {
+                    let _ = sequenced_leaders.split_off(commits_until_update);
+                    self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
+                    sequenced_leaders
                 } else {
+                    self.last_decided_leader = last_decided.get_decided_slot();
+                    sequenced_leaders
+                };
+
+                self.context
+                    .metrics
+                    .node_metrics
+                    .last_decided_leader_round
+                    .set(self.last_decided_leader.round as i64);
+
+                if sequenced_leaders.is_empty() {
                     break;
                 }
+                tracing::info!(
+                    "Committing {} leaders: {}",
+                    sequenced_leaders.len(),
+                    sequenced_leaders
+                        .iter()
+                        .map(|b| b.reference().to_string())
+                        .join(",")
+                );
+
+                // TODO: refcount subdags
+                let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
+                self.dag_state
+                    .write()
+                    .add_unscored_committed_subdags(subdags.clone());
+                committed_subdags.extend(subdags);
             }
 
             Ok(committed_subdags)
