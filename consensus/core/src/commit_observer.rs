@@ -74,17 +74,17 @@ impl CommitObserver {
 
         let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         let mut sent_sub_dags = vec![];
-        let reputation_scores = self
+        let reputation_scores_desc = self
             .leader_schedule
             .leader_swap_table
             .read()
-            .reputation_scores
-            .authorities_by_score_desc(self.context.clone());
+            .reputation_scores_desc
+            .clone();
         for mut committed_sub_dag in committed_sub_dags.into_iter() {
             // TODO: Only update scores after a leader schedule change
             // On handle commit the current scores that were used to elect the
             // leader of the subdag will be added to the subdag and sent to sui.
-            committed_sub_dag.update_scores(reputation_scores.clone());
+            committed_sub_dag.update_scores(reputation_scores_desc.clone());
             // Failures in sender.send() are assumed to be permanent
             if let Err(err) = self.sender.send(committed_sub_dag.clone()) {
                 tracing::error!(
@@ -145,8 +145,8 @@ impl CommitObserver {
                     self.leader_schedule
                         .leader_swap_table
                         .read()
-                        .reputation_scores
-                        .authorities_by_score_desc(self.context.clone()),
+                        .reputation_scores_desc
+                        .clone(),
                 );
             }
             self.sender.send(committed_sub_dag).unwrap_or_else(|e| {
@@ -290,7 +290,7 @@ mod tests {
         let mut processed_subdag_index = 0;
         while let Ok(subdag) = receiver.try_recv() {
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores, vec![]);
+            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_index as usize;
             if processed_subdag_index == leaders.len() {
                 break;
@@ -376,7 +376,7 @@ mod tests {
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores, vec![]);
+            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
@@ -412,7 +412,7 @@ mod tests {
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("{subdag} was sent but not processed by consumer");
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores, vec![]);
+            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
@@ -448,7 +448,7 @@ mod tests {
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("Processed {subdag} on resubmission");
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores, vec![]);
+            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_index as usize;
             if processed_subdag_index == expected_last_sent_index {
                 break;
@@ -516,7 +516,7 @@ mod tests {
         while let Ok(subdag) = receiver.try_recv() {
             tracing::info!("Processed {subdag}");
             assert_eq!(subdag, commits[processed_subdag_index]);
-            assert_eq!(subdag.reputation_scores, vec![]);
+            assert_eq!(subdag.reputation_scores_desc, vec![]);
             processed_subdag_index = subdag.commit_index as usize;
             if processed_subdag_index == expected_last_processed_index {
                 break;
