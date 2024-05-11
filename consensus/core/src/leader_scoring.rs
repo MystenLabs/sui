@@ -263,7 +263,7 @@ impl UnscoredSubdag {
                 }
             } else {
                 // TODO: Add unit test for this case once dagbuilder is ready.
-                tracing::debug!(
+                tracing::trace!(
                     "Potential vote's ancestor block not found in unscored committed subdags: {:?}",
                     ancestor
                 );
