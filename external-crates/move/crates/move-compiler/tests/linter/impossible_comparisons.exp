@@ -1,0 +1,32 @@
+warning[Lint W00011]: Detected a double comparison that can never succeed, indicating a possible logical error.
+  ┌─ tests/linter/impossible_comparisons.move:5:13
+  │
+5 │         if (x < 5 && x > 10) {
+  │             ^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+  │
+  = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00011]: Detected a double comparison that can never succeed, indicating a possible logical error.
+  ┌─ tests/linter/impossible_comparisons.move:8:13
+  │
+8 │         if (x < 5 && 10 < x) {
+  │             ^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+  │
+  = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00011]: Detected a double comparison that can never succeed, indicating a possible logical error.
+   ┌─ tests/linter/impossible_comparisons.move:11:13
+   │
+11 │         if (x > 10 && x < 5) {
+   │             ^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+   │
+   = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
+warning[Lint W00011]: Detected a double comparison that can never succeed, indicating a possible logical error.
+   ┌─ tests/linter/impossible_comparisons.move:20:13
+   │
+20 │         if (x <= 2 && x >= 8) {
+   │             ^^^^^^^^^^^^^^^^ Detected a double comparison that can never succeed, indicating a possible logical error.
+   │
+   = This warning can be suppressed with '#[allow(lint(double_comparison))]' applied to the 'module' or module member ('const', 'fun', or 'struct')
+
