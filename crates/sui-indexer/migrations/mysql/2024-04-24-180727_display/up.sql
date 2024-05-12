@@ -4,5 +4,5 @@ CREATE TABLE display
     id              BLOB        NOT NULL,
     version         SMALLINT    NOT NULL,
     bcs             MEDIUMBLOB  NOT NULL,
-    primary key (object_type(255))
+    primary key (object_type(256))
 );

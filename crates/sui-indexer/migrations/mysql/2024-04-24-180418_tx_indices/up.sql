@@ -4,7 +4,7 @@ CREATE TABLE tx_senders (
     tx_sequence_number          BIGINT       NOT NULL,
     -- SuiAddress in bytes.
     sender                      BLOB         NOT NULL,
-    PRIMARY KEY(sender(255), tx_sequence_number, cp_sequence_number)
+    PRIMARY KEY(sender(32), tx_sequence_number, cp_sequence_number)
 );
 CREATE INDEX tx_senders_tx_sequence_number_index ON tx_senders (tx_sequence_number, cp_sequence_number);
 
@@ -14,7 +14,7 @@ CREATE TABLE tx_recipients (
     tx_sequence_number          BIGINT       NOT NULL,
     -- SuiAddress in bytes.
     recipient                   BLOB         NOT NULL,
-    PRIMARY KEY(recipient(255), tx_sequence_number)
+    PRIMARY KEY(recipient(32), tx_sequence_number)
 );
 CREATE INDEX tx_recipients_tx_sequence_number_index ON tx_recipients (tx_sequence_number, cp_sequence_number);
 
@@ -23,7 +23,7 @@ CREATE TABLE tx_input_objects (
     tx_sequence_number          BIGINT       NOT NULL,
     -- Object ID in bytes.
     object_id                   BLOB         NOT NULL,
-    PRIMARY KEY(object_id(255), tx_sequence_number, cp_sequence_number)
+    PRIMARY KEY(object_id(32), tx_sequence_number, cp_sequence_number)
 );
 
 CREATE TABLE tx_changed_objects (
@@ -31,7 +31,7 @@ CREATE TABLE tx_changed_objects (
     tx_sequence_number          BIGINT       NOT NULL,
     -- Object Id in bytes.
     object_id                   BLOB         NOT NULL,
-    PRIMARY KEY(object_id(255), tx_sequence_number)
+    PRIMARY KEY(object_id(32), tx_sequence_number)
 );
 
 CREATE TABLE tx_calls (
@@ -42,16 +42,16 @@ CREATE TABLE tx_calls (
     func                        TEXT         NOT NULL,
     -- 1. Using Primary Key as a unique index.
     -- 2. Diesel does not like tables with no primary key.
-    PRIMARY KEY(package(255), tx_sequence_number, cp_sequence_number)
+    PRIMARY KEY(package(32), tx_sequence_number, cp_sequence_number)
 );
 
-CREATE INDEX tx_calls_module ON tx_calls (package(255), module(255), tx_sequence_number, cp_sequence_number);
-CREATE INDEX tx_calls_func ON tx_calls (package(255), module(255), func(255), tx_sequence_number, cp_sequence_number);
+CREATE INDEX tx_calls_module ON tx_calls (package(32), module(128), tx_sequence_number, cp_sequence_number);
+CREATE INDEX tx_calls_func ON tx_calls (package(32), module(128), func(128), tx_sequence_number, cp_sequence_number);
 CREATE INDEX tx_calls_tx_sequence_number ON tx_calls (tx_sequence_number, cp_sequence_number);
 
 CREATE TABLE tx_digests (
     tx_digest                   BLOB         NOT NULL,
     cp_sequence_number          BIGINT       NOT NULL,
     tx_sequence_number          BIGINT       NOT NULL,
-    PRIMARY KEY(tx_digest(255))
+    PRIMARY KEY(tx_digest(32))
 );
