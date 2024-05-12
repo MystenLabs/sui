@@ -40,7 +40,7 @@ module basics::object {
         }
     }
 
-    /// Example of transferring an object to a a new owner. A struct can only
+    /// Example of transferring an object to a new owner. A struct can only
     /// be transferred by the module that declares it.
     public fun transfer(o: Object, recipient: address) {
         assert!(some_conditional_logic(), 0);
