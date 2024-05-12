@@ -640,7 +640,7 @@ mod tests {
                         );
                     }
                 }
-                assert_eq!(committed_subdag.reputation_scores, vec![]);
+                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }

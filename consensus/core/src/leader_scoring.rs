@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::{
-    cmp::Ordering,
     collections::{BTreeMap, HashMap},
     fmt::Debug,
     ops::Bound::{Excluded, Included},
@@ -103,13 +102,9 @@ impl ReputationScores {
         }
     }
 
-    // Returns the authorities in score descending order.
-    pub(crate) fn authorities_by_score_desc(
-        &self,
-        context: Arc<Context>,
-    ) -> Vec<(AuthorityIndex, u64)> {
-        let mut authorities: Vec<_> = self
-            .scores_per_authority
+    // Returns the authorities index with score tuples.
+    pub(crate) fn authorities_by_score(&self, context: Arc<Context>) -> Vec<(AuthorityIndex, u64)> {
+        self.scores_per_authority
             .iter()
             .enumerate()
             .map(|(index, score)| {
@@ -121,20 +116,7 @@ impl ReputationScores {
                     *score,
                 )
             })
-            .collect();
-
-        authorities.sort_by(|a1, a2| {
-            match a2.1.cmp(&a1.1) {
-                Ordering::Equal => {
-                    // we resolve the score equality deterministically by ordering in authority
-                    // identifier order descending.
-                    a2.0.cmp(&a1.0)
-                }
-                result => result,
-            }
-        });
-
-        authorities
+            .collect()
     }
 
     pub(crate) fn update_metrics(&self, context: Arc<Context>) {
@@ -334,17 +316,17 @@ mod tests {
     use crate::{leader_scoring_strategy::VoteScoringStrategy, test_dag_builder::DagBuilder};
 
     #[tokio::test]
-    async fn test_reputation_scores_authorities_by_score_desc() {
+    async fn test_reputation_scores_authorities_by_score() {
         let context = Arc::new(Context::new_for_test(4).0);
         let scores = ReputationScores::new((1..300).into(), vec![4, 1, 1, 3]);
-        let authorities = scores.authorities_by_score_desc(context);
+        let authorities = scores.authorities_by_score(context);
         assert_eq!(
             authorities,
             vec![
                 (AuthorityIndex::new_for_test(0), 4),
-                (AuthorityIndex::new_for_test(3), 3),
+                (AuthorityIndex::new_for_test(1), 1),
                 (AuthorityIndex::new_for_test(2), 1),
-                (AuthorityIndex::new_for_test(1), 1)
+                (AuthorityIndex::new_for_test(3), 3),
             ]
         );
     }

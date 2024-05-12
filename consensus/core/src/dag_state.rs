@@ -789,17 +789,10 @@ impl DagState {
         panic!("Fatal error, no quorum has been detected in our DAG on the last two rounds.");
     }
 
-    pub(crate) fn last_reputation_scores_from_store(&self) -> Option<ReputationScores> {
-        let commit_info = self
-            .store
+    pub(crate) fn recover_last_commit_info(&self) -> Option<(CommitRef, CommitInfo)> {
+        self.store
             .read_last_commit_info()
-            .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
-        if let Some((commit_ref, commit_info)) = commit_info {
-            assert!(commit_ref.index <= self.last_commit.as_ref().unwrap().index());
-            Some(commit_info.reputation_scores)
-        } else {
-            None
-        }
+            .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
     }
 
     pub(crate) fn unscored_committed_subdags_count(&self) -> u64 {
