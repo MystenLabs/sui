@@ -30,6 +30,8 @@ pub(crate) const GENESIS_COMMIT_INDEX: CommitIndex = 0;
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
 /// the common case.
+// TODO: merge DEFAULT_WAVE_LENGTH and MINIMUM_WAVE_LENGTH into a single constant,
+// because we are unlikely to change them via config in the forseeable future.
 pub(crate) const DEFAULT_WAVE_LENGTH: Round = MINIMUM_WAVE_LENGTH;
 
 /// We need at least one leader round, one voting round, and one decision round.
@@ -350,11 +352,15 @@ impl Display for CommittedSubDag {
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} (", self.leader, self.commit_index)?;
+        write!(f, "{}@{} ([", self.leader, self.commit_index)?;
         for block in &self.blocks {
             write!(f, "{}, ", block.reference())?;
         }
-        write!(f, ")")
+        write!(
+            f,
+            "];{}ms;rs{:?})",
+            self.timestamp_ms, self.reputation_scores
+        )
     }
 }
 

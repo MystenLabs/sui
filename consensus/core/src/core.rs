@@ -490,7 +490,7 @@ impl Core {
                         "Leader schedule change triggered at commit index {last_commit_index}"
                     );
                     self.leader_schedule
-                        .update_leader_schedule(self.dag_state.clone(), &self.committer);
+                        .update_leader_schedule(self.dag_state.clone());
                     commits_until_update = self
                         .leader_schedule
                         .commits_until_leader_schedule_update(self.dag_state.clone());
