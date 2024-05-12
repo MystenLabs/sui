@@ -19,7 +19,6 @@ use crate::{
         CertificateScoringStrategy, CertifiedVoteScoringStrategyV1, CertifiedVoteScoringStrategyV2,
         ScoringStrategy, VoteScoringStrategy,
     },
-    universal_committer::UniversalCommitter,
     Round,
 };
 
@@ -117,11 +116,7 @@ impl LeaderSchedule {
             .unwrap() as usize
     }
 
-    pub(crate) fn update_leader_schedule(
-        &self,
-        dag_state: Arc<RwLock<DagState>>,
-        committer: &UniversalCommitter,
-    ) {
+    pub(crate) fn update_leader_schedule(&self, dag_state: Arc<RwLock<DagState>>) {
         let _s = self
             .context
             .metrics
@@ -142,7 +137,6 @@ impl LeaderSchedule {
             .start_timer();
         let reputation_scores = ReputationScoreCalculator::new(
             self.context.clone(),
-            committer,
             &unscored_subdags,
             self.scoring_strategy.as_ref(),
         )
@@ -433,7 +427,6 @@ mod tests {
         block::{BlockDigest, BlockRef, BlockTimestampMs, TestBlock, VerifiedBlock},
         commit::{CommitDigest, CommitInfo, CommitRef, CommittedSubDag, TrustedCommit},
         storage::{mem_store::MemStore, Store, WriteBatch},
-        universal_committer::universal_committer_builder::UniversalCommitterBuilder,
     };
 
     #[tokio::test]
@@ -845,20 +838,12 @@ mod tests {
         dag_state_write.add_unscored_committed_subdags(unscored_subdags);
         drop(dag_state_write);
 
-        let committer = UniversalCommitterBuilder::new(
-            context.clone(),
-            leader_schedule.clone(),
-            dag_state.clone(),
-        )
-        .with_pipeline(true)
-        .build();
-
         assert_eq!(
             leader_schedule.elect_leader(4, 0),
             AuthorityIndex::new_for_test(0)
         );
 
-        leader_schedule.update_leader_schedule(dag_state.clone(), &committer);
+        leader_schedule.update_leader_schedule(dag_state.clone());
 
         let leader_swap_table = leader_schedule.leader_swap_table.read();
         assert_eq!(leader_swap_table.good_nodes.len(), 1);

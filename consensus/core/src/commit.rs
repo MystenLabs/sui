@@ -350,11 +350,15 @@ impl Display for CommittedSubDag {
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} (", self.leader, self.commit_index)?;
+        write!(f, "{}@{} ([", self.leader, self.commit_index)?;
         for block in &self.blocks {
             write!(f, "{}, ", block.reference())?;
         }
-        write!(f, ")")
+        write!(
+            f,
+            "];{}ms;rs{:?})",
+            self.timestamp_ms, self.reputation_scores
+        )
     }
 }
 
