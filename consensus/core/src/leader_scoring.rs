@@ -66,7 +66,7 @@ impl<'a> ReputationScoreCalculator<'a> {
 
     pub(crate) fn calculate(&mut self) -> ReputationScores {
         let leaders = self.unscored_subdag.committed_leaders.clone();
-        for leader in leaders.into_iter() {
+        for leader in leaders {
             let leader_slot = Slot::from(leader);
             tracing::trace!("Calculating score for leader {leader_slot}");
             self.add_scores(

@@ -264,8 +264,12 @@ impl LeaderSwapTable {
     pub(crate) fn new(
         context: Arc<Context>,
         reputation_scores: ReputationScores,
-        swap_stake_threshold: u64,
+        // Needed to prevent linter warning in simtests
+        #[allow(unused_variables)] swap_stake_threshold: u64,
     ) -> Self {
+        #[cfg(msim)]
+        let swap_stake_threshold = 33;
+
         assert!(
             (0..=33).contains(&swap_stake_threshold),
             "The swap_stake_threshold ({swap_stake_threshold}) should be in range [0 - 33], out of bounds parameter detected"
