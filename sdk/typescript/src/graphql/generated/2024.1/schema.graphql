@@ -3591,7 +3591,7 @@ type SystemParameters {
 	"""
 	validatorLowStakeThreshold: BigInt
 	"""
-	Validators with stake below this threshold will be removed from the the active validator set
+	Validators with stake below this threshold will be removed from the active validator set
 	at the next epoch boundary, without a grace period.
 	"""
 	validatorVeryLowStakeThreshold: BigInt

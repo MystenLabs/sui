@@ -11,7 +11,7 @@ expression: "results.join(\"\\n\")"
 │ assign       │ a 1u64 │
 │ assign       │ a 2u64 │
 │ assign       │ b 4u64 │
-│ assign       │ a a    │
+│ assign       │ a    │
 │ assign       │ a 4u64 │
 │ warn-shadows │ true   │
 ╰──────────────┴────────╯
