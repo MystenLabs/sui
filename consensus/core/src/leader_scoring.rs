@@ -164,13 +164,13 @@ impl ReputationScores {
 /// scores.
 pub(crate) struct UnscoredSubdag {
     pub(crate) context: Arc<Context>,
-    // When the blocks are collected form the list of provided subdags we ensure
-    // that the CommittedSubDag instances are contiguous in commit index order.
-    // Therefore we can guarnatee the blocks of UnscoredSubdag are also sorted
-    // via the commit index.
-    pub(crate) blocks: BTreeMap<BlockRef, VerifiedBlock>,
     pub(crate) commit_range: CommitRange,
     pub(crate) committed_leaders: Vec<BlockRef>,
+    // When the blocks are collected form the list of provided subdags we ensure
+    // that the CommittedSubDag instances are contiguous in commit index order.
+    // Therefore we can guarantee the blocks of UnscoredSubdag are also sorted
+    // via the commit index.
+    pub(crate) blocks: BTreeMap<BlockRef, VerifiedBlock>,
 }
 
 impl UnscoredSubdag {
@@ -209,9 +209,9 @@ impl UnscoredSubdag {
 
         Self {
             context,
-            blocks,
             commit_range,
             committed_leaders,
+            blocks,
         }
     }
 

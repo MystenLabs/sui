@@ -123,6 +123,7 @@ impl DagBuilder {
             .collect::<Vec<VerifiedBlock>>()
     }
 
+    // TODO: reuse logic from Linearizer.
     pub(crate) fn get_subdag(
         &self,
         leader_block: VerifiedBlock,

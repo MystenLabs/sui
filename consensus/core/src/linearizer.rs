@@ -98,7 +98,7 @@ impl Linearizer {
                 leader_block,
                 last_commit_index,
                 last_commit_timestamp_ms,
-                last_committed_rounds.clone(),
+                last_committed_rounds,
             );
 
             // [Optional] sort the sub-dag using a deterministic algorithm.
