@@ -153,7 +153,10 @@ diesel::table! {
 diesel::table! {
     packages (package_id) {
         package_id -> Blob,
+        original_id -> Blob,
+        package_version -> Bigint,
         move_package -> Mediumblob,
+        checkpoint_sequence_number -> Bigint,
     }
 }
 
