@@ -1,2 +1,1 @@
--- This file should undo anything in `up.sql`
--- TODO: objects_version
+DROP TABLE IF EXISTS objects_version;
