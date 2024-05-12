@@ -473,7 +473,7 @@ module sui::test_scenario_tests {
     }
 
     // Try to receive an object that has been shared. We should be unable to
-    // allocate the receiving ticket for this object. 
+    // allocate the receiving ticket for this object.
     #[test]
     #[expected_failure(abort_code = test_scenario::EObjectNotFound)]
     fun test_receive_object_shared() {
@@ -626,7 +626,7 @@ module sui::test_scenario_tests {
         scenario.end();
     }
 
-    // Test that we can allocate a receiving ticket, and then drop it. 
+    // Test that we can allocate a receiving ticket, and then drop it.
     #[test]
     fun test_unused_receive_ticket() {
         let sender = @0x0;
@@ -1018,4 +1018,34 @@ module sui::test_scenario_tests {
         scenario.next_tx(sender);
         abort 42
     }
+
+/* uncomment me after next release
+    public struct E1(u64) has copy, drop;
+
+    #[test]
+    fun test_events() {
+        // calling test_scenario::end should dump events emitted during previous txes
+        let sender = @0x0;
+        let mut scenario = test_scenario::begin(sender);
+        let e0 = E1(0);
+        event::emit(e0);
+        event::emit(e0);
+        assert_eq(event::num_events(), 2);
+
+        // test scenario users should make assertions about events here, before calling
+        // next_tx
+        let effects = scenario.next_tx(sender);
+        assert_eq(effects.num_user_events(), 2);
+        assert_eq(event::num_events(), 0);
+
+        let e1 = E1(1);
+        event::emit(e1);
+        assert_eq(event::num_events(), 1);
+        assert_eq(event::events_by_type<E1>()[0], e1);
+        let effects = scenario.end();
+        // end should also dump events
+        assert_eq(effects.num_user_events(), 1);
+        assert_eq(event::num_events(), 0);
+    }
+*/
 }
