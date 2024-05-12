@@ -27,8 +27,8 @@ CREATE TABLE events
 ) PARTITION BY RANGE (checkpoint_sequence_number) (
     PARTITION events_partition_0 VALUES LESS THAN MAXVALUE
 );
-CREATE INDEX events_package ON events (package(255), tx_sequence_number, event_sequence_number);
-CREATE INDEX events_package_module ON events (package(255), module(255), tx_sequence_number, event_sequence_number);
-CREATE INDEX events_event_type ON events (event_type(255), tx_sequence_number, event_sequence_number);
-CREATE INDEX events_type_package_module_name ON events (event_type_package(128), event_type_module(128), event_type_name(128), tx_sequence_number, event_sequence_number);
+CREATE INDEX events_package ON events (package(32), tx_sequence_number, event_sequence_number);
+CREATE INDEX events_package_module ON events (package(32), module(128), tx_sequence_number, event_sequence_number);
+CREATE INDEX events_event_type ON events (event_type(256), tx_sequence_number, event_sequence_number);
+CREATE INDEX events_type_package_module_name ON events (event_type_package(32), event_type_module(128), event_type_name(128), tx_sequence_number, event_sequence_number);
 CREATE INDEX events_checkpoint_sequence_number ON events (checkpoint_sequence_number);
