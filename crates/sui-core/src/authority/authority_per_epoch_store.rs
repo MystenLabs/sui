@@ -2904,7 +2904,6 @@ impl AuthorityPerEpochStore {
                         .executable_transaction_digest()
                         .map(TransactionKey::Digest)
                 {
-                    // Filter out roots of any deferred tx.
                     roots.remove(&txn_key);
                     randomness_roots.remove(&txn_key);
                 }
