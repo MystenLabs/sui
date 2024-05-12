@@ -177,7 +177,6 @@ impl ScoringStrategy for VoteScoringStrategy {
     fn calculate_scores_for_leader(&self, subdag: &UnscoredSubdag, leader_slot: Slot) -> Vec<u64> {
         let num_authorities = subdag.context.committee.size();
         let mut scores_per_authority = vec![0_u64; num_authorities];
-        let voting_round = leader_slot.round + 1;
 
         let leader_blocks = subdag.get_blocks_at_slot(leader_slot);
 
@@ -192,8 +191,11 @@ impl ScoringStrategy for VoteScoringStrategy {
 
         let leader_block = leader_blocks.first().unwrap();
 
+        let voting_round = leader_slot.round + 1;
         let voting_blocks = subdag.get_blocks_at_round(voting_round);
         for potential_vote in voting_blocks {
+            // TODO: use the decided leader as input instead of leader slot. If the leader was skipped,
+            // votes to skip should be included in the score as well.
             if subdag.is_vote(&potential_vote, leader_block) {
                 let authority = potential_vote.author();
                 tracing::trace!(

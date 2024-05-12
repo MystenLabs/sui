@@ -449,9 +449,9 @@ impl Core {
             .protocol_config
             .mysticeti_leader_scoring_and_schedule()
         {
-            let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
-            if let Some(last) = sequenced_leaders.last() {
-                self.last_decided_leader = last.get_decided_slot();
+            let decided_leaders = self.committer.try_decide(self.last_decided_leader);
+            if let Some(last) = decided_leaders.last() {
+                self.last_decided_leader = last.slot();
                 self.context
                     .metrics
                     .node_metrics
@@ -459,7 +459,7 @@ impl Core {
                     .set(self.last_decided_leader.round as i64);
             }
 
-            let committed_leaders = sequenced_leaders
+            let committed_leaders = decided_leaders
                 .into_iter()
                 .filter_map(|leader| leader.into_committed_block())
                 .collect::<Vec<_>>();
@@ -499,7 +499,7 @@ impl Core {
 
                 // TODO: limit commits by commits_until_update, which may be needed when leader schedule length
                 // is reduced.
-                let decided_leaders = self.committer.try_commit(self.last_decided_leader);
+                let decided_leaders = self.committer.try_decide(self.last_decided_leader);
 
                 let Some(last_decided) = decided_leaders.last().cloned() else {
                     break;
@@ -518,7 +518,7 @@ impl Core {
                     self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
                     sequenced_leaders
                 } else {
-                    self.last_decided_leader = last_decided.get_decided_slot();
+                    self.last_decided_leader = last_decided.slot();
                     sequenced_leaders
                 };
 
@@ -1344,7 +1344,7 @@ mod test {
                 1
             );
             let expected_reputation_scores =
-                ReputationScores::new((11..21).into(), vec![8, 8, 9, 8]);
+                ReputationScores::new((11..21).into(), vec![9, 8, 8, 8]);
             assert_eq!(
                 core.leader_schedule
                     .leader_swap_table
