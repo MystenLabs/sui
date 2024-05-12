@@ -105,9 +105,9 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
 
 impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     fn reputation_score_sorted_desc(&self) -> Option<Vec<(AuthorityIndex, u64)>> {
-        if !self.reputation_scores.is_empty() {
+        if !self.reputation_scores_desc.is_empty() {
             Some(
-                self.reputation_scores
+                self.reputation_scores_desc
                     .iter()
                     .map(|(id, score)| (id.value() as AuthorityIndex, *score))
                     .collect(),
