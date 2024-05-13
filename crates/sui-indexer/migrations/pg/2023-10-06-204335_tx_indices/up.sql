@@ -19,7 +19,7 @@ CREATE INDEX tx_recipients_tx_sequence_number_index ON tx_recipients (tx_sequenc
 CREATE TABLE tx_input_objects (
     cp_sequence_number          BIGINT       NOT NULL,
     tx_sequence_number          BIGINT       NOT NULL,
-    -- Object ID in bytes. 
+    -- Object ID in bytes.
     object_id                   BYTEA        NOT NULL,
     PRIMARY KEY(object_id, tx_sequence_number, cp_sequence_number)
 );
@@ -40,10 +40,10 @@ CREATE TABLE tx_calls (
     func                        TEXT         NOT NULL,
     -- 1. Using Primary Key as a unique index.
     -- 2. Diesel does not like tables with no primary key.
-    PRIMARY KEY(package, tx_sequence_number, cp_sequence_number)
+    PRIMARY KEY(package, module, func, tx_sequence_number, cp_sequence_number)
 );
+CREATE INDEX tx_calls_package ON tx_calls (package, tx_sequence_number, cp_sequence_number);
 CREATE INDEX tx_calls_module ON tx_calls (package, module, tx_sequence_number, cp_sequence_number);
-CREATE INDEX tx_calls_func ON tx_calls (package, module, func, tx_sequence_number, cp_sequence_number);
 CREATE INDEX tx_calls_tx_sequence_number ON tx_calls (tx_sequence_number, cp_sequence_number);
 
 -- un-partitioned table for tx_digest -> (cp_sequence_number, tx_sequence_number) lookup.
