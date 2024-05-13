@@ -318,6 +318,7 @@ mod test {
                 "consensus-store-before-write",
                 "consensus-store-after-write",
                 "consensus-after-propose",
+                "consensus-after-leader-schedule-change",
             ],
             move || {
                 handle_failpoint(
