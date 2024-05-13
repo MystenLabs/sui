@@ -47,6 +47,9 @@ impl New {
     ) -> anyhow::Result<()> {
         // TODO warn on build config flags
         let Self { name } = self;
+        if name.contains('-') {
+            Err("package name should not contain '-'")
+        }
         let p: PathBuf;
         let path: &Path = match path {
             Some(path) => {
