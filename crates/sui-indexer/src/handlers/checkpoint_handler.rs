@@ -641,7 +641,6 @@ where
                                 package_id: o.id(),
                                 move_package: p.clone(),
                                 checkpoint_sequence_number,
-                                previous_transaction: o.previous_transaction,
                             })
                         } else {
                             None
@@ -665,7 +664,6 @@ where
                                 package_id: o.id(),
                                 move_package: p.clone(),
                                 checkpoint_sequence_number,
-                                previous_transaction: o.previous_transaction,
                             };
                             Some((indexed_pkg, (**o).clone()))
                         } else {
