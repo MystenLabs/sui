@@ -4470,8 +4470,8 @@ fn expand_macro(
                 (use_funs, seq),
                 /* inlined macro */
                 Some((
-                    mod_ident.clone(),
-                    f.clone(),
+                    mod_ident,
+                    f,
                     m,
                     type_args
                         .into_iter()
