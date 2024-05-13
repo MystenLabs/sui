@@ -377,6 +377,12 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                                 .eq(excluded(objects_snapshot::checkpoint_sequence_number)),
                             objects_snapshot::owner_type.eq(excluded(objects_snapshot::owner_type)),
                             objects_snapshot::owner_id.eq(excluded(objects_snapshot::owner_id)),
+                            objects_snapshot::object_type_package
+                                .eq(excluded(objects_snapshot::object_type_package)),
+                            objects_snapshot::object_type_module
+                                .eq(excluded(objects_snapshot::object_type_module)),
+                            objects_snapshot::object_type_name
+                                .eq(excluded(objects_snapshot::object_type_name)),
                             objects_snapshot::object_type
                                 .eq(excluded(objects_snapshot::object_type)),
                             objects_snapshot::serialized_object
@@ -399,6 +405,9 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                                 .eq(excluded.checkpoint_sequence_number),
                             objects_snapshot::owner_type.eq(excluded.owner_type),
                             objects_snapshot::owner_id.eq(excluded.owner_id),
+                            objects_snapshot::object_type_package.eq(excluded.object_type_package),
+                            objects_snapshot::object_type_module.eq(excluded.object_type_module),
+                            objects_snapshot::object_type_name.eq(excluded.object_type_name),
                             objects_snapshot::object_type.eq(excluded.object_type),
                             objects_snapshot::serialized_object.eq(excluded.serialized_object),
                             objects_snapshot::coin_type.eq(excluded.coin_type),
