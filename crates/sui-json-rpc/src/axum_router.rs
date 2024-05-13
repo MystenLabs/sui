@@ -324,7 +324,6 @@ pub fn monitored_reroute(
 
             let params_str = match parsed_value {
                 Value::Array(mut params_vec) => {
-                    params_vec.push(Value::String(client_addr.to_string()));
                     serde_json::to_string(&params_vec).map_err(|err| {
                         SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
                     })?
