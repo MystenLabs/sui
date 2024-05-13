@@ -7753,4 +7753,19 @@ fn macros_test() {
         "macro fun Macros::macros::for_each<$T>($v: &vector<$T>, $body: |&$T| -> ())",
         None,
     );
+
+    // type parameter in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        51,
+        34,
+        "macros.move",
+        2,
+        18,
+        "macros.move",
+        "public struct Macros::macros::SomeStruct has drop {\n\tsome_field: u64\n}",
+        Some((2, 18, "macros.move")),
+    );
 }

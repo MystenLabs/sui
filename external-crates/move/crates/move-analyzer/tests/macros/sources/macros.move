@@ -43,5 +43,12 @@ module Macros::macros {
         let mut sum = 0;
         Macros::macros::for_each!<u64>(&es, |x| sum = sum + *x);
         es.feach!<u64>(|x| sum = sum + *x);
+
+        let es = vector[
+            SomeStruct { some_field: 42},
+            SomeStruct { some_field: 7},
+        ];
+        let mut sum = 0;
+        Macros::macros::for_each!<SomeStruct>(&es, |x| sum = sum + x.some_field);
     }
 }
