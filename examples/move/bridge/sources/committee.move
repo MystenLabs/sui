@@ -88,7 +88,7 @@ module bridge::committee {
         BridgeCommittee { members, thresholds }
     }
 
-    public fun verify_signatures(
+    public(package) fun verify_signatures(
         self: &BridgeCommittee,
         message: BridgeMessage,
         signatures: vector<vector<u8>>,
