@@ -3713,6 +3713,8 @@ type TransactionBlockEffects {
 	lamportVersion: Int!
 	"""
 	The reason for a transaction failure, if it did fail.
+	If the error is a Move abort, the error message will be resolved to a human-readable form if
+	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
 	"""
