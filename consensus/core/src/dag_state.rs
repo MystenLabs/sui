@@ -108,33 +108,34 @@ impl DagState {
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
         let (mut last_committed_rounds, commit_recovery_start_index) =
             if let Some((commit_ref, commit_info)) = commit_info {
+                tracing::info!(
+                    "Recovering from stored CommitRef {commit_ref} & CommitInfo {commit_info:?}"
+                );
                 (commit_info.committed_rounds, commit_ref.index + 1)
             } else {
+                tracing::info!("Found no stored CommitInfo to recover from.");
                 (vec![0; num_authorities], GENESIS_COMMIT_INDEX + 1)
             };
 
         if let Some(last_commit) = last_commit.as_ref() {
-            let committed_blocks = store
+            store
                 .scan_commits((commit_recovery_start_index..last_commit.index() + 1).into())
                 .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e))
                 .iter()
-                .flat_map(|commit| {
-                    let committed_subdag =
-                        load_committed_subdag_from_store(store.as_ref(), commit.clone());
+                .for_each(|commit| {
+                    for block_ref in commit.blocks() {
+                        last_committed_rounds[block_ref.author] =
+                            max(last_committed_rounds[block_ref.author], block_ref.round);
+                    }
                     if context
                         .protocol_config
                         .mysticeti_leader_scoring_and_schedule()
                     {
-                        unscored_committed_subdags.push(committed_subdag.clone());
+                        let committed_subdag =
+                            load_committed_subdag_from_store(store.as_ref(), commit.clone());
+                        unscored_committed_subdags.push(committed_subdag);
                     }
-                    committed_subdag.blocks
-                })
-                .collect::<Vec<_>>();
-
-            for block in committed_blocks {
-                last_committed_rounds[block.author()] =
-                    max(last_committed_rounds[block.author()], block.round());
-            }
+                });
         }
 
         tracing::info!(
