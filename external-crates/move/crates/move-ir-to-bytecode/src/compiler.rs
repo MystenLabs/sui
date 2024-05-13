@@ -15,7 +15,9 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_command_line_common::error_bitset::ErrorBitsetBuilder;
+use move_command_line_common::{
+    env::get_bytecode_version_from_env, error_bitset::ErrorBitsetBuilder,
+};
 use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
@@ -323,10 +325,18 @@ fn constant_name_as_constant_value_index(
     context.constant_index(name_constant)
 }
 
-/// Compile a module.
 pub fn compile_module<'a>(
     module: ModuleDefinition,
     dependencies: impl IntoIterator<Item = &'a CompiledModule>,
+) -> Result<(CompiledModule, SourceMap)> {
+    compile_module_with_version_opt(module, dependencies, None)
+}
+
+/// Compile a module.
+pub fn compile_module_with_version_opt<'a>(
+    module: ModuleDefinition,
+    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
+    version: Option<u32>,
 ) -> Result<(CompiledModule, SourceMap)> {
     verify_module(&module)?;
 
@@ -406,7 +416,7 @@ pub fn compile_module<'a>(
         _compiled_deps,
         source_map,
     ) = context.materialize_pools();
-    let module = CompiledModule {
+    let mut module = CompiledModule {
         version: VERSION_MAX,
         module_handles,
         self_module_handle_idx,
@@ -425,7 +435,14 @@ pub fn compile_module<'a>(
         struct_defs,
         function_defs,
     };
+    fix_module_version(&mut module, version);
     Ok((module, source_map))
+}
+
+fn fix_module_version(module: &mut CompiledModule, version: Option<u32>) {
+    if let Some(version) = version.or_else(get_bytecode_version_from_env) {
+        module.version = version;
+    }
 }
 
 // Note: DO NOT try to recover from this function as it zeros out the `outer_contexts` dependencies

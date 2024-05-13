@@ -233,7 +233,11 @@ fn module(
     };
     let deps: Vec<&F::CompiledModule> = vec![];
     let (mut module, source_map) =
-        match move_ir_to_bytecode::compiler::compile_module(ir_module, deps) {
+        match move_ir_to_bytecode::compiler::compile_module_with_version_opt(
+            ir_module,
+            deps,
+            compilation_env.flags().bytecode_version(),
+        ) {
             Ok(res) => res,
             Err(e) => {
                 compilation_env.add_diag(diag!(
