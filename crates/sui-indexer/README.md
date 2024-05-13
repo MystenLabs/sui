@@ -73,8 +73,8 @@ create database test;
 3.DB setup, under `sui/crates/sui-indexer` run:
 ```sh
 # an example DATABASE_URL is "mysql://root:password@127.0.0.1:4000/test"
-diesel setup --database-url="<DATABASE_URL> --migration-dir='migrations/mysql'"
-diesel database reset --database-url="<DATABASE_URL> --migration-dir='migrations/mysql'"
+diesel setup --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
+diesel database reset --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
 ```
 Note that you'll need an existing database for the above to work. Replace `test` with the name of the database created.
 4. run indexer as a writer, which pulls data from fullnode and writes data to DB
