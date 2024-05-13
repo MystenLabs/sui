@@ -223,7 +223,7 @@ diesel::table! {
 }
 
 diesel::table! {
-    tx_calls (package, tx_sequence_number, cp_sequence_number) {
+    tx_calls (package, module, func, tx_sequence_number, cp_sequence_number) {
         cp_sequence_number -> Int8,
         tx_sequence_number -> Int8,
         package -> Bytea,
