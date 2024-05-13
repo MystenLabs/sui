@@ -161,7 +161,17 @@ pub enum ConsensusCertificateResult {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithHash {
     pub index: ExecutionIndices,
-    pub hash: u64,
+    // unused, but left for db compatibility
+    pub _deprecated_hash: u64,
+}
+
+impl ExecutionIndicesWithHash {
+    pub fn new(index: ExecutionIndices) -> Self {
+        Self {
+            index,
+            _deprecated_hash: 0x7f7f7f7f7f7f7f7f,
+        }
+    }
 }
 
 /// ConsensusStats is versioned because we may iterate on the struct, and it is
@@ -231,7 +241,6 @@ impl ConsensusStatsAPI for ConsensusStatsV1 {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ExecutionIndicesWithStats {
     pub index: ExecutionIndices,
-    pub hash: u64,
     pub stats: ConsensusStats,
 }
 
@@ -1178,7 +1187,6 @@ impl AuthorityPerEpochStore {
                     .map_err(SuiError::from)?;
                 Ok(ExecutionIndicesWithStats {
                     index: indices.index,
-                    hash: indices.hash,
                     stats: ConsensusStats::default(),
                 })
             }
@@ -2085,10 +2093,7 @@ impl AuthorityPerEpochStore {
             &self.tables()?.last_consensus_index,
             [(
                 LAST_CONSENSUS_STATS_ADDR,
-                ExecutionIndicesWithHash {
-                    index: consensus_stats.index,
-                    hash: consensus_stats.hash,
-                },
+                ExecutionIndicesWithHash::new(consensus_stats.index),
             )],
         )?;
         batch.insert_batch(
