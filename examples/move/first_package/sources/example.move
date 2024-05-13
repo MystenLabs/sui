@@ -1,7 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module first_package::example {
+// docs::#first
+module my_first_package::example {
 
     // Part 1: These imports are provided by default
     // use sui::object::{Self, UID};
@@ -45,6 +46,7 @@ module first_package::example {
     }
 
     // Part 5: Public/entry functions (introduced later in the tutorial)
+    // docs::#first-pause
     public fun sword_create(magic: u64, strength: u64, ctx: &mut TxContext): Sword {
         // Create a sword
         Sword {
@@ -68,7 +70,7 @@ module first_package::example {
             strength: strength,
         }
     }
-
+    // docs::#first-resume
     // Part 6: Tests
     #[test]
     fun test_sword_create() {

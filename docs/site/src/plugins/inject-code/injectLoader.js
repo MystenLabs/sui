@@ -65,6 +65,21 @@ const addCodeInject = function (source) {
               return `\`\`\`${language} title="${title}"\n${content}\n\`\`\``;
             };
 
+            const processOptions = (text) => {
+              // Replace all the //docs:: lines in code and license header
+              let processed = text
+
+                .replace(
+                  /^\/\/\s*Copyright.*Mysten Labs.*\n\/\/\s*SPDX-License.*?\n?$/gim,
+                  "",
+                )
+                .replace(/^\s*\/\/\s*docs::\/?.*\r?$\n?/gm, "");
+              processed = removeComments(processed);
+              processed = removeTests(processed);
+
+              return processed;
+            };
+
             // Remove comments. TODO: Add other langs
             const removeComments = (text) => {
               const cont = options.some((element) =>
@@ -72,6 +87,22 @@ const addCodeInject = function (source) {
               );
               if (cont) {
                 return text.replace(/^\s*\/\/\/?.*$(?:\r\n?|\n)?/gm, "");
+              } else {
+                return text;
+              }
+            };
+
+            const removeTests = (text) => {
+              const cont = options.some((element) =>
+                element.toLowerCase().includes("notest"),
+              );
+              if (cont) {
+                return text
+                  .replace(
+                    /\s*#\[test.*?\n.*?}(?!;)\n?/gs,
+                    "\n{{plugin-removed-test}}\n",
+                  )
+                  .replace(/\{\{plugin-removed-test\}\}\s*/gm, "");
               } else {
                 return text;
               }
@@ -86,7 +117,11 @@ const addCodeInject = function (source) {
               };
 
               const removeLeadingSpaces = (matchArray, prepend = "") => {
-                const numSpaces = matchArray[1] ? matchArray[1].length - 1 : 0;
+                const numSpaces = matchArray[1]
+                  ? matchArray[1].match(/^\n/)
+                    ? matchArray[1].length - 1
+                    : matchArray[1].length
+                  : 0;
                 if (numSpaces === 0) {
                   return [prepend, matchArray[0]].join("\n");
                 }
@@ -100,7 +135,7 @@ const addCodeInject = function (source) {
 
               const capturePrepend = (match) => {
                 const numSpaces = match[1] ? match[1].length - 1 : 0;
-                let preFun = injectFileContent.substring(0, match.index - 1);
+                let preFun = injectFileContent.substring(0, match.index);
                 const lines = preFun.split("\n");
                 let pre = [];
                 for (let x = lines.length - 1; x > 0; x--) {
@@ -125,37 +160,56 @@ const addCodeInject = function (source) {
               const structName = getName(marker, structKey);
               const moduleName = getName(marker, moduleKey);
               if (funName) {
-                const funStr = `^(\\s*)*(public )?fun ${funName}\\b(?=[^\\w]).*?}\\n(?=\\n)?`;
-                const funRE = new RegExp(funStr, "msi");
-                const funMatch = funRE.exec(injectFileContent);
-                if (funMatch) {
-                  let preFun = capturePrepend(funMatch);
-                  if (!checkBracesBalance(funMatch[0])) {
-                    injectFileContent =
-                      "Could not find valid function definition. If code is formatted correctly, consider using code comments instead.";
-                  } else {
-                    injectFileContent = removeLeadingSpaces(funMatch, preFun);
+                const funs = funName.split(",");
+                let funContent = [];
+                for (let fn of funs) {
+                  fn = fn.trim();
+                  const funStr = `^(\\s*)*?(public )?fun ${fn}\\b(?=[^\\w]).*?}\\n(?=\\n)?`;
+                  const funRE = new RegExp(funStr, "msi");
+                  const funMatch = funRE.exec(injectFileContent);
+                  if (funMatch) {
+                    let preFun = capturePrepend(funMatch);
+                    if (!checkBracesBalance(funMatch[0])) {
+                      funContent.push(
+                        "Could not find valid function definition. If code is formatted correctly, consider using code comments instead.",
+                      );
+                    } else {
+                      funContent.push(removeLeadingSpaces(funMatch, preFun));
+                    }
                   }
                 }
+                injectFileContent = funContent
+                  .join("\n")
+                  .replace(/\n+/gm, "\n")
+                  .trim();
               } else if (structName) {
-                const structStr = `^(\\s*)*(public )?struct \\b${structName}(?=[^\\w]).*?}\\n(?=\\n)`;
-                const structRE = new RegExp(structStr, "msi");
-                const structMatch = structRE.exec(injectFileContent);
-                if (structMatch) {
-                  let preStruct = capturePrepend(structMatch);
-                  if (!checkBracesBalance(structMatch[0])) {
-                    injectFileContent =
-                      "Could not find valid struct definition. If code is formatted correctly, consider using code comments instead.";
+                const structs = structName.split(",");
+                let structContent = [];
+                for (let struct of structs) {
+                  struct = struct.trim();
+                  const structStr = `^(\\s*)*?(public )?struct \\b${struct}(?=[^\\w]).*?}\\n(?=\\n)`;
+                  const structRE = new RegExp(structStr, "msi");
+                  const structMatch = structRE.exec(injectFileContent);
+                  if (structMatch) {
+                    let preStruct = capturePrepend(structMatch);
+                    if (!checkBracesBalance(structMatch[0])) {
+                      structContent.push(
+                        "Could not find valid struct definition. If code is formatted correctly, consider using code comments instead.",
+                      );
+                    } else {
+                      structContent.push(
+                        removeLeadingSpaces(structMatch, preStruct),
+                      );
+                    }
                   } else {
-                    injectFileContent = removeLeadingSpaces(
-                      structMatch,
-                      preStruct,
-                    );
+                    injectFileContent =
+                      "Struct not found. If code is formatted correctly, consider using code comments instead.";
                   }
-                } else {
-                  injectFileContent =
-                    "Struct not found. If code is formatted correctly, consider using code comments instead.";
                 }
+                injectFileContent = structContent
+                  .join("\n")
+                  .replace(/\n+/gm, "\n")
+                  .trim();
               } else if (moduleName) {
                 const modStr = `^(\\s*)*module \\b${moduleName}\\b(?=[^\\w]).*?}\\n(?=\\n)?`;
                 const modRE = new RegExp(modStr, "msi");
@@ -228,7 +282,7 @@ const addCodeInject = function (source) {
                 const pauseRE = new RegExp(pauseStr, "g");
                 let matches = injectFileContent.match(pauseRE);
                 if (matches) {
-                  for (let match of matches) {
+                  for (let match in matches) {
                     const test = matches[match].replace(
                       /[.*+?^${}()|[\]\\]/g,
                       "\\$&",
@@ -268,13 +322,7 @@ const addCodeInject = function (source) {
                 }
               }
 
-              // Replace all the //docs:: lines in code
-              injectFileContent = injectFileContent.replace(
-                /^\s*\/\/\s*docs::\/?.*\r?$\n?/gm,
-                "",
-              );
-
-              injectFileContent = removeComments(injectFileContent);
+              injectFileContent = processOptions(injectFileContent);
 
               const trimContent = (content) => {
                 let arr = content.split("\n");
@@ -303,12 +351,13 @@ const addCodeInject = function (source) {
               res = addMarkdownIncludes(res);
             } else {
               // Handle import of all the code
-              injectFileContent = formatOutput(
+              const processed = processOptions(injectFileContent);
+              const processedFileContent = formatOutput(
                 language,
                 injectFile,
-                injectFileContent,
+                processed,
               );
-              res = res.replace(replacer, removeComments(injectFileContent));
+              res = res.replace(replacer, processedFileContent);
             }
           } else {
             res = res.replace(

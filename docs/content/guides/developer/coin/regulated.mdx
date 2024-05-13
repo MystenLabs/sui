@@ -76,9 +76,7 @@ The `DenyList` object is a system object that has the address `0x403`. You canno
 
 For the ability to manipulate the addresses assigned to the deny list for your coin, you must add a few functions to the previous example.
 
-{@inject: examples/move/coin/sources/regcoin.move#fun=add_addr_from_deny_list noComments}
-
-{@inject: examples/move/coin/sources/regcoin.move#fun=remove_addr_from_deny_list noComments}
+{@inject: examples/move/coin/sources/regcoin.move#fun=add_addr_from_deny_list,remove_addr_from_deny_list noComments}
 
 To use these functions, you pass the `DenyList` object (`0x403`), your `DenyCap` object ID, and the address you want to either add or remove. Using the Sui CLI, you could use `sui client call` with the required information:
 
