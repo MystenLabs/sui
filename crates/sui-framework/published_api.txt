@@ -2941,6 +2941,18 @@ spent
 key
 	fun
 	0x2::token
+hash_to_input
+	public fun
+	0x2::vdf
+hash_to_input_internal
+	fun
+	0x2::vdf
+vdf_verify
+	public fun
+	0x2::vdf
+vdf_verify_internal
+	fun
+	0x2::vdf
 VerifiedID
 	public struct
 	0x2::zklogin_verified_id

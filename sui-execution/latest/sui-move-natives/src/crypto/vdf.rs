@@ -4,9 +4,8 @@ use crate::object_runtime::ObjectRuntime;
 use crate::NativesCostTable;
 use fastcrypto_vdf::class_group::discriminant::Discriminant;
 use fastcrypto_vdf::class_group::QuadraticForm;
-use fastcrypto_vdf::vdf::wesolowski::StrongVDF;
-use fastcrypto_vdf::vdf::wesolowski::StrongVDFVerifier;
-use fastcrypto_vdf::ToBytes;
+use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
+use fastcrypto_vdf::vdf::VDF;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::gas_algebra::InternalGas;
 use move_core_types::vm_status::StatusCode;
@@ -88,30 +87,31 @@ pub fn vdf_verify_internal(
     let input_bytes = pop_arg!(args, VectorRef);
     let discriminant_bytes = pop_arg!(args, VectorRef);
 
-    let discriminant = match Discriminant::try_from_be_bytes(&discriminant_bytes.as_bytes_ref()) {
+    let discriminant = match bcs::from_bytes::<Discriminant>(&discriminant_bytes.as_bytes_ref()) {
         Ok(discriminant) => discriminant,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let input = match QuadraticForm::from_bytes(&input_bytes.as_bytes_ref(), &discriminant) {
+    let input = match bcs::from_bytes::<QuadraticForm>(&input_bytes.as_bytes_ref()) {
         Ok(input) => input,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let proof = match QuadraticForm::from_bytes(&proof_bytes.as_bytes_ref(), &discriminant) {
+    let proof = match bcs::from_bytes::<QuadraticForm>(&proof_bytes.as_bytes_ref()) {
         Ok(proof) => proof,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let output = match QuadraticForm::from_bytes(&output_bytes.as_bytes_ref(), &discriminant) {
+    let output = match bcs::from_bytes::<QuadraticForm>(&output_bytes.as_bytes_ref()) {
         Ok(output) => output,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let vdf = StrongVDF::new(discriminant, iterations);
-    let fast_verifier = StrongVDFVerifier::new(vdf, input);
+    // We use the default VDF construction: Wesolowski's construction using a strong Fiat-Shamir
+    // construction and a windowed scalar multiplier to speed up the proof verification.
+    let vdf = DefaultVDF::new(discriminant, iterations);
+    let verified = vdf.verify(&input, &output, &proof).is_ok();
 
-    let verified = fast_verifier.verify(&output, &proof).is_ok();
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::bool(verified)],
@@ -161,7 +161,7 @@ pub fn hash_to_input_internal(
     let message = pop_arg!(args, VectorRef);
     let discriminant_bytes = pop_arg!(args, VectorRef);
 
-    let discriminant = match Discriminant::try_from_be_bytes(&discriminant_bytes.as_bytes_ref()) {
+    let discriminant = match bcs::from_bytes::<Discriminant>(&discriminant_bytes.as_bytes_ref()) {
         Ok(discriminant) => discriminant,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
@@ -174,7 +174,12 @@ pub fn hash_to_input_internal(
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
     };
 
-    let output_bytes = output.to_bytes();
+    let output_bytes = match bcs::to_bytes(&output) {
+        Ok(bytes) => bytes,
+        // This should only fail on extremely large inputs, so we treat it as an invalid input error
+        Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
+    };
+
     Ok(NativeResult::ok(
         context.gas_used(),
         smallvec![Value::vector_u8(output_bytes)],
