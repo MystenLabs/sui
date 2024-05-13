@@ -5950,6 +5950,7 @@ async fn test_consensus_handler_per_object_congestion_control() {
 //   1. Consensus handler cancels transactions that are deferred for too many rounds.
 //   2. Shared locks for cancelled transaction are set correctly.
 //   3. Input objects can be read correctly.
+//   4. Consensus commit prologue contains cancelled transaction version assignment.
 #[sim_test]
 async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
@@ -6024,20 +6025,30 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     certificates.shuffle(&mut rand::thread_rng());
 
     // Sends all transactions to consensus. Expect first 2 rounds with 1 transaction per round going through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
-    assert_eq!(scheduled_txns.len(), 1);
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, false).await;
+    assert_eq!(scheduled_txns.len(), 2);
     for cert in scheduled_txns.iter() {
-        assert!(cert.data().transaction_data().gas_price() == 2000);
+        assert!(
+            matches!(
+                cert.data().transaction_data().kind(),
+                TransactionKind::ConsensusCommitPrologueV3(..)
+            ) || cert.data().transaction_data().gas_price() == 2000
+        );
     }
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
-    assert_eq!(scheduled_txns.len(), 1);
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], false).await;
+    assert_eq!(scheduled_txns.len(), 2);
     for cert in scheduled_txns.iter() {
-        assert!(cert.data().transaction_data().gas_price() == 2000);
+        assert!(
+            matches!(
+                cert.data().transaction_data().kind(),
+                TransactionKind::ConsensusCommitPrologueV3(..)
+            ) || cert.data().transaction_data().gas_price() == 2000
+        );
     }
 
     // Run consensus round 3. 2 transactions will come out with 1 transaction being cancelled.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
-    assert_eq!(scheduled_txns.len(), 2);
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], false).await;
+    assert_eq!(scheduled_txns.len(), 3);
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
@@ -6093,4 +6104,22 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // Test get_congested_objects.
     let congested_objects = input_objects.get_congested_objects().unwrap();
     assert_eq!(congested_objects, vec![shared_objects[0].id()]);
+
+    // Consensus commit prologue contains cancelled txn shared object version assignment.
+    if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =
+        scheduled_txns[0].data().transaction_data().kind()
+    {
+        assert_eq!(
+            prologue_txn.consensus_determined_version_assignment,
+            vec![(
+                *cancelled_txn.digest(),
+                vec![
+                    (shared_objects[0].id(), SequenceNumber::CONGESTED),
+                    (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+                ]
+            )]
+        );
+    } else {
+        panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
+    }
 }
