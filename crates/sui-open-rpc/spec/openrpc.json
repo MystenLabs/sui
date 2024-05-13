@@ -1398,6 +1398,7 @@
                 "random_beacon": false,
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
+                "record_consensus_determined_version_assignments_in_prologue": false,
                 "reject_mutable_random_on_entry_functions": false,
                 "reshare_at_same_initial_version": false,
                 "resolve_abort_locations_to_package_id": false,
@@ -10490,6 +10491,66 @@
                 "type": "string",
                 "enum": [
                   "ConsensusCommitPrologueV2"
+                ]
+              },
+              "round": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "commit_timestamp_ms",
+              "consensus_commit_digest",
+              "consensus_determined_version_assignment",
+              "epoch",
+              "kind",
+              "round"
+            ],
+            "properties": {
+              "commit_timestamp_ms": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "consensus_commit_digest": {
+                "$ref": "#/components/schemas/ConsensusCommitDigest"
+              },
+              "consensus_determined_version_assignment": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/TransactionDigest"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "$ref": "#/components/schemas/ObjectID"
+                          },
+                          {
+                            "$ref": "#/components/schemas/SequenceNumber"
+                          }
+                        ],
+                        "maxItems": 2,
+                        "minItems": 2
+                      }
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              },
+              "epoch": {
+                "$ref": "#/components/schemas/BigInt_for_uint64"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "ConsensusCommitPrologueV3"
                 ]
               },
               "round": {

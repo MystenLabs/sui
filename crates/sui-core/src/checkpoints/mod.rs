@@ -1187,6 +1187,7 @@ impl CheckpointBuilder {
                     transaction.inner().transaction_data().kind(),
                     TransactionKind::ConsensusCommitPrologue(_)
                         | TransactionKind::ConsensusCommitPrologueV2(_)
+                        | TransactionKind::ConsensusCommitPrologueV3(_)
                         | TransactionKind::AuthenticatorStateUpdate(_)
                         | TransactionKind::RandomnessStateUpdate(_)
                 ) {

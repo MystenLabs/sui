@@ -708,11 +708,12 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             SuiSubcommand::ConsensusCommitPrologue(ConsensusCommitPrologueCommand {
                 timestamp_ms,
             }) => {
-                let transaction = VerifiedTransaction::new_consensus_commit_prologue_v2(
+                let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
                     0,
                     0,
                     timestamp_ms,
                     ConsensusCommitDigest::default(),
+                    Vec::new(),
                 );
                 let summary = self.execute_txn(transaction.into()).await?;
                 let output = self.object_summary_output(&summary, /* summarize */ false);

@@ -20,7 +20,7 @@ use sui_macros::{fail_point_async, fail_point_if};
 use sui_protocol_config::ProtocolConfig;
 use sui_types::{
     authenticator_state::ActiveJwk,
-    base_types::{AuthorityName, EpochId, TransactionDigest},
+    base_types::{AuthorityName, EpochId, ObjectID, SequenceNumber, TransactionDigest},
     digests::ConsensusCommitDigest,
     executable_transaction::{TrustedExecutableTransaction, VerifiedExecutableTransaction},
     messages_consensus::{ConsensusTransaction, ConsensusTransactionKey, ConsensusTransactionKind},
@@ -831,12 +831,30 @@ impl ConsensusCommitInfo {
         VerifiedExecutableTransaction::new_system(transaction, epoch)
     }
 
+    fn consensus_commit_prologue_v3_transaction(
+        &self,
+        epoch: u64,
+        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+    ) -> VerifiedExecutableTransaction {
+        let transaction = VerifiedTransaction::new_consensus_commit_prologue_v3(
+            epoch,
+            self.round,
+            self.timestamp,
+            self.consensus_commit_digest,
+            cancelled_txn_version_assignment,
+        );
+        VerifiedExecutableTransaction::new_system(transaction, epoch)
+    }
+
     pub fn create_consensus_commit_prologue_transaction(
         &self,
         epoch: u64,
         protocol_config: &ProtocolConfig,
+        cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
     ) -> VerifiedExecutableTransaction {
-        if protocol_config.include_consensus_digest_in_prologue() {
+        if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
+            self.consensus_commit_prologue_v3_transaction(epoch, cancelled_txn_version_assignment)
+        } else if protocol_config.include_consensus_digest_in_prologue() {
             self.consensus_commit_prologue_v2_transaction(epoch)
         } else {
             self.consensus_commit_prologue_transaction(epoch)

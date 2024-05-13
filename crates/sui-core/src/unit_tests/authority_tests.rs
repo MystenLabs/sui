@@ -4787,13 +4787,15 @@ async fn test_consensus_commit_prologue_generation() {
         .include_consensus_digest_in_prologue());
 
     // Tests that new consensus commit prologue transaction is added to the batch, and it is the first transaction.
+
+    // TODO(ZZZZZZ): which version is the prologue here?
     assert_eq!(processed_consensus_transactions.len(), 3);
     assert!(matches!(
         processed_consensus_transactions[0]
             .data()
             .transaction_data()
             .kind(),
-        TransactionKind::ConsensusCommitPrologueV2(..)
+        TransactionKind::ConsensusCommitPrologueV3(..)
     ));
 
     // Tests that the system clock object is updated by the new consensus commit prologue transaction.

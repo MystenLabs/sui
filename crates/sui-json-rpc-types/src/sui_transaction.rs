@@ -402,6 +402,7 @@ pub enum SuiTransactionBlockKind {
     /// The transaction which occurs only at the end of the epoch
     EndOfEpochTransaction(SuiEndOfEpochTransaction),
     ConsensusCommitPrologueV2(SuiConsensusCommitPrologueV2),
+    ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3),
     // .. more transaction types go here
 }
 
@@ -429,6 +430,14 @@ impl Display for SuiTransactionBlockKind {
                 )?;
             }
             Self::ConsensusCommitPrologueV2(p) => {
+                writeln!(writer, "Transaction Kind: Consensus Commit Prologue V2")?;
+                writeln!(
+                    writer,
+                    "Epoch: {}, Round: {}, Timestamp: {}, ConsensusCommitDigest: {}",
+                    p.epoch, p.round, p.commit_timestamp_ms, p.consensus_commit_digest
+                )?;
+            }
+            Self::ConsensusCommitPrologueV3(p) => {
                 writeln!(writer, "Transaction Kind: Consensus Commit Prologue V2")?;
                 writeln!(
                     writer,
@@ -474,6 +483,16 @@ impl SuiTransactionBlockKind {
                     round: p.round,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                     consensus_commit_digest: p.consensus_commit_digest,
+                })
+            }
+            TransactionKind::ConsensusCommitPrologueV3(p) => {
+                Self::ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                    consensus_determined_version_assignment: p
+                        .consensus_determined_version_assignment,
                 })
             }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
@@ -562,6 +581,16 @@ impl SuiTransactionBlockKind {
                     consensus_commit_digest: p.consensus_commit_digest,
                 })
             }
+            TransactionKind::ConsensusCommitPrologueV3(p) => {
+                Self::ConsensusCommitPrologueV3(SuiConsensusCommitPrologueV3 {
+                    epoch: p.epoch,
+                    round: p.round,
+                    commit_timestamp_ms: p.commit_timestamp_ms,
+                    consensus_commit_digest: p.consensus_commit_digest,
+                    consensus_determined_version_assignment: p
+                        .consensus_determined_version_assignment,
+                })
+            }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
                 SuiProgrammableTransactionBlock::try_from_with_package_resolver(
                     p,
@@ -639,6 +668,7 @@ impl SuiTransactionBlockKind {
             Self::Genesis(_) => "Genesis",
             Self::ConsensusCommitPrologue(_) => "ConsensusCommitPrologue",
             Self::ConsensusCommitPrologueV2(_) => "ConsensusCommitPrologueV2",
+            Self::ConsensusCommitPrologueV3(_) => "ConsensusCommitPrologueV3",
             Self::ProgrammableTransaction(_) => "ProgrammableTransaction",
             Self::AuthenticatorStateUpdate(_) => "AuthenticatorStateUpdate",
             Self::RandomnessStateUpdate(_) => "RandomnessStateUpdate",
@@ -1575,6 +1605,23 @@ pub struct SuiConsensusCommitPrologueV2 {
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
     pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
+pub struct SuiConsensusCommitPrologueV3 {
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub epoch: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub round: u64,
+    #[schemars(with = "BigInt<u64>")]
+    #[serde_as(as = "BigInt<u64>")]
+    pub commit_timestamp_ms: u64,
+    pub consensus_commit_digest: ConsensusCommitDigest,
+    pub consensus_determined_version_assignment:
+        Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
 }
 
 #[serde_as]

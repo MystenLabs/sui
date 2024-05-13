@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_types::ConciseableName;
 use crate::base_types::{AuthorityName, ObjectRef, TransactionDigest};
+use crate::base_types::{ConciseableName, ObjectID, SequenceNumber};
 use crate::digests::ConsensusCommitDigest;
 use crate::messages_checkpoint::{
     CheckpointSequenceNumber, CheckpointSignatureMessage, CheckpointTimestamp,
@@ -41,6 +41,21 @@ pub struct ConsensusCommitPrologueV2 {
     pub commit_timestamp_ms: CheckpointTimestamp,
     /// Digest of consensus output
     pub consensus_commit_digest: ConsensusCommitDigest,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct ConsensusCommitPrologueV3 {
+    /// Epoch of the commit prologue transaction
+    pub epoch: u64,
+    /// Consensus round of the commit
+    pub round: u64,
+    /// Unix timestamp from consensus
+    pub commit_timestamp_ms: CheckpointTimestamp,
+    /// Digest of consensus output
+    pub consensus_commit_digest: ConsensusCommitDigest,
+
+    pub consensus_determined_version_assignment:
+        Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
 }
 
 // In practice, JWKs are about 500 bytes of json each, plus a bit more for the ID.
