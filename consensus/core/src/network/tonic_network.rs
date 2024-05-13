@@ -89,6 +89,7 @@ impl TonicClient {
     }
 }
 
+// TODO: make sure callsites do not send request to own index, and return error otherwise.
 #[async_trait]
 impl NetworkClient for TonicClient {
     const SUPPORT_STREAMING: bool = true;
@@ -577,7 +578,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                                 warn!("Error serving connection: {e:?}");
                             },
                             Err(e) => {
-                                warn!("Connection task error: {e:?}");
+                                debug!("Connection task error, likely shutting down: {e:?}");
                             }
                         }
                         continue;
@@ -626,6 +627,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                             ));
                         };
                     let client_public_key = NetworkPublicKey::new(certificate_public_key);
+                    // TODO: improvement connection management. limit connection per peer to 1.
                     let Some(authority_index) =
                         connections_info.authority_index(&client_public_key)
                     else {
@@ -717,8 +719,8 @@ fn to_socket_addr(addr: &Multiaddr) -> Result<SocketAddr, &'static str> {
 
 /// Looks up authority index by authority public key.
 ///
-/// TODO: add more features related to connection monitoring and management.
-/// Keeps track of connected peers. Maybe merge with connection_monitor.rs
+/// TODO: Add connection monitoring, and keep track of connected peers.
+/// TODO: Maybe merge with connection_monitor.rs
 struct ConnectionsInfo {
     authority_key_to_index: BTreeMap<NetworkPublicKey, AuthorityIndex>,
 }
