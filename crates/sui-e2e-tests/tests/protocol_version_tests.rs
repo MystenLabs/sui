@@ -67,8 +67,6 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
-    use sui_swarm_config::genesis_config::GenesisConfig;
-    use sui_swarm_config::network_config::NetworkConfig;
     use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
