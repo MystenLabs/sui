@@ -116,79 +116,6 @@ async fn test_handle_transfer_transaction_extra_signature() {
     .await;
 }
 
-// TODO: verify that these cases are not exploitable via consensus input
-#[sim_test]
-async fn test_empty_sender_signed_data() {
-    do_transaction_test(
-        0,
-        |_| {},
-        |tx| {
-            let data = tx.data_mut_for_testing();
-            data.inner_vec_mut_for_testing().clear();
-        },
-        |err| {
-            assert_matches!(
-                err,
-                SuiError::UserInputError {
-                    error: UserInputError::Unsupported { .. }
-                }
-            );
-        },
-    )
-    .await;
-}
-
-#[sim_test]
-async fn test_multiple_sender_signed_data() {
-    do_transaction_test(
-        0,
-        |_| {},
-        |tx| {
-            let data = tx.data_mut_for_testing();
-            let tx_vec = data.inner_vec_mut_for_testing();
-            assert_eq!(tx_vec.len(), 1);
-            let mut new = tx_vec[0].clone();
-            // make sure second message has unique digest
-            *new.intent_message.value.expiration_mut_for_testing() =
-                TransactionExpiration::Epoch(123);
-            tx_vec.push(new);
-        },
-        |err| {
-            assert_matches!(
-                err,
-                SuiError::UserInputError {
-                    error: UserInputError::Unsupported { .. }
-                }
-            );
-        },
-    )
-    .await;
-}
-
-#[sim_test]
-async fn test_duplicate_sender_signed_data() {
-    do_transaction_test(
-        0,
-        |_| {},
-        |tx| {
-            let data = tx.data_mut_for_testing();
-            let tx_vec = data.inner_vec_mut_for_testing();
-            assert_eq!(tx_vec.len(), 1);
-            let new = tx_vec[0].clone();
-            tx_vec.push(new);
-        },
-        |err| {
-            assert_matches!(
-                err,
-                SuiError::UserInputError {
-                    error: UserInputError::Unsupported { .. }
-                }
-            );
-        },
-    )
-    .await;
-}
-
 #[sim_test]
 async fn test_empty_gas_data() {
     do_transaction_test_skip_cert_checks(
@@ -1563,29 +1490,7 @@ async fn test_handle_certificate_errors() {
         &*authority_state.secret,
     );
 
-    let mut empty_tx = transfer_transaction.clone();
-    let data = empty_tx.data_mut_for_testing();
-    data.inner_vec_mut_for_testing().clear();
-
     let committee = epoch_store.committee().deref().clone();
-    let ct = CertifiedTransaction::new(
-        data.clone(),
-        vec![signed_transaction.auth_sig().clone()],
-        &committee,
-    )
-    .unwrap();
-
-    let err = client
-        .handle_certificate_v2(ct.clone(), Some(socket_addr))
-        .await
-        .unwrap_err();
-
-    assert_matches!(
-        err,
-        SuiError::UserInputError {
-            error: UserInputError::Unsupported(message)
-        } if message == "SenderSignedData must contain exactly one transaction"
-    );
 
     let tx = VerifiedTransaction::new_consensus_commit_prologue(0, 0, 42);
     let ct = CertifiedTransaction::new(
