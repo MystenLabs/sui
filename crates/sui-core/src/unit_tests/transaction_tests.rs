@@ -18,8 +18,7 @@ use sui_types::{
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
     transaction::{
-        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionExpiration,
-        TransactionKind,
+        AuthenticatorStateUpdate, GenesisTransaction, TransactionDataAPI, TransactionKind,
     },
     utils::{load_test_vectors, to_sender_signed_transaction},
     zk_login_authenticator::ZkLoginAuthenticator,
