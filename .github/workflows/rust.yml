@@ -93,7 +93,7 @@ jobs:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
         with:
-          version: 9
+          version: 9.1.1
       - name: Setup Node
         uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
         with:
@@ -477,14 +477,14 @@ jobs:
     if: needs.diff.outputs.isSolidity == 'true'
     runs-on: [ubuntu-latest]
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # Pin v4.1.1
       - name: Install Foundry
         run: |
           curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
           echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: Install Dependencies
         working-directory: bridge/evm
-        run: |  
+        run: |
           forge install https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable@v5.0.1 https://github.com/foundry-rs/forge-std@v1.3.0 https://github.com/OpenZeppelin/openzeppelin-foundry-upgrades --no-git --no-commit
       - name: Check Bridge EVM Unit Tests
         shell: bash
