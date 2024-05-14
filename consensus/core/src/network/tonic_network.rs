@@ -18,7 +18,7 @@ use hyper::server::conn::Http;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use parking_lot::RwLock;
 use tokio::{
-    net::TcpListener,
+    net::TcpSocket,
     sync::oneshot::{self, Sender},
     task::JoinSet,
 };
@@ -56,6 +56,12 @@ const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 
 // Maximum total bytes fetched in a single fetch_blocks() call, after combining the responses.
 const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
+
+// Buffer size for TCP sockets and higher level network stack.
+const BUFFER_SIZE: usize = 64 << 20;
+
+// Maximum number of connections in backlog.
+const MAX_CONNECTIONS_BACKLOG: u32 = 1024;
 
 // Implements Tonic RPC client for Consensus.
 pub(crate) struct TonicClient {
@@ -273,9 +279,9 @@ impl ChannelPool {
         let endpoint = Channel::from_shared(address.clone())
             .unwrap()
             .connect_timeout(timeout)
-            .initial_connection_window_size(64 << 20)
-            .initial_stream_window_size(32 << 20)
-            .buffer_size(64 << 20)
+            .initial_connection_window_size(Some(BUFFER_SIZE as u32))
+            .initial_stream_window_size(Some(BUFFER_SIZE as u32 / 2))
+            .buffer_size(BUFFER_SIZE)
             .keep_alive_while_idle(true)
             .keep_alive_timeout(config.keepalive_interval)
             .http2_keep_alive_interval(config.keepalive_interval)
@@ -299,7 +305,7 @@ impl ChannelPool {
             {
                 Ok(channel) => break channel,
                 Err(e) => {
-                    warn!("Timed out connecting to endpoint at {address}: {e:?}");
+                    warn!("Failed to connect to endpoint at {address}: {e:?}");
                     if tokio::time::Instant::now() >= deadline {
                         return Err(ConsensusError::NetworkClientConnection(format!(
                             "Timed out connecting to endpoint at {address}: {e:?}"
@@ -548,10 +554,38 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             create_rustls_server_config(&self.context, self.network_keypair.clone());
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
-        // TODO: configure socket options via TcpSocket.
-        let listener = TcpListener::bind(own_address)
-            .await
+        // Initialize TCP socket.
+        let socket = if own_address.is_ipv4() {
+            TcpSocket::new_v4()
+        } else if own_address.is_ipv6() {
+            TcpSocket::new_v6()
+        } else {
+            panic!("Invalid own address: {own_address:?}");
+        }
+        .unwrap_or_else(|e| panic!("Cannot create TCP socket: {e:?}"));
+        if let Err(e) = socket.set_nodelay(true) {
+            warn!("Failed to set TCP_NODELAY: {e:?}");
+        }
+        if let Err(e) = socket.set_reuseaddr(true) {
+            warn!("Failed to set SO_REUSEADDR: {e:?}");
+        }
+        if let Err(e) = socket.set_reuseport(true) {
+            warn!("Failed to set SO_REUSEPORT: {e:?}");
+        }
+        if let Err(e) = socket.set_send_buffer_size(BUFFER_SIZE as u32) {
+            warn!("Failed to set send buffer size to {BUFFER_SIZE}: {e:?}");
+        }
+        if let Err(e) = socket.set_recv_buffer_size(BUFFER_SIZE as u32) {
+            warn!("Failed to set receive buffer size to {BUFFER_SIZE}: {e:?}");
+        }
+        socket
+            .bind(own_address)
             .unwrap_or_else(|e| panic!("Cannot bind to {own_address}: {e:?}"));
+
+        // Start listening on the socket.
+        let listener = socket
+            .listen(MAX_CONNECTIONS_BACKLOG)
+            .unwrap_or_else(|e| panic!("Cannot listen at {own_address}: {e:?}"));
 
         let connections_info = Arc::new(ConnectionsInfo::new(self.context.clone()));
 
