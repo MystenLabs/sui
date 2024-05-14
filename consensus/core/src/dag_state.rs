@@ -108,12 +108,10 @@ impl DagState {
             .unwrap_or_else(|e| panic!("Failed to read from storage: {:?}", e));
         let (mut last_committed_rounds, commit_recovery_start_index) =
             if let Some((commit_ref, commit_info)) = commit_info {
-                tracing::info!(
-                    "Recovering from stored CommitRef {commit_ref} & CommitInfo {commit_info:?}"
-                );
+                tracing::info!("Recovering committed state from {commit_ref} {commit_info:?}");
                 (commit_info.committed_rounds, commit_ref.index + 1)
             } else {
-                tracing::info!("Found no stored CommitInfo to recover from.");
+                tracing::info!("Found no stored CommitInfo to recover from");
                 (vec![0; num_authorities], GENESIS_COMMIT_INDEX + 1)
             };
 
