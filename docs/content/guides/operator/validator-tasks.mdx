@@ -270,6 +270,8 @@ To update metadata, a validator makes a MoveCall transaction that interacts with
 
 1. to update name to `new_validator_name`, use the Sui Client CLI to call `sui_system::update_validator_name`:
 
+{@include: ../../snippets/info-gas-budget.mdx}
+
 ```bash
 sui client call --package 0x3 --module sui_system --function update_validator_name --args 0x5 \"new_validator_name\" --gas-budget 10000
 ```
