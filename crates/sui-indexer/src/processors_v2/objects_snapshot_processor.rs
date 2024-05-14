@@ -120,9 +120,7 @@ where
         loop {
             select! {
                 _ = cancel.cancelled() => {
-                    // Handle the cancellation
-                    println!("Operation was cancelled");
-                    break; // Exit the loop
+                    break;
                 },
                 _ = time::sleep(Duration::from_secs(5)) => {
                     while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
@@ -132,8 +130,7 @@ where
                             .await?
                             .unwrap_or_default();
                         if cancel.is_cancelled() {
-                            // If cancellation is requested, break the loop
-                            println!("Operation was cancelled during checkpoint check");
+                            println!("ObjectsSnapshotProcessor was cancelled during checkpoint check");
                             break;
                         }
                     }
