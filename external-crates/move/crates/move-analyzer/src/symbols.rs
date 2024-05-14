@@ -2983,7 +2983,7 @@ impl<'a> TypingSymbolicator<'a> {
         name: FunctionName,
         method_name: Option<Name>,
         type_arguments: &[Type],
-        arguments: Option<&Box<Exp>>,
+        arguments: Option<&Exp>,
         scope: &mut OrdMap<Symbol, LocalDef>,
     ) {
         let Some(mod_def) = self
@@ -3007,7 +3007,7 @@ impl<'a> TypingSymbolicator<'a> {
         let fun_name = name.value();
         // a function name (same as fun_name) or method name (different from fun_name)
         let fun_use = method_name.unwrap_or_else(|| sp(name.loc(), name.value()));
-        self.add_fun_use_def(&mod_ident, &fun_name, &fun_use.value, &fun_use.loc);
+        self.add_fun_use_def(mod_ident, &fun_name, &fun_use.value, &fun_use.loc);
         // handle type parameters
         for t in type_arguments {
             self.add_type_id_use_def(t);
