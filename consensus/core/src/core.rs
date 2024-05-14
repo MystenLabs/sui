@@ -494,8 +494,6 @@ impl Core {
                     commits_until_update = self
                         .leader_schedule
                         .commits_until_leader_schedule_update(self.dag_state.clone());
-
-                    fail_point!("consensus-after-leader-schedule-change");
                 }
                 assert!(commits_until_update > 0);
 
