@@ -47,6 +47,8 @@ pub struct ModuleIdent {
 /// A Move module
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModuleDefinition {
+    /// The specified binary version of this module if a specific version is required.
+    pub specified_version: Option<u32>,
     /// The location of this module
     pub loc: Loc,
     /// name and address of the module
@@ -725,6 +727,7 @@ impl ModuleDefinition {
     /// and procedures
     /// Does not verify the correctness of any internal properties of its elements
     pub fn new(
+        specified_version: Option<u32>,
         loc: Loc,
         identifier: ModuleIdent,
         friends: Vec<ModuleIdent>,
@@ -735,6 +738,7 @@ impl ModuleDefinition {
         functions: Vec<(FunctionName, Function)>,
     ) -> Self {
         ModuleDefinition {
+            specified_version,
             loc,
             identifier,
             friends,

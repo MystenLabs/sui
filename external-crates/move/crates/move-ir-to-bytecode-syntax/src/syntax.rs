@@ -1675,6 +1675,7 @@ fn parse_module(tokens: &mut Lexer) -> Result<ModuleDefinition, ParseError<Loc, 
     let loc = make_loc(tokens.file_hash(), start_loc, end_loc);
 
     Ok(ModuleDefinition::new(
+        None,
         loc,
         identifier,
         friends,

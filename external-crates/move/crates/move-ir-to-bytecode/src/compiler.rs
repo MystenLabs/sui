@@ -325,18 +325,10 @@ fn constant_name_as_constant_value_index(
     context.constant_index(name_constant)
 }
 
+/// Compile a module.
 pub fn compile_module<'a>(
     module: ModuleDefinition,
     dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-) -> Result<(CompiledModule, SourceMap)> {
-    compile_module_with_version_opt(module, dependencies, None)
-}
-
-/// Compile a module.
-pub fn compile_module_with_version_opt<'a>(
-    module: ModuleDefinition,
-    dependencies: impl IntoIterator<Item = &'a CompiledModule>,
-    version: Option<u32>,
 ) -> Result<(CompiledModule, SourceMap)> {
     verify_module(&module)?;
 
@@ -416,7 +408,7 @@ pub fn compile_module_with_version_opt<'a>(
         _compiled_deps,
         source_map,
     ) = context.materialize_pools();
-    let mut module = CompiledModule {
+    let mut compiled_module = CompiledModule {
         version: VERSION_MAX,
         module_handles,
         self_module_handle_idx,
@@ -435,8 +427,8 @@ pub fn compile_module_with_version_opt<'a>(
         struct_defs,
         function_defs,
     };
-    set_module_version(&mut module, version);
-    Ok((module, source_map))
+    set_module_version(&mut compiled_module, module.specified_version);
+    Ok((compiled_module, source_map))
 }
 
 fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
