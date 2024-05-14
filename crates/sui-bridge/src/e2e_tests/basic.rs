@@ -383,6 +383,7 @@ async fn initiate_bridge_eth_to_sui(
         eth_chain_id,
         0,
         BridgeActionStatus::Claimed,
+        60,
     )
     .await;
     info!("Eth to Sui bridge transfer claimed");
@@ -452,6 +453,7 @@ async fn initiate_bridge_sui_to_eth(
         sui_chain_id,
         nonce,
         BridgeActionStatus::Approved,
+        15,
     )
     .await;
     info!("Sui to Eth bridge transfer approved");
@@ -464,6 +466,7 @@ async fn wait_for_transfer_action_status(
     chain_id: u8,
     nonce: u64,
     status: BridgeActionStatus,
+    timeout_sec: u64,
 ) {
     // Wait for the bridge action to be approved
     let now = std::time::Instant::now();
@@ -474,9 +477,10 @@ async fn wait_for_transfer_action_status(
         if res == status {
             break;
         }
-        if now.elapsed().as_secs() > 30 {
+        if now.elapsed().as_secs() > timeout_sec {
             panic!(
-                "Timeout waiting for token transfer action to be {:?}. chain_id: {chain_id}, nonce: {nonce}",
+                "Timeout ({} secs) waiting for token transfer action to be {:?}. chain_id: {chain_id}, nonce: {nonce}",
+                timeout_sec,
                 status
             );
         }
