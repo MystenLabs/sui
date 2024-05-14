@@ -1203,7 +1203,7 @@ async fn sync_checkpoint_contents<S>(
                 match maybe_checkpoint {
                     Ok(checkpoint) => {
                         let _: &VerifiedCheckpoint = &checkpoint;  // type hint
-
+                        println!("downloaded checkpoint: {:?}", checkpoint.sequence_number());
                         store
                             .update_highest_synced_checkpoint(&checkpoint)
                             .expect("store operation should not fail");
@@ -1215,6 +1215,7 @@ async fn sync_checkpoint_contents<S>(
                     }
                     Err(checkpoint) => {
                         let _: &VerifiedCheckpoint = &checkpoint;  // type hint
+                        println!("unable to download checkpoint: {:?}", checkpoint.sequence_number());
                         if let Some(lowest_peer_checkpoint) =
                             peer_heights.read().ok().and_then(|x| x.peers.values().map(|state_sync_info| state_sync_info.lowest).min()) {
                             if checkpoint.sequence_number() >= &lowest_peer_checkpoint {
