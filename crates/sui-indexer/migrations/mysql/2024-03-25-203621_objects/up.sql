@@ -32,15 +32,15 @@ CREATE TABLE objects (
     df_object_type              TEXT,
     -- object_id in DynamicFieldInfo.
     df_object_id                BLOB,
-    CONSTRAINT objects_pk PRIMARY KEY (object_id(128))
+    CONSTRAINT objects_pk PRIMARY KEY (object_id(32))
 );
 
 -- OwnerType: 1: Address, 2: Object, see types.rs
-CREATE INDEX objects_owner ON objects (owner_type, owner_id(128));
-CREATE INDEX objects_coin ON objects (owner_id(128), coin_type(128));
+CREATE INDEX objects_owner ON objects (owner_type, owner_id(32));
+CREATE INDEX objects_coin ON objects (owner_id(32), coin_type(256));
 CREATE INDEX objects_checkpoint_sequence_number ON objects (checkpoint_sequence_number);
-CREATE INDEX objects_package_module_name_full_type ON objects (object_type_package(128), object_type_module(128), object_type_name(128), object_type(128));
-CREATE INDEX objects_owner_package_module_name_full_type ON objects (owner_id(128), object_type_package(128), object_type_module(128), object_type_name(128), object_type(128));
+CREATE INDEX objects_package_module_name_full_type ON objects (object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));
+CREATE INDEX objects_owner_package_module_name_full_type ON objects (owner_id(32), object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));
 
 -- similar to objects table, except that
 -- 1. the primary key to store multiple object versions and partitions by checkpoint_sequence_number
@@ -66,16 +66,16 @@ CREATE TABLE objects_history (
     df_name                     BLOB,
     df_object_type              TEXT,
     df_object_id                BLOB,
-    CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id(128), object_version)
+    CONSTRAINT objects_history_pk PRIMARY KEY (checkpoint_sequence_number, object_id(32), object_version)
 ) PARTITION BY RANGE (checkpoint_sequence_number) (
     PARTITION objects_history_partition_0 VALUES LESS THAN MAXVALUE
 );
-CREATE INDEX objects_history_id_version ON objects_history (object_id(128), object_version, checkpoint_sequence_number);
-CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id(128));
-CREATE INDEX objects_history_coin ON objects_history (checkpoint_sequence_number, owner_id(128), coin_type(128));
-CREATE INDEX objects_history_type ON objects_history (checkpoint_sequence_number, object_type(128));
-CREATE INDEX objects_history_package_module_name_full_type ON objects_history (checkpoint_sequence_number, object_type_package(128), object_type_module(128), object_type_name(128), object_type(128));
-CREATE INDEX objects_history_owner_package_module_name_full_type ON objects_history (checkpoint_sequence_number, owner_id(128), object_type_package(128), object_type_module(128), object_type_name(128), object_type(128));
+CREATE INDEX objects_history_id_version ON objects_history (object_id(32), object_version, checkpoint_sequence_number);
+CREATE INDEX objects_history_owner ON objects_history (checkpoint_sequence_number, owner_type, owner_id(32));
+CREATE INDEX objects_history_coin ON objects_history (checkpoint_sequence_number, owner_id(32), coin_type(256));
+CREATE INDEX objects_history_type ON objects_history (checkpoint_sequence_number, object_type(256));
+CREATE INDEX objects_history_package_module_name_full_type ON objects_history (checkpoint_sequence_number, object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));
+CREATE INDEX objects_history_owner_package_module_name_full_type ON objects_history (checkpoint_sequence_number, owner_id(32), object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));
 
 -- snapshot table by folding objects_history table until certain checkpoint,
 -- effectively the snapshot of objects at the same checkpoint,
@@ -99,10 +99,10 @@ CREATE TABLE objects_snapshot (
     df_name                     BLOB,
     df_object_type              TEXT,
     df_object_id                BLOB,
-    CONSTRAINT objects_snapshot_pk PRIMARY KEY (object_id(128))
+    CONSTRAINT objects_snapshot_pk PRIMARY KEY (object_id(32))
 );
 CREATE INDEX objects_snapshot_checkpoint_sequence_number ON objects_snapshot (checkpoint_sequence_number);
-CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id(128), object_id(128));
-CREATE INDEX objects_snapshot_coin ON objects_snapshot (owner_id(128), coin_type(128), object_id(128));
-CREATE INDEX objects_snapshot_package_module_name_full_type ON objects_snapshot (object_type_package(128), object_type_module(128), object_type_name(128), object_type(128));
-CREATE INDEX objects_snapshot_owner_package_module_name_full_type ON objects_snapshot (owner_id(128), object_type_package(128), object_type_module(128), object_type_name(128), object_type(128));
+CREATE INDEX objects_snapshot_owner ON objects_snapshot (owner_type, owner_id(32), object_id(32));
+CREATE INDEX objects_snapshot_coin ON objects_snapshot (owner_id(32), coin_type(256), object_id(32));
+CREATE INDEX objects_snapshot_package_module_name_full_type ON objects_snapshot (object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));
+CREATE INDEX objects_snapshot_owner_package_module_name_full_type ON objects_snapshot (owner_id(32), object_type_package(32), object_type_module(128), object_type_name(128), object_type(256));

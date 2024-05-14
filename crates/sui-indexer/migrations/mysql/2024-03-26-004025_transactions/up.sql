@@ -23,7 +23,7 @@ CREATE TABLE transactions (
     PARTITION transactions_partition_0 VALUES LESS THAN MAXVALUE
 );
 
-CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest(255));
+CREATE INDEX transactions_transaction_digest ON transactions (transaction_digest(32));
 CREATE INDEX transactions_checkpoint_sequence_number ON transactions (checkpoint_sequence_number);
 -- only create index for system transactions (0). See types.rs
 CREATE INDEX transactions_transaction_kind ON transactions (transaction_kind);
