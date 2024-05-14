@@ -45,7 +45,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
         .with_bridge_cluster(true)
         .build()
         .await;
-
+    println!("@@@@@@@@@@@@@ rpc: {}", bridge_test_cluster.sui_rpc_url());
     let (eth_signer, eth_address) = bridge_test_cluster
         .get_eth_signer_and_address()
         .await
@@ -347,6 +347,7 @@ async fn initiate_bridge_eth_to_sui(
     token_id: u8,
     nonce: u64,
 ) {
+    info!("Deposited Eth to SuiBridge");
     let eth_tx = deposit_native_eth_to_sol_contract(
         eth_signer,
         sui_bridge_contract_address,
@@ -376,13 +377,14 @@ async fn initiate_bridge_eth_to_sui(
     assert_eq!(eth_bridge_event.sui_adjusted_amount, sui_amount);
     assert_eq!(eth_bridge_event.sender_address, eth_address);
     assert_eq!(eth_bridge_event.recipient_address, sui_address.to_vec());
-    info!("Deposited Eth to Sol contract");
+    info!("Deposited Eth to SuiBridge");
 
     wait_for_transfer_action_status(
         sui_bridge_client,
         eth_chain_id,
         0,
         BridgeActionStatus::Claimed,
+        6000,
     )
     .await;
     info!("Eth to Sui bridge transfer claimed");
@@ -452,6 +454,7 @@ async fn initiate_bridge_sui_to_eth(
         sui_chain_id,
         nonce,
         BridgeActionStatus::Approved,
+        15,
     )
     .await;
     info!("Sui to Eth bridge transfer approved");
@@ -464,19 +467,22 @@ async fn wait_for_transfer_action_status(
     chain_id: u8,
     nonce: u64,
     status: BridgeActionStatus,
+    timeout_sec: u64,
 ) {
-    // Wait for the bridge action to be approved
+    info!(chain_id, nonce, "Waiting for token transfer action to be {:?}. Time out in {timeout_sec} secs", status);
     let now = std::time::Instant::now();
     loop {
         let res = sui_bridge_client
             .get_token_transfer_action_onchain_status_until_success(chain_id, nonce)
             .await;
-        if res == status {
-            break;
-        }
-        if now.elapsed().as_secs() > 30 {
+        info!(chain_id, nonce, "Token transfer action is {:?}", res);
+        // if res == status {
+        //     break;
+        // }
+        if now.elapsed().as_secs() > timeout_sec {
             panic!(
-                "Timeout waiting for token transfer action to be {:?}. chain_id: {chain_id}, nonce: {nonce}",
+                "Timeout ({} secs) waiting for token transfer action to be {:?}. chain_id: {chain_id}, nonce: {nonce}",
+                timeout_sec,
                 status
             );
         }

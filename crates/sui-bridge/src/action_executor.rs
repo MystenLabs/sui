@@ -418,6 +418,7 @@ where
                     events,
                     );
                 info!(?tx_digest, "Sui transaction executed successfully");
+                info!(?tx_digest, "@@@@@@@@@@@@@@@@@ events: {:?}", events);
                 store
                     .remove_pending_actions(&[action.digest()])
                     .unwrap_or_else(|e| {

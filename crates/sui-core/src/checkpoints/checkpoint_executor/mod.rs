@@ -437,7 +437,7 @@ impl CheckpointExecutor {
             debug!("No checkpoints to schedule, highest synced checkpoint is None",);
             return;
         };
-
+        // println!("latest_synced_checkpoint: {:?}", latest_synced_checkpoint.sequence_number());
         while *next_to_schedule <= *latest_synced_checkpoint.sequence_number()
             && pending.len() < self.config.checkpoint_execution_max_concurrency
         {

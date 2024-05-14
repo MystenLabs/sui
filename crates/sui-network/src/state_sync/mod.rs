@@ -661,13 +661,19 @@ where
             .store
             .get_highest_verified_checkpoint()
             .expect("store operation should not fail");
-
         let highest_known_checkpoint = self
             .peer_heights
             .read()
             .unwrap()
             .highest_known_checkpoint()
             .cloned();
+        let latest_synced_checkpoint = self
+            .store
+            .get_highest_synced_checkpoint()
+            .expect("Failed to read highest synced checkpoint");
+
+        // println!("latest_synced_checkpoint: {:?}", latest_synced_checkpoint.sequence_number());
+        println!("highest_verified_checkpoint: {:?}, highest_known_checkpoint: {:?}, latest_synced_checkpoint: {:?}", highest_processed_checkpoint.sequence_number(), highest_known_checkpoint.as_ref().map(|x| x.sequence_number()), latest_synced_checkpoint.sequence_number());
 
         if Some(highest_processed_checkpoint.sequence_number())
             < highest_known_checkpoint
