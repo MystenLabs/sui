@@ -535,6 +535,19 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         assertEq(bridge.nonces(BridgeUtils.TOKEN_TRANSFER), 1);
     }
 
+    function testBridgeVaultReentrancy() public {
+        changePrank(address(bridge));
+
+        ReentrantAttack reentrantAttack = new ReentrantAttack(address(vault));
+        vault.transferOwnership(address(reentrantAttack));
+        // Fill vault with WETH
+        changePrank(deployer);
+        IWETH9(wETH).deposit{value: 10 ether}();
+        IERC20(wETH).transfer(address(vault), 10 ether);
+        vm.expectRevert("ETH transfer failed");
+        reentrantAttack.attack();
+    }
+
     // An e2e token transfer regression test covering message ser/de and signature verification
     function testTransferSuiToEthRegressionTest() public {
         address[] memory _committee = new address[](4);
@@ -865,5 +878,26 @@ contract SuiBridgeTest is BridgeBaseTest, ISuiBridge {
         assertEq(proxy, address(0x0606060606060606060606060606060606060606));
         assertEq(newImp, address(0x0909090909090909090909090909090909090909));
         assertEq(_calldata, hex"5cd8a76b");
+    }
+}
+
+contract ReentrantAttack {
+    IBridgeVault public vault;
+    bool private attackInitiated;
+
+    constructor(address _vault) {
+        vault = IBridgeVault(_vault);
+    }
+
+    receive() external payable {
+        if (!attackInitiated) {
+            attackInitiated = true;
+            vault.transferETH(payable(address(this)), 100);
+        }
+    }
+
+    function attack() external payable {
+        attackInitiated = false;
+        vault.transferETH(payable(address(this)), 100);
     }
 }
