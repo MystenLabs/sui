@@ -4129,6 +4129,9 @@ fill
 extract
 	public fun
 	0x1::option
+take
+	public fun
+	0x1::option
 borrow_mut
 	public fun
 	0x1::option
