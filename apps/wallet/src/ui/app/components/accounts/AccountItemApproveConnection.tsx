@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
 import { AccountIcon } from '_components/accounts/AccountIcon';
 import { LockUnlockButton } from '_components/accounts/LockUnlockButton';
 import { useUnlockAccount } from '_components/accounts/UnlockAccountContext';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { useResolveSuiNSName } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 import clsx from 'clsx';
-import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 interface Props {
 	account: SerializedUIAccount;

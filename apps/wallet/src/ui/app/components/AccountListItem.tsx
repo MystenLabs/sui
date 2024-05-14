@@ -1,15 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
-import { useResolveSuiNSName } from '@mysten/core';
 import { Check12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Text } from '../shared/text';
 import { AccountBadge } from './AccountBadge';
-import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 export type AccountItemProps = {
 	account: SerializedUIAccount;
@@ -23,7 +22,6 @@ export function AccountListItem({ account, onAccountSelected }: AccountItemProps
 		copySuccessMessage: 'Address Copied',
 	});
 	const domainName = useAppResolveSuinsName(address);
-
 
 	return (
 		<li>

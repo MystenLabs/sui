@@ -1,15 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
 import { Text } from '_src/ui/app/shared/text';
-import { useFormatCoin, useResolveSuiNSName } from '@mysten/core';
+import { useFormatCoin } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { CheckFill16 } from '@mysten/icons';
 import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import cl from 'clsx';
 
 import { useCoinsReFetchingConfig } from '../../hooks';
-import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 type LedgerAccountRowProps = {
 	isSelected: boolean;

@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
 import { Text } from '_src/ui/app/shared/text';
-import { useResolveSuiNSName } from '@mysten/core';
 import { ArrowUpRight12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 import cn from 'clsx';
@@ -15,7 +15,6 @@ import { useExplorerLink } from '../../hooks/useExplorerLink';
 import { ExplorerLinkType } from '../explorer-link/ExplorerLinkType';
 import { IconButton } from '../IconButton';
 import { EditableAccountName } from './EditableAccountName';
-import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 interface AccountItemProps {
 	accountID: string;

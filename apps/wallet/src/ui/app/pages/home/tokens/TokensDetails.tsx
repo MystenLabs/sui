@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
@@ -36,7 +37,6 @@ import {
 	useCoinMetadata,
 	useFormatCoin,
 	useGetDelegatedStake,
-	useResolveSuiNSName,
 } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
 import { Info12, Pin16, Unpin16 } from '@mysten/icons';
@@ -53,7 +53,6 @@ import { PortfolioName } from './PortfolioName';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
-import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 type TokenDetailsProps = {
 	coinType?: string;
