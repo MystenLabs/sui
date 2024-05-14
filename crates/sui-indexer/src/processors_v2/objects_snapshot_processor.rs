@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::types_v2::IndexerResult;
@@ -13,6 +14,7 @@ pub struct ObjectsSnapshotProcessor<S> {
     pub store: S,
     metrics: IndexerMetrics,
     pub config: SnapshotLagConfig,
+    cancel: CancellationToken,
 }
 
 #[derive(Clone)]
@@ -66,6 +68,7 @@ where
             store,
             metrics,
             config: SnapshotLagConfig::default(),
+            cancel: CancellationToken::new(),
         }
     }
 
@@ -73,11 +76,13 @@ where
         store: S,
         metrics: IndexerMetrics,
         config: SnapshotLagConfig,
+        cancel: CancellationToken,
     ) -> ObjectsSnapshotProcessor<S> {
         Self {
             store,
             metrics,
             config,
+            cancel,
         }
     }
 
@@ -113,21 +118,32 @@ where
             .unwrap_or_default();
 
         loop {
-            while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-                latest_cp = self
-                    .store
-                    .get_latest_tx_checkpoint_sequence_number()
-                    .await?
-                    .unwrap_or_default();
+            tokio::select! {
+                _ = self.cancel.cancelled() => {
+                    return Ok(());
+                },
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
+                    while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
+                        latest_cp = self
+                            .store
+                            .get_latest_tx_checkpoint_sequence_number()
+                            .await?
+                            .unwrap_or_default();
+                        if self.cancel.is_cancelled() {
+                            info!("ObjectsSnapshotProcessor was cancelled during checkpoint check");
+                            break;
+                        }
+                    }
+
+                    self.store
+                        .persist_object_snapshot(start_cp, start_cp + snapshot_window)
+                        .await?;
+                    start_cp += snapshot_window;
+                    self.metrics
+                        .latest_object_snapshot_sequence_number
+                        .set(start_cp as i64);
+                }
             }
-            self.store
-                .persist_object_snapshot(start_cp, start_cp + snapshot_window)
-                .await?;
-            start_cp += snapshot_window;
-            self.metrics
-                .latest_object_snapshot_sequence_number
-                .set(start_cp as i64);
         }
     }
 }

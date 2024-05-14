@@ -17,6 +17,7 @@ use prometheus::{Registry, TextEncoder};
 use regex::Regex;
 use std::path::PathBuf;
 use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 use url::Url;
 
@@ -223,7 +224,8 @@ impl Indexer {
                 Some(last_seq_from_db as u64)
             };
 
-            let (checkpoint_handler, object_handler) = new_handlers(store, metrics, config);
+            let (checkpoint_handler, object_handler) =
+                new_handlers(store, metrics, config, CancellationToken::new());
 
             IndexerBuilder::new()
                 .last_downloaded_checkpoint(last_downloaded_checkpoint)

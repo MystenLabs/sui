@@ -20,6 +20,7 @@ use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointConte
 use sui_types::object::Object;
 
 use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
@@ -61,6 +62,7 @@ pub async fn new_handlers<S>(
     state: S,
     metrics: IndexerMetrics,
     config: &IndexerConfig,
+    cancel: CancellationToken,
 ) -> Result<CheckpointHandler<S>, IndexerError>
 where
     S: IndexerStoreV2 + Clone + Sync + Send + 'static,
@@ -88,6 +90,7 @@ where
         config_clone,
         indexed_checkpoint_receiver,
         tx,
+        cancel.clone()
     ));
 
     let checkpoint_handler = CheckpointHandler {

@@ -17,6 +17,7 @@ use std::net::SocketAddr;
 use sui_json_rpc::ServerType;
 use sui_json_rpc::{JsonRpcServerBuilder, ServerHandle};
 use tokio::runtime::Handle;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
 
 use crate::framework::fetcher::CheckpointFetcher;
@@ -38,7 +39,14 @@ impl IndexerV2 {
         metrics: IndexerMetrics,
     ) -> Result<(), IndexerError> {
         let snapshot_config = SnapshotLagConfig::default();
-        IndexerV2::start_writer_with_config(config, store, metrics, snapshot_config).await
+        IndexerV2::start_writer_with_config(
+            config,
+            store,
+            metrics,
+            snapshot_config,
+            CancellationToken::new(),
+        )
+        .await
     }
 
     pub async fn start_writer_with_config<S: IndexerStoreV2 + Sync + Send + Clone + 'static>(
@@ -46,6 +54,7 @@ impl IndexerV2 {
         store: S,
         metrics: IndexerMetrics,
         snapshot_config: SnapshotLagConfig,
+        cancel: CancellationToken,
     ) -> Result<(), IndexerError> {
         info!(
             "Sui indexerV2 Writer (version {:?}) started...",
@@ -72,6 +81,7 @@ impl IndexerV2 {
             rest_client.clone(),
             last_seq_from_db,
             downloaded_checkpoint_data_sender,
+            cancel.clone(),
         );
         spawn_monitored_task!(fetcher.run());
 
@@ -79,17 +89,19 @@ impl IndexerV2 {
             store.clone(),
             metrics.clone(),
             snapshot_config,
+            cancel.clone(),
         );
 
         spawn_monitored_task!(objects_snapshot_processor.start());
 
-        let checkpoint_handler = new_handlers(store, metrics, config).await?;
+        let checkpoint_handler = new_handlers(store, metrics, config, cancel.clone()).await?;
 
         crate::framework::runner::run(
             mysten_metrics::metered_channel::ReceiverStream::new(
                 downloaded_checkpoint_data_receiver,
             ),
             vec![Box::new(checkpoint_handler)],
+            cancel,
         )
         .await;
 

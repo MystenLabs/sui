@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
+use tokio_util::sync::CancellationToken;
 
 use super::fetcher::CheckpointFetcher;
 use super::Handler;
@@ -50,6 +51,7 @@ impl IndexerBuilder {
     }
 
     pub async fn run(self) {
+        let cancel = CancellationToken::new();
         let (downloaded_checkpoint_data_sender, downloaded_checkpoint_data_receiver) =
             mysten_metrics::metered_channel::channel(
                 self.checkpoint_buffer_size,
@@ -66,6 +68,7 @@ impl IndexerBuilder {
             sui_rest_api::Client::new(rest_api_url),
             self.last_downloaded_checkpoint,
             downloaded_checkpoint_data_sender,
+            cancel.clone(),
         );
         mysten_metrics::spawn_monitored_task!(fetcher.run());
 
@@ -76,6 +79,7 @@ impl IndexerBuilder {
                 downloaded_checkpoint_data_receiver,
             ),
             self.handlers,
+            cancel,
         )
         .await;
     }

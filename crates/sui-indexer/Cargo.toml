@@ -30,6 +30,7 @@ regex.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
 url.workspace = true
 
 fastcrypto = { workspace = true, features = ["copy_key"] }

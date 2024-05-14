@@ -356,6 +356,7 @@ impl ConnectionConfig {
     pub fn ci_integration_test_cfg() -> Self {
         Self {
             db_url: DEFAULT_SERVER_DB_URL.to_string(),
+            db_pool_size: 3,
             ..Default::default()
         }
     }
@@ -369,6 +370,7 @@ impl ConnectionConfig {
             db_url: format!("postgres://postgres:postgrespw@localhost:5432/{}", db_name),
             port,
             prom_port,
+            db_pool_size: 3,
             ..Default::default()
         }
     }

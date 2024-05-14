@@ -6,6 +6,7 @@ use diesel::connection::SimpleConnection;
 use mysten_metrics::init_metrics;
 use prometheus::Registry;
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 
 use std::env;
 use std::net::SocketAddr;
@@ -51,6 +52,7 @@ pub async fn start_test_indexer_v2(
         use_indexer_experimental_methods,
         reader_writer_config,
         None,
+        CancellationToken::new(),
     )
     .await
 }
@@ -61,11 +63,12 @@ pub async fn start_test_indexer_v2_impl(
     use_indexer_experimental_methods: bool,
     reader_writer_config: ReaderWriterConfig,
     new_database: Option<String>,
+    cancel: CancellationToken,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 10 for testing
+    // Reduce the connection pool size to 3 for testing
     // to prevent maxing out
-    info!("Setting DB_POOL_SIZE to 10");
-    std::env::set_var("DB_POOL_SIZE", "10");
+    info!("Setting DB_POOL_SIZE to 3");
+    std::env::set_var("DB_POOL_SIZE", "3");
 
     let db_url = db_url.unwrap_or_else(|| {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
@@ -152,6 +155,7 @@ pub async fn start_test_indexer_v2_impl(
                     store_clone,
                     indexer_metrics,
                     snapshot_config,
+                    cancel,
                 )
                 .await
             })
