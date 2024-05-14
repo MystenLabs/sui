@@ -94,10 +94,18 @@ pub(crate) use debug_print_format;
 /// See `debug_print_format` for different `fmt` options.
 macro_rules! debug_print_internal {
     () => {};
+    ((msg $msg:expr)) => {
+        println!("{}", $msg);
+    };
     (($name:expr => $val:expr $(; $fmt:ident)?)) => {
         {
         print!("{}: ", $name);
         crate::shared::string_utils::debug_print_format!($val $(; $fmt)*);
+        }
+    };
+    ((msg $val:expr)) => {
+        {
+            println!("{}", $val);
         }
     };
     ((opt $name:expr => $val:expr $(; $fmt:ident)?)) => {
@@ -127,7 +135,7 @@ pub(crate) use debug_print_internal;
 
 /// Macro for a small DSL for compactling printing debug information based on the provided flag.
 ///
-///  ```
+///  ```text
 ///  debug_print!(
 ///      context.debug_flags.match_compilation,
 ///      ("subject" => subject),

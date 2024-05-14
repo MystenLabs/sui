@@ -8,25 +8,8 @@ use sui::sui_commands::SuiCommand;
 use sui_types::exit_main;
 use tracing::debug;
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-        version
-    }
-};
-
-const VERSION: &str = {
-    if GIT_REVISION.is_empty() {
-        env!("CARGO_PKG_VERSION")
-    } else {
-        const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION)
-    }
-};
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[derive(Parser)]
 #[clap(

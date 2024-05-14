@@ -1,24 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//! NB: Tests in this module expect real network connections and interactions, thus they
-//! should all be tokio::test rather than simtest. Any deviation from this should be well
-//! understood and justified.
+//! NB: Most tests in this module expect real network connections and interactions, thus
+//! they should nearly all be tokio::test rather than simtest.
 
 use jsonrpsee::{
     core::{client::ClientT, RpcResult},
     rpc_params,
 };
 use std::fs::File;
-use sui_core::traffic_controller::{nodefw_test_server::NodeFwTestServer, TrafficController};
+use std::time::Duration;
+use sui_core::traffic_controller::{
+    nodefw_test_server::NodeFwTestServer, TrafficController, TrafficSim,
+};
 use sui_json_rpc_types::{
     SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
+use sui_macros::sim_test;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
 use sui_types::{
     quorum_driver_types::ExecuteTransactionRequestType,
-    traffic_control::{PolicyConfig, PolicyType, RemoteFirewallConfig},
+    traffic_control::{
+        FreqThresholdConfig, PolicyConfig, PolicyType, RemoteFirewallConfig, Weight,
+    },
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
@@ -34,6 +39,7 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
         error_policy_type: PolicyType::TestPanicOnInvocation,
         channel_capacity: 100,
         dry_run: false,
+        spam_sample_rate: Weight::one(),
     };
     let network_config = ConfigBuilder::new_with_temp_dir()
         .with_policy_config(Some(policy_config))
@@ -55,6 +61,7 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
         channel_capacity: 100,
+        spam_sample_rate: Weight::one(),
         dry_run: false,
         ..Default::default()
     };
@@ -67,11 +74,12 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    let n = 5;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
-        // Test that IP forwarding works through this policy
-        spam_policy_type: PolicyType::TestInspectIp,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_sample_rate: Weight::one(),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
@@ -86,26 +94,28 @@ async fn test_validator_traffic_control_dry_run() -> Result<(), anyhow::Error> {
         .build()
         .await;
 
-    assert_traffic_control_dry_run(test_cluster).await
+    assert_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
 async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
+    let n = 15;
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_sample_rate: Weight::one(),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
         channel_capacity: 100,
         dry_run: true,
-        ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
         .build()
         .await;
-    assert_traffic_control_dry_run(test_cluster).await
+    assert_traffic_control_dry_run(test_cluster, n as usize).await
 }
 
 #[tokio::test]
@@ -115,6 +125,7 @@ async fn test_validator_traffic_control_spam_blocked() -> Result<(), anyhow::Err
         connection_blocklist_ttl_sec: 1,
         // Test that any N requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_sample_rate: Weight::one(),
         channel_capacity: 100,
         dry_run: false,
         ..Default::default()
@@ -136,6 +147,7 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
         connection_blocklist_ttl_sec: 3,
         // Test that any N requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_sample_rate: Weight::one(),
         channel_capacity: 100,
         dry_run: false,
         ..Default::default()
@@ -154,6 +166,7 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
         connection_blocklist_ttl_sec: 3,
         // Test that any N - 1 requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_sample_rate: Weight::one(),
         channel_capacity: 100,
         dry_run: false,
         ..Default::default()
@@ -185,6 +198,7 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
         connection_blocklist_ttl_sec: 3,
         // Test that any N - 1 requests will cause an IP to be added to the blocklist.
         spam_policy_type: PolicyType::TestNConnIP(n - 1),
+        spam_sample_rate: Weight::one(),
         channel_capacity: 100,
         dry_run: false,
         ..Default::default()
@@ -211,6 +225,7 @@ async fn test_traffic_control_dead_mans_switch() -> Result<(), anyhow::Error> {
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 3,
         spam_policy_type: PolicyType::TestNConnIP(10),
+        spam_sample_rate: Weight::one(),
         channel_capacity: 100,
         dry_run: false,
         ..Default::default()
@@ -271,6 +286,119 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
 
     std::fs::remove_file(&drain_path).unwrap();
     Ok(())
+}
+
+#[sim_test]
+async fn test_traffic_sketch_no_blocks() {
+    let sketch_config = FreqThresholdConfig {
+        threshold: 10_100,
+        window_size_secs: 4,
+        update_interval_secs: 1,
+        ..Default::default()
+    };
+    let policy = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        spam_policy_type: PolicyType::NoOp,
+        error_policy_type: PolicyType::FreqThreshold(sketch_config),
+        channel_capacity: 100,
+        dry_run: false,
+        ..Default::default()
+    };
+    let metrics = TrafficSim::run(
+        policy,
+        10,     // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(20),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 20;
+    assert!(metrics.num_blocked < 10_010);
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+    assert!(metrics.num_blocklist_adds <= 1);
+    if let Some(first_block) = metrics.abs_time_to_first_block {
+        assert!(first_block > Duration::from_secs(2));
+    }
+    assert!(metrics.num_blocklist_adds < 10);
+    assert!(metrics.total_time_blocked < Duration::from_secs(10));
+}
+
+#[sim_test]
+async fn test_traffic_sketch_with_slow_blocks() {
+    let sketch_config = FreqThresholdConfig {
+        threshold: 9_900,
+        window_size_secs: 4,
+        update_interval_secs: 1,
+        ..Default::default()
+    };
+    let policy = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        spam_policy_type: PolicyType::NoOp,
+        error_policy_type: PolicyType::FreqThreshold(sketch_config),
+        channel_capacity: 100,
+        dry_run: false,
+        ..Default::default()
+    };
+    let metrics = TrafficSim::run(
+        policy,
+        10,     // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(20),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 10 * 20;
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+    // due to averaging, we will take 4 seconds to start blocking, then
+    // will be in blocklist for 1 second (roughly)
+    assert!(metrics.num_blocked > (expected_requests / 4) - 1_000);
+    // 10 clients, blocked at least every 5 sceonds, over 20 seconds
+    assert!(metrics.num_blocklist_adds >= 40);
+    assert!(metrics.abs_time_to_first_block.unwrap() < Duration::from_secs(5));
+    assert!(metrics.total_time_blocked > Duration::from_millis(3500));
+}
+
+#[sim_test]
+async fn test_traffic_sketch_with_sampled_spam() {
+    let sketch_config = FreqThresholdConfig {
+        threshold: 4_500,
+        window_size_secs: 4,
+        update_interval_secs: 1,
+        ..Default::default()
+    };
+    let policy = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 1,
+        spam_policy_type: PolicyType::FreqThreshold(sketch_config),
+        error_policy_type: PolicyType::NoOp,
+        spam_sample_rate: Weight::new(0.5).unwrap(),
+        channel_capacity: 100,
+        dry_run: false,
+    };
+    let metrics = TrafficSim::run(
+        policy,
+        1,      // num_clients
+        10_000, // per_client_tps
+        Duration::from_secs(20),
+        true, // report
+    )
+    .await;
+
+    let expected_requests = 10_000 * 20;
+    assert!(metrics.num_requests > expected_requests - 1_000);
+    assert!(metrics.num_requests < expected_requests + 200);
+    // number of blocked requests should be nearly the same
+    // as before, as we have half the single client TPS,
+    // but the threshould is also halved. However, divide by
+    // 5 instead of 4 as a buffer due in case we're unlucky with
+    // the sampling
+    assert!(metrics.num_blocked > (expected_requests / 5) - 1000);
 }
 
 async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {
@@ -343,11 +471,10 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
 /// are allowed to proceed.
 async fn assert_traffic_control_dry_run(
     mut test_cluster: TestCluster,
+    txn_count: usize,
 ) -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
-
-    let txn_count = 4;
     let mut txns = batch_make_transfer_transactions(context, txn_count).await;
     assert!(
         txns.len() >= txn_count,

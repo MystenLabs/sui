@@ -27,7 +27,7 @@ use sui_types::error::UserInputError;
 use sui_types::fp_ensure;
 use sui_types::message_envelope::Message;
 use sui_types::object::Object;
-use sui_types::quorum_driver_types::GroupedErrors;
+use sui_types::quorum_driver_types::{GroupedErrors, QuorumDriverResponse};
 use sui_types::sui_system_state::{SuiSystemState, SuiSystemStateTrait};
 use sui_types::{
     base_types::*,
@@ -42,7 +42,7 @@ use prometheus::{
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, IntCounter, IntCounterVec, IntGauge, Registry,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
 use std::sync::Arc;
 use std::time::Duration;
@@ -52,7 +52,8 @@ use sui_types::effects::{
     VerifiedCertifiedTransactionEffects,
 };
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, LayoutGenerationOption, ObjectInfoRequest, TransactionInfoRequest,
+    HandleCertificateRequestV3, HandleCertificateResponseV3, LayoutGenerationOption,
+    ObjectInfoRequest, TransactionInfoRequest,
 };
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use tokio::time::{sleep, timeout};
@@ -294,6 +295,45 @@ pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> G
         .collect()
 }
 
+#[derive(Debug, Default)]
+pub struct RetryableOverloadInfo {
+    // Total stake of validators that are overloaded and request client to retry.
+    pub total_stake: StakeUnit,
+
+    // Records requested retry duration by stakes.
+    pub stake_requested_retry_after: BTreeMap<Duration, StakeUnit>,
+}
+
+impl RetryableOverloadInfo {
+    pub fn add_stake_retryable_overload(&mut self, stake: StakeUnit, retry_after: Duration) {
+        self.total_stake += stake;
+        self.stake_requested_retry_after
+            .entry(retry_after)
+            .and_modify(|s| *s += stake)
+            .or_insert(stake);
+    }
+
+    // Gets the duration of retry requested by a quorum of validators with smallest retry durations.
+    pub fn get_quorum_retry_after(
+        &self,
+        good_stake: StakeUnit,
+        quorum_threshold: StakeUnit,
+    ) -> Duration {
+        if self.stake_requested_retry_after.is_empty() {
+            return Duration::from_secs(0);
+        }
+
+        let mut quorum_stake = good_stake;
+        for (retry_after, stake) in self.stake_requested_retry_after.iter() {
+            quorum_stake += *stake;
+            if quorum_stake >= quorum_threshold {
+                return *retry_after;
+            }
+        }
+        *self.stake_requested_retry_after.last_key_value().unwrap().0
+    }
+}
+
 #[derive(Debug)]
 struct ProcessTransactionState {
     // The list of signatures gathered at any point
@@ -308,7 +348,7 @@ struct ProcessTransactionState {
     // Validators that are overloaded with txns pending execution.
     overloaded_stake: StakeUnit,
     // Validators that are overloaded and request client to retry.
-    retryable_overloaded_stake: StakeUnit,
+    retryable_overload_info: RetryableOverloadInfo,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -406,6 +446,14 @@ struct ProcessCertificateState {
     // 1) >= 2f+1 signatures
     // 2) >= f+1 non-retryable errors
     retryable: bool,
+
+    // collection of extended data returned from the validators.
+    // Not all validators will be asked to return this data so we need to hold onto it when one
+    // validator has provided it
+    events: Option<TransactionEvents>,
+    input_objects: Option<Vec<Object>>,
+    output_objects: Option<Vec<Object>>,
+    auxiliary_data: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -1037,7 +1085,7 @@ where
             object_or_package_not_found_stake: 0,
             non_retryable_stake: 0,
             overloaded_stake: 0,
-            retryable_overloaded_stake: 0,
+            retryable_overload_info: Default::default(),
             retryable: true,
             conflicting_tx_digests: Default::default(),
             conflicting_tx_total_stake: 0,
@@ -1110,7 +1158,7 @@ where
                                     //
                                     // TODO: currently retryable overload and above overload error look redundant. We want to have a unified
                                     // code path to handle both overload scenarios.
-                                    state.retryable_overloaded_stake += weight;
+                                    state.retryable_overload_info.add_stake_retryable_overload(weight, Duration::from_secs(err.retry_after_secs()));
                                 }
                                 else if !retryable && !state.record_conflicting_transaction_if_any(name, weight, &err) {
                                     // We don't count conflicting transactions as non-retryable errors here
@@ -1253,15 +1301,19 @@ where
 
         // When state is in a retryable state and process transaction was not successful, it indicates that
         // we have heard from *all* validators. Check if any SystemOverloadRetryAfter error caused the txn
-        // to fail. If so, return explicit SystemOverloadRetryAfter error for continuous retry (since objects)
-        // are locked in validators. If not, retry regular RetryableTransaction error.
-        if state.tx_signatures.total_votes() + state.retryable_overloaded_stake >= quorum_threshold
+        // to fail. If so, return explicit SystemOverloadRetryAfter error for continuous retry (since objects
+        // are locked in validators). If not, retry regular RetryableTransaction error.
+        if state.tx_signatures.total_votes() + state.retryable_overload_info.total_stake
+            >= quorum_threshold
         {
-            // TODO: make use of retry_after_secs, which is currently not used.
+            let retry_after_secs = state
+                .retryable_overload_info
+                .get_quorum_retry_after(state.tx_signatures.total_votes(), quorum_threshold)
+                .as_secs();
             return AggregatorProcessTransactionError::SystemOverloadRetryAfter {
-                overload_stake: state.retryable_overloaded_stake,
+                overload_stake: state.retryable_overload_info.total_stake,
                 errors: group_errors(state.errors),
-                retry_after_secs: 0,
+                retry_after_secs,
             };
         }
 
@@ -1475,24 +1527,39 @@ where
 
     pub async fn process_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        request: HandleCertificateRequestV3,
         client_addr: Option<SocketAddr>,
-    ) -> Result<
-        (VerifiedCertifiedTransactionEffects, TransactionEvents),
-        AggregatorProcessCertificateError,
-    > {
+    ) -> Result<QuorumDriverResponse, AggregatorProcessCertificateError> {
         let state = ProcessCertificateState {
             effects_map: MultiStakeAggregator::new(self.committee.clone()),
             non_retryable_stake: 0,
             non_retryable_errors: vec![],
             retryable_errors: vec![],
             retryable: true,
+            events: None,
+            input_objects: None,
+            output_objects: None,
+            auxiliary_data: None,
         };
 
-        let tx_digest = *certificate.digest();
+        // create a set of validators that we should sample to request input/output objects from
+        let validators_to_sample =
+            if request.include_input_objects || request.include_output_objects {
+                // Always at least ask 1 validator
+                let number_to_sample = std::cmp::max(1, self.committee.num_members() / 2);
+
+                self.committee
+                    .choose_multiple_weighted_iter(number_to_sample)
+                    .cloned()
+                    .collect()
+            } else {
+                HashSet::new()
+            };
+
+        let tx_digest = *request.certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
-        let cert_ref = certificate;
+        let request_ref = request;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
 
@@ -1515,12 +1582,42 @@ where
             move |name, client| {
                 Box::pin(async move {
                     let _guard = GaugeGuard::acquire(&metrics_clone.inflight_certificate_requests);
-                    client
-                        .handle_certificate_v2(cert_ref, client_addr)
-                        .instrument(
-                            tracing::trace_span!("handle_certificate", authority =? name.concise()),
-                        )
-                        .await
+                    if request_ref.include_input_objects || request_ref.include_output_objects {
+
+                        // adjust the request to validators we aren't planning on sampling
+                        let req = if validators_to_sample.contains(&name) {
+                            request_ref
+                        } else {
+                            HandleCertificateRequestV3 {
+                                include_events: false,
+                                include_input_objects: false,
+                                include_output_objects: false,
+                                include_auxiliary_data: false,
+                                ..request_ref
+                            }
+                        };
+
+                        client
+                            .handle_certificate_v3(req, client_addr)
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                    } else {
+                        client
+                            .handle_certificate_v2(request_ref.certificate, client_addr)
+                            .instrument(
+                                tracing::trace_span!("handle_certificate", authority =? name.concise()),
+                            )
+                            .await
+                            .map(|response| HandleCertificateResponseV3 {
+                                effects: response.signed_effects,
+                                events: Some(response.events),
+                                input_objects: None,
+                                output_objects: None,
+                                auxiliary_data: None,
+                            })
+                    }
                 })
             },
             move |mut state, name, weight, response| {
@@ -1646,20 +1743,39 @@ where
         committee: Arc<Committee>,
         tx_digest: &TransactionDigest,
         state: &mut ProcessCertificateState,
-        response: SuiResult<HandleCertificateResponseV2>,
+        response: SuiResult<HandleCertificateResponseV3>,
         name: AuthorityName,
-    ) -> SuiResult<Option<(VerifiedCertifiedTransactionEffects, TransactionEvents)>> {
+    ) -> SuiResult<Option<QuorumDriverResponse>> {
         match response {
-            Ok(HandleCertificateResponseV2 {
-                signed_effects,
+            Ok(HandleCertificateResponseV3 {
+                effects: signed_effects,
                 events,
-                ..
+                input_objects,
+                output_objects,
+                auxiliary_data,
             }) => {
                 debug!(
                     ?tx_digest,
                     name = ?name.concise(),
                     "Validator handled certificate successfully",
                 );
+
+                if events.is_some() && state.events.is_none() {
+                    state.events = events;
+                }
+
+                if input_objects.is_some() && state.input_objects.is_none() {
+                    state.input_objects = input_objects;
+                }
+
+                if output_objects.is_some() && state.output_objects.is_none() {
+                    state.output_objects = output_objects;
+                }
+
+                if auxiliary_data.is_some() && state.auxiliary_data.is_none() {
+                    state.auxiliary_data = auxiliary_data;
+                }
+
                 let effects_digest = *signed_effects.digest();
                 // Note: here we aggregate votes by the hash of the effects structure
                 match state.effects_map.insert(
@@ -1690,7 +1806,13 @@ where
                         );
                         ct.verify(&committee).map(|ct| {
                             debug!(?tx_digest, "Got quorum for validators handle_certificate.");
-                            Some((ct, events))
+                            Some(QuorumDriverResponse {
+                                effects_cert: ct,
+                                events: state.events.take(),
+                                input_objects: state.input_objects.take(),
+                                output_objects: state.output_objects.take(),
+                                auxiliary_data: state.auxiliary_data.take(),
+                            })
                         })
                     }
                 }
@@ -1720,11 +1842,20 @@ where
 
         let _cert_guard = GaugeGuard::acquire(&self.metrics.inflight_certificates);
         let response = self
-            .process_certificate(cert.clone(), client_addr)
+            .process_certificate(
+                HandleCertificateRequestV3 {
+                    certificate: cert.clone(),
+                    include_events: true,
+                    include_input_objects: false,
+                    include_output_objects: false,
+                    include_auxiliary_data: false,
+                },
+                client_addr,
+            )
             .instrument(tracing::debug_span!("process_cert"))
             .await?;
 
-        Ok(response.0)
+        Ok(response.effects_cert)
     }
 
     /// This function tries to get SignedTransaction OR CertifiedTransaction from

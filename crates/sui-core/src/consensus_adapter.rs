@@ -155,7 +155,7 @@ impl ConsensusAdapterMetrics {
                 .unwrap(),
             sequencing_in_flight_submissions: register_int_gauge_with_registry!(
                 "sequencing_in_flight_submissions",
-                "Number of transactions submitted to local narwhal instance and not yet sequenced",
+                "Number of transactions submitted to local consensus instance and not yet sequenced",
                 registry,
             )
                 .unwrap(),
@@ -696,7 +696,7 @@ impl ConsensusAdapter {
                     tokio::time::sleep(Duration::from_secs(WARN_DELAY_S)).await;
                     let total_wait = i * WARN_DELAY_S;
                     warn!(
-                        "Still waiting {} seconds for transaction {:?} to commit in narwhal",
+                        "Still waiting {} seconds for transaction {:?} to commit in consensus",
                         total_wait, transaction_key
                     );
                 }
@@ -732,12 +732,11 @@ impl ConsensusAdapter {
                     .submit_to_consensus(&transaction, epoch_store)
                     .await
                 {
-                    // This can happen during Narwhal reconfig, or when the Narwhal worker has
-                    // full internal buffers and needs to back pressure, so retry a few times
-                    // before logging warnings.
+                    // This can happen during reconfig, or when consensus has full internal buffers
+                    // and needs to back pressure, so retry a few times before logging warnings.
                     if retries > 30 || (retries > 3 && !transaction.kind.is_dkg()) {
                         warn!(
-                            "Failed to submit transaction {transaction_key:?} to own narwhal worker: {e:?}. Retry #{retries}"
+                            "Failed to submit transaction {transaction_key:?} to consensus: {e:?}. Retry #{retries}"
                         );
                     }
                     self.metrics

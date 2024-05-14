@@ -26,7 +26,7 @@ title: Module `0x2::zklogin_verified_issuer`
 
 ## Resource `VerifiedIssuer`
 
-Posession of a VerifiedIssuer proves that the user's address was created using zklogin and with the given issuer
+Possession of a VerifiedIssuer proves that the user's address was created using zklogin and with the given issuer
 (identity provider).
 
 
@@ -169,7 +169,7 @@ Delete a VerifiedIssuer
 ## Function `verify_zklogin_issuer`
 
 Verify that the caller's address was created using zklogin with the given issuer. If so, a VerifiedIssuer object
-with the issuers id transfered to the caller.
+with the issuers id transferred to the caller.
 
 Aborts with <code><a href="zklogin_verified_issuer.md#0x2_zklogin_verified_issuer_EInvalidProof">EInvalidProof</a></code> if the verification fails.
 

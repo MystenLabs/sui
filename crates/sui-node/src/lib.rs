@@ -30,6 +30,7 @@ use sui_core::epoch::randomness::RandomnessManager;
 use sui_core::execution_cache::ExecutionCacheMetrics;
 use sui_core::execution_cache::NotifyReadWrapper;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
+use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc::ServerType;
 use sui_json_rpc_api::JsonRpcMetrics;
 use sui_network::randomness;
@@ -611,15 +612,10 @@ impl SuiNode {
             index_store.clone(),
             checkpoint_store.clone(),
             &prometheus_registry,
-            pruning_config,
             genesis.objects(),
             &db_checkpoint_config,
-            config.expensive_safety_check_config.clone(),
-            config.transaction_deny_config.clone(),
-            config.certificate_deny_config.clone(),
+            config.clone(),
             config.indirect_objects_threshold,
-            config.state_debug_dump_config.clone(),
-            config.authority_overload_config.clone(),
             archive_readers,
         )
         .await;
@@ -1024,6 +1020,12 @@ impl SuiNode {
 
             // Set high-performance defaults for quinn transport.
             // With 200MiB buffer size and ~500ms RTT, max throughput ~400MiB/s.
+            if quic_config.max_concurrent_bidi_streams.is_none() {
+                quic_config.max_concurrent_bidi_streams = Some(500);
+            }
+            if quic_config.max_concurrent_uni_streams.is_none() {
+                quic_config.max_concurrent_uni_streams = Some(500);
+            }
             if quic_config.stream_receive_window.is_none() {
                 quic_config.stream_receive_window = Some(100 << 20);
             }
@@ -1851,6 +1853,7 @@ pub async fn build_http_server(
             server.register_module(TransactionBuilderApi::new(state.clone()))?;
         }
         server.register_module(GovernanceReadApi::new(state.clone(), metrics.clone()))?;
+        server.register_module(BridgeReadApi::new(state.clone(), metrics.clone()))?;
 
         if let Some(transaction_orchestrator) = transaction_orchestrator {
             server.register_module(TransactionExecutionApi::new(

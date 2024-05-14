@@ -28,7 +28,7 @@ title: Module `0x2::zklogin_verified_id`
 
 ## Resource `VerifiedID`
 
-Posession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
+Possession of a VerifiedID proves that the user's address was created using zklogin and the given parameters.
 
 
 <pre><code><b>struct</b> <a href="zklogin_verified_id.md#0x2_zklogin_verified_id_VerifiedID">VerifiedID</a> <b>has</b> key

@@ -23,12 +23,12 @@ use sui_types::sui_system_state::{
     SuiSystemStateWrapper, SuiValidatorGenesis,
 };
 use sui_types::transaction::Transaction;
-use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
 use sui_types::{
     committee::{Committee, EpochId, ProtocolVersion},
     error::SuiResult,
     object::Object,
 };
+use sui_types::{SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
 use tracing::trace;
 
 #[derive(Clone, Debug)]
@@ -329,6 +329,13 @@ impl UnsignedGenesis {
     pub fn has_randomness_state_object(&self) -> bool {
         self.objects()
             .get_object(&SUI_RANDOMNESS_STATE_OBJECT_ID)
+            .expect("read from genesis cannot fail")
+            .is_some()
+    }
+
+    pub fn has_bridge_object(&self) -> bool {
+        self.objects()
+            .get_object(&SUI_BRIDGE_OBJECT_ID)
             .expect("read from genesis cannot fail")
             .is_some()
     }

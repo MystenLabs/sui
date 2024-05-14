@@ -22,8 +22,9 @@ use crate::authority_client::tonic::IntoRequest;
 use sui_network::tonic::metadata::KeyAndValueRef;
 use sui_network::tonic::transport::Channel;
 use sui_types::messages_grpc::{
-    HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
-    SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
+    HandleCertificateRequestV3, HandleCertificateResponseV2, HandleCertificateResponseV3,
+    HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse, SystemStateRequest,
+    TransactionInfoRequest, TransactionInfoResponse,
 };
 
 #[async_trait]
@@ -41,6 +42,13 @@ pub trait AuthorityAPI {
         certificate: CertifiedTransaction,
         client_addr: Option<SocketAddr>,
     ) -> Result<HandleCertificateResponseV2, SuiError>;
+
+    /// Execute a certificate.
+    async fn handle_certificate_v3(
+        &self,
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError>;
 
     /// Handle Object information requests for this account.
     async fn handle_object_info_request(
@@ -132,6 +140,23 @@ impl AuthorityAPI for NetworkAuthorityClient {
         let response = self
             .client()
             .handle_certificate_v2(request)
+            .await
+            .map(tonic::Response::into_inner);
+
+        response.map_err(Into::into)
+    }
+
+    async fn handle_certificate_v3(
+        &self,
+        request: HandleCertificateRequestV3,
+        client_addr: Option<SocketAddr>,
+    ) -> Result<HandleCertificateResponseV3, SuiError> {
+        let mut request = request.into_request();
+        insert_metadata(&mut request, client_addr);
+
+        let response = self
+            .client()
+            .handle_certificate_v3(request)
             .await
             .map(tonic::Response::into_inner);
 

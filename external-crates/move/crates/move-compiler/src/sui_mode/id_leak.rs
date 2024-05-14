@@ -16,7 +16,7 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, Diagnostics},
     editions::Flavor,
-    expansion::ast::AbilitySet,
+    expansion::ast::{AbilitySet, TargetKind},
     hlir::ast::{Exp, Label, ModuleCall, SingleType, Type, Type_, Var},
     parser::ast::{Ability_, DatatypeName},
     shared::{unique_map::UniqueMap, CompilationEnv, Identifier},
@@ -105,7 +105,12 @@ impl SimpleAbsIntConstructor for IDLeakVerifier {
             // Skip if not sui
             return None;
         }
-        if config.is_dependency || !mdef.is_source_module {
+        if !matches!(
+            mdef.target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Skip non-source, dependency modules
             return None;
         }
@@ -155,7 +160,7 @@ impl<'a> SimpleAbsInt for IDLeakVerifierAI<'a> {
         let E::Pack(s, _tys, fields) = e__ else {
             return None;
         };
-        let abilities = self.declared_abilities.get(s).unwrap();
+        let abilities = self.declared_abilities.get(s)?;
         if !abilities.has_ability_(Ability_::Key) {
             return None;
         }

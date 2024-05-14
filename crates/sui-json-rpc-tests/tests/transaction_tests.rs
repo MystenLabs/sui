@@ -1,6 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#[cfg(not(msim))]
+use std::str::FromStr;
+
+use move_core_types::identifier::Identifier;
+use sui_json::{call_args, type_args};
 use sui_json_rpc_types::SuiTransactionBlockResponseQuery;
 use sui_json_rpc_types::TransactionFilter;
 use sui_json_rpc_types::{
@@ -8,8 +13,14 @@ use sui_json_rpc_types::{
     SuiTransactionBlockResponseOptions, TransactionBlockBytes,
 };
 use sui_macros::sim_test;
+use sui_types::base_types::ObjectID;
+use sui_types::gas_coin::GAS;
+use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
+use sui_types::transaction::Command;
 use sui_types::transaction::SenderSignedData;
+use sui_types::transaction::TransactionData;
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_cluster::TestClusterBuilder;
 
 use sui_json_rpc_api::{IndexerApiClient, TransactionBuilderClient, WriteApiClient};
@@ -326,5 +337,111 @@ async fn test_get_fullnode_transaction() -> Result<(), anyhow::Error> {
         assert_eq!(tx_resp.digest, response.digest);
     }
 
+    Ok(())
+}
+
+#[sim_test]
+async fn test_query_transaction_blocks() -> Result<(), anyhow::Error> {
+    let mut cluster = TestClusterBuilder::new().build().await;
+    let context = &cluster.wallet;
+    let client = context.get_client().await.unwrap();
+
+    let address = cluster.get_address_0();
+    let objects = client
+        .read_api()
+        .get_owned_objects(
+            address,
+            Some(SuiObjectResponseQuery::new_with_options(
+                SuiObjectDataOptions::new()
+                    .with_type()
+                    .with_owner()
+                    .with_previous_transaction(),
+            )),
+            None,
+            None,
+        )
+        .await?
+        .data;
+
+    // make 2 move calls of same package & module, but different functions
+    let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
+    let coin = objects.first().unwrap();
+    let coin_2 = &objects[1];
+    let signer = cluster.wallet.active_address().unwrap();
+
+    let tx_builder = client.transaction_builder().clone();
+    let mut pt_builer = ProgrammableTransactionBuilder::new();
+    let gas = objects.last().unwrap().object().unwrap().object_ref();
+
+    let module = Identifier::from_str("pay")?;
+    let function_1 = Identifier::from_str("split")?;
+    let function_2 = Identifier::from_str("divide_and_keep")?;
+
+    let sui_type_args = type_args![GAS::type_tag()]?;
+    let type_args = sui_type_args
+        .into_iter()
+        .map(|ty| ty.try_into())
+        .collect::<Result<Vec<_>, _>>()?;
+
+    let sui_call_args_1 = call_args!(coin.data.clone().unwrap().object_id, 10)?;
+    let call_args_1 = tx_builder
+        .resolve_and_checks_json_args(
+            &mut pt_builer,
+            package_id,
+            &module,
+            &function_1,
+            &type_args,
+            sui_call_args_1,
+        )
+        .await?;
+    let cmd_1 = Command::move_call(
+        package_id,
+        module.clone(),
+        function_1,
+        type_args.clone(),
+        call_args_1.clone(),
+    );
+
+    let sui_call_args_2 = call_args!(coin_2.data.clone().unwrap().object_id, 10)?;
+    let call_args_2 = tx_builder
+        .resolve_and_checks_json_args(
+            &mut pt_builer,
+            package_id,
+            &module,
+            &function_2,
+            &type_args,
+            sui_call_args_2,
+        )
+        .await?;
+    let cmd_2 = Command::move_call(package_id, module, function_2, type_args, call_args_2);
+    pt_builer.command(cmd_1);
+    pt_builer.command(cmd_2);
+    let pt = pt_builer.finish();
+
+    let tx_data = TransactionData::new_programmable(signer, vec![gas], pt, 10_000_000, 1000);
+    let signed_data = cluster.wallet.sign_transaction(&tx_data);
+    let _response = client
+        .quorum_driver_api()
+        .execute_transaction_block(
+            signed_data,
+            SuiTransactionBlockResponseOptions::new(),
+            Some(ExecuteTransactionRequestType::WaitForLocalExecution),
+        )
+        .await
+        .unwrap();
+    // match with None function, the DB should have 2 records, but both points to the same tx
+    let filter = TransactionFilter::MoveFunction {
+        package: package_id,
+        module: Some("pay".to_string()),
+        function: None,
+    };
+    let move_call_query = SuiTransactionBlockResponseQuery::new_with_filter(filter);
+    let tx = client
+        .read_api()
+        .query_transaction_blocks(move_call_query, None, Some(20), true)
+        .await
+        .unwrap();
+    // verify that only 1 tx is returned and no SuiRpcInputError::ContainsDuplicates error
+    assert_eq!(1, tx.data.len());
     Ok(())
 }

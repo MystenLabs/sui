@@ -1,9 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::VecDeque;
-use std::ops::Range;
 use std::{
+    collections::VecDeque,
     ops::Bound::{Excluded, Included},
     time::Duration,
 };
@@ -19,11 +18,9 @@ use typed_store::{
 };
 
 use super::{CommitInfo, Store, WriteBatch};
-use crate::block::Slot;
-use crate::commit::{CommitAPI as _, CommitDigest, CommitRef, TrustedCommit};
 use crate::{
-    block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, VerifiedBlock},
-    commit::CommitIndex,
+    block::{BlockAPI as _, BlockDigest, BlockRef, Round, SignedBlock, Slot, VerifiedBlock},
+    commit::{CommitAPI as _, CommitDigest, CommitIndex, CommitRange, CommitRef, TrustedCommit},
     error::{ConsensusError, ConsensusResult},
 };
 
@@ -129,28 +126,25 @@ impl Store for RocksDBStore {
                     .map_err(ConsensusError::RocksDBFailure)?;
             }
         }
-        if let Some(last_commit) = write_batch.commits.last().cloned() {
-            for commit in write_batch.commits {
-                batch
-                    .insert_batch(
-                        &self.commits,
-                        [((commit.index(), commit.digest()), commit.serialized())],
-                    )
-                    .map_err(ConsensusError::RocksDBFailure)?;
-            }
-            // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
-            if let Some(last_commit_info) = write_batch.last_commit_info {
-                batch
-                    .insert_batch(
-                        &self.commit_info,
-                        [(
-                            (last_commit.index(), last_commit.digest()),
-                            last_commit_info,
-                        )],
-                    )
-                    .map_err(ConsensusError::RocksDBFailure)?;
-            }
+
+        for commit in write_batch.commits {
+            batch
+                .insert_batch(
+                    &self.commits,
+                    [((commit.index(), commit.digest()), commit.serialized())],
+                )
+                .map_err(ConsensusError::RocksDBFailure)?;
         }
+
+        for (commit_ref, commit_info) in write_batch.commit_info {
+            batch
+                .insert_batch(
+                    &self.commit_info,
+                    [((commit_ref.index, commit_ref.digest), commit_info)],
+                )
+                .map_err(ConsensusError::RocksDBFailure)?;
+        }
+
         batch.write()?;
         fail_point!("consensus-store-after-write");
         Ok(())
@@ -270,11 +264,11 @@ impl Store for RocksDBStore {
         Ok(Some(commit))
     }
 
-    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>> {
+    fn scan_commits(&self, range: CommitRange) -> ConsensusResult<Vec<TrustedCommit>> {
         let mut commits = vec![];
         for result in self.commits.safe_range_iter((
-            Included((range.start, CommitDigest::MIN)),
-            Excluded((range.end, CommitDigest::MIN)),
+            Included((range.start(), CommitDigest::MIN)),
+            Excluded((range.end(), CommitDigest::MIN)),
         )) {
             let ((_index, digest), serialized) = result?;
             let commit = TrustedCommit::new_trusted(

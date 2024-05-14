@@ -11,8 +11,6 @@ expression: "results.join(\"\\n\")"
 │ split-coins      │ @0x5 [1000u64]  │
 │ assign           │ result          │
 │ transfer-objects │ [result.0] @0x6 │
-├──────────────────┼─────────────────┤
-│ gas-budget       │ 100000          │
 ╰──────────────────┴─────────────────╯
  === BUILT PTB === 
 Input 0: SharedObject(mutable: true)

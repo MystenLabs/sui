@@ -15,8 +15,10 @@ use crate::models::epoch::StoredEpochInfo;
 use crate::store::diesel_macro::*;
 use downcast::Any;
 
-const GET_PARTITION_SQL: &str = r"
+const GET_PARTITION_SQL: &str = if cfg!(feature = "postgres-feature") {
+    r"
 SELECT parent.relname                                            AS table_name,
+       MIN(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS first_partition,
        MAX(CAST(SUBSTRING(child.relname FROM '\d+$') AS BIGINT)) AS last_partition
 FROM pg_inherits
          JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
@@ -25,7 +27,20 @@ FROM pg_inherits
          JOIN pg_namespace nmsp_child ON nmsp_child.oid = child.relnamespace
 WHERE parent.relkind = 'p'
 GROUP BY table_name;
-";
+"
+} else if cfg!(feature = "mysql-feature") && cfg!(not(feature = "postgres-feature")) {
+    r"
+SELECT TABLE_NAME AS table_name,
+       MIN(CAST(SUBSTRING_INDEX(PARTITION_NAME, '_', -1) AS UNSIGNED)) AS first_partition,
+       MAX(CAST(SUBSTRING_INDEX(PARTITION_NAME, '_', -1) AS UNSIGNED)) AS last_partition
+FROM information_schema.PARTITIONS
+WHERE TABLE_SCHEMA = DATABASE()
+AND PARTITION_NAME IS NOT NULL
+GROUP BY table_name;
+"
+} else {
+    ""
+};
 
 pub struct PgPartitionManager<T: R2D2Connection + 'static> {
     cp: ConnectionPool<T>,
@@ -74,11 +89,13 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
         Ok(manager)
     }
 
-    pub fn get_table_partitions(&self) -> Result<BTreeMap<String, u64>, IndexerError> {
+    pub fn get_table_partitions(&self) -> Result<BTreeMap<String, (u64, u64)>, IndexerError> {
         #[derive(QueryableByName, Debug, Clone)]
         struct PartitionedTable {
             #[diesel(sql_type = VarChar)]
             table_name: String,
+            #[diesel(sql_type = BigInt)]
+            first_partition: i64,
             #[diesel(sql_type = BigInt)]
             last_partition: i64,
         }
@@ -89,22 +106,30 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                 conn
             ))?
             .into_iter()
-            .map(|table: PartitionedTable| (table.table_name, table.last_partition as u64))
+            .map(|table: PartitionedTable| {
+                (
+                    table.table_name,
+                    (table.first_partition as u64, table.last_partition as u64),
+                )
+            })
             .collect(),
         )
     }
 
-    pub fn advance_table_epoch_partition(
+    pub fn advance_and_prune_epoch_partition(
         &self,
         table: String,
+        first_partition: u64,
         last_partition: u64,
         data: &EpochPartitionData,
+        epochs_to_keep: Option<u64>,
     ) -> Result<(), IndexerError> {
         if data.next_epoch == 0 {
-            tracing::info!("Epoch 0 partition has been crate in migrations, skipped.");
+            tracing::info!("Epoch 0 partition has been created in the initial setup.");
             return Ok(());
         }
         if last_partition == data.last_epoch {
+            #[cfg(feature = "postgres-feature")]
             transactional_blocking_with_retry!(
                 &self.cp,
                 |conn| {
@@ -120,10 +145,55 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                 },
                 Duration::from_secs(10)
             )?;
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            transactional_blocking_with_retry!(
+                &self.cp,
+                |conn| {
+                    RunQueryDsl::execute(diesel::sql_query(format!("ALTER TABLE {table_name} REORGANIZE PARTITION {table_name}_partition_{last_epoch} INTO (PARTITION {table_name}_partition_{last_epoch} VALUES LESS THAN ({next_epoch_start_cp}), PARTITION {table_name}_partition_{next_epoch} VALUES LESS THAN MAXVALUE)", table_name = table.clone(), last_epoch = data.last_epoch as i64, next_epoch_start_cp = data.next_epoch_start_cp as i64, next_epoch = data.next_epoch as i64)), conn)
+                },
+                Duration::from_secs(10)
+            )?;
             info!(
-                "Advanced epoch partition for table {} from {} to {}",
-                table, last_partition, data.next_epoch
+                "Advanced epoch partition for table {} from {} to {}, prev partition upper bound {}",
+                table, last_partition, data.next_epoch, data.last_epoch_start_cp
             );
+
+            // prune old partitions beyond the retention period
+            if let Some(epochs_to_keep) = epochs_to_keep {
+                for epoch in first_partition..(data.next_epoch - epochs_to_keep + 1) {
+                    #[cfg(feature = "postgres-feature")]
+                    transactional_blocking_with_retry!(
+                        &self.cp,
+                        |conn| {
+                            RunQueryDsl::execute(
+                                diesel::sql_query("CALL drop_partition($1, $2)")
+                                    .bind::<diesel::sql_types::Text, _>(table.clone())
+                                    .bind::<diesel::sql_types::BigInt, _>(epoch as i64),
+                                conn,
+                            )
+                        },
+                        Duration::from_secs(10)
+                    )?;
+                    #[cfg(feature = "mysql-feature")]
+                    #[cfg(not(feature = "postgres-feature"))]
+                    transactional_blocking_with_retry!(
+                        &self.cp,
+                        |conn| {
+                            RunQueryDsl::execute(
+                                diesel::sql_query(format!(
+                                    "ALTER TABLE {} DROP PARTITION partition_{}",
+                                    table.clone(),
+                                    epoch
+                                )),
+                                conn,
+                            )
+                        },
+                        Duration::from_secs(10)
+                    )?;
+                    info!("Dropped epoch partition {} for table {}", epoch, table);
+                }
+            }
         } else if last_partition != data.next_epoch {
             // skip when the partition is already advanced once, which is possible when indexer
             // crashes and restarts; error otherwise.

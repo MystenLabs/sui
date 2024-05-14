@@ -641,12 +641,14 @@ impl Object {
         modules: &[CompiledModule],
         previous_transaction: TransactionDigest,
         max_move_package_size: u64,
+        move_binary_format_version: u32,
         dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         Ok(Self::new_package_from_data(
             Data::Package(MovePackage::new_initial(
                 modules,
                 max_move_package_size,
+                move_binary_format_version,
                 dependencies,
             )?),
             previous_transaction,
@@ -678,10 +680,12 @@ impl Object {
         dependencies: impl IntoIterator<Item = MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let dependencies: Vec<_> = dependencies.into_iter().collect();
+        let config = ProtocolConfig::get_for_max_version_UNSAFE();
         Self::new_package(
             modules,
             previous_transaction,
-            ProtocolConfig::get_for_max_version_UNSAFE().max_move_package_size(),
+            config.max_move_package_size(),
+            config.move_binary_format_version(),
             &dependencies,
         )
     }
@@ -922,17 +926,9 @@ impl Object {
         Self::immutable_with_id_for_testing(IMMUTABLE_OBJECT_ID.with(|id| *id))
     }
 
-    /// Make a test shared object. Note that this function returns the same object called from the same thread.
+    /// Make a new random test shared object.
     pub fn shared_for_testing() -> Object {
-        thread_local! {
-            static SHARED_OBJECT_ID: ObjectID = ObjectID::random();
-        }
-
-        Object::with_id_shared_for_testing(SHARED_OBJECT_ID.with(|id| *id))
-    }
-
-    /// Make a new test sahred object.
-    pub fn with_id_shared_for_testing(id: ObjectID) -> Object {
+        let id = ObjectID::random();
         let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, id, 10);
         let owner = Owner::Shared {
             initial_shared_version: obj.version(),

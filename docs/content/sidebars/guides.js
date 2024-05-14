@@ -106,6 +106,7 @@ const guides = [
 					'guides/developer/cryptography/groth16',
 					'guides/developer/cryptography/hashing',
 					'guides/developer/cryptography/ecvrf',
+					'guides/developer/cryptography/multisig',
 					{
 						type: 'category',
 						label: 'zkLogin Integration Guide',
@@ -170,6 +171,7 @@ const guides = [
 					},
 					'guides/developer/app-examples/plinko',
 					'guides/developer/app-examples/recaptcha',
+          'guides/developer/app-examples/reviews-rating',
 					'guides/developer/app-examples/tic-tac-toe',
 					{
 						type: 'category',

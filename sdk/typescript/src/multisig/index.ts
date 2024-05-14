@@ -6,6 +6,7 @@ import type { SignatureFlag } from '../cryptography/index.js';
 import { SIGNATURE_FLAG_TO_SCHEME } from '../cryptography/index.js';
 import { publicKeyFromRawBytes } from '../verify/index.js';
 
+export { MultiSigSigner } from './signer.js';
 export * from './publickey.js';
 
 export function publicKeyFromSuiBytes(publicKey: string | Uint8Array) {

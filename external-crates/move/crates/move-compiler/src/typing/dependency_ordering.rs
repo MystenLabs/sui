@@ -359,18 +359,15 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
     match lv_ {
         L::Ignore => (),
         L::Var { ty, .. } => type_(context, ty),
-        L::Unpack(m, _, tys, fields) | L::BorrowUnpack(_, m, _, tys, fields) => {
+        L::Unpack(m, _, tys, fields)
+        | L::BorrowUnpack(_, m, _, tys, fields)
+        | L::UnpackVariant(m, _, _, tys, fields)
+        | L::BorrowUnpackVariant(_, m, _, _, tys, fields) => {
             context.add_usage(*m, *loc);
             types(context, tys);
             for (_, _, (_, (_, field))) in fields {
                 lvalue(context, field)
             }
-        }
-        L::BorrowUnpackVariant(..) | L::UnpackVariant(..) => {
-            context.env.add_diag(ice!((
-                *loc,
-                "variant unpacking shouldn't occur before match expansion"
-            )));
         }
     }
 }
@@ -402,21 +399,18 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
-        E::Match(esubject, arms) => {
-            exp(context, esubject);
-            for sp!(_, arm) in &arms.value {
-                pat(context, &arm.pattern);
-                if let Some(guard) = arm.guard.as_ref() {
-                    exp(context, guard)
-                }
-                exp(context, &arm.rhs);
-            }
-        }
-        E::VariantMatch(..) => {
+        E::Match(_subject, _arms) => {
             context.env.add_diag(ice!((
                 e.exp.loc,
-                "shouldn't find variant match before HLIR lowering"
+                "shouldn't find match after match compilation step"
             )));
+        }
+        E::VariantMatch(subject, (module, _), arms) => {
+            exp(context, subject);
+            context.add_usage(*module, e.exp.loc);
+            for (_, rhs) in arms {
+                exp(context, rhs);
+            }
         }
         E::While(_, e1, e2) => {
             exp(context, e1);
@@ -486,29 +480,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Constant(..)
         | E::Continue(_)
         | E::BorrowLocal(..)
-        | E::ErrorConstant(_)
+        | E::ErrorConstant { .. }
         | E::UnresolvedError => (),
-    }
-}
-
-fn pat(context: &mut Context, p: &T::MatchPattern) {
-    use T::UnannotatedPat_ as P;
-    match &p.pat.value {
-        P::Variant(m, _, _, tys, fields)
-        | P::BorrowVariant(_, m, _, _, tys, fields)
-        | P::Struct(m, _, tys, fields)
-        | P::BorrowStruct(_, m, _, tys, fields) => {
-            context.add_usage(*m, p.pat.loc);
-            types(context, tys);
-            for (_, _, (_, (_, p))) in fields {
-                pat(context, p)
-            }
-        }
-        P::At(_, inner) => pat(context, inner),
-        P::Or(lhs, rhs) => {
-            pat(context, lhs);
-            pat(context, rhs);
-        }
-        P::Constant(_, _) | P::Wildcard | P::ErrorPat | P::Binder(_, _) | P::Literal(_) => (),
     }
 }

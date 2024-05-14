@@ -6,7 +6,7 @@ use crate::{
     debug_display,
     diagnostics::WarningFilters,
     expansion::ast::{
-        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, Value, Visibility,
+        Address, Attributes, Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Visibility,
     },
     ice,
     naming::ast::{
@@ -26,6 +26,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, VecDeque},
     fmt,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -34,7 +35,7 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub info: TypingProgramInfo,
+    pub info: Arc<TypingProgramInfo>,
     pub inner: Program_,
 }
 
@@ -54,7 +55,7 @@ pub struct ModuleDefinition {
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     /// `dependency_order` is the topological order/rank in the dependency graph.
     /// `dependency_order` is initialized at `0` and set in the uses pass
     pub dependency_order: usize,
@@ -196,7 +197,11 @@ pub enum UnannotatedExp_ {
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
-    VariantMatch(Box<Exp>, DatatypeName, Vec<(VariantName, Exp)>),
+    VariantMatch(
+        Box<Exp>,
+        (ModuleIdent, DatatypeName),
+        Vec<(VariantName, Exp)>,
+    ),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop {
         name: BlockLabel,
@@ -236,7 +241,10 @@ pub enum UnannotatedExp_ {
     // unfinished dot access (e.g. `some_field.`)
     InvalidAccess(Box<Exp>),
 
-    ErrorConstant(Option<ConstantName>),
+    ErrorConstant {
+        line_number_loc: Loc,
+        error_constant: Option<ConstantName>,
+    },
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
@@ -418,7 +426,7 @@ impl AstDebug for ModuleDefinition {
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             dependency_order,
             immediate_neighbors,
             used_addresses,
@@ -435,11 +443,15 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        if *is_source_module {
-            w.writeln("library module")
-        } else {
-            w.writeln("source module")
-        }
+        w.writeln(match target_kind {
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
+        });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
             w.write(&format!("{mident} is"));
@@ -692,10 +704,10 @@ impl AstDebug for UnannotatedExp_ {
                     })
                 });
             }
-            E::VariantMatch(esubject, enum_name, arms) => {
+            E::VariantMatch(esubject, (m, enum_name), arms) => {
                 w.write("variant_switch (");
                 esubject.ast_debug(w);
-                w.write(format!(" : {} ) ", enum_name));
+                w.write(format!(" : {m}::{enum_name} ) "));
                 w.block(|w| {
                     w.comma(arms.iter(), |w, (variant, rhs)| {
                         w.write(format!("{} =>", variant));
@@ -828,9 +840,12 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(".");
             }
             E::UnresolvedError => w.write("_|_"),
-            E::ErrorConstant(constant) => {
+            E::ErrorConstant {
+                line_number_loc: _,
+                error_constant,
+            } => {
                 w.write("ErrorConstant");
-                if let Some(c) = constant {
+                if let Some(c) = error_constant {
                     w.write(&format!("({})", c))
                 }
             }

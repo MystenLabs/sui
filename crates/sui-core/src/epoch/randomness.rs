@@ -11,7 +11,7 @@ use fastcrypto_tbls::nodes::PartyId;
 use fastcrypto_tbls::{dkg, nodes};
 use futures::stream::FuturesUnordered;
 use futures::StreamExt;
-use narwhal_types::Round;
+use narwhal_types::{Round, TimestampMs};
 use parking_lot::Mutex;
 use rand::rngs::{OsRng, StdRng};
 use rand::SeedableRng;
@@ -436,7 +436,7 @@ impl RandomnessManager {
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_num_shares
-                        .set(output.shares.as_ref().map_or(0, |shares| shares.len()) as i64);
+                        .set(num_shares as i64);
                     epoch_store
                         .metrics
                         .epoch_random_beacon_dkg_epoch_start_completion_time_ms
@@ -557,11 +557,31 @@ impl RandomnessManager {
         Ok(())
     }
 
-    /// Reserves the next available round number for randomness generation. Once the given
+    /// Reserves the next available round number for randomness generation if enough time has
+    /// elapsed, or returns None if not yet ready (based on ProtocolConfig setting). Once the given
     /// batch is written, `generate_randomness` must be called to start the process. On restart,
     /// any reserved rounds for which the batch was written will automatically be resumed.
-    pub fn reserve_next_randomness(&mut self, batch: &mut DBBatch) -> SuiResult<RandomnessRound> {
-        let tables = self.tables()?;
+    pub fn reserve_next_randomness(
+        &mut self,
+        commit_timestamp: TimestampMs,
+        batch: &mut DBBatch,
+    ) -> SuiResult<Option<RandomnessRound>> {
+        let epoch_store = self.epoch_store()?;
+        let tables = epoch_store.tables()?;
+
+        let last_round_timestamp = tables
+            .randomness_last_round_timestamp
+            .get(&SINGLETON_KEY)
+            .expect("typed_store should not fail");
+        if let Some(last_round_timestamp) = last_round_timestamp {
+            if commit_timestamp - last_round_timestamp
+                < epoch_store
+                    .protocol_config()
+                    .random_beacon_min_round_interval_ms()
+            {
+                return Ok(None);
+            }
+        }
 
         let randomness_round = self.next_randomness_round;
         self.next_randomness_round = self
@@ -577,8 +597,12 @@ impl RandomnessManager {
             &tables.randomness_next_round,
             std::iter::once((SINGLETON_KEY, self.next_randomness_round)),
         )?;
+        batch.insert_batch(
+            &tables.randomness_last_round_timestamp,
+            std::iter::once((SINGLETON_KEY, commit_timestamp)),
+        )?;
 
-        Ok(randomness_round)
+        Ok(Some(randomness_round))
     }
 
     /// Starts the process of generating the given RandomnessRound.
@@ -587,14 +611,12 @@ impl RandomnessManager {
             .send_partial_signatures(epoch, randomness_round);
     }
 
-    /// Returns true if DKG is over for this epoch, whether due to success or failure.
-    pub fn is_dkg_closed(&self) -> bool {
-        self.dkg_output.initialized()
-    }
-
-    /// Returns true if DKG has completed successfully.
-    pub fn is_dkg_successful(&self) -> bool {
-        self.dkg_output.get().and_then(|opt| opt.as_ref()).is_some()
+    pub fn dkg_status(&self) -> DkgStatus {
+        match self.dkg_output.get() {
+            Some(Some(_)) => DkgStatus::Successful,
+            Some(None) => DkgStatus::Failed,
+            None => DkgStatus::Pending,
+        }
     }
 
     /// Generates a new RandomnessReporter for reporting observed rounds to this RandomnessManager.
@@ -687,6 +709,13 @@ impl RandomnessReporter {
             .complete_round(epoch_store.committee().epoch(), round);
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DkgStatus {
+    Pending,
+    Failed,
+    Successful,
 }
 
 #[cfg(test)]
@@ -820,7 +849,7 @@ mod tests {
 
         // Verify DKG completed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager.is_dkg_successful());
+            assert_eq!(DkgStatus::Successful, randomness_manager.dkg_status());
         }
     }
 
@@ -914,8 +943,7 @@ mod tests {
 
         // Verify DKG failed.
         for randomness_manager in &randomness_managers {
-            assert!(randomness_manager.is_dkg_closed());
-            assert!(!randomness_manager.is_dkg_successful());
+            assert_eq!(DkgStatus::Failed, randomness_manager.dkg_status());
         }
     }
 }

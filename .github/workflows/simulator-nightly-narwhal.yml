@@ -5,7 +5,7 @@ concurrency:
 
 on:
   schedule:
-    - cron: '0 13 * * *' # UTC timing is every day at 5am PST
+    - cron: '0 3 * * *' # equivalent to 7PM PST
   workflow_dispatch:
     inputs:
       sui_ref:
@@ -28,7 +28,8 @@ env:
 
 jobs:
   simtest:
-    timeout-minutes: 240
+    # Allow running the job for up to 6 hours, maximum for GitHub Actions.
+    timeout-minutes: 360
     permissions:
       # The "id-token: write" permission is required or Machine ID will not be
       # able to authenticate with the cluster.

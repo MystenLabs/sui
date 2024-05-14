@@ -310,6 +310,14 @@ String representation of an arbitrary width, possibly signed integer.
 scalar BigInt
 
 
+type BridgeCommitteeInitTransaction {
+	bridgeObjInitialSharedVersion: Int!
+}
+
+type BridgeStateCreateTransaction {
+	chainId: String!
+}
+
 """
 A system transaction that updates epoch information on-chain (increments the current epoch).
 Executed by the system once per epoch, without using gas. Epoch change transactions cannot be
@@ -943,7 +951,7 @@ type EndOfEpochTransaction {
 	transactions(first: Int, before: String, last: Int, after: String): EndOfEpochTransactionKindConnection!
 }
 
-union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction
+union EndOfEpochTransactionKind = ChangeEpochTransaction | AuthenticatorStateCreateTransaction | AuthenticatorStateExpireTransaction | RandomnessStateCreateTransaction | CoinDenyListStateCreateTransaction | BridgeStateCreateTransaction | BridgeCommitteeInitTransaction
 
 type EndOfEpochTransactionKindConnection {
 	"""
@@ -3013,6 +3021,10 @@ type ServiceConfig {
 	"""
 	isEnabled(feature: Feature!): Boolean!
 	"""
+	List the available versions for this GraphQL service.
+	"""
+	availableVersions: [String!]!
+	"""
 	List of all features that are enabled on this GraphQL service.
 	"""
 	enabledFeatures: [Feature!]!
@@ -3103,6 +3115,20 @@ type SharedInput {
 	respect to each other.
 	"""
 	mutable: Boolean!
+}
+
+"""
+The transaction accpeted a shared object as input, but its execution was cancelled.
+"""
+type SharedObjectCancelled {
+	"""
+	ID of the shared object.
+	"""
+	address: SuiAddress!
+	"""
+	The assigned shared object version. It is a special version indicating transaction cancellation reason.
+	"""
+	version: Int!
 }
 
 """
@@ -3705,6 +3731,8 @@ type TransactionBlockEffects {
 	lamportVersion: Int!
 	"""
 	The reason for a transaction failure, if it did fail.
+	If the error is a Move abort, the error message will be resolved to a human-readable form if
+	possible, otherwise it will fall back to displaying the abort code and location.
 	"""
 	errors: String
 	"""
@@ -3871,7 +3899,7 @@ This information is considered part of the effects, because although the transac
 the shared object as input, consensus must schedule it and pick the version that is actually
 used.
 """
-union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete
+union UnchangedSharedObject = SharedObjectRead | SharedObjectDelete | SharedObjectCancelled
 
 type UnchangedSharedObjectConnection {
 	"""
@@ -3963,12 +3991,22 @@ type Validator {
 	The validator's current staking pool object, used to track the amount of stake
 	and to compound staking rewards.
 	"""
-	stakingPool: MoveObject
+	stakingPool: MoveObject @deprecated(reason: "The staking pool is a wrapped object. Access its fields directly on the `Validator` type.")
+	"""
+	The ID of this validator's `0x3::staking_pool::StakingPool`.
+	"""
+	stakingPoolId: SuiAddress!
 	"""
 	The validator's current exchange object. The exchange rate is used to determine
 	the amount of SUI tokens that each past SUI staker can withdraw in the future.
 	"""
-	exchangeRates: MoveObject
+	exchangeRates: MoveObject @deprecated(reason: "The exchange object is a wrapped object. Access its dynamic fields through the `exchangeRatesTable` query.")
+	"""
+	A wrapped object containing the validator's exchange rates. This is a table from epoch
+	number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
+	of SUI tokens that each past SUI staker can withdraw in the future.
+	"""
+	exchangeRatesTable: Owner
 	"""
 	Number of exchange rates in the table.
 	"""

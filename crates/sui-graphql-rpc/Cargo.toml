@@ -1,6 +1,6 @@
 [package]
 name = "sui-graphql-rpc"
-version = "2024.2.0"
+version = "2024.7.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -22,7 +22,7 @@ either.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 fastcrypto-zkp.workspace = true
 futures.workspace = true
-git-version.workspace = true
+bin-version.workspace = true
 hex.workspace = true
 http.workspace = true
 hyper.workspace = true

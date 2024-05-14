@@ -1,5 +1,47 @@
 # @mysten/enoki
 
+## 0.2.7
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+  - @mysten/zklogin@0.6.3
+
+## 0.2.6
+
+### Patch Changes
+
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/sui.js@0.54.0
+  - @mysten/zklogin@0.6.2
+
+## 0.2.5
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+  - @mysten/sui.js@0.53.0
+  - @mysten/zklogin@0.6.1
+
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [e279098cff]
+  - @mysten/zklogin@0.6.0
+
+## 0.2.3
+
+### Patch Changes
+
+- 049610aeb6: Add network to execution flow
+- 9a1406a396: Add missing network param to enokiflow
+- Updated dependencies [929db4976a]
+  - @mysten/sui.js@0.52.0
+  - @mysten/zklogin@0.5.3
+
 ## 0.2.2
 
 ### Patch Changes

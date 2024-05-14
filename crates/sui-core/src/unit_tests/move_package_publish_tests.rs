@@ -410,7 +410,7 @@ async fn test_publish_extraneous_bytes_modules() {
             value: vec![1],
         });
         let mut buf = vec![];
-        m.serialize(&mut buf).unwrap();
+        m.serialize_with_version(m.version, &mut buf).unwrap();
         buf
     };
     modules[0] = new_bytes;

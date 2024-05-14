@@ -938,6 +938,7 @@ impl Loader {
             &bytes,
             &BinaryConfig::legacy(
                 self.vm_config.max_binary_format_version,
+                self.vm_config.binary_config.min_binary_format_version,
                 self.vm_config()
                     .check_no_extraneous_bytes_during_deserialization,
             ),

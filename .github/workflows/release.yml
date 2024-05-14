@@ -12,6 +12,7 @@ on:
 
 env:
   TAG_NAME: "${{ github.event.inputs.sui_tag || github.ref }}"
+  BINARY_LIST_FILE: "./binary-build-list.json"
   CARGO_TERM_COLOR: always
   # Disable incremental compilation.
   #
@@ -42,8 +43,8 @@ jobs:
       matrix:
         os:
           [
-            windows-ghcloud,
             ubuntu-ghcloud,
+            windows-ghcloud,
             macos-latest-xl,
             macos-arm64-self-hosted
           ]
@@ -95,7 +96,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
-          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ${{ env.TMP_BUILD_DIR }}/sui-${{ env.sui_tag }}-${os_type}.tgz
+          aws s3 cp s3://sui-releases/releases/sui-${{ env.sui_tag }}-${os_type}.tgz ./tmp/sui-${{ env.sui_tag }}-${os_type}.tgz
 
       - name: Setup caching
         if: ${{ env.s3_archive_exist == '' }}
@@ -129,11 +130,11 @@ jobs:
         with:
           ref: ${{ env.sui_tag }}
 
-      - name: Cargo build (release) for ${{ matrix.os }} platform
+      - name: Cargo build for ${{ matrix.os }} platform
         if: ${{ env.s3_archive_exist == '' }}
         shell: bash
         run: |
-          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release
+          [ -f ~/.cargo/env ] && source ~/.cargo/env ; cargo build --release && cargo build --profile=dev --bin sui
           cd external-crates/move && cargo build -p move-analyzer --release
 
       - name: Rename binaries for ${{ matrix.os }}
@@ -141,15 +142,15 @@ jobs:
         shell: bash
         run: |
           mkdir -p ${{ env.TMP_BUILD_DIR }}
-          [ -f ./target/release/sui${{ env.extention }} ] && mv ./target/release/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui${{ env.extention }}
-          [ -f ./target/release/sui-node${{ env.extention }} ] && mv ./target/release/sui-node${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-node${{ env.extention }}
-          [ -f ./target/release/sui-tool${{ env.extention }} ] && mv ./target/release/sui-tool${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-tool${{ env.extention }}
-          [ -f ./target/release/sui-faucet${{ env.extention }} ] && mv ./target/release/sui-faucet${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-faucet${{ env.extention }}
-          [ -f ./target/release/sui-test-validator${{ env.extention }} ] && mv ./target/release/sui-test-validator${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-test-validator${{ env.extention }}
-          [ -f ./target/release/sui-data-ingestion${{ env.extention }} ] && mv ./target/release/sui-data-ingestion${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-data-ingestion${{ env.extention }}
-          [ -f ./target/release/sui-bridge${{ env.extention }} ] && mv ./target/release/sui-bridge${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-bridge${{ env.extention }}
-          [ -f ./target/release/sui-graphql-rpc${{ env.extention }} ] && mv ./target/release/sui-graphql-rpc${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-graphql-rpc${{ env.extention }}
-          [ -f ./external-crates/move/target/release/move-analyzer${{ env.extention }} ] && mv ./external-crates/move/target/release/move-analyzer${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/move-analyzer${{ env.extention }}
+
+          [ ! -f ${{ env.BINARY_LIST_FILE }} ] && echo "${{ env.BINARY_LIST_FILE }} cannot be found" && exit 1
+          for binary in $(cat ${{ env.BINARY_LIST_FILE }} | jq -r '.release_binaries[]'); do
+            export binary=$(echo ${binary} | tr -d $'\r')
+            mv ./target/release/${binary}${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/${binary}${{ env.extention }}
+          done
+
+          mv ./target/debug/sui${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/sui-debug${{ env.extention }}
+          mv ./external-crates/move/target/release/move-analyzer${{ env.extention }} ${{ env.TMP_BUILD_DIR }}/move-analyzer${{ env.extention }}
           tar -cvzf ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz -C ${{ env.TMP_BUILD_DIR }} .
           [[ ${{ env.sui_tag }} == *"testnet"* ]] && aws s3 cp ./tmp/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz s3://sui-releases/releases/sui-${{ env.sui_tag }}-${{ env.os_type }}.tgz || true
 
@@ -160,7 +161,7 @@ jobs:
         shell: bash
         run: |
           choco install checksum
-          export sui_sha=$(checksum -t sha256 .${{ env.TMP_BUILD_DIR }}/sui.exe)
+          export sui_sha=$(checksum -t sha256 ${{ env.TMP_BUILD_DIR }}/sui.exe)
 
           cat <<EOF >>VERIFICATION.txt
           Sui Binary verification steps

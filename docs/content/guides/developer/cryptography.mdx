@@ -28,6 +28,12 @@ Use ECVRFs to generate a random number and provide proof that the number used a 
 
 Go to [ECVRF](./cryptography/ecvrf.mdx).
 
+## Multisig
+
+Sui allows you to mix and match key schemes in a single multisig account. For example, you can pick a single Ed25519 mnemonic-based key and two ECDSA secp256r1 keys to create a multisig account that always requires the Ed25519 key, but also one of the ECDSA secp256r1 keys to sign. You could use this structure for mobile secure enclave stored keys as two-factor authentication.
+
+Go to [Multisig](./cryptography/multisig.mdx).
+
 ## Related links
 
 - [Cryptography concepts](../../concepts/cryptography.mdx): Before you use the guides, you might want to learn about the concepts behind the use of cryptography on Sui.

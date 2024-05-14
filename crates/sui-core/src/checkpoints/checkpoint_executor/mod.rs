@@ -102,7 +102,7 @@ fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
             std::env::var("NEW_CHECKPOINT_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(if panic_on_timeout { 20000 } else { 2000 }),
+                .unwrap_or(if panic_on_timeout { 30000 } else { 2000 }),
         );
 
         CheckpointTimeoutConfig {
@@ -314,9 +314,9 @@ impl CheckpointExecutor {
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },
                     Ok(Ok(checkpoint)) => {
-                        debug!(
+                        info!(
                             sequence_number = ?checkpoint.sequence_number,
-                            "received checkpoint summary from state sync"
+                            "Received checkpoint summary from state sync"
                         );
                         checkpoint.report_checkpoint_age_ms(&self.metrics.checkpoint_contents_age_ms);
                     },

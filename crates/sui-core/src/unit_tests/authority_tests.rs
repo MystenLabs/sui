@@ -34,14 +34,13 @@ use sui_protocol_config::{
     Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion,
     SupportedProtocolVersions,
 };
-use sui_types::digests::ConsensusCommitDigest;
 use sui_types::dynamic_field::DynamicFieldType;
 use sui_types::effects::TransactionEffects;
 use sui_types::epoch_data::EpochData;
 use sui_types::error::UserInputError;
+use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages_consensus::{ConsensusCommitPrologue, ConsensusCommitPrologueV2};
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
@@ -59,10 +58,11 @@ use sui_types::{
     SUI_FRAMEWORK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
-use crate::authority::authority_per_epoch_store::DeferralKey;
 use crate::authority::authority_store_tables::AuthorityPerpetualTables;
 use crate::authority::move_integration_tests::build_and_publish_test_package_with_upgrade_cap;
 use crate::authority::test_authority_builder::TestAuthorityBuilder;
+use crate::authority::transaction_deferral::DeferralKey;
+use crate::transaction_input_loader::TransactionInputLoader;
 use crate::{
     authority_client::{AuthorityAPI, NetworkAuthorityClient},
     authority_server::AuthorityServer,
@@ -1751,7 +1751,9 @@ async fn test_publish_dependent_module_ok() {
     let dependent_module = make_dependent_module(&genesis_module);
     let dependent_module_bytes = {
         let mut bytes = Vec::new();
-        dependent_module.serialize(&mut bytes).unwrap();
+        dependent_module
+            .serialize_with_version(dependent_module.version, &mut bytes)
+            .unwrap();
         bytes
     };
 
@@ -1806,7 +1808,9 @@ async fn test_publish_module_no_dependencies_ok() {
 
     let module = file_format::empty_module();
     let mut module_bytes = Vec::new();
-    module.serialize(&mut module_bytes).unwrap();
+    module
+        .serialize_with_version(module.version, &mut module_bytes)
+        .unwrap();
     let module_bytes = vec![module_bytes];
     let dependencies = vec![]; // no dependencies
     let data = TransactionData::new_module(
@@ -1859,7 +1863,9 @@ async fn test_publish_non_existing_dependent_module() {
     });
     let dependent_module_bytes = {
         let mut bytes = Vec::new();
-        dependent_module.serialize(&mut bytes).unwrap();
+        dependent_module
+            .serialize_with_version(dependent_module.version, &mut bytes)
+            .unwrap();
         bytes
     };
     let authority = init_state_with_objects(vec![gas_payment_object]).await;
@@ -1914,7 +1920,9 @@ async fn test_package_size_limit() {
             Identifier::new(format!("TestModule{:0>21000?}", modules_size)).unwrap();
         let module_bytes = {
             let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
+            module
+                .serialize_with_version(module.version, &mut bytes)
+                .unwrap();
             bytes
         };
         modules_size += module_bytes.len() as u64;
@@ -2976,79 +2984,6 @@ async fn test_idempotent_reversed_confirmation() {
             .into_effects_for_testing()
             .into_data()
     );
-}
-
-#[tokio::test]
-async fn test_refusal_to_sign_consensus_commit_prologue() {
-    // The system should refuse to handle sender-signed system transactions
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
-
-    let gas_ref = gas_object.compute_object_reference();
-    let tx_data = TransactionData::new(
-        TransactionKind::ConsensusCommitPrologue(ConsensusCommitPrologue {
-            epoch: 0,
-            round: 0,
-            commit_timestamp_ms: 42,
-        }),
-        sender,
-        gas_ref,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
-        rgp,
-    );
-
-    // Sender is able to sign it.
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
-
-    // But the authority should refuse to handle it.
-    assert!(matches!(
-        authority_state
-            .handle_transaction(&epoch_store, transaction)
-            .await,
-        Err(SuiError::InvalidSystemTransaction),
-    ));
-}
-
-#[tokio::test]
-async fn test_refusal_to_sign_consensus_commit_prologue_v2() {
-    // The system should refuse to handle sender-signed system transactions
-    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let authority_state = init_state_with_objects(vec![gas_object.clone()]).await;
-    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
-    let epoch_store = authority_state.load_epoch_store_one_call_per_task();
-
-    let gas_ref = gas_object.compute_object_reference();
-    let tx_data = TransactionData::new(
-        TransactionKind::ConsensusCommitPrologueV2(ConsensusCommitPrologueV2 {
-            epoch: 0,
-            round: 0,
-            commit_timestamp_ms: 42,
-            consensus_commit_digest: ConsensusCommitDigest::default(),
-        }),
-        sender,
-        gas_ref,
-        TEST_ONLY_GAS_UNIT_FOR_GENERIC * rgp,
-        rgp,
-    );
-
-    // Sender is able to sign it.
-    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
-    let transaction = epoch_store.verify_transaction(transaction).unwrap();
-
-    // But the authority should refuse to handle it.
-    assert!(matches!(
-        authority_state
-            .handle_transaction(&epoch_store, transaction)
-            .await,
-        Err(SuiError::InvalidSystemTransaction),
-    ));
 }
 
 #[tokio::test]
@@ -4623,8 +4558,8 @@ pub async fn call_dev_inspect(
 async fn make_test_transaction(
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
-    shared_object_id: ObjectID,
-    shared_object_initial_shared_version: SequenceNumber,
+    owned_objects: &[Object],
+    shared_objects: &[(ObjectID, SequenceNumber, bool)],
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
     arg_value: u64,
@@ -4648,14 +4583,22 @@ async fn make_test_transaction(
         /* type_args */ vec![],
         *gas_object_ref,
         /* args */
-        vec![
-            CallArg::Object(ObjectArg::SharedObject {
-                id: shared_object_id,
-                initial_shared_version: shared_object_initial_shared_version,
-                mutable: true,
-            }),
-            CallArg::Pure(arg_value.to_le_bytes().to_vec()),
-        ],
+        shared_objects
+            .iter()
+            .map(|(shared_object_id, initial_shared_version, mutable)| {
+                CallArg::Object(ObjectArg::SharedObject {
+                    id: *shared_object_id,
+                    initial_shared_version: *initial_shared_version,
+                    mutable: *mutable,
+                })
+            })
+            .chain(owned_objects.iter().map(|object| {
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                    object.compute_object_reference(),
+                ))
+            }))
+            .chain(vec![CallArg::Pure(arg_value.to_le_bytes().to_vec())])
+            .collect(),
         gas_budget.unwrap_or(TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp),
         gas_price.unwrap_or(rgp),
     )
@@ -4680,7 +4623,7 @@ async fn make_test_transaction(
             CertifiedTransaction::new(transaction.clone().into_message(), sigs.clone(), &committee)
         {
             return cert
-                .try_into_verified(&committee, &Default::default())
+                .try_into_verified_for_testing(&committee, &Default::default())
                 .unwrap();
         }
     }
@@ -4712,8 +4655,8 @@ async fn prepare_authority_and_shared_object_cert(
     let certificate = make_test_transaction(
         &sender,
         &keypair,
-        shared_object_id,
-        initial_shared_version,
+        &[],
+        &[(shared_object_id, initial_shared_version, true)],
         &gas_object_ref,
         &[&authority],
         16,
@@ -4773,6 +4716,108 @@ async fn test_shared_object_transaction_ok() {
     assert_eq!(shared_object_version, SequenceNumber::from(2));
 }
 
+// Tests that process_consensus_transactions_and_commit_boundary() will add the consensus commit prologue transaction
+// to the transactions in the current consensus commit. It will be the first transaction in the batch and
+// the first one that updates the system clock object.
+#[tokio::test]
+async fn test_consensus_commit_prologue_generation() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+
+    let gas_objects = create_gas_objects(2, sender);
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, shared_object_id, 10);
+        let owner = Owner::Shared {
+            initial_shared_version: obj.version(),
+        };
+        Object::new_move(obj, owner, TransactionDigest::genesis_marker())
+    };
+    let initial_shared_version = shared_object.version();
+    let (authority_state, package_object_ref) = init_state_with_objects_and_object_basics(
+        [&[shared_object], gas_objects.as_slice()].concat(),
+    )
+    .await;
+    let rgp = authority_state.reference_gas_price_for_testing().unwrap();
+
+    let mut certificates = vec![];
+    certificates.push(
+        make_test_transaction(
+            &sender,
+            &sender_key,
+            &[],
+            &[(shared_object_id, initial_shared_version, true)],
+            &gas_objects[1].compute_object_reference(),
+            &[&authority_state],
+            0,
+            None,
+            None,
+        )
+        .await,
+    );
+
+    let tx_data = TransactionData::new_move_call(
+        sender,
+        package_object_ref.0,
+        ident_str!("object_basics").to_owned(),
+        ident_str!("use_clock").to_owned(),
+        /* type_args */ vec![],
+        gas_objects[0].compute_object_reference(),
+        vec![CallArg::CLOCK_IMM],
+        TEST_ONLY_GAS_UNIT_FOR_OBJECT_BASICS * rgp,
+        rgp * 2, // User transaction that uses the clock has the highest gas price.
+    )
+    .unwrap();
+
+    let transaction = to_sender_signed_transaction(tx_data, &sender_key);
+    certificates.push(
+        certify_transaction(&authority_state, transaction)
+            .await
+            .unwrap(),
+    );
+
+    let processed_consensus_transactions =
+        send_batch_consensus_no_execution(&authority_state, &certificates, false).await;
+
+    // Consensus commit prologue V2 should be turned on everywhere.
+    assert!(authority_state
+        .epoch_store_for_testing()
+        .protocol_config()
+        .include_consensus_digest_in_prologue());
+
+    // Tests that new consensus commit prologue transaction is added to the batch, and it is the first transaction.
+    assert_eq!(processed_consensus_transactions.len(), 3);
+    assert!(matches!(
+        processed_consensus_transactions[0]
+            .data()
+            .transaction_data()
+            .kind(),
+        TransactionKind::ConsensusCommitPrologueV2(..)
+    ));
+
+    // Tests that the system clock object is updated by the new consensus commit prologue transaction.
+    let get_assigned_version = |txn_key: &TransactionKey| -> SequenceNumber {
+        authority_state
+            .epoch_store_for_testing()
+            .get_shared_locks(txn_key)
+            .unwrap()
+            .iter()
+            .filter_map(|(id, seq)| {
+                if id == &SUI_CLOCK_OBJECT_ID {
+                    Some(*seq)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .unwrap()
+    };
+    let clock_v1 = get_assigned_version(&processed_consensus_transactions[0].key());
+    let clock_v2 = get_assigned_version(&processed_consensus_transactions[1].key());
+    assert!(clock_v1 < clock_v2);
+}
+
 #[tokio::test]
 async fn test_consensus_message_processed() {
     telemetry_subscribers::init_for_testing();
@@ -4827,8 +4872,8 @@ async fn test_consensus_message_processed() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
-            shared_object_id,
-            initial_shared_version,
+            &[],
+            &[(shared_object_id, initial_shared_version, true)],
             &gas_object_ref,
             &[&authority1, &authority2],
             Uniform::from(0..100000).sample(&mut rng),
@@ -5709,7 +5754,7 @@ fn create_shared_objects(num: u32) -> Vec<Object> {
 }
 
 #[sim_test]
-async fn test_per_object_congestion_control() {
+async fn test_consensus_handler_per_object_congestion_control() {
     let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // In this test, we tests transactions that operate on 2 shared objects. The idea is that
@@ -5728,6 +5773,7 @@ async fn test_per_object_congestion_control() {
     protocol_config
         .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
     protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(200_000_000);
+    protocol_config.set_max_deferral_rounds_for_congestion_control(1000); // Set to a large number so that we don't hit this limit.
     let authority = TestAuthorityBuilder::new()
         .with_reference_gas_price(1000)
         .with_protocol_config(protocol_config)
@@ -5750,12 +5796,16 @@ async fn test_per_object_congestion_control() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
-            if index < 5 {
-                shared_objects[0].id()
-            } else {
-                shared_objects[1].id()
-            },
-            OBJECT_START_VERSION,
+            &[],
+            &[(
+                if index < 5 {
+                    shared_objects[0].id()
+                } else {
+                    shared_objects[1].id()
+                },
+                OBJECT_START_VERSION,
+                true,
+            )],
             &gas_object.compute_object_reference(),
             &[&authority],
             12345,
@@ -5780,7 +5830,7 @@ async fn test_per_object_congestion_control() {
     // Sends the first batch of transactions. We should expect that 2 transactions operate on the expensive object
     // should go through, and all transactions oeprate on the cheaper object should go through.
     // We also check that the scheduled transactions on the expensive object have the highest gas price.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
         assert!(
@@ -5813,7 +5863,7 @@ async fn test_per_object_congestion_control() {
             assert_eq!(future_round, commit_round + 1);
             assert_eq!(deferred_from_round, commit_round);
         }
-        DeferralKey::RandomnessDkg {
+        DeferralKey::Randomness {
             deferred_from_round,
         } => {
             panic!(
@@ -5829,8 +5879,8 @@ async fn test_per_object_congestion_control() {
         let certificate = make_test_transaction(
             &sender,
             &keypair,
-            shared_objects[1].id(),
-            OBJECT_START_VERSION,
+            &[],
+            &[(shared_objects[1].id(), OBJECT_START_VERSION, true)],
             &gas_object.compute_object_reference(),
             &[&authority],
             12345,
@@ -5844,7 +5894,8 @@ async fn test_per_object_congestion_control() {
     // Sends the second batch of transactions. We should expect that another 2 transactions operate on the expensive object,
     // which are deferred from the previous round, should go through, and all the new transactions oeprate on the cheaper
     // object should go through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &new_certificates).await;
+    let scheduled_txns =
+        send_batch_consensus_no_execution(&authority, &new_certificates, true).await;
     assert_eq!(scheduled_txns.len(), 7);
     for cert in scheduled_txns.iter() {
         assert!(
@@ -5873,7 +5924,7 @@ async fn test_per_object_congestion_control() {
             assert_eq!(future_round, commit_round + 2);
             assert_eq!(deferred_from_round, commit_round);
         }
-        DeferralKey::RandomnessDkg {
+        DeferralKey::Randomness {
             deferred_from_round,
         } => {
             panic!(
@@ -5884,11 +5935,160 @@ async fn test_per_object_congestion_control() {
     }
 
     // Sends the last batch with no new transaction. The last deferred transactions should go through.
-    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[]).await;
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
     assert_eq!(scheduled_txns.len(), 1);
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
         .unwrap()
         .is_empty());
+}
+
+// Tests congestion control triggered transaction cancellation in consensus handler:
+//   1. Consensus handler cancels transactions that are deferred for too many rounds.
+//   2. Shared locks for cancelled transaction are set correctly.
+//   3. Input objects can be read correctly.
+#[sim_test]
+async fn test_consensus_handler_congestion_control_transaction_cancellation() {
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+
+    // Test setup. We will create some shared object transactions with one that will be cancelled at round 3.
+    let shared_objects = create_shared_objects(2);
+    let gas_objects = create_gas_objects(3, sender);
+    let gas_objects_cancelled_txn = create_gas_objects(1, sender);
+    let owned_objects_cancelled_txn = vec![
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 1.into(), sender),
+        Object::with_id_owner_version_for_testing(ObjectID::random(), 2.into(), sender),
+    ];
+
+    // Create the cluster with controlled per object congestion control and cancellation.
+    let mut protocol_config =
+        ProtocolConfig::get_for_version(ProtocolVersion::max(), Chain::Unknown);
+    protocol_config
+        .set_per_object_congestion_control_mode(PerObjectCongestionControlMode::TotalGasBudget);
+    protocol_config.set_max_accumulated_txn_cost_per_object_in_checkpoint(100_000_000);
+    protocol_config.set_max_deferral_rounds_for_congestion_control(2);
+    let authority = TestAuthorityBuilder::new()
+        .with_reference_gas_price(1000)
+        .with_protocol_config(protocol_config)
+        .build()
+        .await;
+    let mut genesis_objects = gas_objects.clone();
+    genesis_objects.extend(gas_objects_cancelled_txn.clone());
+    genesis_objects.extend(shared_objects.clone());
+    genesis_objects.extend(owned_objects_cancelled_txn.clone());
+    authority.insert_genesis_objects(&genesis_objects).await;
+
+    let mut certificates: Vec<VerifiedCertificate> = vec![];
+
+    // Create 3 transactions that operate on shared_objects[0]. These transactions will go through eventually.
+    for gas_object in gas_objects.iter() {
+        let certificate = make_test_transaction(
+            &sender,
+            &keypair,
+            &[],
+            &[(shared_objects[0].id(), OBJECT_START_VERSION, true)],
+            &gas_object.compute_object_reference(),
+            &[&authority],
+            12345,
+            Some(2000),
+            Some(100_000_000),
+        )
+        .await;
+        certificates.push(certificate);
+    }
+
+    // Create another transaction that operates on shared_objects[0] and shared_objects[1].
+    // Due to its lower gas price, it'll be deferred for 3 rounds and then cancelled.
+    // shared_objects[0] will be considered as congested object.
+    let cancelled_txn = make_test_transaction(
+        &sender,
+        &keypair,
+        &owned_objects_cancelled_txn,
+        &[
+            (shared_objects[0].id(), OBJECT_START_VERSION, true),
+            (shared_objects[1].id(), OBJECT_START_VERSION, true),
+        ],
+        &gas_objects_cancelled_txn[0].compute_object_reference(),
+        &[&authority],
+        12345,
+        Some(1000),
+        Some(100_000_000),
+    )
+    .await;
+    certificates.push(cancelled_txn.clone());
+
+    // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
+    certificates.shuffle(&mut rand::thread_rng());
+
+    // Sends all transactions to consensus. Expect first 2 rounds with 1 transaction per round going through.
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, true).await;
+    assert_eq!(scheduled_txns.len(), 1);
+    for cert in scheduled_txns.iter() {
+        assert!(cert.data().transaction_data().gas_price() == 2000);
+    }
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
+    assert_eq!(scheduled_txns.len(), 1);
+    for cert in scheduled_txns.iter() {
+        assert!(cert.data().transaction_data().gas_price() == 2000);
+    }
+
+    // Run consensus round 3. 2 transactions will come out with 1 transaction being cancelled.
+    let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], true).await;
+    assert_eq!(scheduled_txns.len(), 2);
+    assert!(authority
+        .epoch_store_for_testing()
+        .get_all_deferred_transactions_for_test()
+        .unwrap()
+        .is_empty());
+
+    // Check cancelled transaction shared locks.
+    let shared_object_version = authority
+        .epoch_store_for_testing()
+        .get_shared_locks(&cancelled_txn.key())
+        .expect("Reading shared locks should not fail")
+        .into_iter()
+        .collect::<HashMap<_, _>>();
+    assert_eq!(
+        [
+            (shared_objects[0].id(), SequenceNumber::CONGESTED),
+            (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+        ]
+        .into_iter()
+        .collect::<HashMap<_, _>>(),
+        shared_object_version
+    );
+
+    // Load shared objects.
+    let input_loader = TransactionInputLoader::new(authority.get_cache_reader().clone());
+    let input_objects = input_loader
+        .read_objects_for_execution(
+            authority.epoch_store_for_testing().as_ref(),
+            &cancelled_txn.key(),
+            &cancelled_txn
+                .data()
+                .transaction_data()
+                .input_objects()
+                .unwrap(),
+            authority.epoch_store_for_testing().epoch(),
+        )
+        .await
+        .unwrap();
+
+    // The lamport version should be the lamport version of the owned objects.
+    assert_eq!(input_objects.lamport_timestamp(&[]), 3.into());
+
+    // Check SharedInput data.
+    let shared_inputs = input_objects.filter_shared_objects();
+    assert_eq!(
+        shared_inputs,
+        vec![
+            SharedInput::Cancelled((shared_objects[0].id(), SequenceNumber::CONGESTED)),
+            SharedInput::Cancelled((shared_objects[1].id(), SequenceNumber::CANCELLED_READ))
+        ]
+    );
+
+    // Test get_congested_objects.
+    let congested_objects = input_objects.get_congested_objects().unwrap();
+    assert_eq!(congested_objects, vec![shared_objects[0].id()]);
 }

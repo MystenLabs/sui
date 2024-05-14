@@ -22,8 +22,8 @@ use parking_lot::Mutex;
 use prometheus::{
     register_histogram_vec_with_registry, register_histogram_with_registry,
     register_int_counter_vec_with_registry, register_int_counter_with_registry,
-    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram, IntCounter,
-    IntCounterVec, IntGauge, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, Histogram,
+    HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -60,12 +60,8 @@ use mysten_metrics::{monitored_scope, spawn_monitored_task};
 use once_cell::sync::OnceCell;
 use shared_crypto::intent::{AppId, Intent, IntentMessage, IntentScope, IntentVersion};
 use sui_archival::reader::ArchiveReaderBalancer;
-use sui_config::certificate_deny_config::CertificateDenyConfig;
 use sui_config::genesis::Genesis;
-use sui_config::node::{
-    AuthorityStorePruningConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig,
-};
-use sui_config::transaction_deny_config::TransactionDenyConfig;
+use sui_config::node::{DBCheckpointConfig, ExpensiveSafetyCheckConfig};
 use sui_framework::{BuiltInFramework, SystemPackage};
 use sui_json_rpc_types::{
     DevInspectResults, DryRunTransactionBlockResponse, EventFilter, SuiEvent, SuiMoveValue,
@@ -203,6 +199,7 @@ pub mod epoch_start_configuration;
 pub mod shared_object_congestion_tracker;
 pub mod shared_object_version_manager;
 pub mod test_authority_builder;
+pub mod transaction_deferral;
 
 pub(crate) mod authority_notify_read;
 pub(crate) mod authority_store;
@@ -268,11 +265,12 @@ pub struct AuthorityMetrics {
     post_processing_total_failures: IntCounter,
 
     /// Consensus handler metrics
-    pub consensus_handler_processed_bytes: IntCounter,
     pub consensus_handler_processed: IntCounterVec,
+    pub consensus_handler_transaction_sizes: HistogramVec,
     pub consensus_handler_num_low_scoring_authorities: IntGauge,
     pub consensus_handler_scores: IntGaugeVec,
     pub consensus_handler_deferred_transactions: IntCounter,
+    pub consensus_handler_congested_transactions: IntCounter,
     pub consensus_committed_subdags: IntCounterVec,
     pub consensus_committed_messages: IntGaugeVec,
     pub consensus_committed_user_transactions: IntGaugeVec,
@@ -308,9 +306,11 @@ pub struct AuthorityMetrics {
     pub execution_rate_tracker: Arc<Mutex<RateTracker>>,
 }
 
-// Override default Prom buckets for positive numbers in 0-50k range
+// Override default Prom buckets for positive numbers in 0-10M range
 const POSITIVE_INT_BUCKETS: &[f64] = &[
-    1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
+    1., 2., 5., 7., 10., 20., 50., 70., 100., 200., 500., 700., 1000., 2000., 5000., 7000., 10000.,
+    20000., 50000., 70000., 100000., 200000., 500000., 700000., 1000000., 2000000., 5000000.,
+    7000000., 10000000.,
 ];
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -630,13 +630,19 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
-            consensus_handler_processed_bytes: register_int_counter_with_registry!(
-                "consensus_handler_processed_bytes",
-                "Number of bytes processed by consensus_handler",
+            consensus_handler_processed: register_int_counter_vec_with_registry!(
+                "consensus_handler_processed",
+                "Number of transactions processed by consensus handler",
+                &["class"],
                 registry
             ).unwrap(),
-            consensus_handler_processed: register_int_counter_vec_with_registry!("consensus_handler_processed", "Number of transactions processed by consensus handler", &["class"], registry)
-                .unwrap(),
+            consensus_handler_transaction_sizes: register_histogram_vec_with_registry!(
+                "consensus_handler_transaction_sizes",
+                "Sizes of each type of transactions processed by consensus handler",
+                &["class"],
+                POSITIVE_INT_BUCKETS.to_vec(),
+                registry
+            ).unwrap(),
             consensus_handler_num_low_scoring_authorities: register_int_gauge_with_registry!(
                 "consensus_handler_num_low_scoring_authorities",
                 "Number of low scoring authorities based on reputation scores from consensus",
@@ -651,6 +657,11 @@ impl AuthorityMetrics {
             consensus_handler_deferred_transactions: register_int_counter_with_registry!(
                 "consensus_handler_deferred_transactions",
                 "Number of transactions deferred by consensus handler",
+                registry,
+            ).unwrap(),
+            consensus_handler_congested_transactions: register_int_counter_with_registry!(
+                "consensus_handler_congested_transactions",
+                "Number of transactions deferred by consensus handler due to congestion",
                 registry,
             ).unwrap(),
             consensus_committed_subdags: register_int_counter_vec_with_registry!(
@@ -791,18 +802,7 @@ pub struct AuthorityState {
     /// Take db checkpoints of different dbs
     db_checkpoint_config: DBCheckpointConfig,
 
-    /// Config controlling what kind of expensive safety checks to perform.
-    expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-
-    transaction_deny_config: TransactionDenyConfig,
-
-    certificate_deny_config: CertificateDenyConfig,
-
-    /// Config for state dumping on forks
-    debug_dump_config: StateDebugDumpConfig,
-
-    /// Config for when we consider the node overloaded.
-    authority_overload_config: AuthorityOverloadConfig,
+    config: NodeConfig,
 
     /// Current overload status in this authority. Updated periodically.
     pub overload_info: AuthorityOverloadInfo,
@@ -832,7 +832,7 @@ impl AuthorityState {
     }
 
     pub fn overload_config(&self) -> &AuthorityOverloadConfig {
-        &self.authority_overload_config
+        &self.config.authority_overload_config
     }
 
     pub fn get_epoch_state_commitments(
@@ -853,10 +853,6 @@ impl AuthorityState {
         let tx_digest = transaction.digest();
         let tx_data = transaction.data().transaction_data();
 
-        // Cheap validity checks for a transaction, including input size limits.
-        tx_data.check_version_supported(epoch_store.protocol_config())?;
-        tx_data.validity_check(epoch_store.protocol_config())?;
-
         let input_object_kinds = tx_data.input_objects()?;
         let receiving_objects_refs = tx_data.receiving_objects();
 
@@ -868,14 +864,14 @@ impl AuthorityState {
             transaction.tx_signatures(),
             &input_object_kinds,
             &receiving_objects_refs,
-            &self.transaction_deny_config,
+            &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self
             .input_loader
             .read_objects_for_signing(
-                tx_digest,
+                Some(tx_digest),
                 &input_object_kinds,
                 &receiving_objects_refs,
                 epoch_store.epoch(),
@@ -922,17 +918,10 @@ impl AuthorityState {
         epoch_store: &Arc<AuthorityPerEpochStore>,
         transaction: VerifiedTransaction,
     ) -> SuiResult<HandleTransactionResponse> {
-        // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !transaction.is_system_tx(),
-            SuiError::InvalidSystemTransaction
-        );
-
         let tx_digest = *transaction.digest();
         debug!("handle_transaction");
 
-        // Ensure an idempotent answer. This is checked before the system_tx check so that
-        // a validator is able to return the signed system tx if it was already signed locally.
+        // Ensure an idempotent answer.
         if let Some((_, status)) = self.get_transaction_status(&tx_digest, epoch_store)? {
             return Ok(HandleTransactionResponse { status });
         }
@@ -953,14 +942,6 @@ impl AuthorityState {
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
 
-        // Checks to see if the transaction has expired
-        if match &transaction.inner().data().transaction_data().expiration() {
-            TransactionExpiration::None => false,
-            TransactionExpiration::Epoch(epoch) => *epoch < epoch_store.epoch(),
-        } {
-            return Err(SuiError::TransactionExpired);
-        }
-
         let signed = self.handle_transaction_impl(transaction, epoch_store).await;
         match signed {
             Ok(s) => Ok(HandleTransactionResponse {
@@ -979,12 +960,14 @@ impl AuthorityState {
     }
 
     pub fn check_system_overload_at_signing(&self) -> bool {
-        self.authority_overload_config
+        self.config
+            .authority_overload_config
             .check_system_overload_at_signing
     }
 
     pub fn check_system_overload_at_execution(&self) -> bool {
-        self.authority_overload_config
+        self.config
+            .authority_overload_config
             .check_system_overload_at_execution
     }
 
@@ -1109,7 +1092,7 @@ impl AuthorityState {
         self.metrics.total_cert_attempts.inc();
 
         if !certificate.contains_shared_object() {
-            // Shared object transactions need to be sequenced by Narwhal before enqueueing
+            // Shared object transactions need to be sequenced by the consensus before enqueueing
             // for execution, done in AuthorityPerEpochStore::handle_consensus_transaction().
             // For owned object transactions, they can be enqueued for execution immediately.
             self.enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
@@ -1142,7 +1125,9 @@ impl AuthorityState {
         debug!("execute_certificate_internal");
 
         let tx_digest = certificate.digest();
-        let input_objects = self.read_objects(certificate, epoch_store).await?;
+        let input_objects = self
+            .read_objects_for_execution(certificate, epoch_store)
+            .await?;
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -1161,7 +1146,7 @@ impl AuthorityState {
         .tap_err(|e| info!(?tx_digest, "process_certificate failed: {e}"))
     }
 
-    async fn read_objects(
+    pub async fn read_objects_for_execution(
         &self,
         certificate: &VerifiedExecutableTransaction,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -1172,32 +1157,14 @@ impl AuthorityState {
             .execution_load_input_objects_latency
             .start_timer();
         let input_objects = &certificate.data().transaction_data().input_objects()?;
-        if certificate.data().transaction_data().is_end_of_epoch_tx() {
-            self.input_loader
-                .read_objects_for_synchronous_execution(
-                    certificate.digest(),
-                    input_objects,
-                    epoch_store.protocol_config(),
-                )
-                .await
-        } else {
-            self.input_loader
-                .read_objects_for_execution(
-                    epoch_store.as_ref(),
-                    &certificate.key(),
-                    input_objects,
-                    epoch_store.epoch(),
-                )
-                .await
-        }
-    }
-
-    pub async fn read_objects_for_benchmarking(
-        &self,
-        certificate: &VerifiedExecutableTransaction,
-        epoch_store: &Arc<AuthorityPerEpochStore>,
-    ) -> SuiResult<InputObjects> {
-        self.read_objects(certificate, epoch_store).await
+        self.input_loader
+            .read_objects_for_execution(
+                epoch_store.as_ref(),
+                &certificate.key(),
+                input_objects,
+                epoch_store.epoch(),
+            )
+            .await
     }
 
     /// Test only wrapper for `try_execute_immediately()` above, useful for checking errors if the
@@ -1342,7 +1309,7 @@ impl AuthorityState {
                     expected_effects_digest,
                     &inner_temporary_store,
                     certificate,
-                    &self.debug_dump_config,
+                    &self.config.state_debug_dump_config,
                 ) {
                     Ok(out_path) => {
                         info!(
@@ -1602,9 +1569,10 @@ impl AuthorityState {
                 self.metrics.limits_metrics.clone(),
                 // TODO: would be nice to pass the whole NodeConfig here, but it creates a
                 // cyclic dependency w/ sui-adapter
-                self.expensive_safety_check_config
+                self.config
+                    .expensive_safety_check_config
                     .enable_deep_per_tx_sui_conservation_check(),
-                self.certificate_deny_config.certificate_deny_set(),
+                self.config.certificate_deny_config.certificate_deny_set(),
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
@@ -1714,17 +1682,18 @@ impl AuthorityState {
             &[],
             &input_object_kinds,
             &receiving_object_refs,
-            &self.transaction_deny_config,
+            &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
         let (input_objects, receiving_objects) = self
             .input_loader
-            .read_objects_for_dry_run_exec(
-                &transaction_digest,
+            .read_objects_for_signing(
+                // We don't want to cache this transaction since it's a dry run.
+                None,
                 &input_object_kinds,
                 &receiving_object_refs,
-                epoch_store.protocol_config(),
+                epoch_store.epoch(),
             )
             .await?;
 
@@ -1784,7 +1753,7 @@ impl AuthorityState {
                 protocol_config,
                 self.metrics.limits_metrics.clone(),
                 expensive_checks,
-                self.certificate_deny_config.certificate_deny_set(),
+                self.config.certificate_deny_config.certificate_deny_set(),
                 &epoch_store.epoch_start_config().epoch_data().epoch_id(),
                 epoch_store
                     .epoch_start_config()
@@ -1933,16 +1902,18 @@ impl AuthorityState {
             &[],
             &input_object_kinds,
             &receiving_object_refs,
-            &self.transaction_deny_config,
+            &self.config.transaction_deny_config,
             self.get_backing_package_store().as_ref(),
         )?;
 
         let (mut input_objects, receiving_objects) = self
             .input_loader
-            .read_objects_for_dev_inspect(
+            .read_objects_for_signing(
+                // We don't want to cache this transaction since it's a dev inspect.
+                None,
                 &input_object_kinds,
                 &receiving_object_refs,
-                protocol_config,
+                epoch_store.epoch(),
             )
             .await?;
 
@@ -2024,7 +1995,7 @@ impl AuthorityState {
             protocol_config,
             self.metrics.limits_metrics.clone(),
             /* expensive checks */ false,
-            self.certificate_deny_config.certificate_deny_set(),
+            self.config.certificate_deny_config.certificate_deny_set(),
             &epoch_store.epoch_start_config().epoch_data().epoch_id(),
             epoch_store
                 .epoch_start_config()
@@ -2626,15 +2597,10 @@ impl AuthorityState {
         indexes: Option<Arc<IndexStore>>,
         checkpoint_store: Arc<CheckpointStore>,
         prometheus_registry: &Registry,
-        pruning_config: AuthorityStorePruningConfig,
         genesis_objects: &[Object],
         db_checkpoint_config: &DBCheckpointConfig,
-        expensive_safety_check_config: ExpensiveSafetyCheckConfig,
-        transaction_deny_config: TransactionDenyConfig,
-        certificate_deny_config: CertificateDenyConfig,
+        config: NodeConfig,
         indirect_objects_threshold: usize,
-        debug_dump_config: StateDebugDumpConfig,
-        authority_overload_config: AuthorityOverloadConfig,
         archive_readers: ArchiveReaderBalancer,
     ) -> Arc<Self> {
         Self::check_protocol_version(supported_protocol_versions, epoch_store.protocol_version());
@@ -2649,13 +2615,15 @@ impl AuthorityState {
         ));
         let (tx_execution_shutdown, rx_execution_shutdown) = oneshot::channel();
 
-        let _authority_per_epoch_pruner =
-            AuthorityPerEpochStorePruner::new(epoch_store.get_parent_path(), &pruning_config);
+        let _authority_per_epoch_pruner = AuthorityPerEpochStorePruner::new(
+            epoch_store.get_parent_path(),
+            &config.authority_store_pruning_config,
+        );
         let _pruner = AuthorityStorePruner::new(
             store.perpetual_tables.clone(),
             checkpoint_store.clone(),
             store.objects_lock_table.clone(),
-            pruning_config,
+            config.authority_store_pruning_config,
             epoch_store.committee().authority_exists(&name),
             epoch_store.epoch_start_state().epoch_duration_ms(),
             prometheus_registry,
@@ -2683,11 +2651,7 @@ impl AuthorityState {
             _pruner,
             _authority_per_epoch_pruner,
             db_checkpoint_config: db_checkpoint_config.clone(),
-            expensive_safety_check_config,
-            transaction_deny_config,
-            certificate_deny_config,
-            debug_dump_config,
-            authority_overload_config: authority_overload_config.clone(),
+            config,
             overload_info: AuthorityOverloadInfo::default(),
         });
 
@@ -2784,8 +2748,6 @@ impl AuthorityState {
     }
 
     /// Adds certificates to transaction manager for ordered execution.
-    /// It is unnecessary to persist the certificates into the pending_execution table,
-    /// because only Narwhal output needs to be persisted.
     pub fn enqueue_certificates_for_execution(
         &self,
         certs: Vec<VerifiedCertificate>,
@@ -3503,6 +3465,62 @@ impl AuthorityState {
         self.execution_cache
             .get_events(digest)?
             .ok_or(SuiError::TransactionEventsNotFound { digest: *digest })
+    }
+
+    pub fn get_transaction_input_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> anyhow::Result<Vec<Object>> {
+        let input_object_keys = effects
+            .modified_at_versions()
+            .into_iter()
+            .map(|(object_id, version)| ObjectKey(object_id, version))
+            .collect::<Vec<_>>();
+
+        let input_objects = self
+            .get_object_store()
+            .multi_get_objects_by_key(&input_object_keys)?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing input object key {:?} from tx {}",
+                        input_object_keys[idx],
+                        effects.transaction_digest()
+                    )
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(input_objects)
+    }
+
+    pub fn get_transaction_output_objects(
+        &self,
+        effects: &TransactionEffects,
+    ) -> anyhow::Result<Vec<Object>> {
+        let output_object_keys = effects
+            .all_changed_objects()
+            .into_iter()
+            .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
+            .collect::<Vec<_>>();
+
+        let output_objects = self
+            .get_object_store()
+            .multi_get_objects_by_key(&output_object_keys)?
+            .into_iter()
+            .enumerate()
+            .map(|(idx, maybe_object)| {
+                maybe_object.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "missing output object key {:?} from tx {}",
+                        output_object_keys[idx],
+                        effects.transaction_digest()
+                    )
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()?;
+        Ok(output_objects)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -4393,6 +4411,50 @@ impl AuthorityState {
     }
 
     #[instrument(level = "debug", skip_all)]
+    fn create_bridge_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_bridge() {
+            info!("bridge not enabled");
+            return None;
+        }
+        if epoch_store.bridge_exists() {
+            return None;
+        }
+        let tx = EndOfEpochTransactionKind::new_bridge_create(epoch_store.get_chain_identifier());
+        info!("Creating Bridge Create tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
+    fn init_bridge_committee_tx(
+        &self,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+    ) -> Option<EndOfEpochTransactionKind> {
+        if !epoch_store.protocol_config().enable_bridge() {
+            info!("bridge not enabled");
+            return None;
+        }
+        // Only create this transaction if bridge exists
+        if !epoch_store.bridge_exists() {
+            return None;
+        }
+
+        if epoch_store.bridge_committee_initiated() {
+            return None;
+        }
+
+        let bridge_initial_shared_version = epoch_store
+            .epoch_start_config()
+            .bridge_obj_initial_shared_version()
+            .expect("initial version must exist");
+        let tx = EndOfEpochTransactionKind::init_bridge_committee(bridge_initial_shared_version);
+        info!("Init Bridge committee tx");
+        Some(tx)
+    }
+
+    #[instrument(level = "debug", skip_all)]
     fn create_deny_list_state_tx(
         &self,
         epoch_store: &Arc<AuthorityPerEpochStore>,
@@ -4434,6 +4496,12 @@ impl AuthorityState {
             txns.push(tx);
         }
         if let Some(tx) = self.create_randomness_state_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.create_bridge_tx(epoch_store) {
+            txns.push(tx);
+        }
+        if let Some(tx) = self.init_bridge_committee_tx(epoch_store) {
             txns.push(tx);
         }
         if let Some(tx) = self.create_deny_list_state_tx(epoch_store) {
@@ -4550,17 +4618,17 @@ impl AuthorityState {
             .execution_lock_for_executable_transaction(&executable_tx)
             .await?;
 
-        let input_objects = self
-            .input_loader
-            .read_objects_for_synchronous_execution(
-                tx_digest,
-                &executable_tx
-                    .data()
-                    .intent_message()
-                    .value
-                    .input_objects()?,
-                epoch_store.protocol_config(),
+        // We must manually assign the shared object versions to the transaction before executing it.
+        // This is because we do not sequence end-of-epoch transactions through consensus.
+        epoch_store
+            .assign_shared_object_versions_idempotent(
+                self.get_cache_reader().as_ref(),
+                &[executable_tx.clone()],
             )
+            .await?;
+
+        let input_objects = self
+            .read_objects_for_execution(&executable_tx, epoch_store)
             .await?;
 
         let (temporary_store, effects, _execution_error_opt) =
@@ -4786,13 +4854,21 @@ impl RandomnessRoundReceiver {
             // Wait for transaction execution in a separate task, to avoid deadlock in case of
             // out-of-order randomness generation. (Each RandomnessStateUpdate depends on the
             // output of the RandomnessStateUpdate from the previous round.)
-            let Ok(mut effects) = authority_state
-                .execution_cache
-                .notify_read_executed_effects(&[digest])
-                .await
-            else {
+            //
+            // We set a very long timeout so that in case this gets stuck for some reason, the
+            // validator will eventually crash rather than continuing in a zombie mode.
+            const RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT: Duration = Duration::from_secs(300);
+            let Ok(mut effects) = tokio::time::timeout(
+                RANDOMNESS_STATE_UPDATE_EXECUTION_TIMEOUT,
+                authority_state
+                    .execution_cache
+                    .notify_read_executed_effects(&[digest]),
+            )
+            .await
+            .unwrap_or_else(|_| panic!("randomness state update transaction execution timed out at epoch {epoch}, round {round}")) else {
                 panic!("failed to get effects for randomness state update transaction at epoch {epoch}, round {round}");
             };
+
             let effects = effects.pop().expect("should return effects");
             if *effects.status() != ExecutionStatus::Success {
                 panic!("failed to execute randomness state update transaction at epoch {epoch}, round {round}: {effects:?}");
@@ -4956,7 +5032,7 @@ pub mod framework_injection {
             .iter()
             .map(|m| {
                 let mut buf = Vec::new();
-                m.serialize(&mut buf).unwrap();
+                m.serialize_with_version(m.version, &mut buf).unwrap();
                 buf
             })
             .collect()
@@ -5113,7 +5189,9 @@ impl NodeStateDump {
                         shared_objects.push(ObjDumpFormat::new(w))
                     }
                 }
-                InputSharedObject::ReadDeleted(..) | InputSharedObject::MutateDeleted(..) => (),
+                InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::MutateDeleted(..)
+                | InputSharedObject::Cancelled(..) => (), // TODO: consider record congested objects.
             }
         }
 

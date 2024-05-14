@@ -20,15 +20,17 @@ use crate::{
 
 pub struct SurferTask {
     pub state: SurferState,
-    pub surf_strategy: Box<dyn SurfStrategy>,
+    pub surf_strategy: SurfStrategy,
     pub exit_rcv: watch::Receiver<()>,
 }
 
 impl SurferTask {
-    pub async fn create_surfer_tasks<S: Default + SurfStrategy>(
+    pub async fn create_surfer_tasks(
         cluster: Arc<TestCluster>,
         seed: u64,
         exit_rcv: watch::Receiver<()>,
+        skip_accounts: usize,
+        surf_strategy: SurfStrategy,
     ) -> Vec<SurferTask> {
         let mut rng = StdRng::seed_from_u64(seed);
         let immutable_objects: ImmObjects = Arc::new(RwLock::new(HashMap::new()));
@@ -37,14 +39,14 @@ impl SurferTask {
         let mut accounts: HashMap<SuiAddress, (Option<ObjectRef>, OwnedObjects)> = cluster
             .get_addresses()
             .iter()
+            .skip(skip_accounts)
             .map(|address| (*address, (None, HashMap::new())))
             .collect();
         let node = cluster
             .swarm
             .all_nodes()
+            .flat_map(|node| node.get_node_handle())
             .next()
-            .unwrap()
-            .get_node_handle()
             .unwrap();
         let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
@@ -100,10 +102,12 @@ impl SurferTask {
         let entry_functions = Arc::new(RwLock::new(vec![]));
         accounts
             .into_iter()
-            .map(|(address, (gas_object, owned_objects))| {
+            .enumerate()
+            .map(|(id, (address, (gas_object, owned_objects)))| {
                 let seed = rng.gen::<u64>();
                 let state_rng = StdRng::seed_from_u64(seed);
                 let state = SurferState::new(
+                    id,
                     cluster.clone(),
                     state_rng,
                     address,
@@ -115,7 +119,7 @@ impl SurferTask {
                 );
                 SurferTask {
                     state,
-                    surf_strategy: Box::<S>::default(),
+                    surf_strategy: surf_strategy.clone(),
                     exit_rcv: exit_rcv.clone(),
                 }
             })

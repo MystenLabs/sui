@@ -7,15 +7,13 @@ pub(crate) mod rocksdb_store;
 #[cfg(test)]
 mod store_tests;
 
-use std::ops::Range;
-
 use consensus_config::AuthorityIndex;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     block::{BlockRef, Round, Slot, VerifiedBlock},
-    commit::{CommitIndex, CommitRef, TrustedCommit},
+    commit::{CommitInfo, CommitRange, CommitRef, TrustedCommit},
     error::ConsensusResult,
+    CommitIndex,
 };
 
 /// A common interface for consensus storage.
@@ -53,7 +51,7 @@ pub(crate) trait Store: Send + Sync {
     fn read_last_commit(&self) -> ConsensusResult<Option<TrustedCommit>>;
 
     /// Reads all commits from start (inclusive) until end (exclusive).
-    fn scan_commits(&self, range: Range<CommitIndex>) -> ConsensusResult<Vec<TrustedCommit>>;
+    fn scan_commits(&self, range: CommitRange) -> ConsensusResult<Vec<TrustedCommit>>;
 
     /// Reads all blocks voting on a particular commit.
     fn read_commit_votes(&self, commit_index: CommitIndex) -> ConsensusResult<Vec<BlockRef>>;
@@ -67,19 +65,19 @@ pub(crate) trait Store: Send + Sync {
 pub(crate) struct WriteBatch {
     pub(crate) blocks: Vec<VerifiedBlock>,
     pub(crate) commits: Vec<TrustedCommit>,
-    pub(crate) last_commit_info: Option<CommitInfo>,
+    pub(crate) commit_info: Vec<(CommitRef, CommitInfo)>,
 }
 
 impl WriteBatch {
     pub(crate) fn new(
         blocks: Vec<VerifiedBlock>,
         commits: Vec<TrustedCommit>,
-        last_commit_info: Option<CommitInfo>,
+        commit_info: Vec<(CommitRef, CommitInfo)>,
     ) -> Self {
         WriteBatch {
             blocks,
             commits,
-            last_commit_info,
+            commit_info,
         }
     }
 
@@ -96,21 +94,10 @@ impl WriteBatch {
         self.commits = commits;
         self
     }
-}
 
-/// Per-commit properties that can be regenerated from past values, and do not need to be part of
-/// the Commit struct.
-/// Only the latest version is needed for recovery, but more versions are stored for debugging,
-/// and potentially restoring from an earlier state.
-// TODO: version this struct.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub(crate) struct CommitInfo {
-    pub(crate) committed_rounds: Vec<Round>,
-}
-
-impl CommitInfo {
-    // Returns a new CommitInfo.
-    pub(crate) fn new(committed_rounds: Vec<Round>) -> Self {
-        CommitInfo { committed_rounds }
+    #[cfg(test)]
+    pub(crate) fn commit_info(mut self, commit_info: Vec<(CommitRef, CommitInfo)>) -> Self {
+        self.commit_info = commit_info;
+        self
     }
 }
