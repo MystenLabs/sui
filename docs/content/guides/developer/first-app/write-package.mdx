@@ -33,56 +33,6 @@ Populate the `my_module.move` file with the following code:
 
 {@inject: examples/move/first_package/sources/example.move#first noTests}
 
-```move
-module my_first_package::my_module {
-
-    // Part 1: These imports are provided by default
-    // use sui::object::{Self, UID};
-    // use sui::transfer;
-    // use sui::tx_context::{Self, TxContext};
-
-    // Part 2: struct definitions
-    public struct Sword has key, store {
-        id: UID,
-        magic: u64,
-        strength: u64,
-    }
-
-    public struct Forge has key {
-        id: UID,
-        swords_created: u64,
-    }
-
-    // Part 3: Module initializer to be executed when this module is published
-    fun init(ctx: &mut TxContext) {
-        let admin = Forge {
-            id: object::new(ctx),
-            swords_created: 0,
-        };
-        // Transfer the forge object to the module/package publisher
-        transfer::transfer(admin, ctx.sender());
-    }
-
-    // Part 4: Accessors required to read the struct fields
-    public fun magic(self: &Sword): u64 {
-        self.magic
-    }
-
-    public fun strength(self: &Sword): u64 {
-        self.strength
-    }
-
-    public fun swords_created(self: &Forge): u64 {
-        self.swords_created
-    }
-
-    // Part 5: Public/entry functions (introduced later in the tutorial)
-
-    // Part 6: Tests
-
-}
-```
-
 The comments in the preceding code highlight different parts of a typical Move source file.
 
 - **Part 1: Imports** - Code reuse is a necessity in modern programming. Move supports this concept with `use` aliases that allow your module to refer to types and functions declared in other modules. In this example, the module imports from `object`, `transfer`, and `tx_context` modules, but it does not need to do so explicitly, because the compiler provides these `use` statements by default. These modules are available to the package because the `Move.toml` file defines the Sui dependency (along with the `sui` named address) where they are defined.

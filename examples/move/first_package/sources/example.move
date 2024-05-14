@@ -72,6 +72,8 @@ module my_first_package::example {
     }
     // docs::#first-resume
     // Part 6: Tests
+
+    // docs::#first-test
     #[test]
     fun test_sword_create() {
         // Create a dummy TxContext for testing
@@ -87,9 +89,13 @@ module my_first_package::example {
         // Check if accessor functions return correct values
         assert!(sword.magic() == 42 && sword.strength() == 7, 1);
 
+        // docs::/#first-test}
+
+        // docs::#test-dummy
         // Create a dummy address and transfer the sword
         let dummy_address = @0xCAFE;
         transfer::public_transfer(sword, dummy_address);
+        // docs::/#test-dummy
     }
 
     #[test]
@@ -167,4 +173,5 @@ module my_first_package::example {
         };
         scenario.end();
     }
+
 }
