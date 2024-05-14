@@ -14,6 +14,7 @@ use derive_more::Display;
 use fastcrypto::hash::HashFunction;
 use move_binary_format::binary_config::BinaryConfig;
 use move_binary_format::file_format::CompiledModule;
+use move_binary_format::file_format_common::VERSION_6;
 use move_binary_format::normalized;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::{
@@ -247,6 +248,7 @@ impl MovePackage {
     pub fn new_initial<'p>(
         modules: &[CompiledModule],
         max_move_package_size: u64,
+        move_binary_format_version: u32,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
         let module = modules
@@ -261,6 +263,7 @@ impl MovePackage {
             OBJECT_START_VERSION,
             modules,
             max_move_package_size,
+            move_binary_format_version,
             type_origin_table,
             transitive_dependencies,
         )
@@ -289,6 +292,7 @@ impl MovePackage {
             new_version,
             modules,
             protocol_config.max_move_package_size(),
+            protocol_config.move_binary_format_version(),
             type_origin_table,
             transitive_dependencies,
         )
@@ -328,7 +332,9 @@ impl MovePackage {
         let module_map = BTreeMap::from_iter(modules.iter().map(|module| {
             let name = module.name().to_string();
             let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
+            module
+                .serialize_with_version(module.version, &mut bytes)
+                .unwrap();
             (name, bytes)
         }));
 
@@ -349,6 +355,7 @@ impl MovePackage {
         version: SequenceNumber,
         modules: &[CompiledModule],
         max_move_package_size: u64,
+        move_binary_format_version: u32,
         type_origin_table: Vec<TypeOrigin>,
         transitive_dependencies: impl IntoIterator<Item = &'p MovePackage>,
     ) -> Result<Self, ExecutionError> {
@@ -366,7 +373,12 @@ impl MovePackage {
             );
 
             let mut bytes = Vec::new();
-            module.serialize(&mut bytes).unwrap();
+            let version = if move_binary_format_version > VERSION_6 {
+                module.version
+            } else {
+                VERSION_6
+            };
+            module.serialize_with_version(version, &mut bytes).unwrap();
             module_map.insert(name, bytes);
         }
 

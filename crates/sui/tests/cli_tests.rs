@@ -4,8 +4,10 @@
 use std::collections::BTreeSet;
 use std::io::Read;
 use std::os::unix::prelude::FileExt;
-use std::str::FromStr;
 use std::{fmt::Write, fs::read_dir, path::PathBuf, str, thread, time::Duration};
+
+#[cfg(not(msim))]
+use std::str::FromStr;
 
 use expect_test::expect;
 use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
@@ -239,7 +241,7 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     // Print it out to CLI/logs
     resp.print(true);
 
-    let SuiClientCommandResult::Publish(response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid response");
     };
 
@@ -266,14 +268,15 @@ async fn test_ptb_publish_and_complex_arg_resolution() -> Result<(), anyhow::Err
     .execute(context)
     .await?;
 
-    let shared_id_str = if let SuiClientCommandResult::Call(response) = start_call_result {
-        response.effects.unwrap().created().to_vec()[0]
-            .reference
-            .object_id
-            .to_string()
-    } else {
-        unreachable!("Invalid response");
-    };
+    let shared_id_str =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            response.effects.unwrap().created().to_vec()[0]
+                .reference
+                .object_id
+                .to_string()
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let complex_ptb_string = format!(
         r#"
@@ -525,7 +528,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let package = if let SuiClientCommandResult::Publish(response) = resp {
+    let package = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
             response.status_ok().unwrap(),
             "Command failed: {:?}",
@@ -610,7 +613,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the created object
-    let created_obj: ObjectID = if let SuiClientCommandResult::Call(resp) = resp {
+    let created_obj: ObjectID = if let SuiClientCommandResult::TransactionBlock(resp) = resp {
         resp.effects
             .unwrap()
             .created()
@@ -736,7 +739,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(txn_response) = result {
+    if let SuiClientCommandResult::TransactionBlock(txn_response) = result {
         assert_eq!(
             txn_response.transaction.unwrap().data.gas_data().price,
             12345
@@ -792,7 +795,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
@@ -861,7 +864,7 @@ async fn test_package_management_on_publish_command() -> Result<(), anyhow::Erro
 
     // Get Package ID and version
     let (expect_original_id, expect_version, _) =
-        if let SuiClientCommandResult::Publish(response) = resp {
+        if let SuiClientCommandResult::TransactionBlock(response) = resp {
             assert_eq!(
                 response.effects.as_ref().unwrap().gas_object().object_id(),
                 gas_obj_id
@@ -929,7 +932,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
@@ -964,7 +967,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let shared_id = if let SuiClientCommandResult::Call(response) = start_call_result {
+    let shared_id = if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
         response.effects.unwrap().created().to_vec()[0]
             .reference
             .object_id
@@ -984,7 +987,7 @@ async fn test_delete_shared_object() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = delete_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = delete_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -1033,7 +1036,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
@@ -1068,29 +1071,30 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let (parent, child) = if let SuiClientCommandResult::Call(response) = start_call_result {
-        let created = response.effects.unwrap().created().to_vec();
-        let owners: BTreeSet<ObjectID> = created
-            .iter()
-            .flat_map(|refe| {
-                refe.owner
-                    .get_address_owner_address()
-                    .ok()
-                    .map(|x| x.into())
-            })
-            .collect();
-        let child = created
-            .iter()
-            .find(|refe| !owners.contains(&refe.reference.object_id))
-            .unwrap();
-        let parent = created
-            .iter()
-            .find(|refe| owners.contains(&refe.reference.object_id))
-            .unwrap();
-        (parent.reference.clone(), child.reference.clone())
-    } else {
-        unreachable!("Invalid response");
-    };
+    let (parent, child) =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
+            let owners: BTreeSet<ObjectID> = created
+                .iter()
+                .flat_map(|refe| {
+                    refe.owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|x| x.into())
+                })
+                .collect();
+            let child = created
+                .iter()
+                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .unwrap();
+            let parent = created
+                .iter()
+                .find(|refe| owners.contains(&refe.reference.object_id))
+                .unwrap();
+            (parent.reference.clone(), child.reference.clone())
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let receive_result = SuiClientCommands::Call {
         package: (*package_id.object_id).into(),
@@ -1107,7 +1111,7 @@ async fn test_receive_argument() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = receive_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -1156,7 +1160,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
@@ -1191,29 +1195,30 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let (parent, child) = if let SuiClientCommandResult::Call(response) = start_call_result {
-        let created = response.effects.unwrap().created().to_vec();
-        let owners: BTreeSet<ObjectID> = created
-            .iter()
-            .flat_map(|refe| {
-                refe.owner
-                    .get_address_owner_address()
-                    .ok()
-                    .map(|x| x.into())
-            })
-            .collect();
-        let child = created
-            .iter()
-            .find(|refe| !owners.contains(&refe.reference.object_id))
-            .unwrap();
-        let parent = created
-            .iter()
-            .find(|refe| owners.contains(&refe.reference.object_id))
-            .unwrap();
-        (parent.reference.clone(), child.reference.clone())
-    } else {
-        unreachable!("Invalid response");
-    };
+    let (parent, child) =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
+            let owners: BTreeSet<ObjectID> = created
+                .iter()
+                .flat_map(|refe| {
+                    refe.owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|x| x.into())
+                })
+                .collect();
+            let child = created
+                .iter()
+                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .unwrap();
+            let parent = created
+                .iter()
+                .find(|refe| owners.contains(&refe.reference.object_id))
+                .unwrap();
+            (parent.reference.clone(), child.reference.clone())
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let receive_result = SuiClientCommands::Call {
         package: (*package_id.object_id).into(),
@@ -1230,7 +1235,7 @@ async fn test_receive_argument_by_immut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = receive_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -1279,7 +1284,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let owned_obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let owned_obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
@@ -1314,29 +1319,30 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let (parent, child) = if let SuiClientCommandResult::Call(response) = start_call_result {
-        let created = response.effects.unwrap().created().to_vec();
-        let owners: BTreeSet<ObjectID> = created
-            .iter()
-            .flat_map(|refe| {
-                refe.owner
-                    .get_address_owner_address()
-                    .ok()
-                    .map(|x| x.into())
-            })
-            .collect();
-        let child = created
-            .iter()
-            .find(|refe| !owners.contains(&refe.reference.object_id))
-            .unwrap();
-        let parent = created
-            .iter()
-            .find(|refe| owners.contains(&refe.reference.object_id))
-            .unwrap();
-        (parent.reference.clone(), child.reference.clone())
-    } else {
-        unreachable!("Invalid response");
-    };
+    let (parent, child) =
+        if let SuiClientCommandResult::TransactionBlock(response) = start_call_result {
+            let created = response.effects.unwrap().created().to_vec();
+            let owners: BTreeSet<ObjectID> = created
+                .iter()
+                .flat_map(|refe| {
+                    refe.owner
+                        .get_address_owner_address()
+                        .ok()
+                        .map(|x| x.into())
+                })
+                .collect();
+            let child = created
+                .iter()
+                .find(|refe| !owners.contains(&refe.reference.object_id))
+                .unwrap();
+            let parent = created
+                .iter()
+                .find(|refe| owners.contains(&refe.reference.object_id))
+                .unwrap();
+            (parent.reference.clone(), child.reference.clone())
+        } else {
+            unreachable!("Invalid response");
+        };
 
     let receive_result = SuiClientCommands::Call {
         package: (*package_id.object_id).into(),
@@ -1353,7 +1359,7 @@ async fn test_receive_argument_by_mut_ref() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    if let SuiClientCommandResult::Call(response) = receive_result {
+    if let SuiClientCommandResult::TransactionBlock(response) = receive_result {
         assert!(response.effects.unwrap().into_status().is_ok());
     } else {
         unreachable!("Invalid response");
@@ -1407,7 +1413,7 @@ async fn test_package_publish_command_with_unpublished_dependency_succeeds(
     // Print it out to CLI/logs
     resp.print(true);
 
-    let obj_ids = if let SuiClientCommandResult::Publish(response) = resp {
+    let obj_ids = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
             gas_obj_id
@@ -1702,7 +1708,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
     // Print it out to CLI/logs
     resp.print(true);
 
-    let SuiClientCommandResult::Publish(response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid response");
     };
 
@@ -1771,7 +1777,7 @@ async fn test_package_upgrade_command() -> Result<(), anyhow::Error> {
 
     resp.print(true);
 
-    let SuiClientCommandResult::Upgrade(response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(response) = resp else {
         unreachable!("Invalid upgrade response");
     };
     let SuiTransactionBlockEffects::V1(effects) = response.effects.unwrap();
@@ -1834,7 +1840,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
     .execute(context)
     .await?;
 
-    let SuiClientCommandResult::Publish(publish_response) = resp else {
+    let SuiClientCommandResult::TransactionBlock(publish_response) = resp else {
         unreachable!("Invalid response");
     };
 
@@ -1917,7 +1923,7 @@ async fn test_package_management_on_upgrade_command() -> Result<(), anyhow::Erro
 
     // Get Upgraded Package ID and version
     let (expect_upgrade_latest_id, expect_upgrade_version, _) =
-        if let SuiClientCommandResult::Upgrade(response) = upgrade_response {
+        if let SuiClientCommandResult::TransactionBlock(response) = upgrade_response {
             assert_eq!(
                 response.effects.as_ref().unwrap().gas_object().object_id(),
                 gas_obj_id
@@ -1993,7 +1999,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::Transfer(response) = resp {
+    let (mut_obj1, mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         assert!(
             response.status_ok().unwrap(),
             "Command failed: {:?}",
@@ -2099,7 +2105,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     // Get the mutated objects
-    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::Transfer(response) = resp {
+    let (_mut_obj1, _mut_obj2) = if let SuiClientCommandResult::TransactionBlock(response) = resp {
         (
             response
                 .effects
@@ -2406,7 +2412,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
+    let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
         let object_id = r
@@ -2460,7 +2466,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
+    let g = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         let object_id = r
             .effects
             .as_ref()
@@ -2523,7 +2529,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+    let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         assert_eq!(r.effects.as_ref().unwrap().gas_object().object_id(), gas);
         let updated_object_id = r
@@ -2589,7 +2595,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+    let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
@@ -2657,7 +2663,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .execute(context)
     .await?;
 
-    let (updated_coin, new_coins) = if let SuiClientCommandResult::SplitCoin(r) = resp {
+    let (updated_coin, new_coins) = if let SuiClientCommandResult::TransactionBlock(r) = resp {
         assert!(r.status_ok().unwrap(), "Command failed: {:?}", r);
         let updated_object_id = r
             .effects
@@ -2992,8 +2998,7 @@ async fn test_get_owned_objects_owned_by_address_and_check_pagination() -> Resul
 
 #[tokio::test]
 async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
-    const LINTER_MSG: &str =
-        "Total number of linter warnings suppressed: 5 (filtered categories: 3)";
+    const LINTER_MSG: &str = "Total number of linter warnings suppressed: 5 (unique lints: 3)";
     let mut cmd = assert_cmd::Command::cargo_bin("sui").unwrap();
     let args = vec!["move", "test", "--path", "tests/data/linter"];
     let output = cmd
@@ -3001,7 +3006,10 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .output()
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(out_str.contains(LINTER_MSG));
+    assert!(
+        out_str.contains(LINTER_MSG),
+        "Expected to match {LINTER_MSG}, got: {out_str}"
+    );
     // test no-lint suppresses
     let args = vec!["move", "test", "--no-lint", "--path", "tests/data/linter"];
     let output = cmd
@@ -3009,7 +3017,10 @@ async fn test_linter_suppression_stats() -> Result<(), anyhow::Error> {
         .output()
         .expect("failed to run 'sui move test'");
     let out_str = str::from_utf8(&output.stderr).unwrap();
-    assert!(!out_str.contains(LINTER_MSG));
+    assert!(
+        !out_str.contains(LINTER_MSG),
+        "Expected _not to_ match {LINTER_MSG}, got: {out_str}"
+    );
     Ok(())
 }
 
@@ -3260,7 +3271,7 @@ async fn test_pay() -> Result<(), anyhow::Error> {
     // this test checks if the recipients have received the objects, and if the gas object used is
     // the right one (not one of the input coins, and in this setup it's the 3rd coin of sender)
     // we also check if the balances are right!
-    if let SuiClientCommandResult::Pay(response) = pay {
+    if let SuiClientCommandResult::TransactionBlock(response) = pay {
         // check tx status
         assert!(response.status_ok().unwrap());
         // check gas coin used
@@ -3341,7 +3352,7 @@ async fn test_pay_sui() -> Result<(), anyhow::Error> {
     // check if each recipient has one object, if the tx status is success,
     // and if the gas object used was the first object in the input coins
     // we also check if the balances of each recipient are right!
-    if let SuiClientCommandResult::PaySui(response) = pay_sui {
+    if let SuiClientCommandResult::TransactionBlock(response) = pay_sui {
         assert!(response.status_ok().unwrap());
         // check gas coin used
         assert_eq!(
@@ -3416,7 +3427,7 @@ async fn test_pay_all_sui() -> Result<(), anyhow::Error> {
     // pay all sui will take the input coins and smash them into one coin and transfer that coin to
     // the recipient, so we check that the recipient has one object, if the tx status is success,
     // and if the gas object used was the first object in the input coins
-    if let SuiClientCommandResult::PayAllSui(response) = pay_all_sui {
+    if let SuiClientCommandResult::TransactionBlock(response) = pay_all_sui {
         let objs_refs = client
             .read_api()
             .get_owned_objects(
@@ -3470,7 +3481,7 @@ async fn test_transfer() -> Result<(), anyhow::Error> {
     .await?;
     // transfer command will transfer the object_id1 to address2, and use object_id2 as gas
     // we check if object1 is owned by address 2 and if the gas object used is object_id2
-    if let SuiClientCommandResult::Transfer(response) = transfer {
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer {
         assert!(response.status_ok().unwrap());
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
@@ -3520,7 +3531,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     // transfer sui will transfer the amount from object_id1 to address2, and use the same object
     // as gas, and we check if the recipient address received the object, and the expected balance
     // is correct
-    if let SuiClientCommandResult::TransferSui(response) = transfer_sui {
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.status_ok().unwrap());
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
@@ -3557,7 +3568,7 @@ async fn test_transfer_sui() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
-    if let SuiClientCommandResult::TransferSui(response) = transfer_sui {
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui {
         assert!(response.status_ok().unwrap());
         assert_eq!(
             response.effects.as_ref().unwrap().gas_object().object_id(),
@@ -3600,7 +3611,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     let sender = context.active_address().unwrap();
     let tx_builder = client.transaction_builder();
     let tx_kind = tx_builder.transfer_sui_tx_kind(address2, Some(amount));
-    let gas_estimate = estimate_gas_budget(context, sender, tx_kind, rgp, None, None).await;
+    let gas_estimate = estimate_gas_budget(&client, sender, tx_kind, rgp, None, None).await;
     assert!(gas_estimate.is_ok());
 
     let transfer_sui_cmd = SuiClientCommands::TransferSui {
@@ -3617,7 +3628,7 @@ async fn test_gas_estimation() -> Result<(), anyhow::Error> {
     .execute(context)
     .await
     .unwrap();
-    if let SuiClientCommandResult::TransferSui(response) = transfer_sui_cmd {
+    if let SuiClientCommandResult::TransactionBlock(response) = transfer_sui_cmd {
         assert!(response.status_ok().unwrap());
         let gas_used = response.effects.as_ref().unwrap().gas_object().object_id();
         assert_eq!(gas_used, object_id1);

@@ -14,7 +14,6 @@
 //! terminate eventually.
 
 use move_binary_format::{
-
     errors::{Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         Bytecode, CompiledModule, FunctionDefinition, FunctionDefinitionIndex, FunctionHandleIndex,

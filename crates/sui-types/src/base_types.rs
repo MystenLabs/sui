@@ -58,6 +58,8 @@ use move_core_types::language_storage::TypeTag;
 use rand::Rng;
 use schemars::JsonSchema;
 use serde::ser::Error;
+use serde::ser::SerializeSeq;
+use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use shared_crypto::intent::HashingIntentScope;
@@ -1003,6 +1005,8 @@ impl TxContext {
 impl SequenceNumber {
     pub const MIN: SequenceNumber = SequenceNumber(u64::MIN);
     pub const MAX: SequenceNumber = SequenceNumber(0x7fff_ffff_ffff_ffff);
+    pub const CANCELLED_READ: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 1);
+    pub const CONGESTED: SequenceNumber = SequenceNumber(SequenceNumber::MAX.value() + 2);
 
     pub const fn new() -> Self {
         SequenceNumber(0)
@@ -1049,6 +1053,14 @@ impl SequenceNumber {
         assert_ne!(max_input.0, u64::MAX);
 
         SequenceNumber(max_input.0 + 1)
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self == &SequenceNumber::CANCELLED_READ || self == &SequenceNumber::CONGESTED
+    }
+
+    pub fn is_valid(&self) -> bool {
+        self < &SequenceNumber::MAX
     }
 }
 
@@ -1342,4 +1354,84 @@ impl fmt::Display for ObjectType {
             ObjectType::Struct(t) => write!(f, "{}", t),
         }
     }
+}
+
+// SizeOneVec is a wrapper around Vec<T> that enforces the size of the vec to be 1.
+// This seems pointless, but it allows us to have fields in protocol messages that are
+// current enforced to be of size 1, but might later allow other sizes, and to have
+// that constraint enforced in the serialization/deserialization layer, instead of
+// requiring manual input validation.
+#[derive(Debug, Deserialize, Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
+#[serde(try_from = "Vec<T>")]
+pub struct SizeOneVec<T> {
+    e: T,
+}
+
+impl<T> SizeOneVec<T> {
+    pub fn new(e: T) -> Self {
+        Self { e }
+    }
+
+    pub fn element(&self) -> &T {
+        &self.e
+    }
+
+    pub fn element_mut(&mut self) -> &mut T {
+        &mut self.e
+    }
+
+    pub fn iter(&self) -> std::iter::Once<&T> {
+        std::iter::once(&self.e)
+    }
+}
+
+impl<T> Serialize for SizeOneVec<T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(1))?;
+        seq.serialize_element(&self.e)?;
+        seq.end()
+    }
+}
+
+impl<T> TryFrom<Vec<T>> for SizeOneVec<T> {
+    type Error = anyhow::Error;
+
+    fn try_from(mut v: Vec<T>) -> Result<Self, Self::Error> {
+        if v.len() != 1 {
+            Err(anyhow!("Expected a vec of size 1"))
+        } else {
+            Ok(SizeOneVec {
+                e: v.pop().unwrap(),
+            })
+        }
+    }
+}
+
+#[test]
+fn test_size_one_vec_is_transparent() {
+    let regular = vec![42u8];
+    let size_one = SizeOneVec::new(42u8);
+
+    // Vec -> SizeOneVec serialization is transparent
+    let regular_ser = bcs::to_bytes(&regular).unwrap();
+    let size_one_deser = bcs::from_bytes::<SizeOneVec<u8>>(&regular_ser).unwrap();
+    assert_eq!(size_one, size_one_deser);
+
+    // other direction works too
+    let size_one_ser = bcs::to_bytes(&SizeOneVec::new(43u8)).unwrap();
+    let regular_deser = bcs::from_bytes::<Vec<u8>>(&size_one_ser).unwrap();
+    assert_eq!(regular_deser, vec![43u8]);
+
+    // we get a deserialize error when deserializing a vec with size != 1
+    let empty_ser = bcs::to_bytes(&Vec::<u8>::new()).unwrap();
+    bcs::from_bytes::<SizeOneVec<u8>>(&empty_ser).unwrap_err();
+
+    let size_greater_than_one_ser = bcs::to_bytes(&vec![1u8, 2u8]).unwrap();
+    bcs::from_bytes::<SizeOneVec<u8>>(&size_greater_than_one_ser).unwrap_err();
 }

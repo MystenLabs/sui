@@ -27,6 +27,7 @@ use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::VerifiedExecutionData;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult};
@@ -247,6 +248,10 @@ impl ExecutionCacheRead for PassthroughCache {
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
         get_sui_system_state(self)
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        get_bridge(self)
     }
 
     fn get_marker_value(

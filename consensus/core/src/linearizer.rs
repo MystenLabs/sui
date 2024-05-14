@@ -90,7 +90,7 @@ impl Linearizer {
             let last_commit_index = dag_state.last_commit_index();
             let last_commit_digest = dag_state.last_commit_digest();
             let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
-            let mut last_committed_rounds = dag_state.last_committed_rounds();
+            let last_committed_rounds = dag_state.last_committed_rounds();
             drop(dag_state);
 
             // Collect the sub-dag generated using each of these leaders.
@@ -98,7 +98,7 @@ impl Linearizer {
                 leader_block,
                 last_commit_index,
                 last_commit_timestamp_ms,
-                last_committed_rounds.clone(),
+                last_committed_rounds,
             );
 
             // [Optional] sort the sub-dag using a deterministic algorithm.
@@ -113,11 +113,7 @@ impl Linearizer {
                 sub_dag
                     .blocks
                     .iter()
-                    .map(|block| {
-                        let block_ref = block.reference();
-                        last_committed_rounds[block_ref.author.value()] = block_ref.round;
-                        block_ref
-                    })
+                    .map(|block| block.reference())
                     .collect(),
             );
             let serialized = commit
@@ -147,16 +143,16 @@ impl Linearizer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_dag_builder::DagBuilder;
     use crate::{
         commit::{CommitAPI as _, CommitDigest, DEFAULT_WAVE_LENGTH},
         context::Context,
         leader_schedule::{LeaderSchedule, LeaderSwapTable},
         storage::mem_store::MemStore,
+        test_dag_builder::DagBuilder,
     };
 
-    #[test]
-    fn test_handle_commit() {
+    #[tokio::test]
+    async fn test_handle_commit() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);
@@ -200,8 +196,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_handle_already_committed() {
+    #[tokio::test]
+    async fn test_handle_already_committed() {
         telemetry_subscribers::init_for_testing();
         let num_authorities = 4;
         let context = Arc::new(Context::new_for_test(num_authorities).0);

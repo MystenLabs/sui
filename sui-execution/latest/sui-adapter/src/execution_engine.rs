@@ -23,27 +23,38 @@ mod checked {
         RANDOMNESS_MODULE_NAME, RANDOMNESS_STATE_CREATE_FUNCTION_NAME,
         RANDOMNESS_STATE_UPDATE_FUNCTION_NAME,
     };
-    use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
+    use sui_types::{BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
     use tracing::{info, instrument, trace, warn};
 
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
+    use move_core_types::ident_str;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
         AUTHENTICATOR_STATE_MODULE_NAME, AUTHENTICATOR_STATE_UPDATE_FUNCTION_NAME,
     };
+    use sui_types::base_types::SequenceNumber;
+    use sui_types::bridge::BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER;
+    use sui_types::bridge::{
+        BridgeChainId, BRIDGE_CREATE_FUNCTION_NAME, BRIDGE_INIT_COMMITTEE_FUNCTION_NAME,
+        BRIDGE_MODULE_NAME,
+    };
     use sui_types::clock::{CLOCK_MODULE_NAME, CONSENSUS_COMMIT_PROLOGUE_FUNCTION_NAME};
     use sui_types::committee::EpochId;
     use sui_types::deny_list::{DENY_LIST_CREATE_FUNC, DENY_LIST_MODULE};
+    use sui_types::digests::{
+        get_mainnet_chain_identifier, get_testnet_chain_identifier, ChainIdentifier,
+    };
     use sui_types::effects::TransactionEffects;
     use sui_types::error::{ExecutionError, ExecutionErrorKind};
     use sui_types::execution::is_certificate_denied;
     use sui_types::execution_config_utils::to_binary_config;
-    use sui_types::execution_status::ExecutionStatus;
+    use sui_types::execution_status::{CongestedObjects, ExecutionStatus};
     use sui_types::gas::GasCostSummary;
     use sui_types::gas::SuiGasStatus;
+    use sui_types::id::UID;
     use sui_types::inner_temporary_store::InnerTemporaryStore;
     use sui_types::storage::BackingStore;
     #[cfg(msim)]
@@ -56,7 +67,7 @@ mod checked {
     };
     use sui_types::transaction::{CheckedInputObjects, RandomnessStateUpdate};
     use sui_types::{
-        base_types::{ObjectRef, SuiAddress, TransactionDigest, TxContext},
+        base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
         object::{Object, ObjectInner},
         sui_system_state::{ADVANCE_EPOCH_FUNCTION_NAME, SUI_SYSTEM_MODULE_NAME},
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_FRAMEWORK_ADDRESS, SUI_FRAMEWORK_PACKAGE_ID,
@@ -95,6 +106,7 @@ mod checked {
         let receiving_objects = transaction_kind.receiving_objects();
         let mut transaction_dependencies = input_objects.transaction_dependencies();
         let contains_deleted_input = input_objects.contains_deleted_objects();
+        let congested_objects = input_objects.get_congested_objects();
 
         let mut temporary_store = TemporaryStore::new(
             store,
@@ -128,6 +140,7 @@ mod checked {
             enable_expensive_checks,
             deny_cert,
             contains_deleted_input,
+            congested_objects,
         );
 
         let status = if let Err(error) = &execution_result {
@@ -260,6 +273,7 @@ mod checked {
         enable_expensive_checks: bool,
         deny_cert: bool,
         contains_deleted_input: bool,
+        congested_objects: Option<Vec<ObjectID>>,
     ) -> (
         GasCostSummary,
         Result<Mode::ExecutionResults, ExecutionError>,
@@ -287,6 +301,13 @@ mod checked {
             } else if contains_deleted_input {
                 Err(ExecutionError::new(
                     ExecutionErrorKind::InputObjectDeleted,
+                    None,
+                ))
+            } else if let Some(congested_objects) = congested_objects {
+                Err(ExecutionError::new(
+                    ExecutionErrorKind::ExecutionCancelledDueToSharedObjectCongestion {
+                        congested_objects: CongestedObjects(congested_objects),
+                    },
                     None,
                 ))
             } else {
@@ -628,6 +649,14 @@ mod checked {
                         EndOfEpochTransactionKind::DenyListStateCreate => {
                             assert!(protocol_config.enable_coin_deny_list());
                             builder = setup_coin_deny_list_state_create(builder);
+                        }
+                        EndOfEpochTransactionKind::BridgeStateCreate(chain_id) => {
+                            assert!(protocol_config.enable_bridge());
+                            builder = setup_bridge_create(builder, chain_id)
+                        }
+                        EndOfEpochTransactionKind::BridgeCommitteeInit(bridge_shared_version) => {
+                            assert!(protocol_config.enable_bridge());
+                            builder = setup_bridge_committee_update(builder, bridge_shared_version)
                         }
                     }
                 }
@@ -986,6 +1015,75 @@ mod checked {
                 vec![],
             )
             .expect("Unable to generate randomness_state_create transaction!");
+        builder
+    }
+
+    fn setup_bridge_create(
+        mut builder: ProgrammableTransactionBuilder,
+        chain_id: ChainIdentifier,
+    ) -> ProgrammableTransactionBuilder {
+        let bridge_uid = builder
+            .input(CallArg::Pure(UID::new(SUI_BRIDGE_OBJECT_ID).to_bcs_bytes()))
+            .expect("Unable to create Bridge object UID!");
+
+        let bridge_chain_id = if chain_id == get_mainnet_chain_identifier() {
+            BridgeChainId::SuiMainnet as u8
+        } else if chain_id == get_testnet_chain_identifier() {
+            BridgeChainId::SuiTestnet as u8
+        } else {
+            // How do we distinguish devnet from other test envs?
+            BridgeChainId::SuiCustom as u8
+        };
+
+        let bridge_chain_id = builder.pure(bridge_chain_id).unwrap();
+        builder.programmable_move_call(
+            BRIDGE_ADDRESS.into(),
+            BRIDGE_MODULE_NAME.to_owned(),
+            BRIDGE_CREATE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![bridge_uid, bridge_chain_id],
+        );
+        builder
+    }
+
+    fn setup_bridge_committee_update(
+        mut builder: ProgrammableTransactionBuilder,
+        bridge_shared_version: SequenceNumber,
+    ) -> ProgrammableTransactionBuilder {
+        let bridge = builder
+            .obj(ObjectArg::SharedObject {
+                id: SUI_BRIDGE_OBJECT_ID,
+                initial_shared_version: bridge_shared_version,
+                mutable: true,
+            })
+            .expect("Unable to create Bridge object arg!");
+        let system_state = builder
+            .obj(ObjectArg::SUI_SYSTEM_MUT)
+            .expect("Unable to create System State object arg!");
+
+        let voting_power = builder.programmable_move_call(
+            SUI_SYSTEM_PACKAGE_ID,
+            SUI_SYSTEM_MODULE_NAME.to_owned(),
+            ident_str!("validator_voting_powers").to_owned(),
+            vec![],
+            vec![system_state],
+        );
+
+        // Hardcoding min stake participation to 75.00%
+        // TODO: We need to set a correct value or make this configurable.
+        let min_stake_participation_percentage = builder
+            .input(CallArg::Pure(
+                bcs::to_bytes(&BRIDGE_COMMITTEE_MINIMAL_VOTING_POWER).unwrap(),
+            ))
+            .unwrap();
+
+        builder.programmable_move_call(
+            BRIDGE_ADDRESS.into(),
+            BRIDGE_MODULE_NAME.to_owned(),
+            BRIDGE_INIT_COMMITTEE_FUNCTION_NAME.to_owned(),
+            vec![],
+            vec![bridge, voting_power, min_stake_participation_percentage],
+        );
         builder
     }
 

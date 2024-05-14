@@ -481,6 +481,9 @@ validator_total_stake_amount
 validator_stake_amount
 	public fun
 	0x3::validator_set
+validator_voting_power
+	public fun
+	0x3::validator_set
 validator_staking_pool_id
 	public fun
 	0x3::validator_set
@@ -784,6 +787,9 @@ epoch_start_timestamp_ms
 validator_stake_amount
 	public(package) fun
 	0x3::sui_system_state_inner
+active_validator_voting_powers
+	public(package) fun
+	0x3::sui_system_state_inner
 validator_staking_pool_id
 	public(package) fun
 	0x3::sui_system_state_inner
@@ -932,6 +938,9 @@ load_system_state_mut
 	fun
 	0x3::sui_system
 load_inner_maybe_upgrade
+	fun
+	0x3::sui_system
+validator_voting_powers
 	fun
 	0x3::sui_system
 GenesisValidatorMetadata
@@ -1119,6 +1128,9 @@ randomness_state
 	0x2::object
 sui_deny_list_object_id
 	public(package) fun
+	0x2::object
+bridge
+	fun
 	0x2::object
 uid_as_inner
 	public fun
@@ -3553,6 +3565,411 @@ order_id
 tick_level
 	public fun
 	0xdee9::order_query
+BridgeTreasury
+	public struct
+	0xb::treasury
+BridgeTokenMetadata
+	public struct
+	0xb::treasury
+ForeignTokenRegistration
+	public struct
+	0xb::treasury
+UpdateTokenPriceEvent
+	public struct
+	0xb::treasury
+NewTokenEvent
+	public struct
+	0xb::treasury
+TokenRegistrationEvent
+	public struct
+	0xb::treasury
+token_id
+	public fun
+	0xb::treasury
+decimal_multiplier
+	public fun
+	0xb::treasury
+notional_value
+	public fun
+	0xb::treasury
+register_foreign_token
+	public(package) fun
+	0xb::treasury
+add_new_token
+	public(package) fun
+	0xb::treasury
+create
+	public(package) fun
+	0xb::treasury
+burn
+	public(package) fun
+	0xb::treasury
+mint
+	public(package) fun
+	0xb::treasury
+update_asset_notional_price
+	public(package) fun
+	0xb::treasury
+get_token_metadata
+	fun
+	0xb::treasury
+token
+	public fun
+	0xb::message_types
+committee_blocklist
+	public fun
+	0xb::message_types
+emergency_op
+	public fun
+	0xb::message_types
+update_bridge_limit
+	public fun
+	0xb::message_types
+update_asset_price
+	public fun
+	0xb::message_types
+add_tokens_on_sui
+	public fun
+	0xb::message_types
+BridgeRoute
+	public struct
+	0xb::chain_ids
+sui_mainnet
+	public fun
+	0xb::chain_ids
+sui_testnet
+	public fun
+	0xb::chain_ids
+sui_custom
+	public fun
+	0xb::chain_ids
+eth_mainnet
+	public fun
+	0xb::chain_ids
+eth_sepolia
+	public fun
+	0xb::chain_ids
+eth_custom
+	public fun
+	0xb::chain_ids
+route_source
+	public fun
+	0xb::chain_ids
+route_destination
+	public fun
+	0xb::chain_ids
+assert_valid_chain_id
+	public fun
+	0xb::chain_ids
+valid_routes
+	public fun
+	0xb::chain_ids
+is_valid_route
+	public fun
+	0xb::chain_ids
+get_route
+	public fun
+	0xb::chain_ids
+BridgeMessage
+	public struct
+	0xb::message
+BridgeMessageKey
+	public struct
+	0xb::message
+TokenPayload
+	public struct
+	0xb::message
+EmergencyOp
+	public struct
+	0xb::message
+Blocklist
+	public struct
+	0xb::message
+UpdateBridgeLimit
+	public struct
+	0xb::message
+UpdateAssetPrice
+	public struct
+	0xb::message
+AddTokenOnSui
+	public struct
+	0xb::message
+extract_token_bridge_payload
+	public fun
+	0xb::message
+extract_emergency_op_payload
+	public fun
+	0xb::message
+extract_blocklist_payload
+	public fun
+	0xb::message
+extract_update_bridge_limit
+	public fun
+	0xb::message
+extract_update_asset_price
+	public fun
+	0xb::message
+extract_add_tokens_on_sui
+	public fun
+	0xb::message
+serialize_message
+	public fun
+	0xb::message
+create_token_bridge_message
+	public fun
+	0xb::message
+create_emergency_op_message
+	public fun
+	0xb::message
+create_blocklist_message
+	public fun
+	0xb::message
+create_update_bridge_limit_message
+	public fun
+	0xb::message
+create_update_asset_price_message
+	public fun
+	0xb::message
+create_add_tokens_on_sui_message
+	public fun
+	0xb::message
+create_key
+	public fun
+	0xb::message
+key
+	public fun
+	0xb::message
+message_version
+	public fun
+	0xb::message
+message_type
+	public fun
+	0xb::message
+seq_num
+	public fun
+	0xb::message
+source_chain
+	public fun
+	0xb::message
+token_target_chain
+	public fun
+	0xb::message
+token_target_address
+	public fun
+	0xb::message
+token_type
+	public fun
+	0xb::message
+token_amount
+	public fun
+	0xb::message
+emergency_op_type
+	public fun
+	0xb::message
+blocklist_type
+	public fun
+	0xb::message
+blocklist_validator_addresses
+	public fun
+	0xb::message
+update_bridge_limit_payload_sending_chain
+	public fun
+	0xb::message
+update_bridge_limit_payload_receiving_chain
+	public fun
+	0xb::message
+update_bridge_limit_payload_limit
+	public fun
+	0xb::message
+update_asset_price_payload_token_id
+	public fun
+	0xb::message
+update_asset_price_payload_new_price
+	public fun
+	0xb::message
+is_native
+	public fun
+	0xb::message
+token_ids
+	public fun
+	0xb::message
+token_type_names
+	public fun
+	0xb::message
+token_prices
+	public fun
+	0xb::message
+emergency_op_pause
+	public fun
+	0xb::message
+emergency_op_unpause
+	public fun
+	0xb::message
+required_voting_power
+	public fun
+	0xb::message
+reverse_bytes
+	fun
+	0xb::message
+peel_u64_be
+	fun
+	0xb::message
+TransferLimiter
+	public struct
+	0xb::limiter
+TransferRecord
+	public struct
+	0xb::limiter
+UpdateRouteLimitEvent
+	public struct
+	0xb::limiter
+get_route_limit
+	public fun
+	0xb::limiter
+new
+	public(package) fun
+	0xb::limiter
+check_and_record_sending_transfer
+	public(package) fun
+	0xb::limiter
+update_route_limit
+	public(package) fun
+	0xb::limiter
+current_hour_since_epoch
+	fun
+	0xb::limiter
+adjust_transfer_records
+	fun
+	0xb::limiter
+initial_transfer_limits
+	fun
+	0xb::limiter
+ecdsa_pub_key_to_eth_address
+	public(package) fun
+	0xb::crypto
+BlocklistValidatorEvent
+	public struct
+	0xb::committee
+BridgeCommittee
+	public struct
+	0xb::committee
+CommitteeUpdateEvent
+	public struct
+	0xb::committee
+CommitteeMember
+	public struct
+	0xb::committee
+CommitteeMemberRegistration
+	public struct
+	0xb::committee
+verify_signatures
+	public fun
+	0xb::committee
+create
+	public(package) fun
+	0xb::committee
+register
+	public(package) fun
+	0xb::committee
+try_create_next_committee
+	public(package) fun
+	0xb::committee
+execute_blocklist
+	public(package) fun
+	0xb::committee
+committee_members
+	public(package) fun
+	0xb::committee
+check_uniqueness_bridge_keys
+	fun
+	0xb::committee
+Bridge
+	public struct
+	0xb::bridge
+BridgeInner
+	public struct
+	0xb::bridge
+TokenDepositedEvent
+	public struct
+	0xb::bridge
+EmergencyOpEvent
+	public struct
+	0xb::bridge
+BridgeRecord
+	public struct
+	0xb::bridge
+TokenTransferApproved
+	public struct
+	0xb::bridge
+TokenTransferClaimed
+	public struct
+	0xb::bridge
+TokenTransferAlreadyApproved
+	public struct
+	0xb::bridge
+TokenTransferAlreadyClaimed
+	public struct
+	0xb::bridge
+TokenTransferLimitExceed
+	public struct
+	0xb::bridge
+create
+	fun
+	0xb::bridge
+init_bridge_committee
+	fun
+	0xb::bridge
+committee_registration
+	public fun
+	0xb::bridge
+register_foreign_token
+	public fun
+	0xb::bridge
+send_token
+	public fun
+	0xb::bridge
+approve_token_transfer
+	public fun
+	0xb::bridge
+claim_token
+	public fun
+	0xb::bridge
+claim_and_transfer_token
+	public fun
+	0xb::bridge
+execute_system_message
+	public fun
+	0xb::bridge
+get_token_transfer_action_status
+	public fun
+	0xb::bridge
+load_inner
+	fun
+	0xb::bridge
+load_inner_mut
+	fun
+	0xb::bridge
+claim_token_internal
+	fun
+	0xb::bridge
+execute_emergency_op
+	fun
+	0xb::bridge
+execute_update_bridge_limit
+	fun
+	0xb::bridge
+execute_update_asset_price
+	fun
+	0xb::bridge
+execute_add_tokens_on_sui
+	fun
+	0xb::bridge
+get_current_seq_num_and_increment
+	fun
+	0xb::bridge
+get_token_transfer_action_signatures
+	fun
+	0xb::bridge
 print
 	public fun
 	0x1::debug

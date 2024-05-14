@@ -30,6 +30,8 @@ pub(crate) const GENESIS_COMMIT_INDEX: CommitIndex = 0;
 /// Default wave length for all committers. A longer wave length increases the
 /// chance of committing the leader under asynchrony at the cost of latency in
 /// the common case.
+// TODO: merge DEFAULT_WAVE_LENGTH and MINIMUM_WAVE_LENGTH into a single constant,
+// because we are unlikely to change them via config in the forseeable future.
 pub(crate) const DEFAULT_WAVE_LENGTH: Round = MINIMUM_WAVE_LENGTH;
 
 /// We need at least one leader round, one voting round, and one decision round.
@@ -294,11 +296,14 @@ pub struct CommittedSubDag {
     /// First commit after genesis has a index of 1, then every next commit has a
     /// index incremented by 1.
     pub commit_index: CommitIndex,
+    /// Optional scores that are provided as part of the consensus output to Sui
+    /// that can then be used by Sui for future submission to consensus.
+    pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
 }
 
 impl CommittedSubDag {
     /// Create new (empty) sub-dag.
-    pub fn new(
+    pub(crate) fn new(
         leader: BlockRef,
         blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,
@@ -309,12 +314,17 @@ impl CommittedSubDag {
             blocks,
             timestamp_ms,
             commit_index,
+            reputation_scores_desc: vec![],
         }
+    }
+
+    pub(crate) fn update_scores(&mut self, reputation_scores_desc: Vec<(AuthorityIndex, u64)>) {
+        self.reputation_scores_desc = reputation_scores_desc;
     }
 
     /// Sort the blocks of the sub-dag by round number then authority index. Any
     /// deterministic & stable algorithm works.
-    pub fn sort(&mut self) {
+    pub(crate) fn sort(&mut self) {
         self.blocks.sort_by(|a, b| {
             a.round()
                 .cmp(&b.round())
@@ -342,11 +352,15 @@ impl Display for CommittedSubDag {
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} (", self.leader, self.commit_index)?;
+        write!(f, "{}@{} ([", self.leader, self.commit_index)?;
         for block in &self.blocks {
             write!(f, "{}, ", block.reference())?;
         }
-        write!(f, ")")
+        write!(
+            f,
+            "];{}ms;rs{:?})",
+            self.timestamp_ms, self.reputation_scores_desc
+        )
     }
 }
 
@@ -413,9 +427,7 @@ pub(crate) enum Decision {
     Indirect,
 }
 
-/// The status of every leader output by the committers. While the core only cares
-/// about committed leaders, providing a richer status allows for easier debugging,
-/// testing, and composition with advanced commit strategies.
+/// The status of a leader slot from the direct and indirect commit rules.
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LeaderStatus {
     Commit(VerifiedBlock),
@@ -432,14 +444,6 @@ impl LeaderStatus {
         }
     }
 
-    pub(crate) fn authority(&self) -> AuthorityIndex {
-        match self {
-            Self::Commit(block) => block.author(),
-            Self::Skip(leader) => leader.authority,
-            Self::Undecided(leader) => leader.authority,
-        }
-    }
-
     pub(crate) fn is_decided(&self) -> bool {
         match self {
             Self::Commit(_) => true,
@@ -448,21 +452,11 @@ impl LeaderStatus {
         }
     }
 
-    // Only should be called when the leader status is decided (Commit/Skip)
-    pub fn get_decided_slot(&self) -> Slot {
+    pub(crate) fn into_decided_leader(self) -> Option<DecidedLeader> {
         match self {
-            Self::Commit(block) => block.reference().into(),
-            Self::Skip(leader) => *leader,
-            Self::Undecided(..) => panic!("Decided block is either Commit or Skip"),
-        }
-    }
-
-    // Only should be called when the leader status is decided (Commit/Skip)
-    pub fn into_committed_block(self) -> Option<VerifiedBlock> {
-        match self {
-            Self::Commit(block) => Some(block),
-            Self::Skip(_leader) => None,
-            Self::Undecided(..) => panic!("Decided block is either Commit or Skip"),
+            Self::Commit(block) => Some(DecidedLeader::Commit(block)),
+            Self::Skip(slot) => Some(DecidedLeader::Skip(slot)),
+            Self::Undecided(..) => None,
         }
     }
 }
@@ -471,8 +465,58 @@ impl Display for LeaderStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Commit(block) => write!(f, "Commit({})", block.reference()),
-            Self::Skip(leader) => write!(f, "Skip({leader})"),
-            Self::Undecided(leader) => write!(f, "Undecided({leader})"),
+            Self::Skip(slot) => write!(f, "Skip({slot})"),
+            Self::Undecided(slot) => write!(f, "Undecided({slot})"),
+        }
+    }
+}
+
+/// Decision of each leader slot.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum DecidedLeader {
+    Commit(VerifiedBlock),
+    Skip(Slot),
+}
+
+impl DecidedLeader {
+    // Slot where the leader is decided.
+    pub(crate) fn slot(&self) -> Slot {
+        match self {
+            Self::Commit(block) => block.reference().into(),
+            Self::Skip(slot) => *slot,
+        }
+    }
+
+    // Converts to committed block if the decision is to commit. Returns None otherwise.
+    pub(crate) fn into_committed_block(self) -> Option<VerifiedBlock> {
+        match self {
+            Self::Commit(block) => Some(block),
+            Self::Skip(_) => None,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn round(&self) -> Round {
+        match self {
+            Self::Commit(block) => block.round(),
+            Self::Skip(leader) => leader.round,
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn authority(&self) -> AuthorityIndex {
+        match self {
+            Self::Commit(block) => block.author(),
+            Self::Skip(leader) => leader.authority,
+        }
+    }
+}
+
+impl Display for DecidedLeader {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Commit(block) => write!(f, "Commit({})", block.reference()),
+            Self::Skip(slot) => write!(f, "Skip({slot})"),
         }
     }
 }
@@ -498,10 +542,8 @@ impl CommitInfo {
     }
 }
 
-/// CommitRange stores a range of CommitIndex. The range contains the start and
-/// end commit indices and can be ordered for use as the key of a table.
-/// Note: If used as a key for a table it is useful to ensure the key ranges don't
-/// intersect using the provided helper methods so that ordering becomes clear.
+/// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
+/// and end (exclusive) commit indices and can be ordered for use as the key of a table.
 #[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct CommitRange(Range<CommitIndex>);
 
@@ -511,10 +553,12 @@ impl CommitRange {
         Self(range)
     }
 
+    // Inclusive
     pub(crate) fn start(&self) -> CommitIndex {
         self.0.start
     }
 
+    // Exclusive
     pub(crate) fn end(&self) -> CommitIndex {
         self.0.end
     }
@@ -522,13 +566,7 @@ impl CommitRange {
     /// Check if the provided range is sequentially after this range with the same
     /// range length.
     pub(crate) fn is_next_range(&self, other: &Self) -> bool {
-        self.0.len() == other.0.len() && self.end() + 1 == other.start()
-    }
-
-    /// Check if two CommitRange intersect. An intersection is true if any point
-    /// of the range intersects inclusive of the start and end indices.
-    pub(crate) fn has_intersection(&self, other: &Self) -> bool {
-        self.start() <= other.end() && self.end() >= other.start()
+        self.0.len() == other.0.len() && self.end() == other.start()
     }
 }
 
@@ -563,8 +601,8 @@ mod tests {
         storage::{mem_store::MemStore, WriteBatch},
     };
 
-    #[test]
-    fn test_new_subdag_from_commit() {
+    #[tokio::test]
+    async fn test_new_subdag_from_commit() {
         let store = Arc::new(MemStore::new());
         let context = Arc::new(Context::new_for_test(4).0);
         let wave_length = DEFAULT_WAVE_LENGTH;
@@ -636,24 +674,16 @@ mod tests {
         assert_eq!(subdag.commit_index, commit_index);
     }
 
-    #[test]
-    fn test_commit_range() {
-        let range1 = CommitRange::new(1..5);
+    #[tokio::test]
+    async fn test_commit_range() {
+        let range1 = CommitRange::new(1..6);
         let range2 = CommitRange::new(2..6);
         let range3 = CommitRange::new(5..10);
-        let range4 = CommitRange::new(6..10);
+        let range4 = CommitRange::new(6..11);
         let range5 = CommitRange::new(6..9);
 
         assert_eq!(range1.start(), 1);
-        assert_eq!(range1.end(), 5);
-
-        // Test range intersection check
-        assert!(range1.has_intersection(&range2));
-        assert!(range1.has_intersection(&range3));
-        assert!(range3.has_intersection(&range1));
-        assert!(range3.has_intersection(&range4));
-        assert!(!range1.has_intersection(&range4));
-        assert!(!range4.has_intersection(&range1));
+        assert_eq!(range1.end(), 6);
 
         // Test next range check
         assert!(!range1.is_next_range(&range2));
@@ -665,5 +695,6 @@ mod tests {
         assert!(range1 < range2);
         assert!(range2 < range3);
         assert!(range3 < range4);
+        assert!(range5 < range4);
     }
 }

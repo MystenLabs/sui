@@ -460,7 +460,9 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
 
-    ErrorConstant,
+    ErrorConstant {
+        line_number_loc: Loc,
+    },
 
     UnresolvedError,
 }
@@ -1813,7 +1815,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
-            E::ErrorConstant => w.write("ErrorConstant"),
+            E::ErrorConstant { .. } => w.write("ErrorConstant"),
         }
     }
 }

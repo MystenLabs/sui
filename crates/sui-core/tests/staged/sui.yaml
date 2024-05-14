@@ -52,6 +52,9 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
+ChainIdentifier:
+  NEWTYPESTRUCT:
+    TYPENAME: CheckpointDigest
 ChangeEpoch:
   STRUCT:
     - epoch: U64
@@ -222,6 +225,10 @@ CompressedSignature:
       ZkLogin:
         NEWTYPE:
           TYPENAME: ZkLoginAuthenticatorAsBytes
+CongestedObjects:
+  NEWTYPESTRUCT:
+    SEQ:
+      TYPENAME: ObjectID
 ConsensusCommitDigest:
   NEWTYPESTRUCT:
     TYPENAME: Digest
@@ -302,6 +309,14 @@ EndOfEpochTransactionKind:
       RandomnessStateCreate: UNIT
     4:
       DenyListStateCreate: UNIT
+    5:
+      BridgeStateCreate:
+        NEWTYPE:
+          TYPENAME: ChainIdentifier
+    6:
+      BridgeCommitteeInit:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
 Envelope:
   STRUCT:
     - data:
@@ -424,6 +439,11 @@ ExecutionFailureStatus:
       SharedObjectOperationNotAllowed: UNIT
     32:
       InputObjectDeleted: UNIT
+    33:
+      ExecutionCancelledDueToSharedObjectCongestion:
+        STRUCT:
+          - congested_objects:
+              TYPENAME: CongestedObjects
 ExecutionStatus:
   ENUM:
     0:
@@ -1044,6 +1064,10 @@ UnchangedSharedKind:
           TYPENAME: SequenceNumber
     2:
       ReadDeleted:
+        NEWTYPE:
+          TYPENAME: SequenceNumber
+    3:
+      Cancelled:
         NEWTYPE:
           TYPENAME: SequenceNumber
 UpgradeInfo:

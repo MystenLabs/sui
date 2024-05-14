@@ -112,6 +112,10 @@ export function getAssetsFromTxnBlock({
 	});
 
 	transactionBlock.objectChanges?.forEach((change) => {
+		if (!isObjectOwner(change, normalizedAddress, isSent)) {
+			return;
+		}
+
 		if ('objectType' in change) {
 			const type = parseStructTag(change.objectType);
 
@@ -125,7 +129,10 @@ export function getAssetsFromTxnBlock({
 					change.type === 'transferred' ||
 					change.type === 'mutated'
 				) {
-					coins.push(change);
+					coins.push({
+						...change,
+						type: change.objectType,
+					});
 				}
 				return;
 			}

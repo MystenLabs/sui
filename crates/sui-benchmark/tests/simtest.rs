@@ -34,7 +34,7 @@ mod test {
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
-    use sui_surfer::default_surf_strategy::DefaultSurfStrategy;
+    use sui_surfer::surf_strategy::SurfStrategy;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_cluster::{TestCluster, TestClusterBuilder};
@@ -775,7 +775,9 @@ mod test {
                 .collect();
             info!("using sui_surfer test packages: {test_package_paths:?}");
 
-            let results = sui_surfer::run_with_test_cluster::<DefaultSurfStrategy>(
+            let surf_strategy = SurfStrategy::new(Duration::from_millis(400));
+            let results = sui_surfer::run_with_test_cluster_and_strategy(
+                surf_strategy,
                 test_duration,
                 test_package_paths,
                 test_cluster,

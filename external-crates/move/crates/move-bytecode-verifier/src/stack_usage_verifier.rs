@@ -9,9 +9,11 @@
 //! the stack height by the number of values returned by the function as indicated in its
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
-use crate::absint::FunctionContext;
-use move_binary_format::{
+use move_abstract_interpreter::{
+    absint::FunctionContext,
     control_flow_graph::{BlockId, ControlFlowGraph},
+};
+use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
     CompiledModule,

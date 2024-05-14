@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IWETH9.sol";
 
@@ -37,14 +38,8 @@ contract BridgeVault is Ownable, IBridgeVault {
         override
         onlyOwner
     {
-        // Get the token contract instance
-        IERC20 token = IERC20(tokenAddress);
-
         // Transfer the tokens from the contract to the target address
-        bool success = token.transfer(recipientAddress, amount);
-
-        // Check that the transfer was successful
-        require(success, "BridgeVault: Transfer failed");
+        SafeERC20.safeTransfer(IERC20(tokenAddress), recipientAddress, amount);
     }
 
     /// @notice Unwraps stored wrapped ETH and transfers the newly withdrawn ETH to the provided target
@@ -61,10 +56,15 @@ contract BridgeVault is Ownable, IBridgeVault {
         wETH.withdraw(amount);
 
         // Transfer the unwrapped ETH to the target address
-        recipientAddress.transfer(amount);
+        (bool success,) = recipientAddress.call{value: amount}("");
+        require(success, "ETH transfer failed");
     }
 
-    /// @notice Enables the contract to receive ETH.
-    /// @dev This function is required to receive ETH when unwrapping WETH.
-    receive() external payable {}
+    /// @notice Wraps as eth sent to this contract.
+    /// @dev skip if sender is wETH contract to avoid infinite loop.
+    receive() external payable {
+        if (msg.sender != address(wETH)) {
+            wETH.deposit{value: msg.value}();
+        }
+    }
 }

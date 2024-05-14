@@ -10,6 +10,7 @@ mod checked {
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format_common::VERSION_6,
         normalized, CompiledModule,
     };
     use move_core_types::{
@@ -816,11 +817,17 @@ mod checked {
         modules: &[CompiledModule],
     ) -> Result<(), ExecutionError> {
         // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+        let binary_version = context.protocol_config.move_binary_format_version();
         let new_module_bytes: Vec<_> = modules
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap();
+                let version = if binary_version > VERSION_6 {
+                    m.version
+                } else {
+                    VERSION_6
+                };
+                m.serialize_with_version(version, &mut bytes).unwrap();
                 bytes
             })
             .collect();

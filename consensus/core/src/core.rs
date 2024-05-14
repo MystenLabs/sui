@@ -20,6 +20,7 @@ use crate::{
         VerifiedBlock, GENESIS_ROUND,
     },
     block_manager::BlockManager,
+    commit::CommittedSubDag,
     commit_observer::CommitObserver,
     context::Context,
     dag_state::DagState,
@@ -31,7 +32,6 @@ use crate::{
     universal_committer::{
         universal_committer_builder::UniversalCommitterBuilder, UniversalCommitter,
     },
-    CommittedSubDag,
 };
 
 // TODO: Move to protocol config once initial value is finalized.
@@ -65,7 +65,6 @@ pub(crate) struct Core {
     last_decided_leader: Slot,
     /// The consensus leader schedule to be used to resolve the leader for a
     /// given round.
-    #[allow(unused)]
     leader_schedule: Arc<LeaderSchedule>,
     /// The commit observer is responsible for observing the commits and collecting
     /// + sending subdags over the consensus output channel.
@@ -90,7 +89,6 @@ impl Core {
         dag_state: Arc<RwLock<DagState>>,
     ) -> Self {
         let last_decided_leader = dag_state.read().last_commit_leader();
-
         let committer = UniversalCommitterBuilder::new(
             context.clone(),
             leader_schedule.clone(),
@@ -122,12 +120,12 @@ impl Core {
             context: context.clone(),
             threshold_clock: ThresholdClock::new(0, context.clone()),
             last_proposed_block,
-            transaction_consumer,
             last_included_ancestors,
-            block_manager,
-            committer,
             last_decided_leader,
             leader_schedule,
+            transaction_consumer,
+            block_manager,
+            committer,
             commit_observer,
             signals,
             block_signer,
@@ -155,6 +153,10 @@ impl Core {
         let wait_ms = max_ancestor_timestamp.saturating_sub(self.context.clock.timestamp_utc_ms());
         if wait_ms > 0 {
             warn!(
+                "Waiting for {} ms while recovering ancestors from storage",
+                wait_ms
+            );
+            println!(
                 "Waiting for {} ms while recovering ancestors from storage",
                 wait_ms
             );
@@ -442,33 +444,112 @@ impl Core {
             .with_label_values(&["Core::try_commit"])
             .start_timer();
 
-        // TODO: Add optimization to abort early without quorum for a round.
-        let sequenced_leaders = self.committer.try_commit(self.last_decided_leader);
+        if !self
+            .context
+            .protocol_config
+            .mysticeti_leader_scoring_and_schedule()
+        {
+            let decided_leaders = self.committer.try_decide(self.last_decided_leader);
+            if let Some(last) = decided_leaders.last() {
+                self.last_decided_leader = last.slot();
+                self.context
+                    .metrics
+                    .node_metrics
+                    .last_decided_leader_round
+                    .set(self.last_decided_leader.round as i64);
+            }
 
-        if let Some(last) = sequenced_leaders.last() {
-            self.last_decided_leader = last.get_decided_slot();
-            self.context
-                .metrics
-                .node_metrics
-                .last_decided_leader_round
-                .set(self.last_decided_leader.round as i64);
+            let committed_leaders = decided_leaders
+                .into_iter()
+                .filter_map(|leader| leader.into_committed_block())
+                .collect::<Vec<_>>();
+            if !committed_leaders.is_empty() {
+                debug!(
+                    "Committing leaders: {}",
+                    committed_leaders
+                        .iter()
+                        .map(|b| b.reference().to_string())
+                        .join(",")
+                );
+            }
+            self.commit_observer.handle_commit(committed_leaders)
+        } else {
+            let mut committed_subdags = Vec::new();
+            // TODO: Add optimization to abort early without quorum for a round.
+            loop {
+                // LeaderSchedule has a limit to how many sequenced leaders can be committed
+                // before a change is triggered. Calling into leader schedule will get you
+                // how many commits till next leader change. We will loop back and recalculate
+                // any discarded leaders with the new schedule.
+                let mut commits_until_update = self
+                    .leader_schedule
+                    .commits_until_leader_schedule_update(self.dag_state.clone());
+                if commits_until_update == 0 {
+                    let last_commit_index = self.dag_state.read().last_commit_index();
+                    tracing::info!(
+                        "Leader schedule change triggered at commit index {last_commit_index}"
+                    );
+                    self.leader_schedule
+                        .update_leader_schedule(self.dag_state.clone());
+                    commits_until_update = self
+                        .leader_schedule
+                        .commits_until_leader_schedule_update(self.dag_state.clone());
+                }
+                assert!(commits_until_update > 0);
+
+                // TODO: limit commits by commits_until_update, which may be needed when leader schedule length
+                // is reduced.
+                let decided_leaders = self.committer.try_decide(self.last_decided_leader);
+
+                let Some(last_decided) = decided_leaders.last().cloned() else {
+                    break;
+                };
+                tracing::info!("Decided {} leaders and {commits_until_update} commits can be made before next leader schedule change", decided_leaders.len());
+
+                let mut sequenced_leaders = decided_leaders
+                    .into_iter()
+                    .filter_map(|leader| leader.into_committed_block())
+                    .collect::<Vec<_>>();
+
+                // If the sequenced leaders are truncated to fit the leader schedule, use the last sequenced leader
+                // as the last decided leader. Otherwise, use the last decided leader from try_commit().
+                let sequenced_leaders = if sequenced_leaders.len() >= commits_until_update {
+                    let _ = sequenced_leaders.split_off(commits_until_update);
+                    self.last_decided_leader = sequenced_leaders.last().unwrap().slot();
+                    sequenced_leaders
+                } else {
+                    self.last_decided_leader = last_decided.slot();
+                    sequenced_leaders
+                };
+
+                self.context
+                    .metrics
+                    .node_metrics
+                    .last_decided_leader_round
+                    .set(self.last_decided_leader.round as i64);
+
+                if sequenced_leaders.is_empty() {
+                    break;
+                }
+                tracing::info!(
+                    "Committing {} leaders: {}",
+                    sequenced_leaders.len(),
+                    sequenced_leaders
+                        .iter()
+                        .map(|b| b.reference().to_string())
+                        .join(",")
+                );
+
+                // TODO: refcount subdags
+                let subdags = self.commit_observer.handle_commit(sequenced_leaders)?;
+                self.dag_state
+                    .write()
+                    .add_unscored_committed_subdags(subdags.clone());
+                committed_subdags.extend(subdags);
+            }
+
+            Ok(committed_subdags)
         }
-
-        let committed_leaders = sequenced_leaders
-            .into_iter()
-            .filter_map(|leader| leader.into_committed_block())
-            .collect::<Vec<_>>();
-        if !committed_leaders.is_empty() {
-            debug!(
-                "Committing leaders: {}",
-                committed_leaders
-                    .iter()
-                    .map(|b| b.reference().to_string())
-                    .join(",")
-            );
-        }
-
-        self.commit_observer.handle_commit(committed_leaders)
     }
 
     pub(crate) fn get_missing_blocks(&self) -> BTreeSet<BlockRef> {
@@ -655,10 +736,10 @@ mod test {
         block::{genesis_blocks, TestBlock},
         block_verifier::NoopBlockVerifier,
         commit::CommitAPI as _,
-        leader_schedule::LeaderSwapTable,
+        leader_scoring::ReputationScores,
         storage::{mem_store::MemStore, Store, WriteBatch},
         transaction::TransactionClient,
-        CommitConsumer, CommitIndex,
+        CommitConsumer, CommitIndex, CommittedSubDag,
     };
 
     /// Recover Core and continue proposing from the last round which forms a quorum.
@@ -700,9 +781,9 @@ mod test {
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
         );
-        let leader_schedule = Arc::new(LeaderSchedule::new(
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
-            LeaderSwapTable::default(),
+            dag_state.clone(),
         ));
 
         let (sender, _receiver) = unbounded_channel();
@@ -711,6 +792,7 @@ mod test {
             CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
 
         // Check no commits have been persisted to dag_state or store.
@@ -815,9 +897,9 @@ mod test {
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
         );
-        let leader_schedule = Arc::new(LeaderSchedule::new(
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
-            LeaderSwapTable::default(),
+            dag_state.clone(),
         ));
 
         let (sender, _receiver) = unbounded_channel();
@@ -826,6 +908,7 @@ mod test {
             CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
 
         // Check no commits have been persisted to dag_state & store
@@ -909,9 +992,9 @@ mod test {
         let (signals, signal_receivers) = CoreSignals::new(context.clone());
         // Need at least one subscriber to the block broadcast channel.
         let mut block_receiver = signal_receivers.block_broadcast_receiver();
-        let leader_schedule = Arc::new(LeaderSchedule::new(
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
-            LeaderSwapTable::default(),
+            dag_state.clone(),
         ));
 
         let (sender, _receiver) = unbounded_channel();
@@ -920,6 +1003,7 @@ mod test {
             CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
 
         let mut core = Core::new(
@@ -1010,9 +1094,9 @@ mod test {
             dag_state.clone(),
             Arc::new(NoopBlockVerifier),
         );
-        let leader_schedule = Arc::new(LeaderSchedule::new(
+        let leader_schedule = Arc::new(LeaderSchedule::from_store(
             context.clone(),
-            LeaderSwapTable::default(),
+            dag_state.clone(),
         ));
 
         let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
@@ -1027,6 +1111,7 @@ mod test {
             CommitConsumer::new(sender.clone(), 0, 0),
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
 
         let mut core = Core::new(
@@ -1083,8 +1168,28 @@ mod test {
     async fn test_core_try_new_block_leader_timeout() {
         telemetry_subscribers::init_for_testing();
 
+        // Since we run the test with started_paused = true, any time-dependent operations using Tokio's time
+        // facilities, such as tokio::time::sleep or tokio::time::Instant, will not advance. So practically each
+        // Core's clock will have initialised potentially with different values but it never advances.
+        // To ensure that blocks won't get rejected by cores we'll need to manually wait for the time
+        // diff before processing them. By calling the `tokio::time::sleep` we implicitly also advance the
+        // tokio clock.
+        async fn wait_blocks(blocks: &[VerifiedBlock], context: &Context) {
+            // Simulate the time wait before processing a block to ensure that block.timestamp <= now
+            let now = context.clock.timestamp_utc_ms();
+            let max_timestamp = blocks
+                .iter()
+                .max_by_key(|block| block.timestamp_ms() as BlockTimestampMs)
+                .map(|block| block.timestamp_ms())
+                .unwrap_or(0);
+
+            let wait_time = Duration::from_millis(max_timestamp.saturating_sub(now));
+            sleep(wait_time).await;
+        }
+
+        let (context, _) = Context::new_for_test(4);
         // Create the cores for all authorities
-        let mut all_cores = create_cores(vec![1, 1, 1, 1]);
+        let mut all_cores = create_cores(context, vec![1, 1, 1, 1]);
 
         // Create blocks for rounds 1..=3 from all Cores except last Core of authority 3, so we miss the block from it. As
         // it will be the leader of round 3 then no-one will be able to progress to round 4 unless we explicitly trigger
@@ -1098,6 +1203,8 @@ mod test {
             let mut this_round_blocks = Vec::new();
 
             for (core, _signal_receivers, _, _, _) in cores.iter_mut() {
+                wait_blocks(&last_round_blocks, &core.context).await;
+
                 core.add_blocks(last_round_blocks.clone()).unwrap();
 
                 // Only when round > 1 and using non-genesis parents.
@@ -1122,6 +1229,8 @@ mod test {
         // Try to create the blocks for round 4 by calling the try_propose() method. No block should be created as the
         // leader - authority 3 - hasn't proposed any block.
         for (core, _, _, _, _) in cores.iter_mut() {
+            wait_blocks(&last_round_blocks, &core.context).await;
+
             core.add_blocks(last_round_blocks.clone()).unwrap();
             assert!(core.try_propose(false).unwrap().is_none());
         }
@@ -1145,22 +1254,227 @@ mod test {
         }
     }
 
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_leader_schedule_change() {
+        telemetry_subscribers::init_for_testing();
+        let default_params = Parameters::default();
+
+        let (context, _) = Context::new_for_test(4);
+        // create the cores and their signals for all the authorities
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
+
+        // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
+        let mut last_round_blocks = Vec::new();
+        for round in 1..=30 {
+            let mut this_round_blocks = Vec::new();
+
+            // Wait for min round delay to allow blocks to be proposed.
+            sleep(default_params.min_round_delay).await;
+
+            for (core, signal_receivers, block_receiver, _, _) in &mut cores {
+                // add the blocks from last round
+                // this will trigger a block creation for the round and a signal should be emitted
+                core.add_blocks(last_round_blocks.clone()).unwrap();
+
+                // A "new round" signal should be received given that all the blocks of previous round have been processed
+                let new_round = receive(
+                    Duration::from_secs(1),
+                    signal_receivers.new_round_receiver(),
+                )
+                .await;
+                assert_eq!(new_round, round);
+
+                // Check that a new block has been proposed.
+                let block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(block.round(), round);
+                assert_eq!(block.author(), core.context.own_index);
+
+                // append the new block to this round blocks
+                this_round_blocks.push(core.last_proposed_block().clone());
+
+                let block = core.last_proposed_block();
+
+                // ensure that produced block is referring to the blocks of last_round
+                assert_eq!(block.ancestors().len(), core.context.committee.size());
+                for ancestor in block.ancestors() {
+                    if block.round() > 1 {
+                        // don't bother with round 1 block which just contains the genesis blocks.
+                        assert!(
+                            last_round_blocks
+                                .iter()
+                                .any(|block| block.reference() == *ancestor),
+                            "Reference from previous round should be added"
+                        );
+                    }
+                }
+            }
+
+            last_round_blocks = this_round_blocks;
+        }
+
+        for (core, _, _, _, store) in cores {
+            // Check commits have been persisted to store
+            let last_commit = store
+                .read_last_commit()
+                .unwrap()
+                .expect("last commit should be set");
+            // There are 28 leader rounds with rounds completed up to and including
+            // round 29. Round 30 blocks will only include their own blocks, so the
+            // 28th leader will not be committed.
+            assert_eq!(last_commit.index(), 27);
+            let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+            assert_eq!(all_stored_commits.len(), 27);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .bad_nodes
+                    .len(),
+                1
+            );
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .good_nodes
+                    .len(),
+                1
+            );
+            let expected_reputation_scores =
+                ReputationScores::new((11..21).into(), vec![9, 8, 8, 8]);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .reputation_scores,
+                expected_reputation_scores
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    async fn test_no_leader_schedule_change() {
+        telemetry_subscribers::init_for_testing();
+        let default_params = Parameters::default();
+
+        let (mut context, _) = Context::new_for_test(4);
+        context
+            .protocol_config
+            .set_mysticeti_leader_scoring_and_schedule(false);
+        // create the cores and their signals for all the authorities
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
+
+        // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
+        let mut last_round_blocks = Vec::new();
+        for round in 1..=30 {
+            let mut this_round_blocks = Vec::new();
+
+            for (core, signal_receivers, block_receiver, _, _) in &mut cores {
+                // Wait for min round delay to allow blocks to be proposed.
+                sleep(default_params.min_round_delay).await;
+                // add the blocks from last round
+                // this will trigger a block creation for the round and a signal should be emitted
+                core.add_blocks(last_round_blocks.clone()).unwrap();
+
+                // A "new round" signal should be received given that all the blocks of previous round have been processed
+                let new_round = receive(
+                    Duration::from_secs(1),
+                    signal_receivers.new_round_receiver(),
+                )
+                .await;
+                assert_eq!(new_round, round);
+
+                // Check that a new block has been proposed.
+                let block = tokio::time::timeout(Duration::from_secs(1), block_receiver.recv())
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(block.round(), round);
+                assert_eq!(block.author(), core.context.own_index);
+
+                // append the new block to this round blocks
+                this_round_blocks.push(core.last_proposed_block().clone());
+
+                let block = core.last_proposed_block();
+
+                // ensure that produced block is referring to the blocks of last_round
+                assert_eq!(block.ancestors().len(), core.context.committee.size());
+                for ancestor in block.ancestors() {
+                    if block.round() > 1 {
+                        // don't bother with round 1 block which just contains the genesis blocks.
+                        assert!(
+                            last_round_blocks
+                                .iter()
+                                .any(|block| block.reference() == *ancestor),
+                            "Reference from previous round should be added"
+                        );
+                    }
+                }
+            }
+
+            last_round_blocks = this_round_blocks;
+        }
+
+        for (core, _, _, _, store) in cores {
+            // Check commits have been persisted to store
+            let last_commit = store
+                .read_last_commit()
+                .unwrap()
+                .expect("last commit should be set");
+            // There are 28 leader rounds with rounds completed up to and including
+            // round 29. Round 30 blocks will only include their own blocks, so the
+            // 28th leader will not be committed.
+            assert_eq!(last_commit.index(), 27);
+            let all_stored_commits = store.scan_commits((0..CommitIndex::MAX).into()).unwrap();
+            assert_eq!(all_stored_commits.len(), 27);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .bad_nodes
+                    .len(),
+                0
+            );
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .good_nodes
+                    .len(),
+                0
+            );
+            let expected_reputation_scores = ReputationScores::new((0..0).into(), vec![]);
+            assert_eq!(
+                core.leader_schedule
+                    .leader_swap_table
+                    .read()
+                    .reputation_scores,
+                expected_reputation_scores
+            );
+        }
+    }
+
     #[tokio::test]
     async fn test_core_signals() {
         telemetry_subscribers::init_for_testing();
         let default_params = Parameters::default();
 
+        let (context, _) = Context::new_for_test(4);
         // create the cores and their signals for all the authorities
-        let mut cores = create_cores(vec![1, 1, 1, 1]);
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
 
         // Now iterate over a few rounds and ensure the corresponding signals are created while network advances
         let mut last_round_blocks = Vec::new();
         for round in 1..=10 {
             let mut this_round_blocks = Vec::new();
 
+            // Wait for min round delay to allow blocks to be proposed.
+            sleep(default_params.min_round_delay).await;
+
             for (core, signal_receivers, block_receiver, _, _) in &mut cores {
-                // Wait for min round delay to allow blocks to be proposed.
-                sleep(default_params.min_round_delay).await;
                 // add the blocks from last round
                 // this will trigger a block creation for the round and a signal should be emitted
                 core.add_blocks(last_round_blocks.clone()).unwrap();
@@ -1224,8 +1538,9 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let default_params = Parameters::default();
 
+        let (context, _) = Context::new_for_test(4);
         // create the cores and their signals for all the authorities
-        let mut cores = create_cores(vec![1, 1, 1, 1]);
+        let mut cores = create_cores(context, vec![1, 1, 1, 1]);
 
         let mut last_round_blocks = Vec::new();
         let mut all_blocks = Vec::new();
@@ -1295,6 +1610,7 @@ mod test {
     /// cores and their respective signal receivers are returned in `AuthorityIndex` order asc.
     // TODO: return a test fixture instead.
     fn create_cores(
+        context: Context,
         authorities: Vec<Stake>,
     ) -> Vec<(
         Core,
@@ -1307,10 +1623,13 @@ mod test {
 
         for index in 0..authorities.len() {
             let (committee, mut signers) = local_committee_and_keys(0, authorities.clone());
-            let (mut context, _) = Context::new_for_test(4);
+            let mut context = context.clone();
             context = context
                 .with_committee(committee)
                 .with_authority_index(AuthorityIndex::new_for_test(index as u32));
+            context
+                .protocol_config
+                .set_consensus_bad_nodes_stake_threshold(33);
 
             let context = Arc::new(context);
             let store = Arc::new(MemStore::new());
@@ -1321,11 +1640,10 @@ mod test {
                 dag_state.clone(),
                 Arc::new(NoopBlockVerifier),
             );
-            let leader_schedule = Arc::new(LeaderSchedule::new(
-                context.clone(),
-                LeaderSwapTable::default(),
-            ));
-
+            let leader_schedule = Arc::new(
+                LeaderSchedule::from_store(context.clone(), dag_state.clone())
+                    .with_num_commits_per_schedule(10),
+            );
             let (_transaction_client, tx_receiver) = TransactionClient::new(context.clone());
             let transaction_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
             let (signals, signal_receivers) = CoreSignals::new(context.clone());
@@ -1338,6 +1656,7 @@ mod test {
                 CommitConsumer::new(commit_sender.clone(), 0, 0),
                 dag_state.clone(),
                 store.clone(),
+                leader_schedule.clone(),
             );
 
             let block_signer = signers.remove(index).1;

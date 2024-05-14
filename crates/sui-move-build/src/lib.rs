@@ -46,7 +46,8 @@ use sui_types::{
     error::{SuiError, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
-    DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
 use sui_verifier::verifier as sui_bytecode_verifier;
 
@@ -187,7 +188,7 @@ impl BuildConfig {
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-    let (filtered_diags_num, filtered_categories) =
+    let (filtered_diags_num, unique) =
         warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
     if let Some(f) = files {
         report_warnings(f, warning_diags);
@@ -196,7 +197,7 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceT
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
     }
 }
 
@@ -368,7 +369,7 @@ impl CompiledPackage {
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap(); // safe because package built successfully
+                m.serialize_with_version(m.version, &mut bytes).unwrap(); // safe because package built successfully
                 bytes
             })
             .collect()
@@ -394,6 +395,12 @@ impl CompiledPackage {
     pub fn get_deepbook_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == DEEPBOOK_ADDRESS)
+    }
+
+    /// Get bytecode modules from DeepBook that are used by this package
+    pub fn get_bridge_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+        self.get_modules_and_deps()
+            .filter(|m| *m.self_id().address() == BRIDGE_ADDRESS)
     }
 
     /// Get bytecode modules from the Sui System that are used by this package
