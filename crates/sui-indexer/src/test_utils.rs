@@ -65,10 +65,10 @@ pub async fn start_test_indexer_v2_impl(
     new_database: Option<String>,
     cancel: CancellationToken,
 ) -> (PgIndexerStoreV2, JoinHandle<Result<(), IndexerError>>) {
-    // Reduce the connection pool size to 10 for testing
+    // Reduce the connection pool size to 3 for testing
     // to prevent maxing out
-    info!("Setting DB_POOL_SIZE to 10");
-    std::env::set_var("DB_POOL_SIZE", "10");
+    info!("Setting DB_POOL_SIZE to 3");
+    std::env::set_var("DB_POOL_SIZE", "3");
 
     let db_url = db_url.unwrap_or_else(|| {
         let pg_host = env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
