@@ -1,24 +1,24 @@
 CREATE TABLE transactions (
-                              tx_sequence_number          BIGINT       NOT NULL,
-                              transaction_digest          BLOB        NOT NULL,
+    tx_sequence_number          BIGINT       NOT NULL,
+    transaction_digest          BLOB         NOT NULL,
     -- bcs serialized SenderSignedData bytes
-                              raw_transaction             MEDIUMBLOB        NOT NULL,
+    raw_transaction             MEDIUMBLOB   NOT NULL,
     -- bcs serialized TransactionEffects bytes
-                              raw_effects                 MEDIUMBLOB        NOT NULL,
-                              checkpoint_sequence_number  BIGINT       NOT NULL,
-                              timestamp_ms                BIGINT       NOT NULL,
+    raw_effects                 MEDIUMBLOB   NOT NULL,
+    checkpoint_sequence_number  BIGINT       NOT NULL,
+    timestamp_ms                BIGINT       NOT NULL,
     -- array of bcs serialized IndexedObjectChange bytes
-                              object_changes              JSON      NOT NULL,
+    object_changes              JSON         NOT NULL,
     -- array of bcs serialized BalanceChange bytes
-                              balance_changes             JSON      NOT NULL,
+    balance_changes             JSON         NOT NULL,
     -- array of bcs serialized StoredEvent bytes
-                              events                      JSON      NOT NULL,
+    events                      JSON         NOT NULL,
     -- SystemTransaction/ProgrammableTransaction. See types.rs
-                              transaction_kind            smallint     NOT NULL,
+    transaction_kind            SMALLINT     NOT NULL,
     -- number of successful commands in this transaction, bound by number of command
     -- in a programmaable transaction.
-                              success_command_count       smallint     NOT NULL,
-                              CONSTRAINT transactions_pkey PRIMARY KEY (tx_sequence_number, checkpoint_sequence_number)
+    success_command_count       SMALLINT     NOT NULL,
+    CONSTRAINT transactions_pkey PRIMARY KEY (tx_sequence_number, checkpoint_sequence_number)
 ) PARTITION BY RANGE (checkpoint_sequence_number) (
     PARTITION transactions_partition_0 VALUES LESS THAN MAXVALUE
 );

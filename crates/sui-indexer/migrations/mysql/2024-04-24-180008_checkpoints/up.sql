@@ -1,13 +1,13 @@
 CREATE TABLE checkpoints
 (
     sequence_number                     bigint       PRIMARY KEY,
-    checkpoint_digest                   blob         NOT NULL,
-    epoch                               bigint       NOT NULL,
+    checkpoint_digest                   BLOB         NOT NULL,
+    epoch                               BIGINT       NOT NULL,
     -- total transactions in the network at the end of this checkpoint (including itself)
-    network_total_transactions          bigint       NOT NULL,
-    previous_checkpoint_digest          blob,
+    network_total_transactions          BIGINT       NOT NULL,
+    previous_checkpoint_digest          BLOB,
     -- if this checkpoitn is the last checkpoint of an epoch
-    end_of_epoch                        boolean      NOT NULL,
+    end_of_epoch                        BOOLEAN      NOT NULL,
     -- array of TranscationDigest in bytes included in this checkpoint
     tx_digests                          JSON         NOT NULL,
     timestamp_ms                        BIGINT       NOT NULL,
@@ -17,11 +17,11 @@ CREATE TABLE checkpoints
     storage_rebate                      BIGINT       NOT NULL,
     non_refundable_storage_fee          BIGINT       NOT NULL,
     -- bcs serialized Vec<CheckpointCommitment> bytes
-    checkpoint_commitments              MEDIUMBLOB         NOT NULL,
+    checkpoint_commitments              MEDIUMBLOB   NOT NULL,
     -- bcs serialized AggregateAuthoritySignature bytes
-    validator_signature                 blob         NOT NULL,
+    validator_signature                 BLOB         NOT NULL,
     -- bcs serialzied EndOfEpochData bytes, if the checkpoint marks end of an epoch
-    end_of_epoch_data                   blob
+    end_of_epoch_data                   BLOB
 );
 
 CREATE INDEX checkpoints_epoch ON checkpoints (epoch, sequence_number);
