@@ -83,6 +83,12 @@ module std::option {
         t.vec.pop_back()
     }
 
+    public fun take<Element>(t: &mut Option<Element>): Option<Element> {
+        if (t.is_none()) none()
+        else some(t.vec.pop_back())
+    }
+
+
     /// Return a mutable reference to the value inside `t`
     /// Aborts if `t` does not hold a value
     public fun borrow_mut<Element>(t: &mut Option<Element>): &mut Element {
