@@ -81,32 +81,35 @@ where
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
     let config_clone = config.clone();
+    let cancel_clone = cancel.clone();
     spawn_monitored_task!(start_tx_checkpoint_commit_task(
         state_clone,
         metrics_clone,
         config_clone,
         tx_indexing_receiver,
-        cancel.clone()
+        cancel_clone
     ));
 
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
+    let cancel_clone = cancel.clone();
     spawn_monitored_task!(start_epoch_commit_task(
         state_clone,
         metrics_clone,
         epoch_indexing_receiver,
-        cancel.clone()
+        cancel_clone
     ));
 
     let state_clone = state.clone();
     let metrics_clone = metrics.clone();
     let config_clone = config.clone();
+    let cancel_clone = cancel.clone();
     spawn_monitored_task!(start_object_checkpoint_commit_task(
         state_clone,
         metrics_clone,
         config_clone,
         object_indexing_receiver,
-        cancel.clone()
+        cancel_clone
     ));
 
     let checkpoint_processor = CheckpointProcessor {

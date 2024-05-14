@@ -119,17 +119,17 @@ where
 
         loop {
             tokio::select! {
-                _ = cancel.cancelled() => {
-                    break;
+                _ = self.cancel.cancelled() => {
+                    return Ok(());
                 },
-                _ = time::sleep(Duration::from_secs(5)) => {
+                _ = tokio::time::sleep(std::time::Duration::from_secs(5)) => {
                     while latest_cp <= start_cp + self.config.snapshot_max_lag as u64 {
                         latest_cp = self
                             .store
                             .get_latest_tx_checkpoint_sequence_number()
                             .await?
                             .unwrap_or_default();
-                        if cancel.is_cancelled() {
+                        if self.cancel.is_cancelled() {
                             info!("ObjectsSnapshotProcessor was cancelled during checkpoint check");
                             break;
                         }
