@@ -118,7 +118,7 @@ where
             .unwrap_or_default();
 
         loop {
-            select! {
+            tokio::select! {
                 _ = cancel.cancelled() => {
                     break;
                 },
@@ -130,7 +130,7 @@ where
                             .await?
                             .unwrap_or_default();
                         if cancel.is_cancelled() {
-                            println!("ObjectsSnapshotProcessor was cancelled during checkpoint check");
+                            info!("ObjectsSnapshotProcessor was cancelled during checkpoint check");
                             break;
                         }
                     }
