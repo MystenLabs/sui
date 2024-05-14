@@ -117,7 +117,7 @@ importers:
         version: 7.59.2(react@18.2.0)
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       bignumber.js:
         specifier: ^9.1.1
         version: 9.1.1
@@ -286,10 +286,10 @@ importers:
         version: 7.61.0
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       '@tanstack/react-query-persist-client':
         specifier: ^4.29.25
-        version: 4.29.25(@tanstack/react-query@5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0))
+        version: 4.29.25(@tanstack/react-query@5.36.0(react@18.2.0))
       bech32:
         specifier: ^2.0.0
         version: 2.0.0
@@ -587,7 +587,7 @@ importers:
         version: link:../../sdk/typescript
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       clsx:
         specifier: ^2.0.0
         version: 2.0.0
@@ -675,7 +675,7 @@ importers:
         version: 1.0.4(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.0
@@ -754,7 +754,7 @@ importers:
     dependencies:
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -884,7 +884,7 @@ importers:
         version: 2.0.0(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -945,7 +945,7 @@ importers:
         version: 2.0.0(@types/react-dom@18.2.7)(@types/react@18.2.15)(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       react:
         specifier: ^18.2.0
         version: 18.2.0
@@ -1031,7 +1031,7 @@ importers:
         version: 8.2.6(size-limit@8.2.6)
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       '@testing-library/dom':
         specifier: ^9.3.1
         version: 9.3.1
@@ -1143,7 +1143,7 @@ importers:
         version: link:../zksend
       '@tanstack/react-query':
         specifier: ^5.0.0
-        version: 5.35.1(react@18.2.0)
+        version: 5.36.0(react@18.2.0)
       '@types/node':
         specifier: ^20.4.2
         version: 20.12.11
@@ -5762,11 +5762,8 @@ packages:
   '@tanstack/query-core@4.29.25':
     resolution: {integrity: sha512-DI4y4VC6Uw4wlTpOocEXDky69xeOScME1ezLKsj+hOk7DguC9fkqXtp6Hn39BVb9y0b5IBrY67q6kIX623Zj4Q==}
 
-  '@tanstack/query-core@5.0.0':
-    resolution: {integrity: sha512-Y1BpiA6BblJd/UlVqxEVeAG7IACn568YJuTTItAiecBI7En+33g780kg+/8lhgl+BzcUPN7o+NjBrSRGJoemyQ==}
-
-  '@tanstack/query-core@5.35.1':
-    resolution: {integrity: sha512-0Dnpybqb8+ps6WgqBnqFEC+1F/xLvUosRAq+wiGisTgolOZzqZfkE2995dEXmhuzINiTM7/a6xSGznU0NIvBkw==}
+  '@tanstack/query-core@5.36.0':
+    resolution: {integrity: sha512-B5BD3pg/mztDR36i77hGcyySKKeYrbM5mnogOROTBi1SUml5ByRK7PGUUl16vvubvQC+mSnqziFG/VIy/DE3FQ==}
 
   '@tanstack/query-persist-client-core@4.29.25':
     resolution: {integrity: sha512-jC1JlZxUaO4bJdeN0GcLwnNIbtsdzkL54hZP1rjTbp2tzfEHNQFkMjaIMZtnsxgdrU9LclXz8loOd1ufQ6C44w==}
@@ -5776,20 +5773,8 @@ packages:
     peerDependencies:
       '@tanstack/react-query': 4.29.25
 
-  '@tanstack/react-query@5.0.0':
-    resolution: {integrity: sha512-diQoC8FNBcO5Uf5yuaJlXthTtbO1xM8kzOX+pSBUMT9n/cqQ/u1wJGCtukvhDWA+6j07WmIj4bfqNbd2KOB6jQ==}
-    peerDependencies:
-      react: ^18.0.0
-      react-dom: ^18.0.0
-      react-native: '*'
-    peerDependenciesMeta:
-      react-dom:
-        optional: true
-      react-native:
-        optional: true
-
-  '@tanstack/react-query@5.35.1':
-    resolution: {integrity: sha512-i2T7m2ffQdNqlX3pO+uMsnQ0H4a59Ens2GxtlMsRiOvdSB4SfYmHb27MnvFV8rGmtWRaa4gPli0/rpDoSS5LbQ==}
+  '@tanstack/react-query@5.36.0':
+    resolution: {integrity: sha512-BATvtM0rohwg7pRHUnxgeDiwLWRGZ8OM/4y8LImHVpecQWoH6Uhytu3Z8YV6V7hQ1sMQBFcUrGE1/e4MxR6YiA==}
     peerDependencies:
       react: ^18.0.0
 
@@ -19882,29 +19867,20 @@ snapshots:
 
   '@tanstack/query-core@4.29.25': {}
 
-  '@tanstack/query-core@5.0.0': {}
-
-  '@tanstack/query-core@5.35.1': {}
+  '@tanstack/query-core@5.36.0': {}
 
   '@tanstack/query-persist-client-core@4.29.25':
     dependencies:
       '@tanstack/query-core': 4.29.25
 
-  '@tanstack/react-query-persist-client@4.29.25(@tanstack/react-query@5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0))':
+  '@tanstack/react-query-persist-client@4.29.25(@tanstack/react-query@5.36.0(react@18.2.0))':
     dependencies:
       '@tanstack/query-persist-client-core': 4.29.25
-      '@tanstack/react-query': 5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)
+      '@tanstack/react-query': 5.36.0(react@18.2.0)
 
-  '@tanstack/react-query@5.0.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
+  '@tanstack/react-query@5.36.0(react@18.2.0)':
     dependencies:
-      '@tanstack/query-core': 5.0.0
-      react: 18.2.0
-    optionalDependencies:
-      react-dom: 18.2.0(react@18.2.0)
-
-  '@tanstack/react-query@5.35.1(react@18.2.0)':
-    dependencies:
-      '@tanstack/query-core': 5.35.1
+      '@tanstack/query-core': 5.36.0
       react: 18.2.0
 
   '@tanstack/react-virtual@3.5.0(react-dom@18.2.0(react@18.2.0))(react@18.2.0)':
