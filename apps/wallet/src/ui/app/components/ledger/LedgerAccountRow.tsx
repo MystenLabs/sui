@@ -9,6 +9,7 @@ import { formatAddress, SUI_TYPE_ARG } from '@mysten/sui.js/utils';
 import cl from 'clsx';
 
 import { useCoinsReFetchingConfig } from '../../hooks';
+import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 type LedgerAccountRowProps = {
 	isSelected: boolean;
@@ -29,7 +30,8 @@ export function LedgerAccountRow({ isSelected, address }: LedgerAccountRowProps)
 			staleTime,
 		},
 	);
-	const { data: domainName } = useResolveSuiNSName(address);
+	const domainName = useAppResolveSuinsName(address);
+
 	const [totalAmount, totalAmountSymbol] = useFormatCoin(
 		coinBalance?.totalBalance ?? 0,
 		SUI_TYPE_ARG,

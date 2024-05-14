@@ -5,6 +5,7 @@ import { Text } from '_src/ui/app/shared/text';
 import { useResolveSuiNSName } from '@mysten/core';
 
 import { TxnAddressLink } from './TxnAddressLink';
+import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 type TxnAddressProps = {
 	address: string;
@@ -12,7 +13,7 @@ type TxnAddressProps = {
 };
 
 export function TxnAddress({ address, label }: TxnAddressProps) {
-	const { data: domainName } = useResolveSuiNSName(address);
+	const domainName = useAppResolveSuinsName(address);
 
 	return (
 		<div className="flex justify-between w-full items-center py-3.5 first:pt-0">

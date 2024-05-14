@@ -9,6 +9,7 @@ import { formatAddress } from '@mysten/sui.js/utils';
 import { useCopyToClipboard } from '../hooks/useCopyToClipboard';
 import { Text } from '../shared/text';
 import { AccountBadge } from './AccountBadge';
+import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 export type AccountItemProps = {
 	account: SerializedUIAccount;
@@ -21,7 +22,8 @@ export function AccountListItem({ account, onAccountSelected }: AccountItemProps
 	const copy = useCopyToClipboard(address, {
 		copySuccessMessage: 'Address Copied',
 	});
-	const { data: domainName } = useResolveSuiNSName(address);
+	const domainName = useAppResolveSuinsName(address);
+
 
 	return (
 		<li>

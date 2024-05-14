@@ -9,6 +9,7 @@ import { useResolveSuiNSName } from '@mysten/core';
 import { CheckFill16 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
 import clsx from 'clsx';
+import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 interface Props {
 	account: SerializedUIAccount;
@@ -18,7 +19,7 @@ interface Props {
 }
 
 export function AccountItemApproveConnection({ account, selected, disabled, showLock }: Props) {
-	const { data: domainName } = useResolveSuiNSName(account?.address);
+	const domainName = useAppResolveSuinsName(account?.address);
 	const accountName = account?.nickname ?? domainName ?? formatAddress(account?.address || '');
 	const { unlockAccount, lockAccount, isPending, accountToUnlock } = useUnlockAccount();
 

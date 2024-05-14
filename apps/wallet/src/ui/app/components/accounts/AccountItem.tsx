@@ -15,6 +15,7 @@ import { useExplorerLink } from '../../hooks/useExplorerLink';
 import { ExplorerLinkType } from '../explorer-link/ExplorerLinkType';
 import { IconButton } from '../IconButton';
 import { EditableAccountName } from './EditableAccountName';
+import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 interface AccountItemProps {
 	accountID: string;
@@ -51,7 +52,7 @@ export const AccountItem = forwardRef<HTMLDivElement, AccountItemProps>(
 	) => {
 		const { data: accounts } = useAccounts();
 		const account = accounts?.find((account) => account.id === accountID);
-		const { data: domainName } = useResolveSuiNSName(account?.address);
+		const domainName = useAppResolveSuinsName(account?.address);
 		const accountName = account?.nickname ?? domainName ?? formatAddress(account?.address || '');
 		const copyAddress = useCopyToClipboard(account?.address || '', {
 			copySuccessMessage: 'Address copied',

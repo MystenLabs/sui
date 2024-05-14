@@ -53,6 +53,7 @@ import { PortfolioName } from './PortfolioName';
 import { TokenIconLink } from './TokenIconLink';
 import { TokenLink } from './TokenLink';
 import { TokenList } from './TokenList';
+import {useAppResolveSuinsName} from "_app/hooks/useAppResolveSuinsName";
 
 type TokenDetailsProps = {
 	coinType?: string;
@@ -312,7 +313,8 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const { data: domainName } = useResolveSuiNSName(activeAccountAddress);
+	const domainName = useAppResolveSuinsName(activeAccountAddress);
+
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {
 		data: coinBalance,
