@@ -175,6 +175,20 @@ pub enum BuiltinFunction_ {
 pub type BuiltinFunction = Spanned<BuiltinFunction_>;
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct MacroCallInfo {
+    /// Module where the macro is defined
+    pub module: ModuleIdent,
+    /// Name of the macro function
+    pub name: FunctionName,
+    /// Optional method name if macro invoked as dot-call
+    pub method_name: Option<Name>,
+    /// Type params at macro's call site
+    pub type_arguments: Vec<Type>,
+    /// Number of by-value args
+    pub by_value_args_num: usize,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum UnannotatedExp_ {
     Unit {
         trailing: bool,
@@ -209,17 +223,8 @@ pub enum UnannotatedExp_ {
         body: Box<Exp>,
     },
     NamedBlock(BlockLabel, Sequence),
-    Block(
-        Sequence,
-        /* if representing inlined macro */
-        Option<(
-            ModuleIdent,
-            FunctionName,
-            /* method name */ Option<Name>,
-            /* type params */ Vec<Type>,
-            /* num by-value-args */ usize,
-        )>,
-    ),
+    Block(Sequence),
+    ExpandedMacro(MacroCallInfo, /* inlined macro body */ Sequence),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),
@@ -755,7 +760,17 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(": ");
                 seq.ast_debug(w)
             }
-            E::Block(seq, _) => seq.ast_debug(w),
+            E::Block(seq) => seq.ast_debug(w),
+            E::ExpandedMacro(i, e) => {
+                w.write(format!("{}::{}", i.module, i.name));
+                if !i.type_arguments.is_empty() {
+                    w.write("<");
+                    w.comma(&i.type_arguments, |w, t| t.ast_debug(w));
+                    w.write(">");
+                }
+                w.write("()");
+                e.ast_debug(w);
+            }
             E::ExpList(es) => {
                 w.write("(");
                 w.comma(es, |w, e| e.ast_debug(w));

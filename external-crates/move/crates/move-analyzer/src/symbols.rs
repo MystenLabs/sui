@@ -103,7 +103,7 @@ use move_compiler::{
     shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
-        ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
+        MacroCallInfo, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
@@ -678,7 +678,7 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
         UE::Constant(mod_ident, name) => Some(format!("{mod_ident}::{name}")),
         UE::Value(v) => Some(ast_value_to_ide_string(v)),
         UE::Vector(_, _, _, exp) => ast_exp_to_ide_string(exp).map(|s| format!("[{s}]")),
-        UE::Block((_, seq), _) => {
+        UE::Block((_, seq)) | UE::NamedBlock(_, (_, seq)) | UE::ExpandedMacro(_, (_, seq)) => {
             let seq_items = seq
                 .iter()
                 .map(ast_seq_item_to_ide_string)
@@ -2829,29 +2829,7 @@ impl<'a> TypingSymbolicator<'a> {
                     self.traverse_only = old_traverse_mode;
                 }
             }
-            E::Block(
-                (use_funs, sequence),
-                Some((mod_ident, name, method_name, type_arguments, num_by_value)),
-            ) => {
-                self.mod_call_symbols(mod_ident, *name, *method_name, type_arguments, None, scope);
-                // a block is a new var scope
-                let mut new_scope = scope.clone();
-
-                // add use-defs etc. for by-value arguments, if any
-                for seq_item in sequence.range(0..(*num_by_value)) {
-                    self.seq_item_symbols(&mut new_scope, seq_item);
-                }
-
-                let old_traverse_mode = self.traverse_only;
-                // stop adding new use-defs etc.
-                self.traverse_only = true;
-                self.use_funs_symbols(use_funs);
-                for seq_item in sequence.range((*num_by_value)..) {
-                    self.seq_item_symbols(&mut new_scope, seq_item);
-                }
-                self.traverse_only = old_traverse_mode;
-            }
-            E::Block((use_funs, sequence), None) => {
+            E::Block((use_funs, sequence)) => {
                 let old_traverse_mode = self.traverse_only;
                 // start adding new use-defs etc. when processing "regular" arguments
                 if use_funs.color == 0 {
@@ -2866,6 +2844,27 @@ impl<'a> TypingSymbolicator<'a> {
                 if use_funs.color == 0 {
                     self.traverse_only = old_traverse_mode;
                 }
+            }
+            E::ExpandedMacro(MacroCallInfo {
+                module,name,method_name, type_arguments, by_value_args_num
+            }, (use_funs, sequence)) => {
+                self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
+                // a block is a new var scope
+                let mut new_scope = scope.clone();
+
+                // add use-defs etc. for by-value arguments, if any
+                for seq_item in sequence.range(0..(*by_value_args_num)) {
+                    self.seq_item_symbols(&mut new_scope, seq_item);
+                }
+
+                let old_traverse_mode = self.traverse_only;
+                // stop adding new use-defs etc.
+                self.traverse_only = true;
+                self.use_funs_symbols(use_funs);
+                for seq_item in sequence.range((*by_value_args_num)..) {
+                    self.seq_item_symbols(&mut new_scope, seq_item);
+                }
+                self.traverse_only = old_traverse_mode;
             }
             E::Assign(lvalues, opt_types, e) => {
                 self.lvalue_list_symbols(false, lvalues, scope);

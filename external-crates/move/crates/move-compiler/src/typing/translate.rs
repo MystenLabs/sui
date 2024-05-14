@@ -29,7 +29,7 @@ use crate::{
     },
     sui_mode,
     typing::{
-        ast as T,
+        ast::{self as T, MacroCallInfo},
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
@@ -486,7 +486,11 @@ mod check_valid_constant {
             // Valid cases
             //*****************************************
             E::Unit { .. } | E::Value(_) | E::Move { .. } | E::Copy { .. } => return,
-            E::Block(seq, _) => {
+            E::Block(seq) => {
+                sequence(context, seq);
+                return;
+            }
+            E::ExpandedMacro(_, seq) => {
                 sequence(context, seq);
                 return;
             }
@@ -1624,7 +1628,7 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
                 };
                 (sp(eloc, final_type.value), TE::NamedBlock(name, seq))
             } else {
-                (seq_ty, TE::Block(seq, /* not an inlined macro */ None))
+                (seq_ty, TE::Block(seq))
             };
             context.maybe_exit_macro_argument(eloc, from_macro_argument);
             res
@@ -4466,23 +4470,20 @@ fn expand_macro(
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let use_funs = N::UseFuns::new(context.current_call_color());
-            let e_ = TE::Block(
-                (use_funs, seq),
-                /* inlined macro */
-                Some((
-                    mod_ident,
-                    f,
-                    m,
-                    type_args
-                        .into_iter()
-                        .map(|mut t| {
-                            expand::type_(context, &mut t);
-                            t
-                        })
-                        .collect::<Vec<_>>(),
-                    by_value_num,
-                )),
-            );
+            let e_ = if context.env.ide_mode() {
+                TE::ExpandedMacro(
+                    MacroCallInfo {
+                        module: mod_ident,
+                        name: f,
+                        method_name: m,
+                        type_arguments: type_args.clone(),
+                        by_value_args_num: by_value_num,
+                    },
+                    (use_funs, seq),
+                )
+            } else {
+                TE::Block((use_funs, seq))
+            };
             (ty, e_)
         }
     };

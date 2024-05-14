@@ -1135,10 +1135,7 @@ pub fn compile_match(
     let mut seq = VecDeque::new();
     seq.append(&mut initial_binders);
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(match_exp))));
-    let exp_value = sp(
-        eloc,
-        T::UnannotatedExp_::Block((UseFuns::new(0), seq), /* not an inlined macro */ None),
-    );
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(result_type.clone(), exp_value)
 }
 
@@ -1696,8 +1693,7 @@ fn make_arm_unpack(
     let out_type = next.ty.clone();
     seq.push_back(sp(nloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let body =
-        T::UnannotatedExp_::Block((UseFuns::new(0), seq), /* not an inlined macro */ None);
+    let body = T::UnannotatedExp_::Block((UseFuns::new(0), seq));
     T::exp(out_type, sp(ploc, body))
 }
 
@@ -1940,10 +1936,7 @@ fn make_match_variant_unpack(
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let exp_value = sp(
-        eloc,
-        T::UnannotatedExp_::Block((UseFuns::new(0), seq), /* not an inlined macro */ None),
-    );
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(result_type, exp_value)
 }
 
@@ -1986,10 +1979,7 @@ fn make_match_struct_unpack(
     let eloc = next.exp.loc;
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
 
-    let exp_value = sp(
-        eloc,
-        T::UnannotatedExp_::Block((UseFuns::new(0), seq), /* not an inlined macro */ None),
-    );
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(result_type, exp_value)
 }
 
@@ -2101,10 +2091,7 @@ fn make_bindings(bindings: PatBindings, next: T::Exp, as_copy: bool) -> T::Exp {
     }
     let result_type = next.ty.clone();
     seq.push_back(sp(eloc, T::SequenceItem_::Seq(Box::new(next))));
-    let exp_value = sp(
-        eloc,
-        T::UnannotatedExp_::Block((UseFuns::new(0), seq), /* not an inlined macro */ None),
-    );
+    let exp_value = sp(eloc, T::UnannotatedExp_::Block((UseFuns::new(0), seq)));
     T::exp(result_type, exp_value)
 }
 
