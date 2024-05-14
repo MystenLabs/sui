@@ -25,7 +25,7 @@ module games::vdf_based_lottery {
     const EGameAlreadyCompleted: u64 = 1;
     const EInvalidTicket: u64 = 3;
     const ESubmissionPhaseInProgress: u64 = 4;
-    const EInvalidVdfOutput: u64 = 5;
+    const EInvalidVdfProof: u64 = 5;
     const ESubmissionPhaseFinished: u64 = 6;
 
     /// Game status
@@ -84,9 +84,9 @@ module games::vdf_based_lottery {
 
         // Hash combined randomness to vdf input
         let vdf_input = hash_to_input(&self.vdf_input_seed);
-
+        
         // Verify output and proof
-        assert!(vdf_verify(&vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfOutput);
+        assert!(vdf_verify(&vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfProof);
 
         // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
         let randomness = sha2_256(vdf_output);
