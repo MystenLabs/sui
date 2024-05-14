@@ -80,6 +80,8 @@ For the ability to manipulate the addresses assigned to the deny list for your c
 
 To use these functions, you pass the `DenyList` object (`0x403`), your `DenyCap` object ID, and the address you want to either add or remove. Using the Sui CLI, you could use `sui client call` with the required information:
 
+{@include: ../../../../snippets/info-gas-budget.mdx}
+
 ```shell
 sui client call --function add_addr_from_deny_list --module regcoin --package <PACKAGE-ID> --args <DENY-LIST> <DENY-CAP> <ADDRESS-TO-DENY> --gas-budget <GAS-AMOUNT>
 Transaction Digest: <DIGEST-HASH>

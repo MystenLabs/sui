@@ -14,6 +14,8 @@ You must serialize transaction data following [Binary Canonical Serialization](h
 
 The following example demonstrates how to serialize data for a transfer using the [Sui CLI](/references/cli.mdx). This returns serialized transaction data in Base64. Submit the raw transaction to execute as `tx_bytes`.
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 ```shell
 sui client transfer-sui --to <SUI-ADDRESS> --sui-coin-object-id <COIN-OBJECT-ID> --gas-budget <GAS-AMOUNT> --serialize-unsigned-transaction
 ```
