@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 module examples::testnet_nft {
     use sui::url::{Self, Url};
     use std::string;
