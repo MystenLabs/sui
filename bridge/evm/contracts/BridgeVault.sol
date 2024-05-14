@@ -4,6 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/IBridgeVault.sol";
 import "./interfaces/IWETH9.sol";
 
@@ -13,7 +14,7 @@ import "./interfaces/IWETH9.sol";
 /// unwrapping WETH (Wrapped Ether) and transferring the unwrapped ETH.
 /// @dev The contract is initialized with the deployer as the owner. The ownership is intended to be
 /// transferred to the SuiBridge contract after the bridge contract is deployed.
-contract BridgeVault is Ownable, IBridgeVault {
+contract BridgeVault is Ownable, IBridgeVault, ReentrancyGuard {
     /* ========== STATE VARIABLES ========== */
 
     IWETH9 public immutable wETH;
@@ -22,7 +23,7 @@ contract BridgeVault is Ownable, IBridgeVault {
 
     /// @notice Constructor function for the BridgeVault contract.
     /// @param _wETH The address of the Wrapped Ether (WETH) contract.
-    constructor(address _wETH) Ownable(msg.sender) {
+    constructor(address _wETH) Ownable(msg.sender) ReentrancyGuard() {
         // Set the WETH address
         wETH = IWETH9(_wETH);
     }
@@ -37,6 +38,7 @@ contract BridgeVault is Ownable, IBridgeVault {
         external
         override
         onlyOwner
+        nonReentrant
     {
         // Transfer the tokens from the contract to the target address
         SafeERC20.safeTransfer(IERC20(tokenAddress), recipientAddress, amount);
@@ -51,6 +53,7 @@ contract BridgeVault is Ownable, IBridgeVault {
         external
         override
         onlyOwner
+        nonReentrant
     {
         // Unwrap the WETH
         wETH.withdraw(amount);
