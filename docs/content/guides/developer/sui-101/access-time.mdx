@@ -35,6 +35,8 @@ module basics::clock {
 
 A call to the previous entry function takes the following form, passing `0x6` as the address for the `Clock` parameter:
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 ```shell
 sui client call --package <EXAMPLE> --module 'clock' --function 'access' --args '0x6' --gas-budget <GAS-AMOUNT>
 ```

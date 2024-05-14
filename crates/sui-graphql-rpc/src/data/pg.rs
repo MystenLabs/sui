@@ -125,7 +125,7 @@ mod query_cost {
     use diesel::{query_builder::AstPass, sql_types::Text, PgConnection, QueryResult};
     use serde_json::Value;
     use tap::{TapFallible, TapOptional};
-    use tracing::{info, warn};
+    use tracing::{debug, info, warn};
 
     #[derive(Debug, Clone, Copy, QueryId)]
     struct Explained<Q> {
@@ -151,6 +151,8 @@ mod query_cost {
     where
         Q: Query + QueryId + QueryFragment<Pg> + RunQueryDsl<PgConnection>,
     {
+        debug!("Estimating: {}", diesel::debug_query(&query).to_string());
+
         let Some(cost) = explain(conn, query) else {
             warn!("Failed to extract cost from EXPLAIN.");
             return;
