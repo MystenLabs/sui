@@ -7,16 +7,8 @@ use crate::{
     diagnostics::{codes::WarningFilter, Diagnostic, WarningFilters},
     editions::{self, Edition, FeatureGate, Flavor},
     expansion::{
-        alias_map_builder::{
-            AliasEntry, AliasMapBuilder, ParserExplicitUseFun, UnnecessaryAlias, UseFunsBuilder,
-        },
-        aliases::AliasSet,
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, TargetKind},
         byte_string, hex_string,
-        path_expander::{
-            access_result, Access, LegacyPathExpander, ModuleAccessResult, Move2024PathExpander,
-            PathExpander,
-        },
         translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
     },
     ice, ice_assert,
@@ -27,7 +19,7 @@ use crate::{
     },
     shared::{
         known_attributes::AttributePosition,
-        string_utils::{is_pascal_case, is_upper_snake_case},
+        string_utils::{is_pascal_case, is_upper_snake_case, is_valid_datatype_or_constant_name},
         unique_map::UniqueMap,
         *,
     },
@@ -50,27 +42,16 @@ use std::{
 
 type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
 
-// NB: We carry a few things separately because we need to split them out during path resolution to
-// allow for dynamic behavior during that resolution. This dynamic behavior allows us to reuse the
-// majority of the pass while swapping out how we handle paths and aliases for Move 2024 versus
-// legacy.
-
-pub(super) struct DefnContext<'env, 'map> {
-    pub(super) named_address_mapping: Option<&'map NamedAddressMap>,
-    pub(super) module_members: UniqueMap<ModuleIdent, ModuleMembers>,
-    pub(super) env: &'env mut CompilationEnv,
-    pub(super) address_conflicts: BTreeSet<Symbol>,
-    pub(super) current_package: Option<Symbol>,
-}
-
 struct Context<'env, 'map> {
-    defn_context: DefnContext<'env, 'map>,
+    env: &'env mut CompilationEnv,
     address: Option<Address>,
     is_source_definition: bool,
     // Cached warning filters for all available prefixes. Used by non-source defs
     // and dependency packages
     all_filter_alls: WarningFilters,
-    pub path_expander: Option<Box<dyn PathExpander>>,
+    named_address_mapping: Option<&'map NamedAddressMap>,
+    address_conflicts: BTreeSet<Symbol>,
+    current_package: Option<Symbol>,
 }
 
 impl<'env, 'map> Context<'env, 'map> {
@@ -85,19 +66,14 @@ impl<'env, 'map> Context<'env, 'map> {
                 all_filter_alls.add(f);
             }
         }
-        let defn_context = DefnContext {
-            env: compilation_env,
-            named_address_mapping: None,
-            address_conflicts,
-            module_members,
-            current_package: None,
-        };
         Context {
-            defn_context,
+            env: compilation_env,
             address: None,
             is_source_definition: false,
             all_filter_alls,
-            path_expander: None,
+            named_address_mapping: None,
+            address_conflicts,
+            current_package: None,
         }
     }
 
@@ -113,113 +89,113 @@ impl<'env, 'map> Context<'env, 'map> {
         self.address.as_ref().unwrap()
     }
 
-    pub fn new_alias_map_builder(&mut self) -> AliasMapBuilder {
-        let current_package = self.current_package();
-        let new_paths = self
-            .defn_context
-            .env
-            .supports_feature(current_package, FeatureGate::Move2024Paths);
-        if new_paths {
-            AliasMapBuilder::namespaced()
-        } else {
-            AliasMapBuilder::legacy()
-        }
-    }
+    // pub fn new_alias_map_builder(&mut self) -> AliasMapBuilder {
+    //     let current_package = self.current_package();
+    //     let new_paths = self
+    //         .defn_context
+    //         .env
+    //         .supports_feature(current_package, FeatureGate::Move2024Paths);
+    //     if new_paths {
+    //         AliasMapBuilder::namespaced()
+    //     } else {
+    //         AliasMapBuilder::legacy()
+    //     }
+    // }
 
-    /// Pushes a new alias map onto the alias information in the pash expander.
-    pub fn push_alias_scope(&mut self, loc: Loc, new_scope: AliasMapBuilder) {
-        let res = self
-            .path_expander
-            .as_mut()
-            .unwrap()
-            .push_alias_scope(loc, new_scope);
-        match res {
-            Err(diag) => self.env().add_diag(*diag),
-            Ok(unnecessaries) => unnecessary_alias_errors(self, unnecessaries),
-        }
-    }
+    // /// Pushes a new alias map onto the alias information in the pash expander.
+    // pub fn push_alias_scope(&mut self, loc: Loc, new_scope: AliasMapBuilder) {
+    //     let res = self
+    //         .path_expander
+    //         .as_mut()
+    //         .unwrap()
+    //         .push_alias_scope(loc, new_scope);
+    //     match res {
+    //         Err(diag) => self.env().add_diag(*diag),
+    //         Ok(unnecessaries) => unnecessary_alias_errors(self, unnecessaries),
+    //     }
+    // }
 
-    // Push a number of type parameters onto the alias information in the path expander.
-    pub fn push_type_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, tparams: I)
-    where
-        I::IntoIter: ExactSizeIterator,
-    {
-        self.path_expander
-            .as_mut()
-            .unwrap()
-            .push_type_parameters(tparams.into_iter().collect::<Vec<_>>());
-    }
+    // // Push a number of type parameters onto the alias information in the path expander.
+    // pub fn push_type_parameters<'a, I: IntoIterator<Item = &'a Name>>(&mut self, tparams: I)
+    // where
+    //     I::IntoIter: ExactSizeIterator,
+    // {
+    //     self.path_expander
+    //         .as_mut()
+    //         .unwrap()
+    //         .push_type_parameters(tparams.into_iter().collect::<Vec<_>>());
+    // }
 
-    /// Pops the innermost alias information on the path expander and reports errors for aliases
-    /// that were unused Marks implicit use funs as unused
-    pub fn pop_alias_scope(&mut self, mut use_funs: Option<&mut E::UseFuns>) {
-        let AliasSet { modules, members } = self.path_expander.as_mut().unwrap().pop_alias_scope();
-        for alias in modules {
-            unused_alias(self, "module", alias)
-        }
-        for alias in members {
-            let use_fun_used_opt = use_funs
-                .as_mut()
-                .and_then(|use_funs| use_funs.implicit.get_mut(&alias))
-                .and_then(|use_fun| match &mut use_fun.kind {
-                    E::ImplicitUseFunKind::FunctionDeclaration => None,
-                    E::ImplicitUseFunKind::UseAlias { used } => Some(used),
-                });
-            if let Some(used) = use_fun_used_opt {
-                // We do not report the use error if it is a function alias, since these will be
-                // reported after method calls are fully resolved
-                *used = false;
-            } else {
-                unused_alias(self, "member", alias)
-            }
-        }
-    }
+    // /// Pops the innermost alias information on the path expander and reports errors for aliases
+    // /// that were unused Marks implicit use funs as unused
+    // pub fn pop_alias_scope(&mut self, mut use_funs: Option<&mut E::UseFuns>) {
+    //     let AliasSet { modules, members } = self.path_expander.as_mut().unwrap().pop_alias_scope();
+    //     for alias in modules {
+    //         unused_alias(self, "module", alias)
+    //     }
+    //     for alias in members {
+    //         let use_fun_used_opt = use_funs
+    //             .as_mut()
+    //             .and_then(|use_funs| use_funs.implicit.get_mut(&alias))
+    //             .and_then(|use_fun| match &mut use_fun.kind {
+    //                 E::ImplicitUseFunKind::FunctionDeclaration => None,
+    //                 E::ImplicitUseFunKind::UseAlias { used } => Some(used),
+    //             });
+    //         if let Some(used) = use_fun_used_opt {
+    //             // We do not report the use error if it is a function alias, since these will be
+    //             // reported after method calls are fully resolved
+    //             *used = false;
+    //         } else {
+    //             unused_alias(self, "member", alias)
+    //         }
+    //     }
+    // }
 
-    pub fn attribute_value(
-        &mut self,
-        attribute_value: P::AttributeValue,
-    ) -> Option<E::AttributeValue> {
-        let Context {
-            path_expander,
-            defn_context: inner_context,
-            ..
-        } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_attribute_value(inner_context, attribute_value)
-    }
+    // pub fn attribute_value(
+    //     &mut self,
+    //     attribute_value: P::AttributeValue,
+    // ) -> Option<E::AttributeValue> {
+    //     let Context {
+    //         path_expander,
+    //         defn_context: inner_context,
+    //         ..
+    //     } = self;
+    //     path_expander
+    //         .as_mut()
+    //         .unwrap()
+    //         .name_access_chain_to_attribute_value(inner_context, attribute_value)
+    // }
 
-    pub fn name_access_chain_to_module_access(
-        &mut self,
-        access: Access,
-        chain: P::NameAccessChain,
-    ) -> Option<ModuleAccessResult> {
-        let Context {
-            path_expander,
-            defn_context: inner_context,
-            ..
-        } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_module_access(inner_context, access, chain)
-    }
+    // pub fn name_access_chain_to_module_access(
+    //     &mut self,
+    //     access: Access,
+    //     chain: P::NameAccessChain,
+    // ) -> Option<ModuleAccessResult> {
+    //     let Context {
+    //         path_expander,
+    //         defn_context: inner_context,
+    //         ..
+    //     } = self;
+    //     path_expander
+    //         .as_mut()
+    //         .unwrap()
+    //         .name_access_chain_to_module_access(inner_context, access, chain)
+    // }
 
-    pub fn name_access_chain_to_module_ident(
-        &mut self,
-        chain: P::NameAccessChain,
-    ) -> Option<E::ModuleIdent> {
-        let Context {
-            path_expander,
-            defn_context: inner_context,
-            ..
-        } = self;
-        path_expander
-            .as_mut()
-            .unwrap()
-            .name_access_chain_to_module_ident(inner_context, chain)
-    }
+    // pub fn name_access_chain_to_module_ident(
+    //     &mut self,
+    //     chain: P::NameAccessChain,
+    // ) -> Option<E::ModuleIdent> {
+    //     let Context {
+    //         path_expander,
+    //         defn_context: inner_context,
+    //         ..
+    //     } = self;
+    //     path_expander
+    //         .as_mut()
+    //         .unwrap()
+    //         .name_access_chain_to_module_ident(inner_context, chain)
+    // }
 
     pub fn spec_deprecated(&mut self, loc: Loc, is_error: bool) {
         let diag = self.spec_deprecated_diag(loc, is_error);
@@ -239,46 +215,6 @@ impl<'env, 'map> Context<'env, 'map> {
             )
         )
     }
-}
-
-fn unnecessary_alias_errors(context: &mut Context, unnecessaries: Vec<UnnecessaryAlias>) {
-    for unnecessary in unnecessaries {
-        unnecessary_alias_error(context, unnecessary)
-    }
-}
-
-fn unnecessary_alias_error(context: &mut Context, unnecessary: UnnecessaryAlias) {
-    let UnnecessaryAlias { entry, prev } = unnecessary;
-    let loc = entry.loc();
-    let is_default = prev == Loc::invalid();
-    let (alias, entry_case) = match entry {
-        AliasEntry::Address(_, _) => {
-            debug_assert!(false, "ICE cannot manually make address aliases");
-            return;
-        }
-        AliasEntry::TypeParam(_) => {
-            debug_assert!(
-                false,
-                "ICE cannot manually make type param aliases. \
-                We do not have nested TypeParam scopes"
-            );
-            return;
-        }
-        AliasEntry::Module(n, m) => (n, format!(" for module '{m}'")),
-        AliasEntry::Member(n, m, mem) => (n, format!(" for module member '{m}::{mem}'")),
-    };
-    let decl_case = if is_default {
-        "This alias is provided by default"
-    } else {
-        "It was already in scope"
-    };
-    let msg = format!("Unnecessary alias '{alias}'{entry_case}. {decl_case}");
-    let mut diag = diag!(Declarations::DuplicateAlias, (loc, msg));
-    if prev != Loc::invalid() {
-        // nothing to point to for the default case
-        diag.add_secondary_label((prev, "The same alias was previously declared here"))
-    }
-    context.env().add_diag(diag);
 }
 
 /// We mark named addresses as having a conflict if there is not a bidirectional mapping between
@@ -315,98 +251,6 @@ fn compute_address_conflicts(
         .collect()
 }
 
-// Implicit aliases for the Move Stdlib:
-// use std::vector;
-// use std::option::{Self, Option};
-const IMPLICIT_STD_MODULES: &[Symbol] = &[symbol!("option"), symbol!("vector")];
-const IMPLICIT_STD_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[(
-    symbol!("option"),
-    symbol!("Option"),
-    ModuleMemberKind::Struct,
-)];
-
-// Implicit aliases for Sui mode:
-// use sui::object::{Self, ID, UID};
-// use sui::transfer;
-// use sui::tx_context::{Self, TxContext};
-const IMPLICIT_SUI_MODULES: &[Symbol] = &[
-    symbol!("object"),
-    symbol!("transfer"),
-    symbol!("tx_context"),
-];
-const IMPLICIT_SUI_MEMBERS: &[(Symbol, Symbol, ModuleMemberKind)] = &[
-    (symbol!("object"), symbol!("ID"), ModuleMemberKind::Struct),
-    (symbol!("object"), symbol!("UID"), ModuleMemberKind::Struct),
-    (
-        symbol!("tx_context"),
-        symbol!("TxContext"),
-        ModuleMemberKind::Struct,
-    ),
-];
-
-fn default_aliases(context: &mut Context) -> AliasMapBuilder {
-    let current_package = context.current_package();
-    let mut builder = context.new_alias_map_builder();
-    if !context
-        .env()
-        .supports_feature(current_package, FeatureGate::Move2024Paths)
-    {
-        return builder;
-    }
-    // Unused loc since these will not conflict and are implicit so no warnings are given
-    let loc = Loc::invalid();
-    let std_address = maybe_make_well_known_address(context, loc, symbol!("std"));
-    let sui_address = maybe_make_well_known_address(context, loc, symbol!("sui"));
-    let mut modules: Vec<(Address, Symbol)> = vec![];
-    let mut members: Vec<(Address, Symbol, Symbol, ModuleMemberKind)> = vec![];
-    // if std is defined, add implicit std aliases
-    if let Some(std_address) = std_address {
-        modules.extend(
-            IMPLICIT_STD_MODULES
-                .iter()
-                .copied()
-                .map(|m| (std_address, m)),
-        );
-        members.extend(
-            IMPLICIT_STD_MEMBERS
-                .iter()
-                .copied()
-                .map(|(m, mem, k)| (std_address, m, mem, k)),
-        );
-    }
-    // if sui is defined and the current package is in Sui mode, add implicit sui aliases
-    if sui_address.is_some() && context.env().package_config(current_package).flavor == Flavor::Sui
-    {
-        let sui_address = sui_address.unwrap();
-        modules.extend(
-            IMPLICIT_SUI_MODULES
-                .iter()
-                .copied()
-                .map(|m| (sui_address, m)),
-        );
-        members.extend(
-            IMPLICIT_SUI_MEMBERS
-                .iter()
-                .copied()
-                .map(|(m, mem, k)| (sui_address, m, mem, k)),
-        );
-    }
-    for (addr, module) in modules {
-        let alias = sp(loc, module);
-        let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
-        builder.add_implicit_module_alias(alias, mident).unwrap();
-    }
-    for (addr, module, member, kind) in members {
-        let alias = sp(loc, member);
-        let mident = sp(loc, ModuleIdent_::new(addr, ModuleName(sp(loc, module))));
-        let name = sp(loc, member);
-        builder
-            .add_implicit_member_alias(alias, mident, name, kind)
-            .unwrap();
-    }
-    builder
-}
-
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -417,45 +261,6 @@ pub fn program(
     prog: P::Program,
 ) -> E::Program {
     let address_conflicts = compute_address_conflicts(pre_compiled_lib.clone(), &prog);
-
-    let mut member_computation_context = DefnContext {
-        env: compilation_env,
-        named_address_mapping: None,
-        module_members: UniqueMap::new(),
-        address_conflicts,
-        current_package: None,
-    };
-
-    let module_members = {
-        let mut members = UniqueMap::new();
-        all_module_members(
-            &mut member_computation_context,
-            &prog.named_address_maps,
-            &mut members,
-            true,
-            &prog.source_definitions,
-        );
-        all_module_members(
-            &mut member_computation_context,
-            &prog.named_address_maps,
-            &mut members,
-            true,
-            &prog.lib_definitions,
-        );
-        if let Some(pre_compiled) = pre_compiled_lib.clone() {
-            assert!(pre_compiled.parser.lib_definitions.is_empty());
-            all_module_members(
-                &mut member_computation_context,
-                &pre_compiled.parser.named_address_maps,
-                &mut members,
-                false,
-                &pre_compiled.parser.source_definitions,
-            );
-        }
-        members
-    };
-
-    let address_conflicts = member_computation_context.address_conflicts;
 
     let mut source_module_map = UniqueMap::new();
     let mut lib_module_map = UniqueMap::new();
@@ -474,32 +279,32 @@ pub fn program(
         def,
     } in source_definitions
     {
-        context.defn_context.current_package = package;
-        let named_address_map = named_address_maps.get(named_address_map);
-        if context
-            .env()
-            .supports_feature(package, FeatureGate::Move2024Paths)
-        {
-            let mut path_expander = Move2024PathExpander::new();
+        // context.current_package = package;
+        // let named_address_map = named_address_maps.get(named_address_map);
+        // if context
+        //     .env()
+        //     .supports_feature(package, FeatureGate::Move2024Paths)
+        // {
+        //     let mut path_expander = Move2024PathExpander::new();
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+        //     let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
 
-            // should never fail
-            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
-                context.env().add_diag(*diag);
-            }
+        //     // should never fail
+        //     if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+        //         context.env().add_diag(*diag);
+        //     }
 
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(path_expander));
-            definition(&mut context, &mut source_module_map, package, def);
-            context.pop_alias_scope(None); // Handle unused addresses in this case
-            context.path_expander = None;
-        } else {
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(&mut context, &mut source_module_map, package, def);
-            context.path_expander = None;
-        }
+        //     context.defn_context.named_address_mapping = Some(named_address_map);
+        //     context.path_expander = Some(Box::new(path_expander));
+        //     definition(&mut context, &mut source_module_map, package, def);
+        //     context.pop_alias_scope(None); // Handle unused addresses in this case
+        //     context.path_expander = None;
+        // } else {
+        //     context.defn_context.named_address_mapping = Some(named_address_map);
+        //     context.path_expander = Some(Box::new(LegacyPathExpander::new()));
+        //     definition(&mut context, &mut source_module_map, package, def);
+        //     context.path_expander = None;
+        // }
     }
 
     context.is_source_definition = false;
@@ -509,30 +314,30 @@ pub fn program(
         def,
     } in lib_definitions
     {
-        context.defn_context.current_package = package;
+        context.current_package = package;
         let named_address_map = named_address_maps.get(named_address_map);
-        if context
-            .env()
-            .supports_feature(package, FeatureGate::Move2024Paths)
-        {
-            let mut path_expander = Move2024PathExpander::new();
+        // if context
+        //     .env()
+        //     .supports_feature(package, FeatureGate::Move2024Paths)
+        // {
+        //     let mut path_expander = Move2024PathExpander::new();
 
-            let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
-            // should never fail
-            if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
-                context.env().add_diag(*diag);
-            }
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(path_expander));
-            definition(&mut context, &mut lib_module_map, package, def);
-            context.pop_alias_scope(None); // Handle unused addresses in this case
-            context.path_expander = None;
-        } else {
-            context.defn_context.named_address_mapping = Some(named_address_map);
-            context.path_expander = Some(Box::new(LegacyPathExpander::new()));
-            definition(&mut context, &mut lib_module_map, package, def);
-            context.path_expander = None;
-        }
+        //     let aliases = named_addr_map_to_alias_map_builder(&mut context, named_address_map);
+        //     // should never fail
+        //     if let Err(diag) = path_expander.push_alias_scope(Loc::invalid(), aliases) {
+        //         context.env().add_diag(*diag);
+        //     }
+        //     context.defn_context.named_address_mapping = Some(named_address_map);
+        //     context.path_expander = Some(Box::new(path_expander));
+        //     definition(&mut context, &mut lib_module_map, package, def);
+        //     context.pop_alias_scope(None); // Handle unused addresses in this case
+        //     context.path_expander = None;
+        // } else {
+        //     context.defn_context.named_address_mapping = Some(named_address_map);
+        //     context.path_expander = Some(Box::new(LegacyPathExpander::new()));
+        //     definition(&mut context, &mut lib_module_map, package, def);
+        //     context.path_expander = None;
+        // }
     }
 
     context.defn_context.current_package = None;
@@ -560,194 +365,24 @@ fn definition(
     package_name: Option<Symbol>,
     def: P::Definition,
 ) {
-    let default_aliases = default_aliases(context);
-    context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
+    // let default_aliases = default_aliases(context);
+    // context.push_alias_scope(/* unused */ Loc::invalid(), default_aliases);
     match def {
         P::Definition::Module(mut m) => {
             let module_paddr = std::mem::take(&mut m.address);
-            let module_addr = module_paddr.map(|addr| {
-                let address = top_level_address(
-                    &mut context.defn_context,
-                    /* suggest_declaration */ true,
-                    addr,
-                );
-                sp(addr.loc, address)
+            let module_addr = module_paddr.map(|address| {
+                sp(address.loc, address)
             });
             module(context, module_map, package_name, module_addr, m)
         }
         P::Definition::Address(a) => {
-            let addr = top_level_address(
-                &mut context.defn_context,
-                /* suggest_declaration */ false,
-                a.addr,
-            );
             for mut m in a.modules {
-                let module_addr = check_module_address(context, a.loc, addr, &mut m);
+                let module_addr = check_module_address(context, a.loc, a.addr, &mut m);
                 module(context, module_map, package_name, Some(module_addr), m)
             }
         }
     }
-    context.pop_alias_scope(None);
-}
-
-// Access a top level address as declared, not affected by any aliasing/shadowing
-pub(super) fn top_level_address(
-    context: &mut DefnContext,
-    suggest_declaration: bool,
-    ln: P::LeadingNameAccess,
-) -> Address {
-    top_level_address_(
-        context,
-        context.named_address_mapping.as_ref().unwrap(),
-        suggest_declaration,
-        ln,
-    )
-}
-
-fn top_level_address_(
-    context: &mut DefnContext,
-    named_address_mapping: &NamedAddressMap,
-    suggest_declaration: bool,
-    ln: P::LeadingNameAccess,
-) -> Address {
-    let name_res = check_valid_address_name(context, &ln);
-    let sp!(loc, ln_) = ln;
-    match ln_ {
-        P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res.is_ok());
-            Address::anonymous(loc, bytes)
-        }
-        // This should have been handled elsewhere in alias resolution for user-provided paths, and
-        // should never occur in compiler-generated ones.
-        P::LeadingNameAccess_::GlobalAddress(name) => {
-            context.env.add_diag(ice!((
-                loc,
-                "Found an address in top-level address position that uses a global name"
-            )));
-            Address::NamedUnassigned(name)
-        }
-        P::LeadingNameAccess_::Name(name) => {
-            match named_address_mapping.get(&name.value).copied() {
-                Some(addr) => make_address(context, name, loc, addr),
-                None => {
-                    if name_res.is_ok() {
-                        context.env.add_diag(address_without_value_error(
-                            suggest_declaration,
-                            loc,
-                            &name,
-                        ));
-                    }
-                    Address::NamedUnassigned(name)
-                }
-            }
-        }
-    }
-}
-
-pub(super) fn top_level_address_opt(
-    context: &mut DefnContext,
-    ln: P::LeadingNameAccess,
-) -> Option<Address> {
-    let name_res = check_valid_address_name(context, &ln);
-    let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
-    let sp!(loc, ln_) = ln;
-    match ln_ {
-        P::LeadingNameAccess_::AnonymousAddress(bytes) => {
-            debug_assert!(name_res.is_ok());
-            Some(Address::anonymous(loc, bytes))
-        }
-        // This should have been handled elsewhere in alias resolution for user-provided paths, and
-        // should never occur in compiler-generated ones.
-        P::LeadingNameAccess_::GlobalAddress(_) => {
-            context.env.add_diag(ice!((
-                loc,
-                "Found an address in top-level address position that uses a global name"
-            )));
-            None
-        }
-        P::LeadingNameAccess_::Name(name) => {
-            let addr = named_address_mapping.get(&name.value).copied()?;
-            Some(make_address(context, name, loc, addr))
-        }
-    }
-}
-
-fn maybe_make_well_known_address(context: &mut Context, loc: Loc, name: Symbol) -> Option<Address> {
-    let named_address_mapping = context.defn_context.named_address_mapping.as_ref().unwrap();
-    let addr = named_address_mapping.get(&name).copied()?;
-    Some(make_address(
-        &mut context.defn_context,
-        sp(loc, name),
-        loc,
-        addr,
-    ))
-}
-
-fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) -> Diagnostic {
-    let mut msg = format!("address '{}' is not assigned a value", n);
-    if suggest_declaration {
-        msg = format!(
-            "{}. Try assigning it a value when calling the compiler",
-            msg,
-        )
-    }
-    diag!(NameResolution::AddressWithoutValue, (loc, msg))
-}
-
-pub(super) fn make_address(
-    context: &mut DefnContext,
-    name: Name,
-    loc: Loc,
-    value: NumericalAddress,
-) -> Address {
-    Address::Numerical {
-        name: Some(name),
-        value: sp(loc, value),
-        name_conflict: context.address_conflicts.contains(&name.value),
-    }
-}
-
-pub(super) fn module_ident(
-    context: &mut DefnContext,
-    sp!(loc, mident_): P::ModuleIdent,
-) -> ModuleIdent {
-    let P::ModuleIdent_ {
-        address: ln,
-        module,
-    } = mident_;
-    let addr = top_level_address(context, /* suggest_declaration */ false, ln);
-    sp(loc, ModuleIdent_::new(addr, module))
-}
-
-fn check_module_address(
-    context: &mut Context,
-    loc: Loc,
-    addr: Address,
-    m: &mut P::ModuleDefinition,
-) -> Spanned<Address> {
-    let module_address = std::mem::take(&mut m.address);
-    match module_address {
-        Some(other_paddr) => {
-            let other_loc = other_paddr.loc;
-            let other_addr = top_level_address(
-                &mut context.defn_context,
-                /* suggest_declaration */ true,
-                other_paddr,
-            );
-            let msg = if addr == other_addr {
-                "Redundant address specification"
-            } else {
-                "Multiple addresses specified for module"
-            };
-            context.env().add_diag(diag!(
-                Declarations::DuplicateItem,
-                (other_loc, msg),
-                (loc, "Address previously specified here")
-            ));
-            sp(other_loc, other_addr)
-        }
-        None => sp(loc, addr),
-    }
+    // context.pop_alias_scope(None);
 }
 
 fn duplicate_module(
@@ -783,6 +418,32 @@ fn module(
         duplicate_module(context, module_map, mident, old_loc)
     }
     context.address = None
+}
+
+fn check_module_address(
+    context: &mut Context,
+    loc: Loc,
+    addr: P::LeadingNameAccess,
+    m: &mut P::ModuleDefinition,
+) -> Spanned<Address> {
+    match &m.address {
+        Some(other_paddr) => {
+            let other_loc = other_paddr.loc;
+            let other_addr = other_paddr;
+            let msg = if addr == other_addr {
+                "Redundant address specification"
+            } else {
+                "Multiple addresses specified for module"
+            };
+            context.env.add_diag(diag!(
+                Declarations::DuplicateItem,
+                (other_loc, msg),
+                (loc, "Address previously specified here")
+            ));
+            sp(other_loc, other_addr)
+        }
+        None => sp(loc, addr),
+    }
 }
 
 fn set_module_address(
@@ -847,22 +508,22 @@ fn module_(
     let name_loc = name.0.loc;
     let current_module = sp(name_loc, ModuleIdent_::new(*context.cur_address(), name));
 
-    let mut new_scope = context.new_alias_map_builder();
-    let mut use_funs_builder = UseFunsBuilder::new();
-    module_self_aliases(&mut new_scope, &current_module);
-    let members = members
-        .into_iter()
-        .filter_map(|member| {
-            aliases_from_member(
-                context,
-                &mut new_scope,
-                &mut use_funs_builder,
-                &current_module,
-                member,
-            )
-        })
-        .collect::<Vec<_>>();
-    context.push_alias_scope(loc, new_scope);
+    // let mut new_scope = context.new_alias_map_builder();
+    // let mut use_funs_builder = UseFunsBuilder::new();
+    // module_self_aliases(&mut new_scope, &current_module);
+    // let members = members
+    //     .into_iter()
+    //     .filter_map(|member| {
+    //         aliases_from_member(
+    //             context,
+    //             &mut new_scope,
+    //             &mut use_funs_builder,
+    //             &current_module,
+    //             member,
+    //         )
+    //     })
+    //     .collect::<Vec<_>>();
+    // context.push_alias_scope(loc, new_scope);
 
     let mut friends = UniqueMap::new();
     let mut functions = UniqueMap::new();
@@ -879,7 +540,8 @@ fn module_(
                 }
                 function(
                     context,
-                    Some((current_module, &mut use_funs_builder)),
+                    None,
+                    // Some((current_module, &mut use_funs_builder)),
                     &mut functions,
                     f,
                 )
@@ -890,10 +552,10 @@ fn module_(
             P::ModuleMember::Spec(s) => context.spec_deprecated(s.loc, /* is_error */ false),
         }
     }
-    let mut use_funs = use_funs(context, use_funs_builder);
+    // let mut use_funs = use_funs(context, use_funs_builder);
     check_visibility_modifiers(context, &functions, &friends, package_name);
 
-    context.pop_alias_scope(Some(&mut use_funs));
+    // context.pop_alias_scope(Some(&mut use_funs));
 
     let target_kind = if !context.is_source_definition {
         TargetKind::External
@@ -1340,466 +1002,466 @@ fn prefixed_warning_filters(
 // Aliases
 //**************************************************************************************************
 
-fn all_module_members<'a>(
-    context: &mut DefnContext,
-    named_addr_maps: &NamedAddressMaps,
-    members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
-    defs: impl IntoIterator<Item = &'a P::PackageDefinition>,
-) {
-    for P::PackageDefinition {
-        named_address_map: named_address_map_index,
-        def,
-        ..
-    } in defs
-    {
-        let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map_index);
-        match def {
-            P::Definition::Module(m) => {
-                let addr = match &m.address {
-                    Some(a) => top_level_address_(
-                        context,
-                        named_addr_map,
-                        /* suggest_declaration */ true,
-                        *a,
-                    ),
-                    // Error will be handled when the module is compiled
-                    None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
-                };
-                module_members(members, always_add, addr, m)
-            }
-            P::Definition::Address(addr_def) => {
-                let addr = top_level_address_(
-                    context,
-                    named_addr_map,
-                    /* suggest_declaration */ false,
-                    addr_def.addr,
-                );
-                for m in &addr_def.modules {
-                    module_members(members, always_add, addr, m)
-                }
-            }
-        };
-    }
-}
-
-fn module_members(
-    members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
-    always_add: bool,
-    address: Address,
-    m: &P::ModuleDefinition,
-) {
-    let mident = sp(m.name.loc(), ModuleIdent_::new(address, m.name));
-    if !always_add && members.contains_key(&mident) {
-        return;
-    }
-    let mut cur_members = members.remove(&mident).unwrap_or_default();
-    for mem in &m.members {
-        match mem {
-            P::ModuleMember::Function(f) => {
-                cur_members.insert(f.name.0, ModuleMemberKind::Function);
-            }
-            P::ModuleMember::Constant(c) => {
-                cur_members.insert(c.name.0, ModuleMemberKind::Constant);
-            }
-            P::ModuleMember::Struct(s) => {
-                cur_members.insert(s.name.0, ModuleMemberKind::Struct);
-            }
-            P::ModuleMember::Enum(e) => {
-                cur_members.insert(e.name.0, ModuleMemberKind::Enum);
-            }
-            P::ModuleMember::Spec(_) | P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
-        };
-    }
-    members.add(mident, cur_members).unwrap();
-}
-
-fn named_addr_map_to_alias_map_builder(
-    context: &mut Context,
-    named_addr_map: &NamedAddressMap,
-) -> AliasMapBuilder {
-    let mut new_aliases = context.new_alias_map_builder();
-    for (name, addr) in named_addr_map {
-        // Address symbols get dummy locations so that we can lift them to names. These should
-        // always be rewritten with more-accurate information as they are used.
-        new_aliases
-            .add_address_alias(sp(Loc::invalid(), *name), *addr)
-            .expect("ICE dupe address");
-    }
-    new_aliases
-}
-
-fn module_self_aliases(acc: &mut AliasMapBuilder, current_module: &ModuleIdent) {
-    let self_name = sp(current_module.loc, ModuleName::SELF_NAME.into());
-    acc.add_implicit_module_alias(self_name, *current_module)
-        .unwrap()
-}
-
-fn aliases_from_member(
-    context: &mut Context,
-    acc: &mut AliasMapBuilder,
-    use_funs: &mut UseFunsBuilder,
-    current_module: &ModuleIdent,
-    member: P::ModuleMember,
-) -> Option<P::ModuleMember> {
-    macro_rules! check_name_and_add_implicit_alias {
-        ($kind:expr, $name:expr) => {{
-            if let Some(n) = check_valid_module_member_name(context, $kind, $name) {
-                if let Err(loc) = acc.add_implicit_member_alias(
-                    n.clone(),
-                    current_module.clone(),
-                    n.clone(),
-                    $kind,
-                ) {
-                    duplicate_module_member(context, loc, n)
-                }
-            }
-        }};
-    }
-
-    match member {
-        P::ModuleMember::Use(u) => {
-            use_(context, acc, use_funs, u);
-            None
-        }
-        f @ P::ModuleMember::Friend(_) => {
-            // friend declarations do not produce implicit aliases
-            Some(f)
-        }
-        P::ModuleMember::Function(f) => {
-            let n = f.name.0;
-            check_name_and_add_implicit_alias!(ModuleMemberKind::Function, n);
-            Some(P::ModuleMember::Function(f))
-        }
-        P::ModuleMember::Constant(c) => {
-            let n = c.name.0;
-            check_name_and_add_implicit_alias!(ModuleMemberKind::Constant, n);
-            Some(P::ModuleMember::Constant(c))
-        }
-        P::ModuleMember::Struct(s) => {
-            let n = s.name.0;
-            check_name_and_add_implicit_alias!(ModuleMemberKind::Struct, n);
-            Some(P::ModuleMember::Struct(s))
-        }
-        P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
-        P::ModuleMember::Enum(e) => {
-            let n = e.name.0;
-            check_name_and_add_implicit_alias!(ModuleMemberKind::Enum, n);
-            Some(P::ModuleMember::Enum(e))
-        }
-    }
-}
-
-fn uses(context: &mut Context, uses: Vec<P::UseDecl>) -> (AliasMapBuilder, UseFunsBuilder) {
-    let mut new_scope = context.new_alias_map_builder();
-    let mut use_funs = UseFunsBuilder::new();
-    for u in uses {
-        use_(context, &mut new_scope, &mut use_funs, u);
-    }
-    (new_scope, use_funs)
-}
-
-fn use_(
-    context: &mut Context,
-    acc: &mut AliasMapBuilder,
-    use_funs: &mut UseFunsBuilder,
-    u: P::UseDecl,
-) {
-    let P::UseDecl {
-        use_: u,
-        loc,
-        attributes,
-    } = u;
-    let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
-    match u {
-        P::Use::NestedModuleUses(address, use_decls) => {
-            for (module, use_) in use_decls {
-                let mident = sp(module.loc(), P::ModuleIdent_ { address, module });
-                module_use(context, acc, use_funs, mident, &attributes, use_);
-            }
-        }
-        P::Use::ModuleUse(mident, use_) => {
-            module_use(context, acc, use_funs, mident, &attributes, use_);
-        }
-        P::Use::Fun {
-            visibility,
-            function,
-            ty,
-            method,
-        } => {
-            let pkg = context.current_package();
-            context.env().check_feature(pkg, FeatureGate::DotCall, loc);
-            let is_public = match visibility {
-                P::Visibility::Public(vis_loc) => Some(vis_loc),
-                P::Visibility::Internal => None,
-                P::Visibility::Friend(vis_loc) | P::Visibility::Package(vis_loc) => {
-                    let msg = "Invalid visibility for 'use fun' declaration";
-                    let vis_msg = format!(
-                        "Module level 'use fun' declarations can be '{}' for the module's types, \
-                    otherwise they must internal to declared scope.",
-                        P::Visibility::PUBLIC
-                    );
-                    context.env().add_diag(diag!(
-                        Declarations::InvalidUseFun,
-                        (loc, msg),
-                        (vis_loc, vis_msg)
-                    ));
-                    None
-                }
-            };
-            let explicit = ParserExplicitUseFun {
-                loc,
-                attributes,
-                is_public,
-                function,
-                ty,
-                method,
-            };
-            use_funs.explicit.push(explicit);
-        }
-    }
-}
-
-fn module_use(
-    context: &mut Context,
-    acc: &mut AliasMapBuilder,
-    use_funs: &mut UseFunsBuilder,
-    in_mident: P::ModuleIdent,
-    attributes: &E::Attributes,
-    muse: P::ModuleUse,
-) {
-    let unbound_module = |mident: &ModuleIdent| -> Diagnostic {
-        diag!(
-            NameResolution::UnboundModule,
-            (
-                mident.loc,
-                format!("Invalid 'use'. Unbound module: '{}'", mident),
-            )
-        )
-    };
-    macro_rules! add_module_alias {
-        ($ident:expr, $alias:expr) => {{
-            if let Err(()) = check_restricted_name_all_cases(
-                &mut context.defn_context,
-                NameCase::ModuleAlias,
-                &$alias,
-            ) {
-                return;
-            }
-
-            if let Err(old_loc) = acc.add_module_alias($alias.clone(), $ident) {
-                duplicate_module_alias(context, old_loc, $alias)
-            }
-        }};
-    }
-    match muse {
-        P::ModuleUse::Module(alias_opt) => {
-            let mident = module_ident(&mut context.defn_context, in_mident);
-            if !context.defn_context.module_members.contains_key(&mident) {
-                context.env().add_diag(unbound_module(&mident));
-                return;
-            };
-            let alias = alias_opt
-                .map(|m| m.0)
-                .unwrap_or_else(|| mident.value.module.0);
-            add_module_alias!(mident, alias)
-        }
-        P::ModuleUse::Members(sub_uses) => {
-            let mident = module_ident(&mut context.defn_context, in_mident);
-            let members = match context.defn_context.module_members.get(&mident) {
-                Some(members) => members,
-                None => {
-                    context.env().add_diag(unbound_module(&mident));
-                    return;
-                }
-            };
-            let mloc = *context
-                .defn_context
-                .module_members
-                .get_loc(&mident)
-                .unwrap();
-            let sub_uses_kinds = sub_uses
-                .into_iter()
-                .map(|(member, alia_opt)| {
-                    let kind = members.get(&member).cloned();
-                    (member, alia_opt, kind)
-                })
-                .collect::<Vec<_>>();
-
-            for (member, alias_opt, member_kind_opt) in sub_uses_kinds {
-                if member.value.as_str() == ModuleName::SELF_NAME {
-                    let alias = if let Some(alias) = alias_opt {
-                        alias
-                    } else {
-                        // For Self-inclusion, we respan the symbol to point to Self for better
-                        // error messages.
-                        let symbol = mident.value.module.0.value;
-                        sp(member.loc, symbol)
-                    };
-                    add_module_alias!(mident, alias);
-                    continue;
-                }
-
-                // check is member
-
-                let member_kind = match member_kind_opt {
-                    None => {
-                        let msg = format!(
-                            "Invalid 'use'. Unbound member '{}' in module '{}'",
-                            member, mident
-                        );
-                        context.env().add_diag(diag!(
-                            NameResolution::UnboundModuleMember,
-                            (member.loc, msg),
-                            (mloc, format!("Module '{}' declared here", mident)),
-                        ));
-                        continue;
-                    }
-                    Some(m) => m,
-                };
-
-                let alias = alias_opt.unwrap_or(member);
-
-                let alias = match check_valid_module_member_alias(context, member_kind, alias) {
-                    None => continue,
-                    Some(alias) => alias,
-                };
-                if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
-                    duplicate_module_member(context, old_loc, alias)
-                }
-                if matches!(member_kind, ModuleMemberKind::Function) {
-                    // remove any previously declared alias to keep in sync with the member alias
-                    // map
-                    use_funs.implicit.remove(&alias);
-                    // not a function declaration
-                    let is_public = None;
-                    // assume used. We will set it to false if needed when exiting this alias scope
-                    let kind = E::ImplicitUseFunKind::UseAlias { used: true };
-                    let implicit = E::ImplicitUseFunCandidate {
-                        loc: alias.loc,
-                        attributes: attributes.clone(),
-                        is_public,
-                        function: (mident, member),
-                        kind,
-                    };
-                    use_funs.implicit.add(alias, implicit).unwrap();
-                }
-            }
-        }
-    }
-}
-
-fn use_funs(context: &mut Context, builder: UseFunsBuilder) -> E::UseFuns {
-    let UseFunsBuilder {
-        explicit: pexplicit,
-        implicit,
-    } = builder;
-    // If None, there was an error and we can skip it
-    let explicit = pexplicit
-        .into_iter()
-        .filter_map(|e| explicit_use_fun(context, e))
-        .collect();
-    E::UseFuns { explicit, implicit }
-}
-
-fn explicit_use_fun(
-    context: &mut Context,
-    pexplicit: ParserExplicitUseFun,
-) -> Option<E::ExplicitUseFun> {
-    let ParserExplicitUseFun {
-        loc,
-        attributes,
-        is_public,
-        function,
-        ty,
-        method,
-    } = pexplicit;
-    let access_result!(function, tyargs, is_macro) =
-        context.name_access_chain_to_module_access(Access::ApplyPositional, *function)?;
-    ice_assert!(
-        context.env(),
-        tyargs.is_none(),
-        loc,
-        "'use fun' with tyargs"
-    );
-    ice_assert!(
-        context.env(),
-        is_macro.is_none(),
-        loc,
-        "Found a 'use fun' as a macro"
-    );
-    let access_result!(ty, tyargs, is_macro) =
-        context.name_access_chain_to_module_access(Access::Type, *ty)?;
-    ice_assert!(
-        context.env(),
-        tyargs.is_none(),
-        loc,
-        "'use fun' with tyargs"
-    );
-    ice_assert!(
-        context.env(),
-        is_macro.is_none(),
-        loc,
-        "Found a 'use fun' as a macro"
-    );
-    Some(E::ExplicitUseFun {
-        loc,
-        attributes,
-        is_public,
-        function,
-        ty,
-        method,
-    })
-}
-
-fn duplicate_module_alias(context: &mut Context, old_loc: Loc, alias: Name) {
-    let msg = format!(
-        "Duplicate module alias '{}'. Module aliases must be unique within a given namespace",
-        alias
-    );
-    context.env().add_diag(diag!(
-        Declarations::DuplicateItem,
-        (alias.loc, msg),
-        (old_loc, "Alias previously defined here"),
-    ));
-}
-
-fn duplicate_module_member(context: &mut Context, old_loc: Loc, alias: Name) {
-    let msg = format!(
-        "Duplicate module member or alias '{}'. Top level names in a namespace must be unique",
-        alias
-    );
-    context.env().add_diag(diag!(
-        Declarations::DuplicateItem,
-        (alias.loc, msg),
-        (old_loc, "Alias previously defined here"),
-    ));
-}
-
-fn unused_alias(context: &mut Context, _kind: &str, alias: Name) {
-    if !context.is_source_definition {
-        return;
-    }
-    let mut diag = diag!(
-        UnusedItem::Alias,
-        (
-            alias.loc,
-            format!("Unused 'use' of alias '{}'. Consider removing it", alias)
-        ),
-    );
-    if crate::naming::ast::BuiltinTypeName_::all_names().contains(&alias.value) {
-        diag.add_note(format!(
-            "This alias does not shadow the built-in type '{}' in type annotations.",
-            alias
-        ));
-    } else if crate::naming::ast::BuiltinFunction_::all_names().contains(&alias.value) {
-        diag.add_note(format!(
-            "This alias does not shadow the built-in function '{}' in call expressions.",
-            alias
-        ));
-    }
-    context.env().add_diag(diag);
-}
+// fn all_module_members<'a>(
+//     context: &mut Context,
+//     named_addr_maps: &NamedAddressMaps,
+//     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
+//     always_add: bool,
+//     defs: impl IntoIterator<Item = &'a P::PackageDefinition>,
+// ) {
+//     for P::PackageDefinition {
+//         named_address_map: named_address_map_index,
+//         def,
+//         ..
+//     } in defs
+//     {
+//         let named_addr_map: &NamedAddressMap = named_addr_maps.get(*named_address_map_index);
+//         match def {
+//             P::Definition::Module(m) => {
+//                 let addr = match &m.address {
+//                     Some(a) => top_level_address_(
+//                         context,
+//                         named_addr_map,
+//                         /* suggest_declaration */ true,
+//                         *a,
+//                     ),
+//                     // Error will be handled when the module is compiled
+//                     None => Address::anonymous(m.loc, NumericalAddress::DEFAULT_ERROR_ADDRESS),
+//                 };
+//                 module_members(members, always_add, addr, m)
+//             }
+//             P::Definition::Address(addr_def) => {
+//                 let addr = top_level_address_(
+//                     context,
+//                     named_addr_map,
+//                     /* suggest_declaration */ false,
+//                     addr_def.addr,
+//                 );
+//                 for m in &addr_def.modules {
+//                     module_members(members, always_add, addr, m)
+//                 }
+//             }
+//         };
+//     }
+// }
+//
+// fn module_members(
+//     members: &mut UniqueMap<ModuleIdent, ModuleMembers>,
+//     always_add: bool,
+//     address: Address,
+//     m: &P::ModuleDefinition,
+// ) {
+//     let mident = sp(m.name.loc(), ModuleIdent_::new(address, m.name));
+//     if !always_add && members.contains_key(&mident) {
+//         return;
+//     }
+//     let mut cur_members = members.remove(&mident).unwrap_or_default();
+//     for mem in &m.members {
+//         match mem {
+//             P::ModuleMember::Function(f) => {
+//                 cur_members.insert(f.name.0, ModuleMemberKind::Function);
+//             }
+//             P::ModuleMember::Constant(c) => {
+//                 cur_members.insert(c.name.0, ModuleMemberKind::Constant);
+//             }
+//             P::ModuleMember::Struct(s) => {
+//                 cur_members.insert(s.name.0, ModuleMemberKind::Struct);
+//             }
+//             P::ModuleMember::Enum(e) => {
+//                 cur_members.insert(e.name.0, ModuleMemberKind::Enum);
+//             }
+//             P::ModuleMember::Spec(_) | P::ModuleMember::Use(_) | P::ModuleMember::Friend(_) => (),
+//         };
+//     }
+//     members.add(mident, cur_members).unwrap();
+// }
+//
+// fn named_addr_map_to_alias_map_builder(
+//     context: &mut Context,
+//     named_addr_map: &NamedAddressMap,
+// ) -> AliasMapBuilder {
+//     let mut new_aliases = context.new_alias_map_builder();
+//     for (name, addr) in named_addr_map {
+//         // Address symbols get dummy locations so that we can lift them to names. These should
+//         // always be rewritten with more-accurate information as they are used.
+//         new_aliases
+//             .add_address_alias(sp(Loc::invalid(), *name), *addr)
+//             .expect("ICE dupe address");
+//     }
+//     new_aliases
+// }
+//
+// fn module_self_aliases(acc: &mut AliasMapBuilder, current_module: &ModuleIdent) {
+//     let self_name = sp(current_module.loc, ModuleName::SELF_NAME.into());
+//     acc.add_implicit_module_alias(self_name, *current_module)
+//         .unwrap()
+// }
+//
+// fn aliases_from_member(
+//     context: &mut Context,
+//     acc: &mut AliasMapBuilder,
+//     use_funs: &mut UseFunsBuilder,
+//     current_module: &ModuleIdent,
+//     member: P::ModuleMember,
+// ) -> Option<P::ModuleMember> {
+//     macro_rules! check_name_and_add_implicit_alias {
+//         ($kind:expr, $name:expr) => {{
+//             if let Some(n) = check_valid_module_member_name(context, $kind, $name) {
+//                 if let Err(loc) = acc.add_implicit_member_alias(
+//                     n.clone(),
+//                     current_module.clone(),
+//                     n.clone(),
+//                     $kind,
+//                 ) {
+//                     duplicate_module_member(context, loc, n)
+//                 }
+//             }
+//         }};
+//     }
+//
+//     match member {
+//         P::ModuleMember::Use(u) => {
+//             use_(context, acc, use_funs, u);
+//             None
+//         }
+//         f @ P::ModuleMember::Friend(_) => {
+//             // friend declarations do not produce implicit aliases
+//             Some(f)
+//         }
+//         P::ModuleMember::Function(f) => {
+//             let n = f.name.0;
+//             check_name_and_add_implicit_alias!(ModuleMemberKind::Function, n);
+//             Some(P::ModuleMember::Function(f))
+//         }
+//         P::ModuleMember::Constant(c) => {
+//             let n = c.name.0;
+//             check_name_and_add_implicit_alias!(ModuleMemberKind::Constant, n);
+//             Some(P::ModuleMember::Constant(c))
+//         }
+//         P::ModuleMember::Struct(s) => {
+//             let n = s.name.0;
+//             check_name_and_add_implicit_alias!(ModuleMemberKind::Struct, n);
+//             Some(P::ModuleMember::Struct(s))
+//         }
+//         P::ModuleMember::Spec(s) => Some(P::ModuleMember::Spec(s)),
+//         P::ModuleMember::Enum(e) => {
+//             let n = e.name.0;
+//             check_name_and_add_implicit_alias!(ModuleMemberKind::Enum, n);
+//             Some(P::ModuleMember::Enum(e))
+//         }
+//     }
+// }
+//
+// fn uses(context: &mut Context, uses: Vec<P::UseDecl>) -> (AliasMapBuilder, UseFunsBuilder) {
+//     let mut new_scope = context.new_alias_map_builder();
+//     let mut use_funs = UseFunsBuilder::new();
+//     for u in uses {
+//         use_(context, &mut new_scope, &mut use_funs, u);
+//     }
+//     (new_scope, use_funs)
+// }
+//
+// fn use_(
+//     context: &mut Context,
+//     acc: &mut AliasMapBuilder,
+//     use_funs: &mut UseFunsBuilder,
+//     u: P::UseDecl,
+// ) {
+//     let P::UseDecl {
+//         use_: u,
+//         loc,
+//         attributes,
+//     } = u;
+//     let attributes = flatten_attributes(context, AttributePosition::Use, attributes);
+//     match u {
+//         P::Use::NestedModuleUses(address, use_decls) => {
+//             for (module, use_) in use_decls {
+//                 let mident = sp(module.loc(), P::ModuleIdent_ { address, module });
+//                 module_use(context, acc, use_funs, mident, &attributes, use_);
+//             }
+//         }
+//         P::Use::ModuleUse(mident, use_) => {
+//             module_use(context, acc, use_funs, mident, &attributes, use_);
+//         }
+//         P::Use::Fun {
+//             visibility,
+//             function,
+//             ty,
+//             method,
+//         } => {
+//             let pkg = context.current_package();
+//             context.env().check_feature(pkg, FeatureGate::DotCall, loc);
+//             let is_public = match visibility {
+//                 P::Visibility::Public(vis_loc) => Some(vis_loc),
+//                 P::Visibility::Internal => None,
+//                 P::Visibility::Friend(vis_loc) | P::Visibility::Package(vis_loc) => {
+//                     let msg = "Invalid visibility for 'use fun' declaration";
+//                     let vis_msg = format!(
+//                         "Module level 'use fun' declarations can be '{}' for the module's types, \
+//                     otherwise they must internal to declared scope.",
+//                         P::Visibility::PUBLIC
+//                     );
+//                     context.env().add_diag(diag!(
+//                         Declarations::InvalidUseFun,
+//                         (loc, msg),
+//                         (vis_loc, vis_msg)
+//                     ));
+//                     None
+//                 }
+//             };
+//             let explicit = ParserExplicitUseFun {
+//                 loc,
+//                 attributes,
+//                 is_public,
+//                 function,
+//                 ty,
+//                 method,
+//             };
+//             use_funs.explicit.push(explicit);
+//         }
+//     }
+// }
+//
+// fn module_use(
+//     context: &mut Context,
+//     acc: &mut AliasMapBuilder,
+//     use_funs: &mut UseFunsBuilder,
+//     in_mident: P::ModuleIdent,
+//     attributes: &E::Attributes,
+//     muse: P::ModuleUse,
+// ) {
+//     let unbound_module = |mident: &ModuleIdent| -> Diagnostic {
+//         diag!(
+//             NameResolution::UnboundModule,
+//             (
+//                 mident.loc,
+//                 format!("Invalid 'use'. Unbound module: '{}'", mident),
+//             )
+//         )
+//     };
+//     macro_rules! add_module_alias {
+//         ($ident:expr, $alias:expr) => {{
+//             if let Err(()) = check_restricted_name_all_cases(
+//                 &mut context.defn_context,
+//                 NameCase::ModuleAlias,
+//                 &$alias,
+//             ) {
+//                 return;
+//             }
+//
+//             if let Err(old_loc) = acc.add_module_alias($alias.clone(), $ident) {
+//                 duplicate_module_alias(context, old_loc, $alias)
+//             }
+//         }};
+//     }
+//     match muse {
+//         P::ModuleUse::Module(alias_opt) => {
+//             let mident = module_ident(&mut context.defn_context, in_mident);
+//             if !context.defn_context.module_members.contains_key(&mident) {
+//                 context.env().add_diag(unbound_module(&mident));
+//                 return;
+//             };
+//             let alias = alias_opt
+//                 .map(|m| m.0)
+//                 .unwrap_or_else(|| mident.value.module.0);
+//             add_module_alias!(mident, alias)
+//         }
+//         P::ModuleUse::Members(sub_uses) => {
+//             let mident = module_ident(&mut context.defn_context, in_mident);
+//             let members = match context.defn_context.module_members.get(&mident) {
+//                 Some(members) => members,
+//                 None => {
+//                     context.env().add_diag(unbound_module(&mident));
+//                     return;
+//                 }
+//             };
+//             let mloc = *context
+//                 .defn_context
+//                 .module_members
+//                 .get_loc(&mident)
+//                 .unwrap();
+//             let sub_uses_kinds = sub_uses
+//                 .into_iter()
+//                 .map(|(member, alia_opt)| {
+//                     let kind = members.get(&member).cloned();
+//                     (member, alia_opt, kind)
+//                 })
+//                 .collect::<Vec<_>>();
+//
+//             for (member, alias_opt, member_kind_opt) in sub_uses_kinds {
+//                 if member.value.as_str() == ModuleName::SELF_NAME {
+//                     let alias = if let Some(alias) = alias_opt {
+//                         alias
+//                     } else {
+//                         // For Self-inclusion, we respan the symbol to point to Self for better
+//                         // error messages.
+//                         let symbol = mident.value.module.0.value;
+//                         sp(member.loc, symbol)
+//                     };
+//                     add_module_alias!(mident, alias);
+//                     continue;
+//                 }
+//
+//                 // check is member
+//
+//                 let member_kind = match member_kind_opt {
+//                     None => {
+//                         let msg = format!(
+//                             "Invalid 'use'. Unbound member '{}' in module '{}'",
+//                             member, mident
+//                         );
+//                         context.env().add_diag(diag!(
+//                             NameResolution::UnboundModuleMember,
+//                             (member.loc, msg),
+//                             (mloc, format!("Module '{}' declared here", mident)),
+//                         ));
+//                         continue;
+//                     }
+//                     Some(m) => m,
+//                 };
+//
+//                 let alias = alias_opt.unwrap_or(member);
+//
+//                 let alias = match check_valid_module_member_alias(context, member_kind, alias) {
+//                     None => continue,
+//                     Some(alias) => alias,
+//                 };
+//                 if let Err(old_loc) = acc.add_member_alias(alias, mident, member, member_kind) {
+//                     duplicate_module_member(context, old_loc, alias)
+//                 }
+//                 if matches!(member_kind, ModuleMemberKind::Function) {
+//                     // remove any previously declared alias to keep in sync with the member alias
+//                     // map
+//                     use_funs.implicit.remove(&alias);
+//                     // not a function declaration
+//                     let is_public = None;
+//                     // assume used. We will set it to false if needed when exiting this alias scope
+//                     let kind = E::ImplicitUseFunKind::UseAlias { used: true };
+//                     let implicit = E::ImplicitUseFunCandidate {
+//                         loc: alias.loc,
+//                         attributes: attributes.clone(),
+//                         is_public,
+//                         function: (mident, member),
+//                         kind,
+//                     };
+//                     use_funs.implicit.add(alias, implicit).unwrap();
+//                 }
+//             }
+//         }
+//     }
+// }
+//
+// fn use_funs(context: &mut Context, builder: UseFunsBuilder) -> E::UseFuns {
+//     let UseFunsBuilder {
+//         explicit: pexplicit,
+//         implicit,
+//     } = builder;
+//     // If None, there was an error and we can skip it
+//     let explicit = pexplicit
+//         .into_iter()
+//         .filter_map(|e| explicit_use_fun(context, e))
+//         .collect();
+//     E::UseFuns { explicit, implicit }
+// }
+//
+// fn explicit_use_fun(
+//     context: &mut Context,
+//     pexplicit: ParserExplicitUseFun,
+// ) -> Option<E::ExplicitUseFun> {
+//     let ParserExplicitUseFun {
+//         loc,
+//         attributes,
+//         is_public,
+//         function,
+//         ty,
+//         method,
+//     } = pexplicit;
+//     let access_result!(function, tyargs, is_macro) =
+//         context.name_access_chain_to_module_access(Access::ApplyPositional, *function)?;
+//     ice_assert!(
+//         context.env(),
+//         tyargs.is_none(),
+//         loc,
+//         "'use fun' with tyargs"
+//     );
+//     ice_assert!(
+//         context.env(),
+//         is_macro.is_none(),
+//         loc,
+//         "Found a 'use fun' as a macro"
+//     );
+//     let access_result!(ty, tyargs, is_macro) =
+//         context.name_access_chain_to_module_access(Access::Type, *ty)?;
+//     ice_assert!(
+//         context.env(),
+//         tyargs.is_none(),
+//         loc,
+//         "'use fun' with tyargs"
+//     );
+//     ice_assert!(
+//         context.env(),
+//         is_macro.is_none(),
+//         loc,
+//         "Found a 'use fun' as a macro"
+//     );
+//     Some(E::ExplicitUseFun {
+//         loc,
+//         attributes,
+//         is_public,
+//         function,
+//         ty,
+//         method,
+//     })
+// }
+//
+// fn duplicate_module_alias(context: &mut Context, old_loc: Loc, alias: Name) {
+//     let msg = format!(
+//         "Duplicate module alias '{}'. Module aliases must be unique within a given namespace",
+//         alias
+//     );
+//     context.env().add_diag(diag!(
+//         Declarations::DuplicateItem,
+//         (alias.loc, msg),
+//         (old_loc, "Alias previously defined here"),
+//     ));
+// }
+//
+// fn duplicate_module_member(context: &mut Context, old_loc: Loc, alias: Name) {
+//     let msg = format!(
+//         "Duplicate module member or alias '{}'. Top level names in a namespace must be unique",
+//         alias
+//     );
+//     context.env().add_diag(diag!(
+//         Declarations::DuplicateItem,
+//         (alias.loc, msg),
+//         (old_loc, "Alias previously defined here"),
+//     ));
+// }
+//
+// fn unused_alias(context: &mut Context, _kind: &str, alias: Name) {
+//     if !context.is_source_definition {
+//         return;
+//     }
+//     let mut diag = diag!(
+//         UnusedItem::Alias,
+//         (
+//             alias.loc,
+//             format!("Unused 'use' of alias '{}'. Consider removing it", alias)
+//         ),
+//     );
+//     if crate::naming::ast::BuiltinTypeName_::all_names().contains(&alias.value) {
+//         diag.add_note(format!(
+//             "This alias does not shadow the built-in type '{}' in type annotations.",
+//             alias
+//         ));
+//     } else if crate::naming::ast::BuiltinFunction_::all_names().contains(&alias.value) {
+//         diag.add_note(format!(
+//             "This alias does not shadow the built-in function '{}' in call expressions.",
+//             alias
+//         ));
+//     }
+//     context.env().add_diag(diag);
+// }
 
 //**************************************************************************************************
 // Structs
@@ -2114,11 +1776,12 @@ fn constant_(
 
 fn function(
     context: &mut Context,
-    module_and_use_funs: Option<(ModuleIdent, &mut UseFunsBuilder)>,
+    // module_and_use_funs: Option<(ModuleIdent, &mut UseFunsBuilder)>,
     functions: &mut UniqueMap<FunctionName, E::Function>,
     pfunction: P::Function,
 ) {
-    let (fname, fdef) = function_(context, module_and_use_funs, functions.len(), pfunction);
+    // let (fname, fdef) = function_(context, module_and_use_funs, functions.len(), pfunction);
+    let (fname, fdef) = function_(context, functions.len(), pfunction);
     if let Err(_old_loc) = functions.add(fname, fdef) {
         assert!(context.env().has_errors())
     }
@@ -2126,7 +1789,7 @@ fn function(
 
 fn function_(
     context: &mut Context,
-    module_and_use_funs: Option<(ModuleIdent, &mut UseFunsBuilder)>,
+    // module_and_use_funs: Option<(ModuleIdent, &mut UseFunsBuilder)>,
     index: usize,
     pfunction: P::Function,
 ) -> (FunctionName, E::Function) {
@@ -2179,18 +1842,18 @@ fn function_(
     let visibility = visibility(pvisibility);
     let signature = function_signature(context, macro_, psignature);
     let body = function_body(context, pbody);
-    if let Some((m, use_funs_builder)) = module_and_use_funs {
-        let implicit = E::ImplicitUseFunCandidate {
-            loc: name.loc(),
-            attributes: attributes.clone(),
-            is_public: Some(visibility.loc().unwrap_or_else(|| name.loc())),
-            function: (m, name.0),
-            // disregard used/unused information tracking
-            kind: E::ImplicitUseFunKind::FunctionDeclaration,
-        };
-        // we can ignore any error, since the alias map will catch conflicting names
-        let _ = use_funs_builder.implicit.add(name.0, implicit);
-    }
+    // if let Some((m, use_funs_builder)) = module_and_use_funs {
+    //     let implicit = E::ImplicitUseFunCandidate {
+    //         loc: name.loc(),
+    //         attributes: attributes.clone(),
+    //         is_public: Some(visibility.loc().unwrap_or_else(|| name.loc())),
+    //         function: (m, name.0),
+    //         // disregard used/unused information tracking
+    //         kind: E::ImplicitUseFunKind::FunctionDeclaration,
+    //     };
+    //     // we can ignore any error, since the alias map will catch conflicting names
+    //     let _ = use_funs_builder.implicit.add(name.0, implicit);
+    // }
     let fdef = E::Function {
         warning_filter,
         index,
@@ -3845,10 +3508,6 @@ fn check_valid_type_parameter_name(
     )?;
 
     check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
-}
-
-pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
-    s.starts_with(|c: char| c.is_ascii_uppercase())
 }
 
 // Checks for a restricted name in any decl case

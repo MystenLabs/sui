@@ -5,6 +5,7 @@ use crate::{
     expansion::ast::{self as E, ModuleIdent},
     expansion::translate::ModuleMemberKind,
     parser::ast::{self as P},
+    naming::name_resolver::ResolvedMember,
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
@@ -14,7 +15,7 @@ use std::{collections::BTreeSet, fmt};
 pub enum AliasMapBuilder {
     Legacy {
         modules: UniqueMap<Name, (ModuleIdent, /* is_implicit */ bool)>,
-        members: UniqueMap<Name, (MemberName, /* is_implicit */ bool)>,
+        members: UniqueMap<Name, (ResolvedMember, /* is_implicit */ bool)>,
     },
     Namespaced {
         leading_access: UniqueMap<Name, (LeadingAccessEntry, /* is_implicit */ bool)>,
@@ -34,7 +35,7 @@ pub struct UnnecessaryAlias {
 pub enum AliasEntry {
     Address(Name, NumericalAddress),
     Module(Name, ModuleIdent),
-    Member(Name, ModuleIdent, Name),
+    Member(Name, ResolvedMember),
     TypeParam(Name),
 }
 
@@ -42,14 +43,14 @@ pub enum AliasEntry {
 pub enum LeadingAccessEntry {
     Address(NumericalAddress),
     Module(ModuleIdent),
-    Member(ModuleIdent, Name),
+    Member(ResolvedMember),
     TypeParam,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum MemberEntry {
-    Member(ModuleIdent, Name),
+    Member(ResolvedMember),
     TypeParam,
 }
 
@@ -89,7 +90,7 @@ impl AliasEntry {
         match self {
             AliasEntry::Address(n, _)
             | AliasEntry::Module(n, _)
-            | AliasEntry::Member(n, _, _)
+            | AliasEntry::Member(n, _)
             | AliasEntry::TypeParam(n) => n.loc,
         }
     }
@@ -204,16 +205,16 @@ impl AliasMapBuilder {
             } => match kind {
                 // constants and functions are not in the leading access namespace
                 ModuleMemberKind::Constant | ModuleMemberKind::Function => {
-                    let entry = (MemberEntry::Member(ident, member), is_implicit);
+                    let entry = (MemberEntry::Member(member), is_implicit);
                     module_members.add(alias, entry).unwrap();
                 }
                 // structs and enums are in the leading access namespace in addition to the module
                 // members namespace
                 ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
-                    let member_entry = (MemberEntry::Member(ident, member), is_implicit);
+                    let member_entry = (MemberEntry::Member(member), is_implicit);
                     module_members.add(alias, member_entry).unwrap();
                     let leading_access_entry =
-                        (LeadingAccessEntry::Member(ident, member), is_implicit);
+                        (LeadingAccessEntry::Member(member), is_implicit);
                     leading_access.add(alias, leading_access_entry).unwrap();
                 }
             },
@@ -296,7 +297,7 @@ impl From<(Name, LeadingAccessEntry)> for AliasEntry {
         match entry {
             LeadingAccessEntry::Address(addr) => AliasEntry::Address(name, addr),
             LeadingAccessEntry::Module(mident) => AliasEntry::Module(name, mident),
-            LeadingAccessEntry::Member(mident, member) => AliasEntry::Member(name, mident, member),
+            LeadingAccessEntry::Member(member) => AliasEntry::Member(name, member),
             LeadingAccessEntry::TypeParam => AliasEntry::TypeParam(name),
         }
     }
@@ -305,7 +306,7 @@ impl From<(Name, LeadingAccessEntry)> for AliasEntry {
 impl From<(Name, MemberEntry)> for AliasEntry {
     fn from((name, entry): (Name, MemberEntry)) -> Self {
         match entry {
-            MemberEntry::Member(mident, member) => AliasEntry::Member(name, mident, member),
+            MemberEntry::Member(member) => AliasEntry::Member(name, member),
             MemberEntry::TypeParam => AliasEntry::TypeParam(name),
         }
     }
@@ -329,7 +330,7 @@ impl fmt::Debug for AliasEntry {
         match self {
             AliasEntry::Module(alias, mident) => write!(f, "({alias}, m#{mident})"),
             AliasEntry::Address(alias, addr) => write!(f, "({alias}, @{addr})"),
-            AliasEntry::Member(alias, mident, name) => write!(f, "({alias},{mident}::{name})"),
+            AliasEntry::Member(alias, entry) => write!(f, "({alias},{}::{})", entry.mident(), entry.name()),
             AliasEntry::TypeParam(alias) => write!(f, "({alias},[tparam])"),
         }
     }
@@ -340,7 +341,7 @@ impl fmt::Debug for LeadingAccessEntry {
         match self {
             LeadingAccessEntry::Module(mident) => write!(f, "m#{mident}"),
             LeadingAccessEntry::Address(addr) => write!(f, "@{addr}"),
-            LeadingAccessEntry::Member(mident, name) => write!(f, "{mident}::{name}"),
+            LeadingAccessEntry::Member(entry) => write!(f, "{}::{}", entry.mident(), entry.name()),
             LeadingAccessEntry::TypeParam => write!(f, "[tparam]"),
         }
     }
@@ -349,7 +350,7 @@ impl fmt::Debug for LeadingAccessEntry {
 impl fmt::Debug for MemberEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
         match self {
-            MemberEntry::Member(mident, name) => write!(f, "{mident}::{name}"),
+            MemberEntry::Member(entry) => write!(f, "{}::{}", entry.mident(), entry.name()),
             MemberEntry::TypeParam => write!(f, "[tparam]"),
         }
     }

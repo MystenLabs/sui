@@ -1,38 +1,223 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
-/// Name access chain (path) resolution. This is driven by the trait PathExpander, which works over
-/// a DefnContext and resolves according to the rules of the selected expander.
+/// Name resolution. This is driven by the trait PathResolver, which works over
+/// a DefnContext and resolves according to the rules of the selected resolver (to preserve legacy
+/// behavior versus newer resolution behaviors).
 use crate::{
     diag,
     diagnostics::Diagnostic,
     editions::{create_feature_error, Edition, FeatureGate},
-    expansion::{
+    expansion::ast::{self as E, Address, ModuleIdent, ModuleIdent_},
+    naming::{
+        ast as N,
         alias_map_builder::{AliasEntry, AliasMapBuilder, NameSpace},
         aliases::{AliasMap, AliasSet},
-        ast::{self as E, Address, ModuleIdent, ModuleIdent_},
         legacy_aliases,
-        translate::{
-            is_valid_datatype_or_constant_name, make_address, module_ident, top_level_address,
-            top_level_address_opt, value, DefnContext,
-        },
+        translate::DefnContext,
+        address::{make_address, module_ident, top_level_address, top_level_address_opt},
     },
     ice, ice_assert,
     parser::{
-        ast::{self as P, ModuleName, NameAccess, NamePath, PathEntry, Type},
+        ast::{self as P, ModuleName, NameAccess, NamePath, PathEntry, Type, DatatypeName, Field, VariantName},
         syntax::make_loc,
     },
-    shared::*,
+    shared::{*, unique_map::UniqueMap, string_utils::{a_article_prefix, is_valid_datatype_or_constant_name}}, FullyCompiledProgram,
 };
 
 use move_ir_types::location::{sp, Loc, Spanned};
 
+use std::{collections::{BTreeSet, BTreeMap}, sync::Arc};
+
 //**************************************************************************************************
-// Definitions
+// Resolution Results
+//**************************************************************************************************
+
+#[derive(Clone)]
+pub enum ResolvedFunction {
+    Builtin(BuiltinFunction),
+    Var(N::Var),
+    Unbound,
+}
+
+#[derive(Clone)]
+pub struct ResolvedMemberFunction { module: ModuleIdent, name: Name, tyarg_arity: usize, arity: usize }
+
+#[derive(Clone)]
+pub struct ResolvedStruct {
+    module: ModuleIdent,
+    name: Name,
+    decl_loc: Loc,
+    tyarg_arity: usize,
+    field_info: FieldInfo
+}
+
+#[derive(Clone)]
+pub struct ResolvedEnum {
+    module: ModuleIdent,
+    name: Name,
+    decl_loc: Loc,
+    tyarg_arity: usize,
+    variants: UniqueMap<VariantName, ResolvedVariant>,
+}
+
+#[derive(Clone)]
+pub struct ResolvedVariant {
+    module: ModuleIdent,
+    enum_name: DatatypeName,
+    tyarg_arity: usize,
+    name: Name,
+    decl_loc: Loc,
+    field_info: FieldInfo,
+}
+
+#[derive(Clone)]
+pub enum FieldInfo {
+    Positional(usize),
+    Named(BTreeSet<Field>),
+    Empty,
+}
+
+#[derive(Clone)]
+pub struct ResolvedConstant {
+    module: ModuleIdent,
+    name: Name,
+    decl_loc: Loc,
+}
+
+#[derive(Clone)]
+pub enum ResolvedMember {
+    Function(ResolvedMemberFunction),
+    Struct(ResolvedStruct),
+    Enum(ResolvedEnum),
+    Constant(ResolvedConstant),
+}
+
+#[derive(Clone)]
+pub enum ResolvedDefinition {
+    Member(ResolvedMember),
+    Function(ResolvedFunction),
+    Variant(ResolvedVariant),
+}
+
+#[derive(Clone)]
+pub enum ResolvedName {
+    Address(E::Address),
+    Module(E::ModuleIdent),
+    Definition(ResolvedDefinition),
+}
+
+//************************************************
+// impls
+//************************************************
+
+impl ResolvedMember {
+    pub fn mident(&self) -> ModuleIdent {
+        match self {
+            ResolvedMember::Function(f) => f.module,
+            ResolvedMember::Struct(s) => s.module,
+            ResolvedMember::Enum(e) => e.module,
+            ResolvedMember::Constant(c) => c.module,
+        }
+    }
+
+    pub fn name(&self) -> Name {
+        match self {
+            ResolvedMember::Function(f) => f.name,
+            ResolvedMember::Struct(s) => s.name,
+            ResolvedMember::Enum(e) => e.name,
+            ResolvedMember::Constant(c) => c.name,
+        }
+    }
+
+}
+
+//**************************************************************************************************
+// Module Index
+//**************************************************************************************************
+
+pub type ModuleMembers = BTreeMap<ModuleIdent, BTreeMap<Name, ResolvedMember>>;
+
+pub fn build_member_map(
+    pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
+    prog: &E::Program,
+) -> (BTreeSet<ModuleIdent>, ModuleMembers) {
+    use ResolvedDefinition as D;
+    let all_modules = prog.modules
+                  .key_cloned_iter()
+                  .chain(pre_compiled_lib.iter().flat_map(|pre_compiled| {
+                      pre_compiled
+                          .expansion
+                          .modules
+                          .key_cloned_iter()
+                          .filter(|(mident, _m)| !prog.modules.contains_key(mident))
+                  }));
+    let mut module_names = BTreeSet::new();
+    let mut all_members = BTreeMap::new();
+    for (module, mdef) in all_modules {
+        module_names.insert(module);
+        let mut members = BTreeMap::new();
+        for (nloc, name, fun) in mdef.functions.iter() {
+            let tyarg_arity = fun.signature.type_parameters.len();
+            let arity = fun.signature.parameters.len();
+            let fun_def = ResolvedMemberFunction { module, name, tyarg_arity, arity };
+            assert!(members.insert(name, D::Function(fun_def)).is_none());
+        }
+        for (decl_loc, name, _) in mdef.constants.iter() {
+            let const_def = ResolvedConstant { module, name, decl_loc };
+            assert!(members.insert(name, D::Constant(const_def)).is_none());
+        }
+        for (decl_loc, name, sdef) in mdef.structs.iter() {
+            let tyarg_arity = sdef.type_parameters.len();
+            let field_info = match &sdef.fields {
+                E::StructFields::Positional(fields) => {
+                    FieldInfo::Positional(fields.len())
+                }
+                E::StructFields::Named(f) => {
+                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
+                }
+                E::StructFields::Native(_) => FieldInfo::Empty,
+            };
+            let struct_def = ResolvedStruct { module, name, decl_loc, tyarg_arity, field_info };
+            assert!(members.insert(name, D::Struct(struct_def)).is_none());
+        }
+        for (decl_loc, enum_name, edef) in mdef.enums.iter() {
+            let tyarg_arity = edef.type_parameters.len();
+            let variants = edef.variants.clone().map(|name, v| {
+                                  let field_info = match &v.fields {
+                                      E::VariantFields::Named(fields) => FieldInfo::Named(
+                                          fields.key_cloned_iter().map(|(k, _)| k).collect(),
+                                      ),
+                                      E::VariantFields::Positional(tys) => {
+                                          FieldInfo::Positional(tys.len())
+                                      }
+                                      E::VariantFields::Empty => FieldInfo::Empty,
+                                  };
+                                  ResolvedVariant {
+                                      module,
+                                      enum_name,
+                                      tyarg_arity,
+                                      name: name.value(),
+                                      decl_loc: v.loc,
+                                      field_info,
+                                  }
+                              });
+            let decl_loc = edef.loc;
+            let enum_def = ResolvedEnum { module, name: enum_name, decl_loc, tyarg_arity, variants};
+            assert!(members.insert(enum_name, D::Enum(enum_def)).is_none());
+        }
+        all_members.insert(module, members);
+    }
+    (module_names, all_members);
+}
+
+//**************************************************************************************************
+// Resolver Definitions
 //**************************************************************************************************
 
 pub struct ModuleAccessResult {
-    pub access: E::ModuleAccess,
+    pub loc: Loc,
+    pub defn: ResolvedDefinition,
     pub ptys_opt: Option<Spanned<Vec<P::Type>>>,
     pub is_macro: Option<Loc>,
 }
@@ -50,7 +235,7 @@ pub enum Access {
 // This trait describes the commands available to handle alias scopes and expanding name access
 // chains. This is used to model both legacy and modern path expansion.
 
-pub trait PathExpander {
+pub trait NameResolver {
     // Push a new innermost alias scope
     fn push_alias_scope(
         &mut self,
@@ -86,15 +271,12 @@ pub trait PathExpander {
 }
 
 pub fn make_access_result(
-    access: E::ModuleAccess,
+    loc: Loc,
+    defn: ResolvedDefinition,
     ptys_opt: Option<Spanned<Vec<P::Type>>>,
     is_macro: Option<Loc>,
 ) -> ModuleAccessResult {
-    ModuleAccessResult {
-        access,
-        ptys_opt,
-        is_macro,
-    }
+    ModuleAccessResult { loc, defn, ptys_opt, is_macro }
 }
 
 macro_rules! path_entry {
@@ -114,9 +296,10 @@ macro_rules! single_entry {
 }
 
 macro_rules! access_result {
-    ($access:pat, $ptys_opt:pat, $is_macro:pat) => {
+    ($defn:pat, $ptys_opt:pat, $is_macro:pat) => {
         ModuleAccessResult {
-            access: $access,
+            loc: _,
+            defn: $defn,
             ptys_opt: $ptys_opt,
             is_macro: $is_macro,
         }
@@ -125,22 +308,19 @@ macro_rules! access_result {
 
 pub(crate) use access_result;
 
-use super::alias_map_builder::UnnecessaryAlias;
+use super::{alias_map_builder::UnnecessaryAlias, ast::BuiltinFunction, translate::DefnContext};
 
 //**************************************************************************************************
 // Move 2024 Path Expander
 //**************************************************************************************************
 
-pub struct Move2024PathExpander {
+pub struct Move2024NameResolver {
     aliases: AliasMap,
 }
 
 #[derive(Debug, PartialEq, Eq)]
 enum AccessChainNameResult {
-    ModuleAccess(Loc, ModuleIdent, Name),
-    Variant(Loc, Spanned<(ModuleIdent, Name)>, Name),
-    Address(Loc, E::Address),
-    ModuleIdent(Loc, E::ModuleIdent),
+    ResolvedName(Loc, ResolvedName),
     UnresolvedName(Loc, Name),
     ResolutionFailure(Box<AccessChainNameResult>, AccessChainFailure),
 }
@@ -167,9 +347,9 @@ macro_rules! chain_result {
     };
 }
 
-impl Move2024PathExpander {
-    pub(super) fn new() -> Move2024PathExpander {
-        Move2024PathExpander {
+impl Move2024NameResolver {
+    pub(super) fn new() -> Move2024NameResolver {
+        Move2024NameResolver {
             aliases: AliasMap::new(),
         }
     }
@@ -215,14 +395,15 @@ impl Move2024PathExpander {
     ) -> AccessChainNameResult {
         use AccessChainFailure as NF;
         use AccessChainNameResult as NR;
+        use ResolvedName as RN;
 
         match self.aliases.resolve(namespace, &name) {
-            Some(AliasEntry::Member(_, mident, sp!(_, mem))) => {
+            Some(AliasEntry::Member(_, entry)) => {
                 // We are preserving the name's original location, rather than referring to where
                 // the alias was defined. The name represents JUST the member name, though, so we do
                 // not change location of the module as we don't have this information.
                 // TODO maybe we should also keep the alias reference (or its location)?
-                NR::ModuleAccess(name.loc, mident, sp(name.loc, mem))
+                NR::ResolvedName(name.loc, entry)
             }
             Some(AliasEntry::Module(_, mident)) => {
                 // We are preserving the name's original location, rather than referring to where
@@ -259,11 +440,12 @@ impl Move2024PathExpander {
                     };
                     let result = match entry {
                         AliasEntry::Address(_, address) => {
-                            NR::Address(name.loc, make_address(context, name, name.loc, address))
+                            let addr = make_address(context, name, name.loc, address);
+                            NR::ResolvedName(name.loc, RN::Address(addr))
                         }
                         AliasEntry::Module(_, mident) => NR::ModuleIdent(name.loc, mident),
-                        AliasEntry::Member(_, mident, mem) => {
-                            NR::ModuleAccess(name.loc, mident, mem)
+                        AliasEntry::Member(_, entry) => {
+                            NR::ResolvedName(name.loc, entry)
                         }
                         AliasEntry::TypeParam(_) => {
                             context.env.add_diag(ice!((
@@ -478,7 +660,7 @@ impl Move2024PathExpander {
     }
 }
 
-impl PathExpander for Move2024PathExpander {
+impl NameResolver for Move2024NameResolver {
     fn push_alias_scope(
         &mut self,
         loc: Loc,
@@ -501,12 +683,13 @@ impl PathExpander for Move2024PathExpander {
         sp!(loc, avalue_): P::AttributeValue,
     ) -> Option<E::AttributeValue> {
         use AccessChainNameResult as NR;
+        use ResolvedName as RN;
         use E::AttributeValue_ as EV;
         use P::AttributeValue_ as PV;
         Some(sp(
             loc,
             match avalue_ {
-                PV::Value(v) => EV::Value(value(context, v)?),
+                PV::Value(v) => EV::Value(context, v),
                 // A bit strange, but we try to resolve it as a term and a module, and report
                 // an error if they both resolve (to different things)
                 PV::ModuleAccess(access_chain) => {
@@ -547,7 +730,8 @@ impl PathExpander for Move2024PathExpander {
                         }
                     };
                     match result {
-                        NR::ModuleIdent(_, mident) => {
+                        NR::ResolvedName(_, RN::Address(a)) => EV::Address(a),
+                        NR::ResolvedName(_, RN::Module(mident)) => {
                             if context.module_members.get(&mident).is_none() {
                                 context.env.add_diag(diag!(
                                     NameResolution::UnboundModule,
@@ -556,18 +740,19 @@ impl PathExpander for Move2024PathExpander {
                             }
                             EV::Module(mident)
                         }
-                        NR::ModuleAccess(loc, mident, member) => {
-                            let access = sp(loc, E::ModuleAccess_::ModuleAccess(mident, member));
-                            EV::ModuleAccess(access)
-                        }
-                        NR::Variant(loc, member_path, variant) => {
-                            let access = sp(loc, E::ModuleAccess_::Variant(member_path, variant));
-                            EV::ModuleAccess(access)
+                        NR::ResolvedName(_, RN::Definition(defn)) => {
+                            match defn {
+                                ResolvedDefinition::Member(member) => {
+                                    let access = sp(loc, E::ModuleAccess_::ModuleAccess(member.mident(), member.name()));
+                                    EV::ModuleAccess(access)
+                                }
+                                ResolvedDefinition::Function(_) => todo!(),
+                                ResolvedDefinition::Variant(v) => todo!(),
+                            }
                         }
                         NR::UnresolvedName(loc, name) => {
                             EV::ModuleAccess(sp(loc, E::ModuleAccess_::Name(name)))
                         }
-                        NR::Address(_, a) => EV::Address(a),
                         result @ NR::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
@@ -592,59 +777,41 @@ impl PathExpander for Move2024PathExpander {
 
         let (module_access, tyargs, is_macro) = match access {
             Access::ApplyPositional | Access::ApplyNamed | Access::Type => {
-                let chain_result!(resolved_name, tyargs, is_macro) =
+                let chain_result!(defn, tyargs, is_macro) =
                     self.resolve_name_access_chain(context, access, chain.clone());
-                match resolved_name {
+                match defn {
                     NR::UnresolvedName(_, name) => {
                         loc = name.loc;
                         (EN::Name(name), tyargs, is_macro)
                     }
-                    NR::ModuleAccess(_loc, mident, member) => {
-                        let access = E::ModuleAccess_::ModuleAccess(mident, member);
-                        (access, tyargs, is_macro)
-                    }
-                    NR::Variant(_loc, sp!(_mloc, (_mident, _member)), _)
-                        if access == Access::Type =>
-                    {
-                        let mut diag = unexpected_access_error(
-                            resolved_name.loc(),
-                            resolved_name.name(),
-                            access,
-                        );
-                        diag.add_note("Variants may not be used as types. Use the enum instead.");
-                        context.env.add_diag(diag);
-                        // We could try to use the member access to try to keep going.
-                        return None;
-                    }
-                    NR::Variant(_loc, member_path, variant) => {
-                        let access = E::ModuleAccess_::Variant(member_path, variant);
-                        (access, tyargs, is_macro)
-                    }
-                    NR::Address(_, _) => {
-                        context.env.add_diag(unexpected_access_error(
-                            resolved_name.loc(),
-                            resolved_name.name(),
-                            access,
-                        ));
-                        return None;
-                    }
-                    NR::ModuleIdent(_, sp!(_, ModuleIdent_ { address, module })) => {
-                        let mut diag = unexpected_access_error(
-                            resolved_name.loc(),
-                            resolved_name.name(),
-                            access,
-                        );
-                        let base_str = format!("{}", chain);
-                        let realized_str = format!("{}::{}", address, module);
-                        if base_str != realized_str {
-                            diag.add_note(format!(
-                                "Resolved '{}' to module identifier '{}'",
-                                base_str, realized_str
-                            ));
+                    NR::ResolvedName(_, name) => match name {
+                        ResolvedName::Address(_) => {
+                            let diag = unexpected_access_error(defn.loc(), defn.name(), access);
+                            context.env.add_diag(diag);
+                            return None;
+                        },
+                        ResolvedName::Module(mident) => {
+                            let mut diag = unexpected_access_error(defn.loc(), defn.name(), access);
+                            let base_str = format!("{}", chain);
+                            let realized_str = format!("{}", mident);
+                            if base_str != realized_str {
+                                diag.add_note(format!(
+                                    "Resolved '{}' to module identifier '{}'",
+                                    base_str, realized_str
+                                ));
+                            }
+                            context.env.add_diag(diag);
+                            return None;
+                        },
+                        ResolvedName::Definition(ResolvedDefinition::Variant(v)) if access == Access::Type => {
+                            let mut diag = unexpected_access_error(loc, v.name, access);
+                            diag.add_note("Variants may not be used as types. Use the enum instead.");
+                            context.env.add_diag(diag);
+                            // We could try to use the member access to try to keep going.
+                            return None;
                         }
-                        context.env.add_diag(diag);
-                        return None;
-                    }
+                        ResolvedName::Definition(defn) => (defn, tyargs, is_macro),
+                    },
                     result @ NR::ResolutionFailure(_, _) => {
                         context.env.add_diag(access_chain_resolution_error(result));
                         return None;
@@ -658,26 +825,16 @@ impl PathExpander for Move2024PathExpander {
                     (EN::Name(name), tyargs, is_macro)
                 }
                 _ => {
-                    let chain_result!(resolved_name, tyargs, is_macro) =
+                    let chain_result!(defn, tyargs, is_macro) =
                         self.resolve_name_access_chain(context, access, chain);
-                    match resolved_name {
+                    match defn {
                         NR::UnresolvedName(_, name) => (EN::Name(name), tyargs, is_macro),
-                        NR::ModuleAccess(_loc, mident, member) => {
-                            let access = E::ModuleAccess_::ModuleAccess(mident, member);
-                            (access, tyargs, is_macro)
-                        }
-                        NR::Variant(_loc, member_path, variant) => {
-                            let access = E::ModuleAccess_::Variant(member_path, variant);
-                            (access, tyargs, is_macro)
-                        }
-                        NR::Address(_, _) | NR::ModuleIdent(_, _) => {
-                            context.env.add_diag(unexpected_access_error(
-                                resolved_name.loc(),
-                                resolved_name.name(),
-                                access,
-                            ));
+                        ResolvedName::Address(_) | NR::ModuleIdent(_, _) => {
+                            let diag = unexpected_access_error(defn.loc(), defn.name(), access);
+                            context.env.add_diag(diag);
                             return None;
-                        }
+                        },
+                        ResolvedName::Definition(defn) => (defn, tyargs, is_macro),
                         result @ NR::ResolutionFailure(_, _) => {
                             context.env.add_diag(access_chain_resolution_error(result));
                             return None;
@@ -693,7 +850,7 @@ impl PathExpander for Move2024PathExpander {
                 return None;
             }
         };
-        Some(make_access_result(sp(loc, module_access), tyargs, is_macro))
+        Some(make_access_result(loc, module_access, tyargs, is_macro))
     }
 
     fn name_access_chain_to_module_ident(
@@ -738,36 +895,39 @@ impl PathExpander for Move2024PathExpander {
 
 impl AccessChainNameResult {
     fn loc(&self) -> Loc {
+        use AccessChainNameResult as AR;
         match self {
-            AccessChainNameResult::ModuleAccess(loc, _, _) => *loc,
-            AccessChainNameResult::Variant(loc, _, _) => *loc,
-            AccessChainNameResult::Address(loc, _) => *loc,
-            AccessChainNameResult::ModuleIdent(loc, _) => *loc,
-            AccessChainNameResult::UnresolvedName(loc, _) => *loc,
-            AccessChainNameResult::ResolutionFailure(inner, _) => inner.loc(),
+            AR::ResolvedName(loc, _) => *loc,
+            AR::UnresolvedName(loc, _) => *loc,
+            AR::ResolutionFailure(inner, _) => inner.loc(),
         }
     }
 
     fn name(&self) -> String {
+        use AccessChainNameResult as AR;
+        use ResolvedName as RN;
         match self {
-            AccessChainNameResult::ModuleAccess(_, _, _) => "module member".to_string(),
-            AccessChainNameResult::Variant(_, _, _) => "enum variant".to_string(),
-            AccessChainNameResult::ModuleIdent(_, _) => "module".to_string(),
-            AccessChainNameResult::UnresolvedName(_, _) => "name".to_string(),
-            AccessChainNameResult::Address(_, _) => "address".to_string(),
-            AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
+            AR::ResolvedName(_, RN::Address(_)) => "address".to_string(),
+            AR::ResolvedName(_, RN::Module(_)) => "module".to_string(),
+            AR::ResolvedName(_, RN::Definition(defn)) => match defn {
+                ResolvedDefinition::Member(m) => {
+                    match m {
+                        ResolvedMember::Function(_) => "function".to_string(),
+                        ResolvedMember::Struct(_) => "struct".to_string(),
+                        ResolvedMember::Enum(_) => "enum".to_string(),
+                        ResolvedMember::Constant(_) => "constant".to_string(),
+                    }
+                },
+                ResolvedDefinition::Function(_) => "function".to_string(),
+                ResolvedDefinition::Variant(_) => "variant".to_string(),
+            },
+            AR::UnresolvedName(_, _) => "name".to_string(),
+            AR::ResolutionFailure(inner, _) => inner.err_name(),
         }
     }
 
     fn err_name(&self) -> String {
-        match self {
-            AccessChainNameResult::ModuleAccess(_, _, _) => "a module member".to_string(),
-            AccessChainNameResult::Variant(_, _, _) => "an enum variant".to_string(),
-            AccessChainNameResult::ModuleIdent(_, _) => "a module".to_string(),
-            AccessChainNameResult::UnresolvedName(_, _) => "a name".to_string(),
-            AccessChainNameResult::Address(_, _) => "an address".to_string(),
-            AccessChainNameResult::ResolutionFailure(inner, _) => inner.err_name(),
-        }
+        a_article_prefix(self.name())
     }
 }
 
@@ -840,7 +1000,7 @@ impl LegacyPathExpander {
     }
 }
 
-impl PathExpander for LegacyPathExpander {
+impl NameResolver for LegacyPathExpander {
     fn push_alias_scope(
         &mut self,
         loc: Loc,
@@ -874,7 +1034,7 @@ impl PathExpander for LegacyPathExpander {
         Some(sp(
             loc,
             match avalue_ {
-                PV::Value(v) => EV::Value(value(context, v)?),
+                PV::Value(v) => EV::Value(context, v),
                 // bit wonky, but this is the only spot currently where modules and expressions
                 // exist in the same namespace.
                 // TODO: consider if we want to just force all of these checks into the well-known
@@ -973,23 +1133,23 @@ impl PathExpander for LegacyPathExpander {
                 if access == Access::Type {
                     ice_assert!(context.env, is_macro.is_none(), loc, "Found macro");
                 }
-                let access = match self.aliases.member_alias_get(&name) {
-                    Some((mident, mem)) => EN::ModuleAccess(mident, mem),
+                let defn = match self.aliases.member_alias_get(&name) {
+                    Some(defn) => defn,
                     None => EN::Name(name),
                 };
-                make_access_result(sp(name.loc, access), tyargs, is_macro)
+                make_access_result(name.loc, defn, tyargs, is_macro)
             }
             (Access::Term, single_entry!(name, tyargs, is_macro))
                 if is_valid_datatype_or_constant_name(name.value.as_str()) =>
             {
-                let access = match self.aliases.member_alias_get(&name) {
-                    Some((mident, mem)) => EN::ModuleAccess(mident, mem),
+                let defn = match self.aliases.member_alias_get(&name) {
+                    Some(defn) => defn,
                     None => EN::Name(name),
                 };
-                make_access_result(sp(name.loc, access), tyargs, is_macro)
+                make_access_result(name.loc, defn, tyargs, is_macro)
             }
             (Access::Term, single_entry!(name, tyargs, is_macro)) => {
-                make_access_result(sp(name.loc, EN::Name(name)), tyargs, is_macro)
+                make_access_result(name.loc, EN::Name(name), tyargs, is_macro)
             }
             (Access::Module, single_entry!(_name, _tyargs, _is_macro)) => {
                 context.env.add_diag(ice!((
@@ -1046,11 +1206,16 @@ impl PathExpander for LegacyPathExpander {
                             } else {
                                 (path.take_tyargs(), path.is_macro())
                             };
-                            make_access_result(
-                                sp(loc, EN::ModuleAccess(mident, n2_name)),
-                                tyargs,
-                                is_macro.copied(),
-                            )
+                            if let Some(defn) = context.module_members.get(&mident).and_then(|members| members.get(&n2_name).clone()).map(ResolvedDefinition::Member) {
+                                make_access_result(
+                                    loc,
+                                    defn,
+                                    tyargs,
+                                    is_macro.copied(),
+                                )
+                            } else {
+                                return None;
+                            }
                         }
                     },
                     (ln, [n2, n3]) => {
@@ -1062,7 +1227,6 @@ impl PathExpander for LegacyPathExpander {
                         let addr =
                             top_level_address(context, /* suggest_declaration */ false, *ln);
                         let mident = sp(ident_loc, ModuleIdent_::new(addr, ModuleName(n2.name)));
-                        let access = EN::ModuleAccess(mident, n3.name);
                         let (tyargs, is_macro) = if !(path.has_tyargs_last()) {
                             let mut diag = diag!(
                                 Syntax::InvalidName,
@@ -1074,7 +1238,16 @@ impl PathExpander for LegacyPathExpander {
                         } else {
                             (path.take_tyargs(), path.is_macro())
                         };
-                        make_access_result(sp(loc, access), tyargs, is_macro.copied())
+                        if let Some(defn) = context.module_members.get(&mident).and_then(|members| members.get(&n3.name).clone()).map(ResolvedDefinition::Member) {
+                            make_access_result(
+                                loc,
+                                defn,
+                                tyargs,
+                                is_macro.copied(),
+                            )
+                        } else {
+                            return None;
+                        }
                     }
                     (_ln, []) => {
                         let diag = ice!((loc, "Found a root path with no additional entries"));

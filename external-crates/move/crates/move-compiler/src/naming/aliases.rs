@@ -6,7 +6,7 @@ use move_ir_types::location::Loc;
 
 use crate::{
     diagnostics::Diagnostic,
-    expansion::alias_map_builder::*,
+    naming::alias_map_builder::*,
     ice,
     shared::{unique_map::UniqueMap, unique_set::UniqueSet, *},
 };
@@ -111,7 +111,7 @@ impl AliasMap {
         match &entry {
             LeadingAccessEntry::Module(_)
             | LeadingAccessEntry::Address(_)
-            | LeadingAccessEntry::Member(_, _) => Some((name, entry)),
+            | LeadingAccessEntry::Member(_) => Some((name, entry)),
             // For code legacy reasons, don't resolve type parameters, they are just here for
             // shadowing
             LeadingAccessEntry::TypeParam => None,
@@ -121,7 +121,7 @@ impl AliasMap {
     pub fn resolve_call(&mut self, name: &Name) -> Option<(Name, MemberEntry)> {
         let (name, entry) = MemberEntry::find(self, name)?;
         match &entry {
-            MemberEntry::Member(_, _) => Some((name, entry)),
+            MemberEntry::Member(_) => Some((name, entry)),
             // For code legacy reasons, don't resolve type parameters, they are just here for
             // shadowing
             MemberEntry::TypeParam => None,
@@ -244,7 +244,7 @@ impl AliasMap {
         for alias_entry in popped.unused {
             match alias_entry {
                 AliasEntry::Module(name, _) => result.modules.add(name).unwrap(),
-                AliasEntry::Member(name, _, _) => result.members.add(name).unwrap(),
+                AliasEntry::Member(name, _) => result.members.add(name).unwrap(),
                 AliasEntry::Address(_, _) | AliasEntry::TypeParam(_) => (),
             }
         }

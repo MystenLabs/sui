@@ -18,6 +18,10 @@ pub fn is_upper_snake_case(s: &str) -> bool {
         .all(|c| c.is_uppercase() || c.is_numeric() || c == '_')
 }
 
+pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
+    s.starts_with(|c: char| c.is_ascii_uppercase())
+}
+
 //**************************************************************************************************
 // String Construction Helpers
 //**************************************************************************************************
@@ -52,6 +56,13 @@ macro_rules! format_oxford_list {
 }
 
 pub(crate) use format_oxford_list;
+
+pub fn a_article_prefix(s: String) -> String {
+    match s[0] {
+        'a' | 'e' | 'i' | 'o' => format!("an {}", s),
+        _ => format!("a {}", s),
+    }
+}
 
 //**************************************************************************************************
 // Debug Printing

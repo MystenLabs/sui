@@ -4,17 +4,18 @@
 
 use crate::{
     debug_display, diag,
-    diagnostics::{self, codes::*},
+    diagnostics::{self, codes::*, WarningFilters},
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Mutability, Visibility},
-        translate::is_valid_datatype_or_constant_name as is_constant_name,
+        ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Mutability, Visibility, Address},
+        translate::{is_valid_datatype_or_constant_name as is_constant_name, NameCase},
     },
     ice,
     naming::{
         ast::{self as N, BlockLabel, NominalBlockUsage, TParamID},
         fake_natives,
         syntax_methods::resolve_syntax_attributes,
+        path_expander::NameResolver,
     },
     parser::ast::{
         self as P, ConstantName, DatatypeName, Field, FunctionName, VariantName, MACRO_MODIFIER,
@@ -30,99 +31,16 @@ use std::{
     sync::Arc,
 };
 
+use super::name_resolver::ModuleMembers;
+
 //**************************************************************************************************
 // Resolver Types
 //**************************************************************************************************
-
-#[derive(Debug, Clone)]
-pub(super) enum ResolvedType {
-    ModuleType(Box<ResolvedModuleType>),
-    TParam(Loc, N::TParam),
-    BuiltinType(N::BuiltinTypeName_),
-    Hole, // '_' type
-    Unbound,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct ResolvedModuleType {
-    // original names/locs are provided to preserve loc information if needed
-    pub original_loc: Loc,
-    pub original_type_name: Name,
-    pub module_type: ModuleType,
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum ModuleType {
-    Struct(Box<StructType>),
-    Enum(Box<EnumType>),
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct StructType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    field_info: FieldInfo,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct EnumType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    variants: UniqueMap<VariantName, VariantConstructor>,
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub(super) struct VariantConstructor {
-    original_variant_name: Name,
-    decl_loc: Loc,
-    field_info: FieldInfo,
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum FieldInfo {
-    Positional(usize),
-    Named(BTreeSet<Field>),
-    Empty,
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum ResolvedConstructor {
-    Struct(DatatypeName, Box<StructType>),
-    Variant(
-        Box<EnumType>,
-        VariantName,
-        /* variant decl loc */ Loc,
-        Box<FieldInfo>,
-    ),
-}
-
-enum ResolvedFunction {
-    Builtin(N::BuiltinFunction),
-    Module(Box<ResolvedModuleFunction>),
-    Var(N::Var),
-    Unbound,
-}
-
-struct ResolvedModuleFunction {
-    // original names/locs are provided to preserve loc information if needed
-    module: ModuleIdent,
-    function: FunctionName,
-    ty_args: Option<Vec<N::Type>>,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ResolveFunctionCase {
     UseFun,
     Call,
-}
-
-enum ResolvedModuleAccess {
-    Function(FunctionName),
-    Constant(ConstantName),
-    Datatype(ModuleType),
 }
 
 enum ModuleAccessKind {
@@ -155,147 +73,33 @@ enum TypeAnnotation {
     Expression,
 }
 
-impl ResolvedType {
-    fn is_struct(&self) -> bool {
-        match self {
-            ResolvedType::ModuleType(rt) => match rt.module_type {
-                ModuleType::Struct(..) => true,
-                ModuleType::Enum(..) => false,
-            },
-            _ => false,
-        }
-    }
-
-    #[allow(dead_code)]
-    fn is_enum(&self) -> bool {
-        match self {
-            ResolvedType::ModuleType(rt) => match rt.module_type {
-                ModuleType::Struct(..) => false,
-                ModuleType::Enum(..) => true,
-            },
-            _ => false,
-        }
-    }
-}
-
-//************************************************
-// impls
-//************************************************
-
-impl ModuleType {
-    fn decl_loc(&self) -> Loc {
-        match self {
-            ModuleType::Struct(stype) => stype.decl_loc,
-            ModuleType::Enum(etype) => etype.decl_loc,
-        }
-    }
-
-    fn original_mident(&self) -> ModuleIdent {
-        match self {
-            ModuleType::Struct(stype) => stype.original_mident,
-            ModuleType::Enum(etype) => etype.original_mident,
-        }
-    }
-
-    fn with_original_mident(self, mident: ModuleIdent) -> ModuleType {
-        match self {
-            ModuleType::Struct(stype) => {
-                let st = StructType {
-                    original_mident: mident,
-                    ..*stype
-                };
-                ModuleType::Struct(Box::new(st))
-            }
-            ModuleType::Enum(etype) => {
-                let et = EnumType {
-                    original_mident: mident,
-                    ..*etype
-                };
-                ModuleType::Enum(Box::new(et))
-            }
-        }
-    }
-
-    fn datatype_kind_str(&self) -> String {
-        match self {
-            ModuleType::Struct(_) => "struct".to_string(),
-            ModuleType::Enum(_) => "enum".to_string(),
-        }
-    }
-}
-
-impl FieldInfo {
-    pub fn is_empty(&self) -> bool {
-        matches!(self, FieldInfo::Empty)
-    }
-
-    pub fn is_positional(&self) -> bool {
-        matches!(self, FieldInfo::Positional(_))
-    }
-
-    pub fn field_count(&self) -> usize {
-        match self {
-            FieldInfo::Positional(n) => *n,
-            FieldInfo::Named(fields) => fields.len(),
-            FieldInfo::Empty => 0,
-        }
-    }
-}
-
-impl ResolvedConstructor {
-    fn type_arity(&self) -> usize {
-        match self {
-            ResolvedConstructor::Struct(_, stype) => stype.arity,
-            ResolvedConstructor::Variant(etype, _, _, _) => etype.arity,
-        }
-    }
-
-    fn field_info(&self) -> &FieldInfo {
-        match self {
-            ResolvedConstructor::Struct(_, stype) => &stype.field_info,
-            ResolvedConstructor::Variant(_, _, _, field_info) => field_info,
-        }
-    }
-
-    fn name(&self) -> String {
-        match self {
-            ResolvedConstructor::Struct(name, _) => name.to_string(),
-            ResolvedConstructor::Variant(_, vname, _, _) => vname.to_string(),
-        }
-    }
-}
-
-impl std::fmt::Display for ResolvedModuleAccess {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ResolvedModuleAccess::Function(_) => write!(f, "function"),
-            ResolvedModuleAccess::Constant(_) => write!(f, "constant"),
-            ResolvedModuleAccess::Datatype(ty) => write!(f, "{}", ty.datatype_kind_str()),
-        }
-    }
-}
-
-impl std::fmt::Display for ModuleAccessKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ModuleAccessKind::Function => write!(f, "function"),
-            ModuleAccessKind::Constant => write!(f, "constant"),
-            ModuleAccessKind::Datatype => write!(f, "type"),
-        }
-    }
-}
-
 //**************************************************************************************************
 // Context
 //**************************************************************************************************
 
-pub(super) struct Context<'env> {
-    pub env: &'env mut CompilationEnv,
-    current_module: Option<ModuleIdent>,
-    scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
-    unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
-    scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
-    scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
+// NB: We carry a few things separately because we need to split them out during path resolution to
+// allow for dynamic behavior during that resolution. This dynamic behavior allows us to reuse the
+// majority of the pass while swapping out how we handle paths and aliases for Move 2024 versus
+// legacy.
+
+pub(super) struct DefnContext<'env, 'map> {
+    pub(super) named_address_mapping: Option<&'map NamedAddressMap>,
+    pub(super) module_members: ModuleMembers,
+    pub(super) env: &'env mut CompilationEnv,
+    pub(super) address_conflicts: BTreeSet<Symbol>,
+    pub(super) current_package: Option<Symbol>,
+    pub(super) current_module: Option<ModuleIdent>,
+}
+
+pub(super) struct Context<'env, 'map> {
+    defn_context: DefnContext<'env, 'map>,
+    address: Option<Address>,
+    is_source_definition: bool,
+    pub path_resolver: Option<Box<dyn NameResolver>>,
+    // scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
+    // unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
+    // scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
+    // scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     modules: BTreeSet<ModuleIdent>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
@@ -346,7 +150,7 @@ macro_rules! resolve_from_module_access {
     }};
 }
 
-impl<'env> Context<'env> {
+impl<'env, 'map> Context<'env, 'map> {
     fn new(
         compilation_env: &'env mut CompilationEnv,
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
