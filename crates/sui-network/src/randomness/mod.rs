@@ -325,8 +325,16 @@ impl RandomnessEventLoop {
         debug!("completing randomness round");
         self.pending_tasks.remove(&(epoch, round));
         self.round_request_time.remove(&(epoch, round));
-        self.completed_sigs.insert((epoch, round)); // in case we got it from a checkpoint
         self.completed_rounds.insert((epoch, round));
+
+        // In case we first received the full sig from a checkpoint instead of aggregating it
+        // locally, update related data structures here.
+        self.completed_sigs.insert((epoch, round));
+        self.remove_partial_sigs_in_range((
+            Bound::Included((epoch, round, PeerId([0; 32]))),
+            Bound::Excluded((epoch, round + 1, PeerId([0; 32]))),
+        ));
+
         if let Some(task) = self.send_tasks.remove(&(epoch, round)) {
             task.abort();
             self.maybe_start_pending_tasks();
@@ -561,21 +569,12 @@ impl RandomnessEventLoop {
 
         debug!("successfully generated randomness full signature");
         self.completed_sigs.insert((epoch, round));
+        self.remove_partial_sigs_in_range(sig_bounds);
         self.metrics.record_completed_round(round);
         if let Some(start_time) = self.round_request_time.get(&(epoch, round)) {
             if let Some(metric) = self.metrics.round_generation_latency_metric() {
                 metric.observe(start_time.elapsed().as_secs_f64());
             }
-        }
-
-        let keys_to_remove: Vec<_> = self
-            .received_partial_sigs
-            .range(sig_bounds)
-            .map(|(key, _)| *key)
-            .collect();
-        for key in keys_to_remove {
-            // Have to remove keys one-by-one because BTreeMap does not support range-removal.
-            self.received_partial_sigs.remove(&key);
         }
 
         let bytes = bcs::to_bytes(&sig).expect("signature serialization should not fail");
@@ -677,6 +676,25 @@ impl RandomnessEventLoop {
         // enough for us to aggregate already.
         for (epoch, round) in rounds_to_aggregate {
             self.maybe_aggregate_partial_signatures(epoch, round);
+        }
+    }
+
+    #[allow(clippy::type_complexity)]
+    fn remove_partial_sigs_in_range(
+        &mut self,
+        range: (
+            Bound<(u64, RandomnessRound, PeerId)>,
+            Bound<(u64, RandomnessRound, PeerId)>,
+        ),
+    ) {
+        let keys_to_remove: Vec<_> = self
+            .received_partial_sigs
+            .range(range)
+            .map(|(key, _)| *key)
+            .collect();
+        for key in keys_to_remove {
+            // Have to remove keys one-by-one because BTreeMap does not support range-removal.
+            self.received_partial_sigs.remove(&key);
         }
     }
 

@@ -2834,6 +2834,7 @@ impl AuthorityPerEpochStore {
         for tx in transactions {
             let key = tx.0.transaction.key();
             let mut ignored = false;
+            let mut filter_roots = false;
             let execution_cost = if tx
                 .0
                 .is_user_tx_with_randomness(self.randomness_state_enabled())
@@ -2868,15 +2869,8 @@ impl AuthorityPerEpochStore {
                         .entry(deferral_key)
                         .or_default()
                         .push(tx.clone());
-                    if let Some(txn_key) =
-                        tx.0.transaction
-                            .executable_transaction_digest()
-                            .map(TransactionKey::Digest)
-                    {
-                        // Filter out roots of any deferred tx.
-                        roots.remove(&txn_key);
-                        randomness_roots.remove(&txn_key);
-
+                    filter_roots = true;
+                    if tx.0.transaction.is_executable_transaction() {
                         // Notify consensus adapter that the consensus handler has received the transaction.
                         notifications.push(key.clone());
                     }
@@ -2891,13 +2885,28 @@ impl AuthorityPerEpochStore {
                     notifications.push(key.clone());
                 }
                 ConsensusCertificateResult::ConsensusMessage => notifications.push(key.clone()),
-                ConsensusCertificateResult::IgnoredSystem => (),
+                ConsensusCertificateResult::IgnoredSystem => {
+                    filter_roots = true;
+                }
                 // Note: ignored external transactions must not be recorded as processed. Otherwise
                 // they may not get reverted after restart during epoch change.
-                ConsensusCertificateResult::Ignored => ignored = true,
+                ConsensusCertificateResult::Ignored => {
+                    ignored = true;
+                    filter_roots = true;
+                }
             }
             if !ignored {
                 self.record_consensus_message_processed(batch, key.clone())?;
+            }
+            if filter_roots {
+                if let Some(txn_key) =
+                    tx.0.transaction
+                        .executable_transaction_digest()
+                        .map(TransactionKey::Digest)
+                {
+                    roots.remove(&txn_key);
+                    randomness_roots.remove(&txn_key);
+                }
             }
         }
 

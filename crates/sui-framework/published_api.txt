@@ -3676,7 +3676,7 @@ BridgeMessage
 BridgeMessageKey
 	public struct
 	0xb::message
-TokenPayload
+TokenTransferPayload
 	public struct
 	0xb::message
 EmergencyOp
@@ -3692,6 +3692,9 @@ UpdateAssetPrice
 	public struct
 	0xb::message
 AddTokenOnSui
+	public struct
+	0xb::message
+ParsedTokenTransferMessage
 	public struct
 	0xb::message
 extract_token_bridge_payload
@@ -3751,6 +3754,9 @@ seq_num
 source_chain
 	public fun
 	0xb::message
+payload
+	public fun
+	0xb::message
 token_target_chain
 	public fun
 	0xb::message
@@ -3806,6 +3812,9 @@ emergency_op_unpause
 	public fun
 	0xb::message
 required_voting_power
+	public fun
+	0xb::message
+to_parsed_token_transfer_message
 	public fun
 	0xb::message
 reverse_bytes
@@ -3941,7 +3950,10 @@ execute_system_message
 	public fun
 	0xb::bridge
 get_token_transfer_action_status
-	public fun
+	fun
+	0xb::bridge
+get_token_transfer_action_signatures
+	fun
 	0xb::bridge
 load_inner
 	fun
@@ -3967,7 +3979,7 @@ execute_add_tokens_on_sui
 get_current_seq_num_and_increment
 	fun
 	0xb::bridge
-get_token_transfer_action_signatures
+get_parsed_token_transfer_message
 	fun
 	0xb::bridge
 print
