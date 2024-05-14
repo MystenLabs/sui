@@ -3,7 +3,8 @@
 
 //docs::#regulate
 module examples::regcoin {
-    use sui::coin;
+    use sui::coin::{Self, DenyCap};
+    use sui::deny_list::{DenyList};
 
     public struct REGCOIN has drop {}
 
@@ -17,10 +18,10 @@ module examples::regcoin {
     //docs::/#regulate}
 
     public fun add_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext) {
-        ctx.deny_list_add(denylist, denycap, denyaddy );
+        coin::deny_list_add(denylist, denycap, denyaddy, ctx);
     }
 
     public fun remove_addr_from_deny_list(denylist: &mut DenyList, denycap: &mut DenyCap<REGCOIN>, denyaddy: address, ctx: &mut TxContext){
-        ctx.deny_list_remove(denylist, denycap, denyaddy );
+        coin::deny_list_remove(denylist, denycap, denyaddy, ctx);
     }
 }
