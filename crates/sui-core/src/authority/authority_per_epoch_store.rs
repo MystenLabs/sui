@@ -3274,22 +3274,13 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgMessage from {:?}",
                             authority.concise()
                         );
-                        if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
-                            warn!(
-                                "Ignoring RandomnessDkgMessage from {:?} because it is too large",
-                                authority.concise()
-                            );
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(message) => {
-                                    randomness_manager.add_message(authority, message)?
-                                }
-                                Err(e) => {
-                                    warn!(
+                        match bcs::from_bytes(bytes) {
+                            Ok(message) => randomness_manager.add_message(authority, message)?,
+                            Err(e) => {
+                                warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
-                                }
                             }
                         }
                     } else {
@@ -3316,24 +3307,17 @@ impl AuthorityPerEpochStore {
                             "Received RandomnessDkgConfirmation from {:?}",
                             authority.concise()
                         );
-                        if bytes.len() > dkg::DKG_MESSAGES_MAX_SIZE {
-                            warn!(
-                                "Ignoring RandomnessDkgConfirmation from {:?} because it is too large",
-                                authority.concise()
-                            );
-                        } else {
-                            match bcs::from_bytes(bytes) {
-                                Ok(confirmation) => randomness_manager.add_confirmation(
-                                    batch,
-                                    authority,
-                                    confirmation,
-                                )?,
-                                Err(e) => {
-                                    warn!(
+                        match bcs::from_bytes(bytes) {
+                            Ok(confirmation) => randomness_manager.add_confirmation(
+                                batch,
+                                authority,
+                                confirmation,
+                            )?,
+                            Err(e) => {
+                                warn!(
                                     "Failed to deserialize RandomnessDkgMessage from {:?}: {e:?}",
                                     authority.concise(),
                                 );
-                                }
                             }
                         }
                     } else {

@@ -404,6 +404,8 @@ pub enum SuiError {
 
     #[error("Invalid digest length. Expected {expected}, got {actual}")]
     InvalidDigestLength { expected: usize, actual: usize },
+    #[error("Invalid DKG message size")]
+    InvalidDkgMessageSize,
 
     #[error("Unexpected message.")]
     UnexpectedMessage,
