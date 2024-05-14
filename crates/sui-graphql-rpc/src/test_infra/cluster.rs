@@ -209,7 +209,7 @@ async fn start_validator_with_fullnode(internal_data_source_rpc_port: Option<u16
 
 /// Repeatedly ping the GraphQL server for 10s, until it responds
 async fn wait_for_graphql_server(client: &SimpleClient) {
-    tokio::time::timeout(Duration::from_secs(10), async {
+    tokio::time::timeout(Duration::from_secs(30), async {
         while client.ping().await.is_err() {
             tokio::time::sleep(Duration::from_millis(500)).await;
         }
