@@ -3480,8 +3480,6 @@ impl<'a> TypingSymbolicator<'a> {
                     doc_string,
                 ),
             );
-        } else {
-            debug_assert!(false);
         }
     }
 }
