@@ -66,7 +66,7 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
         edition,
         ..PackageConfig::default()
     };
-    testsuite(path, config, true)
+    testsuite(path, config, lint)
 }
 
 fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_stable::Result<()> {
@@ -287,4 +287,4 @@ pub fn run_test_inner(
     }
 }
 
-datatest_stable::harness!(move_check_testsuite, "tests/linter", r".*\.move$");
+datatest_stable::harness!(move_check_testsuite, "tests/", r".*\.move$");
