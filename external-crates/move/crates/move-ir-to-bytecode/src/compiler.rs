@@ -435,11 +435,11 @@ pub fn compile_module_with_version_opt<'a>(
         struct_defs,
         function_defs,
     };
-    fix_module_version(&mut module, version);
+    set_module_version(&mut module, version);
     Ok((module, source_map))
 }
 
-fn fix_module_version(module: &mut CompiledModule, version: Option<u32>) {
+fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
     if let Some(version) = version.or_else(get_bytecode_version_from_env) {
         module.version = version;
     }
