@@ -32,9 +32,6 @@ module games::vdf_based_lottery {
     const IN_PROGRESS: u8 = 0;
     const COMPLETED: u8 = 2;
 
-    /// Use a fixed discriminant. In production we should use a larger one which is randomly generated.
-    const DISCRIMINANT_BYTES: vector<u8> = x"fdf4aa9b7f49b85fc71f6fbf31a3d51e6828afb9d06165f5814bb5142485853abb52f50b7c8a937bba09ce75b51a639886d997d561b7a654f1a9e6b66645d76fad093381d464eccf28d599fb5a938bb99101c30e374f5f786c9232f56d0118826d113400b080bb4737018b088af5203a18da25d106fffdad7e8f660e141dd11f";
-
     /// Game represents a set of parameters of a single game.
     /// This game can be extended to require ticket purchase, reward winners, etc.
     ///
@@ -86,11 +83,10 @@ module games::vdf_based_lottery {
         assert!(clock.timestamp_ms() - self.timestamp_start >= self.submission_phase_length, ESubmissionPhaseInProgress);
 
         // Hash combined randomness to vdf input
-        let discriminant = DISCRIMINANT_BYTES;
-        let vdf_input = hash_to_input(&discriminant, &self.vdf_input_seed);
+        let vdf_input = hash_to_input(&self.vdf_input_seed);
 
         // Verify output and proof
-        assert!(vdf_verify(&discriminant, &vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfOutput);
+        assert!(vdf_verify(&vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfOutput);
 
         // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
         let randomness = sha2_256(vdf_output);

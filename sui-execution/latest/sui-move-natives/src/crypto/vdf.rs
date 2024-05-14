@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::object_runtime::ObjectRuntime;
 use crate::NativesCostTable;
-use fastcrypto_vdf::class_group::discriminant::Discriminant;
+use fastcrypto_vdf::class_group::discriminant::DISCRIMINANT_3072;
 use fastcrypto_vdf::class_group::QuadraticForm;
 use fastcrypto_vdf::vdf::wesolowski::DefaultVDF;
 use fastcrypto_vdf::vdf::VDF;
@@ -41,7 +41,6 @@ pub struct VDFCostParams {
  * native fun vdf_verify_internal
  *
  * Implementation of the Move native function `vdf::verify_vdf_internal(
- *      discriminant: &vector<u8>,
  *      input: &vector<u8>,
  *      output: &vector<u8>,
  *      proof: &vector<u8>,
@@ -78,19 +77,13 @@ pub fn vdf_verify_internal(
     );
 
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 5);
+    debug_assert!(args.len() == 4);
 
     // The input is a reference to a vector of vector<u8>'s
     let iterations = pop_arg!(args, u64);
     let proof_bytes = pop_arg!(args, VectorRef);
     let output_bytes = pop_arg!(args, VectorRef);
     let input_bytes = pop_arg!(args, VectorRef);
-    let discriminant_bytes = pop_arg!(args, VectorRef);
-
-    let discriminant = match bcs::from_bytes::<Discriminant>(&discriminant_bytes.as_bytes_ref()) {
-        Ok(discriminant) => discriminant,
-        Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
-    };
 
     let input = match bcs::from_bytes::<QuadraticForm>(&input_bytes.as_bytes_ref()) {
         Ok(input) => input,
@@ -109,7 +102,7 @@ pub fn vdf_verify_internal(
 
     // We use the default VDF construction: Wesolowski's construction using a strong Fiat-Shamir
     // construction and a windowed scalar multiplier to speed up the proof verification.
-    let vdf = DefaultVDF::new(discriminant, iterations);
+    let vdf = DefaultVDF::new(DISCRIMINANT_3072.clone(), iterations);
     let verified = vdf.verify(&input, &output, &proof).is_ok();
 
     Ok(NativeResult::ok(
@@ -121,9 +114,7 @@ pub fn vdf_verify_internal(
 /***************************************************************************************************
  * native fun hash_to_input_internal
  *
- * Implementation of the Move native function `vdf::hash_to_input_internal(
- *      discriminant: &vector<u8>,
- *      message: &vector<u8>): vector<u8>`
+ * Implementation of the Move native function `vdf::hash_to_input_internal(message: &vector<u8>): vector<u8>`
  *
  * Gas cost: hash_to_input_cost
  **************************************************************************************************/
@@ -156,19 +147,13 @@ pub fn hash_to_input_internal(
     );
 
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    debug_assert!(args.len() == 1);
 
     let message = pop_arg!(args, VectorRef);
-    let discriminant_bytes = pop_arg!(args, VectorRef);
-
-    let discriminant = match bcs::from_bytes::<Discriminant>(&discriminant_bytes.as_bytes_ref()) {
-        Ok(discriminant) => discriminant,
-        Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
-    };
 
     let output = match QuadraticForm::hash_to_group_with_default_parameters(
         &message.as_bytes_ref(),
-        &discriminant,
+        &DISCRIMINANT_3072,
     ) {
         Ok(output) => output,
         Err(_) => return Ok(NativeResult::err(context.gas_used(), INVALID_INPUT_ERROR)),
