@@ -20,6 +20,7 @@ mod inner {
     pub use crate::schema::pg::objects;
     pub use crate::schema::pg::objects_history;
     pub use crate::schema::pg::objects_snapshot;
+    pub use crate::schema::pg::objects_version;
     pub use crate::schema::pg::packages;
     pub use crate::schema::pg::pruner_cp_watermark;
     pub use crate::schema::pg::transactions;
@@ -42,6 +43,7 @@ mod inner {
     pub use crate::schema::mysql::objects;
     pub use crate::schema::mysql::objects_history;
     pub use crate::schema::mysql::objects_snapshot;
+    pub use crate::schema::mysql::objects_version;
     pub use crate::schema::mysql::packages;
     pub use crate::schema::mysql::pruner_cp_watermark;
     pub use crate::schema::mysql::transactions;
@@ -61,6 +63,7 @@ pub use inner::events;
 pub use inner::objects;
 pub use inner::objects_history;
 pub use inner::objects_snapshot;
+pub use inner::objects_version;
 pub use inner::packages;
 pub use inner::pruner_cp_watermark;
 pub use inner::transactions;

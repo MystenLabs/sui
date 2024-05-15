@@ -198,6 +198,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    objects_version (object_id, object_version) {
+        object_id -> Bytea,
+        object_version -> Int8,
+        cp_sequence_number -> Int8,
+    }
+}
+
+diesel::table! {
     packages (package_id) {
         package_id -> Bytea,
         move_package -> Bytea,
@@ -299,6 +307,7 @@ macro_rules! for_all_tables {
             objects,
             objects_history,
             objects_snapshot,
+            objects_version,
             packages,
             transactions,
             tx_calls,
