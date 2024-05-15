@@ -3,10 +3,10 @@
 import { useFeatureIsOn } from '@growthbook/growthbook-react';
 import { normalizeSuiNSName } from '@mysten/sui.js/utils';
 
-import { useResolveSuiNSName } from '../../../../../core';
+import { useResolveSuiNSName as useResolveSuiNSNameCore } from '../../../../../core';
 
-export function useAppResolveSuinsName(address?: string) {
+export function useResolveSuiNSName(address?: string) {
 	const enableNewSuinsFormat = useFeatureIsOn('wallet-enable-new-suins-name-format');
-	const { data } = useResolveSuiNSName(address);
+	const { data } = useResolveSuiNSNameCore(address);
 	return data ? normalizeSuiNSName(data, enableNewSuinsFormat ? 'at' : 'dot') : undefined;
 }

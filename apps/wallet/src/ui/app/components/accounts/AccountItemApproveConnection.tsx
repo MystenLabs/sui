@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
+import { useResolveSuiNSName } from '_app/hooks/useAppResolveSuinsName';
 import { AccountIcon } from '_components/accounts/AccountIcon';
 import { LockUnlockButton } from '_components/accounts/LockUnlockButton';
 import { useUnlockAccount } from '_components/accounts/UnlockAccountContext';
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export function AccountItemApproveConnection({ account, selected, disabled, showLock }: Props) {
-	const domainName = useAppResolveSuinsName(account?.address);
+	const domainName = useResolveSuiNSName(account?.address);
 	const accountName = account?.nickname ?? domainName ?? formatAddress(account?.address || '');
 	const { unlockAccount, lockAccount, isPending, accountToUnlock } = useUnlockAccount();
 

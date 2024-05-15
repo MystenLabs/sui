@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
+import { useResolveSuiNSName } from '_app/hooks/useAppResolveSuinsName';
 import { type SerializedUIAccount } from '_src/background/accounts/Account';
 import { Check12, Copy12 } from '@mysten/icons';
 import { formatAddress } from '@mysten/sui.js/utils';
@@ -21,7 +21,7 @@ export function AccountListItem({ account, onAccountSelected }: AccountItemProps
 	const copy = useCopyToClipboard(address, {
 		copySuccessMessage: 'Address Copied',
 	});
-	const domainName = useAppResolveSuinsName(address);
+	const domainName = useResolveSuiNSName(address);
 
 	return (
 		<li>

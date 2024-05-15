@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
+import { useResolveSuiNSName } from '_app/hooks/useAppResolveSuinsName';
 import { useIsWalletDefiEnabled } from '_app/hooks/useIsWalletDefiEnabled';
 import { LargeButton } from '_app/shared/LargeButton';
 import { Text } from '_app/shared/text';
@@ -312,7 +312,7 @@ function TokenDetails({ coinType }: TokenDetailsProps) {
 	const activeCoinType = coinType || SUI_TYPE_ARG;
 	const activeAccount = useActiveAccount();
 	const activeAccountAddress = activeAccount?.address;
-	const domainName = useAppResolveSuinsName(activeAccountAddress);
+	const domainName = useResolveSuiNSName(activeAccountAddress);
 
 	const { staleTime, refetchInterval } = useCoinsReFetchingConfig();
 	const {

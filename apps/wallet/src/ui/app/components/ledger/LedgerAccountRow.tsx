@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useAppResolveSuinsName } from '_app/hooks/useAppResolveSuinsName';
+import { useResolveSuiNSName } from '_app/hooks/useAppResolveSuinsName';
 import { Text } from '_src/ui/app/shared/text';
 import { useFormatCoin } from '@mysten/core';
 import { useSuiClientQuery } from '@mysten/dapp-kit';
@@ -30,7 +30,7 @@ export function LedgerAccountRow({ isSelected, address }: LedgerAccountRowProps)
 			staleTime,
 		},
 	);
-	const domainName = useAppResolveSuinsName(address);
+	const domainName = useResolveSuiNSName(address);
 
 	const [totalAmount, totalAmountSymbol] = useFormatCoin(
 		coinBalance?.totalBalance ?? 0,
