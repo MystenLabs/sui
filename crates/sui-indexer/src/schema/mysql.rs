@@ -143,6 +143,14 @@ diesel::table! {
 }
 
 diesel::table! {
+    objects_version (object_id, object_version) {
+        object_id -> Blob,
+        object_version -> Bigint,
+        cp_sequence_number -> Bigint,
+    }
+}
+
+diesel::table! {
     packages (package_id) {
         package_id -> Blob,
         move_package -> Mediumblob,
