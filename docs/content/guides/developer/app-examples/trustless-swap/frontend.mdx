@@ -1,12 +1,14 @@
 ---
-title: Trustless Swap Frontend
+title: Trustless Swap - Frontend
 sidebar_label: Frontend
 toc_max_heading_level: 2
 ---
 
+# Part 3: Frontend
+
 :::note Multi-Page Guide
 
-This is the third in a [three-part guide](../trustless-swap.mdx) on how to build a trustless atomic swap on Sui.
+This is the third in a [three-part guide](./intro.mdx) on how to build a trustless atomic swap on Sui.
 
 :::
 
@@ -18,8 +20,8 @@ In this final part of the app example, you build a frontend (UI) that allows end
 
 Before getting started, make sure you:
 
-- Understand [the mechanism behind the Escrow smart contract backend](../trustless-swap.mdx).
-- Check out [indexing service guide](./indexer-api.mdx) to learn how we index on-chain data and API endpoints exposed to serve data query requests.
+- Understand [the mechanism behind the Escrow smart contract backend](./intro.mdx).
+- Check out [indexing service guide](./backend.mdx) to learn how we index on-chain data and API endpoints exposed to serve data query requests.
 - Install [`pnpm` through this guide](https://pnpm.io/installation) as we will use it as our package manager.
 - Check out [Sui Typescript SDK](https://sdk.mystenlabs.com/typescript) for basic usage on how to interact with Sui with Typescript.
 - Check out [Sui dApp Kit](https://sdk.mystenlabs.com/dapp-kit) to learn basic building blocks for developing a dApp in the Sui ecosystem with React.js.
@@ -705,7 +707,7 @@ The UI has a place for users to discover, create, and execute trades. The code o
 
 ### Requested escrows
 
-Let's take a look at the **Requested Escrows** tab by examining `src/components/escrows/EscrowList.tsx`. This time, the data is retrieved by using `useInfiniteQuery` directly from `react-query`. Fetch the data by calling the API service that you already implemented in the [Escrow Indexing and API Service Guide](./indexer-api.mdx). Call the `/escrows` endpoint to fetch all the escrows requested to you. The rationale behind using an API service to fetch the data is because the indexed data includes additional information that allows query efficiency and flexibility. You can fetch specific escrows satisfying different configured query clauses rather than limited query features of Sui blockchain RPC endpoints.
+Let's take a look at the **Requested Escrows** tab by examining `src/components/escrows/EscrowList.tsx`. This time, the data is retrieved by using `useInfiniteQuery` directly from `react-query`. Fetch the data by calling the API service that you already implemented in the [Escrow Indexing and API Service Guide](./backend.mdx). Call the `/escrows` endpoint to fetch all the escrows requested to you. The rationale behind using an API service to fetch the data is because the indexed data includes additional information that allows query efficiency and flexibility. You can fetch specific escrows satisfying different configured query clauses rather than limited query features of Sui blockchain RPC endpoints.
 
 ```ts title='src/components/escrows/EscrowList.tsx'
 import { constructUrlSearchParams, getNextPageParam } from '@/utils/helpers';
