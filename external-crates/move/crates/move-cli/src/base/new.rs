@@ -55,7 +55,10 @@ impl New {
         let Self { name } = self;
 
         if !is_valid_package_name(&name) {
-            return Err(anyhow!("invalid package name, only support: lowercase letters, numbers, and underscores, can only start with a lowercase letter."));
+            return Err(anyhow!(
+                "invalid package name, only support: lowercase letters, numbers, and underscores,
+                can only start with a lowercase letter."
+            ));
         }
 
         let p: PathBuf;
