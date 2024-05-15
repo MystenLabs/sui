@@ -1,0 +1,45 @@
+---
+title: Trustless Swap
+sidebar_label: Intro
+hide_table_of_contents: true
+---
+
+:::note Guide Information
+
+- First published: 23 February 2024.
+- Last updated: 15 May 2024.
+
+:::
+
+## What you'll make
+
+In this guide, you will make an app that performs atomic swaps on Sui. Atomic swaps are similar to escrows but without requiring a trusted third party.
+
+The guide is split into three parts:
+
+1. [Smart Contracts](./smart-contracts.mdx): The Move code that holds the state and perform the swaps.
+1. [Backend](./backend.mdx): A service that indexes chain state to discover trades, and an API service to read this data.
+1. [Frontend](./frontend.mdx): A UI that enables users to list objects for sale and to accept trades.
+
+**\<SCREENSHOT THAT LINKS TO DEMO\>**
+
+## What you'll learn
+
+- **Shared objects.** You'll learn how to use [shared objects](../../../../concepts/object-ownership/shared.mdx), in this case to act as the escrow between two Sui users wanting to trade. Shared objects are a unique concept to Sui. Any transaction and any signer can modify it, given the changes meet the requirements set forth by the package that defined the type.
+- **Composability.** You'll learn how to design your Move code in a way that enables full composability. In this app, the Move code that handles trading is completely unaware of the code that defines the objects it is trading and vice versa.
+
+You will also learn how to build an app that:
+
+- **Is trustless.** Users do not have to trust (or pay) any third parties; the chain manages the swap.
+- **Avoids rug-pulls.** It is guaranteed that the object a user wants to trade for isn't tampered with after initiating the trade.
+- **Preserves liveness.** Users are able to pull out of the trade and reclaim their object at any time, in case the other party stops responding.
+
+## What you'll need
+
+{@include: ../../../../snippets/app-examples-swap-source.mdx}
+
+Before getting started, make sure you have:
+
+- [Installed the latest version of Sui](../../getting-started/sui-install.mdx).
+- [Configured a valid network environment](../../../../references/cli/client.mdx#set-current-environment), as you will be deploying the module on Testnet.
+- Read the basics of [shared versus owned objects](../../sui-101/shared-owned.mdx).

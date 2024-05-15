@@ -170,11 +170,12 @@ const guides = [
 						label: 'Trustless Swap',
 						link: {
 							type: 'doc',
-							id: 'guides/developer/app-examples/trustless-swap',
+							id: 'guides/developer/app-examples/trustless-swap/intro',
 						},
 						items: [
+							'guides/developer/app-examples/trustless-swap/intro',
+							'guides/developer/app-examples/trustless-swap/smart-contracts',
 							'guides/developer/app-examples/trustless-swap/backend',
-							'guides/developer/app-examples/trustless-swap/indexer-api',
 							'guides/developer/app-examples/trustless-swap/frontend',
 						],
 					},
