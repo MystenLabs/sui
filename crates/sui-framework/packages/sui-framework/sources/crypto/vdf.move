@@ -19,10 +19,12 @@ module sui::vdf {
     /// This uses Wesolowski's VDF construction over imaginary class groups as described in Wesolowski (2020), 
     /// 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in 
     /// fastcrypto.
+    /// 
+    /// The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf crate.
     public fun vdf_verify(input: &vector<u8>, output: &vector<u8>, proof: &vector<u8>, iterations: u64): bool {
         vdf_verify_internal(input, output, proof, iterations)
     }
 
-    /// The internal functions for `vdf_verify_internal`. The discriminant must have been verified to be a negative prime which is 1 mod 8.
+    /// The internal functions for `vdf_verify_internal`.
     native fun vdf_verify_internal(input: &vector<u8>, output: &vector<u8>, proof: &vector<u8>, iterations: u64): bool;
 }

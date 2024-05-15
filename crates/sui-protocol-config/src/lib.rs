@@ -2273,8 +2273,10 @@ impl ProtocolConfig {
                     // enable vdf in devnet
                     if chain != Chain::Mainnet && chain != Chain::Testnet {
                         cfg.feature_flags.enable_vdf = true;
-                        cfg.vdf_verify_vdf_cost = Some(2000);
-                        cfg.vdf_hash_to_input_cost = Some(1000);
+                        // Set to 30x and 2x the cost of a signature verification for now. This
+                        // should be updated along with other native crypto functions.
+                        cfg.vdf_verify_vdf_cost = Some(1500);
+                        cfg.vdf_hash_to_input_cost = Some(100);
                     }
                 }
                 48 => {
