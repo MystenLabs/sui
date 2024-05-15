@@ -45,13 +45,13 @@ module ibe::example {
     /// Note that the algorithms in that paper use G2 for signatures, where the drand chain uses G1, thus
     /// the operations below are slightly different.
     public fun insecure_ibe_encrypt(pk: &Element<G2>, target: &vector<u8>, m: &vector<u8>, sigma: &vector<u8>): IbeEncryption {
-        assert!(vector::length(sigma) == 32, 0);
+        assert!(sigma.length() == 32, 0);
         // pk_rho = e(H1(target), pk)
         let target_hash = bls12381::hash_to_g1(target);
         let pk_rho = bls12381::pairing(&target_hash, pk);
 
         // r = H3(sigma | m) as a scalar
-        assert!(vector::length(m) == vector::length(sigma), 0);
+        assert!(m.length() == sigma.length(), 0);
         let mut to_hash = b"HASH3 - ";
         to_hash.append(*sigma);
         to_hash.append(*m);
@@ -135,7 +135,7 @@ module ibe::example {
 
     /// Returns x-ORDER if x >= ORDER, otherwise none.
     public(package) fun try_substract(x: &vector<u8>): Option<vector<u8>> {
-        assert!(vector::length(x) == 32, EInvalidLength);
+        assert!(x.length() == 32, EInvalidLength);
         let order = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
         let mut c = vector::empty();
         let mut i = 0;
