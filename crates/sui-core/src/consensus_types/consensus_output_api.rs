@@ -5,6 +5,7 @@ use std::fmt::Display;
 use consensus_core::{BlockAPI, CommittedSubDagDigest};
 use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
+use sui_protocol_config::ProtocolConfig;
 use sui_types::{digests::ConsensusCommitDigest, messages_consensus::ConsensusTransaction};
 
 use crate::consensus_types::AuthorityIndex;
@@ -29,7 +30,7 @@ pub(crate) trait ConsensusOutputAPI: Display {
     fn transactions(&self) -> ConsensusOutputTransactions<'_>;
 
     /// Returns the digest of consensus output.
-    fn consensus_digest(&self) -> ConsensusCommitDigest;
+    fn consensus_digest(&self, protocol_config: &ProtocolConfig) -> ConsensusCommitDigest;
 }
 
 impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
@@ -95,7 +96,7 @@ impl ConsensusOutputAPI for narwhal_types::ConsensusOutput {
             }).collect()
     }
 
-    fn consensus_digest(&self) -> ConsensusCommitDigest {
+    fn consensus_digest(&self, _protocol_config: &ProtocolConfig) -> ConsensusCommitDigest {
         // We port ConsensusOutputDigest, a narwhal space object, into ConsensusCommitDigest, a sui-core space object.
         // We assume they always have the same format.
         static_assertions::assert_eq_size!(ConsensusCommitDigest, ConsensusOutputDigest);
@@ -162,10 +163,14 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
             .collect()
     }
 
-    fn consensus_digest(&self) -> ConsensusCommitDigest {
-        // We port CommittedSubDagDigest, a consensus space object, into ConsensusCommitDigest, a sui-core space object.
-        // We assume they always have the same format.
-        static_assertions::assert_eq_size!(ConsensusCommitDigest, CommittedSubDagDigest);
-        ConsensusCommitDigest::new(self.digest.into_inner())
+    fn consensus_digest(&self, protocol_config: &ProtocolConfig) -> ConsensusCommitDigest {
+        if protocol_config.mysticeti_use_committed_subdag_digest() {
+            // We port CommittedSubDagDigest, a consensus space object, into ConsensusCommitDigest, a sui-core space object.
+            // We assume they always have the same format.
+            static_assertions::assert_eq_size!(ConsensusCommitDigest, CommittedSubDagDigest);
+            ConsensusCommitDigest::new(self.digest.into_inner())
+        } else {
+            ConsensusCommitDigest::default()
+        }
     }
 }

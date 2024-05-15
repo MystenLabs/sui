@@ -435,7 +435,7 @@ impl<C: CheckpointServiceNotify + Send + Sync> ConsensusHandler<C> {
                 &self.last_consensus_stats,
                 &self.checkpoint_service,
                 self.cache_reader.as_ref(),
-                &ConsensusCommitInfo::new(&consensus_output),
+                &ConsensusCommitInfo::new(self.epoch_store.protocol_config(), &consensus_output),
                 &self.metrics,
             )
             .await
@@ -782,11 +782,11 @@ pub struct ConsensusCommitInfo {
 }
 
 impl ConsensusCommitInfo {
-    fn new(consensus_output: &impl ConsensusOutputAPI) -> Self {
+    fn new(protocol_config: &ProtocolConfig, consensus_output: &impl ConsensusOutputAPI) -> Self {
         Self {
             round: consensus_output.leader_round(),
             timestamp: consensus_output.commit_timestamp_ms(),
-            consensus_commit_digest: consensus_output.consensus_digest(),
+            consensus_commit_digest: consensus_output.consensus_digest(protocol_config),
 
             #[cfg(any(test, feature = "test-utils"))]
             skip_consensus_commit_prologue_in_test: false,

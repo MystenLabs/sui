@@ -650,7 +650,7 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let mut subdag =
+            let subdag =
                 dag_builder.get_subdag(leader.clone(), last_committed_rounds.clone(), commit_index);
             for block in subdag.blocks.iter() {
                 blocks_to_write.push(block.clone());
@@ -669,7 +669,6 @@ mod tests {
                     .collect::<Vec<_>>(),
             );
             expected_commits.push(commit);
-            subdag.sort();
             subdags.push(subdag);
         }
 
@@ -705,8 +704,7 @@ mod tests {
         );
         let actual_unscored_subdags = dag_state.read().unscored_committed_subdags();
         assert_eq!(1, dag_state.read().unscored_committed_subdags_count());
-        let mut actual_subdag = actual_unscored_subdags[0].clone();
-        actual_subdag.sort();
+        let actual_subdag = actual_unscored_subdags[0].clone();
         assert_eq!(*subdags.last().unwrap(), actual_subdag);
 
         let leader_schedule = LeaderSchedule::from_store(context.clone(), dag_state.clone());
@@ -783,7 +781,7 @@ mod tests {
         let mut last_committed_rounds = vec![0; 4];
         for (idx, leader) in leaders.into_iter().enumerate() {
             let commit_index = idx as u32 + 1;
-            let mut subdag =
+            let subdag =
                 dag_builder.get_subdag(leader.clone(), last_committed_rounds.clone(), commit_index);
             for block in subdag.blocks.iter() {
                 blocks_to_write.push(block.clone());
@@ -802,7 +800,6 @@ mod tests {
                     .collect::<Vec<_>>(),
             );
             expected_commits.push(commit);
-            subdag.sort();
             expected_unscored_subdags.push(subdag);
         }
 
@@ -832,8 +829,7 @@ mod tests {
             dag_state.read().unscored_committed_subdags_count()
         );
         for (idx, expected_subdag) in expected_unscored_subdags.into_iter().enumerate() {
-            let mut actual_subdag = actual_unscored_subdags[idx].clone();
-            actual_subdag.sort();
+            let actual_subdag = actual_unscored_subdags[idx].clone();
             assert_eq!(expected_subdag, actual_subdag);
         }
 

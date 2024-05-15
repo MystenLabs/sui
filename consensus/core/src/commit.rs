@@ -308,10 +308,18 @@ impl CommittedSubDag {
     /// Create new (empty) sub-dag.
     pub(crate) fn new(
         leader: BlockRef,
-        blocks: Vec<VerifiedBlock>,
+        mut blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,
         commit_index: CommitIndex,
     ) -> Self {
+        // Sort the blocks of the sub-dag by round number then authority index. Any
+        // deterministic & stable algorithm works.
+        blocks.sort_by(|a, b| {
+            a.round()
+                .cmp(&b.round())
+                .then_with(|| a.author().cmp(&b.author()))
+        });
+
         let digest = Self::digest(leader, &blocks, timestamp_ms, commit_index);
         Self {
             leader,
@@ -325,16 +333,6 @@ impl CommittedSubDag {
 
     pub(crate) fn update_scores(&mut self, reputation_scores_desc: Vec<(AuthorityIndex, u64)>) {
         self.reputation_scores_desc = reputation_scores_desc;
-    }
-
-    /// Sort the blocks of the sub-dag by round number then authority index. Any
-    /// deterministic & stable algorithm works.
-    pub(crate) fn sort(&mut self) {
-        self.blocks.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
     }
 
     fn digest(
@@ -382,6 +380,28 @@ impl From<CommittedSubDagDigest> for Digest<{ DIGEST_LENGTH }> {
     }
 }
 
+impl fmt::Display for CommittedSubDagDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+                .get(0..4)
+                .ok_or(fmt::Error)?
+        )
+    }
+}
+
+impl fmt::Debug for CommittedSubDagDigest {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+        write!(
+            f,
+            "{}",
+            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
+        )
+    }
+}
+
 impl Display for CommittedSubDag {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
@@ -395,7 +415,7 @@ impl Display for CommittedSubDag {
             }
             write!(f, "{}", block.digest())?;
         }
-        write!(f, "])")
+        write!(f, "], digest={})", self.digest)
     }
 }
 
@@ -407,8 +427,8 @@ impl fmt::Debug for CommittedSubDag {
         }
         write!(
             f,
-            "];{}ms;rs{:?})",
-            self.timestamp_ms, self.reputation_scores_desc
+            "];{}ms;rs{:?},digest:{})",
+            self.timestamp_ms, self.reputation_scores_desc, self.digest
         )
     }
 }

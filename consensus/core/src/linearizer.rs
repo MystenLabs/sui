@@ -94,15 +94,12 @@ impl Linearizer {
             drop(dag_state);
 
             // Collect the sub-dag generated using each of these leaders.
-            let mut sub_dag = self.collect_sub_dag(
+            let sub_dag = self.collect_sub_dag(
                 leader_block,
                 last_commit_index,
                 last_commit_timestamp_ms,
                 last_committed_rounds,
             );
-
-            // [Optional] sort the sub-dag using a deterministic algorithm.
-            sub_dag.sort();
 
             // Summarize CommittedSubDag into Commit.
             let commit = Commit::new(
