@@ -110,9 +110,9 @@ impl Worker for SuinsIndexerWorker {
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    let (remote_storage, registry_id, subdomain_wrapper_type) = (
+    let (remote_storage, name_record_type, subdomain_wrapper_type) = (
         env::var("REMOTE_STORAGE").ok(),
-        env::var("REGISTRY_ID").ok(),
+        env::var("NAME_RECORD_TYPE").ok(),
         env::var("SUBDOMAIN_WRAPPER_TYPE").ok(),
     );
     let backfill_progress_file_path =
@@ -126,10 +126,10 @@ async fn main() -> Result<()> {
     let metrics = DataIngestionMetrics::new(&Registry::new());
     let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
 
-    let indexer_setup = if let (Some(registry_id), Some(subdomain_wrapper_type)) =
-        (registry_id, subdomain_wrapper_type)
+    let indexer_setup = if let (Some(name_record_type), Some(subdomain_wrapper_type)) =
+        (name_record_type, subdomain_wrapper_type)
     {
-        SuinsIndexer::new(registry_id, subdomain_wrapper_type)
+        SuinsIndexer::new(name_record_type, subdomain_wrapper_type)
     } else {
         SuinsIndexer::default()
     };
