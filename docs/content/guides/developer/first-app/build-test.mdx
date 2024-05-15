@@ -199,46 +199,6 @@ Now, create a function to test the module initialization:
 
 {@inject: examples/move/first_package/sources/example.move#fun=test_module_init}
 
-```move
-#[test]
-fun test_module_init() {
-    use sui::test_scenario;
-
-    // Create test addresses representing users
-    let admin = @0xAD;
-    let initial_owner = @0xCAFE;
-
-    // First transaction to emulate module initialization
-    let mut scenario = test_scenario::begin(admin);
-    {
-        init(scenario.ctx());
-    };
-
-    // Second transaction to check if the forge has been created
-    // and has initial value of zero swords created
-    scenario.next_tx(admin);
-    {
-        // Extract the Forge object
-        let forge = scenario.take_from_sender<Forge>();
-        // Verify number of created swords
-        assert!(forge.swords_created() == 0, 1);
-        // Return the Forge object to the object pool
-        scenario.return_to_sender(forge);
-    };
-
-    // Third transaction executed by admin to create the sword
-    scenario.next_tx(admin);
-    {
-        let mut forge = scenario.take_from_sender<Forge>();
-        // Create the sword and transfer it to the initial owner
-        let sword = forge.new_sword(42, 7, scenario.ctx());
-        transfer::public_transfer(sword, initial_owner);
-        scenario.return_to_sender(forge);
-    };
-    scenario.end();
-}
-```
-
 As the new test function shows, the first transaction (explicitly) calls the initializer. The next transaction checks if the `Forge` object has been created and properly initialized. Finally, the admin uses the `Forge` to create a sword and transfer it to the initial owner.
 
 You can refer to the source code for the package (with all the tests and functions properly adjusted) in the [first_package](https://github.com/MystenLabs/sui/tree/main/examples/move/first_package/sources/example.move) module in the `sui/examples` directory.

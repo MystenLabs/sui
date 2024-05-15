@@ -21,7 +21,7 @@ const addCodeInject = function (source) {
 
   function addMarkdownIncludes(fileContent) {
     let res = fileContent;
-    const matches = fileContent.match(/\{@\w+: .+\}/g);
+    const matches = fileContent.match(/(?<!`)\{@\w+: .+\}/g);
     if (matches) {
       matches.forEach((match) => {
         const replacer = new RegExp(match, "g");
