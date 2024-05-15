@@ -124,7 +124,7 @@ impl BridgeTestClusterBuilder {
 
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
-        std::env::set_var("__TEST_ONLY_CONSENSUS_UES_LONG_MIN_ROUND_DELAY", "1");
+        std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
 
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
