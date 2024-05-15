@@ -295,6 +295,45 @@ pub fn group_errors(errors: Vec<(SuiError, Vec<AuthorityName>, StakeUnit)>) -> G
         .collect()
 }
 
+#[derive(Debug, Default)]
+pub struct RetryableOverloadInfo {
+    // Total stake of validators that are overloaded and request client to retry.
+    pub total_stake: StakeUnit,
+
+    // Records requested retry duration by stakes.
+    pub stake_requested_retry_after: BTreeMap<Duration, StakeUnit>,
+}
+
+impl RetryableOverloadInfo {
+    pub fn add_stake_retryable_overload(&mut self, stake: StakeUnit, retry_after: Duration) {
+        self.total_stake += stake;
+        self.stake_requested_retry_after
+            .entry(retry_after)
+            .and_modify(|s| *s += stake)
+            .or_insert(stake);
+    }
+
+    // Gets the duration of retry requested by a quorum of validators with smallest retry durations.
+    pub fn get_quorum_retry_after(
+        &self,
+        good_stake: StakeUnit,
+        quorum_threshold: StakeUnit,
+    ) -> Duration {
+        if self.stake_requested_retry_after.is_empty() {
+            return Duration::from_secs(0);
+        }
+
+        let mut quorum_stake = good_stake;
+        for (retry_after, stake) in self.stake_requested_retry_after.iter() {
+            quorum_stake += *stake;
+            if quorum_stake >= quorum_threshold {
+                return *retry_after;
+            }
+        }
+        *self.stake_requested_retry_after.last_key_value().unwrap().0
+    }
+}
+
 #[derive(Debug)]
 struct ProcessTransactionState {
     // The list of signatures gathered at any point
@@ -309,7 +348,7 @@ struct ProcessTransactionState {
     // Validators that are overloaded with txns pending execution.
     overloaded_stake: StakeUnit,
     // Validators that are overloaded and request client to retry.
-    retryable_overloaded_stake: StakeUnit,
+    retryable_overload_info: RetryableOverloadInfo,
     // If there are conflicting transactions, we note them down and may attempt to retry
     conflicting_tx_digests:
         BTreeMap<TransactionDigest, (Vec<(AuthorityName, ObjectRef)>, StakeUnit)>,
@@ -1046,7 +1085,7 @@ where
             object_or_package_not_found_stake: 0,
             non_retryable_stake: 0,
             overloaded_stake: 0,
-            retryable_overloaded_stake: 0,
+            retryable_overload_info: Default::default(),
             retryable: true,
             conflicting_tx_digests: Default::default(),
             conflicting_tx_total_stake: 0,
@@ -1119,7 +1158,7 @@ where
                                     //
                                     // TODO: currently retryable overload and above overload error look redundant. We want to have a unified
                                     // code path to handle both overload scenarios.
-                                    state.retryable_overloaded_stake += weight;
+                                    state.retryable_overload_info.add_stake_retryable_overload(weight, Duration::from_secs(err.retry_after_secs()));
                                 }
                                 else if !retryable && !state.record_conflicting_transaction_if_any(name, weight, &err) {
                                     // We don't count conflicting transactions as non-retryable errors here
@@ -1262,15 +1301,19 @@ where
 
         // When state is in a retryable state and process transaction was not successful, it indicates that
         // we have heard from *all* validators. Check if any SystemOverloadRetryAfter error caused the txn
-        // to fail. If so, return explicit SystemOverloadRetryAfter error for continuous retry (since objects)
-        // are locked in validators. If not, retry regular RetryableTransaction error.
-        if state.tx_signatures.total_votes() + state.retryable_overloaded_stake >= quorum_threshold
+        // to fail. If so, return explicit SystemOverloadRetryAfter error for continuous retry (since objects
+        // are locked in validators). If not, retry regular RetryableTransaction error.
+        if state.tx_signatures.total_votes() + state.retryable_overload_info.total_stake
+            >= quorum_threshold
         {
-            // TODO: make use of retry_after_secs, which is currently not used.
+            let retry_after_secs = state
+                .retryable_overload_info
+                .get_quorum_retry_after(state.tx_signatures.total_votes(), quorum_threshold)
+                .as_secs();
             return AggregatorProcessTransactionError::SystemOverloadRetryAfter {
-                overload_stake: state.retryable_overloaded_stake,
+                overload_stake: state.retryable_overload_info.total_stake,
                 errors: group_errors(state.errors),
-                retry_after_secs: 0,
+                retry_after_secs,
             };
         }
 

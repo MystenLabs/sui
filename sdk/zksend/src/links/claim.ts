@@ -34,7 +34,6 @@ const DEFAULT_ZK_SEND_LINK_OPTIONS = {
 	host: 'https://zksend.com',
 	path: '/claim',
 	network: 'mainnet' as const,
-	claimApi: 'https://zksend.com/api',
 };
 
 const SUI_COIN_TYPE = normalizeStructTag(SUI_TYPE_ARG);
@@ -71,10 +70,10 @@ export class ZkSendLink {
 
 	#client: SuiClient;
 	#contract?: ZkBag<ZkBagContractOptions>;
-	#claimApi: string;
 	#network: 'mainnet' | 'testnet';
-	#host?: string;
-	#path?: string;
+	#host: string;
+	#path: string;
+	#claimApi: string;
 
 	// State for non-contract based links
 	#gasCoin?: CoinStruct;
@@ -88,13 +87,13 @@ export class ZkSendLink {
 
 	constructor({
 		network = DEFAULT_ZK_SEND_LINK_OPTIONS.network,
-		claimApi = DEFAULT_ZK_SEND_LINK_OPTIONS.claimApi,
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		keypair,
 		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : null,
 		address,
-		host,
-		path,
+		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
+		path = DEFAULT_ZK_SEND_LINK_OPTIONS.path,
+		claimApi = `${host}/api`,
 		isContractLink,
 	}: ZkSendLinkOptions) {
 		if (!keypair && !address) {
@@ -186,8 +185,19 @@ export class ZkSendLink {
 		}
 	}
 
-	async claimAssets(address: string) {
-		if (!this.keypair) {
+	async claimAssets(
+		address: string,
+		{
+			reclaim,
+			sign,
+		}:
+			| { reclaim?: false; sign?: never }
+			| {
+					reclaim: true;
+					sign: (transactionBlock: Uint8Array) => Promise<string>;
+			  } = {},
+	) {
+		if (!this.keypair && !sign) {
 			throw new Error('Cannot claim assets without links keypair');
 		}
 
@@ -196,9 +206,16 @@ export class ZkSendLink {
 		}
 
 		if (!this.#contract) {
-			return this.#client.signAndExecuteTransactionBlock({
-				transactionBlock: this.createClaimTransaction(address),
-				signer: this.keypair,
+			const bytes = await this.createClaimTransaction(address).build({
+				client: this.#client,
+			});
+			const signature = sign
+				? await sign(bytes)
+				: (await this.keypair!.signTransactionBlock(bytes)).signature;
+
+			return this.#client.executeTransactionBlock({
+				transactionBlock: bytes,
+				signature,
 			});
 		}
 
@@ -206,12 +223,20 @@ export class ZkSendLink {
 			await this.#loadBag();
 		}
 
-		const txb = this.createClaimTransaction(address);
+		const txb = this.createClaimTransaction(address, { reclaim });
 
-		const { digest } = await this.#executeSponsoredTransactionBlock(
-			await this.#createSponsoredTransactionBlock(txb, address, this.keypair.toSuiAddress()),
-			this.keypair,
+		const sponsored = await this.#createSponsoredTransactionBlock(
+			txb,
+			address,
+			reclaim ? address : this.keypair!.toSuiAddress(),
 		);
+
+		const bytes = fromB64(sponsored.bytes);
+		const signature = sign
+			? await sign(bytes)
+			: (await this.keypair!.signTransactionBlock(bytes)).signature;
+
+		const { digest } = await this.#executeSponsoredTransactionBlock(sponsored, signature);
 
 		return this.#client.waitForTransactionBlock({ digest });
 	}
@@ -525,12 +550,12 @@ export class ZkSendLink {
 
 	async #executeSponsoredTransactionBlock(
 		input: { digest: string; bytes: string },
-		keypair: Keypair,
+		signature: string,
 	) {
 		return this.#fetch<{ digest: string }>(`transaction-blocks/sponsor/${input.digest}`, {
 			method: 'POST',
 			body: JSON.stringify({
-				signature: (await keypair.signTransactionBlock(fromB64(input.bytes))).signature,
+				signature,
 			}),
 		});
 	}

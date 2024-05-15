@@ -34,15 +34,15 @@ abstract contract CommitteeUpgradeable is
     /// @notice Enables the upgrade of the inheriting contract by verifying the provided signatures.
     /// @dev The function will revert if the provided signatures or message is invalid.
     /// @param signatures The array of signatures to be verified.
-    /// @param message The BridgeMessage to be verified.
-    function upgradeWithSignatures(bytes[] memory signatures, BridgeMessage.Message memory message)
+    /// @param message The BridgeUtils to be verified.
+    function upgradeWithSignatures(bytes[] memory signatures, BridgeUtils.Message memory message)
         external
         nonReentrant
-        verifyMessageAndSignatures(message, signatures, BridgeMessage.UPGRADE)
+        verifyMessageAndSignatures(message, signatures, BridgeUtils.UPGRADE)
     {
         // decode the upgrade payload
         (address proxy, address implementation, bytes memory callData) =
-            BridgeMessage.decodeUpgradePayload(message.payload);
+            BridgeUtils.decodeUpgradePayload(message.payload);
 
         // verify proxy address
         require(proxy == address(this), "CommitteeUpgradeable: Invalid proxy address");
@@ -51,8 +51,6 @@ abstract contract CommitteeUpgradeable is
         _upgradeAuthorized = true;
         // upgrade contract
         upgradeToAndCall(implementation, callData); // Upgraded event emitted with new implementation address
-        // reset upgrade authorization
-        _upgradeAuthorized = false;
     }
 
     /* ========== INTERNAL FUNCTIONS ========== */
@@ -60,7 +58,8 @@ abstract contract CommitteeUpgradeable is
     /// @notice Authorizes the upgrade of the inheriting contract.
     /// @dev The _upgradeAuthorized state variable can only be set with the upgradeWithSignatures
     /// function, meaning that the upgrade can only be authorized by the committee.
-    function _authorizeUpgrade(address) internal view override {
+    function _authorizeUpgrade(address) internal override {
         require(_upgradeAuthorized, "CommitteeUpgradeable: Unauthorized upgrade");
+        _upgradeAuthorized = false;
     }
 }

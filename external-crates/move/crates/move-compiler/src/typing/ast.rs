@@ -26,6 +26,7 @@ use move_symbol_pool::Symbol;
 use std::{
     collections::{BTreeSet, VecDeque},
     fmt,
+    sync::Arc,
 };
 
 //**************************************************************************************************
@@ -34,7 +35,7 @@ use std::{
 
 #[derive(Debug, Clone)]
 pub struct Program {
-    pub info: TypingProgramInfo,
+    pub info: Arc<TypingProgramInfo>,
     pub inner: Program_,
 }
 
@@ -196,7 +197,11 @@ pub enum UnannotatedExp_ {
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
-    VariantMatch(Box<Exp>, DatatypeName, Vec<(VariantName, Exp)>),
+    VariantMatch(
+        Box<Exp>,
+        (ModuleIdent, DatatypeName),
+        Vec<(VariantName, Exp)>,
+    ),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop {
         name: BlockLabel,
@@ -699,10 +704,10 @@ impl AstDebug for UnannotatedExp_ {
                     })
                 });
             }
-            E::VariantMatch(esubject, enum_name, arms) => {
+            E::VariantMatch(esubject, (m, enum_name), arms) => {
                 w.write("variant_switch (");
                 esubject.ast_debug(w);
-                w.write(format!(" : {} ) ", enum_name));
+                w.write(format!(" : {m}::{enum_name} ) "));
                 w.block(|w| {
                     w.comma(arms.iter(), |w, (variant, rhs)| {
                         w.write(format!("{} =>", variant));

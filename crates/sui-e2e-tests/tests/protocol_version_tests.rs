@@ -87,7 +87,8 @@ mod sim_only_tests {
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         transaction::TransactionKind,
-        MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+        MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
     use sui_types::{
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -436,6 +437,7 @@ mod sim_only_tests {
                         SUI_CLOCK_OBJECT_ID,
                         SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        SUI_BRIDGE_OBJECT_ID,
                     ]
                     .contains(&obj.0);
                     (!is_framework_obj).then_some(obj.0)
@@ -787,6 +789,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_safe_mode_recovery() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/base");
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
@@ -835,6 +842,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_mock_smoke_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -849,6 +861,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_shallow_upgrade_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/shallow_upgrade");
 
         let test_cluster = TestClusterBuilder::new()
@@ -881,6 +898,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_deep_upgrade_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/deep_upgrade");
 
         let test_cluster = TestClusterBuilder::new()

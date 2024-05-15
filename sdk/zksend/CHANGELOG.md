@@ -1,5 +1,36 @@
 # @mysten/zksend
 
+## 0.8.1
+
+### Patch Changes
+
+- 2da78f77a3: Update stashed logo and fix detection of stashed wallet
+
+## 0.8.0
+
+### Minor Changes
+
+- 807262f394: Update zkSend Wallet references to Stashed.
+
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+  - @mysten/wallet-standard@0.11.6
+
+## 0.7.1
+
+### Patch Changes
+
+- 29d8e45b0e: Add support for sponsoring reclaimed links
+- b7f673dbd9: Update graphql schema imports
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/sui.js@0.54.0
+  - @mysten/wallet-standard@0.11.5
+
 ## 0.7.0
 
 ### Minor Changes

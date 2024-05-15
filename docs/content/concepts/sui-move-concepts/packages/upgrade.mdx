@@ -253,6 +253,8 @@ If you have a package with a dependency, and that dependency is upgraded, your p
 
 Use the `sui client upgrade` command to upgrade packages that meet the previous requirements, providing values for the following flags:
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 - `--gas-budget`: The maximum number of gas units that can be expended before the network cancels the transaction.
 - `--cap`: The ID of the `UpgradeCap`. You receive this ID as a return from the publish command.
 

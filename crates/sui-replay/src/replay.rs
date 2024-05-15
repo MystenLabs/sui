@@ -1579,6 +1579,7 @@ impl LocalExec {
         // Add shared objects
         in_objs.extend(shared_inputs);
 
+        // TODO(Zhe): Account for cancelled transaction assigned version here, and tests.
         let resolved_input_objs = tx_info
             .input_objects
             .iter()

@@ -142,8 +142,7 @@ pub fn new_connection_pool_with_config<T: R2D2Connection + 'static>(
         .build(manager)
         .map_err(|e| {
             IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool with error: {:?}",
-                e
+                "Failed to initialize connection pool for {db_url} with error: {e:?}"
             ))
         })
 }
@@ -273,6 +272,7 @@ pub mod setup_postgres {
             );
             e
         })?;
+        info!("Postgres database connection pool is created at {}", db_url);
         if indexer_config.reset_db {
             let mut conn = get_pool_connection(&blocking_cp).map_err(|e| {
                 error!(
@@ -289,6 +289,7 @@ pub mod setup_postgres {
                 error!("{}", db_err_msg);
                 IndexerError::PostgresResetError(db_err_msg)
             })?;
+            info!("Reset Postgres database complete.");
         }
         let indexer_metrics = IndexerMetrics::new(&registry);
         mysten_metrics::init_metrics(&registry);
@@ -411,6 +412,7 @@ pub mod setup_mysql {
             error!("Failed creating Mysql connection pool with error {:?}", e);
             e
         })?;
+        info!("MySQL database connection pool is created.");
         if indexer_config.reset_db {
             let mut conn = get_pool_connection(&blocking_cp).map_err(|e| {
                 error!(
@@ -429,6 +431,7 @@ pub mod setup_mysql {
                     IndexerError::PostgresResetError(db_err_msg)
                 },
             )?;
+            info!("Reset MySQL database complete.");
         }
         let indexer_metrics = IndexerMetrics::new(&registry);
         mysten_metrics::init_metrics(&registry);

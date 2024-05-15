@@ -9,8 +9,10 @@ use crate::test_utils::make_transfer_sui_transaction;
 use crate::{quorum_driver::QuorumDriverMetrics, test_utils::init_local_authorities};
 use mysten_common::sync::notify_read::{NotifyRead, Registration};
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
+use sui_macros::{register_fail_point, sim_test};
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{deterministic_random_account_key, get_key_pair, AccountKeyPair};
@@ -535,7 +537,7 @@ async fn test_quorum_driver_object_locked() -> Result<(), anyhow::Error> {
 }
 
 // Tests that quorum driver can continuously retry txn with SystemOverloadedRetryAfter error.
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[sim_test]
 async fn test_quorum_driver_handling_overload_and_retry() {
     telemetry_subscribers::init_for_testing();
 
@@ -547,7 +549,7 @@ async fn test_quorum_driver_handling_overload_and_retry() {
 
     // Make local authority client to always return SystemOverloadedRetryAfter error.
     let fault_config = LocalAuthorityClientFaultConfig {
-        overload_retry_after_handle_transaction: true,
+        overload_retry_after_handle_transaction: Some(Duration::from_secs(30)),
         ..Default::default()
     };
     let mut clients = aggregator.clone_inner_clients_test_only();
@@ -570,6 +572,14 @@ async fn test_quorum_driver_handling_overload_and_retry() {
         .unwrap();
     let tx = make_tx(gas_object, sender, &keypair, rgp);
 
+    // Use a fail point to count the number of retries to test that the quorum backoff logic
+    // respects above `overload_retry_after_handle_transaction`.
+    let retry_count: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let retry_count_clone = retry_count.clone();
+    register_fail_point("count_retry_times", move || {
+        retry_count_clone.fetch_add(1, Ordering::SeqCst);
+    });
+
     // Create a quorum driver with max_retry_times = 0.
     let arc_aggregator = Arc::new(aggregator.clone());
     let quorum_driver_handler = Arc::new(
@@ -582,13 +592,17 @@ async fn test_quorum_driver_handling_overload_and_retry() {
         .start(),
     );
 
-    // Submit the transaction, and check that it shouldn't return.
+    // Submit the transaction, and check that it shouldn't return, and the number of retries is within
+    // 300s timeout / 30s retry after duration = 10 times.
     let ticket = quorum_driver_handler
         .submit_transaction(ExecuteTransactionRequestV3::new_v2(tx))
         .await
         .unwrap();
     match timeout(Duration::from_secs(300), ticket).await {
         Ok(result) => panic!("Process transaction should timeout! {:?}", result),
-        Err(_) => eprintln!("Waiting for txn timed out! This is desired behavior."),
+        Err(_) => {
+            assert!(retry_count.load(Ordering::SeqCst) <= 10);
+            println!("Waiting for txn timed out! This is desired behavior.")
+        }
     }
 }

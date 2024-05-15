@@ -18,6 +18,7 @@ move-ir-types.workspace = true
 move-binary-format.workspace = true
 move-coverage.workspace = true
 move-compiler.workspace = true
+move-abstract-interpreter.workspace = true
 
 bcs.workspace = true
 clap.workspace = true

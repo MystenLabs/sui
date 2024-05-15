@@ -4,10 +4,11 @@ cache*
 network_config.json
 .vscode
 cache/
-out/
+out*/
 *.txt
 !remappings.txt
 lcov.info
 broadcast/**/31337
 
 lib/*
+

@@ -1217,6 +1217,7 @@ pub fn get_symbols(
 
     let mut edition = None;
     build_plan.compile_with_driver_and_deps(dependencies, &mut std::io::sink(), |compiler| {
+        let compiler = compiler.set_ide_mode();
         // extract expansion AST
         let (files, compilation_result) = compiler
             .set_pre_compiled_lib_opt(compiled_libs.clone())

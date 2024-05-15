@@ -30,13 +30,14 @@ GROUP BY table_name;
 "
 } else if cfg!(feature = "mysql-feature") && cfg!(not(feature = "postgres-feature")) {
     r"
-    SELECT TABLE_NAME AS table_name,
-       MAX(CAST(SUBSTRING(PARTITION_NAME, -1) AS UNSIGNED)) AS last_partition
+SELECT TABLE_NAME AS table_name,
+       MIN(CAST(SUBSTRING_INDEX(PARTITION_NAME, '_', -1) AS UNSIGNED)) AS first_partition,
+       MAX(CAST(SUBSTRING_INDEX(PARTITION_NAME, '_', -1) AS UNSIGNED)) AS last_partition
 FROM information_schema.PARTITIONS
 WHERE TABLE_SCHEMA = DATABASE()
 AND PARTITION_NAME IS NOT NULL
 GROUP BY table_name;
-    "
+"
 } else {
     ""
 };
@@ -128,6 +129,7 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
             return Ok(());
         }
         if last_partition == data.last_epoch {
+            #[cfg(feature = "postgres-feature")]
             transactional_blocking_with_retry!(
                 &self.cp,
                 |conn| {
@@ -143,14 +145,24 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                 },
                 Duration::from_secs(10)
             )?;
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            transactional_blocking_with_retry!(
+                &self.cp,
+                |conn| {
+                    RunQueryDsl::execute(diesel::sql_query(format!("ALTER TABLE {table_name} REORGANIZE PARTITION {table_name}_partition_{last_epoch} INTO (PARTITION {table_name}_partition_{last_epoch} VALUES LESS THAN ({next_epoch_start_cp}), PARTITION {table_name}_partition_{next_epoch} VALUES LESS THAN MAXVALUE)", table_name = table.clone(), last_epoch = data.last_epoch as i64, next_epoch_start_cp = data.next_epoch_start_cp as i64, next_epoch = data.next_epoch as i64)), conn)
+                },
+                Duration::from_secs(10)
+            )?;
             info!(
-                "Advanced epoch partition for table {} from {} to {}",
-                table, last_partition, data.next_epoch
+                "Advanced epoch partition for table {} from {} to {}, prev partition upper bound {}",
+                table, last_partition, data.next_epoch, data.last_epoch_start_cp
             );
 
             // prune old partitions beyond the retention period
             if let Some(epochs_to_keep) = epochs_to_keep {
                 for epoch in first_partition..(data.next_epoch - epochs_to_keep + 1) {
+                    #[cfg(feature = "postgres-feature")]
                     transactional_blocking_with_retry!(
                         &self.cp,
                         |conn| {
@@ -158,6 +170,22 @@ impl<T: R2D2Connection> PgPartitionManager<T> {
                                 diesel::sql_query("CALL drop_partition($1, $2)")
                                     .bind::<diesel::sql_types::Text, _>(table.clone())
                                     .bind::<diesel::sql_types::BigInt, _>(epoch as i64),
+                                conn,
+                            )
+                        },
+                        Duration::from_secs(10)
+                    )?;
+                    #[cfg(feature = "mysql-feature")]
+                    #[cfg(not(feature = "postgres-feature"))]
+                    transactional_blocking_with_retry!(
+                        &self.cp,
+                        |conn| {
+                            RunQueryDsl::execute(
+                                diesel::sql_query(format!(
+                                    "ALTER TABLE {} DROP PARTITION partition_{}",
+                                    table.clone(),
+                                    epoch
+                                )),
                                 conn,
                             )
                         },

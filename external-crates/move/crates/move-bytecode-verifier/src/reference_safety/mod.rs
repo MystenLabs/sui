@@ -10,13 +10,11 @@
 
 mod abstract_state;
 
-use crate::{
-    absint::{AbstractInterpreter, FunctionContext, TransferFunctions},
-    reference_safety::abstract_state::{
-        STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
-    },
+use crate::reference_safety::abstract_state::{
+    STEP_BASE_COST, STEP_PER_GRAPH_ITEM_COST, STEP_PER_LOCAL_COST,
 };
 use abstract_state::{AbstractState, AbstractValue};
+use move_abstract_interpreter::absint::{AbstractInterpreter, FunctionContext, TransferFunctions};
 use move_abstract_stack::AbstractStack;
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},

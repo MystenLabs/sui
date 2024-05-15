@@ -61,6 +61,7 @@ impl BridgeAuthorityAggregator {
         }
     }
 
+    // TODO: change the signature, to remove `threshold`, which can be obtained from `BridgeAction`
     pub async fn request_committee_signatures(
         &self,
         action: BridgeAction,
@@ -328,6 +329,9 @@ mod tests {
             Some(sui_tx_event_index),
             Some(nonce),
             Some(amount),
+            None,
+            None,
+            None,
         );
 
         // All authorities return signatures
@@ -422,6 +426,9 @@ mod tests {
             Some(sui_tx_event_index),
             Some(nonce),
             Some(amount),
+            None,
+            None,
+            None,
         );
 
         // Only mock authority 2 and 3 to return signatures, such that if BridgeAuthorityAggregator
@@ -554,6 +561,9 @@ mod tests {
             Some(sui_tx_event_index),
             Some(nonce),
             Some(amount),
+            None,
+            None,
+            None,
         );
 
         let sig_0 = sign_action_with_key(&action, &secrets[0]);

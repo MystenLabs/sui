@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.25.0"
+    "version": "1.26.0"
   },
   "methods": [
     {
@@ -1367,6 +1367,7 @@
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_receiving_object_id": false,
                 "ban_entry_init": false,
+                "bridge": false,
                 "commit_root_state_digest": false,
                 "consensus_order_end_of_epoch_last": true,
                 "disable_invariant_violation_check_in_swap_loc": false,
@@ -1385,6 +1386,7 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "mysticeti_leader_scoring_and_schedule": false,
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
@@ -1723,6 +1725,7 @@
                 "max_checkpoint_size_bytes": {
                   "u64": "31457280"
                 },
+                "max_deferral_rounds_for_congestion_control": null,
                 "max_dependency_depth": {
                   "u64": "100"
                 },
@@ -1847,6 +1850,7 @@
                 "max_verifier_meter_ticks_per_function": {
                   "u64": "6000000"
                 },
+                "min_move_binary_format_version": null,
                 "move_binary_format_version": {
                   "u32": "6"
                 },
@@ -8546,6 +8550,30 @@
             "properties": {
               "AuthenticatorStateExpire": {
                 "$ref": "#/components/schemas/SuiAuthenticatorStateExpire"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "BridgeStateCreate"
+            ],
+            "properties": {
+              "BridgeStateCreate": {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "BridgeCommitteeUpdate"
+            ],
+            "properties": {
+              "BridgeCommitteeUpdate": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
             },
             "additionalProperties": false

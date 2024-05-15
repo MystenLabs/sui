@@ -122,6 +122,11 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 // Version 44: Enable consensus fork detection on mainnet.
 //             Switch between Narwhal and Mysticeti consensus in tests, devnet and testnet.
 // Version 45: Use tonic networking for Mysticeti consensus.
+//             Set min Move binary format version to 6.
+//             Enable transactions to be signed with zkLogin inside multisig signature.
+//             Add native bridge.
+//             Enable native bridge in devnet
+//             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -346,6 +351,10 @@ struct FeatureFlags {
     #[serde(skip_serializing_if = "is_false")]
     random_beacon: bool,
 
+    // Enable bridge protocol
+    #[serde(skip_serializing_if = "is_false")]
+    bridge: bool,
+
     #[serde(skip_serializing_if = "is_false")]
     enable_effects_v2: bool,
 
@@ -417,6 +426,10 @@ struct FeatureFlags {
     // Set the upper bound allowed for max_epoch in zklogin signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     zklogin_max_epoch_upper_bound_delta: Option<u64>,
+
+    // Controls leader scoring & schedule change in Mysticeti consensus.
+    #[serde(skip_serializing_if = "is_false")]
+    mysticeti_leader_scoring_and_schedule: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -573,6 +586,8 @@ pub struct ProtocolConfig {
     // ==== Move VM, Move bytecode verifier, and execution limits ===
     /// Maximum Move bytecode version the VM understands. All older versions are accepted.
     move_binary_format_version: Option<u32>,
+    min_move_binary_format_version: Option<u32>,
+
     /// Configuration controlling binary tables size.
     binary_module_handles: Option<u16>,
     binary_struct_handles: Option<u16>,
@@ -1039,9 +1054,13 @@ pub struct ProtocolConfig {
     /// The maximum size of transactions included in a consensus proposed block
     consensus_max_transactions_in_block_bytes: Option<u64>,
 
-    // The max accumulated txn execution cost per object in a checkpoint. Transactions
-    // in a checkpoint will be deferred once their touch shared objects hit this limit.
+    /// The max accumulated txn execution cost per object in a checkpoint. Transactions
+    /// in a checkpoint will be deferred once their touch shared objects hit this limit.
     max_accumulated_txn_cost_per_object_in_checkpoint: Option<u64>,
+
+    /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
+    /// Transactions will be cancelled after this many rounds.
+    max_deferral_rounds_for_congestion_control: Option<u64>,
 }
 
 // feature flags
@@ -1216,6 +1235,15 @@ impl ProtocolConfig {
         self.feature_flags.random_beacon
     }
 
+    pub fn enable_bridge(&self) -> bool {
+        let ret = self.feature_flags.bridge;
+        if ret {
+            // bridge required end-of-epoch transactions
+            assert!(self.feature_flags.end_of_epoch_transaction_supported);
+        }
+        ret
+    }
+
     pub fn enable_effects_v2(&self) -> bool {
         self.feature_flags.enable_effects_v2
     }
@@ -1278,6 +1306,10 @@ impl ProtocolConfig {
 
     pub fn consensus_network(&self) -> ConsensusNetwork {
         self.feature_flags.consensus_network
+    }
+
+    pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
+        self.feature_flags.mysticeti_leader_scoring_and_schedule
     }
 }
 
@@ -1415,6 +1447,7 @@ impl ProtocolConfig {
             max_pure_argument_size: Some(16 * 1024),
             max_programmable_tx_commands: Some(1024),
             move_binary_format_version: Some(6),
+            min_move_binary_format_version: None,
             binary_module_handles: None,
             binary_struct_handles: None,
             binary_function_handles: None,
@@ -1720,6 +1753,8 @@ impl ProtocolConfig {
             consensus_max_transactions_in_block_bytes: None,
 
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
+
+            max_deferral_rounds_for_congestion_control: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
@@ -2134,7 +2169,20 @@ impl ProtocolConfig {
                     if chain != Chain::Testnet && chain != Chain::Mainnet {
                         cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                     }
+
+                    if chain != Chain::Mainnet {
+                        // Enable leader scoring & schedule change on testnet for mysticeti.
+                        cfg.feature_flags.mysticeti_leader_scoring_and_schedule = true;
+                    }
+                    cfg.min_move_binary_format_version = Some(6);
+                    cfg.feature_flags.accept_zklogin_in_multisig = true;
+
                     // Also bumps framework snapshot to fix binop issue.
+
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
                 }
                 // Use this template when making changes:
                 //
@@ -2290,8 +2338,19 @@ impl ProtocolConfig {
         self.max_accumulated_txn_cost_per_object_in_checkpoint = Some(val);
     }
 
+    pub fn set_max_deferral_rounds_for_congestion_control(&mut self, val: u64) {
+        self.max_deferral_rounds_for_congestion_control = Some(val);
+    }
+
     pub fn set_zklogin_max_epoch_upper_bound_delta(&mut self, val: Option<u64>) {
         self.feature_flags.zklogin_max_epoch_upper_bound_delta = val
+    }
+    pub fn set_disable_bridge_for_testing(&mut self) {
+        self.feature_flags.bridge = false
+    }
+
+    pub fn set_mysticeti_leader_scoring_and_schedule(&mut self, val: bool) {
+        self.feature_flags.mysticeti_leader_scoring_and_schedule = val;
     }
 }
 

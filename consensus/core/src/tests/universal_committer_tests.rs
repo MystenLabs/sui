@@ -8,7 +8,7 @@ use parking_lot::RwLock;
 
 use crate::{
     block::{BlockAPI, Slot, TestBlock, Transaction, VerifiedBlock},
-    commit::LeaderStatus,
+    commit::DecidedLeader,
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
@@ -20,8 +20,8 @@ use crate::{
 };
 
 /// Commit one leader.
-#[test]
-fn direct_commit() {
+#[tokio::test]
+async fn direct_commit() {
     let mut test_setup = basic_dag_builder_test_setup();
 
     // Build fully connected dag with empty blocks adding up to voting round of
@@ -43,11 +43,11 @@ fn direct_commit() {
     // The universal committer should mark the potential leaders in leader round 6 as
     // undecided because there is no way to get enough certificates for leaders of
     // leader round 6 without completing wave 2.
-    let sequence = test_setup.committer.try_commit(last_decided);
+    let sequence = test_setup.committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
-    if let LeaderStatus::Commit(ref block) = sequence[0] {
+    if let DecidedLeader::Commit(ref block) = sequence[0] {
         assert_eq!(
             block.author(),
             test_setup.committer.get_leaders(leader_round_wave_1)[0]
@@ -58,8 +58,8 @@ fn direct_commit() {
 }
 
 /// Ensure idempotent replies.
-#[test]
-fn idempotence() {
+#[tokio::test]
+async fn idempotence() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // note: waves & rounds are zero-indexed.
@@ -74,10 +74,10 @@ fn idempotence() {
 
     // Commit one leader.
     let last_decided = Slot::new_for_test(0, 0);
-    let first_sequence = committer.try_commit(last_decided);
+    let first_sequence = committer.try_decide(last_decided);
     assert_eq!(first_sequence.len(), 1);
 
-    if let LeaderStatus::Commit(ref block) = first_sequence[0] {
+    if let DecidedLeader::Commit(ref block) = first_sequence[0] {
         assert_eq!(first_sequence[0].round(), leader_round_wave_1);
         assert_eq!(
             block.author(),
@@ -89,10 +89,10 @@ fn idempotence() {
 
     // Ensure that if try_commit is called again with the same last decided leader
     // input the commit decision will be the same.
-    let first_sequence = committer.try_commit(last_decided);
+    let first_sequence = committer.try_decide(last_decided);
 
     assert_eq!(first_sequence.len(), 1);
-    if let LeaderStatus::Commit(ref block) = first_sequence[0] {
+    if let DecidedLeader::Commit(ref block) = first_sequence[0] {
         assert_eq!(first_sequence[0].round(), leader_round_wave_1);
         assert_eq!(
             block.author(),
@@ -119,11 +119,11 @@ fn idempotence() {
         leader_status_wave_1.authority(),
     );
     let leader_round_wave_2 = committer.committers[0].leader_round(2);
-    let second_sequence = committer.try_commit(last_decided);
+    let second_sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {second_sequence:#?}");
 
     assert_eq!(second_sequence.len(), 1);
-    if let LeaderStatus::Commit(ref block) = second_sequence[0] {
+    if let DecidedLeader::Commit(ref block) = second_sequence[0] {
         assert_eq!(second_sequence[0].round(), leader_round_wave_2);
         assert_eq!(
             block.author(),
@@ -135,8 +135,8 @@ fn idempotence() {
 }
 
 /// Commit one by one each leader as the dag progresses in ideal conditions.
-#[test]
-fn multiple_direct_commit() {
+#[tokio::test]
+async fn multiple_direct_commit() {
     let (context, dag_state, committer) = basic_test_setup();
 
     let mut ancestors = None;
@@ -154,11 +154,11 @@ fn multiple_direct_commit() {
 
         // After each wave is complete try commit the leader of that wave.
         let leader_round = committer.committers[0].leader_round(n);
-        let sequence = committer.try_commit(last_decided);
+        let sequence = committer.try_decide(last_decided);
         tracing::info!("Commit sequence: {sequence:#?}");
 
         assert_eq!(sequence.len(), 1);
-        if let LeaderStatus::Commit(ref block) = sequence[0] {
+        if let DecidedLeader::Commit(ref block) = sequence[0] {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
         } else {
@@ -173,8 +173,8 @@ fn multiple_direct_commit() {
 }
 
 /// Commit 10 leaders in a row (calling the committer after adding them).
-#[test]
-fn direct_commit_late_call() {
+#[tokio::test]
+async fn direct_commit_late_call() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // note: waves & rounds are zero-indexed.
@@ -188,7 +188,7 @@ fn direct_commit_late_call() {
     );
 
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     // With 11 waves completed, excluding wave 0 with genesis round as its leader
@@ -196,7 +196,7 @@ fn direct_commit_late_call() {
     assert_eq!(sequence.len(), num_waves - 1_usize);
     for (i, leader_block) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(i as u32 + 1);
-        if let LeaderStatus::Commit(ref block) = leader_block {
+        if let DecidedLeader::Commit(ref block) = leader_block {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), committer.get_leaders(leader_round)[0]);
         } else {
@@ -206,8 +206,8 @@ fn direct_commit_late_call() {
 }
 
 /// Do not commit anything if we are still in the first wave.
-#[test]
-fn no_genesis_commit() {
+#[tokio::test]
+async fn no_genesis_commit() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // note: waves & rounds are zero-indexed.
@@ -217,15 +217,15 @@ fn no_genesis_commit() {
         ancestors = Some(build_dag(context.clone(), dag_state.clone(), ancestors, r));
 
         let last_committed = Slot::new_for_test(0, 0);
-        let sequence = committer.try_commit(last_committed);
+        let sequence = committer.try_decide(last_committed);
         tracing::info!("Commit sequence: {sequence:#?}");
         assert!(sequence.is_empty());
     }
 }
 
 /// We directly skip the leader if there are enough non-votes (blames).
-#[test]
-fn direct_skip_no_leader_votes() {
+#[tokio::test]
+async fn direct_skip_no_leader_votes() {
     let mut test_setup = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the leader round of wave 1.
@@ -259,11 +259,11 @@ fn direct_skip_no_leader_votes() {
     // Ensure no blocks are committed because there are 2f+1 blame (non-votes) for
     // the leader of wave 1.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = test_setup.committer.try_commit(last_decided);
+    let sequence = test_setup.committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
-    if let LeaderStatus::Skip(leader) = sequence[0] {
+    if let DecidedLeader::Skip(leader) = sequence[0] {
         assert_eq!(leader.authority, leader_wave_1);
         assert_eq!(leader.round, leader_round_wave_1);
     } else {
@@ -272,8 +272,8 @@ fn direct_skip_no_leader_votes() {
 }
 
 /// We directly skip the leader if it is missing.
-#[test]
-fn direct_skip_missing_leader_block() {
+#[tokio::test]
+async fn direct_skip_missing_leader_block() {
     let mut test_setup = basic_dag_builder_test_setup();
 
     // Add enough blocks to reach the decision round of wave 0
@@ -307,11 +307,11 @@ fn direct_skip_missing_leader_block() {
 
     // Ensure the leader is skipped because the leader is missing.
     let last_committed = Slot::new_for_test(0, 0);
-    let sequence = test_setup.committer.try_commit(last_committed);
+    let sequence = test_setup.committer.try_decide(last_committed);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 1);
-    if let LeaderStatus::Skip(leader) = sequence[0] {
+    if let DecidedLeader::Skip(leader) = sequence[0] {
         assert_eq!(
             leader.authority,
             test_setup.committer.get_leaders(leader_round_wave_1)[0]
@@ -323,8 +323,8 @@ fn direct_skip_missing_leader_block() {
 }
 
 /// Indirect-commit the first leader.
-#[test]
-fn indirect_commit() {
+#[tokio::test]
+async fn indirect_commit() {
     telemetry_subscribers::init_for_testing();
     // Dag Notes:
     // - Fully connected up to the leader round of wave 1.
@@ -381,14 +381,14 @@ fn indirect_commit() {
     // Ensure we indirectly commit the leader of wave 1 via the directly committed
     // leader of wave 2.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 2);
 
     for (idx, decided_leader) in sequence.iter().enumerate() {
         let leader_round = committer.committers[0].leader_round(idx as u32 + 1);
         let expected_leader = committer.get_leaders(leader_round)[0];
-        if let LeaderStatus::Commit(ref block) = decided_leader {
+        if let DecidedLeader::Commit(ref block) = decided_leader {
             assert_eq!(block.round(), leader_round);
             assert_eq!(block.author(), expected_leader);
         } else {
@@ -398,8 +398,8 @@ fn indirect_commit() {
 }
 
 /// Commit the first leader, skip the 2nd, and commit the 3rd leader.
-#[test]
-fn indirect_skip() {
+#[tokio::test]
+async fn indirect_skip() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader of wave 2
@@ -461,14 +461,14 @@ fn indirect_skip() {
 
     // Ensure we make a commit decision for the leaders of wave 1 ~ 3
     let last_committed = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_committed);
+    let sequence = committer.try_decide(last_committed);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert_eq!(sequence.len(), 3);
 
     // Ensure we commit the leader of wave 1 directly.
     let leader_round_wave_1 = committer.committers[0].leader_round(1);
     let leader_wave_1 = committer.get_leaders(leader_round_wave_1)[0];
-    if let LeaderStatus::Commit(ref block) = sequence[0] {
+    if let DecidedLeader::Commit(ref block) = sequence[0] {
         assert_eq!(block.round(), leader_round_wave_1);
         assert_eq!(block.author(), leader_wave_1);
     } else {
@@ -479,7 +479,7 @@ fn indirect_skip() {
     // This happens because we do not have enough votes in voting round of wave 2
     // for the certificates of decision round wave 2 to form a certified link to
     // the leader of wave 2.
-    if let LeaderStatus::Skip(leader) = sequence[1] {
+    if let DecidedLeader::Skip(leader) = sequence[1] {
         assert_eq!(leader.authority, leader_wave_2);
         assert_eq!(leader.round, leader_round_wave_2);
     } else {
@@ -489,7 +489,7 @@ fn indirect_skip() {
     // Ensure we commit the 3rd leader directly.
     let leader_round_wave_3 = committer.committers[0].leader_round(3);
     let leader_wave_3 = committer.get_leaders(leader_round_wave_3)[0];
-    if let LeaderStatus::Commit(ref block) = sequence[2] {
+    if let DecidedLeader::Commit(ref block) = sequence[2] {
         assert_eq!(block.round(), leader_round_wave_3);
         assert_eq!(block.author(), leader_wave_3);
     } else {
@@ -498,8 +498,8 @@ fn indirect_skip() {
 }
 
 /// If there is no leader with enough support nor blame, we commit nothing.
-#[test]
-fn undecided() {
+#[tokio::test]
+async fn undecided() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach the leader of wave 1.
@@ -549,7 +549,7 @@ fn undecided() {
     // Ensure outcome of direct & indirect rule is undecided. So not commit decisions
     // should be returned.
     let last_committed = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_committed);
+    let sequence = committer.try_decide(last_committed);
     tracing::info!("Commit sequence: {sequence:#?}");
     assert!(sequence.is_empty());
 }
@@ -557,8 +557,8 @@ fn undecided() {
 // This test scenario has one authority that is acting in a byzantine manner. It
 // will be sending multiple different blocks to different validators for a round.
 // The commit rule should handle this and correctly commit the expected blocks.
-#[test]
-fn test_byzantine_direct_commit() {
+#[tokio::test]
+async fn test_byzantine_direct_commit() {
     let (context, dag_state, committer) = basic_test_setup();
 
     // Add enough blocks to reach leader round of wave 4
@@ -692,11 +692,11 @@ fn test_byzantine_direct_commit() {
 
     // Expect a successful direct commit of A12 and leaders at rounds 9, 6 & 3.
     let last_decided = Slot::new_for_test(0, 0);
-    let sequence = committer.try_commit(last_decided);
+    let sequence = committer.try_decide(last_decided);
     tracing::info!("Commit sequence: {sequence:#?}");
 
     assert_eq!(sequence.len(), 4);
-    if let LeaderStatus::Commit(ref block) = sequence[3] {
+    if let DecidedLeader::Commit(ref block) = sequence[3] {
         assert_eq!(
             block.author(),
             committer.get_leaders(leader_round_wave_4)[0]

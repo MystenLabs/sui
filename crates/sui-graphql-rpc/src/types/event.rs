@@ -222,8 +222,7 @@ impl Event {
 
         let mut conn = Connection::new(prev, next);
 
-        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
-        // current available range. This sets a consistent upper bound for the nested queries.
+        // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(

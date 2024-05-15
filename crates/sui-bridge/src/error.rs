@@ -33,6 +33,8 @@ pub enum BridgeError {
     TransientProviderError(String),
     // Ethereum provider error
     ProviderError(String),
+    // TokenId is unknown
+    UnknownTokenId(u8),
     // Invalid BridgeCommittee
     InvalidBridgeCommittee(String),
     // Invalid Bridge authority signature
@@ -43,6 +45,8 @@ pub enum BridgeError {
     InvalidAuthorityUrl(BridgeAuthorityPublicKeyBytes),
     // Invalid Bridge Client request
     InvalidBridgeClientRequest(String),
+    // Invalid ChainId
+    InvalidChainId,
     // Message is signed by mismatched authority
     MismatchedAuthoritySigner,
     // Signature is over a mismatched action

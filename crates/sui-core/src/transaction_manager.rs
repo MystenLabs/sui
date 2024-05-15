@@ -458,7 +458,13 @@ impl TransactionManager {
                 }
 
                 for key in input_object_keys.iter() {
-                    object_availability.insert(*key, None);
+                    if key.is_cancelled() {
+                        // Cancelled txn objects should always be available immediately.
+                        // Don't need to wait on these objects for execution.
+                        object_availability.insert(*key, Some(true));
+                    } else {
+                        object_availability.insert(*key, None);
+                    }
                 }
 
                 (cert, fx_digest, input_object_keys)
@@ -468,6 +474,9 @@ impl TransactionManager {
         {
             let mut inner = reconfig_lock.write();
             for (key, value) in object_availability.iter_mut() {
+                if value.is_some_and(|available| available) {
+                    continue;
+                }
                 if let Some(available) = inner.available_objects_cache.is_object_available(key) {
                     *value = Some(available);
                 }
