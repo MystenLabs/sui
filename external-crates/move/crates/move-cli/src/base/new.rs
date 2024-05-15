@@ -30,7 +30,7 @@ pub struct New {
 }
 
 fn is_valid_package_name(name: &str) -> bool {
-    let re = regex::Regex::new(r"^[a-z]+(?:_[a-z0-9]+)*$").unwrap();
+    let re = regex::Regex::new(r"^[a-z][a-z0-9_]*$").unwrap();
     re.is_match(name)
 }
 
@@ -56,8 +56,8 @@ impl New {
 
         if !is_valid_package_name(&name) {
             return Err(anyhow!(
-                "invalid package name, only support: lowercase letters, numbers, and underscores,
-                can only start with a lowercase letter."
+                "invalid package name, only support: lowercase letters, numbers, and underscores, \
+should start with a lowercase letter."
             ));
         }
 
