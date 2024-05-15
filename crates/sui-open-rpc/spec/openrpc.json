@@ -1387,6 +1387,7 @@
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
                 "mysticeti_leader_scoring_and_schedule": false,
+                "mysticeti_use_committed_subdag_digest": false,
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
