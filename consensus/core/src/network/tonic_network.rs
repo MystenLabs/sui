@@ -59,6 +59,7 @@ const MAX_FETCH_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 
 // Buffer size for TCP sockets and higher level network stack.
+// TODO: move to parameters.
 const BUFFER_SIZE: usize = 64 << 20;
 
 // Maximum number of connections in backlog.
@@ -585,9 +586,6 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     }
                     if let Err(e) = socket.set_reuseaddr(true) {
                         info!("Failed to set SO_REUSEADDR: {e:?}");
-                    }
-                    if let Err(e) = socket.set_reuseport(true) {
-                        info!("Failed to set SO_REUSEPORT: {e:?}");
                     }
                     if let Err(e) = socket.set_send_buffer_size(BUFFER_SIZE as u32) {
                         info!("Failed to set send buffer size to {BUFFER_SIZE}: {e:?}");
