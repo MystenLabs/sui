@@ -15,12 +15,13 @@ use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair, NetworkPublicKey};
 use futures::{stream, Stream, StreamExt as _};
 use hyper::server::conn::Http;
+use mysten_common::sync::notify_once::NotifyOnce;
 use mysten_network::{multiaddr::Protocol, Multiaddr};
 use parking_lot::RwLock;
 use tokio::{
-    net::TcpSocket,
-    sync::oneshot::{self, Sender},
+    pin,
     task::JoinSet,
+    time::{timeout, Instant},
 };
 use tokio_rustls::TlsAcceptor;
 use tokio_stream::{iter, Iter};
@@ -61,6 +62,7 @@ const MAX_TOTAL_FETCHED_BYTES: usize = 128 * 1024 * 1024;
 const BUFFER_SIZE: usize = 64 << 20;
 
 // Maximum number of connections in backlog.
+#[cfg(not(msim))]
 const MAX_CONNECTIONS_BACKLOG: u32 = 1024;
 
 // Implements Tonic RPC client for Consensus.
@@ -482,7 +484,7 @@ pub(crate) struct TonicManager {
     network_keypair: NetworkKeyPair,
     client: Arc<TonicClient>,
     server: JoinSet<()>,
-    shutdown: Option<Sender<()>>,
+    shutdown_notif: Arc<NotifyOnce>,
 }
 
 impl TonicManager {
@@ -492,7 +494,7 @@ impl TonicManager {
             network_keypair: network_keypair.clone(),
             client: Arc::new(TonicClient::new(context, network_keypair)),
             server: JoinSet::new(),
-            shutdown: None,
+            shutdown_notif: Arc::new(NotifyOnce::new()),
         }
     }
 }
@@ -528,8 +530,6 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             }
         );
         let own_address = to_socket_addr(&own_address).unwrap();
-        let (tx_shutdown, mut rx_shutdown) = oneshot::channel::<()>();
-        self.shutdown = Some(tx_shutdown);
         let service = TonicServiceProxy::new(self.context.clone(), service);
         let config = &self.context.parameters.tonic;
 
@@ -554,40 +554,69 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
             create_rustls_server_config(&self.context, self.network_keypair.clone());
         let tls_acceptor = TlsAcceptor::from(Arc::new(tls_server_config));
 
-        // Initialize TCP socket.
-        let socket = if own_address.is_ipv4() {
-            TcpSocket::new_v4()
-        } else if own_address.is_ipv6() {
-            TcpSocket::new_v6()
-        } else {
-            panic!("Invalid own address: {own_address:?}");
-        }
-        .unwrap_or_else(|e| panic!("Cannot create TCP socket: {e:?}"));
-        if let Err(e) = socket.set_nodelay(true) {
-            warn!("Failed to set TCP_NODELAY: {e:?}");
-        }
-        if let Err(e) = socket.set_reuseaddr(true) {
-            warn!("Failed to set SO_REUSEADDR: {e:?}");
-        }
-        if let Err(e) = socket.set_reuseport(true) {
-            warn!("Failed to set SO_REUSEPORT: {e:?}");
-        }
-        if let Err(e) = socket.set_send_buffer_size(BUFFER_SIZE as u32) {
-            warn!("Failed to set send buffer size to {BUFFER_SIZE}: {e:?}");
-        }
-        if let Err(e) = socket.set_recv_buffer_size(BUFFER_SIZE as u32) {
-            warn!("Failed to set receive buffer size to {BUFFER_SIZE}: {e:?}");
-        }
-        socket
-            .bind(own_address)
-            .unwrap_or_else(|e| panic!("Cannot bind to {own_address}: {e:?}"));
-
-        // Start listening on the socket.
-        let listener = socket
-            .listen(MAX_CONNECTIONS_BACKLOG)
-            .unwrap_or_else(|e| panic!("Cannot listen at {own_address}: {e:?}"));
+        // Create listener to incoming connections.
+        let deadline = Instant::now() + Duration::from_secs(30);
+        let listener = loop {
+            if Instant::now() > deadline {
+                panic!("Failed to start server: timeout");
+            }
+            cfg_if!(
+                if #[cfg(msim)] {
+                    // msim does not have a working stub for TcpSocket. So create TcpListener directly.
+                    match tokio::net::TcpListener::bind(own_address).await {
+                        Ok(listener) => break listener,
+                        Err(e) => {
+                            warn!("Error binding to {own_address}: {e:?}");
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+                } else {
+                    // Create TcpListener via TCP socket, for more fine grained configurations.
+                    let socket = if own_address.is_ipv4() {
+                        tokio::net::TcpSocket::new_v4()
+                    } else if own_address.is_ipv6() {
+                        tokio::net::TcpSocket::new_v6()
+                    } else {
+                        panic!("Invalid own address: {own_address:?}");
+                    }
+                    .unwrap_or_else(|e| panic!("Cannot create TCP socket: {e:?}"));
+                    if let Err(e) = socket.set_nodelay(true) {
+                        info!("Failed to set TCP_NODELAY: {e:?}");
+                    }
+                    if let Err(e) = socket.set_reuseaddr(true) {
+                        info!("Failed to set SO_REUSEADDR: {e:?}");
+                    }
+                    if let Err(e) = socket.set_reuseport(true) {
+                        info!("Failed to set SO_REUSEPORT: {e:?}");
+                    }
+                    if let Err(e) = socket.set_send_buffer_size(BUFFER_SIZE as u32) {
+                        info!("Failed to set send buffer size to {BUFFER_SIZE}: {e:?}");
+                    }
+                    if let Err(e) = socket.set_recv_buffer_size(BUFFER_SIZE as u32) {
+                        info!("Failed to set receive buffer size to {BUFFER_SIZE}: {e:?}");
+                    }
+                    match socket.bind(own_address) {
+                        Ok(_) => {}
+                        Err(e) => {
+                            warn!("Error binding to {own_address}: {e:?}");
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                            continue;
+                        }
+                    };
+                    match socket.listen(MAX_CONNECTIONS_BACKLOG) {
+                        Ok(listener) => break listener,
+                        Err(e) => {
+                            warn!("Error listening at {own_address}: {e:?}");
+                            tokio::time::sleep(Duration::from_secs(1)).await;
+                        }
+                    }
+                }
+            );
+        };
 
         let connections_info = Arc::new(ConnectionsInfo::new(self.context.clone()));
+
+        let shutdown_notif = self.shutdown_notif.clone();
 
         self.server.spawn(async move {
             let mut connection_handlers = JoinSet::new();
@@ -617,10 +646,15 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                         }
                         continue;
                     },
-                    _ = &mut rx_shutdown => {
+                    _ = shutdown_notif.wait() => {
                         info!("Received shutdown. Stopping consensus service.");
-                        connection_handlers.shutdown().await;
-                        break;
+                        if timeout(Duration::from_secs(5), async {
+                            while connection_handlers.join_next().await.is_some() {}
+                        }).await.is_err() {
+                            warn!("Failed to stop all connection handlers in 5s. Forcing shutdown.");
+                            connection_handlers.shutdown().await;
+                        }
+                        return;
                     },
                 };
                 trace!("Received TCP connection attempt from {peer_addr}");
@@ -629,6 +663,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                 let consensus_service = consensus_service.clone();
                 let http = http.clone();
                 let connections_info = connections_info.clone();
+                let shutdown_notif = shutdown_notif.clone();
 
                 connection_handlers.spawn(async move {
                     let tls_stream = tls_acceptor.accept(tcp_stream).await.map_err(|e| {
@@ -673,16 +708,40 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     };
                     let svc = tower::ServiceBuilder::new()
                         // NOTE: the PeerInfo extension is copied to every request served.
-                        // If PeerInfo ever starts to contain complex values, it should be wrapped with an Arc.
+                        // If PeerInfo starts to contain complex values, it should be wrapped in an Arc<>.
                         .add_extension(PeerInfo { authority_index })
                         .service(consensus_service.clone());
 
+                    pin! {
+                        let connection = http.serve_connection(tls_stream, svc);
+                    }
                     trace!("Connection ready. Starting to serve requests for {peer_addr:?}");
-                    http.serve_connection(tls_stream, svc).await.map_err(|e| {
-                        let msg = format!("Error serving {peer_addr:?}: {e:?}");
-                        trace!(msg);
-                        ConsensusError::NetworkServerConnection(msg)
-                    })
+
+                    let mut has_shutdown = false;
+                    loop {
+                        tokio::select! {
+                            result = connection.as_mut() => {
+                                match result {
+                                    Ok(()) => {
+                                        trace!("Connection closed for {peer_addr:?}");
+                                        break;
+                                    },
+                                    Err(e) => {
+                                        let msg = format!("Connection error serving {peer_addr:?}: {e:?}");
+                                        trace!(msg);
+                                        return Err(ConsensusError::NetworkServerConnection(msg));
+                                    },
+                                }
+                            },
+                            _ = shutdown_notif.wait(), if !has_shutdown => {
+                                trace!("Received shutdown. Stopping connection for {peer_addr:?}");
+                                connection.as_mut().graceful_shutdown();
+                                has_shutdown = true;
+                            },
+                        }
+                    }
+
+                    Ok(())
                 });
             }
         });
@@ -691,9 +750,7 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
     }
 
     async fn stop(&mut self) {
-        if let Some(shutdown) = self.shutdown.take() {
-            let _ = shutdown.send(());
-        }
+        let _ = self.shutdown_notif.notify();
         self.server.join_next().await;
 
         self.context

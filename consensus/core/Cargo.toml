@@ -26,6 +26,7 @@ hyper-rustls.workspace = true
 itertools.workspace = true
 quinn-proto.workspace = true
 mockall.workspace = true
+mysten-common.workspace = true
 mysten-metrics.workspace = true
 mysten-network.workspace = true
 nom = "7.1.3"

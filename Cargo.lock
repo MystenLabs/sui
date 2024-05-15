@@ -2620,6 +2620,7 @@ dependencies = [
  "hyper-rustls 0.24.0",
  "itertools 0.10.5",
  "mockall",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "nom",
