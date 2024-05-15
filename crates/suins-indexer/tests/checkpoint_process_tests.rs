@@ -6,6 +6,8 @@ use sui_types::full_checkpoint_content::CheckpointData;
 use suins_indexer::indexer::SuinsIndexer;
 
 /// Test ids.
+const TEST_REGISTRY_TABLE_ID: &str =
+    "0xb120c0d55432630fce61f7854795a3463deb6e3b443cc4ae72e1282073ff56e4";
 const TEST_NAME_RECORD_TYPE: &str = "0x2::dynamic_field::Field<0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::domain::Domain,0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::name_record::NameRecord>";
 const TEST_SUBDOMAIN_REGISTRATION_TYPE: &str = "0x22fa05f21b1ad71442491220bb9338f7b7095fe35000ef88d5400d28523bdd93::subdomain_registration::SubDomainRegistration";
 
@@ -140,7 +142,8 @@ fn read_checkpoint_from_file(file: &[u8]) -> CheckpointData {
 /// Uses the testnet demo we used to extract the checkpoints being processed.
 fn get_test_indexer() -> SuinsIndexer {
     SuinsIndexer::new(
-        TEST_NAME_RECORD_TYPE.to_string(),
+        TEST_REGISTRY_TABLE_ID.to_string(),
         TEST_SUBDOMAIN_REGISTRATION_TYPE.to_string(),
+        TEST_NAME_RECORD_TYPE.to_string(),
     )
 }

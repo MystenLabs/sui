@@ -18,6 +18,8 @@ use sui_types::{
 use crate::models::VerifiedDomain;
 
 /// We default to mainnet for both.
+const REGISTRY_TABLE_ID: &str =
+    "0xe64cd9db9f829c6cc405d9790bd71567ae07259855f4fba6f02c84f52298c106";
 const NAME_RECORD_TYPE: &str = "0x2::dynamic_field::Field<0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::domain::Domain,0xd22b24490e0bae52676651b4f56660a5ff8022a2576e0089f79b3c88d44e08f0::name_record::NameRecord>";
 const SUBDOMAIN_REGISTRATION_TYPE: &str =
     "0x00c2f85e07181b90c140b15c5ce27d863f93c4d9159d2a4e7bdaeb40e286d6f5::subdomain_registration::SubDomainRegistration";
@@ -26,6 +28,7 @@ const SUBDOMAIN_REGISTRATION_TYPE: &str =
 pub struct NameRecordChange(Field<Domain, NameRecord>);
 
 pub struct SuinsIndexer {
+    registry_table_id: SuiAddress,
     name_record_type: StructTag,
     subdomain_wrapper_type: StructTag,
 }
@@ -33,8 +36,9 @@ pub struct SuinsIndexer {
 impl std::default::Default for SuinsIndexer {
     fn default() -> Self {
         Self::new(
-            NAME_RECORD_TYPE.to_owned(),
+            REGISTRY_TABLE_ID.to_owned(),
             SUBDOMAIN_REGISTRATION_TYPE.to_owned(),
+            NAME_RECORD_TYPE.to_owned(),
         )
     }
 }
@@ -42,11 +46,13 @@ impl std::default::Default for SuinsIndexer {
 impl SuinsIndexer {
     /// Create a new config by passing the table ID + subdomain wrapper type.
     /// Useful for testing or custom environments.
-    pub fn new(record_type: String, wrapper_type: String) -> Self {
+    pub fn new(registry_address: String, wrapper_type: String, record_type: String) -> Self {
+        let registry_table_id = SuiAddress::from_str(&registry_address).unwrap();
         let name_record_type = StructTag::from_str(&record_type).unwrap();
         let subdomain_wrapper_type = StructTag::from_str(&wrapper_type).unwrap();
 
         Self {
+            registry_table_id,
             name_record_type,
             subdomain_wrapper_type,
         }
@@ -62,11 +68,15 @@ impl SuinsIndexer {
     }
 
     // Filter by the dynamic field value type.
-    // A valid name record for an object has the type `Field<Domain,NameRecord>
+    // A valid name record for an object has the type `Field<Domain,NameRecord>,
+    // and the parent of it is the `registry` table id.
     pub fn is_name_record(&self, object: &Object) -> bool {
         object
-            .struct_tag()
-            .is_some_and(|tag| tag == self.name_record_type)
+            .get_single_owner()
+            .is_some_and(|owner| owner == self.registry_table_id)
+            && object
+                .struct_tag()
+                .is_some_and(|tag| tag == self.name_record_type)
     }
 
     /// Processes a checkpoint and produces a list of `updates` and a list of `removals`
