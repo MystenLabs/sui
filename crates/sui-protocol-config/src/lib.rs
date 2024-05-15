@@ -2179,8 +2179,8 @@ impl ProtocolConfig {
 
                     // Also bumps framework snapshot to fix binop issue.
 
-                    // enable bridge in devnet
-                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                    // enable bridge in devnet and testnet
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.bridge = true;
                     }
                 }
