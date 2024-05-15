@@ -76,7 +76,7 @@ impl Parameters {
     }
 
     pub(crate) fn default_min_round_delay() -> Duration {
-        if cfg!(msim) {
+        if cfg!(msim) || std::env::var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY").is_ok() {
             // Checkpoint building and execution cannot keep up with high commit rate in simtests,
             // leading to long reconfiguration delays. This is because simtest is single threaded,
             // and spending too much time in consensus can lead to starvation elsewhere.
