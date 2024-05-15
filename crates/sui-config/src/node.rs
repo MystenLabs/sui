@@ -179,6 +179,12 @@ pub struct NodeConfig {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub firewall_config: Option<RemoteFirewallConfig>,
+
+    /// Only applicable to noes running json rpc server.
+    /// If true, node will inject client IP into headers
+    /// in validator requests for eligible rpc endpoints.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_client_ip_injection: Option<bool>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

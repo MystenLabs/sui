@@ -41,6 +41,7 @@ pub struct JsonRpcService<L> {
     methods: Methods,
     rpc_router: RpcRouter,
     traffic_controller: Option<Arc<TrafficController>>,
+    with_client_ip_injection: bool,
 }
 
 impl<L> JsonRpcService<L> {
@@ -51,6 +52,7 @@ impl<L> JsonRpcService<L> {
         remote_fw_config: Option<RemoteFirewallConfig>,
         policy_config: Option<PolicyConfig>,
         traffic_controller_metrics: TrafficControllerMetrics,
+        with_client_ip_injection: bool,
     ) -> Self {
         Self {
             methods,
@@ -64,6 +66,7 @@ impl<L> JsonRpcService<L> {
                     remote_fw_config,
                 ))
             }),
+            with_client_ip_injection,
         }
     }
 }
@@ -130,7 +133,14 @@ pub async fn json_rpc_handler<L: Logger>(
     let api_version = headers
         .get(CLIENT_TARGET_API_VERSION_HEADER)
         .and_then(|h| h.to_str().ok());
-    let response = process_raw_request(&service, api_version, raw_request.get(), client_addr).await;
+    let response = process_raw_request(
+        &service,
+        api_version,
+        raw_request.get(),
+        client_addr,
+        service.with_client_ip_injection,
+    )
+    .await;
 
     ok_response(response.result)
 }
@@ -140,6 +150,7 @@ async fn process_raw_request<L: Logger>(
     api_version: Option<&str>,
     raw_request: &str,
     client_addr: SocketAddr,
+    with_client_ip_injection: bool,
 ) -> MethodResponse {
     if let Ok(request) = serde_json::from_str::<Request>(raw_request) {
         // check if either IP is blocked, in which case return early
@@ -150,8 +161,14 @@ async fn process_raw_request<L: Logger>(
                 return blocked_response;
             }
         }
-        let response =
-            process_request(request, api_version, service.call_data(), client_addr).await;
+        let response = process_request(
+            request,
+            api_version,
+            service.call_data(),
+            client_addr,
+            with_client_ip_injection,
+        )
+        .await;
 
         // handle response tallying
         if let Some(traffic_controller) = &service.traffic_controller {
@@ -210,6 +227,7 @@ async fn process_request<L: Logger>(
     api_version: Option<&str>,
     call: CallData<'_, L>,
     client_addr: SocketAddr,
+    with_client_ip_injection: bool,
 ) -> MethodResponse {
     let CallData {
         methods,
@@ -225,19 +243,20 @@ async fn process_request<L: Logger>(
 
     // This is really ugly, but it's the only way to do it for now. We will
     // kill this aggressively once we move away from this json rpc framework.
-    let (params_string, name): (String, String) =
+    let (params_string, name): (String, String) = if with_client_ip_injection {
         match monitored_reroute(raw_params, name_str, client_addr) {
             Ok((params_string, name)) => (params_string, name),
             Err(e) => {
                 warn!("Could not reroute request: {:?}", e);
                 (String::from(""), name_str.to_string())
             }
-        };
-
+        }
+    } else {
+        (String::from(""), name_str.to_string())
+    };
     let params_str = params_string.as_str();
-
     let params = if params_str.is_empty() {
-        // Failed to parse params
+        // No param injection
         Params::new(raw_params.map(|params| params.get()))
     } else if raw_params.is_some() {
         Params::new(Some(params_str))
