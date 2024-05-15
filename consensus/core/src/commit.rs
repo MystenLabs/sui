@@ -8,6 +8,7 @@ use std::{
     ops::{Deref, Range},
     sync::Arc,
 };
+use std::cell::OnceCell;
 
 use bytes::Bytes;
 use consensus_config::{AuthorityIndex, DefaultHashFunction, DIGEST_LENGTH};
@@ -299,6 +300,9 @@ pub struct CommittedSubDag {
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
+    /// The committed sub dag digest. The reputation scores are excluded since there is no strict
+    /// requirements those to be consistent for every committed sub dag.
+    digest: CommittedSubDagDigest
 }
 
 impl CommittedSubDag {
@@ -309,12 +313,14 @@ impl CommittedSubDag {
         timestamp_ms: BlockTimestampMs,
         commit_index: CommitIndex,
     ) -> Self {
+        let digest = Self::digest(leader, &blocks, timestamp_ms, commit_index);
         Self {
             leader,
             blocks,
             timestamp_ms,
             commit_index,
             reputation_scores_desc: vec![],
+            digest
         }
     }
 
@@ -330,6 +336,51 @@ impl CommittedSubDag {
                 .cmp(&b.round())
                 .then_with(|| a.author().cmp(&b.author()))
         });
+    }
+
+    fn digest(leader: BlockRef,
+              blocks: &[VerifiedBlock],
+              timestamp_ms: BlockTimestampMs,
+              commit_index: CommitIndex,) -> CommittedSubDagDigest {
+        let mut hasher = DefaultHashFunction::new();
+        // Instead of hashing serialized CommittedSubDag, hash the certificate digests instead.
+        // Signatures in the certificates are not part of the commitment.
+        for block in blocks {
+            hasher.update(block.digest());
+        }
+        hasher.update(leader.digest);
+        hasher.update(
+            bcs::to_bytes(&commit_index).unwrap_or_else(|_| {
+                panic!("Serialization of {} should not fail", commit_index)
+            }),
+        );
+        hasher.update(bcs::to_bytes(&timestamp_ms).unwrap_or_else(|_| {
+            panic!("Serialization of {} should not fail", timestamp_ms)
+        }));
+        CommittedSubDagDigest(hasher.finalize().into())
+    }
+}
+
+
+/// Digest of a committed sub dag.
+#[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CommittedSubDagDigest([u8; DIGEST_LENGTH]);
+
+impl CommittedSubDagDigest {
+    /// Lexicographic min & max digest.
+    pub const MIN: Self = Self([u8::MIN; DIGEST_LENGTH]);
+    pub const MAX: Self = Self([u8::MAX; DIGEST_LENGTH]);
+}
+
+impl Hash for CommittedSubDagDigest {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        state.write(&self.0[..8]);
+    }
+}
+
+impl From<CommittedSubDagDigest> for Digest<{ DIGEST_LENGTH }> {
+    fn from(hd: CommittedSubDagDigest) -> Self {
+        Digest::new(hd.0)
     }
 }
 
