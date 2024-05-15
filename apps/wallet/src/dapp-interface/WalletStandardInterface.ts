@@ -324,7 +324,6 @@ export class SuiWallet implements Wallet {
 					type: 'transaction',
 					data: await input.transactionBlock.toJSON(),
 					options: {
-						showBalanceChanges: true,
 						showRawEffects: true,
 						showRawInput: true,
 					},
@@ -333,7 +332,7 @@ export class SuiWallet implements Wallet {
 					account: input.account?.address || this.#accounts[0]?.address || '',
 				},
 			}),
-			({ result: { rawEffects, rawTransaction, balanceChanges, digest } }) => {
+			({ result: { rawEffects, rawTransaction, digest } }) => {
 				const [
 					{
 						txSignatures: [signature],
@@ -348,18 +347,6 @@ export class SuiWallet implements Wallet {
 					signature,
 					bytes,
 					effects: toB64(new Uint8Array(rawEffects!)),
-					balanceChanges:
-						balanceChanges?.map(({ coinType, amount, owner }) => {
-							const address =
-								(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
-								(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
-
-							return {
-								coinType,
-								amount,
-								address,
-							};
-						}) ?? null,
 				};
 			},
 		);

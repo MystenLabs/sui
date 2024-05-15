@@ -76,16 +76,14 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 			version: '2.0.0',
 			signAndExecuteTransactionBlock: async (input) => {
 				const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
-				const { digest, rawEffects, balanceChanges, rawTransaction } =
-					await signAndExecuteTransactionBlock({
-						...input,
-						transactionBlock,
-						options: {
-							showRawEffects: true,
-							showBalanceChanges: true,
-							showRawInput: true,
-						},
-					});
+				const { digest, rawEffects, rawTransaction } = await signAndExecuteTransactionBlock({
+					...input,
+					transactionBlock,
+					options: {
+						showRawEffects: true,
+						showRawInput: true,
+					},
+				});
 
 				const [
 					{
@@ -101,18 +99,6 @@ function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFea
 					signature,
 					bytes,
 					effects: toB64(new Uint8Array(rawEffects!)),
-					balanceChanges:
-						balanceChanges?.map(({ coinType, amount, owner }) => {
-							const address =
-								(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
-								(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
-
-							return {
-								coinType,
-								amount,
-								address,
-							};
-						}) ?? null,
 				};
 			},
 		};

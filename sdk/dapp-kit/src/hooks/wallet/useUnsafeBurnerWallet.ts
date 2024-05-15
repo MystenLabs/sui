@@ -167,10 +167,7 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			return suiClient.executeTransactionBlock({
 				signature,
 				transactionBlock: bytes,
-				options: {
-					showRawEffects: true,
-					showBalanceChanges: true,
-				},
+				options: transactionInput.options,
 			});
 		};
 
@@ -186,12 +183,11 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 
 			transactionInput.signal?.throwIfAborted();
 
-			const { rawEffects, balanceChanges, digest } = await suiClient.executeTransactionBlock({
+			const { rawEffects, digest } = await suiClient.executeTransactionBlock({
 				signature,
 				transactionBlock: bytes,
 				options: {
 					showRawEffects: true,
-					showBalanceChanges: true,
 				},
 			});
 
@@ -200,18 +196,6 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 				signature,
 				digest,
 				effects: toB64(new Uint8Array(rawEffects!)),
-				balanceChanges:
-					balanceChanges?.map(({ coinType, amount, owner }) => {
-						const address =
-							(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
-							(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
-
-						return {
-							coinType,
-							amount,
-							address,
-						};
-					}) ?? null,
 			};
 		};
 	}

@@ -99,11 +99,12 @@ describe('useSignAndExecuteTransactionBlock', () => {
 		expect(result.current.useSignAndExecuteTransactionBlock.data).toStrictEqual({
 			digest: '123',
 		});
-		expect(signAndExecuteTransactionBlock).toHaveBeenCalledWith({
-			account: mockWallet.accounts[0],
-			chain: 'sui:testnet',
-			transactionBlock: await new TransactionBlock().toJSON(),
-		});
+
+		const call = signAndExecuteTransactionBlock.mock.calls[0];
+
+		expect(call[0].account).toStrictEqual(mockWallet.accounts[0]);
+		expect(call[0].chain).toBe('sui:testnet');
+		expect(await call[0].transactionBlock.toJSON()).toEqual(await new TransactionBlock().toJSON());
 
 		act(() => unregister());
 	});

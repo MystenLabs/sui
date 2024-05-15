@@ -9,6 +9,7 @@ import type {
 	WalletWithFeatures,
 } from '@wallet-standard/core';
 
+import type { SuiReportTransactionBlockEffectsFeature } from './suiReportTransactionBlockEffects.js';
 import type { SuiSignAndExecuteTransactionBlockFeature } from './suiSignAndExecuteTransactionBlock.js';
 import type { SuiSignAndExecuteTransactionBlockV2Feature } from './suiSignAndExecuteTransactionBlockV2.js';
 import type { SuiSignMessageFeature } from './suiSignMessage.js';
@@ -25,7 +26,8 @@ export type SuiFeatures = Partial<SuiSignTransactionBlockFeature> &
 	SuiSignAndExecuteTransactionBlockV2Feature &
 	SuiSignTransactionBlockV2Feature &
 	// This deprecated feature should be removed once wallets update to the new method:
-	Partial<SuiSignMessageFeature>;
+	Partial<SuiSignMessageFeature> &
+	Partial<SuiReportTransactionBlockEffectsFeature>;
 
 export type SuiWalletFeatures = StandardConnectFeature &
 	StandardEventsFeature &
@@ -53,3 +55,4 @@ export * from './suiSignTransactionBlockV2.js';
 export * from './suiSignAndExecuteTransactionBlock.js';
 export * from './suiSignAndExecuteTransactionBlockV2.js';
 export * from './suiSignPersonalMessage.js';
+export * from './suiReportTransactionBlockEffects.js';

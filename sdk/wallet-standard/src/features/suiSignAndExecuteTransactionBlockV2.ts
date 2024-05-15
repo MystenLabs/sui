@@ -34,12 +34,5 @@ export interface SuiSignAndExecuteTransactionBlockV2Input extends SuiSignTransac
 export interface SuiSignAndExecuteTransactionBlockV2Output extends SuiSignTransactionBlockV2Output {
 	digest: string;
 	effects: string;
-	balanceChanges:
-		| {
-				address: string;
-				amount: string;
-				coinType: string;
-		  }[]
-		| null;
 	signal?: AbortSignal;
 }

@@ -78,6 +78,10 @@ export function useSignAndExecuteTransactionBlock({
 			const canExecuteFromWallet =
 				!!currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
 
+			const reportEffects =
+				currentWallet.features['sui:reportTransactionBlockEffects']
+					?.reportTransactionBlockEffects ?? (() => {});
+
 			if (canExecuteFromWallet) {
 				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
 				if (!walletFeature) {
@@ -101,6 +105,8 @@ export function useSignAndExecuteTransactionBlock({
 					account: signerAccount,
 					chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 				});
+
+				await reportEffects({ effects: result.effects });
 
 				return result;
 			}
@@ -128,32 +134,23 @@ export function useSignAndExecuteTransactionBlock({
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});
 
-			const { rawEffects, balanceChanges, digest } = await client.executeTransactionBlock({
+			const { rawEffects, digest } = await client.executeTransactionBlock({
 				transactionBlock: bytes,
 				signature,
 				options: {
 					showRawEffects: true,
-					showBalanceChanges: true,
 				},
 			});
+
+			const effects = toB64(new Uint8Array(rawEffects!));
+
+			await reportEffects({ effects });
 
 			return {
 				digest,
 				bytes,
 				signature,
-				effects: toB64(new Uint8Array(rawEffects!)),
-				balanceChanges:
-					balanceChanges?.map(({ coinType, amount, owner }) => {
-						const address =
-							(owner as Extract<typeof owner, { AddressOwner: unknown }>).AddressOwner ??
-							(owner as Extract<typeof owner, { ObjectOwner: unknown }>).ObjectOwner;
-
-						return {
-							coinType,
-							amount,
-							address,
-						};
-					}) ?? null,
+				effects,
 			};
 		},
 		...mutationOptions,
