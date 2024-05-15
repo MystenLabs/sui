@@ -2684,6 +2684,17 @@ impl AuthorityPerEpochStore {
             }
         }
 
+        fail_point_arg!(
+            "additional_cancelled_txns_for_tests",
+            |additional_cancelled_txns: Vec<(
+                TransactionDigest,
+                Vec<(ObjectID, SequenceNumber)>
+            )>| {
+                // info!("Additional cancelled_txns  {:?}", additional_cancelled_txns);
+                version_assignment.extend(additional_cancelled_txns);
+            }
+        );
+
         let transaction = consensus_commit_info.create_consensus_commit_prologue_transaction(
             self.epoch(),
             self.protocol_config(),
@@ -2691,6 +2702,8 @@ impl AuthorityPerEpochStore {
         );
         match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
+                info!("ZZZZZZZ size {:?} txn count {:?}", processed_tx.serialized_size(), transactions.len()+1);
+                info!("ZZZZZZZ txns {:?}", transactions);
                 roots.insert(processed_tx.key());
                 transactions.push_front(processed_tx);
             }

@@ -27,14 +27,16 @@ mod test {
     use sui_core::checkpoints::{CheckpointStore, CheckpointWatermark};
     use sui_framework::BuiltInFramework;
     use sui_macros::{
-        clear_fail_point, nondeterministic, register_fail_point_async, register_fail_point_if,
-        register_fail_points, sim_test,
+        clear_fail_point, nondeterministic, register_fail_point_arg, register_fail_point_async,
+        register_fail_point_if, register_fail_points, sim_test,
     };
     use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
     use sui_surfer::surf_strategy::SurfStrategy;
+    use sui_types::base_types::{ObjectID, SequenceNumber};
+    use sui_types::digests::TransactionDigest;
     use sui_types::full_checkpoint_content::CheckpointData;
     use sui_types::messages_checkpoint::VerifiedCheckpoint;
     use test_cluster::{TestCluster, TestClusterBuilder};
@@ -426,6 +428,39 @@ mod test {
 
         let _checkpoint: CheckpointData =
             Blob::from_bytes(&bytes).expect("failed to load checkpoint");
+    }
+
+    #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_large_consensus_commit_prologue_size() {
+        let test_cluster = build_test_cluster(4, 1000).await;
+
+        let mut additional_cancelled_txns = Vec::new();
+        let small = false;
+        let num_txns = if small {
+            thread_rng().gen_range(1..5)
+        } else {
+            thread_rng().gen_range(1000..2000)
+        };
+        info!("Adding additional {num_txns} cancelled txns in consensus commit prologue.");
+        for _ in 0..num_txns {
+            let num_objs = if small {
+                thread_rng().gen_range(1..3)
+            } else {
+                thread_rng().gen_range(20..30)
+            };
+            // info!("Transaction index {i} has {num_objs} shared objects.");
+            let mut assigned_object_versions = Vec::new();
+            for _ in 0..num_objs {
+                assigned_object_versions.push((ObjectID::random(), SequenceNumber::CONGESTED));
+            }
+            additional_cancelled_txns.push((TransactionDigest::random(), assigned_object_versions));
+        }
+
+        register_fail_point_arg("additional_cancelled_txns_for_tests", move || {
+            Some(additional_cancelled_txns.clone())
+        });
+
+        test_simulated_load(test_cluster.clone(), 1).await;
     }
 
     // TODO add this back once flakiness is resolved
