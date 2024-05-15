@@ -29,8 +29,8 @@ pub struct NameRecordChange(Field<Domain, NameRecord>);
 
 pub struct SuinsIndexer {
     registry_table_id: SuiAddress,
-    name_record_type: StructTag,
     subdomain_wrapper_type: StructTag,
+    name_record_type: StructTag,
 }
 
 impl std::default::Default for SuinsIndexer {
