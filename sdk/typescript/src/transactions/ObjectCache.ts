@@ -1,10 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '../bcs/index.js';
-import type { SuiClient } from '../client/client.js';
-import type { ExecuteTransactionBlockParams } from '../client/index.js';
-import type { Signer } from '../cryptography/keypair.js';
+import type { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature } from './data/internal.js';
 import type { TransactionPlugin } from './json-rpc-resolver.js';
@@ -29,6 +26,7 @@ export interface CacheEntryTypes {
 	OwnedObject: ObjectCacheEntry;
 	SharedOrImmutableObject: ObjectCacheEntry;
 	MoveFunction: MoveFunctionCacheEntry;
+	Custom: unknown;
 }
 export abstract class AsyncCache {
 	protected abstract get<T extends keyof CacheEntryTypes>(
@@ -95,6 +93,18 @@ export abstract class AsyncCache {
 		const functionName = `${normalizeSuiAddress(ref.package)}::${ref.module}::${ref.function}`;
 		await this.delete('MoveFunction', functionName);
 	}
+
+	async getCustom<T>(key: string) {
+		return this.get('Custom', key) as Promise<T | null>;
+	}
+
+	async setCustom<T>(key: string, value: T) {
+		return this.set('Custom', key, value);
+	}
+
+	async deleteCustom(key: string) {
+		return this.delete('Custom', key);
+	}
 }
 
 export class InMemoryCache extends AsyncCache {
@@ -102,6 +112,7 @@ export class InMemoryCache extends AsyncCache {
 		OwnedObject: new Map<string, ObjectCacheEntry>(),
 		SharedOrImmutableObject: new Map<string, ObjectCacheEntry>(),
 		MoveFunction: new Map<string, MoveFunctionCacheEntry>(),
+		Custom: new Map<string, unknown>(),
 	};
 
 	protected async get<T extends keyof CacheEntryTypes>(type: T, key: string) {
@@ -131,7 +142,7 @@ export class InMemoryCache extends AsyncCache {
 	}
 }
 
-interface ObjectCacheOptions {
+export interface ObjectCacheOptions {
 	cache?: AsyncCache;
 	address: string;
 }
@@ -230,6 +241,22 @@ export class ObjectCache {
 		await this.#cache.clear('OwnedObject');
 	}
 
+	async clearCustom() {
+		await this.#cache.clear('Custom');
+	}
+
+	async getCustom<T>(key: string) {
+		return this.#cache.getCustom<T>(key);
+	}
+
+	async setCustom<T>(key: string, value: T) {
+		return this.#cache.setCustom(key, value);
+	}
+
+	async deleteCustom(key: string) {
+		return this.#cache.deleteCustom(key);
+	}
+
 	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
 		if (!effects.V2) {
 			throw new Error(`Unsupported transaction effects version ${effects.$kind}`);
@@ -259,90 +286,5 @@ export class ObjectCache {
 				}
 			}),
 		);
-	}
-}
-
-export class CachingTransactionExecutor {
-	#client: SuiClient;
-	cache: ObjectCache;
-
-	constructor({
-		client,
-		...options
-	}: ObjectCacheOptions & {
-		client: SuiClient;
-	}) {
-		this.#client = client;
-		this.cache = new ObjectCache(options);
-	}
-
-	/**
-	 * Clears all Owned objects
-	 * Immutable objects, Shared objects, and Move function definitions will be preserved
-	 */
-	async reset() {
-		await this.cache.clearOwnedObjects();
-	}
-
-	async buildTransaction({ transaction }: { transaction: Transaction }) {
-		return transaction.build({
-			client: this.#client,
-		});
-	}
-
-	async executeTransaction({
-		transaction,
-		options,
-		...input
-	}: {
-		transaction: Transaction;
-	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
-		transaction.addSerializationPlugin(this.cache.asPlugin());
-		const results = await this.#client.executeTransactionBlock({
-			...input,
-			transactionBlock: await transaction.build({
-				client: this.#client,
-			}),
-			options: {
-				...options,
-				showRawEffects: true,
-			},
-		});
-
-		if (results.rawEffects) {
-			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects));
-			await this.cache.applyEffects(effects);
-		}
-
-		return results;
-	}
-
-	async signAndExecuteTransaction({
-		options,
-		transaction,
-		...input
-	}: {
-		transaction: Transaction;
-
-		signer: Signer;
-	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
-		transaction.addBuildPlugin(this.cache.asPlugin());
-		const results = await this.#client.signAndExecuteTransaction({
-			...input,
-			transaction: await transaction.build({
-				client: this.#client,
-			}),
-			options: {
-				...options,
-				showRawEffects: true,
-			},
-		});
-
-		if (results.rawEffects) {
-			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects));
-			await this.cache.applyEffects(effects);
-		}
-
-		return results;
 	}
 }
