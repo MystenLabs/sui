@@ -156,6 +156,8 @@ contract SuiBridge is ISuiBridge, CommitteeUpgradeable, PausableUpgradeable {
             IERC20Metadata(tokenAddress).decimals(), config.tokenSuiDecimalOf(tokenID), amount
         );
 
+        require(suiAdjustedAmount > 0, "SuiBridge: Invalid amount provided");
+
         emit TokensDeposited(
             config.chainID(),
             nonces[BridgeUtils.TOKEN_TRANSFER],
