@@ -15,8 +15,7 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 tracing.workspace = true
 prometheus.workspace = true
-git-version.workspace = true
-const-str.workspace = true
+bin-version.workspace = true
 
 move-binary-format.workspace = true
 move-cli.workspace = true

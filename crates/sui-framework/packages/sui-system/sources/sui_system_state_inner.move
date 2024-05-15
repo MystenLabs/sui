@@ -984,6 +984,19 @@ module sui_system::sui_system_state_inner {
         self.validators.validator_total_stake_amount(validator_addr)
     }
 
+    /// Returns the voting power for `validator_addr`.
+    /// Aborts if `validator_addr` is not an active validator.
+    public(package) fun active_validator_voting_powers(self: &SuiSystemStateInnerV2): VecMap<address, u64> {
+        let mut active_validators = active_validator_addresses(self);
+        let mut voting_powers = vec_map::empty();
+        while (!vector::is_empty(&active_validators)) {
+            let validator = vector::pop_back(&mut active_validators);
+            let voting_power = validator_set::validator_voting_power(&self.validators, validator);
+            vec_map::insert(&mut voting_powers, validator, voting_power);
+        };
+        voting_powers
+    }
+
     /// Returns the staking pool id of a given validator.
     /// Aborts if `validator_addr` is not an active validator.
     public(package) fun validator_staking_pool_id(self: &SuiSystemStateInnerV2, validator_addr: address): ID {

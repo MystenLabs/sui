@@ -10,7 +10,7 @@ use move_core_types::parser::parse_struct_tag;
 use rand::rngs::OsRng;
 use serde_json::json;
 use std::sync::Arc;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui::client_commands::{OptsWithGas, SuiClientCommandResult, SuiClientCommands};
 use sui_config::node::RunWithRange;
 use sui_core::authority::EffectsNotifyRead;
 use sui_json_rpc_types::{
@@ -584,21 +584,23 @@ async fn do_test_full_node_sync_flood() {
                         amounts: Some(vec![1]),
                         count: None,
                         coin_id: object_to_split.0,
-                        gas: Some(gas_object_id),
-                        gas_budget: TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
-                            * context.get_reference_gas_price().await.unwrap(),
-                        serialize_unsigned_transaction: false,
-                        serialize_signed_transaction: false,
+                        opts: OptsWithGas::for_testing(
+                            Some(gas_object_id),
+                            TEST_ONLY_GAS_UNIT_FOR_SPLIT_COIN
+                                * context.get_reference_gas_price().await.unwrap(),
+                        ),
                     }
                     .execute(context)
                     .await
                     .unwrap()
                 };
 
-                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
+                owned_tx_digest = if let SuiClientCommandResult::TransactionBlock(resp) = res {
                     Some(resp.digest)
                 } else {
-                    panic!("transfer command did not return WalletCommandResult::Transfer");
+                    panic!(
+                        "SplitCoin command did not return SuiClientCommandResult::TransactionBlock"
+                    );
                 };
 
                 let context = &context.lock().await;
@@ -873,13 +875,14 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
     assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
     assert!(is_executed_locally);
-    assert_eq!(events.digest(), txn_events.digest());
+    assert_eq!(events.digest(), txn_events.unwrap_or_default().digest());
     // verify that the node has sequenced and executed the txn
     fullnode.state().get_executed_transaction_and_effects(digest, kv_store.clone()).await
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with WaitForLocalExecution: {:?}", digest, e));
@@ -904,12 +907,13 @@ async fn test_full_node_transaction_orchestrator_basic() -> Result<(), anyhow::E
         QuorumDriverResponse {
             effects_cert: certified_txn_effects,
             events: txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     let (cte, events, is_executed_locally) = *res;
     assert_eq!(*tx.digest(), digest);
     assert_eq!(cte.effects.digest(), *certified_txn_effects.digest());
-    assert_eq!(txn_events.digest(), events.digest());
+    assert_eq!(txn_events.unwrap_or_default().digest(), events.digest());
     assert!(!is_executed_locally);
     fullnode
         .state()
@@ -936,7 +940,6 @@ async fn test_validator_node_has_no_transaction_orchestrator() {
         assert!(node
             .subscribe_to_transaction_orchestrator_effects()
             .is_err());
-        assert!(node.get_google_jwk_bytes().is_ok());
     });
 }
 
@@ -1308,6 +1311,7 @@ async fn test_pass_back_no_object() -> Result<(), anyhow::Error> {
         QuorumDriverResponse {
             effects_cert: _certified_txn_effects,
             events: _txn_events,
+            ..
         },
     ) = rx.recv().await.unwrap().unwrap();
     Ok(())

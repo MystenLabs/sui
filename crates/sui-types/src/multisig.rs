@@ -3,7 +3,9 @@
 
 use crate::{
     crypto::{CompressedSignature, DefaultHash, SignatureScheme},
+    digests::ZKLoginInputsDigest,
     signature::{AuthenticatorTrait, GenericSignature, VerifyParams},
+    signature_verification::VerifiedDigestCache,
     zk_login_authenticator::ZkLoginAuthenticator,
 };
 pub use enum_dispatch::enum_dispatch;
@@ -24,6 +26,7 @@ use shared_crypto::intent::IntentMessage;
 use std::{
     hash::{Hash, Hasher},
     str::FromStr,
+    sync::Arc,
 };
 
 use crate::{
@@ -82,21 +85,10 @@ impl AuthenticatorTrait for MultiSig {
         max_epoch_upper_bound_delta: Option<u64>,
     ) -> Result<(), SuiError> {
         // If there is any zkLogin signatures, filter and check epoch for each.
+        // TODO: call this on all sigs to avoid future lapses
         self.get_zklogin_sigs()?.iter().try_for_each(|s| {
             s.verify_user_authenticator_epoch(epoch_id, max_epoch_upper_bound_delta)
         })
-    }
-
-    fn verify_uncached_checks<T>(
-        &self,
-        _value: &IntentMessage<T>,
-        _author: SuiAddress,
-        _verify_params: &VerifyParams,
-    ) -> Result<(), SuiError>
-    where
-        T: Serialize,
-    {
-        Ok(())
     }
 
     fn verify_claims<T>(
@@ -104,6 +96,7 @@ impl AuthenticatorTrait for MultiSig {
         value: &IntentMessage<T>,
         multisig_address: SuiAddress,
         verify_params: &VerifyParams,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) -> Result<(), SuiError>
     where
         T: Serialize,
@@ -191,7 +184,12 @@ impl AuthenticatorTrait for MultiSig {
                         }
                     })?;
                     authenticator
-                        .verify_claims(value, SuiAddress::from(subsig_pubkey), verify_params)
+                        .verify_claims(
+                            value,
+                            SuiAddress::from(subsig_pubkey),
+                            verify_params,
+                            zklogin_inputs_cache.clone(),
+                        )
                         .map_err(|e| FastCryptoError::GeneralError(e.to_string()))
                 }
             };

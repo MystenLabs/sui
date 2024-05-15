@@ -8,7 +8,8 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 
 use super::big_int::BigInt;
 use super::move_object::MoveObject;
-use super::object::ObjectLookupKey;
+use super::object::Object;
+use super::owner::Owner;
 use super::sui_address::SuiAddress;
 use super::validator_credentials::ValidatorCredentials;
 use super::{address::Address, base64::Base64};
@@ -96,9 +97,9 @@ impl Validator {
     /// can then update the reference gas price and tallying rule on behalf of the validator.
     async fn operation_cap(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
         MoveObject::query(
-            ctx.data_unchecked(),
+            ctx,
             self.operation_cap_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -106,26 +107,37 @@ impl Validator {
 
     /// The validator's current staking pool object, used to track the amount of stake
     /// and to compound staking rewards.
-    async fn staking_pool(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(
-            ctx.data_unchecked(),
-            self.staking_pool_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+    #[graphql(
+        deprecation = "The staking pool is a wrapped object. Access its fields directly on the \
+        `Validator` type."
+    )]
+    async fn staking_pool(&self) -> Result<Option<MoveObject>> {
+        Ok(None)
+    }
+
+    /// The ID of this validator's `0x3::staking_pool::StakingPool`.
+    async fn staking_pool_id(&self) -> SuiAddress {
+        self.validator_summary.staking_pool_id.into()
     }
 
     /// The validator's current exchange object. The exchange rate is used to determine
     /// the amount of SUI tokens that each past SUI staker can withdraw in the future.
-    async fn exchange_rates(&self, ctx: &Context<'_>) -> Result<Option<MoveObject>> {
-        MoveObject::query(
-            ctx.data_unchecked(),
-            self.exchange_rates_id(),
-            ObjectLookupKey::LatestAt(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+    #[graphql(
+        deprecation = "The exchange object is a wrapped object. Access its dynamic fields through \
+        the `exchangeRatesTable` query."
+    )]
+    async fn exchange_rates(&self) -> Result<Option<MoveObject>> {
+        Ok(None)
+    }
+
+    /// A wrapped object containing the validator's exchange rates. This is a table from epoch
+    /// number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
+    /// of SUI tokens that each past SUI staker can withdraw in the future.
+    async fn exchange_rates_table(&self) -> Result<Option<Owner>> {
+        Ok(Some(Owner {
+            address: self.validator_summary.exchange_rates_id.into(),
+            checkpoint_viewed_at: self.checkpoint_viewed_at,
+        }))
     }
 
     /// Number of exchange rates in the table.
@@ -265,11 +277,5 @@ impl Validator {
 impl Validator {
     pub fn operation_cap_id(&self) -> SuiAddress {
         SuiAddress::from_array(**self.validator_summary.operation_cap_id)
-    }
-    pub fn staking_pool_id(&self) -> SuiAddress {
-        SuiAddress::from_array(**self.validator_summary.staking_pool_id)
-    }
-    pub fn exchange_rates_id(&self) -> SuiAddress {
-        SuiAddress::from_array(**self.validator_summary.exchange_rates_id)
     }
 }

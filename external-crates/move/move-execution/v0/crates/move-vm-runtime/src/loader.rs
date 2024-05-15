@@ -938,6 +938,7 @@ impl Loader {
             &bytes,
             &BinaryConfig::legacy(
                 self.vm_config.max_binary_format_version,
+                self.vm_config.binary_config.min_binary_format_version,
                 self.vm_config()
                     .check_no_extraneous_bytes_during_deserialization,
             ),
@@ -1950,7 +1951,7 @@ impl TypeCache {
 /// Maximal depth of a value in terms of type depth.
 pub const VALUE_DEPTH_MAX: u64 = 128;
 
-/// Maximal nodes which are allowed when converting to layout. This includes the the types of
+/// Maximal nodes which are allowed when converting to layout. This includes the types of
 /// fields for struct types.
 const MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 

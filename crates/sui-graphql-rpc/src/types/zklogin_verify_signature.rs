@@ -1,6 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use crate::config::ZkLoginConfig;
 use crate::error::Error;
 use crate::server::watermark_task::Watermark;
@@ -18,7 +20,8 @@ use sui_types::authenticator_state::{ActiveJwk, AuthenticatorStateInner};
 use sui_types::crypto::ToFromBytes;
 use sui_types::dynamic_field::{DynamicFieldType, Field};
 use sui_types::signature::GenericSignature;
-use sui_types::signature::{AuthenticatorTrait, VerifyParams};
+use sui_types::signature::VerifyParams;
+use sui_types::signature_verification::VerifiedDigestCache;
 use sui_types::transaction::TransactionData;
 use sui_types::{TypeTag, SUI_AUTHENTICATOR_STATE_ADDRESS};
 use tracing::warn;
@@ -37,7 +40,7 @@ pub(crate) enum ZkLoginIntentScope {
 #[derive(SimpleObject, Clone, Debug)]
 pub(crate) struct ZkLoginVerifyResult {
     /// The boolean result of the verification. If true, errors should be empty.
-    success: bool,
+    pub success: bool,
     /// The errors field captures any verification error
     pub errors: Vec<String>,
 }
@@ -77,7 +80,7 @@ pub(crate) async fn verify_zklogin_signature(
 
     // fetch on-chain JWKs from dynamic field of system object.
     let df = DynamicField::query(
-        ctx.data_unchecked(),
+        ctx,
         SUI_AUTHENTICATOR_STATE_ADDRESS.into(),
         None,
         DynamicFieldName {
@@ -125,15 +128,13 @@ pub(crate) async fn verify_zklogin_signature(
             let tx_data: TransactionData = bcs::from_bytes(&bytes)
                 .map_err(|_| Error::Client("Invalid tx data bytes".to_string()))?;
             let intent_msg = IntentMessage::new(Intent::sui_transaction(), tx_data.clone());
-            let tx_sender = tx_data.execution_parts().1;
-            if tx_sender != author.into() {
-                return Err(Error::Client("Tx sender mismatch author".to_string()));
-            }
-            match zklogin_sig.verify_authenticator(
+            let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+            match sig.verify_authenticator(
                 &intent_msg,
-                tx_sender,
-                Some(curr_epoch),
+                author.into(),
+                curr_epoch,
                 &verify_params,
+                Arc::new(VerifiedDigestCache::new_empty()),
             ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,
@@ -156,11 +157,13 @@ pub(crate) async fn verify_zklogin_signature(
                 data,
             );
 
-            match zklogin_sig.verify_authenticator(
+            let sig = GenericSignature::ZkLoginAuthenticator(zklogin_sig);
+            match sig.verify_authenticator(
                 &intent_msg,
                 author.into(),
-                Some(curr_epoch),
+                curr_epoch,
                 &verify_params,
+                Arc::new(VerifiedDigestCache::new_empty()),
             ) {
                 Ok(_) => Ok(ZkLoginVerifyResult {
                     success: true,

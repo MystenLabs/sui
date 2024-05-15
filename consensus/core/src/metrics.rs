@@ -79,60 +79,65 @@ pub(crate) fn test_metrics() -> Arc<Metrics> {
 }
 
 pub(crate) struct NodeMetrics {
-    pub block_commit_latency: Histogram,
-    pub block_proposed: IntCounterVec,
-    pub block_size: Histogram,
-    pub block_ancestors: Histogram,
-    pub block_timestamp_drift_wait_ms: IntCounterVec,
-    pub blocks_per_commit_count: Histogram,
-    pub broadcaster_rtt_estimate_ms: IntGaugeVec,
-    pub core_lock_dequeued: IntCounter,
-    pub core_lock_enqueued: IntCounter,
-    pub highest_accepted_round: IntGauge,
-    pub accepted_blocks: IntCounter,
-    pub dag_state_recent_blocks: IntGauge,
-    pub dag_state_recent_refs: IntGauge,
-    pub dag_state_store_read_count: IntCounterVec,
-    pub dag_state_store_write_count: IntCounter,
-    pub fetch_blocks_scheduler_inflight: IntGauge,
-    pub fetched_blocks: IntCounterVec,
-    pub invalid_blocks: IntCounterVec,
-    pub rejected_blocks: IntCounterVec,
-    pub rejected_future_blocks: IntCounterVec,
-    pub verified_blocks: IntCounterVec,
-    pub committed_leaders_total: IntCounterVec,
-    pub last_committed_leader_round: IntGauge,
-    pub commit_round_advancement_interval: Histogram,
-    pub last_decided_leader_round: IntGauge,
-    pub leader_timeout_total: IntCounter,
-    pub missing_blocks_total: IntCounter,
-    pub missing_blocks_after_fetch_total: IntCounter,
-    pub quorum_receive_latency: Histogram,
-    pub reputation_scores: IntGaugeVec,
-    pub scope_processing_time: HistogramVec,
-    pub sub_dags_per_commit_count: Histogram,
-    pub block_suspensions: IntCounterVec,
-    pub block_unsuspensions: IntCounterVec,
-    pub suspended_block_time: HistogramVec,
-    pub block_manager_suspended_blocks: IntGauge,
-    pub block_manager_missing_ancestors: IntGauge,
-    pub block_manager_missing_blocks: IntGauge,
-    pub threshold_clock_round: IntGauge,
-    pub subscriber_connection_attempts: IntCounterVec,
-    pub subscriber_connections: IntGaugeVec,
-    pub commit_sync_inflight_fetches: IntGauge,
-    pub commit_sync_pending_fetches: IntGauge,
-    pub commit_sync_fetched_commits: IntCounter,
-    pub commit_sync_fetched_blocks: IntCounter,
-    pub commit_sync_total_fetched_blocks_size: IntCounter,
-    pub commit_sync_local_index: IntGauge,
-    pub commit_sync_fetch_loop_latency: Histogram,
-    pub commit_sync_fetch_once_latency: Histogram,
-    pub uptime: Histogram,
+    pub(crate) block_commit_latency: Histogram,
+    pub(crate) proposed_blocks: IntCounterVec,
+    pub(crate) block_size: Histogram,
+    pub(crate) block_ancestors: Histogram,
+    pub(crate) block_proposal_leader_wait_ms: IntCounterVec,
+    pub(crate) block_proposal_leader_wait_count: IntCounterVec,
+    pub(crate) block_timestamp_drift_wait_ms: IntCounterVec,
+    pub(crate) blocks_per_commit_count: Histogram,
+    pub(crate) broadcaster_rtt_estimate_ms: IntGaugeVec,
+    pub(crate) core_lock_dequeued: IntCounter,
+    pub(crate) core_lock_enqueued: IntCounter,
+    pub(crate) highest_accepted_round: IntGauge,
+    pub(crate) accepted_blocks: IntCounterVec,
+    pub(crate) dag_state_recent_blocks: IntGauge,
+    pub(crate) dag_state_recent_refs: IntGauge,
+    pub(crate) dag_state_store_read_count: IntCounterVec,
+    pub(crate) dag_state_store_write_count: IntCounter,
+    pub(crate) fetch_blocks_scheduler_inflight: IntGauge,
+    pub(crate) fetched_blocks: IntCounterVec,
+    pub(crate) invalid_blocks: IntCounterVec,
+    pub(crate) rejected_blocks: IntCounterVec,
+    pub(crate) rejected_future_blocks: IntCounterVec,
+    pub(crate) verified_blocks: IntCounterVec,
+    pub(crate) committed_leaders_total: IntCounterVec,
+    pub(crate) last_committed_leader_round: IntGauge,
+    pub(crate) commit_round_advancement_interval: Histogram,
+    pub(crate) last_decided_leader_round: IntGauge,
+    pub(crate) leader_timeout_total: IntCounterVec,
+    pub(crate) missing_blocks_total: IntCounter,
+    pub(crate) missing_blocks_after_fetch_total: IntCounter,
+    pub(crate) num_of_bad_nodes: IntGauge,
+    pub(crate) quorum_receive_latency: Histogram,
+    pub(crate) reputation_scores: IntGaugeVec,
+    pub(crate) scope_processing_time: HistogramVec,
+    pub(crate) sub_dags_per_commit_count: Histogram,
+    pub(crate) block_suspensions: IntCounterVec,
+    pub(crate) block_unsuspensions: IntCounterVec,
+    pub(crate) suspended_block_time: HistogramVec,
+    pub(crate) block_manager_suspended_blocks: IntGauge,
+    pub(crate) block_manager_missing_ancestors: IntGauge,
+    pub(crate) block_manager_missing_blocks: IntGauge,
+    pub(crate) threshold_clock_round: IntGauge,
+    pub(crate) subscriber_connection_attempts: IntCounterVec,
+    pub(crate) subscriber_connections: IntGaugeVec,
+    pub(crate) commit_sync_inflight_fetches: IntGauge,
+    pub(crate) commit_sync_pending_fetches: IntGauge,
+    pub(crate) commit_sync_fetched_commits: IntCounter,
+    pub(crate) commit_sync_fetched_blocks: IntCounter,
+    pub(crate) commit_sync_total_fetched_blocks_size: IntCounter,
+    pub(crate) commit_sync_quorum_index: IntGauge,
+    pub(crate) commit_sync_fetched_index: IntGauge,
+    pub(crate) commit_sync_local_index: IntGauge,
+    pub(crate) commit_sync_fetch_loop_latency: Histogram,
+    pub(crate) commit_sync_fetch_once_latency: Histogram,
+    pub(crate) uptime: Histogram,
 }
 
 impl NodeMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             block_commit_latency: register_histogram_with_registry!(
                 "block_commit_latency",
@@ -140,9 +145,9 @@ impl NodeMetrics {
                 LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
-            block_proposed: register_int_counter_vec_with_registry!(
-                "block_proposed",
-                "Total number of block proposals. If force is true then this block has been created forcefully via a leader timeout event.",
+            proposed_blocks: register_int_counter_vec_with_registry!(
+                "proposed_blocks",
+                "Total number of proposed blocks. If force is true then this block has been created forcefully via a leader timeout event.",
                 &["force"],
                 registry,
             ).unwrap(),
@@ -156,6 +161,18 @@ impl NodeMetrics {
                 "block_ancestors",
                 "Number of ancestors in proposed blocks",
                 exponential_buckets(1.0, 1.4, 20).unwrap(),
+                registry,
+            ).unwrap(),
+            block_proposal_leader_wait_ms: register_int_counter_vec_with_registry!(
+                "block_proposal_leader_wait_ms",
+                "Total time in ms spent waiting for a leader when proposing blocks.",
+                &["authority"],
+                registry,
+            ).unwrap(),
+            block_proposal_leader_wait_count: register_int_counter_vec_with_registry!(
+                "block_proposal_leader_wait_count",
+                "Total times waiting for a leader when proposing blocks.",
+                &["authority"],
                 registry,
             ).unwrap(),
             block_timestamp_drift_wait_ms: register_int_counter_vec_with_registry!(
@@ -191,9 +208,10 @@ impl NodeMetrics {
                 "The highest round where a block has been accepted. Resets on restart.",
                 registry,
             ).unwrap(),
-            accepted_blocks: register_int_counter_with_registry!(
+            accepted_blocks: register_int_counter_vec_with_registry!(
                 "accepted_blocks",
-                "Number of accepted blocks",
+                "Number of accepted blocks by source (own, others)",
+                &["source"],
                 registry,
             ).unwrap(),
             dag_state_recent_blocks: register_int_gauge_with_registry!(
@@ -275,9 +293,10 @@ impl NodeMetrics {
                 "The last round where a commit decision was made.",
                 registry,
             ).unwrap(),
-            leader_timeout_total: register_int_counter_with_registry!(
+            leader_timeout_total: register_int_counter_vec_with_registry!(
                 "leader_timeout_total",
-                "Total number of leader timeouts",
+                "Total number of leader timeouts, either when the min round time has passed, or max leader timeout",
+                &["timeout_type"],
                 registry,
             ).unwrap(),
             missing_blocks_total: register_int_counter_with_registry!(
@@ -289,6 +308,11 @@ impl NodeMetrics {
                 "missing_blocks_after_fetch_total",
                 "Total number of missing blocks after fetching blocks from peer",
                 registry,
+            ).unwrap(),
+            num_of_bad_nodes: register_int_gauge_with_registry!(
+                "num_of_bad_nodes",
+                "The number of bad nodes in the new leader schedule",
+                registry
             ).unwrap(),
             quorum_receive_latency: register_histogram_with_registry!(
                 "quorum_receive_latency",
@@ -359,7 +383,7 @@ impl NodeMetrics {
             ).unwrap(),
             subscriber_connections: register_int_gauge_vec_with_registry!(
                 "subscriber_connections",
-                "The number of block stream connections breaking down by peer",
+                "The number of block stream connections broken down by peer",
                 &["authority"],
                 registry,
             ).unwrap(),
@@ -388,9 +412,19 @@ impl NodeMetrics {
                 "The total size in bytes of blocks fetched via commit syncer",
                 registry,
             ).unwrap(),
+            commit_sync_quorum_index: register_int_gauge_with_registry!(
+                "commit_sync_quorum_index",
+                "The maximum commit index voted by a quorum of authorities",
+                registry,
+            ).unwrap(),
+            commit_sync_fetched_index: register_int_gauge_with_registry!(
+                "commit_sync_fetched_index",
+                "The max commit index among local and fetched commits",
+                registry,
+            ).unwrap(),
             commit_sync_local_index: register_int_gauge_with_registry!(
                 "commit_sync_local_index",
-                "The max commit index among local and fetched commits",
+                "The local commit index",
                 registry,
             ).unwrap(),
             commit_sync_fetch_loop_latency: register_histogram_with_registry!(
@@ -417,17 +451,17 @@ impl NodeMetrics {
 
 pub(crate) struct ChannelMetrics {
     /// occupancy of the channel from TransactionClient to TransactionConsumer
-    pub tx_transactions_submit: IntGauge,
+    pub(crate) tx_transactions_submit: IntGauge,
     /// total received on channel from TransactionClient to TransactionConsumer
-    pub tx_transactions_submit_total: IntCounter,
+    pub(crate) tx_transactions_submit_total: IntCounter,
     /// occupancy of the CoreThread commands channel
-    pub core_thread: IntGauge,
+    pub(crate) core_thread: IntGauge,
     /// total received on the CoreThread commands channel
-    pub core_thread_total: IntCounter,
+    pub(crate) core_thread_total: IntCounter,
 }
 
 impl ChannelMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             tx_transactions_submit: register_int_gauge_with_registry!(
                 "tx_transactions_submit",
@@ -455,13 +489,13 @@ impl ChannelMetrics {
 
 // Fields for network-agnostic metrics can be added here
 pub(crate) struct NetworkMetrics {
-    pub network_type: IntGaugeVec,
-    pub inbound: NetworkRouteMetrics,
-    pub outbound: NetworkRouteMetrics,
+    pub(crate) network_type: IntGaugeVec,
+    pub(crate) inbound: NetworkRouteMetrics,
+    pub(crate) outbound: NetworkRouteMetrics,
 }
 
 impl NetworkMetrics {
-    pub fn new(registry: &Registry) -> Self {
+    pub(crate) fn new(registry: &Registry) -> Self {
         Self {
             network_type: register_int_gauge_vec_with_registry!(
                 "network_type",

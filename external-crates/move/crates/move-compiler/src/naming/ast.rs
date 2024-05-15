@@ -461,7 +461,9 @@ pub enum Exp_ {
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
 
-    ErrorConstant,
+    ErrorConstant {
+        line_number_loc: Loc,
+    },
 
     UnresolvedError,
 }
@@ -503,6 +505,7 @@ pub enum MatchPattern_ {
         Option<Vec<Type>>,
         Fields<MatchPattern>,
     ),
+    Constant(ModuleIdent, ConstantName),
     Binder(Mutability, Var, /* unused binding */ bool),
     Literal(Value),
     Wildcard,
@@ -1208,9 +1211,13 @@ impl AstDebug for ModuleDefinition {
         }
         attributes.ast_debug(w);
         w.writeln(match target_kind {
-            TargetKind::Source => "source module",
-            TargetKind::DependencyBeingCompiled => "dependency module",
-            TargetKind::DependencyBeingLinked => "linked module",
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
         });
         use_funs.ast_debug(w);
         syntax_methods.ast_debug(w);
@@ -1810,7 +1817,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
-            E::ErrorConstant => w.write("ErrorConstant"),
+            E::ErrorConstant { .. } => w.write("ErrorConstant"),
         }
     }
 }
@@ -1942,6 +1949,9 @@ impl AstDebug for MatchPattern_ {
                     pat.ast_debug(w);
                 });
                 w.write("} ");
+            }
+            Constant(mident, const_) => {
+                w.write(format!("const#{}::{}", mident, const_));
             }
             Binder(mut_, name, unused_binding) => {
                 mut_.ast_debug(w);

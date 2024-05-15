@@ -14,12 +14,12 @@ use super::{
 };
 use crate::consistency::Checkpointed;
 use crate::{
-    data::{self, Conn, Db, DbConnection, QueryExecutor},
+    data::{self, Conn, DataLoader, Db, DbConnection, QueryExecutor},
     error::Error,
 };
 use async_graphql::{
     connection::{Connection, CursorType, Edge},
-    dataloader::{DataLoader, Loader},
+    dataloader::Loader,
     *,
 };
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl};
@@ -35,8 +35,8 @@ pub(crate) struct CheckpointId {
     pub sequence_number: Option<u64>,
 }
 
-/// DataLoader key for fetching a `Checkpoint` by its sequence number, optionally constrained by a
-/// consistency cursor.
+/// DataLoader key for fetching a `Checkpoint` by its sequence number, constrained by a consistency
+/// cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct SeqNumKey {
     pub sequence_number: u64,
@@ -46,8 +46,7 @@ struct SeqNumKey {
     pub checkpoint_viewed_at: u64,
 }
 
-/// DataLoader key for fetching a `Checkpoint` by its digest, optionally constrained by a
-/// consistency cursor.
+/// DataLoader key for fetching a `Checkpoint` by its digest, constrained by a consistency cursor.
 #[derive(Copy, Clone, Hash, Eq, PartialEq, Debug)]
 struct DigestKey {
     pub digest: Digest,
@@ -212,7 +211,7 @@ impl Checkpoint {
                 sequence_number: Some(sequence_number),
                 digest,
             } => {
-                let dl: &DataLoader<Db> = ctx.data_unchecked();
+                let DataLoader(dl) = ctx.data_unchecked();
                 dl.load_one(SeqNumKey {
                     sequence_number,
                     digest,
@@ -225,7 +224,7 @@ impl Checkpoint {
                 sequence_number: None,
                 digest: Some(digest),
             } => {
-                let dl: &DataLoader<Db> = ctx.data_unchecked();
+                let DataLoader(dl) = ctx.data_unchecked();
                 dl.load_one(DigestKey {
                     digest,
                     checkpoint_viewed_at,
@@ -320,8 +319,7 @@ impl Checkpoint {
             })
             .await?;
 
-        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
-        // current available range. This sets a consistent upper bound for the nested queries.
+        // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
         let mut conn = Connection::new(prev, next);
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();

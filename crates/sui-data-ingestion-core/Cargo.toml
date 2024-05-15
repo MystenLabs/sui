@@ -10,6 +10,7 @@ version = "0.1.0"
 anyhow.workspace = true
 async-trait.workspace = true
 backoff.workspace = true
+bcs.workspace = true
 futures.workspace = true
 mysten-metrics.workspace = true
 notify.workspace = true

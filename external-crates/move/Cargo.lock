@@ -305,7 +305,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bytecode-verifier-tests"
+name = "bytecode-verifier-prop-tests"
 version = "0.1.0"
 dependencies = [
  "fail",
@@ -321,19 +321,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "bytecode-verifier-tests"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
 name = "bytecode-verifier-tests-v0"
 version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
- "invalid-mutations-v0",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v0",
  "move-core-types",
  "move-vm-config",
  "petgraph",
- "proptest",
 ]
 
 [[package]]
@@ -342,14 +356,13 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
- "invalid-mutations-v1",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v1",
  "move-core-types",
  "move-vm-config",
  "petgraph",
- "proptest",
 ]
 
 [[package]]
@@ -358,14 +371,13 @@ version = "0.1.0"
 dependencies = [
  "fail",
  "hex",
- "invalid-mutations-v2",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier-meter",
  "move-bytecode-verifier-v2",
  "move-core-types",
  "move-vm-config",
  "petgraph",
- "proptest",
 ]
 
 [[package]]
@@ -1206,33 +1218,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "invalid-mutations-v0"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "proptest",
-]
-
-[[package]]
-name = "invalid-mutations-v1"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "proptest",
-]
-
-[[package]]
-name = "invalid-mutations-v2"
-version = "0.1.0"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "proptest",
-]
-
-[[package]]
 name = "io-lifetimes"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1465,6 +1450,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
+name = "move-abstract-interpreter-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -1545,7 +1546,7 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1569,7 +1570,7 @@ name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations-v0",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1584,7 +1585,7 @@ name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations-v1",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1599,7 +1600,7 @@ name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations-v2",
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -1705,6 +1706,7 @@ dependencies = [
  "petgraph",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",
@@ -1755,6 +1757,7 @@ dependencies = [
  "clap 4.4.1",
  "codespan",
  "colored",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -1773,6 +1776,7 @@ dependencies = [
  "clap 4.4.1",
  "colored",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -1814,6 +1818,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap 4.4.1",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",

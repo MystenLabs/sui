@@ -6,7 +6,7 @@ use std::{sync::Arc, time::Instant};
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
+use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
 use tracing::info;
 
 use crate::{
@@ -16,7 +16,7 @@ use crate::{
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
     commit_syncer::{CommitSyncer, CommitVoteMonitor},
-    context::Context,
+    context::{Clock, Context},
     core::{Core, CoreSignals},
     core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
@@ -42,16 +42,9 @@ pub enum ConsensusAuthority {
     WithTonic(AuthorityNode<TonicManager>),
 }
 
-// Type of network used by the authority node.
-#[derive(Clone, Copy)]
-pub enum NetworkType {
-    Anemo,
-    Tonic,
-}
-
 impl ConsensusAuthority {
     pub async fn start(
-        network_type: NetworkType,
+        network_type: ConsensusNetwork,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -63,7 +56,7 @@ impl ConsensusAuthority {
         registry: Registry,
     ) -> Self {
         match network_type {
-            NetworkType::Anemo => {
+            ConsensusNetwork::Anemo => {
                 let authority = AuthorityNode::start(
                     own_index,
                     committee,
@@ -78,7 +71,7 @@ impl ConsensusAuthority {
                 .await;
                 Self::WithAnemo(authority)
             }
-            NetworkType::Tonic => {
+            ConsensusNetwork::Tonic => {
                 let authority = AuthorityNode::start(
                     own_index,
                     committee,
@@ -165,6 +158,7 @@ where
             parameters,
             protocol_config,
             initialise_metrics(registry),
+            Arc::new(Clock::new()),
         ));
         let start_time = Instant::now();
 
@@ -173,7 +167,7 @@ where
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let mut network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone(), network_keypair);
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listening on the
@@ -207,17 +201,28 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
+        let leader_schedule = if context
+            .protocol_config
+            .mysticeti_leader_scoring_and_schedule()
+        {
+            Arc::new(LeaderSchedule::from_store(
+                context.clone(),
+                dag_state.clone(),
+            ))
+        } else {
+            Arc::new(LeaderSchedule::new(
+                context.clone(),
+                LeaderSwapTable::default(),
+            ))
+        };
+
         let commit_observer = CommitObserver::new(
             context.clone(),
             commit_consumer,
             dag_state.clone(),
             store.clone(),
+            leader_schedule.clone(),
         );
-
-        let leader_schedule = Arc::new(LeaderSchedule::new(
-            context.clone(),
-            LeaderSwapTable::default(),
-        ));
 
         let core = Core::new(
             context.clone(),
@@ -282,9 +287,7 @@ where
             None
         };
 
-        network_manager
-            .install_service(network_keypair, network_service)
-            .await;
+        network_manager.install_service(network_service).await;
 
         Self {
             context,
@@ -336,6 +339,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+
     use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use async_trait::async_trait;
@@ -350,11 +355,12 @@ mod tests {
         sync::{broadcast, mpsc::unbounded_channel},
         time::sleep,
     };
+    use typed_store::DBMetrics;
 
     use super::*;
     use crate::{
         authority_node::AuthorityService,
-        block::{timestamp_utc_ms, BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
@@ -391,12 +397,12 @@ mod tests {
             Ok(block_refs)
         }
 
-        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
-            unimplemented!()
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+            Ok(())
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            unimplemented!()
+            Ok(Default::default())
         }
     }
 
@@ -449,7 +455,7 @@ mod tests {
     #[rstest]
     #[tokio::test]
     async fn test_authority_start_and_stop(
-        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
@@ -518,7 +524,7 @@ mod tests {
         ));
 
         // Test delaying blocks with time drift.
-        let now = timestamp_utc_ms();
+        let now = context.clock.timestamp_utc_ms();
         let max_drift = context.parameters.max_forward_time_drift;
         let input_block = VerifiedBlock::new_for_test(
             TestBlock::new(9, 0)
@@ -546,10 +552,13 @@ mod tests {
 
     // TODO: build AuthorityFixture.
     #[rstest]
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_authority_committee(
-        #[values(NetworkType::Anemo, NetworkType::Tonic)] network_type: NetworkType,
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
     ) {
+        let db_registry = Registry::new();
+        DBMetrics::init(&db_registry);
+
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
         let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
 
@@ -629,6 +638,7 @@ mod tests {
                         );
                     }
                 }
+                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }
@@ -638,13 +648,13 @@ mod tests {
         // Stop authority 1.
         let index = committee.to_authority_index(1).unwrap();
         authorities.remove(index.value()).stop().await;
-        sleep(Duration::from_secs(30)).await;
+        sleep(Duration::from_secs(15)).await;
 
         // Restart authority 1 and let it run.
         let (authority, receiver) = make_authority(index).await;
         output_receivers[index] = receiver;
         authorities.insert(index.value(), authority);
-        sleep(Duration::from_secs(30)).await;
+        sleep(Duration::from_secs(15)).await;
 
         // Stop all authorities and exit.
         for authority in authorities {

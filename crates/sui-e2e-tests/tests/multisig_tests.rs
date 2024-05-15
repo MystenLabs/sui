@@ -345,6 +345,11 @@ async fn test_multisig_with_zklogin_scenerios() {
         0b1000,
         multisig_pk.clone(),
     ));
+    let sender = SuiAddress::try_from(&multisig).unwrap();
+    let tx_data = TestTransactionBuilder::new(sender, gas, rgp)
+        .transfer_sui(None, SuiAddress::ZERO)
+        .build();
+
     let tx_7 = Transaction::from_generic_sig_data(tx_data.clone(), vec![multisig]);
     let res = context.execute_transaction_may_fail(tx_7).await;
     assert!(res

@@ -27,6 +27,7 @@ use sui_storage::package_object_cache::PackageObjectCache;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::VerifiedExecutionData;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber};
+use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::{SuiError, SuiResult};
@@ -249,6 +250,10 @@ impl ExecutionCacheRead for PassthroughCache {
         get_sui_system_state(self)
     }
 
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        get_bridge(self)
+    }
+
     fn get_marker_value(
         &self,
         object_id: &ObjectID,
@@ -365,6 +370,11 @@ impl ExecutionCacheCommit for PassthroughCache {
         _epoch: EpochId,
         _digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult> {
+        // Nothing needs to be done since they were already committed in write_transaction_outputs
+        async { Ok(()) }.boxed()
+    }
+
+    fn persist_transactions(&self, _digests: &[TransactionDigest]) -> BoxFuture<'_, SuiResult> {
         // Nothing needs to be done since they were already committed in write_transaction_outputs
         async { Ok(()) }.boxed()
     }

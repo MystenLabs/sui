@@ -14,8 +14,10 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_types::base_types::{AuthorityName, ObjectRef, TransactionDigest};
 use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::messages_grpc::HandleCertificateRequestV3;
 use sui_types::quorum_driver_types::{
-    QuorumDriverEffectsQueueResult, QuorumDriverError, QuorumDriverResponse, QuorumDriverResult,
+    ExecuteTransactionRequestV3, QuorumDriverEffectsQueueResult, QuorumDriverError,
+    QuorumDriverResponse, QuorumDriverResult,
 };
 use tap::TapFallible;
 use tokio::sync::Semaphore;
@@ -36,6 +38,7 @@ use mysten_metrics::{
     spawn_monitored_task, GaugeGuard, TX_TYPE_SHARED_OBJ_TX, TX_TYPE_SINGLE_WRITER_TX,
 };
 use std::fmt::Write;
+use sui_macros::fail_point;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages_safe_client::PlainTransactionInfoResponse;
 use sui_types::transaction::{CertifiedTransaction, Transaction};
@@ -51,7 +54,7 @@ const TX_MAX_RETRY_TIMES: u32 = 10;
 
 #[derive(Clone)]
 pub struct QuorumDriverTask {
-    pub transaction: Transaction,
+    pub request: ExecuteTransactionRequestV3,
     pub tx_cert: Option<CertifiedTransaction>,
     pub retry_times: u32,
     pub next_retry_after: Instant,
@@ -61,7 +64,7 @@ pub struct QuorumDriverTask {
 impl Debug for QuorumDriverTask {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        write!(writer, "tx_digest={:?} ", self.transaction.digest())?;
+        write!(writer, "tx_digest={:?} ", self.request.transaction.digest())?;
         write!(writer, "has_tx_cert={} ", self.tx_cert.is_some())?;
         write!(writer, "retry_times={} ", self.retry_times)?;
         write!(writer, "next_retry_after={:?} ", self.next_retry_after)?;
@@ -136,16 +139,16 @@ impl<A: Clone> QuorumDriver<A> {
     /// If it has, notify failure.
     async fn enqueue_again_maybe(
         &self,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
         tx_cert: Option<CertifiedTransaction>,
         old_retry_times: u32,
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<()> {
         if old_retry_times >= self.max_retry_times {
             // max out the retry times, notify failure
-            info!(tx_digest=?transaction.digest(), "Failed to reach finality after attempting for {} times", old_retry_times+1);
+            info!(tx_digest=?request.transaction.digest(), "Failed to reach finality after attempting for {} times", old_retry_times+1);
             self.notify(
-                &transaction,
+                &request.transaction,
                 &Err(
                     QuorumDriverError::FailedWithTransientErrorAfterMaximumAttempts {
                         total_attempts: old_retry_times + 1,
@@ -155,21 +158,26 @@ impl<A: Clone> QuorumDriver<A> {
             );
             return Ok(());
         }
-        self.backoff_and_enqueue(transaction, tx_cert, old_retry_times, client_addr)
+        self.backoff_and_enqueue(request, tx_cert, old_retry_times, client_addr, None)
             .await
     }
 
     /// Performs exponential backoff and enqueue the `transaction` to the execution queue.
+    /// When `min_backoff_duration` is provided, the backoff duration will be at least `min_backoff_duration`.
     async fn backoff_and_enqueue(
         &self,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
         tx_cert: Option<CertifiedTransaction>,
         old_retry_times: u32,
         client_addr: Option<SocketAddr>,
+        min_backoff_duration: Option<Duration>,
     ) -> SuiResult<()> {
-        let next_retry_after =
-            Instant::now() + Duration::from_millis(200 * u64::pow(2, old_retry_times));
+        let next_retry_after = Instant::now()
+            + Duration::from_millis(200 * u64::pow(2, old_retry_times))
+                .max(min_backoff_duration.unwrap_or(Duration::from_secs(0)));
         sleep_until(next_retry_after).await;
+
+        fail_point!("count_retry_times");
 
         let tx_cert = match tx_cert {
             // TxCert is only valid when its epoch matches current epoch.
@@ -180,7 +188,7 @@ impl<A: Clone> QuorumDriver<A> {
         };
 
         self.enqueue_task(QuorumDriverTask {
-            transaction,
+            request,
             tx_cert,
             retry_times: old_retry_times + 1,
             next_retry_after,
@@ -231,15 +239,15 @@ where
 {
     pub async fn submit_transaction(
         &self,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
-        let tx_digest = transaction.digest();
+        let tx_digest = request.transaction.digest();
         debug!(?tx_digest, "Received transaction execution request.");
         self.metrics.total_requests.inc();
 
         let ticket = self.notifier.register_one(tx_digest);
         self.enqueue_task(QuorumDriverTask {
-            transaction,
+            request,
             tx_cert: None,
             retry_times: 0,
             next_retry_after: Instant::now(),
@@ -253,10 +261,10 @@ where
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
     pub async fn submit_transaction_no_ticket(
         &self,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<()> {
-        let tx_digest = transaction.digest();
+        let tx_digest = request.transaction.digest();
         debug!(
             ?tx_digest,
             "Received transaction execution request, no ticket."
@@ -264,7 +272,7 @@ where
         self.metrics.total_requests.inc();
 
         self.enqueue_task(QuorumDriverTask {
-            transaction,
+            request,
             tx_cert: None,
             retry_times: 0,
             next_retry_after: Instant::now(),
@@ -371,7 +379,11 @@ where
                 retry_after_secs,
             }) => {
                 self.metrics.total_retryable_overload_errors.inc();
-                debug!(?tx_digest, ?errors, "System overload and retry");
+                debug!(
+                    ?tx_digest,
+                    ?errors,
+                    "System overload and retry after secs {retry_after_secs}",
+                );
                 Err(Some(QuorumDriverError::SystemOverloadRetryAfter {
                     overload_stake,
                     errors,
@@ -460,14 +472,14 @@ where
 
     pub(crate) async fn process_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        request: HandleCertificateRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> Result<QuorumDriverResponse, Option<QuorumDriverError>> {
         let auth_agg = self.validators.load();
         let _cert_guard = GaugeGuard::acquire(&auth_agg.metrics.inflight_certificates);
-        let tx_digest = *certificate.digest();
-        let (effects, events) = auth_agg
-            .process_certificate(certificate.clone(), client_addr)
+        let tx_digest = *request.certificate.digest();
+        let response = auth_agg
+            .process_certificate(request.clone(), client_addr)
             .instrument(tracing::debug_span!("aggregator_process_cert", ?tx_digest))
             .await
             .map_err(|agg_err| match agg_err {
@@ -491,10 +503,6 @@ where
                     None
                 }
             })?;
-        let response = QuorumDriverResponse {
-            effects_cert: effects,
-            events,
-        };
 
         Ok(response)
     }
@@ -538,7 +546,16 @@ where
                 let result = self
                     .validators
                     .load()
-                    .process_certificate(cert, client_addr)
+                    .process_certificate(
+                        HandleCertificateRequestV3 {
+                            certificate: cert,
+                            include_events: true,
+                            include_input_objects: false,
+                            include_output_objects: false,
+                            include_auxiliary_data: false,
+                        },
+                        client_addr,
+                    )
                     .await
                     .tap_ok(|_resp| {
                         debug!(
@@ -652,19 +669,19 @@ where
     // already obtained prior to calling this function, for instance, TransactionOrchestrator
     pub async fn submit_transaction_no_ticket(
         &self,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
         client_addr: Option<SocketAddr>,
     ) -> SuiResult<()> {
         self.quorum_driver
-            .submit_transaction_no_ticket(transaction, client_addr)
+            .submit_transaction_no_ticket(request, client_addr)
             .await
     }
 
     pub async fn submit_transaction(
         &self,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
     ) -> SuiResult<Registration<TransactionDigest, QuorumDriverResult>> {
-        self.quorum_driver.submit_transaction(transaction).await
+        self.quorum_driver.submit_transaction(request).await
     }
 
     /// Create a new `QuorumDriverHandler` based on the same AuthorityAggregator.
@@ -737,12 +754,13 @@ where
     async fn process_task(quorum_driver: Arc<QuorumDriver<A>>, task: QuorumDriverTask) {
         debug!(?task, "Quorum Driver processing task");
         let QuorumDriverTask {
-            transaction,
+            request,
             tx_cert,
             retry_times: old_retry_times,
             client_addr,
             ..
         } = task;
+        let transaction = &request.transaction;
         let tx_digest = *transaction.digest();
         let is_single_writer_tx = !transaction.contains_shared_object();
 
@@ -766,15 +784,18 @@ where
                     );
                     let response = QuorumDriverResponse {
                         effects_cert,
-                        events,
+                        events: Some(events),
+                        input_objects: None,
+                        output_objects: None,
+                        auxiliary_data: None,
                     };
-                    quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
+                    quorum_driver.notify(transaction, &Ok(response), old_retry_times + 1);
                     return;
                 }
                 Err(err) => {
                     Self::handle_error(
                         quorum_driver,
-                        transaction,
+                        request,
                         err,
                         None,
                         old_retry_times,
@@ -788,7 +809,16 @@ where
         };
 
         let response = match quorum_driver
-            .process_certificate(tx_cert.clone(), client_addr)
+            .process_certificate(
+                HandleCertificateRequestV3 {
+                    certificate: tx_cert.clone(),
+                    include_events: request.include_events,
+                    include_input_objects: request.include_input_objects,
+                    include_output_objects: request.include_output_objects,
+                    include_auxiliary_data: request.include_auxiliary_data,
+                },
+                client_addr,
+            )
             .await
         {
             Ok(response) => {
@@ -800,7 +830,7 @@ where
             Err(err) => {
                 Self::handle_error(
                     quorum_driver,
-                    transaction,
+                    request,
                     err,
                     Some(tx_cert),
                     old_retry_times,
@@ -832,30 +862,32 @@ where
             );
         }
 
-        quorum_driver.notify(&transaction, &Ok(response), old_retry_times + 1);
+        quorum_driver.notify(transaction, &Ok(response), old_retry_times + 1);
     }
 
     fn handle_error(
         quorum_driver: Arc<QuorumDriver<A>>,
-        transaction: Transaction,
+        request: ExecuteTransactionRequestV3,
         err: Option<QuorumDriverError>,
         tx_cert: Option<CertifiedTransaction>,
         old_retry_times: u32,
         action: &'static str,
         client_addr: Option<SocketAddr>,
     ) {
-        let tx_digest = *transaction.digest();
+        let tx_digest = *request.transaction.digest();
         match err {
             None => {
                 debug!(?tx_digest, "Failed to {action} - Retrying");
                 spawn_monitored_task!(quorum_driver.enqueue_again_maybe(
-                    transaction.clone(),
+                    request.clone(),
                     tx_cert,
                     old_retry_times,
                     client_addr,
                 ));
             }
-            Some(QuorumDriverError::SystemOverloadRetryAfter { .. }) => {
+            Some(QuorumDriverError::SystemOverloadRetryAfter {
+                retry_after_secs, ..
+            }) => {
                 // Special case for SystemOverloadRetryAfter error. In this case, due to that objects are already
                 // locked inside validators, we need to perform continuous retry and ignore `max_retry_times`.
                 // TODO: the txn can potentially be retried unlimited times, therefore, we need to bound the number
@@ -863,16 +895,17 @@ where
                 // reject any new transaction requests.
                 debug!(?tx_digest, "Failed to {action} - Retrying");
                 spawn_monitored_task!(quorum_driver.backoff_and_enqueue(
-                    transaction.clone(),
+                    request.clone(),
                     tx_cert,
                     old_retry_times,
                     client_addr,
+                    Some(Duration::from_secs(retry_after_secs)),
                 ));
             }
             Some(qd_error) => {
                 debug!(?tx_digest, "Failed to {action}: {}", qd_error);
                 // non-retryable failure, this task reaches terminal state for now, notify waiter.
-                quorum_driver.notify(&transaction, &Err(qd_error), old_retry_times + 1);
+                quorum_driver.notify(&request.transaction, &Err(qd_error), old_retry_times + 1);
             }
         }
     }

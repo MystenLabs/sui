@@ -13,9 +13,36 @@ module sui::deny_list {
     const ENotSystemAddress: u64 = 0;
     /// The specified address to be removed is not already in the deny list.
     const ENotDenied: u64 = 1;
+    /// The specified address cannot be added to the deny list.
+    const EInvalidAddress: u64 = 1;
 
     /// The index into the deny list vector for the `sui::coin::Coin` type.
     const COIN_INDEX: u64 = 0;
+
+    /// These addresses are reserved and cannot be added to the deny list.
+    /// The addresses listed are well known package and object addresses. So it would be
+    /// meaningless to add them to the deny list.
+    const RESERVED: vector<address> = vector[
+        @0x0,
+        @0x1,
+        @0x2,
+        @0x3,
+        @0x4,
+        @0x5,
+        @0x6,
+        @0x7,
+        @0x8,
+        @0x9,
+        @0xA,
+        @0xB,
+        @0xC,
+        @0xD,
+        @0xE,
+        @0xF,
+        @0x403,
+        @0xDEE9,
+    ];
+
 
     /// A shared object that stores the addresses that are blocked for a given core type.
     public struct DenyList has key {
@@ -46,6 +73,8 @@ module sui::deny_list {
         `type`: vector<u8>,
         addr: address,
     ) {
+        let reserved = RESERVED;
+        assert!(!reserved.contains(&addr), EInvalidAddress);
         let bag_entry: &mut PerTypeList = &mut deny_list.lists[per_type_index];
         bag_entry.per_type_list_add(`type`, addr)
     }
@@ -78,6 +107,8 @@ module sui::deny_list {
         `type`: vector<u8>,
         addr: address,
     ) {
+        let reserved = RESERVED;
+        assert!(!reserved.contains(&addr), EInvalidAddress);
         per_type_list_remove(&mut deny_list.lists[per_type_index], `type`, addr)
     }
 
@@ -103,6 +134,8 @@ module sui::deny_list {
         `type`: vector<u8>,
         addr: address,
     ): bool {
+        let reserved = RESERVED;
+        if (reserved.contains(&addr)) return false;
         per_type_list_contains(&deny_list.lists[per_type_index], `type`, addr)
     }
 
@@ -143,6 +176,11 @@ module sui::deny_list {
             denied_count: table::new(ctx),
             denied_addresses: table::new(ctx),
         }
+    }
+
+    #[test_only]
+    public fun reserved_addresses(): vector<address> {
+        RESERVED
     }
 
     #[test_only]

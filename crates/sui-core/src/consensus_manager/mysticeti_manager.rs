@@ -5,12 +5,13 @@ use std::{path::PathBuf, sync::Arc};
 use arc_swap::ArcSwapOption;
 use async_trait::async_trait;
 use consensus_config::{Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
-use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, NetworkType, Round};
+use consensus_core::{CommitConsumer, CommitIndex, ConsensusAuthority, Round};
 use fastcrypto::ed25519;
 use mysten_metrics::{RegistryID, RegistryService};
 use narwhal_executor::ExecutionState;
 use prometheus::Registry;
 use sui_config::NodeConfig;
+use sui_protocol_config::ConsensusNetwork;
 use sui_types::{
     committee::EpochId, sui_system_state::epoch_start_sui_system_state::EpochStartSystemStateTrait,
 };
@@ -76,6 +77,17 @@ impl MysticetiManager {
         store_path.push(format!("{}", epoch));
         store_path
     }
+
+    fn pick_network(&self, epoch_store: &AuthorityPerEpochStore) -> ConsensusNetwork {
+        if let Ok(type_str) = std::env::var("CONSENSUS_NETWORK") {
+            match type_str.to_lowercase().as_str() {
+                "anemo" => return ConsensusNetwork::Anemo,
+                "tonic" => return ConsensusNetwork::Tonic,
+                _ => {}
+            }
+        }
+        epoch_store.protocol_config().consensus_network()
+    }
 }
 
 #[async_trait]
@@ -91,14 +103,7 @@ impl ConsensusManagerTrait for MysticetiManager {
         let committee: Committee = system_state.get_mysticeti_committee();
         let epoch = epoch_store.epoch();
         let protocol_config = epoch_store.protocol_config();
-        let network_type = match std::env::var("CONSENSUS_NETWORK") {
-            Ok(type_str) => match type_str.to_lowercase().as_str() {
-                "tonic" => NetworkType::Tonic,
-                "anemo" => NetworkType::Anemo,
-                _ => NetworkType::Anemo,
-            },
-            Err(_) => NetworkType::Anemo,
-        };
+        let network_type = self.pick_network(&epoch_store);
 
         let Some(_guard) = RunningLockGuard::acquire_start(
             &self.metrics,

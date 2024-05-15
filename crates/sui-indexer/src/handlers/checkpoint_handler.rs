@@ -11,19 +11,24 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use mysten_metrics::{get_metrics, spawn_monitored_task};
 use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
-use sui_package_resolver::{PackageStore, Resolver};
+use sui_package_resolver::{PackageStore, PackageStoreWithLruCache, Resolver};
 use sui_rest_api::{CheckpointData, CheckpointTransaction, Client};
 use sui_types::base_types::ObjectRef;
 use sui_types::dynamic_field::DynamicFieldInfo;
 use sui_types::dynamic_field::DynamicFieldName;
 use sui_types::dynamic_field::DynamicFieldType;
-use sui_types::messages_checkpoint::{CertifiedCheckpointSummary, CheckpointContents};
+use sui_types::messages_checkpoint::{
+    CertifiedCheckpointSummary, CheckpointContents, CheckpointSequenceNumber,
+};
 use sui_types::object::Object;
+use tokio_util::sync::CancellationToken;
 
 use tokio::sync::watch;
 
+use diesel::r2d2::R2D2Connection;
 use std::collections::hash_map::Entry;
 use std::collections::HashSet;
+use sui_data_ingestion_core::Worker;
 use sui_json_rpc_types::SuiMoveValue;
 use sui_types::base_types::SequenceNumber;
 use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -31,17 +36,16 @@ use sui_types::event::SystemEpochInfoEvent;
 use sui_types::object::Owner;
 use sui_types::transaction::TransactionDataAPI;
 use tap::tap::TapFallible;
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 
 use sui_types::base_types::ObjectID;
 use sui_types::sui_system_state::sui_system_state_summary::SuiSystemStateSummary;
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemStateTrait};
 
 use crate::errors::IndexerError;
-use crate::framework::interface::Handler;
 use crate::metrics::IndexerMetrics;
 
-use crate::db::PgConnectionPool;
+use crate::db::ConnectionPool;
 use crate::store::package_resolver::{IndexerStorePackageResolver, InterimPackageResolver};
 use crate::store::{IndexerStore, PgIndexerStore};
 use crate::types::{
@@ -57,13 +61,16 @@ use super::TransactionObjectChangesToCommit;
 
 const CHECKPOINT_QUEUE_SIZE: usize = 100;
 
-pub async fn new_handlers<S>(
+pub async fn new_handlers<S, T>(
     state: S,
     client: Client,
     metrics: IndexerMetrics,
-) -> Result<CheckpointHandler<S>, IndexerError>
+    next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    cancel: CancellationToken,
+) -> Result<CheckpointHandler<S, T>, IndexerError>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection,
 {
     let checkpoint_queue_size = std::env::var("CHECKPOINT_QUEUE_SIZE")
         .unwrap_or(CHECKPOINT_QUEUE_SIZE.to_string())
@@ -88,140 +95,86 @@ where
         metrics_clone,
         indexed_checkpoint_receiver,
         tx,
+        next_checkpoint_sequence_number,
+        cancel.clone()
     ));
-
-    let checkpoint_handler = CheckpointHandler {
+    Ok(CheckpointHandler::new(
         state,
         metrics,
         indexed_checkpoint_sender,
-        package_buffer: IndexingPackageBuffer::start(package_tx),
-    };
-
-    Ok(checkpoint_handler)
+        package_tx,
+    ))
 }
 
-pub struct CheckpointHandler<S> {
+pub struct CheckpointHandler<S, T: R2D2Connection + 'static> {
     state: S,
     metrics: IndexerMetrics,
     indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
     // buffers for packages that are being indexed but not committed to DB,
     // they will be periodically GCed to avoid OOM.
     package_buffer: Arc<Mutex<IndexingPackageBuffer>>,
+    package_resolver: Arc<Resolver<PackageStoreWithLruCache<InterimPackageResolver<T>>>>,
 }
 
 #[async_trait]
-impl<S> Handler for CheckpointHandler<S>
+impl<S, T> Worker for CheckpointHandler<S, T>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection + 'static,
 {
-    fn name(&self) -> &str {
-        "checkpoint-handler"
+    async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+        let checkpoint_data = Self::index_checkpoint(
+            self.state.clone().into(),
+            checkpoint.clone(),
+            Arc::new(self.metrics.clone()),
+            Self::index_packages(&[checkpoint], &self.metrics),
+            self.package_resolver.clone(),
+        )
+        .await?;
+        self.indexed_checkpoint_sender.send(checkpoint_data).await?;
+        Ok(())
     }
-    async fn process_checkpoints(&mut self, checkpoints: &[CheckpointData]) -> anyhow::Result<()> {
-        if checkpoints.is_empty() {
-            return Ok(());
-        }
-        // Safe to unwrap, checked emptiness above
-        let first_checkpoint_seq = checkpoints
-            .first()
+
+    fn preprocess_hook(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+        let package_objects = Self::get_package_objects(&[checkpoint]);
+        self.package_buffer
+            .lock()
             .unwrap()
-            .checkpoint_summary
-            .sequence_number();
-        let last_checkpoint_seq = checkpoints
-            .last()
-            .unwrap()
-            .checkpoint_summary
-            .sequence_number();
-        info!(
-            first = first_checkpoint_seq,
-            last = last_checkpoint_seq,
-            "Checkpoints received by CheckpointHandler"
-        );
-
-        let indexing_timer = self.metrics.checkpoint_index_latency.start_timer();
-        // It's important to index packages first to populate ModuleResolver
-        let packages = Self::index_packages(checkpoints, &self.metrics);
-        let package_objects = Self::get_package_objects(checkpoints);
-
-        let pg_blocking_cp = self.pg_blocking_cp()?;
-        let package_db_resolver = IndexerStorePackageResolver::new(pg_blocking_cp);
-        let in_mem_package_resolver = InterimPackageResolver::new(
-            package_db_resolver,
-            self.package_buffer.clone(),
-            &package_objects,
-            self.metrics.clone(),
-        );
-        let package_resolver = Arc::new(Resolver::new(in_mem_package_resolver));
-
-        let mut packages_per_checkpoint: HashMap<_, Vec<_>> = HashMap::new();
-        for package in packages {
-            packages_per_checkpoint
-                .entry(package.checkpoint_sequence_number)
-                .or_default()
-                .push(package);
-        }
-        let mut tasks = vec![];
-        let state_clone = Arc::new(self.state.clone());
-        let metrics_clone = Arc::new(self.metrics.clone());
-        for checkpoint in checkpoints {
-            let packages = packages_per_checkpoint
-                .remove(checkpoint.checkpoint_summary.sequence_number())
-                .unwrap_or_default();
-            tasks.push(tokio::task::spawn(Self::index_one_checkpoint(
-                state_clone.clone(),
-                checkpoint.clone(),
-                metrics_clone.clone(),
-                packages,
-                package_resolver.clone(),
-            )));
-        }
-        let checkpoint_data_to_commit = futures::future::join_all(tasks)
-            .await
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| {
-                error!(
-                    "Failed to join all checkpoint indexing tasks with error: {}",
-                    e.to_string()
-                );
-            })?
-            .into_iter()
-            .collect::<Result<Vec<_>, _>>()
-            .tap_err(|e| {
-                error!("Failed to index checkpoints with error: {}", e.to_string());
-            })?;
-        let elapsed = indexing_timer.stop_and_record();
-
-        info!(
-            first = first_checkpoint_seq,
-            last = last_checkpoint_seq,
-            elapsed,
-            "Checkpoints indexing finished, about to sending to commit handler"
-        );
-
-        // NOTE: when the channel is full, checkpoint_sender_guard will wait until the channel has space.
-        // Checkpoints are sent sequentially to stick to the order of checkpoint sequence numbers.
-        for checkpoint_data in checkpoint_data_to_commit {
-            let checkpoint_seq = checkpoint_data.checkpoint.sequence_number;
-            self.indexed_checkpoint_sender
-                .send(checkpoint_data)
-                .await
-                .tap_ok(|_| info!(checkpoint_seq, "Checkpoint sent to commit handler"))
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "checkpoint channel send should not fail, but got error: {:?}",
-                        e
-                    )
-                });
-        }
+            .insert_packages(package_objects);
         Ok(())
     }
 }
 
-impl<S> CheckpointHandler<S>
+impl<S, T> CheckpointHandler<S, T>
 where
     S: IndexerStore + Clone + Sync + Send + 'static,
+    T: R2D2Connection + 'static,
 {
+    fn new(
+        state: S,
+        metrics: IndexerMetrics,
+        indexed_checkpoint_sender: mysten_metrics::metered_channel::Sender<CheckpointDataToCommit>,
+        package_tx: watch::Receiver<Option<CheckpointSequenceNumber>>,
+    ) -> Self {
+        let package_buffer = IndexingPackageBuffer::start(package_tx);
+        let pg_blocking_cp = Self::pg_blocking_cp(state.clone()).unwrap();
+        let package_db_resolver = IndexerStorePackageResolver::new(pg_blocking_cp);
+        let in_mem_package_resolver = InterimPackageResolver::new(
+            package_db_resolver,
+            package_buffer.clone(),
+            metrics.clone(),
+        );
+        let cached_package_resolver = PackageStoreWithLruCache::new(in_mem_package_resolver);
+        let package_resolver = Arc::new(Resolver::new(cached_package_resolver));
+        Self {
+            state,
+            metrics,
+            indexed_checkpoint_sender,
+            package_buffer,
+            package_resolver,
+        }
+    }
+
     async fn index_epoch(
         state: Arc<S>,
         data: &CheckpointData,
@@ -299,7 +252,7 @@ where
         }))
     }
 
-    async fn index_one_checkpoint(
+    async fn index_checkpoint(
         state: Arc<S>,
         data: CheckpointData,
         metrics: Arc<IndexerMetrics>,
@@ -722,9 +675,9 @@ where
             .collect()
     }
 
-    fn pg_blocking_cp(&self) -> Result<PgConnectionPool, IndexerError> {
-        let state_as_any = self.state.as_any();
-        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore>() {
+    fn pg_blocking_cp(state: S) -> Result<ConnectionPool<T>, IndexerError> {
+        let state_as_any = state.as_any();
+        if let Some(pg_state) = state_as_any.downcast_ref::<PgIndexerStore<T>>() {
             return Ok(pg_state.blocking_cp());
         }
         Err(IndexerError::UncategorizedError(anyhow::anyhow!(

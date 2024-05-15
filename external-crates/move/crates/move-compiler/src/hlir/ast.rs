@@ -381,7 +381,10 @@ pub enum UnannotatedExp_ {
         var: Var,
     },
     Constant(ConstantName),
-    ErrorConstant(Option<ConstantName>),
+    ErrorConstant {
+        line_number_loc: Loc,
+        error_constant: Option<ConstantName>,
+    },
 
     ModuleCall(Box<ModuleCall>),
     Freeze(Box<Exp>),
@@ -915,9 +918,13 @@ impl AstDebug for ModuleDefinition {
         }
         attributes.ast_debug(w);
         w.writeln(match target_kind {
-            TargetKind::Source => "source module",
-            TargetKind::DependencyBeingCompiled => "dependency module",
-            TargetKind::DependencyBeingLinked => "linked module",
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
         });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, _loc) in friends.key_cloned_iter() {
@@ -1552,9 +1559,12 @@ impl AstDebug for UnannotatedExp_ {
             }
             E::UnresolvedError => w.write("_|_"),
             E::Unreachable => w.write("unreachable"),
-            E::ErrorConstant(c) => {
+            E::ErrorConstant {
+                line_number_loc: _,
+                error_constant,
+            } => {
                 w.write("ErrorConstant");
-                if let Some(c) = c {
+                if let Some(c) = error_constant {
                     w.write(&format!("({})", c))
                 }
             }

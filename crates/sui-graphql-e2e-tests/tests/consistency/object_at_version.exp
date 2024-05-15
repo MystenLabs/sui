@@ -20,7 +20,7 @@ task 4 'run-graphql'. lines 62-75:
 Response: {
   "data": {
     "object": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -45,7 +45,7 @@ task 7 'run-graphql'. lines 81-107:
 Response: {
   "data": {
     "latest_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 4,
       "asMoveObject": {
         "contents": {
@@ -57,7 +57,7 @@ Response: {
       }
     },
     "previous_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -89,7 +89,7 @@ Response: {
       "asMoveObject": null
     },
     "previous_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 4,
       "asMoveObject": {
         "contents": {
@@ -116,7 +116,7 @@ task 13 'run-graphql'. lines 145-183:
 Response: {
   "data": {
     "latest_unwrapped": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 6,
       "asMoveObject": {
         "contents": {
@@ -133,7 +133,7 @@ Response: {
       "asMoveObject": null
     },
     "first_version": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 3,
       "asMoveObject": {
         "contents": {
@@ -177,11 +177,11 @@ Objects snapshot updated to [0 to 5)
 task 18 'create-checkpoint'. lines 219-219:
 Checkpoint created: 6
 
-task 19 'run-graphql'. lines 221-259:
+task 19 'run-graphql'. lines 221-260:
 Response: {
   "data": {
     "object_within_available_range": {
-      "status": "HISTORICAL",
+      "status": "INDEXED",
       "version": 6,
       "asMoveObject": {
         "contents": {
@@ -192,7 +192,22 @@ Response: {
         }
       }
     },
-    "object_outside_available_range": null,
-    "object_not_in_snapshot": null
+    "object_outside_available_range": {
+      "status": "WRAPPED_OR_DELETED",
+      "version": 5,
+      "asMoveObject": null
+    },
+    "object_not_in_snapshot": {
+      "status": "INDEXED",
+      "version": 3,
+      "asMoveObject": {
+        "contents": {
+          "json": {
+            "id": "0x7a166d93d67f2815b463e90d909798a5c572b3e15cdbd6dc8fc10f9fc88618f9",
+            "value": "0"
+          }
+        }
+      }
+    }
   }
 }

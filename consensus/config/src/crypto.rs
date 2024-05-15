@@ -31,8 +31,18 @@ impl NetworkPublicKey {
         Self(key)
     }
 
+    pub fn into_inner(self) -> ed25519::Ed25519PublicKey {
+        self.0
+    }
+
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0 .0.to_bytes()
+    }
+}
+
+impl NetworkPrivateKey {
+    pub fn into_inner(self) -> ed25519::Ed25519PrivateKey {
+        self.0
     }
 }
 
@@ -47,6 +57,10 @@ impl NetworkKeyPair {
 
     pub fn public(&self) -> NetworkPublicKey {
         NetworkPublicKey(self.0.public().clone())
+    }
+
+    pub fn private_key(self) -> NetworkPrivateKey {
+        NetworkPrivateKey(self.0.copy().private())
     }
 
     pub fn private_key_bytes(self) -> [u8; 32] {

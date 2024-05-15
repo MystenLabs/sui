@@ -19,9 +19,9 @@ npm i @mysten/bcs
 import { bcs } from '@mysten/bcs';
 
 // define UID as a 32-byte array, then add a transform to/from hex strings
-const UID = bcs.array(32, bcs.u8()).transform({
-	input: (id: string) => fromHex(id),
-	output: (id) => toHex(id),
+const UID = bcs.fixedArray(32, bcs.u8()).transform({
+	input: (id: string) => fromHEX(id),
+	output: (id) => toHEX(Uint8Array.from(id)),
 });
 
 const Coin = bcs.struct('Coin', {
@@ -147,10 +147,15 @@ const struct = MyStruct.serialize({ id: 1, name: 'name' }).toBytes();
 const tuple = bcs.tuple([bcs.u8(), bcs.string()]).serialize([1, 'name']).toBytes();
 
 // Map
-const map = bcs.map(bcs.u8(), bcs.string()).serialize(.toBytes()[
-	[1, 'one'],
-	[2, 'two'],
-]);
+const map = bcs
+	.map(bcs.u8(), bcs.string())
+	.serialize(
+		new Map([
+			[1, 'one'],
+			[2, 'two'],
+		]),
+	)
+	.toBytes();
 
 // Parsing data back into original types
 

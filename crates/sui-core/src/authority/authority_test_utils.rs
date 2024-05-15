@@ -65,7 +65,7 @@ pub async fn certify_transaction(
     let committee = authority.clone_committee_for_testing();
     let certificate = CertifiedTransaction::new(transaction.into_message(), vec![vote], &committee)
         .unwrap()
-        .verify_authenticated(&committee, &Default::default())
+        .try_into_verified_for_testing(&committee, &Default::default())
         .unwrap();
     Ok(certificate)
 }
@@ -305,7 +305,7 @@ pub fn init_certified_transaction(
         epoch_store.committee(),
     )
     .unwrap()
-    .verify_authenticated(epoch_store.committee(), &Default::default())
+    .try_into_verified_for_testing(epoch_store.committee(), &Default::default())
     .unwrap()
 }
 
@@ -325,7 +325,7 @@ pub async fn certify_shared_obj_transaction_no_execution(
     let certificate =
         CertifiedTransaction::new(transaction.into_message(), vec![vote.clone()], &committee)
             .unwrap()
-            .verify_authenticated(&committee, &Default::default())
+            .try_into_verified_for_testing(&committee, &Default::default())
             .unwrap();
 
     send_consensus_no_execution(authority, &certificate).await;
@@ -375,6 +375,7 @@ pub async fn send_consensus(authority: &AuthorityState, cert: &VerifiedCertifica
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
             &authority.metrics,
+            true,
         )
         .await
         .unwrap();
@@ -398,6 +399,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
             &authority.metrics,
+            true,
         )
         .await
         .unwrap();
@@ -406,6 +408,7 @@ pub async fn send_consensus_no_execution(authority: &AuthorityState, cert: &Veri
 pub async fn send_batch_consensus_no_execution(
     authority: &AuthorityState,
     certificates: &[VerifiedCertificate],
+    skip_consensus_commit_prologue_in_test: bool,
 ) -> Vec<VerifiedExecutableTransaction> {
     let transactions = certificates
         .iter()
@@ -426,6 +429,7 @@ pub async fn send_batch_consensus_no_execution(
             &Arc::new(CheckpointServiceNoop {}),
             authority.get_cache_reader().as_ref(),
             &authority.metrics,
+            skip_consensus_commit_prologue_in_test,
         )
         .await
         .unwrap()

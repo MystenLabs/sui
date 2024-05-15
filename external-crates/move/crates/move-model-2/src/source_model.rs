@@ -835,10 +835,12 @@ impl Model {
                 let id = (*a, *m);
                 for (fname, fdata) in &mut data.functions {
                     let qualified_id = (id, *fname);
-                    fdata.calls =
-                        function_immediate_deps.remove(&qualified_id).unwrap_or(BTreeSet::new());
-                    fdata.called_by =
-                        function_called_by.remove(&qualified_id).unwrap_or(BTreeSet::new());
+                    fdata.calls = function_immediate_deps
+                        .remove(&qualified_id)
+                        .unwrap_or(BTreeSet::new());
+                    fdata.called_by = function_called_by
+                        .remove(&qualified_id)
+                        .unwrap_or(BTreeSet::new());
                 }
             }
         }

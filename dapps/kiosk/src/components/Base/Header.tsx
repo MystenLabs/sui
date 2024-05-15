@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useSuiClientContext } from '@mysten/dapp-kit';
 import classNames from 'clsx';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -10,6 +11,8 @@ import { SuiConnectButton } from './SuiConnectButton';
 
 export function Header() {
 	const navigate = useNavigate();
+
+	const { network, networks, selectNetwork } = useSuiClientContext();
 
 	const location = useLocation();
 	const isHome = location.pathname === '/';
@@ -47,7 +50,18 @@ export function Header() {
 					</svg>
 				</Button>
 				<FindKiosk />
-				<div className="ml-auto my-3 md:my-1">
+				<div className="ml-auto my-3 md:my-1 flex gap-5 items-center">
+					<select
+						value={network}
+						onChange={(e) => selectNetwork(e.target.value)}
+						className="bg-gray-50 border border-gray-300 text-gray-900 h-[45px] text-sm rounded-lg focus:ring-primary focus:border-primary block w-full p-2.5"
+					>
+						{Object.keys(networks).map((n) => (
+							<option key={n} value={n}>
+								{n}
+							</option>
+						))}
+					</select>
 					<SuiConnectButton></SuiConnectButton>
 				</div>
 			</div>

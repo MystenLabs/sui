@@ -8,7 +8,6 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::Arc;
 use sui_core::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use sui_core::authority::authority_store_tables::LiveObject;
-use sui_core::authority::shared_object_version_manager::SharedObjVerManager;
 use sui_core::authority::test_authority_builder::TestAuthorityBuilder;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_server::{ValidatorService, ValidatorServiceMetrics};
@@ -310,17 +309,13 @@ impl SingleValidator {
                 )
             })
             .collect();
-        let versions = SharedObjVerManager::assign_versions_from_consensus(
-            self.epoch_store.as_ref(),
-            self.get_validator().get_cache_reader().as_ref(),
-            &transactions,
-            None,
-        )
-        .await
-        .unwrap();
         self.epoch_store
-            .set_assigned_shared_object_versions_for_benchmark(versions.assigned_versions)
-            .await;
+            .assign_shared_object_versions_idempotent(
+                self.get_validator().get_cache_reader().as_ref(),
+                &transactions,
+            )
+            .await
+            .unwrap();
     }
 }
 

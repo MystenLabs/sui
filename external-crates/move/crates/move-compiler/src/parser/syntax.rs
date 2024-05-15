@@ -11,7 +11,7 @@ use crate::{
     diagnostics::{Diagnostic, Diagnostics},
     editions::{Edition, FeatureGate, UPGRADE_NOTE},
     parser::{ast::*, lexer::*, token_set::*},
-    shared::*,
+    shared::{string_utils::*, *},
     MatchedFileCommentMap,
 };
 
@@ -2601,7 +2601,11 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 context.tokens,
                                 "an identifier or a decimal number",
                             ));
-                            Exp_::DotUnresolved(first_token_loc, Box::new(lhs))
+                            if context.env.ide_mode() {
+                                Exp_::DotUnresolved(first_token_loc, Box::new(lhs))
+                            } else {
+                                Exp_::UnresolvedError
+                            }
                         }
                         Ok(n) => {
                             if is_start_of_call_after_function_name(context, &n) {
@@ -3283,7 +3287,7 @@ fn parse_body(context: &mut Context, native: Option<Loc>) -> Result<FunctionBody
 //          "{" (<VariantDecl>,)+ "}" ("has" <Ability> (, <Ability>)+;)
 //      EnumDefName =
 //          <Identifier> <OptionalTypeParameters>
-// Where the the two "has" statements are mutually exclusive -- an enum cannot be declared with
+// Where the two "has" statements are mutually exclusive -- an enum cannot be declared with
 // both infix and postfix ability declarations.
 fn parse_enum_decl(
     attributes: Vec<Attributes>,
@@ -3475,7 +3479,7 @@ fn check_enum_visibility(visibility: Option<Visibility>, context: &mut Context) 
 //          (("{" Comma<FieldAnnot> "}" | "(" Comma<PosField> ")") ("has" <Ability> (, <Ability>)+;)? | ";")
 //      StructDefName =
 //          <Identifier> <OptionalTypeParameters>
-// Where the the two "has" statements are mutually exclusive -- a struct cannot be declared with
+// Where the two "has" statements are mutually exclusive -- a struct cannot be declared with
 // both infix and postfix ability declarations.
 fn parse_struct_decl(
     attributes: Vec<Attributes>,

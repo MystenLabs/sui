@@ -8,8 +8,7 @@ use typed_store::TypedStoreError;
 
 use crate::{
     block::{BlockRef, Round},
-    commit::Commit,
-    CommitIndex,
+    commit::{Commit, CommitIndex},
 };
 
 /// Errors that can occur when processing blocks, reading from storage, or encountering shutdown.
@@ -137,7 +136,7 @@ pub enum ConsensusError {
         commit: Box<Commit>,
     },
 
-    #[error("Received unexpected block from from peer {peer}: {requested:?} vs {received:?}")]
+    #[error("Received unexpected block from peer {peer}: {requested:?} vs {received:?}")]
     UnexpectedBlockForCommit {
         peer: AuthorityIndex,
         requested: BlockRef,
@@ -153,8 +152,17 @@ pub enum ConsensusError {
     #[error("Peer {0} is disconnected.")]
     PeerDisconnected(String),
 
-    #[error("Network error: {0:?}")]
-    NetworkError(String),
+    #[error("Network config error: {0:?}")]
+    NetworkConfig(String),
+
+    #[error("Failed to connect as client: {0:?}")]
+    NetworkClientConnection(String),
+
+    #[error("Failed to connect as server: {0:?}")]
+    NetworkServerConnection(String),
+
+    #[error("Failed to send request: {0:?}")]
+    NetworkRequest(String),
 
     #[error("Request timeout: {0:?}")]
     NetworkRequestTimeout(String),

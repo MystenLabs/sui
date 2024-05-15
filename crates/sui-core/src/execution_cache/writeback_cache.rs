@@ -70,6 +70,7 @@ use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
 use sui_types::base_types::{EpochId, ObjectID, ObjectRef, SequenceNumber, VerifiedExecutionData};
+use sui_types::bridge::{get_bridge, Bridge};
 use sui_types::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
 };
@@ -768,6 +769,33 @@ impl WritebackCache {
         }
     }
 
+    async fn persist_transactions(&self, digests: &[TransactionDigest]) -> SuiResult {
+        let mut txns = Vec::with_capacity(digests.len());
+        for tx_digest in digests {
+            let Some(tx) = self
+                .dirty
+                .pending_transaction_writes
+                .get(tx_digest)
+                .map(|o| o.transaction.clone())
+            else {
+                // tx should exist in the db if it is not in dirty set.
+                debug_assert!(self
+                    .store
+                    .get_transaction_block(tx_digest)
+                    .unwrap()
+                    .is_some());
+                // If the transaction is not in dirty, it does not need to be committed.
+                // This situation can happen if we build a checkpoint locally which was just executed
+                // via state sync.
+                continue;
+            };
+
+            txns.push((*tx_digest, (*tx).clone()));
+        }
+
+        self.store.commit_transactions(&txns)
+    }
+
     // Move the oldest/least entry from the dirty queue to the cache queue.
     // This is called after the entry is committed to the db.
     fn move_version_from_dirty_to_cache<K, V>(
@@ -893,6 +921,13 @@ impl ExecutionCacheCommit for WritebackCache {
         digests: &'a [TransactionDigest],
     ) -> BoxFuture<'a, SuiResult> {
         WritebackCache::commit_transaction_outputs(self, epoch, digests).boxed()
+    }
+
+    fn persist_transactions<'a>(
+        &'a self,
+        digests: &'a [TransactionDigest],
+    ) -> BoxFuture<'a, SuiResult> {
+        WritebackCache::persist_transactions(self, digests).boxed()
     }
 }
 
@@ -1228,6 +1263,10 @@ impl ExecutionCacheRead for WritebackCache {
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
         get_sui_system_state(self)
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        get_bridge(self)
     }
 
     fn get_marker_value(

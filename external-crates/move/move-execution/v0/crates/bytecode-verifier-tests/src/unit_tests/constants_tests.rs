@@ -1,17 +1,9 @@
 // Copyright (c) The Diem Core Contributors
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
-use move_binary_format::file_format::{empty_module, CompiledModule, Constant, SignatureToken};
+use move_binary_format::file_format::{empty_module, Constant, SignatureToken};
 use move_bytecode_verifier::constants;
 use move_core_types::vm_status::StatusCode;
-use proptest::prelude::*;
-
-proptest! {
-    #[test]
-    fn valid_generated(module in CompiledModule::valid_strategy(20)) {
-        prop_assert!(constants::verify_module(&module).is_ok());
-    }
-}
 
 #[test]
 fn valid_primitives() {
@@ -69,7 +61,8 @@ fn invalid_primitives() {
     malformed(SignatureToken::U256, vec![0, 0]);
     let data = vec![
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0,
     ];
     malformed(SignatureToken::Address, data);
 }
@@ -220,7 +213,8 @@ fn invalid_vectors() {
         tvec(SignatureToken::Address),
         vec![
             1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0,
         ],
     );
     // wrong lens

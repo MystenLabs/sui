@@ -367,11 +367,13 @@ enum TryAcceptResult {
 mod tests {
     use std::{collections::BTreeSet, sync::Arc};
 
+    use consensus_config::AuthorityIndex;
     use parking_lot::RwLock;
     use rand::{prelude::StdRng, seq::SliceRandom, SeedableRng};
 
+    use crate::test_dag_builder::DagBuilder;
     use crate::{
-        block::{genesis_blocks, BlockAPI, BlockRef, Round, SignedBlock, TestBlock, VerifiedBlock},
+        block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
         block_manager::BlockManager,
         block_verifier::{BlockVerifier, NoopBlockVerifier},
         context::Context,
@@ -380,8 +382,8 @@ mod tests {
         storage::mem_store::MemStore,
     };
 
-    #[test]
-    fn suspend_blocks_with_missing_ancestors() {
+    #[tokio::test]
+    async fn suspend_blocks_with_missing_ancestors() {
         // GIVEN
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -391,13 +393,22 @@ mod tests {
         let mut block_manager =
             BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
-        // create a DAG of 2 rounds
-        let all_blocks = dag(context, 2);
+        // create a DAG
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=2) // 2 rounds
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(2),
+            ]) // Create equivocating blocks for 2 authorities
+            .equivocate(3)
+            .build();
 
         // Take only the blocks of round 2 and try to accept them
-        let round_2_blocks = all_blocks
+        let round_2_blocks = dag_builder
+            .blocks
             .into_iter()
-            .filter(|block| block.round() == 2)
+            .filter_map(|(_, block)| (block.round() == 2).then_some(block))
             .collect::<Vec<VerifiedBlock>>();
 
         // WHEN
@@ -425,8 +436,8 @@ mod tests {
         );
     }
 
-    #[test]
-    fn try_accept_block_returns_missing_blocks() {
+    #[tokio::test]
+    async fn try_accept_block_returns_missing_blocks() {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
         let store = Arc::new(MemStore::new());
@@ -435,15 +446,24 @@ mod tests {
         let mut block_manager =
             BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
-        // create a DAG of 4 rounds
-        let all_blocks = dag(context, 4);
+        // create a DAG
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder
+            .layers(1..=4) // 4 rounds
+            .authorities(vec![
+                AuthorityIndex::new_for_test(0),
+                AuthorityIndex::new_for_test(2),
+            ]) // Create equivocating blocks for 2 authorities
+            .equivocate(3) // Use 3 equivocations blocks per authority
+            .build();
 
         // Take the blocks from round 4 up to 2 (included). Only the first block of each round should return missing
         // ancestors when try to accept
-        for block in all_blocks
+        for (_, block) in dag_builder
+            .blocks
             .into_iter()
             .rev()
-            .take_while(|block| block.round() >= 2)
+            .take_while(|(_, block)| block.round() >= 2)
         {
             // WHEN
             let (accepted_blocks, missing) = block_manager.try_accept_blocks(vec![block.clone()]);
@@ -456,8 +476,8 @@ mod tests {
         }
     }
 
-    #[test]
-    fn accept_blocks_with_complete_causal_history() {
+    #[tokio::test]
+    async fn accept_blocks_with_complete_causal_history() {
         // GIVEN
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
@@ -468,7 +488,10 @@ mod tests {
             BlockManager::new(context.clone(), dag_state, Arc::new(NoopBlockVerifier));
 
         // create a DAG of 2 rounds
-        let all_blocks = dag(context, 2);
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=2).build();
+
+        let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
 
         // WHEN
         let (accepted_blocks, missing) = block_manager.try_accept_blocks(all_blocks.clone());
@@ -491,14 +514,17 @@ mod tests {
         assert!(accepted_blocks.is_empty());
     }
 
-    #[test]
-    fn accept_blocks_unsuspend_children_blocks() {
+    #[tokio::test]
+    async fn accept_blocks_unsuspend_children_blocks() {
         // GIVEN
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 3
-        let mut all_blocks = dag(context.clone(), 3);
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=3).build();
+
+        let mut all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
 
         // Now randomize the sequence of sending the blocks to block manager. In the end all the blocks should be uniquely
         // suspended and no missing blocks should exist.
@@ -532,27 +558,6 @@ mod tests {
         }
     }
 
-    /// Creates all the blocks to produce a fully connected DAG from round 0 up to `end_round`.
-    /// Note: this method also returns the genesis blocks.
-    fn dag(context: Arc<Context>, end_round: u64) -> Vec<VerifiedBlock> {
-        let mut last_round_blocks = genesis_blocks(context.clone());
-        let mut all_blocks = vec![];
-        for round in 1..=end_round {
-            let mut this_round_blocks = Vec::new();
-            for (index, _authority) in context.committee.authorities() {
-                let block = TestBlock::new(round as Round, index.value() as u32)
-                    .set_timestamp_ms(round * 1000)
-                    .set_ancestors(last_round_blocks.iter().map(|b| b.reference()).collect())
-                    .build();
-
-                this_round_blocks.push(VerifiedBlock::new_for_test(block));
-            }
-            all_blocks.extend(this_round_blocks.clone());
-            last_round_blocks = this_round_blocks;
-        }
-        all_blocks
-    }
-
     struct TestBlockVerifier {
         fail: BTreeSet<BlockRef>,
     }
@@ -584,13 +589,16 @@ mod tests {
         }
     }
 
-    #[test]
-    fn reject_blocks_failing_verifications() {
+    #[tokio::test]
+    async fn reject_blocks_failing_verifications() {
         let (context, _key_pairs) = Context::new_for_test(4);
         let context = Arc::new(context);
 
         // create a DAG of rounds 1 ~ 5.
-        let all_blocks = dag(context.clone(), 5);
+        let mut dag_builder = DagBuilder::new(context.clone());
+        dag_builder.layers(1..=5).build();
+
+        let all_blocks = dag_builder.blocks.values().cloned().collect::<Vec<_>>();
 
         // Create a test verifier that fails the blocks of round 3
         let test_verifier = TestBlockVerifier::new(

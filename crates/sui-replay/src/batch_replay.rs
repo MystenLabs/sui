@@ -7,6 +7,7 @@ use futures::future::join_all;
 use futures::FutureExt;
 use parking_lot::Mutex;
 use std::collections::VecDeque;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use sui_config::node::ExpensiveSafetyCheckConfig;
@@ -24,6 +25,7 @@ pub async fn batch_replay(
     expensive_safety_check_config: ExpensiveSafetyCheckConfig,
     use_authority: bool,
     terminate_early: bool,
+    persist_path: Option<PathBuf>,
 ) {
     let provider = Arc::new(TransactionDigestProvider::new(tx_digests));
     let cancel = tokio_util::sync::CancellationToken::new();
@@ -34,6 +36,7 @@ pub async fn batch_replay(
         let expensive_safety_check_config = expensive_safety_check_config.clone();
         let rpc_url_ref = rpc_url.as_ref();
         let cancel = cancel.clone();
+        let persist_path_ref = persist_path.as_ref();
         tasks.push(run_task(
             provider,
             rpc_url_ref,
@@ -41,6 +44,7 @@ pub async fn batch_replay(
             use_authority,
             terminate_early,
             cancel,
+            persist_path_ref,
         ));
     }
     let all_failed_transactions: Vec<_> = join_all(tasks).await.into_iter().flatten().collect();
@@ -101,6 +105,7 @@ async fn run_task(
     use_authority: bool,
     terminate_early: bool,
     cancel: tokio_util::sync::CancellationToken,
+    persist_path: Option<&PathBuf>,
 ) -> Vec<ReplayEngineError> {
     let total_count = tx_digest_provider.get_total_count();
     let mut failed_transactions = vec![];
@@ -113,6 +118,16 @@ async fn run_task(
             "[{}/{}] Replaying transaction {:?}...",
             index, total_count, digest
         );
+        let sandbox_persist_path = persist_path.map(|path| path.join(format!("{}.json", digest,)));
+        if let Some(p) = sandbox_persist_path.as_ref() {
+            if p.exists() {
+                info!(
+                    "Skipping transaction {:?} as it has been replayed before",
+                    digest
+                );
+                continue;
+            }
+        }
         let async_func = execute_transaction(
             &mut executor,
             &digest,
@@ -126,15 +141,22 @@ async fn run_task(
                 break;
             }
         };
-        if let Err(err) = result {
-            error!("Replaying transaction {:?} forked: {:?}", digest, err);
-            if terminate_early {
-                cancel.cancel();
-                failed_transactions.push(err);
-                break;
+        match result {
+            Err(err) => {
+                error!("Replaying transaction {:?} failed: {:?}", digest, err);
+                failed_transactions.push(err.clone());
+                if terminate_early {
+                    cancel.cancel();
+                    break;
+                }
             }
-        } else {
-            info!("Replaying transaction {:?} succeeded", digest);
+            Ok(sandbox_state) => {
+                info!("Replaying transaction {:?} succeeded", digest);
+                if let Some(p) = sandbox_persist_path {
+                    let out = serde_json::to_string(&sandbox_state).unwrap();
+                    std::fs::write(p, out).unwrap();
+                }
+            }
         }
     }
     failed_transactions
@@ -168,6 +190,9 @@ async fn execute_transaction(
             .await;
         match result {
             Ok(sandbox_state) => break sandbox_state,
+            err @ Err(ReplayEngineError::TransactionNotSupported { .. }) => {
+                return err;
+            }
             Err(err) => {
                 error!("Failed to execute transaction: {:?}. Retrying in 3s", err);
                 tokio::time::sleep(std::time::Duration::from_secs(3)).await;

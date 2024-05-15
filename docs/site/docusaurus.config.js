@@ -49,6 +49,7 @@ const config = {
   },
   plugins: [
     // ....
+    [path.resolve(__dirname, "src/plugins/inject-code"), {}],
     [
       "@graphql-markdown/docusaurus",
       {

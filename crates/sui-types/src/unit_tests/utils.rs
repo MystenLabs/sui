@@ -186,6 +186,12 @@ mod zk_login {
         }
         res
     }
+    pub fn get_one_zklogin_inputs(path: &str) -> String {
+        let file = std::fs::File::open(path).expect("Unable to open file");
+
+        let test_data: Vec<TestData> = serde_json::from_reader(file).unwrap();
+        test_data[1].zklogin_inputs.clone()
+    }
 
     pub fn get_zklogin_user_address() -> SuiAddress {
         thread_local! {
@@ -265,7 +271,6 @@ mod zk_login {
 
         let tx = Transaction::new(SenderSignedData::new(
             tx.transaction_data().clone(),
-            Intent::sui_transaction(),
             vec![authenticator.clone()],
         ));
         (data.execution_parts().1, tx, authenticator)
@@ -310,7 +315,6 @@ mod zk_login {
         let multi_sig1 = MultiSig::combine(vec![sig1, sig2], multisig_pk).unwrap();
         Transaction::new(SenderSignedData::new(
             tx.transaction_data().clone(),
-            Intent::sui_transaction(),
             vec![GenericSignature::MultiSig(multi_sig1)],
         ))
     }

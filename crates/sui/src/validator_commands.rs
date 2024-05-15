@@ -34,6 +34,10 @@ use fastcrypto::{
 };
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
+use sui_bridge::config::{read_bridge_authority_key, BridgeNodeConfig};
+use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
+use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
+use sui_config::Config;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -163,6 +167,15 @@ pub enum SuiValidatorCommand {
         #[clap(name = "gas-budget", long)]
         gas_budget: Option<u64>,
     },
+    /// Sui native bridge committee member registration
+    BridgeCommitteeRegistration {
+        /// Path to bridge node config
+        #[clap(long)]
+        bridge_node_config_path: PathBuf,
+        /// Bridge authority URL which clients collects action signatures from
+        #[clap(long)]
+        bridge_authority_url: String,
+    },
 }
 
 #[derive(Serialize)]
@@ -181,6 +194,7 @@ pub enum SuiValidatorCommandResponse {
         data: TransactionData,
         serialized_data: String,
     },
+    BridgeCommitteeRegistration(SuiTransactionBlockResponse),
 }
 
 fn make_key_files(
@@ -454,6 +468,50 @@ impl SuiValidatorCommand {
                     serialized_data,
                 }
             }
+            SuiValidatorCommand::BridgeCommitteeRegistration {
+                bridge_node_config_path,
+                bridge_authority_url,
+            } => {
+                let bridge_config = match BridgeNodeConfig::load(bridge_node_config_path) {
+                    Ok(config) => config,
+                    Err(e) => panic!("Couldn't load BridgeNodeConfig, caused by: {e}"),
+                };
+                // Read bridge keypair
+                let ecdsa_keypair =
+                    read_bridge_authority_key(&bridge_config.bridge_authority_key_path_base64_raw)?;
+
+                let address = context.active_address()?;
+                println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {}", ecdsa_keypair.public);
+
+                let bridge_client = SuiBridgeClient::new(&bridge_config.sui.sui_rpc_url).await?;
+                let bridge = bridge_client
+                    .get_mutable_bridge_object_arg_must_succeed()
+                    .await;
+
+                let gas = context
+                    .get_one_gas_object_owned_by_address(address)
+                    .await?
+                    .unwrap_or_else(|| panic!("Cannot find gas object from address : {address}"));
+
+                let gas_price = context.get_reference_gas_price().await?;
+                let tx_data = build_committee_register_transaction(
+                    address,
+                    &gas,
+                    bridge,
+                    ecdsa_keypair,
+                    &bridge_authority_url,
+                    gas_price,
+                )
+                .map_err(|e| anyhow!("{e:?}"))?;
+
+                let tx = context.sign_transaction(&tx_data);
+                let response = context.execute_transaction_must_succeed(tx).await;
+                println!(
+                    "Committee registration successful. Transaction digest: {}",
+                    response.digest
+                );
+                SuiValidatorCommandResponse::BridgeCommitteeRegistration(response)
+            }
         });
         ret
     }
@@ -688,6 +746,9 @@ impl Display for SuiValidatorCommandResponse {
                     "Transaction: {:?}, \nSerialized transaction: {:?}",
                     data, serialized_data
                 )?;
+            }
+            SuiValidatorCommandResponse::BridgeCommitteeRegistration(response) => {
+                write!(writer, "{}", response)?;
             }
         }
         write!(f, "{}", writer.trim_end_matches('\n'))

@@ -198,7 +198,11 @@ pub enum UnannotatedExp_ {
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
     Match(Box<Exp>, Spanned<Vec<MatchArm>>),
-    VariantMatch(Box<Exp>, DatatypeName, Vec<(VariantName, Exp)>),
+    VariantMatch(
+        Box<Exp>,
+        (ModuleIdent, DatatypeName),
+        Vec<(VariantName, Exp)>,
+    ),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop {
         name: BlockLabel,
@@ -238,7 +242,10 @@ pub enum UnannotatedExp_ {
     // unfinished dot access (e.g. `some_field.`)
     InvalidAccess(Box<Exp>),
 
-    ErrorConstant(Option<ConstantName>),
+    ErrorConstant {
+        line_number_loc: Loc,
+        error_constant: Option<ConstantName>,
+    },
     UnresolvedError,
 }
 pub type UnannotatedExp = Spanned<UnannotatedExp_>;
@@ -299,6 +306,7 @@ pub enum UnannotatedPat_ {
         Vec<Type>,
         Fields<(Type, MatchPattern)>,
     ),
+    Constant(ModuleIdent, ConstantName),
     Binder(Mutability, Var),
     Literal(Value),
     Wildcard,
@@ -313,10 +321,6 @@ pub type UnannotatedPat = Spanned<UnannotatedPat_>;
 pub struct MatchPattern {
     pub ty: Type,
     pub pat: Spanned<UnannotatedPat_>,
-}
-
-pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
-    MatchPattern { pat, ty }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -380,6 +384,10 @@ pub fn splat_item(env: &mut CompilationEnv, splat_loc: Loc, e: Exp) -> ExpListIt
     ExpListItem::Splat(splat_loc, e, ss)
 }
 
+pub fn pat(ty: Type, pat: UnannotatedPat) -> MatchPattern {
+    MatchPattern { ty, pat }
+}
+
 //**************************************************************************************************
 // Display
 //**************************************************************************************************
@@ -437,9 +445,13 @@ impl AstDebug for ModuleDefinition {
         }
         attributes.ast_debug(w);
         w.writeln(match target_kind {
-            TargetKind::Source => "source module",
-            TargetKind::DependencyBeingCompiled => "dependency module",
-            TargetKind::DependencyBeingLinked => "linked module",
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
         });
         w.writeln(&format!("dependency order #{}", dependency_order));
         for (mident, neighbor) in immediate_neighbors.key_cloned_iter() {
@@ -694,10 +706,10 @@ impl AstDebug for UnannotatedExp_ {
                     })
                 });
             }
-            E::VariantMatch(esubject, enum_name, arms) => {
+            E::VariantMatch(esubject, (m, enum_name), arms) => {
                 w.write("variant_switch (");
                 esubject.ast_debug(w);
-                w.write(format!(" : {} ) ", enum_name));
+                w.write(format!(" : {m}::{enum_name} ) "));
                 w.block(|w| {
                     w.comma(arms.iter(), |w, (variant, rhs)| {
                         w.write(format!("{} =>", variant));
@@ -830,9 +842,12 @@ impl AstDebug for UnannotatedExp_ {
                 w.write(".");
             }
             E::UnresolvedError => w.write("_|_"),
-            E::ErrorConstant(constant) => {
+            E::ErrorConstant {
+                line_number_loc: _,
+                error_constant,
+            } => {
                 w.write("ErrorConstant");
-                if let Some(c) = constant {
+                if let Some(c) = error_constant {
                     w.write(&format!("({})", c))
                 }
             }
@@ -989,6 +1004,9 @@ impl AstDebug for UnannotatedPat_ {
                     a.ast_debug(w);
                 });
                 w.write("}");
+            }
+            UnannotatedPat_::Constant(m, c) => {
+                w.write(&format!("{}::{}", m, c));
             }
             UnannotatedPat_::Or(lhs, rhs) => {
                 w.write("(");

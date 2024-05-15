@@ -178,7 +178,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "ring 0.16.20",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "rustls-webpki 0.101.7",
  "serde",
  "serde_json",
@@ -1376,7 +1376,7 @@ dependencies = [
  "hyper-rustls 0.24.0",
  "lazy_static",
  "pin-project-lite",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "tokio",
  "tower",
  "tracing",
@@ -1535,7 +1535,6 @@ checksum = "3b829e4e32b91e643de6eafe82b1d90675f5874230191a4ffbc1b336dec4d6bf"
 dependencies = [
  "async-trait",
  "axum-core",
- "axum-macros",
  "base64 0.21.2",
  "bitflags 1.3.2",
  "bytes",
@@ -1601,18 +1600,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-macros"
-version = "0.3.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdca6a10ecad987bda04e95606ef85a5417dcaac1a78455242d72e031e2b6b62"
-dependencies = [
- "heck 0.4.1",
- "proc-macro2 1.0.78",
- "quote 1.0.35",
- "syn 2.0.48",
-]
-
-[[package]]
 name = "axum-server"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1625,8 +1612,8 @@ dependencies = [
  "http-body",
  "hyper",
  "pin-project-lite",
- "rustls 0.21.11",
- "rustls-pemfile 1.0.2",
+ "rustls 0.21.12",
+ "rustls-pemfile",
  "tokio",
  "tokio-rustls 0.24.0",
  "tower-service",
@@ -1810,6 +1797,14 @@ name = "bimap"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bc0455254eb5c6964c4545d8bac815e1a1be4f3afe0ae695ea539c12d728d44b"
+
+[[package]]
+name = "bin-version"
+version = "1.26.0"
+dependencies = [
+ "const-str",
+ "git-version",
+]
 
 [[package]]
 name = "bincode"
@@ -2029,7 +2024,6 @@ checksum = "7a8a8ed6fefbeef4a8c7b460e4110e12c5e22a5b7cf32621aae6ad650c4dcf29"
 dependencies = [
  "blst",
  "byte-slice-cast",
- "ec-gpu",
  "ff 0.13.0",
  "group 0.13.0",
  "pairing",
@@ -2622,8 +2616,11 @@ dependencies = [
  "enum_dispatch",
  "fastcrypto",
  "futures",
+ "hyper",
+ "hyper-rustls 0.24.0",
  "itertools 0.10.5",
  "mockall",
+ "mysten-common",
  "mysten-metrics",
  "mysten-network",
  "nom",
@@ -2633,19 +2630,24 @@ dependencies = [
  "quinn-proto",
  "rand 0.8.5",
  "rstest",
+ "rustls 0.21.12",
  "serde",
  "shared-crypto",
+ "sui-macros",
  "sui-protocol-config",
+ "sui-tls",
  "tap",
  "telemetry-subscribers",
  "tempfile",
  "thiserror",
  "tokio",
+ "tokio-rustls 0.24.0",
  "tokio-stream",
  "tokio-util 0.7.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic 0.11.0",
  "tonic-build",
  "tower",
+ "tower-http",
  "tracing",
  "typed-store",
 ]
@@ -2800,6 +2802,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b49ba7ef1ad6107f8824dbe97de947cbaac53c44e7f9756a1fba0d37c1eec505"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "count-min-sketch"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca319fe30d7b68949da20d78b612215708af87157d49665a4545dadcc20fecc7"
+dependencies = [
+ "rand 0.8.5",
+ "siphasher",
 ]
 
 [[package]]
@@ -3289,26 +3301,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "data-transform"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "base64 0.21.2",
- "diesel",
- "dotenvy",
- "fastcrypto",
- "move-bytecode-utils",
- "move-core-types",
- "once_cell",
- "serde",
- "serde_json",
- "sui-indexer",
- "sui-json-rpc-types",
- "sui-types",
- "tracing",
-]
-
-[[package]]
 name = "datatest-stable"
 version = "0.1.3"
 source = "git+https://github.com/nextest-rs/datatest-stable.git?rev=72db7f6d1bbe36a5407e96b9488a581f763e106f#72db7f6d1bbe36a5407e96b9488a581f763e106f"
@@ -3484,9 +3476,12 @@ dependencies = [
  "chrono",
  "diesel_derives",
  "itoa",
+ "mysqlclient-sys",
+ "percent-encoding",
  "pq-sys",
  "r2d2",
  "serde_json",
+ "url",
 ]
 
 [[package]]
@@ -3755,12 +3750,6 @@ name = "dyn-clone"
 version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "545b22097d44f8a9581187cdf93de7a71e4722bf51200cfaba810865b49a495d"
-
-[[package]]
-name = "ec-gpu"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd63582de2b59ea1aa48d7c1941b5d87618d95484397521b3acdfa0e1e9f5e45"
 
 [[package]]
 name = "ecdsa"
@@ -4394,7 +4383,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.8"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6#4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6"
 dependencies = [
  "aes",
  "aes-gcm",
@@ -4417,7 +4406,6 @@ dependencies = [
  "ecdsa 0.16.6",
  "ed25519-consensus",
  "elliptic-curve 0.13.4",
- "eyre",
  "fastcrypto-derive",
  "generic-array",
  "hex",
@@ -4449,7 +4437,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-derive"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6#4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6"
 dependencies = [
  "quote 1.0.35",
  "syn 1.0.107",
@@ -4458,7 +4446,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-tbls"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6#4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6"
 dependencies = [
  "bcs",
  "digest 0.10.7",
@@ -4476,7 +4464,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto-zkp"
 version = "0.1.3"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=878492bd2541dce1491791bcadf3cc855ddcdc05#878492bd2541dce1491791bcadf3cc855ddcdc05"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6#4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6"
 dependencies = [
  "ark-bls12-381",
  "ark-bn254",
@@ -5426,7 +5414,7 @@ dependencies = [
  "http",
  "hyper",
  "log",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "rustls-native-certs",
  "tokio",
  "tokio-rustls 0.24.0",
@@ -6586,6 +6574,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1fafa6961cabd9c63bcd77a45d7e3b7f3b552b70417831fb0f56db717e72407e"
 
 [[package]]
+name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
+name = "move-abstract-interpreter-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -6635,6 +6639,7 @@ dependencies = [
 name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6657,6 +6662,7 @@ dependencies = [
 name = "move-bytecode-verifier-v0"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6670,6 +6676,7 @@ dependencies = [
 name = "move-bytecode-verifier-v1"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6683,6 +6690,7 @@ dependencies = [
 name = "move-bytecode-verifier-v2"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter-v2",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
@@ -6784,6 +6792,7 @@ dependencies = [
  "petgraph 0.5.1",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",
@@ -6824,6 +6833,7 @@ dependencies = [
  "clap",
  "codespan",
  "colored",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -6842,6 +6852,7 @@ dependencies = [
  "clap",
  "colored",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -6880,6 +6891,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -7451,6 +7463,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e5ce46fe64a9d73be07dcbe690a38ce1b293be448fd8ce1e6c1b8062c9f72c6a"
 
 [[package]]
+name = "mysqlclient-sys"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f61b381528ba293005c42a409dd73d034508e273bf90481f17ec2e964a6e969b"
+dependencies = [
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "mysten-common"
 version = "0.1.0"
 dependencies = [
@@ -7514,19 +7536,6 @@ dependencies = [
  "telemetry-subscribers",
  "tokio",
  "tower",
- "tracing",
-]
-
-[[package]]
-name = "mysten-service-boilerplate"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "axum",
- "mysten-service",
- "prometheus",
- "serde",
- "tokio",
  "tracing",
 ]
 
@@ -8330,7 +8339,7 @@ dependencies = [
  "rand 0.8.5",
  "reqwest",
  "ring 0.16.20",
- "rustls-pemfile 1.0.2",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "snafu",
@@ -8839,7 +8848,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3e57598f73cc7e1b2ac63c79c517b31a0877cd7c402cdcaa311b5208de7a095"
 dependencies = [
  "blake2b_simd",
- "ec-gpu",
  "ff 0.13.0",
  "group 0.13.0",
  "hex",
@@ -9651,7 +9659,7 @@ dependencies = [
  "quinn-proto",
  "quinn-udp",
  "rustc-hash",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "thiserror",
  "tokio",
  "tracing",
@@ -9667,7 +9675,7 @@ dependencies = [
  "rand 0.8.5",
  "ring 0.16.20",
  "rustc-hash",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "slab",
  "thiserror",
  "tinyvec",
@@ -10020,9 +10028,9 @@ dependencies = [
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "rustls-native-certs",
- "rustls-pemfile 1.0.2",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -10540,28 +10548,14 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.21.11"
+version = "0.21.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fecbfb7b1444f477b345853b1fce097a2c6fb637b2bfb87e6bc5db0f043fae4"
+checksum = "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e"
 dependencies = [
  "log",
  "ring 0.17.3",
  "rustls-webpki 0.101.7",
  "sct",
-]
-
-[[package]]
-name = "rustls"
-version = "0.22.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e87c9956bd9807afa1f77e0f7594af32566e830e088a5576d27c5b6f30f49d41"
-dependencies = [
- "log",
- "ring 0.17.3",
- "rustls-pki-types",
- "rustls-webpki 0.102.2",
- "subtle",
- "zeroize",
 ]
 
 [[package]]
@@ -10571,7 +10565,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
 dependencies = [
  "openssl-probe",
- "rustls-pemfile 1.0.2",
+ "rustls-pemfile",
  "schannel",
  "security-framework",
 ]
@@ -10584,22 +10578,6 @@ checksum = "d194b56d58803a43635bdc398cd17e383d6f71f9182b9a192c127ca42494a59b"
 dependencies = [
  "base64 0.21.2",
 ]
-
-[[package]]
-name = "rustls-pemfile"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f48172685e6ff52a556baa527774f61fcaa884f59daf3375c62a3f1cd2549dab"
-dependencies = [
- "base64 0.21.2",
- "rustls-pki-types",
-]
-
-[[package]]
-name = "rustls-pki-types"
-version = "1.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ede67b28608b4c60685c7d54122d4400d90f62b40caee7700e700380a390fa8"
 
 [[package]]
 name = "rustls-webpki"
@@ -10618,17 +10596,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
  "ring 0.17.3",
- "untrusted 0.9.0",
-]
-
-[[package]]
-name = "rustls-webpki"
-version = "0.102.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "faaa0a62740bedb9b2ef5afa303da42764c012f743917351dc9a237ea1663610"
-dependencies = [
- "ring 0.17.3",
- "rustls-pki-types",
  "untrusted 0.9.0",
 ]
 
@@ -10861,6 +10828,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70a129b9e9efbfb223753b9163c4ab3b13cff7fd9c7f010fbac25ab4099fa07e"
 dependencies = [
  "cc",
+]
+
+[[package]]
+name = "secrecy"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9bd1c54ea06cfd2f6b63219704de0b9b4f72dcc2b8fdef820be6cd799780e91e"
+dependencies = [
+ "zeroize",
 ]
 
 [[package]]
@@ -11680,7 +11656,7 @@ checksum = "734676eb262c623cec13c3155096e08d1f8f29adce39ba17948b18dad1e54142"
 
 [[package]]
 name = "sui"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anemo",
  "anyhow",
@@ -11688,18 +11664,18 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
+ "bin-version",
  "bip32",
  "camino",
  "clap",
  "colored",
- "const-str",
  "csv",
  "datatest-stable",
  "expect-test",
  "fastcrypto",
  "fastcrypto-zkp",
  "fs_extra",
- "git-version",
+ "futures",
  "im",
  "inquire",
  "insta",
@@ -11730,6 +11706,7 @@ dependencies = [
  "shell-words",
  "shlex",
  "signature 1.6.4",
+ "sui-bridge",
  "sui-config",
  "sui-execution",
  "sui-genesis-builder",
@@ -11881,7 +11858,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "arrow",
@@ -11934,7 +11911,7 @@ dependencies = [
 
 [[package]]
 name = "sui-analytics-indexer-derive"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "proc-macro2 1.0.78",
  "quote 1.0.35",
@@ -12054,6 +12031,7 @@ dependencies = [
  "sui-sdk",
  "sui-simulator",
  "sui-storage",
+ "sui-surfer",
  "sui-swarm-config",
  "sui-test-transaction-builder",
  "sui-types",
@@ -12076,13 +12054,13 @@ dependencies = [
  "axum",
  "backoff",
  "bcs",
+ "bin-version",
  "clap",
- "const-str",
+ "enum_dispatch",
  "ethers",
  "eyre",
  "fastcrypto",
  "futures",
- "git-version",
  "hex-literal 0.3.4",
  "lru 0.10.0",
  "move-core-types",
@@ -12099,6 +12077,7 @@ dependencies = [
  "shared-crypto",
  "sui-common",
  "sui-config",
+ "sui-json-rpc-api",
  "sui-json-rpc-types",
  "sui-sdk",
  "sui-test-transaction-builder",
@@ -12122,6 +12101,7 @@ dependencies = [
  "async-trait",
  "clap",
  "derivative",
+ "diesel",
  "fastcrypto",
  "futures",
  "jsonrpsee",
@@ -12207,6 +12187,7 @@ dependencies = [
  "clap",
  "consensus-config",
  "consensus-core",
+ "count-min-sketch",
  "criterion",
  "dashmap",
  "diffy",
@@ -12360,6 +12341,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
+ "bcs",
  "futures",
  "mysten-metrics",
  "notify",
@@ -12406,6 +12388,7 @@ dependencies = [
  "serde_json",
  "shared-crypto",
  "sui",
+ "sui-bridge",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -12445,6 +12428,8 @@ name = "sui-execution"
 version = "0.1.0"
 dependencies = [
  "cargo_metadata 0.15.4",
+ "move-abstract-interpreter",
+ "move-abstract-interpreter-v2",
  "move-binary-format",
  "move-bytecode-verifier",
  "move-bytecode-verifier-meter",
@@ -12488,7 +12473,7 @@ dependencies = [
 
 [[package]]
 name = "sui-faucet"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -12550,7 +12535,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
- "git-version",
+ "bin-version",
  "serde",
  "serde_json",
  "sui-framework",
@@ -12619,7 +12604,7 @@ dependencies = [
 
 [[package]]
 name = "sui-graphql-rpc"
-version = "2024.2.0"
+version = "2024.7.0"
 dependencies = [
  "anyhow",
  "async-graphql",
@@ -12628,16 +12613,17 @@ dependencies = [
  "async-trait",
  "axum",
  "bcs",
+ "bin-version",
  "chrono",
  "clap",
  "const-str",
  "diesel",
+ "downcast",
  "either",
  "expect-test",
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "git-version",
  "hex",
  "http",
  "hyper",
@@ -12680,6 +12666,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
+ "tempfile",
  "test-cluster",
  "thiserror",
  "tokio",
@@ -12713,7 +12700,7 @@ dependencies = [
 
 [[package]]
 name = "sui-indexer"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -12727,6 +12714,7 @@ dependencies = [
  "diesel",
  "diesel-derive-enum",
  "diesel_migrations",
+ "downcast",
  "fastcrypto",
  "futures",
  "itertools 0.10.5",
@@ -12739,10 +12727,12 @@ dependencies = [
  "prometheus",
  "rayon",
  "regex",
+ "secrecy",
  "serde",
  "serde_json",
  "serde_with",
  "simulacrum",
+ "sui-data-ingestion-core",
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-api",
@@ -12759,6 +12749,7 @@ dependencies = [
  "sui-types",
  "tap",
  "telemetry-subscribers",
+ "tempfile",
  "test-cluster",
  "thiserror",
  "tokio",
@@ -12867,6 +12858,7 @@ dependencies = [
  "bcs",
  "hyper",
  "jsonrpsee",
+ "move-core-types",
  "move-package",
  "prometheus",
  "rand 0.8.5",
@@ -12999,16 +12991,15 @@ dependencies = [
 
 [[package]]
 name = "sui-move"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
  "better_any",
+ "bin-version",
  "clap",
  "colored",
- "const-str",
  "futures",
- "git-version",
  "jemalloc-ctl",
  "jsonrpsee",
  "move-binary-format",
@@ -13041,7 +13032,7 @@ dependencies = [
 
 [[package]]
 name = "sui-move-build"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "datatest-stable",
@@ -13183,19 +13174,18 @@ dependencies = [
 
 [[package]]
 name = "sui-node"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anemo",
  "anemo-tower",
  "anyhow",
  "arc-swap",
  "axum",
+ "bin-version",
  "clap",
- "const-str",
  "fastcrypto",
  "fastcrypto-zkp",
  "futures",
- "git-version",
  "humantime",
  "move-vm-profiler",
  "mysten-common",
@@ -13233,7 +13223,7 @@ dependencies = [
 
 [[package]]
 name = "sui-open-rpc"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13269,7 +13259,7 @@ dependencies = [
 
 [[package]]
 name = "sui-oracle"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "bcs",
@@ -13299,7 +13289,7 @@ dependencies = [
 
 [[package]]
 name = "sui-package-management"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "move-package",
@@ -13319,6 +13309,7 @@ dependencies = [
  "insta",
  "lru 0.10.0",
  "move-binary-format",
+ "move-command-line-common",
  "move-compiler",
  "move-core-types",
  "serde",
@@ -13372,11 +13363,11 @@ dependencies = [
  "anyhow",
  "axum",
  "axum-server",
+ "bin-version",
  "bytes",
  "clap",
  "const-str",
  "fastcrypto",
- "git-version",
  "hex",
  "http-body",
  "hyper",
@@ -13392,8 +13383,8 @@ dependencies = [
  "protobuf",
  "rand 0.8.5",
  "reqwest",
- "rustls 0.21.11",
- "rustls-pemfile 1.0.2",
+ "rustls 0.21.12",
+ "rustls-pemfile",
  "serde",
  "serde_json",
  "serde_with",
@@ -13445,6 +13436,7 @@ dependencies = [
  "sui-protocol-config",
  "sui-sdk",
  "sui-storage",
+ "sui-transaction-checks",
  "sui-types",
  "tabled",
  "tempfile",
@@ -13518,7 +13510,7 @@ dependencies = [
 
 [[package]]
 name = "sui-rpc-loadgen"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -13547,11 +13539,12 @@ dependencies = [
 
 [[package]]
 name = "sui-sdk"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
+ "base64 0.21.2",
  "bcs",
  "clap",
  "colored",
@@ -13582,7 +13575,7 @@ dependencies = [
 
 [[package]]
 name = "sui-security-watchdog"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "arrow-array",
@@ -13691,7 +13684,7 @@ dependencies = [
 
 [[package]]
 name = "sui-source-validation"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -13726,11 +13719,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "bin-version",
  "clap",
- "const-str",
  "expect-test",
  "fs_extra",
- "git-version",
  "hyper",
  "jsonrpsee",
  "move-compiler",
@@ -13817,7 +13809,7 @@ dependencies = [
 
 [[package]]
 name = "sui-surfer"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "async-trait",
  "bcs",
@@ -13948,7 +13940,7 @@ dependencies = [
  "rand 0.8.5",
  "rcgen",
  "reqwest",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "rustls-webpki 0.101.7",
  "tokio",
  "tokio-rustls 0.24.0",
@@ -13958,21 +13950,20 @@ dependencies = [
 
 [[package]]
 name = "sui-tool"
-version = "1.24.0"
+version = "1.26.0"
 dependencies = [
  "anemo",
  "anemo-cli",
  "anyhow",
  "bcs",
+ "bin-version",
  "clap",
  "colored",
  "comfy-table",
- "const-str",
  "diesel",
  "eyre",
  "fastcrypto",
  "futures",
- "git-version",
  "hex",
  "indicatif",
  "itertools 0.10.5",
@@ -14110,6 +14101,7 @@ dependencies = [
  "indexmap 2.1.0",
  "itertools 0.10.5",
  "jsonrpsee",
+ "lru 0.10.0",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
@@ -14126,6 +14118,7 @@ dependencies = [
  "nonempty",
  "num-bigint 0.4.4",
  "num-traits",
+ "num_enum 0.6.1",
  "once_cell",
  "parking_lot 0.12.1",
  "prometheus",
@@ -14172,6 +14165,7 @@ dependencies = [
 name = "sui-verifier-latest"
 version = "0.1.0"
 dependencies = [
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-bytecode-utils",
@@ -14270,7 +14264,7 @@ dependencies = [
 
 [[package]]
 name = "suiop-cli"
-version = "0.1.9"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "axum",
@@ -14577,12 +14571,15 @@ name = "test-cluster"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
+ "fastcrypto",
  "fastcrypto-zkp",
  "futures",
  "jsonrpsee",
  "move-binary-format",
  "prometheus",
  "rand 0.8.5",
+ "sui-bridge",
  "sui-config",
  "sui-core",
  "sui-framework",
@@ -14898,18 +14895,7 @@ version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e0d409377ff5b1e3ca6437aa86c1eb7d40c134bfec254e44c830defa92669db5"
 dependencies = [
- "rustls 0.21.11",
- "tokio",
-]
-
-[[package]]
-name = "tokio-rustls"
-version = "0.25.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "775e0c0f0adb3a2f22a00c4745d728b479985fc15ee7ca6a2608388c5569860f"
-dependencies = [
- "rustls 0.22.2",
- "rustls-pki-types",
+ "rustls 0.21.12",
  "tokio",
 ]
 
@@ -15120,10 +15106,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost 0.12.3",
- "rustls-pemfile 2.1.1",
- "rustls-pki-types",
  "tokio",
- "tokio-rustls 0.25.0",
  "tokio-stream",
  "tower",
  "tower-layer",
@@ -15664,7 +15647,7 @@ dependencies = [
  "flate2",
  "log",
  "once_cell",
- "rustls 0.21.11",
+ "rustls 0.21.12",
  "rustls-webpki 0.101.7",
  "url",
  "webpki-roots 0.25.2",
@@ -16401,8 +16384,8 @@ dependencies = [
  "itertools 0.10.5",
  "log",
  "percent-encoding",
- "rustls 0.21.11",
- "rustls-pemfile 1.0.2",
+ "rustls 0.21.12",
+ "rustls-pemfile",
  "seahash",
  "serde",
  "serde_json",

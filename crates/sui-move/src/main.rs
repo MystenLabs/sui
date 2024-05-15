@@ -10,22 +10,8 @@ use sui_move::execute_move_command;
 use sui_types::exit_main;
 use tracing::debug;
 
-const GIT_REVISION: &str = {
-    if let Some(revision) = option_env!("GIT_REVISION") {
-        revision
-    } else {
-        let version = git_version::git_version!(
-            args = ["--always", "--dirty", "--exclude", "*"],
-            fallback = ""
-        );
-
-        if version.is_empty() {
-            panic!("unable to query git revision");
-        }
-        version
-    }
-};
-const VERSION: &str = const_str::concat!(env!("CARGO_PKG_VERSION"), "-", GIT_REVISION);
+// Define the `GIT_REVISION` and `VERSION` consts
+bin_version::bin_version!();
 
 #[derive(Parser)]
 #[clap(

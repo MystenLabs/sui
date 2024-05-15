@@ -3,9 +3,10 @@
 
 use self::effects_v2::TransactionEffectsV2;
 use crate::base_types::{ExecutionDigests, ObjectID, ObjectRef, SequenceNumber};
-use crate::committee::EpochId;
+use crate::committee::{Committee, EpochId};
 use crate::crypto::{
-    default_hash, AuthoritySignInfo, AuthorityStrongQuorumSignInfo, EmptySignInfo,
+    default_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityStrongQuorumSignInfo,
+    EmptySignInfo,
 };
 use crate::digests::{
     ObjectDigest, TransactionDigest, TransactionEffectsDigest, TransactionEventsDigest,
@@ -15,9 +16,7 @@ use crate::event::Event;
 use crate::execution::SharedInput;
 use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
-use crate::message_envelope::{
-    Envelope, Message, TrustedEnvelope, UnauthenticatedMessage, VerifiedEnvelope,
-};
+use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelope};
 use crate::object::Owner;
 use crate::storage::WriteKind;
 use crate::transaction::VersionedProtocolMessage;
@@ -26,7 +25,7 @@ pub use effects_v2::UnchangedSharedKind;
 use enum_dispatch::enum_dispatch;
 pub use object_change::{EffectsObjectChange, ObjectIn, ObjectOut};
 use serde::{Deserialize, Serialize};
-use shared_crypto::intent::IntentScope;
+use shared_crypto::intent::{Intent, IntentScope};
 use std::collections::BTreeMap;
 use sui_protocol_config::ProtocolConfig;
 pub use test_effects_builder::TestEffectsBuilder;
@@ -96,19 +95,7 @@ impl Message for TransactionEffects {
     fn digest(&self) -> Self::DigestType {
         TransactionEffectsDigest::new(default_hash(self))
     }
-
-    fn verify_user_input(&self) -> SuiResult {
-        Ok(())
-    }
-
-    fn verify_epoch(&self, _: EpochId) -> SuiResult {
-        // Authorities are allowed to re-sign effects from prior epochs, so we do not verify the
-        // epoch here.
-        Ok(())
-    }
 }
-
-impl UnauthenticatedMessage for TransactionEffects {}
 
 // TODO: Get rid of this and use TestEffectsBuilder instead.
 impl Default for TransactionEffects {
@@ -317,6 +304,7 @@ pub enum InputSharedObject {
     ReadOnly(ObjectRef),
     ReadDeleted(ObjectID, SequenceNumber),
     MutateDeleted(ObjectID, SequenceNumber),
+    Cancelled(ObjectID, SequenceNumber),
 }
 
 impl InputSharedObject {
@@ -331,6 +319,9 @@ impl InputSharedObject {
             InputSharedObject::ReadDeleted(id, version)
             | InputSharedObject::MutateDeleted(id, version) => {
                 (*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED)
+            }
+            InputSharedObject::Cancelled(id, version) => {
+                (*id, *version, ObjectDigest::OBJECT_DIGEST_CANCELLED)
             }
         }
     }
@@ -385,7 +376,8 @@ pub trait TransactionEffectsAPI {
                 InputSharedObject::MutateDeleted(id, _) => Some(id),
                 InputSharedObject::Mutate(..)
                 | InputSharedObject::ReadOnly(..)
-                | InputSharedObject::ReadDeleted(..) => None,
+                | InputSharedObject::ReadDeleted(..)
+                | InputSharedObject::Cancelled(..) => None,
             })
             .collect()
     }
@@ -459,3 +451,18 @@ pub type VerifiedTransactionEffectsEnvelope<S> = VerifiedEnvelope<TransactionEff
 pub type VerifiedSignedTransactionEffects = VerifiedTransactionEffectsEnvelope<AuthoritySignInfo>;
 pub type VerifiedCertifiedTransactionEffects =
     VerifiedTransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
+
+impl CertifiedTransactionEffects {
+    pub fn verify_authority_signatures(&self, committee: &Committee) -> SuiResult {
+        self.auth_sig().verify_secure(
+            self.data(),
+            Intent::sui_app(IntentScope::TransactionEffects),
+            committee,
+        )
+    }
+
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertifiedTransactionEffects> {
+        self.verify_authority_signatures(committee)?;
+        Ok(VerifiedCertifiedTransactionEffects::new_from_verified(self))
+    }
+}

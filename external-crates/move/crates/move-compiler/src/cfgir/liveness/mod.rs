@@ -130,7 +130,7 @@ fn exp(state: &mut LivenessState, parent_e: &Exp) {
         | E::Value(_)
         | E::Constant(_)
         | E::UnresolvedError
-        | E::ErrorConstant(_) => (),
+        | E::ErrorConstant { .. } => (),
 
         E::BorrowLocal(_, var) | E::Copy { var, .. } | E::Move { var, .. } => {
             state.0.insert(*var);
@@ -323,7 +323,7 @@ mod last_usage {
             | E::Value(_)
             | E::Constant(_)
             | E::UnresolvedError
-            | E::ErrorConstant(_) => (),
+            | E::ErrorConstant { .. } => (),
 
             E::BorrowLocal(_, var) | E::Move { var, .. } => {
                 // remove it from context to prevent accidental dropping in previous usages

@@ -2,11 +2,11 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use move_binary_format::file_format_common::VERSION_MAX;
 use move_vm_config::verifier::{
     MeterConfig, VerifierConfig, DEFAULT_MAX_CONSTANT_VECTOR_LEN, DEFAULT_MAX_IDENTIFIER_LENGTH,
 };
 
-pub mod ability_field_requirements_tests;
 pub mod binary_samples;
 pub mod bounds_tests;
 pub mod code_unit_tests;
@@ -19,11 +19,9 @@ pub mod limit_tests;
 pub mod locals;
 pub mod loop_summary_tests;
 pub mod many_back_edges;
-pub mod multi_pass_tests;
 pub mod negative_stack_size_tests;
 pub mod reference_safety_tests;
 pub mod signature_tests;
-pub mod struct_defs_tests;
 pub mod vec_pack_tests;
 
 /// Configuration used in production.
@@ -51,6 +49,7 @@ pub(crate) fn production_config() -> (VerifierConfig, MeterConfig) {
             max_idenfitier_len: Some(DEFAULT_MAX_IDENTIFIER_LENGTH),
             allow_receiving_object_id: true,
             reject_mutable_random_on_entry_functions: true,
+            bytecode_version: VERSION_MAX,
         },
         MeterConfig::default(),
     )

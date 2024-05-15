@@ -7,11 +7,14 @@ use std::time::Duration;
 
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use diesel::r2d2::R2D2Connection;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use metrics::IndexerMetrics;
 use mysten_metrics::spawn_monitored_task;
 use prometheus::Registry;
+use secrecy::{ExposeSecret, Secret};
 use std::path::PathBuf;
+use sui_types::base_types::{ObjectID, SuiAddress};
 use system_package_task::SystemPackageTask;
 use tokio::runtime::Handle;
 use tokio_util::sync::CancellationToken;
@@ -52,11 +55,11 @@ pub mod types;
 )]
 pub struct IndexerConfig {
     #[clap(long)]
-    pub db_url: Option<String>,
+    pub db_url: Option<Secret<String>>,
     #[clap(long)]
     pub db_user_name: Option<String>,
     #[clap(long)]
-    pub db_password: Option<String>,
+    pub db_password: Option<Secret<String>>,
     #[clap(long)]
     pub db_host: Option<String>,
     #[clap(long)]
@@ -83,13 +86,20 @@ pub struct IndexerConfig {
     pub rpc_server_worker: bool,
     #[clap(long)]
     pub data_ingestion_path: Option<PathBuf>,
+    #[clap(long)]
+    pub name_service_package_address: Option<SuiAddress>,
+    #[clap(long)]
+    pub name_service_registry_id: Option<ObjectID>,
+    #[clap(long)]
+    pub name_service_reverse_registry_id: Option<ObjectID>,
 }
 
 impl IndexerConfig {
     /// returns connection url without the db name
     pub fn base_connection_url(&self) -> Result<String, anyhow::Error> {
-        let url_str = self.get_db_url()?;
-        let url = Url::parse(&url_str).expect("Failed to parse URL");
+        let url_secret = self.get_db_url()?;
+        let url_str = url_secret.expose_secret();
+        let url = Url::parse(url_str).expect("Failed to parse URL");
         Ok(format!(
             "{}://{}:{}@{}:{}/",
             url.scheme(),
@@ -100,14 +110,14 @@ impl IndexerConfig {
         ))
     }
 
-    pub fn get_db_url(&self) -> Result<String, anyhow::Error> {
+    pub fn get_db_url(&self) -> Result<Secret<String>, anyhow::Error> {
         match (&self.db_url, &self.db_user_name, &self.db_password, &self.db_host, &self.db_port, &self.db_name) {
             (Some(db_url), _, _, _, _, _) => Ok(db_url.clone()),
             (None, Some(db_user_name), Some(db_password), Some(db_host), Some(db_port), Some(db_name)) => {
-                Ok(format!(
+                Ok(secrecy::Secret::new(format!(
                     "postgres://{}:{}@{}:{}/{}",
-                    db_user_name, db_password, db_host, db_port, db_name
-                ))
+                    db_user_name, db_password.expose_secret(), db_host, db_port, db_name
+                )))
             }
             _ => Err(anyhow!("Invalid db connection config, either db_url or (db_user_name, db_password, db_host, db_port, db_name) must be provided")),
         }
@@ -117,7 +127,9 @@ impl IndexerConfig {
 impl Default for IndexerConfig {
     fn default() -> Self {
         Self {
-            db_url: Some("postgres://postgres:postgres@localhost:5432/sui_indexer".to_string()),
+            db_url: Some(secrecy::Secret::new(
+                "postgres://postgres:postgres@localhost:5432/sui_indexer".to_string(),
+            )),
             db_user_name: None,
             db_password: None,
             db_host: None,
@@ -133,13 +145,16 @@ impl Default for IndexerConfig {
             fullnode_sync_worker: true,
             rpc_server_worker: true,
             data_ingestion_path: None,
+            name_service_package_address: None,
+            name_service_registry_id: None,
+            name_service_reverse_registry_id: None,
         }
     }
 }
 
-pub async fn build_json_rpc_server(
+pub async fn build_json_rpc_server<T: R2D2Connection>(
     prometheus_registry: &Registry,
-    reader: IndexerReader,
+    reader: IndexerReader<T>,
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
@@ -147,8 +162,23 @@ pub async fn build_json_rpc_server(
         JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry, None, None);
     let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
 
+    let name_service_config =
+        if let (Some(package_address), Some(registry_id), Some(reverse_registry_id)) = (
+            config.name_service_package_address,
+            config.name_service_registry_id,
+            config.name_service_reverse_registry_id,
+        ) {
+            sui_json_rpc::name_service::NameServiceConfig::new(
+                package_address,
+                registry_id,
+                reverse_registry_id,
+            )
+        } else {
+            sui_json_rpc::name_service::NameServiceConfig::default()
+        };
+
     builder.register_module(WriteApi::new(http_client.clone()))?;
-    builder.register_module(IndexerApi::new(reader.clone()))?;
+    builder.register_module(IndexerApi::new(reader.clone(), name_service_config))?;
     builder.register_module(TransactionBuilderApi::new(reader.clone()))?;
     builder.register_module(MoveUtilsApi::new(reader.clone()))?;
     builder.register_module(GovernanceReadApi::new(reader.clone()))?;

@@ -4,7 +4,7 @@
 
 //! This module defines the abstract state for the local safety analysis.
 
-use crate::absint::{AbstractDomain, FunctionContext, JoinResult};
+use move_abstract_interpreter::absint::{AbstractDomain, FunctionContext, JoinResult};
 use move_binary_format::{
     errors::{PartialVMError, PartialVMResult},
     file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex},

@@ -45,7 +45,7 @@ use tokio::{
 use tracing::{debug, info, warn};
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    block::{BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
     block_verifier::BlockVerifier,
     commit::{
         Commit, CommitAPI as _, CommitDigest, CommitRef, TrustedCommit, GENESIS_COMMIT_INDEX,
@@ -125,6 +125,9 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 _ = interval.tick() => {
                     let quorum_commit_index = inner.commit_vote_monitor.quorum_commit_index();
                     let local_commit_index = inner.dag_state.read().last_commit_index();
+                    let metrics = &inner.context.metrics.node_metrics;
+                    metrics.commit_sync_quorum_index.set(quorum_commit_index as i64);
+                    metrics.commit_sync_local_index.set(local_commit_index as i64);
                     // Update synced_commit_index periodically to make sure it is not smaller than
                     // local commit index.
                     synced_commit_index = synced_commit_index.max(local_commit_index);
@@ -272,7 +275,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
                 .commit_sync_pending_fetches
                 .set(pending_fetches.len() as i64);
             metrics
-                .commit_sync_local_index
+                .commit_sync_fetched_index
                 .set(synced_commit_index as i64);
         }
     }
@@ -454,7 +457,7 @@ impl<C: NetworkClient> CommitSyncer<C> {
 
         // 8. Make sure fetched block timestamps are lower than current time.
         for block in &fetched_blocks {
-            let now_ms = timestamp_utc_ms();
+            let now_ms = inner.context.clock.timestamp_utc_ms();
             let forward_drift = block.timestamp_ms().saturating_sub(now_ms);
             if forward_drift == 0 {
                 continue;
@@ -668,8 +671,8 @@ mod test {
         context::Context,
     };
 
-    #[test]
-    fn test_commit_vote_monitor() {
+    #[tokio::test]
+    async fn test_commit_vote_monitor() {
         let context = Arc::new(Context::new_for_test(4).0);
         let monitor = CommitVoteMonitor::new(context.clone());
 

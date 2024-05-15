@@ -32,7 +32,8 @@ use crate::{
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
-        dependency_ordering, expand, infinite_instantiations, macro_expand, recursive_datatypes,
+        dependency_ordering, expand, infinite_instantiations, macro_expand, match_compilation,
+        recursive_datatypes,
         syntax_methods::validate_syntax_methods,
     },
     FullyCompiledProgram,
@@ -334,7 +335,7 @@ fn function_body(context: &mut Context, sp!(loc, nb_): N::FunctionBody) -> T::Fu
     };
     core::solve_constraints(context);
     expand::function_body_(context, &mut b_);
-    // freeze::function_body_(context, &mut b_);
+    match_compilation::function_body_(context, &mut b_);
     sp(loc, b_)
 }
 
@@ -516,7 +517,7 @@ mod check_valid_constant {
 
             // NB: module scoping is checked during constant type creation, so we don't need to
             // relitigate here.
-            E::Constant(_, _) | E::ErrorConstant(_) => {
+            E::Constant(_, _) | E::ErrorConstant { .. } => {
                 return;
             }
 
@@ -552,7 +553,7 @@ mod check_valid_constant {
             E::VariantMatch(_subject, _, _arms) => {
                 context.env.add_diag(ice!((
                     *loc,
-                    "shouldn't find variant match before HLIR lowering"
+                    "shouldn't find variant match before match compilation"
                 )));
                 "'variant match' expressions are"
             }
@@ -1441,7 +1442,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
 
     let sp!(eloc, ne_) = *ne;
     let (ty, e_) = match ne_ {
-        NE::ErrorConstant => (Type_::u64(eloc), TE::ErrorConstant(None)),
+        NE::ErrorConstant { line_number_loc } => (
+            Type_::u64(eloc),
+            TE::ErrorConstant {
+                line_number_loc,
+                error_constant: None,
+            },
+        ),
         NE::Unit { trailing } => (sp(eloc, Type_::Unit), TE::Unit { trailing }),
         NE::Value(sp!(vloc, Value_::InferredNum(v))) => (
             core::make_num_tvar(context, eloc),
@@ -2173,6 +2180,15 @@ fn match_pattern_(
         };
     }
 
+    macro_rules! maybe_add_drop {
+        ($ty:expr, $msg:expr) => {
+            // If the thing we are matching isn't a ref, a wildcard (or lit/const) drops it.
+            if mut_ref.is_none() && wildcard_needs_drop {
+                context.add_ability_constraint(loc, Some($msg), $ty.clone(), Ability_::Drop);
+            }
+        };
+    }
+
     match pat_ {
         P::Variant(m, enum_, variant, tys_opt, fields) => {
             let (bt, targs) = core::make_enum_type(context, loc, &m, &enum_, tys_opt);
@@ -2186,7 +2202,11 @@ fn match_pattern_(
                 targs.clone(),
                 fields,
             );
+            let mut field_error = false;
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
+                if matches!(fty.value, N::Type_::UnresolvedError) {
+                    field_error = true;
+                }
                 let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 let fty_ref = rtype!(fty.clone());
                 subtype(
@@ -2209,7 +2229,9 @@ fn match_pattern_(
                     .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
             let bt = rtype!(bt);
-            let pat_ = if let Some(mut_) = mut_ref {
+            let pat_ = if field_error {
+                TP::ErrorPat
+            } else if let Some(mut_) = mut_ref {
                 TP::BorrowVariant(*mut_, m, enum_, variant, targs, tfields)
             } else {
                 TP::Variant(m, enum_, variant, targs, tfields)
@@ -2227,7 +2249,11 @@ fn match_pattern_(
                 targs.clone(),
                 fields,
             );
+            let mut field_error = false;
             let tfields = typed_fields.map(|f, (idx, (fty, tpat))| {
+                if matches!(fty.value, N::Type_::UnresolvedError) {
+                    field_error = true;
+                }
                 let tpat = match_pattern_(context, tpat, mut_ref, rhs_binders, wildcard_needs_drop);
                 let fty_ref = rtype!(fty.clone());
                 subtype(
@@ -2250,14 +2276,40 @@ fn match_pattern_(
                     .add_diag(diag!(TypeSafety::Visibility, (loc, msg)));
             }
             let bt = rtype!(bt);
-            let pat_ = if let Some(mut_) = mut_ref {
+            let pat_ = if field_error {
+                TP::ErrorPat
+            } else if let Some(mut_) = mut_ref {
                 TP::BorrowStruct(*mut_, m, struct_, targs, tfields)
             } else {
                 TP::Struct(m, struct_, targs, tfields)
             };
             T::pat(bt, sp(loc, pat_))
         }
-
+        P::Constant(m, const_) => {
+            let ty = core::make_constant_type(context, loc, &m, &const_);
+            context
+                .used_module_members
+                .entry(m.value)
+                .or_default()
+                .insert(const_.value());
+            context.add_ability_constraint(
+                loc,
+                Some(format!(
+                    "Invalid 'copy' of value with the '{}' ability. \
+                    Literal patterns copy their values for equality checking",
+                    Ability_::Copy
+                )),
+                ty.clone(),
+                Ability_::Copy,
+            );
+            let msg = format!(
+                "Cannot match constants against values without the '{}' ability. \
+                              Constant patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
+            T::pat(rtype!(ty), sp(loc, TP::Constant(m, const_)))
+        }
         P::Binder(_mut_, x, /* unused binding */ true) => {
             let x_ty = context.get_local_type(&x);
             T::pat(x_ty, sp(loc, TP::Wildcard))
@@ -2274,30 +2326,29 @@ fn match_pattern_(
             context.add_ability_constraint(
                 loc,
                 Some(format!(
-                    "Cannot ignore values without the '{}' ability. \
+                    "Invalid 'copy' of value with the '{}' ability. \
                     Literal patterns copy their values for equality checking",
                     Ability_::Copy
                 )),
                 ty.clone(),
                 Ability_::Copy,
             );
+            let msg = format!(
+                "Cannot match literals against values without the '{}' ability. \
+                              Literal patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
             T::pat(rtype!(ty), sp(loc, TP::Literal(v)))
         }
         P::Wildcard => {
             let ty = core::make_tvar(context, loc);
-            if mut_ref.is_none() && wildcard_needs_drop {
-                // If the thing we are matching isn't a ref, a wildcard drops it.
-                context.add_ability_constraint(
-                    loc,
-                    Some(format!(
-                        "Cannot ignore values without the '{}' ability. \
-                        '_' patterns discard their values",
-                        Ability_::Drop
-                    )),
-                    ty.clone(),
-                    Ability_::Drop,
-                );
-            }
+            let msg = format!(
+                "Cannot ignore values without the '{}' ability. \
+                              '_' patterns discard their values",
+                Ability_::Drop
+            );
+            maybe_add_drop!(ty, msg);
             T::pat(rtype!(ty), sp(loc, TP::Wildcard))
         }
         P::Or(lhs, rhs) => {
@@ -2436,6 +2487,7 @@ fn match_pattern_has_rhs_binders(
             match_pattern_has_rhs_binders(lhs, rhs_binders)
                 || match_pattern_has_rhs_binders(rhs, rhs_binders)
         }
+        N::MatchPattern_::Constant(_, _) => false,
         N::MatchPattern_::Literal(_) => false,
         N::MatchPattern_::Wildcard => false,
         N::MatchPattern_::ErrorPat => false,
@@ -2828,7 +2880,7 @@ fn add_variant_field_types<T>(
                 );
                 context
                     .env
-                    .add_diag(diag!(TypeSafety::InvalidNativeUsage, (loc, msg),));
+                    .add_diag(diag!(TypeSafety::TooManyArguments, (loc, msg),));
                 return fields.map(|f, (idx, x)| (idx, (context.error_type(f.loc()), x)));
             } else {
                 return Fields::new();
@@ -3725,13 +3777,11 @@ fn annotated_error_const(context: &mut Context, e: &mut T::Exp, abort_or_assert_
             attributes.contains_key_(&known_attributes::ErrorAttribute.into());
 
         if has_error_annotation {
-            *e = T::exp(
-                u64_type.clone(),
-                sp(
-                    *const_loc,
-                    T::UnannotatedExp_::ErrorConstant(Some(*constant_name)),
-                ),
-            );
+            let econst = T::UnannotatedExp_::ErrorConstant {
+                line_number_loc: *const_loc,
+                error_constant: Some(*constant_name),
+            };
+            *e = T::exp(u64_type.clone(), sp(*const_loc, econst));
         }
     }
 
@@ -4303,7 +4353,12 @@ fn process_attributes<T: TName>(context: &mut Context, all_attributes: &UniqueMa
 /// Generates warnings for unused (private) functions and unused constants.
 /// Should be called after the whole program has been processed.
 fn unused_module_members(context: &mut Context, mident: &ModuleIdent_, mdef: &T::ModuleDefinition) {
-    if !matches!(mdef.target_kind, TargetKind::Source) {
+    if !matches!(
+        mdef.target_kind,
+        TargetKind::Source {
+            is_root_package: true
+        }
+    ) {
         // generate warnings only for modules compiled in this pass rather than for all modules
         // including pre-compiled libraries for which we do not have source code available and
         // cannot be analyzed in this pass

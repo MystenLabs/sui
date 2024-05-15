@@ -81,7 +81,7 @@ pub enum WarningFilter {
 /// A custom DiagnosticInfo.
 /// The diagnostic will get rendered as
 /// `"[{external_prefix}{severity}{category}{code}] {message}"`.
-/// Note, this will will panic if `category > 99`
+/// Note, this will panic if `category > 99`
 pub const fn custom(
     external_prefix: &'static str,
     severity: Severity,
@@ -241,6 +241,7 @@ codes!(
         InvalidPattern: { msg: "invalid pattern", severity: BlockingError },
         UnboundVariant: { msg: "unbound variant", severity: BlockingError },
         InvalidTypeAnnotation: { msg: "invalid type annotation", severity: NonblockingError },
+        InvalidPosition: { msg: "invalid usage position", severity: NonblockingError },
     ],
     // errors for typing rules. mostly typing/translate
     TypeSafety: [

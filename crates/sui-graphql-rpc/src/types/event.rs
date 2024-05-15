@@ -99,7 +99,7 @@ impl Event {
     /// the sending module would be A::m1.
     async fn sending_module(&self, ctx: &Context<'_>) -> Result<Option<MoveModule>> {
         MoveModule::query(
-            ctx.data_unchecked(),
+            ctx,
             self.native.package_id.into(),
             &self.native.transaction_module.to_string(),
             self.checkpoint_viewed_at,
@@ -206,7 +206,13 @@ impl Event {
                     }
 
                     if let Some(type_) = &filter.event_type {
-                        query = type_.apply(query, events::dsl::event_type);
+                        query = type_.apply(
+                            query,
+                            events::dsl::event_type,
+                            events::dsl::event_type_package,
+                            events::dsl::event_type_module,
+                            events::dsl::event_type_name,
+                        );
                     }
 
                     query
@@ -216,8 +222,7 @@ impl Event {
 
         let mut conn = Connection::new(prev, next);
 
-        // Defer to the provided checkpoint_viewed_at, but if it is not provided, use the
-        // current available range. This sets a consistent upper bound for the nested queries.
+        // The "checkpoint viewed at" sets a consistent upper bound for the nested queries.
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             conn.edges.push(Edge::new(
@@ -234,7 +239,7 @@ impl Event {
         idx: usize,
         checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
-        let Some(Some(serialized_event)) = stored_tx.events.get(idx) else {
+        let Some(serialized_event) = &stored_tx.get_event_at_idx(idx) else {
             return Err(Error::Internal(format!(
                 "Could not find event with event_sequence_number {} at transaction {}",
                 idx, stored_tx.tx_sequence_number
@@ -253,12 +258,19 @@ impl Event {
             event_sequence_number: idx as i64,
             transaction_digest: stored_tx.transaction_digest.clone(),
             checkpoint_sequence_number: stored_tx.checkpoint_sequence_number,
+            #[cfg(feature = "postgres-feature")]
             senders: vec![Some(native_event.sender.to_vec())],
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            senders: serde_json::to_value(vec![native_event.sender.to_vec()]).unwrap(),
             package: native_event.package_id.to_vec(),
             module: native_event.transaction_module.to_string(),
             event_type: native_event
                 .type_
                 .to_canonical_string(/* with_prefix */ true),
+            event_type_package: native_event.type_.address.to_vec(),
+            event_type_module: native_event.type_.module.to_string(),
+            event_type_name: native_event.type_.name.to_string(),
             bcs: native_event.contents.clone(),
             timestamp_ms: stored_tx.timestamp_ms,
         };
@@ -274,12 +286,27 @@ impl Event {
         stored: StoredEvent,
         checkpoint_viewed_at: u64,
     ) -> Result<Self, Error> {
-        let Some(Some(sender_bytes)) = stored.senders.first() else {
+        let Some(Some(sender_bytes)) = ({
+            #[cfg(feature = "postgres-feature")]
+            {
+                stored.senders.first()
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                stored
+                    .senders
+                    .as_array()
+                    .ok_or_else(|| {
+                        Error::Internal("Failed to parse event senders as array".to_string())
+                    })?
+                    .first()
+            }
+        }) else {
             return Err(Error::Internal("No senders found for event".to_string()));
         };
         let sender = NativeSuiAddress::from_bytes(sender_bytes)
             .map_err(|e| Error::Internal(e.to_string()))?;
-
         let package_id =
             ObjectID::from_bytes(&stored.package).map_err(|e| Error::Internal(e.to_string()))?;
         let type_ =

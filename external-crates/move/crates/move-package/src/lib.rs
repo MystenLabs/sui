@@ -101,6 +101,10 @@ pub struct BuildConfig {
     #[clap(long = move_compiler::command_line::WARNINGS_ARE_ERRORS, global = true)]
     pub warnings_are_errors: bool,
 
+    /// If set, reports errors at JSON
+    #[clap(long = move_compiler::command_line::JSON_ERRORS, global = true)]
+    pub json_errors: bool,
+
     /// Additional named address mapping. Useful for tools in rust
     #[clap(skip)]
     pub additional_named_addresses: BTreeMap<String, AccountAddress>,
@@ -325,6 +329,7 @@ impl BuildConfig {
         };
         flags
             .set_warnings_are_errors(self.warnings_are_errors)
+            .set_json_errors(self.json_errors)
             .set_silence_warnings(self.silence_warnings)
     }
 

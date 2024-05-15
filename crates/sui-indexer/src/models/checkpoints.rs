@@ -21,7 +21,12 @@ pub struct StoredCheckpoint {
     pub network_total_transactions: i64,
     pub previous_checkpoint_digest: Option<Vec<u8>>,
     pub end_of_epoch: bool,
+    #[cfg(feature = "postgres-feature")]
     pub tx_digests: Vec<Option<Vec<u8>>>,
+    #[cfg(feature = "mysql-feature")]
+    #[cfg(not(feature = "postgres-feature"))]
+    #[diesel(sql_type = diesel::sql_types::Json)]
+    pub tx_digests: serde_json::Value,
     pub timestamp_ms: i64,
     pub total_gas_cost: i64,
     pub computation_cost: i64,
@@ -39,11 +44,21 @@ impl From<&IndexedCheckpoint> for StoredCheckpoint {
             sequence_number: c.sequence_number as i64,
             checkpoint_digest: c.checkpoint_digest.into_inner().to_vec(),
             epoch: c.epoch as i64,
+            #[cfg(feature = "postgres-feature")]
             tx_digests: c
                 .tx_digests
                 .iter()
                 .map(|tx| Some(tx.into_inner().to_vec()))
                 .collect(),
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            tx_digests: serde_json::to_value(
+                c.tx_digests
+                    .iter()
+                    .map(|tx| tx.into_inner().to_vec())
+                    .collect::<Vec<Vec<u8>>>(),
+            )
+            .unwrap(),
             network_total_transactions: c.network_total_transactions as i64,
             previous_checkpoint_digest: c
                 .previous_checkpoint_digest
@@ -89,22 +104,59 @@ impl TryFrom<StoredCheckpoint> for RpcCheckpoint {
             })
             .transpose()?;
 
-        let transactions: Vec<TransactionDigest> = checkpoint
-            .tx_digests
-            .into_iter()
-            .map(|tx_digest| match tx_digest {
-                None => Err(IndexerError::PersistentStorageDataCorruptionError(
-                    "tx_digests should not contain null elements".to_string(),
-                )),
-                Some(tx_digest) => TransactionDigest::try_from(tx_digest.as_slice()).map_err(|e| {
-                    IndexerError::PersistentStorageDataCorruptionError(format!(
-                        "Failed to decode transaction digest: {:?} with err: {:?}",
-                        tx_digest, e
-                    ))
-                }),
-            })
-            .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?;
-
+        let transactions: Vec<TransactionDigest> = {
+            #[cfg(feature = "postgres-feature")]
+            {
+                checkpoint
+                    .tx_digests
+                    .into_iter()
+                    .map(|tx_digest| match tx_digest {
+                        None => Err(IndexerError::PersistentStorageDataCorruptionError(
+                            "tx_digests should not contain null elements".to_string(),
+                        )),
+                        Some(tx_digest) => TransactionDigest::try_from(tx_digest.as_slice())
+                            .map_err(|e| {
+                                IndexerError::PersistentStorageDataCorruptionError(format!(
+                                    "Failed to decode transaction digest: {:?} with err: {:?}",
+                                    tx_digest, e
+                                ))
+                            }),
+                    })
+                    .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                checkpoint
+                    .tx_digests
+                    .as_array()
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(
+                            "Failed to parse tx_digests as array".to_string(),
+                        )
+                    })?
+                    .iter()
+                    .map(|tx_digest| match tx_digest {
+                        serde_json::Value::Null => {
+                            Err(IndexerError::PersistentStorageDataCorruptionError(
+                                "tx_digests should not contain null elements".to_string(),
+                            ))
+                        }
+                        serde_json::Value::String(tx_digest) => {
+                            TransactionDigest::try_from(tx_digest.as_bytes()).map_err(|e| {
+                                IndexerError::PersistentStorageDataCorruptionError(format!(
+                                    "Failed to decode transaction digest: {:?} with err: {:?}",
+                                    tx_digest, e
+                                ))
+                            })
+                        }
+                        _ => Err(IndexerError::PersistentStorageDataCorruptionError(
+                            "tx_digests should contain only string elements".to_string(),
+                        )),
+                    })
+                    .collect::<Result<Vec<TransactionDigest>, IndexerError>>()?
+            }
+        };
         let validator_signature =
             bcs::from_bytes(&checkpoint.validator_signature).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(

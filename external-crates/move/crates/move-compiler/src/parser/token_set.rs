@@ -171,6 +171,12 @@ pub static VALUE_START_SET: Lazy<TokenSet> = Lazy::new(|| TokenSet::from(VALUE_S
 //**************************************************************************************************
 
 #[allow(dead_code)]
+impl Default for TokenSet {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TokenSet {
     pub fn new() -> Self {
         let tokens = [0; TOK_COUNT];

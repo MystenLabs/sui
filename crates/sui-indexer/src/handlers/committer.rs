@@ -1,10 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use tap::tap::TapFallible;
 use tokio::sync::watch;
+use tokio_util::sync::CancellationToken;
 use tracing::instrument;
 use tracing::{error, info};
 
@@ -26,6 +27,8 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     metrics: IndexerMetrics,
     tx_indexing_receiver: mysten_metrics::metered_channel::Receiver<CheckpointDataToCommit>,
     commit_notifier: watch::Sender<Option<CheckpointSequenceNumber>>,
+    mut next_checkpoint_sequence_number: CheckpointSequenceNumber,
+    cancel: CancellationToken,
 ) where
     S: IndexerStore + Clone + Sync + Send + 'static,
 {
@@ -41,10 +44,12 @@ pub async fn start_tx_checkpoint_commit_task<S>(
     let mut stream = mysten_metrics::metered_channel::ReceiverStream::new(tx_indexing_receiver)
         .ready_chunks(checkpoint_commit_batch_size);
     let mut object_snapshot_backfill_mode = true;
+    let mut unprocessed = HashMap::new();
+    let mut batch = vec![];
 
     while let Some(indexed_checkpoint_batch) = stream.next().await {
-        if indexed_checkpoint_batch.is_empty() {
-            continue;
+        if cancel.is_cancelled() {
+            break;
         }
 
         let mut latest_fn_cp_res = client.get_latest_checkpoint().await;
@@ -63,33 +68,37 @@ pub async fn start_tx_checkpoint_commit_task<S>(
             .sequence_number;
 
         // split the batch into smaller batches per epoch to handle partitioning
-        let mut indexed_checkpoint_batch_per_epoch = vec![];
-        for indexed_checkpoint in indexed_checkpoint_batch {
-            let epoch = indexed_checkpoint.epoch.clone();
-            indexed_checkpoint_batch_per_epoch.push(indexed_checkpoint);
-            if epoch.is_some() {
+        for checkpoint in indexed_checkpoint_batch {
+            unprocessed.insert(checkpoint.checkpoint.sequence_number, checkpoint);
+        }
+        while let Some(checkpoint) = unprocessed.remove(&next_checkpoint_sequence_number) {
+            let epoch = checkpoint.epoch.clone();
+            batch.push(checkpoint);
+            next_checkpoint_sequence_number += 1;
+            if batch.len() == checkpoint_commit_batch_size || epoch.is_some() {
                 commit_checkpoints(
                     &state,
-                    indexed_checkpoint_batch_per_epoch,
+                    batch,
                     epoch,
                     &metrics,
                     &commit_notifier,
                     object_snapshot_backfill_mode,
                 )
                 .await;
-                indexed_checkpoint_batch_per_epoch = vec![];
+                batch = vec![];
             }
         }
-        if !indexed_checkpoint_batch_per_epoch.is_empty() {
+        if !batch.is_empty() && unprocessed.is_empty() {
             commit_checkpoints(
                 &state,
-                indexed_checkpoint_batch_per_epoch,
+                batch,
                 None,
                 &metrics,
                 &commit_notifier,
                 object_snapshot_backfill_mode,
             )
             .await;
+            batch = vec![];
         }
         // this is a one-way flip in case indexer falls behind again, so that the objects snapshot
         // table will not be populated by both committer and async snapshot processor at the same time.

@@ -1,14 +1,15 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Mutex;
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::{anyhow, Result};
-use cached::proc_macro::cached;
-use cached::SizedCache;
+use cached::{Cached, SizedCache};
+use diesel::r2d2::R2D2Connection;
 use diesel::{
     dsl::sql, r2d2::ConnectionManager, sql_types::Bool, ExpressionMethods, OptionalExtension,
-    PgConnection, QueryDsl, RunQueryDsl, TextExpressionMethods,
+    QueryDsl, RunQueryDsl, TextExpressionMethods,
 };
 use itertools::{any, Itertools};
 use tap::TapFallible;
@@ -42,8 +43,10 @@ use sui_types::{
 };
 use sui_types::{coin::CoinMetadata, event::EventID};
 
+use crate::db::{ConnectionConfig, ConnectionPool, ConnectionPoolConfig};
+use crate::models::transactions::{stored_events_to_events, StoredTransactionEvents};
+use crate::store::diesel_macro::*;
 use crate::{
-    db::{PgConnectionConfig, PgConnectionPool, PgConnectionPoolConfig, PgPoolConnection},
     errors::IndexerError,
     models::{
         checkpoints::StoredCheckpoint,
@@ -63,28 +66,45 @@ pub const TX_SEQUENCE_NUMBER_STR: &str = "tx_sequence_number";
 pub const TRANSACTION_DIGEST_STR: &str = "transaction_digest";
 pub const EVENT_SEQUENCE_NUMBER_STR: &str = "event_sequence_number";
 
-#[derive(Clone)]
-pub struct IndexerReader {
-    pool: PgConnectionPool,
-    package_resolver: PackageResolver,
+pub struct IndexerReader<T>
+where
+    T: R2D2Connection + 'static,
+{
+    pool: ConnectionPool<T>,
+    package_resolver: PackageResolver<T>,
+    package_obj_type_cache: Arc<Mutex<SizedCache<String, Option<ObjectID>>>>,
 }
 
-pub type PackageResolver = Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver>>>;
+impl<T> Clone for IndexerReader<T>
+where
+    T: R2D2Connection,
+{
+    fn clone(&self) -> IndexerReader<T> {
+        IndexerReader {
+            pool: self.pool.clone(),
+            package_resolver: self.package_resolver.clone(),
+            package_obj_type_cache: self.package_obj_type_cache.clone(),
+        }
+    }
+}
+
+pub type PackageResolver<T> =
+    Arc<Resolver<PackageStoreWithLruCache<IndexerStorePackageResolver<T>>>>;
 
 // Impl for common initialization and utilities
-impl IndexerReader {
+impl<U: R2D2Connection + 'static> IndexerReader<U> {
     pub fn new<T: Into<String>>(db_url: T) -> Result<Self> {
-        let config = PgConnectionPoolConfig::default();
+        let config = ConnectionPoolConfig::default();
         Self::new_with_config(db_url, config)
     }
 
     pub fn new_with_config<T: Into<String>>(
         db_url: T,
-        config: PgConnectionPoolConfig,
+        config: ConnectionPoolConfig,
     ) -> Result<Self> {
-        let manager = ConnectionManager::<PgConnection>::new(db_url);
+        let manager = ConnectionManager::<U>::new(db_url);
 
-        let connection_config = PgConnectionConfig {
+        let connection_config = ConnectionConfig {
             statement_timeout: config.statement_timeout,
             read_only: true,
         };
@@ -99,51 +119,12 @@ impl IndexerReader {
         let indexer_store_pkg_resolver = IndexerStorePackageResolver::new(pool.clone());
         let package_cache = PackageStoreWithLruCache::new(indexer_store_pkg_resolver);
         let package_resolver = Arc::new(Resolver::new(package_cache));
-
+        let package_obj_type_cache = Arc::new(Mutex::new(SizedCache::with_size(10000)));
         Ok(Self {
             pool,
             package_resolver,
+            package_obj_type_cache,
         })
-    }
-
-    fn get_connection(&self) -> Result<PgPoolConnection, IndexerError> {
-        self.pool.get().map_err(|e| {
-            IndexerError::PgPoolConnectionError(format!(
-                "Failed to get connection from PG connection pool with error: {:?}",
-                e
-            ))
-        })
-    }
-
-    pub fn run_query<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E>,
-        E: From<diesel::result::Error> + std::error::Error,
-    {
-        blocking_call_is_ok_or_panic();
-
-        let mut connection = self.get_connection()?;
-        connection
-            .build_transaction()
-            .read_only()
-            .run(query)
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
-    }
-
-    pub fn run_query_repeatable<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E>,
-        E: From<diesel::result::Error> + std::error::Error,
-    {
-        blocking_call_is_ok_or_panic();
-
-        let mut connection = self.get_connection()?;
-        connection
-            .build_transaction()
-            .read_only()
-            .repeatable_read()
-            .run(query)
-            .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
     }
 
     pub async fn spawn_blocking<F, R, E>(&self, f: F) -> Result<R, E>
@@ -164,51 +145,13 @@ impl IndexerReader {
         .expect("propagate any panics")
     }
 
-    pub async fn run_query_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        self.spawn_blocking(move |this| this.run_query(query)).await
-    }
-
-    pub async fn run_query_repeatable_async<T, E, F>(&self, query: F) -> Result<T, IndexerError>
-    where
-        F: FnOnce(&mut PgConnection) -> Result<T, E> + Send + 'static,
-        E: From<diesel::result::Error> + std::error::Error + Send + 'static,
-        T: Send + 'static,
-    {
-        self.spawn_blocking(move |this| this.run_query_repeatable(query))
-            .await
-    }
-}
-
-thread_local! {
-    static CALLED_FROM_BLOCKING_POOL: std::cell::RefCell<bool> = std::cell::RefCell::new(false);
-}
-
-/// Check that we are in a context conducive to making blocking calls.
-/// This is done by either:
-/// - Checking that we are not inside a tokio runtime context
-/// Or:
-/// - If we are inside a tokio runtime context, ensure that the call went through
-/// `IndexerReader::spawn_blocking` which properly moves the blocking call to a blocking thread
-/// pool.
-fn blocking_call_is_ok_or_panic() {
-    if tokio::runtime::Handle::try_current().is_ok()
-        && !CALLED_FROM_BLOCKING_POOL.with(|in_blocking_pool| *in_blocking_pool.borrow())
-    {
-        panic!(
-            "You are calling a blocking DB operation directly on an async thread. \
-                Please use IndexerReader::spawn_blocking instead to move the \
-                operation to a blocking thread"
-        );
+    pub fn get_pool(&self) -> ConnectionPool<U> {
+        self.pool.clone()
     }
 }
 
 // Impl for reading data from the DB
-impl IndexerReader {
+impl<U: R2D2Connection> IndexerReader<U> {
     fn get_object_from_db(
         &self,
         object_id: &ObjectID,
@@ -216,7 +159,7 @@ impl IndexerReader {
     ) -> Result<Option<StoredObject>, IndexerError> {
         let object_id = object_id.to_vec();
 
-        let stored_object = self.run_query(|conn| {
+        let stored_object = run_query!(&self.pool, |conn| {
             if let Some(version) = version {
                 objects::dsl::objects
                     .filter(objects::dsl::object_id.eq(object_id))
@@ -230,7 +173,6 @@ impl IndexerReader {
                     .optional()
             }
         })?;
-
         Ok(stored_object)
     }
 
@@ -274,7 +216,7 @@ impl IndexerReader {
 
     fn get_object_raw(&self, object_id: ObjectID) -> Result<Option<StoredObject>, IndexerError> {
         let id = object_id.to_vec();
-        let stored_object = self.run_query(|conn| {
+        let stored_object = run_query!(&self.pool, |conn| {
             objects::dsl::objects
                 .filter(objects::dsl::object_id.eq(id))
                 .first::<StoredObject>(conn)
@@ -303,7 +245,7 @@ impl IndexerReader {
         &self,
         epoch: Option<EpochId>,
     ) -> Result<Option<StoredEpochInfo>, IndexerError> {
-        let stored_epoch = self.run_query(|conn| {
+        let stored_epoch = run_query!(&self.pool, |conn| {
             if let Some(epoch) = epoch {
                 epochs::dsl::epochs
                     .filter(epochs::epoch.eq(epoch as i64))
@@ -321,7 +263,7 @@ impl IndexerReader {
     }
 
     pub fn get_latest_epoch_info_from_db(&self) -> Result<StoredEpochInfo, IndexerError> {
-        let stored_epoch = self.run_query(|conn| {
+        let stored_epoch = run_query!(&self.pool, |conn| {
             epochs::dsl::epochs
                 .order_by(epochs::epoch.desc())
                 .first::<StoredEpochInfo>(conn)
@@ -351,7 +293,7 @@ impl IndexerReader {
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<StoredEpochInfo>, IndexerError> {
-        self.run_query(|conn| {
+        run_query!(&self.pool, |conn| {
             let mut boxed_query = epochs::table.into_boxed();
             if let Some(cursor) = cursor {
                 if descending_order {
@@ -419,22 +361,24 @@ impl IndexerReader {
         &self,
         checkpoint_id: CheckpointId,
     ) -> Result<Option<StoredCheckpoint>, IndexerError> {
-        let stored_checkpoint = self.run_query(|conn| match checkpoint_id {
-            CheckpointId::SequenceNumber(seq) => checkpoints::dsl::checkpoints
-                .filter(checkpoints::sequence_number.eq(seq as i64))
-                .first::<StoredCheckpoint>(conn)
-                .optional(),
-            CheckpointId::Digest(digest) => checkpoints::dsl::checkpoints
-                .filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
-                .first::<StoredCheckpoint>(conn)
-                .optional(),
+        let stored_checkpoint = run_query!(&self.pool, |conn| {
+            match checkpoint_id {
+                CheckpointId::SequenceNumber(seq) => checkpoints::dsl::checkpoints
+                    .filter(checkpoints::sequence_number.eq(seq as i64))
+                    .first::<StoredCheckpoint>(conn)
+                    .optional(),
+                CheckpointId::Digest(digest) => checkpoints::dsl::checkpoints
+                    .filter(checkpoints::checkpoint_digest.eq(digest.into_inner().to_vec()))
+                    .first::<StoredCheckpoint>(conn)
+                    .optional(),
+            }
         })?;
 
         Ok(stored_checkpoint)
     }
 
     pub fn get_latest_checkpoint_from_db(&self) -> Result<StoredCheckpoint, IndexerError> {
-        let stored_checkpoint = self.run_query(|conn| {
+        let stored_checkpoint = run_query!(&self.pool, |conn| {
             checkpoints::dsl::checkpoints
                 .order_by(checkpoints::sequence_number.desc())
                 .first::<StoredCheckpoint>(conn)
@@ -468,7 +412,7 @@ impl IndexerReader {
         limit: usize,
         descending_order: bool,
     ) -> Result<Vec<StoredCheckpoint>, IndexerError> {
-        self.run_query(|conn| {
+        run_query!(&self.pool, |conn| {
             let mut boxed_query = checkpoints::table.into_boxed();
             if let Some(cursor) = cursor {
                 if descending_order {
@@ -507,9 +451,9 @@ impl IndexerReader {
         &self,
         digest: TransactionDigest,
     ) -> Result<SuiTransactionBlockEffects, IndexerError> {
-        let stored_txn: StoredTransaction = self.run_query(|conn| {
+        let stored_txn: StoredTransaction = run_query!(&self.pool, |conn| {
             transactions::table
-                .filter(transactions::transaction_digest.eq(digest.inner().to_vec()))
+                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
                 .first::<StoredTransaction>(conn)
         })?;
 
@@ -520,7 +464,7 @@ impl IndexerReader {
         &self,
         sequence_number: i64,
     ) -> Result<SuiTransactionBlockEffects, IndexerError> {
-        let stored_txn: StoredTransaction = self.run_query(|conn| {
+        let stored_txn: StoredTransaction = run_query!(&self.pool, |conn| {
             transactions::table
                 .filter(transactions::tx_sequence_number.eq(sequence_number))
                 .first::<StoredTransaction>(conn)
@@ -537,7 +481,7 @@ impl IndexerReader {
             .iter()
             .map(|digest| digest.inner().to_vec())
             .collect::<Vec<_>>();
-        self.run_query(|conn| {
+        run_query!(&self.pool, |conn| {
             transactions::table
                 .filter(transactions::transaction_digest.eq_any(digests))
                 .load::<StoredTransaction>(conn)
@@ -596,7 +540,7 @@ impl IndexerReader {
             }
             None => (),
         }
-        self.run_query(|conn| query.load::<StoredTransaction>(conn))
+        run_query!(&self.pool, |conn| query.load::<StoredTransaction>(conn))
     }
 
     pub async fn get_owned_objects_in_blocking_task(
@@ -617,7 +561,7 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        self.run_query(|conn| {
+        run_query!(&self.pool, |conn| {
             let mut query = objects::dsl::objects
                 .filter(objects::dsl::owner_type.eq(OwnerType::Address as i16))
                 .filter(objects::dsl::owner_id.eq(address.to_vec()))
@@ -626,19 +570,26 @@ impl IndexerReader {
                 .into_boxed();
             if let Some(filter) = filter {
                 match filter {
-                    SuiObjectDataFilter::StructType (struct_tag ) => {
-                        let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
-                        query = query.filter(objects::dsl::object_type.like(format!("{}%",object_type)));
-                    },
+                    SuiObjectDataFilter::StructType(struct_tag) => {
+                        let object_type =
+                            struct_tag.to_canonical_string(/* with_prefix */ true);
+                        query =
+                            query.filter(objects::object_type.like(format!("{}%", object_type)));
+                    }
                     SuiObjectDataFilter::MatchAny(filters) => {
                         let mut condition = "(".to_string();
                         for (i, filter) in filters.iter().enumerate() {
-                            if let SuiObjectDataFilter::StructType (struct_tag) = filter {
-                                let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
+                            if let SuiObjectDataFilter::StructType(struct_tag) = filter {
+                                let object_type =
+                                    struct_tag.to_canonical_string(/* with_prefix */ true);
                                 if i == 0 {
-                                    condition += format!("objects.object_type LIKE '{}%'",object_type).as_str();
+                                    condition +=
+                                        format!("objects.object_type LIKE '{}%'", object_type)
+                                            .as_str();
                                 } else {
-                                    condition += format!(" OR objects.object_type LIKE '{}%'",object_type).as_str();
+                                    condition +=
+                                        format!(" OR objects.object_type LIKE '{}%'", object_type)
+                                            .as_str();
                                 }
                             } else {
                                 return Err(IndexerError::InvalidArgumentError(
@@ -648,12 +599,15 @@ impl IndexerReader {
                         }
                         condition += ")";
                         query = query.filter(sql::<Bool>(&condition));
-                    },
+                    }
                     SuiObjectDataFilter::MatchNone(filters) => {
                         for filter in filters {
-                            if let SuiObjectDataFilter::StructType (struct_tag) = filter {
-                                let object_type = struct_tag.to_canonical_string(/* with_prefix */ true);
-                                query = query.filter(objects::dsl::object_type.not_like(format!("{}%", object_type)));
+                            if let SuiObjectDataFilter::StructType(struct_tag) = filter {
+                                let object_type =
+                                    struct_tag.to_canonical_string(/* with_prefix */ true);
+                                query = query.filter(
+                                    objects::object_type.not_like(format!("{}%", object_type)),
+                                );
                             } else {
                                 return Err(IndexerError::InvalidArgumentError(
                                     "Invalid filter type. Only struct, MatchAny and MatchNone of struct filters are supported.".into(),
@@ -673,7 +627,9 @@ impl IndexerReader {
                 query = query.filter(objects::dsl::object_id.gt(object_cursor.to_vec()));
             }
 
-            query.load::<StoredObject>(conn).map_err(|e| IndexerError::PostgresReadError(e.to_string()))
+            query
+                .load::<StoredObject>(conn)
+                .map_err(|e| IndexerError::PostgresReadError(e.to_string()))
         })
     }
 
@@ -683,13 +639,14 @@ impl IndexerReader {
         object_type: String,
     ) -> Result<Vec<ObjectID>, IndexerError> {
         let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
-        let filtered_ids = self.run_query(|conn| {
+        let filtered_ids = run_query!(&self.pool, |conn| {
             objects::dsl::objects
                 .filter(objects::object_id.eq_any(object_ids))
                 .filter(objects::object_type.eq(object_type))
                 .select(objects::object_id)
                 .load::<Vec<u8>>(conn)
         })?;
+
         filtered_ids
             .into_iter()
             .map(|id| {
@@ -716,8 +673,7 @@ impl IndexerReader {
         object_ids: Vec<ObjectID>,
     ) -> Result<Vec<StoredObject>, IndexerError> {
         let object_ids = object_ids.into_iter().map(|id| id.to_vec()).collect_vec();
-
-        self.run_query(|conn| {
+        run_query!(&self.pool, |conn| {
             objects::dsl::objects
                 .filter(objects::object_id.eq_any(object_ids))
                 .load::<StoredObject>(conn)
@@ -749,10 +705,10 @@ impl IndexerReader {
         } else {
             query = query.order(transactions::dsl::tx_sequence_number.asc());
         }
-
-        let stored_txes = self
-            .run_query_async(move |conn| query.limit(limit as i64).load::<StoredTransaction>(conn))
-            .await?;
+        let pool = self.get_pool();
+        let stored_txes = run_query_async!(&pool, move |conn| query
+            .limit(limit as i64)
+            .load::<StoredTransaction>(conn))?;
         self.stored_transaction_to_transaction_block(stored_txes, options)
             .await
     }
@@ -778,16 +734,13 @@ impl IndexerReader {
         is_descending: bool,
     ) -> IndexerResult<Vec<SuiTransactionBlockResponse>> {
         let cursor_tx_seq = if let Some(cursor) = cursor {
-            let tx_seq = self
-                .run_query_async(move |conn| {
-                    transactions::dsl::transactions
-                        .select(transactions::tx_sequence_number)
-                        .filter(
-                            transactions::dsl::transaction_digest.eq(cursor.into_inner().to_vec()),
-                        )
-                        .first::<i64>(conn)
-                })
-                .await?;
+            let pool = self.get_pool();
+            let tx_seq = run_query_async!(&pool, move |conn| {
+                transactions::dsl::transactions
+                    .select(transactions::tx_sequence_number)
+                    .filter(transactions::dsl::transaction_digest.eq(cursor.into_inner().to_vec()))
+                    .first::<i64>(conn)
+            })?;
             Some(tx_seq)
         } else {
             None
@@ -966,14 +919,13 @@ impl IndexerReader {
         );
 
         tracing::debug!("query transaction blocks: {}", query);
-        let tx_sequence_numbers = self
-            .run_query_async(move |conn| {
-                diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn)
-            })
-            .await?
-            .into_iter()
-            .map(|tsn| tsn.tx_sequence_number)
-            .collect::<Vec<i64>>();
+        let pool = self.get_pool();
+        let tx_sequence_numbers = run_query_async!(&pool, move |conn| {
+            diesel::sql_query(query.clone()).load::<TxSequenceNumber>(conn)
+        })?
+        .into_iter()
+        .map(|tsn| tsn.tx_sequence_number)
+        .collect::<Vec<i64>>();
         self.multi_get_transaction_block_response_by_sequence_numbers_in_blocking_task(
             tx_sequence_numbers,
             options,
@@ -1026,20 +978,15 @@ impl IndexerReader {
         &self,
         digest: TransactionDigest,
     ) -> Result<Vec<sui_json_rpc_types::SuiEvent>, IndexerError> {
-        let (timestamp_ms, serialized_events) = self
-            .run_query_async(move |conn| {
-                transactions::table
-                    .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
-                    .select((transactions::timestamp_ms, transactions::events))
-                    .first::<(i64, Vec<Option<Vec<u8>>>)>(conn)
-            })
-            .await?;
+        let pool = self.get_pool();
+        let (timestamp_ms, serialized_events) = run_query_async!(&pool, move |conn| {
+            transactions::table
+                .filter(transactions::transaction_digest.eq(digest.into_inner().to_vec()))
+                .select((transactions::timestamp_ms, transactions::events))
+                .first::<(i64, StoredTransactionEvents)>(conn)
+        })?;
 
-        let events = serialized_events
-            .into_iter()
-            .flatten()
-            .map(|event| bcs::from_bytes::<sui_types::event::Event>(&event))
-            .collect::<Result<Vec<_>, _>>()?;
+        let events = stored_events_to_events(serialized_events)?;
         let tx_events = TransactionEvents { data: events };
 
         let sui_tx_events = tx_events_to_sui_tx_events(
@@ -1098,33 +1045,28 @@ impl IndexerReader {
         limit: usize,
         descending_order: bool,
     ) -> IndexerResult<Vec<SuiEvent>> {
+        let pool = self.get_pool();
         let (tx_seq, event_seq) = if let Some(cursor) = cursor {
             let EventID {
                 tx_digest,
                 event_seq,
             } = cursor;
-
-            let tx_seq = self
-                .run_query_async(move |conn| {
-                    transactions::dsl::transactions
-                        .select(transactions::tx_sequence_number)
-                        .filter(
-                            transactions::dsl::transaction_digest
-                                .eq(tx_digest.into_inner().to_vec()),
-                        )
-                        .first::<i64>(conn)
-                })
-                .await?;
+            let tx_seq = run_query_async!(&pool, move |conn| {
+                transactions::dsl::transactions
+                    .select(transactions::tx_sequence_number)
+                    .filter(
+                        transactions::dsl::transaction_digest.eq(tx_digest.into_inner().to_vec()),
+                    )
+                    .first::<i64>(conn)
+            })?;
             (tx_seq, event_seq)
         } else if descending_order {
-            let max_tx_seq: i64 = self
-                .run_query_async(move |conn| {
-                    events::dsl::events
-                        .select(events::tx_sequence_number)
-                        .order(events::dsl::tx_sequence_number.desc())
-                        .first::<i64>(conn)
-                })
-                .await?;
+            let max_tx_seq: i64 = run_query_async!(&pool, move |conn| {
+                events::dsl::events
+                    .select(events::tx_sequence_number)
+                    .order(events::dsl::tx_sequence_number.desc())
+                    .first::<i64>(conn)
+            })?;
             (max_tx_seq + 1, 0)
         } else {
             (-1, 0)
@@ -1221,9 +1163,9 @@ impl IndexerReader {
             )
         };
         tracing::debug!("query events: {}", query);
-        let stored_events = self
-            .run_query_async(move |conn| diesel::sql_query(query).load::<StoredEvent>(conn))
-            .await?;
+        let pool = self.get_pool();
+        let stored_events = run_query_async!(&pool, move |conn| diesel::sql_query(query)
+            .load::<StoredEvent>(conn))?;
 
         let mut sui_event_futures = vec![];
         for stored_event in stored_events {
@@ -1324,7 +1266,7 @@ impl IndexerReader {
         cursor: Option<ObjectID>,
         limit: usize,
     ) -> Result<Vec<StoredObject>, IndexerError> {
-        let objects: Vec<StoredObject> = self.run_query(|conn| {
+        let objects: Vec<StoredObject> = run_query!(&self.pool, |conn| {
             let mut query = objects::dsl::objects
                 .filter(objects::dsl::owner_type.eq(OwnerType::Object as i16))
                 .filter(objects::dsl::owner_id.eq(parent_object_id.to_vec()))
@@ -1363,7 +1305,7 @@ impl IndexerReader {
         &self,
         object_ids: Vec<Vec<u8>>,
     ) -> IndexerResult<HashMap<ObjectID, ObjectRef>> {
-        self.run_query(|conn| {
+        run_query!(&self.pool, |conn| {
             let query = objects::dsl::objects
                 .select((
                     objects::dsl::object_id,
@@ -1408,7 +1350,7 @@ impl IndexerReader {
         &self,
         object_type: String,
     ) -> Result<Option<sui_types::display::DisplayVersionUpdatedEvent>, IndexerError> {
-        let stored_display = self.run_query(|conn| {
+        let stored_display = run_query!(&self.pool, |conn| {
             display::table
                 .filter(display::object_type.eq(object_type))
                 .first::<StoredDisplay>(conn)
@@ -1458,7 +1400,7 @@ impl IndexerReader {
             .order((objects::dsl::coin_type.asc(), objects::dsl::object_id.asc()))
             .limit(limit as i64);
 
-        let stored_objects = self.run_query(|conn| query.load::<StoredObject>(conn))?;
+        let stored_objects = run_query!(&self.pool, |conn| query.load::<StoredObject>(conn))?;
 
         stored_objects
             .into_iter()
@@ -1506,8 +1448,8 @@ impl IndexerReader {
         );
 
         tracing::debug!("get coin balances query: {query}");
-        let coin_balances =
-            self.run_query(|conn| diesel::sql_query(query).load::<CoinBalance>(conn))?;
+        let coin_balances = run_query!(&self.pool, |conn| diesel::sql_query(query)
+            .load::<CoinBalance>(conn))?;
         coin_balances
             .into_iter()
             .map(|cb| cb.try_into())
@@ -1556,8 +1498,14 @@ impl IndexerReader {
         let package_id = coin_struct.address.into();
         let coin_metadata_type =
             CoinMetadata::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-        let coin_metadata_obj_id =
-            get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type)?;
+        let coin_metadata_obj_id = *self
+            .package_obj_type_cache
+            .lock()
+            .unwrap()
+            .cache_get_or_set_with(format!("{}{}", package_id, coin_metadata_type), || {
+                get_single_obj_id_from_package_publish(self, package_id, coin_metadata_type.clone())
+                    .unwrap()
+            });
         if let Some(id) = coin_metadata_obj_id {
             let metadata_object = self.get_object(&id, None)?;
             Ok(metadata_object.and_then(|v| SuiCoinMetadata::try_from(v).ok()))
@@ -1578,12 +1526,18 @@ impl IndexerReader {
         let package_id = coin_struct.address.into();
         let treasury_cap_type =
             TreasuryCap::type_(coin_struct).to_canonical_string(/* with_prefix */ true);
-        let treasury_cap_obj_id =
-            get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())?
-                .ok_or(IndexerError::GenericError(format!(
-                    "Cannot find treasury cap for type {}",
-                    treasury_cap_type
-                )))?;
+        let treasury_cap_obj_id = self
+            .package_obj_type_cache
+            .lock()
+            .unwrap()
+            .cache_get_or_set_with(format!("{}{}", package_id, treasury_cap_type), || {
+                get_single_obj_id_from_package_publish(self, package_id, treasury_cap_type.clone())
+                    .unwrap()
+            })
+            .ok_or(IndexerError::GenericError(format!(
+                "Cannot find treasury cap for type {}",
+                treasury_cap_type
+            )))?;
         let treasury_cap_obj_object =
             self.get_object(&treasury_cap_obj_id, None)?
                 .ok_or(IndexerError::GenericError(format!(
@@ -1594,36 +1548,34 @@ impl IndexerReader {
     }
 
     pub fn get_consistent_read_range(&self) -> Result<(i64, i64), IndexerError> {
-        let latest_checkpoint_sequence = self
-            .run_query(|conn| {
-                checkpoints::table
-                    .select(checkpoints::sequence_number)
-                    .order(checkpoints::sequence_number.desc())
-                    .first::<i64>(conn)
-                    .optional()
-            })?
-            .unwrap_or_default();
-        let latest_object_snapshot_checkpoint_sequence = self
-            .run_query(|conn| {
-                objects_snapshot::table
-                    .select(objects_snapshot::checkpoint_sequence_number)
-                    .order(objects_snapshot::checkpoint_sequence_number.desc())
-                    .first::<i64>(conn)
-                    .optional()
-            })?
-            .unwrap_or_default();
+        let latest_checkpoint_sequence = run_query!(&self.pool, |conn| {
+            checkpoints::table
+                .select(checkpoints::sequence_number)
+                .order(checkpoints::sequence_number.desc())
+                .first::<i64>(conn)
+                .optional()
+        })?
+        .unwrap_or_default();
+        let latest_object_snapshot_checkpoint_sequence = run_query!(&self.pool, |conn| {
+            objects_snapshot::table
+                .select(objects_snapshot::checkpoint_sequence_number)
+                .order(objects_snapshot::checkpoint_sequence_number.desc())
+                .first::<i64>(conn)
+                .optional()
+        })?
+        .unwrap_or_default();
         Ok((
             latest_object_snapshot_checkpoint_sequence,
             latest_checkpoint_sequence,
         ))
     }
 
-    pub fn package_resolver(&self) -> PackageResolver {
+    pub fn package_resolver(&self) -> PackageResolver<U> {
         self.package_resolver.clone()
     }
 }
 
-impl sui_types::storage::ObjectStore for IndexerReader {
+impl<U: R2D2Connection> sui_types::storage::ObjectStore for IndexerReader<U> {
     fn get_object(
         &self,
         object_id: &ObjectID,
@@ -1642,14 +1594,8 @@ impl sui_types::storage::ObjectStore for IndexerReader {
     }
 }
 
-#[cached(
-    type = "SizedCache<String, Option<ObjectID>>",
-    create = "{ SizedCache::with_size(10000) }",
-    convert = r#"{ format!("{}{}", package_id, obj_type) }"#,
-    result = true
-)]
-fn get_single_obj_id_from_package_publish(
-    reader: &IndexerReader,
+fn get_single_obj_id_from_package_publish<U: R2D2Connection>(
+    reader: &IndexerReader<U>,
     package_id: ObjectID,
     obj_type: String,
 ) -> Result<Option<ObjectID>, IndexerError> {

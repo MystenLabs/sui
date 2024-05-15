@@ -1,8 +1,11 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use core::ops::Range;
-use std::{collections::BTreeMap, ops::Bound::Included, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    ops::{Bound::Included, RangeInclusive},
+    sync::Arc,
+};
 
 use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
@@ -17,6 +20,7 @@ use crate::{
     context::Context,
     dag_state::DagState,
     leader_schedule::{LeaderSchedule, LeaderSwapTable},
+    CommittedSubDag,
 };
 
 /// DagBuilder API
@@ -107,6 +111,84 @@ impl DagBuilder {
         }
     }
 
+    pub(crate) fn blocks(&self, rounds: RangeInclusive<Round>) -> Vec<VerifiedBlock> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        self.blocks
+            .iter()
+            .filter_map(|(block_ref, block)| rounds.contains(&block_ref.round).then_some(block))
+            .cloned()
+            .collect::<Vec<VerifiedBlock>>()
+    }
+
+    // TODO: reuse logic from Linearizer.
+    pub(crate) fn get_subdag(
+        &self,
+        leader_block: VerifiedBlock,
+        last_committed_rounds: Vec<Round>,
+        commit_index: u32,
+    ) -> CommittedSubDag {
+        let mut to_commit = Vec::new();
+        let mut committed = HashSet::new();
+
+        let timestamp_ms = leader_block.timestamp_ms();
+        let leader_block_ref = leader_block.reference();
+        let mut buffer = vec![leader_block];
+        assert!(committed.insert(leader_block_ref));
+        while let Some(x) = buffer.pop() {
+            to_commit.push(x.clone());
+
+            let ancestors = self.get_blocks(
+                &x.ancestors()
+                    .iter()
+                    .copied()
+                    .filter(|ancestor| {
+                        // We skip the block if we already committed it or we reached a
+                        // round that we already committed.
+                        !committed.contains(ancestor)
+                            && last_committed_rounds[ancestor.author] < ancestor.round
+                    })
+                    .collect::<Vec<_>>(),
+            );
+
+            for ancestor in ancestors {
+                buffer.push(ancestor.clone());
+                assert!(committed.insert(ancestor.reference()));
+            }
+        }
+        CommittedSubDag::new(leader_block_ref, to_commit, timestamp_ms, commit_index)
+    }
+
+    pub(crate) fn leader_blocks(
+        &self,
+        rounds: RangeInclusive<Round>,
+    ) -> Vec<Option<VerifiedBlock>> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        rounds
+            .into_iter()
+            .map(|round| self.leader_block(round))
+            .collect()
+    }
+
+    pub(crate) fn leader_block(&self, round: Round) -> Option<VerifiedBlock> {
+        assert!(
+            !self.blocks.is_empty(),
+            "No blocks have been created, please make sure that you have called build method"
+        );
+        self.blocks
+            .iter()
+            .find(|(block_ref, block)| {
+                block_ref.round == round
+                    && block_ref.author == self.leader_schedule.elect_leader(round, 0)
+            })
+            .map(|(_block_ref, block)| block.clone())
+    }
+
     pub(crate) fn with_wave_length(mut self, wave_length: Round) -> Self {
         self.wave_length = wave_length;
         self
@@ -126,9 +208,9 @@ impl DagBuilder {
         LayerBuilder::new(self, round)
     }
 
-    pub(crate) fn layers(&mut self, rounds: Range<Round>) -> LayerBuilder {
-        let mut builder = LayerBuilder::new(self, rounds.start);
-        builder.end_round = Some(rounds.end);
+    pub(crate) fn layers(&mut self, rounds: RangeInclusive<Round>) -> LayerBuilder {
+        let mut builder = LayerBuilder::new(self, *rounds.start());
+        builder.end_round = Some(*rounds.end());
         builder
     }
 
@@ -189,6 +271,25 @@ impl DagBuilder {
             blocks.push(block.clone())
         }
         blocks
+    }
+
+    pub(crate) fn get_blocks(&self, block_refs: &[BlockRef]) -> Vec<VerifiedBlock> {
+        let mut blocks = vec![None; block_refs.len()];
+
+        for (index, block_ref) in block_refs.iter().enumerate() {
+            if block_ref.round == 0 {
+                if let Some(block) = self.genesis.get(block_ref) {
+                    blocks[index] = Some(block.clone());
+                }
+                continue;
+            }
+            if let Some(block) = self.blocks.get(block_ref) {
+                blocks[index] = Some(block.clone());
+                continue;
+            }
+        }
+
+        blocks.into_iter().map(|x| x.unwrap()).collect()
     }
 
     pub(crate) fn genesis_block_refs(&self) -> Vec<BlockRef> {
@@ -392,6 +493,7 @@ impl<'a> LayerBuilder<'a> {
     }
 
     pub fn persist_layers(&self, dag_state: Arc<RwLock<DagState>>) {
+        assert!(!self.blocks.is_empty(), "Called to persist layers although no blocks have been created. Make sure you have called build before.");
         dag_state.write().accept_blocks(self.blocks.clone());
     }
 

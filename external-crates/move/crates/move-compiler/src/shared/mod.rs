@@ -8,7 +8,7 @@ use crate::{
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
-        Diagnostic, Diagnostics, FileName, MappedFiles, WarningFilters,
+        Diagnostic, Diagnostics, DiagnosticsFormat, FileName, MappedFiles, WarningFilters,
     },
     editions::{
         check_feature_or_error as edition_check_feature, feature_edition_error_msg, Edition,
@@ -26,7 +26,6 @@ use clap::*;
 use move_command_line_common::files::FileHash;
 use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
-use once_cell::sync::OnceCell;
 use petgraph::{algo::astar as petgraph_astar, graphmap::DiGraphMap};
 use std::{
     cell::RefCell,
@@ -45,6 +44,7 @@ pub mod ast_debug;
 pub mod known_attributes;
 pub mod program_info;
 pub mod remembering_unique_map;
+pub mod string_utils;
 pub mod unique_map;
 pub mod unique_set;
 
@@ -347,10 +347,14 @@ impl CompilationEnv {
         } else {
             vec![]
         };
+        let mut diags = Diagnostics::new();
+        if flags.json_errors() {
+            diags.set_format(DiagnosticsFormat::JSON);
+        }
         Self {
             flags,
             warning_filter,
-            diags: Diagnostics::new(),
+            diags,
             visitors: Rc::new(Visitors::new(visitors)),
             package_configs,
             default_config: default_config.unwrap_or_default(),
@@ -600,59 +604,49 @@ impl CompilationEnv {
         self.prim_definers.get(&t)
     }
 
+    pub fn ide_mode(&self) -> bool {
+        self.flags.ide_mode()
+    }
+
     pub fn save_parser_ast(&self, ast: &P::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Parser(h) = hook {
-                h.set(ast)
-            }
+            hook.save_parser_ast(ast)
         }
     }
 
     pub fn save_expansion_ast(&self, ast: &E::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Expansion(h) = hook {
-                h.set(ast)
-            }
+            hook.save_expansion_ast(ast)
         }
     }
 
     pub fn save_naming_ast(&self, ast: &N::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Naming(h) = hook {
-                h.set(ast)
-            }
+            hook.save_naming_ast(ast)
         }
     }
 
     pub fn save_typing_ast(&self, ast: &T::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::Typing(h) = hook {
-                h.set(ast)
-            }
+            hook.save_typing_ast(ast)
         }
     }
 
     pub fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
         for hook in &self.save_hooks {
-            if let SaveHook::TypingInfo(h) = hook {
-                h.set(info)
-            }
+            hook.save_typing_info(info)
         }
     }
 
     pub fn save_hlir_ast(&self, ast: &H::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::HLIR(h) = hook {
-                h.set(ast)
-            }
+            hook.save_hlir_ast(ast)
         }
     }
 
     pub fn save_cfgir_ast(&self, ast: &G::Program) {
         for hook in &self.save_hooks {
-            if let SaveHook::CFGIR(h) = hook {
-                h.set(ast)
-            }
+            hook.save_cfgir_ast(ast)
         }
     }
 }
@@ -714,6 +708,12 @@ pub struct Flags {
     )]
     warnings_are_errors: bool,
 
+    /// If set, report errors as json.
+    #[clap(
+        long = cli::JSON_ERRORS,
+    )]
+    json_errors: bool,
+
     /// If set, all warnings are silenced
     #[clap(
         long = cli::SILENCE_WARNINGS,
@@ -740,6 +740,10 @@ pub struct Flags {
     /// included only in tests, without creating the unit test code regular tests do.
     #[clap(skip)]
     keep_testing_functions: bool,
+
+    /// If set, all warnings are silenced
+    #[clap(skip = false)]
+    ide_mode: bool,
 }
 
 impl Flags {
@@ -750,7 +754,9 @@ impl Flags {
             bytecode_version: None,
             warnings_are_errors: false,
             silence_warnings: false,
+            json_errors: false,
             keep_testing_functions: false,
+            ide_mode: false,
         }
     }
 
@@ -760,8 +766,10 @@ impl Flags {
             shadow: false,
             bytecode_version: None,
             warnings_are_errors: false,
+            json_errors: false,
             silence_warnings: false,
             keep_testing_functions: false,
+            ide_mode: false,
         }
     }
 
@@ -793,6 +801,20 @@ impl Flags {
         }
     }
 
+    pub fn set_json_errors(self, value: bool) -> Self {
+        Self {
+            json_errors: value,
+            ..self
+        }
+    }
+
+    pub fn set_ide_mode(self, value: bool) -> Self {
+        Self {
+            ide_mode: value,
+            ..self
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self == &Self::empty()
     }
@@ -817,8 +839,16 @@ impl Flags {
         self.warnings_are_errors
     }
 
+    pub fn json_errors(&self) -> bool {
+        self.json_errors
+    }
+
     pub fn silence_warnings(&self) -> bool {
         self.silence_warnings
+    }
+
+    pub fn ide_mode(&self) -> bool {
+        self.ide_mode
     }
 }
 
@@ -875,174 +905,157 @@ impl Visitors {
 // Save Hooks
 //**************************************************************************************************
 
-pub enum SaveHook {
-    Parser(SaveParser),
-    Expansion(SaveExpansion),
-    Naming(SaveNaming),
-    Typing(SaveTyping),
-    TypingInfo(SaveTypingInfo),
-    HLIR(SaveHLIR),
-    CFGIR(SaveCFGIR),
-}
+#[derive(Clone)]
+pub struct SaveHook(Rc<RefCell<SavedInfo>>);
 
 #[derive(Clone)]
-pub struct SaveParser(Rc<OnceCell<P::Program>>);
-
-#[derive(Clone)]
-pub struct SaveExpansion(Rc<OnceCell<E::Program>>);
-
-#[derive(Clone)]
-pub struct SaveNaming(Rc<OnceCell<N::Program>>);
-
-#[derive(Clone)]
-pub struct SaveTyping(Rc<OnceCell<T::Program>>);
-
-#[derive(Clone)]
-pub struct SaveTypingInfo(Rc<OnceCell<Arc<program_info::TypingProgramInfo>>>);
-
-#[derive(Clone)]
-pub struct SaveHLIR(Rc<OnceCell<H::Program>>);
-
-#[derive(Clone)]
-pub struct SaveCFGIR(Rc<OnceCell<G::Program>>);
-
-impl SaveParser {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
-    }
-
-    pub(crate) fn set(&self, p: &crate::parser::ast::Program) {
-        self.0.set(p.clone()).unwrap()
-    }
-
-    pub fn into_inner(self) -> crate::parser::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
-    }
+pub(crate) struct SavedInfo {
+    flags: BTreeSet<SaveFlag>,
+    parser: Option<P::Program>,
+    expansion: Option<E::Program>,
+    naming: Option<N::Program>,
+    typing: Option<T::Program>,
+    typing_info: Option<Arc<program_info::TypingProgramInfo>>,
+    hlir: Option<H::Program>,
+    cfgir: Option<G::Program>,
 }
 
-impl From<SaveParser> for SaveHook {
-    fn from(s: SaveParser) -> Self {
-        SaveHook::Parser(s)
-    }
+#[derive(Clone, Copy, Ord, PartialOrd, Eq, PartialEq)]
+pub enum SaveFlag {
+    Parser,
+    Expansion,
+    Naming,
+    Typing,
+    TypingInfo,
+    HLIR,
+    CFGIR,
 }
 
-impl SaveExpansion {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+impl SaveHook {
+    pub fn new(flags: impl IntoIterator<Item = SaveFlag>) -> Self {
+        let flags = flags.into_iter().collect();
+        Self(Rc::new(RefCell::new(SavedInfo {
+            flags,
+            parser: None,
+            expansion: None,
+            naming: None,
+            typing: None,
+            typing_info: None,
+            hlir: None,
+            cfgir: None,
+        })))
     }
 
-    pub(crate) fn set(&self, p: &crate::expansion::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+    pub(crate) fn save_parser_ast(&self, ast: &P::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.parser.is_none() && r.flags.contains(&SaveFlag::Parser) {
+            r.parser = Some(ast.clone())
+        }
     }
 
-    pub fn into_inner(self) -> crate::expansion::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
-    }
-}
-
-impl From<SaveExpansion> for SaveHook {
-    fn from(s: SaveExpansion) -> Self {
-        SaveHook::Expansion(s)
-    }
-}
-
-impl SaveNaming {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+    pub(crate) fn save_expansion_ast(&self, ast: &E::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.expansion.is_none() && r.flags.contains(&SaveFlag::Expansion) {
+            r.expansion = Some(ast.clone())
+        }
     }
 
-    pub(crate) fn set(&self, p: &crate::naming::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+    pub(crate) fn save_naming_ast(&self, ast: &N::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.naming.is_none() && r.flags.contains(&SaveFlag::Naming) {
+            r.naming = Some(ast.clone())
+        }
     }
 
-    pub fn into_inner(self) -> crate::naming::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
-    }
-}
-
-impl From<SaveNaming> for SaveHook {
-    fn from(s: SaveNaming) -> Self {
-        SaveHook::Naming(s)
-    }
-}
-
-impl SaveTyping {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+    pub(crate) fn save_typing_ast(&self, ast: &T::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.typing.is_none() && r.flags.contains(&SaveFlag::Typing) {
+            r.typing = Some(ast.clone())
+        }
     }
 
-    pub(crate) fn set(&self, p: &crate::typing::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+    pub(crate) fn save_typing_info(&self, info: &Arc<program_info::TypingProgramInfo>) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.typing_info.is_none() && r.flags.contains(&SaveFlag::TypingInfo) {
+            r.typing_info = Some(info.clone())
+        }
     }
 
-    pub fn into_inner(self) -> crate::typing::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
-    }
-}
-
-impl From<SaveTyping> for SaveHook {
-    fn from(s: SaveTyping) -> Self {
-        SaveHook::Typing(s)
-    }
-}
-
-impl SaveTypingInfo {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+    pub(crate) fn save_hlir_ast(&self, ast: &H::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.hlir.is_none() && r.flags.contains(&SaveFlag::HLIR) {
+            r.hlir = Some(ast.clone())
+        }
     }
 
-    pub(crate) fn set(&self, p: &Arc<program_info::TypingProgramInfo>) {
-        self.0.set(p.clone()).unwrap()
+    pub(crate) fn save_cfgir_ast(&self, ast: &G::Program) {
+        let mut r = RefCell::borrow_mut(&self.0);
+        if r.cfgir.is_none() && r.flags.contains(&SaveFlag::CFGIR) {
+            r.cfgir = Some(ast.clone())
+        }
     }
 
-    pub fn into_inner(self) -> Arc<program_info::TypingProgramInfo> {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
-    }
-}
-
-impl From<SaveTypingInfo> for SaveHook {
-    fn from(s: SaveTypingInfo) -> Self {
-        SaveHook::TypingInfo(s)
-    }
-}
-
-impl SaveHLIR {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+    pub fn take_parser_ast(&self) -> P::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Parser),
+            "Parser AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.parser.take().unwrap()
     }
 
-    pub(crate) fn set(&self, p: &crate::hlir::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+    pub fn take_expansion_ast(&self) -> E::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Expansion),
+            "Expansion AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.expansion.take().unwrap()
     }
 
-    pub fn into_inner(self) -> crate::hlir::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
-    }
-}
-
-impl From<SaveHLIR> for SaveHook {
-    fn from(s: SaveHLIR) -> Self {
-        SaveHook::HLIR(s)
-    }
-}
-
-impl SaveCFGIR {
-    pub fn new() -> Self {
-        Self(Rc::new(OnceCell::new()))
+    pub fn take_naming_ast(&self) -> N::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Naming),
+            "Naming AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.naming.take().unwrap()
     }
 
-    pub(crate) fn set(&self, p: &crate::cfgir::ast::Program) {
-        self.0.set(p.clone()).unwrap()
+    pub fn take_typing_ast(&self) -> T::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::Typing),
+            "Typing AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing.take().unwrap()
     }
 
-    pub fn into_inner(self) -> crate::cfgir::ast::Program {
-        Rc::into_inner(self.0).unwrap().into_inner().unwrap()
+    pub fn take_typing_info(&self) -> Arc<program_info::TypingProgramInfo> {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::TypingInfo),
+            "Typing info not saved. Please set the flag when creating the SaveHook"
+        );
+        r.typing_info.take().unwrap()
     }
-}
 
-impl From<SaveCFGIR> for SaveHook {
-    fn from(s: SaveCFGIR) -> Self {
-        SaveHook::CFGIR(s)
+    pub fn take_hlir_ast(&self) -> H::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::HLIR),
+            "HLIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.hlir.take().unwrap()
+    }
+
+    pub fn take_cfgir_ast(&self) -> G::Program {
+        let mut r = RefCell::borrow_mut(&self.0);
+        assert!(
+            r.flags.contains(&SaveFlag::CFGIR),
+            "CFGIR AST not saved. Please set the flag when creating the SaveHook"
+        );
+        r.cfgir.take().unwrap()
     }
 }
 
@@ -1190,136 +1203,3 @@ impl IndexedPhysicalPackagePath {
         })
     }
 }
-
-//**************************************************************************************************
-// String Construction Helpers
-//**************************************************************************************************
-
-macro_rules! format_oxford_list {
-    ($sep:expr, $format_str:expr, $e:expr) => {{
-        let entries = $e;
-        match entries.len() {
-            0 => String::new(),
-            1 => format!($format_str, entries[0]),
-            2 => format!(
-                "{} {} {}",
-                format!($format_str, entries[0]),
-                $sep,
-                format!($format_str, entries[1])
-            ),
-            _ => {
-                let entries = entries
-                    .iter()
-                    .map(|entry| format!($format_str, entry))
-                    .collect::<Vec<_>>();
-                if let Some((last, init)) = entries.split_last() {
-                    let mut result = init.join(", ");
-                    result.push_str(&format!(", {} {}", $sep, last));
-                    result
-                } else {
-                    String::new()
-                }
-            }
-        }
-    }};
-}
-
-pub(crate) use format_oxford_list;
-
-//**************************************************************************************************
-// Debug Printing
-//**************************************************************************************************
-
-/// Debug formatter based on provided `fmt` option:
-///
-/// - None: calls `val.print()`
-/// - `verbose`: calls `val.print_verbose()`
-/// - `fmt`: calls `println!("{}", val)`
-/// - `dbg`: calls `println!("{:?}", val)`
-/// - `sdbg`: calls `println!("{:#?}", val)`
-macro_rules! debug_print_format {
-    ($val:expr) => {{
-        $val.print();
-    }};
-    ($val:expr ; verbose) => {{
-        $val.print_verbose();
-    }};
-    ($val:expr ; fmt) => {{
-        println!("{}", $val);
-    }};
-    ($val:expr ; dbg) => {{
-        println!("{:?}", $val);
-    }};
-    ($val:expr ; sdbg) => {{
-        println!("{:#?}", $val);
-    }};
-}
-
-pub(crate) use debug_print_format;
-
-/// Print formatter for debugging. Allows a few different forms:
-///
-/// `(msg `s`)`                        as println!(s);
-/// `(name => val [; fmt])`            as "name: " + debug_fprint_ormat!(vall fmt)
-/// `(opt name => val [; fmt])`        as "name: " + "Some " debug_print_format!(val; fmt) or "None"
-/// `(lines name => val [; fmt]) ` as "name: " + for n in val { debug_print_format!(n; fmt) }
-///
-/// See `debug_print_format` for different `fmt` options.
-macro_rules! debug_print_internal {
-    () => {};
-    (($name:expr => $val:expr $(; $fmt:ident)?)) => {
-        {
-        print!("{}: ", $name);
-        crate::shared::debug_print_format!($val $(; $fmt)*);
-        }
-    };
-    ((opt $name:expr => $val:expr $(; $fmt:ident)?)) => {
-        {
-        print!("{}: ", $name);
-        match $val {
-            Some(value) => { print!("Some "); crate::shared::debug_print_format!(value $(; $fmt)*); }
-            None => { print!("None"); }
-        }
-        }
-    };
-    ((lines $name:expr => $val:expr $(; $fmt:ident)?)) => { {
-        println!("\n{}: ", $name);
-        for n in $val {
-            crate::shared::debug_print_format!(n $(; $fmt)*);
-        }
-    }
-    };
-    ($fst:tt, $($rest:tt),+) => { {
-        crate::shared::debug_print_internal!($fst);
-        crate::shared::debug_print_internal!($($rest),+);
-    }
-    };
-}
-
-pub(crate) use debug_print_internal;
-
-/// Macro for a small DSL for compactling printing debug information based on the provided flag.
-///
-///  ```
-///  debug_print!(
-///      context.debug_flags.match_compilation,
-///      ("subject" => subject),
-///      (opt "flag" => flag; dbg)
-///      (lines "arms" => &arms.value; verbose)
-///  );
-///  ```
-///
-/// See `debug_print_internal` for the available syntax.
-///
-/// Feature gates the print and check against the `debug_assertions` feature.
-macro_rules! debug_print {
-    ($flag:expr, $($arg:tt),+) => {
-        #[cfg(debug_assertions)]
-        if $flag {
-            println!("\n------------------");
-            crate::shared::debug_print_internal!($($arg),+)
-        }
-    }
-}
-
-pub(crate) use debug_print;

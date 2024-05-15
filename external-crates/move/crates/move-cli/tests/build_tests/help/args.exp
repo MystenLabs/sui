@@ -45,6 +45,8 @@ Options:
           If set, ignore any compiler warnings
       --warnings-are-errors
           If set, warnings become errors
+      --json-errors
+          If set, reports errors at JSON
       --no-lint
           If `true`, disable linters
       --lint

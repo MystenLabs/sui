@@ -44,6 +44,16 @@ async fn basic_checkpoints_integration_test() {
 
 #[sim_test]
 async fn checkpoint_split_brain_test() {
+    #[cfg(msim)]
+    {
+        // this test intentionally halts the network by causing a fork, so we cannot panic on
+        // loss of liveness
+        use sui_core::authority::{init_checkpoint_timeout_config, CheckpointTimeoutConfig};
+        init_checkpoint_timeout_config(CheckpointTimeoutConfig {
+            timeout: Duration::from_secs(2),
+            panic_on_timeout: false,
+        });
+    }
     let committee_size = 9;
     // count number of nodes that have reached split brain condition
     let count_split_brain_nodes: Arc<Mutex<AtomicUsize>> = Default::default();

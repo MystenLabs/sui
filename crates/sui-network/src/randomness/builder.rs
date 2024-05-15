@@ -130,9 +130,11 @@ impl UnstartedRandomness {
                 pending_tasks: BTreeSet::new(),
                 send_tasks: BTreeMap::new(),
                 round_request_time: BTreeMap::new(),
+                future_epoch_partial_sigs: BTreeMap::new(),
                 received_partial_sigs: BTreeMap::new(),
                 completed_sigs: BTreeSet::new(),
                 completed_rounds: BTreeSet::new(),
+                recovered_last_completed_round: None,
             },
             handle,
         )

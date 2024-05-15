@@ -31,7 +31,7 @@ use std::{
 };
 
 //**************************************************************************************************
-// Context
+// Resolver Types
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
@@ -41,6 +41,118 @@ pub(super) enum ResolvedType {
     BuiltinType(N::BuiltinTypeName_),
     Hole, // '_' type
     Unbound,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct ResolvedModuleType {
+    // original names/locs are provided to preserve loc information if needed
+    pub original_loc: Loc,
+    pub original_type_name: Name,
+    pub module_type: ModuleType,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum ModuleType {
+    Struct(Box<StructType>),
+    Enum(Box<EnumType>),
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct StructType {
+    original_mident: ModuleIdent,
+    decl_loc: Loc,
+    arity: usize,
+    field_info: FieldInfo,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct EnumType {
+    original_mident: ModuleIdent,
+    decl_loc: Loc,
+    arity: usize,
+    variants: UniqueMap<VariantName, VariantConstructor>,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(super) struct VariantConstructor {
+    original_variant_name: Name,
+    decl_loc: Loc,
+    field_info: FieldInfo,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum FieldInfo {
+    Positional(usize),
+    Named(BTreeSet<Field>),
+    Empty,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum ResolvedConstructor {
+    Struct(DatatypeName, Box<StructType>),
+    Variant(
+        Box<EnumType>,
+        VariantName,
+        /* variant decl loc */ Loc,
+        Box<FieldInfo>,
+    ),
+}
+
+enum ResolvedFunction {
+    Builtin(N::BuiltinFunction),
+    Module(Box<ResolvedModuleFunction>),
+    Var(N::Var),
+    Unbound,
+}
+
+struct ResolvedModuleFunction {
+    // original names/locs are provided to preserve loc information if needed
+    module: ModuleIdent,
+    function: FunctionName,
+    ty_args: Option<Vec<N::Type>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ResolveFunctionCase {
+    UseFun,
+    Call,
+}
+
+enum ResolvedModuleAccess {
+    Function(FunctionName),
+    Constant(ConstantName),
+    Datatype(ModuleType),
+}
+
+enum ModuleAccessKind {
+    Function,
+    Datatype,
+    Constant,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum LoopType {
+    While,
+    Loop,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum NominalBlockType {
+    Loop(LoopType),
+    Block,
+    LambdaReturn,
+    LambdaLoopCapture,
+}
+
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum TypeAnnotation {
+    StructField,
+    VariantField,
+    ConstantSignature,
+    FunctionSignature,
+    MacroSignature,
+    Expression,
 }
 
 impl ResolvedType {
@@ -66,19 +178,9 @@ impl ResolvedType {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct ResolvedModuleType {
-    // original names/locs are provided to preserve loc information if needed
-    pub original_loc: Loc,
-    pub original_type_name: Name,
-    pub module_type: ModuleType,
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum ModuleType {
-    Struct(Box<StructType>),
-    Enum(Box<EnumType>),
-}
+//************************************************
+// impls
+//************************************************
 
 impl ModuleType {
     fn decl_loc(&self) -> Loc {
@@ -113,37 +215,13 @@ impl ModuleType {
             }
         }
     }
-}
 
-#[derive(Debug, Clone)]
-pub(super) struct StructType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    field_info: FieldInfo,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct EnumType {
-    original_mident: ModuleIdent,
-    decl_loc: Loc,
-    arity: usize,
-    variants: UniqueMap<VariantName, VariantConstructor>,
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-pub(super) struct VariantConstructor {
-    original_variant_name: Name,
-    decl_loc: Loc,
-    field_info: FieldInfo,
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum FieldInfo {
-    Positional(usize),
-    Named(BTreeSet<Field>),
-    Empty,
+    fn datatype_kind_str(&self) -> String {
+        match self {
+            ModuleType::Struct(_) => "struct".to_string(),
+            ModuleType::Enum(_) => "enum".to_string(),
+        }
+    }
 }
 
 impl FieldInfo {
@@ -162,17 +240,6 @@ impl FieldInfo {
             FieldInfo::Empty => 0,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum ResolvedConstructor {
-    Struct(DatatypeName, Box<StructType>),
-    Variant(
-        Box<EnumType>,
-        VariantName,
-        /* variant decl loc */ Loc,
-        Box<FieldInfo>,
-    ),
 }
 
 impl ResolvedConstructor {
@@ -198,49 +265,29 @@ impl ResolvedConstructor {
     }
 }
 
-enum ResolvedFunction {
-    Builtin(N::BuiltinFunction),
-    Module(Box<ResolvedModuleFunction>),
-    Var(N::Var),
-    Unbound,
+impl std::fmt::Display for ResolvedModuleAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedModuleAccess::Function(_) => write!(f, "function"),
+            ResolvedModuleAccess::Constant(_) => write!(f, "constant"),
+            ResolvedModuleAccess::Datatype(ty) => write!(f, "{}", ty.datatype_kind_str()),
+        }
+    }
 }
 
-struct ResolvedModuleFunction {
-    // original names/locs are provided to preserve loc information if needed
-    module: ModuleIdent,
-    function: FunctionName,
-    ty_args: Option<Vec<N::Type>>,
+impl std::fmt::Display for ModuleAccessKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleAccessKind::Function => write!(f, "function"),
+            ModuleAccessKind::Constant => write!(f, "constant"),
+            ModuleAccessKind::Datatype => write!(f, "type"),
+        }
+    }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ResolveFunctionCase {
-    UseFun,
-    Call,
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum LoopType {
-    While,
-    Loop,
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum NominalBlockType {
-    Loop(LoopType),
-    Block,
-    LambdaReturn,
-    LambdaLoopCapture,
-}
-
-#[derive(PartialEq, Eq, Copy, Clone, Debug)]
-enum TypeAnnotation {
-    StructField,
-    VariantField,
-    ConstantSignature,
-    FunctionSignature,
-    MacroSignature,
-    Expression,
-}
+//**************************************************************************************************
+// Context
+//**************************************************************************************************
 
 pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
@@ -249,6 +296,7 @@ pub(super) struct Context<'env> {
     unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
+    modules: BTreeSet<ModuleIdent>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
@@ -260,6 +308,42 @@ pub(super) struct Context<'env> {
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
     pub current_package: Option<Symbol>,
+}
+
+macro_rules! resolve_from_module_access {
+    ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
+        if !$context.modules.contains($mident) {
+            $context.env.add_diag(diag!(
+                NameResolution::UnboundModule,
+                ($mident.loc, format!("Unbound module '{}'", $mident)),
+            ));
+            return None;
+        }
+        match $context.resolve_module_access($mident, $name, $expected_kind) {
+            Some($expected_pat) => $rhs,
+            Some(other) => {
+                let msg = format!(
+                    "Invalid module access. \
+                        Expected a {}, but found {} '{}' in module '{}'",
+                    $expected_kind, other, $name, $mident
+                );
+                $context
+                    .env
+                    .add_diag(diag!(NameResolution::UnboundModuleMember, ($loc, msg)));
+                None
+            }
+            None => {
+                let msg = format!(
+                    "Invalid module access. Unbound {} '{}' in module '{}'",
+                    $expected_kind, $name, $mident
+                );
+                $context
+                    .env
+                    .add_diag(diag!(NameResolution::UnboundModuleMember, ($loc, msg)));
+                None
+            }
+        }
+    }};
 }
 
 impl<'env> Context<'env> {
@@ -280,6 +364,7 @@ impl<'env> Context<'env> {
                         .filter(|(mident, _m)| !prog.modules.contains_key(mident))
                 }))
         };
+        let modules = all_modules().map(|(mident, _)| mident).collect();
         let scoped_types = all_modules()
             .map(|(mident, mdef)| {
                 let mems = {
@@ -377,6 +462,7 @@ impl<'env> Context<'env> {
         Self {
             env: compilation_env,
             current_module: None,
+            modules,
             scoped_types,
             scoped_functions,
             scoped_constants,
@@ -406,29 +492,58 @@ impl<'env> Context<'env> {
         resolved
     }
 
-    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
-        let types = match self.scoped_types.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match types.get(&n.value) {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound struct '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(module_type) => Some(module_type.clone()),
+    fn resolve_module_type_opt(&self, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
+        if let Some(types) = self.scoped_types.get(m) {
+            types.get(&n.value).cloned()
+        } else {
+            None
         }
+    }
+
+    fn resolve_function_opt(&self, m: &ModuleIdent, n: &Name) -> Option<FunctionName> {
+        self.scoped_functions
+            .get(m)
+            .and_then(|functions| functions.get(&n.value).map(|_| FunctionName(*n)))
+    }
+
+    fn resolve_constant_opt(&self, m: &ModuleIdent, n: &Name) -> Option<ConstantName> {
+        self.scoped_constants
+            .get(m)
+            .and_then(|constants| constants.get(&n.value).map(|_| ConstantName(*n)))
+    }
+
+    fn resolve_module_access(
+        &mut self,
+        m: &ModuleIdent,
+        n: &Name,
+        expected_access_type: ModuleAccessKind,
+    ) -> Option<ResolvedModuleAccess> {
+        let function_opt = self
+            .resolve_function_opt(m, n)
+            .map(ResolvedModuleAccess::Function);
+        let constant_opt = self
+            .resolve_constant_opt(m, n)
+            .map(ResolvedModuleAccess::Constant);
+        let datatype_opt = self
+            .resolve_module_type_opt(m, n)
+            .map(ResolvedModuleAccess::Datatype);
+        match expected_access_type {
+            ModuleAccessKind::Function => function_opt.or(datatype_opt).or(constant_opt),
+            ModuleAccessKind::Constant => constant_opt.or(datatype_opt).or(function_opt),
+            ModuleAccessKind::Datatype => datatype_opt.or(constant_opt).or(function_opt),
+        }
+    }
+
+    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
+        resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleAccess::Datatype(module_type),
+            Some(module_type),
+            ModuleAccessKind::Datatype
+        )
     }
 
     fn resolve_module_function(
@@ -437,58 +552,15 @@ impl<'env> Context<'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<FunctionName> {
-        let functions = match self.scoped_functions.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match functions.get(&n.value).cloned() {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound function '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(_) => Some(FunctionName(*n)),
-        }
-    }
-
-    fn resolve_module_constant(
-        &mut self,
-        loc: Loc,
-        m: &ModuleIdent,
-        n: Name,
-    ) -> Option<ConstantName> {
-        let constants = match self.scoped_constants.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match constants.get(&n.value).cloned() {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound constant '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(_) => Some(ConstantName(n)),
-        }
+        resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleAccess::Function(name),
+            Some(name),
+            ModuleAccessKind::Function
+        )
     }
 
     pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
@@ -731,6 +803,19 @@ impl<'env> Context<'env> {
         }
     }
 
+    fn resolves_to_constant(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+        use E::ModuleAccess_ as EA;
+        match ma_ {
+            EA::Name(_) => false, // constants are expanded during naming
+            EA::ModuleAccess(m, n) => self
+                .scoped_constants
+                .get(m)
+                .and_then(|constants| constants.get(&n.value))
+                .is_some(),
+            EA::Variant(_, _) => false,
+        }
+    }
+
     fn resolve_constant(
         &mut self,
         sp!(loc, ma_): E::ModuleAccess,
@@ -744,18 +829,92 @@ impl<'env> Context<'env> {
                 ));
                 None
             }
-            EA::ModuleAccess(m, n) => match self.resolve_module_constant(loc, &m, n) {
-                None => {
-                    assert!(self.env.has_errors());
-                    None
+            EA::ModuleAccess(m, n) => {
+                if !self.modules.contains(&m) {
+                    self.env.add_diag(diag!(
+                        NameResolution::UnboundModule,
+                        (m.loc, format!("Unbound module '{m}'")),
+                    ));
+                    return None;
                 }
-                Some(cname) => Some((m, cname)),
-            },
+                match self.resolve_module_access(&m, &n, ModuleAccessKind::Constant) {
+                    Some(ResolvedModuleAccess::Constant(cname)) => Some((m, cname)),
+                    Some(ResolvedModuleAccess::Datatype(module_type)) => {
+                        match module_type {
+                            ModuleType::Struct(stype) => {
+                                let tyargs = arity_string(stype.arity);
+                                let msg = format!(
+                                    "Expected local or constant, \
+                                     found struct '{n}' in module '{m}' instead."
+                                );
+                                let mut diag = diag!(NameResolution::InvalidPosition, (loc, msg));
+                                if stype.field_info.is_positional() {
+                                    diag.add_note(format!(
+                                        "Structs with positional arguments must be written as \
+                                        '{n}{tyargs}( ... )'"
+                                    ));
+                                } else {
+                                    diag.add_note(format!(
+                                        "Struct with named arguments must be written as \
+                                        '{n}{tyargs} {{ ... }}'"
+                                    ));
+                                }
+                                self.env.add_diag(diag);
+                            }
+                            ModuleType::Enum(etype) => {
+                                let tyargs = arity_string(etype.arity);
+                                let msg = format!(
+                                    "Expected local or constant, \
+                                     found enum '{n}' in module '{m}' instead."
+                                );
+                                let mut diag =
+                                    diag!(NameResolution::UnboundModuleMember, (loc, msg));
+                                if let Some((_, vname, ctor)) = etype.variants.iter().next() {
+                                    if ctor.field_info.is_empty() {
+                                        diag.add_note(format!(
+                                            "Enum variants with no arguments must be \
+                                            written as '{n}::{vname}{tyargs}'"
+                                        ));
+                                    } else if ctor.field_info.is_positional() {
+                                        diag.add_note(format!(
+                                            "Enum variants with positional arguments must be \
+                                            written as '{n}::{vname}( ... ){tyargs}'"
+                                        ));
+                                    } else {
+                                        diag.add_note(format!(
+                                            "Enum variants with named arguments must be \
+                                            written as '{n}::{vname}{tyargs} {{ ... }}'"
+                                        ));
+                                    }
+                                    self.env.add_diag(diag);
+                                }
+                            }
+                        }
+                        None
+                    }
+                    Some(ResolvedModuleAccess::Function(_)) => {
+                        let msg = format!(
+                            "Expected local or constant, \
+                             found function '{n}' in module '{m}' instead."
+                        );
+                        let mut diag = diag!(NameResolution::UnboundModuleMember, (loc, msg));
+                        diag.add_note("Functions should be called as '{n}( ... )'");
+                        self.env.add_diag(diag);
+                        None
+                    }
+                    None => {
+                        let msg = format!(
+                            "Invalid module access. Unbound constant '{n}' in module '{m}'"
+                        );
+                        self.env
+                            .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
+                        None
+                    }
+                }
+            }
             EA::Variant(_, _) => {
-                self.env.add_diag(diag!(
-                    NameResolution::NamePositionMismatch,
-                    (loc, "Invalid variant. Expected a constant name".to_string()),
-                ));
+                self.env
+                    .add_diag(ice!((loc, "Treated variant as a constant during naming")));
                 None
             }
         }
@@ -1033,6 +1192,14 @@ impl std::fmt::Display for NominalBlockType {
                 NominalBlockType::LambdaReturn | NominalBlockType::LambdaLoopCapture => "lambda",
             }
         )
+    }
+}
+
+fn arity_string(arity: usize) -> &'static str {
+    match arity {
+        0 => "",
+        1 => "<T>",
+        _ => "<T0,...>",
     }
 }
 
@@ -1981,22 +2148,18 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
     let ne_ = match e_ {
         EE::Unit { trailing } => NE::Unit { trailing },
         EE::Value(val) => NE::Value(val),
-        EE::Name(sp!(aloc, E::ModuleAccess_::Name(v)), None) => {
-            if is_constant_name(&v.value) {
-                access_constant(context, sp(aloc, E::ModuleAccess_::Name(v)))
-            } else {
-                match context.resolve_local(
-                    eloc,
-                    NameResolution::UnboundVariable,
-                    |name| format!("Unbound variable '{name}'"),
-                    v,
-                ) {
-                    None => {
-                        debug_assert!(context.env.has_errors());
-                        NE::UnresolvedError
-                    }
-                    Some(nv) => NE::Var(nv),
+        EE::Name(sp!(_, E::ModuleAccess_::Name(v)), None) if !is_constant_name(&v.value) => {
+            match context.resolve_local(
+                eloc,
+                NameResolution::UnboundVariable,
+                |name| format!("Unbound variable '{name}'"),
+                v,
+            ) {
+                None => {
+                    debug_assert!(context.env.has_errors());
+                    NE::UnresolvedError
                 }
+                Some(nv) => NE::Var(nv),
             }
         }
         EE::Name(ma @ sp!(_, E::ModuleAccess_::Variant(_, _)), etys_opt) => {
@@ -2303,7 +2466,12 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                             FeatureGate::CleverAssertions,
                             bloc,
                         );
-                        nes.value.push(sp(bloc, NE::ErrorConstant));
+                        nes.value.push(sp(
+                            bloc,
+                            NE::ErrorConstant {
+                                line_number_loc: bloc,
+                            },
+                        ));
                     }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
                 }
@@ -2915,7 +3083,7 @@ fn unique_pattern_binders(
                 }
                 left_bindings
             }
-            EP::HeadConstructor(_, _) | EP::Literal(_) | EP::ErrorPat => BTreeMap::new(),
+            EP::ModuleAccessName(_, _) | EP::Literal(_) | EP::ErrorPat => BTreeMap::new(),
         }
     }
 
@@ -3057,28 +3225,48 @@ fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::
                 }
             }
         }
-        EP::HeadConstructor(name, etys_opt) => {
-            let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
+        EP::ModuleAccessName(name, etys_opt) => {
+            let resolves_to_constant = context.resolves_to_constant(&name);
+            let resolves_to_datatype = context.resolves_to_datatype(&name);
+            if resolves_to_constant && resolves_to_datatype {
+                // If this happened, we should have already thrown an error about it in
+                // expansion alias map construction.
                 assert!(context.env.has_errors());
                 return Box::new(sp(ploc, NP::ErrorPat));
-            };
-            let tys_opt = opt_types_with_arity_check(
-                context,
-                TypeAnnotation::Expression,
-                ploc,
-                || format!("{}::{}", &m, &n),
-                etys_opt,
-                ty.type_arity(),
-            );
-
-            match ty {
-                ResolvedConstructor::Struct(_name, _stype) => {
-                    // No need to chck is_empty / is_positional because typing will report the errors.
-                    NP::Struct(m, n, tys_opt, UniqueMap::new())
+            } else if resolves_to_constant {
+                let Some((m, n)) = context.resolve_constant(name) else {
+                    unreachable!()
+                };
+                if etys_opt.is_some() {
+                    context.env.add_diag(diag!(
+                        NameResolution::TooManyTypeArguments,
+                        (ploc, "Constants in patterns do not take type arguments")
+                    ));
                 }
-                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
-                    // No need to chck is_empty / is_positional because typing will report the errors.
-                    NP::Variant(m, n, variant, tys_opt, UniqueMap::new())
+                NP::Constant(m, n)
+            } else {
+                let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
+                    assert!(context.env.has_errors());
+                    return Box::new(sp(ploc, NP::ErrorPat));
+                };
+                let tys_opt = opt_types_with_arity_check(
+                    context,
+                    TypeAnnotation::Expression,
+                    ploc,
+                    || format!("{}::{}", &m, &n),
+                    etys_opt,
+                    ty.type_arity(),
+                );
+
+                match ty {
+                    ResolvedConstructor::Struct(_name, _stype) => {
+                        // No need to chck is_empty / is_positional because typing will report the errors.
+                        NP::Struct(m, n, tys_opt, UniqueMap::new())
+                    }
+                    ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                        // No need to chck is_empty / is_positional because typing will report the errors.
+                        NP::Variant(m, n, variant, tys_opt, UniqueMap::new())
+                    }
                 }
             }
         }
@@ -3563,7 +3751,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
-        | N::Exp_::ErrorConstant
+        | N::Exp_::ErrorConstant { .. }
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
@@ -3675,7 +3863,7 @@ fn remove_unused_bindings_pattern(
 ) {
     use N::MatchPattern_ as NP;
     match pat_ {
-        NP::Literal(_) | NP::Wildcard | NP::ErrorPat => (),
+        NP::Constant(_, _) | NP::Literal(_) | NP::Wildcard | NP::ErrorPat => (),
         NP::Variant(_, _, _, _, fields) => {
             for (_, _, (_, pat)) in fields {
                 remove_unused_bindings_pattern(context, used, pat)

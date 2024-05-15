@@ -16,17 +16,16 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
-use sui_types::effects::TransactionEvents;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::messages_consensus::ConsensusTransaction;
+use sui_types::messages_grpc::{HandleCertificateRequestV3, HandleCertificateResponseV3};
 use sui_types::messages_grpc::{
     HandleCertificateResponseV2, HandleTransactionResponse, ObjectInfoRequest, ObjectInfoResponse,
     SubmitCertificateResponse, SystemStateRequest, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::multiaddr::Multiaddr;
 use sui_types::sui_system_state::SuiSystemState;
-use sui_types::traffic_control::ServiceResponse;
-use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig};
-use sui_types::{effects::TransactionEffectsAPI, message_envelope::Message};
+use sui_types::traffic_control::{PolicyConfig, RemoteFirewallConfig, Weight};
 use sui_types::{error::*, transaction::*};
 use sui_types::{
     fp_ensure,
@@ -38,6 +37,7 @@ use tap::TapFallible;
 use tokio::task::JoinHandle;
 use tracing::{error, error_span, info, Instrument};
 
+use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{ConsensusAdapter, ConsensusAdapterMetrics},
@@ -164,6 +164,9 @@ pub struct ValidatorServiceMetrics {
     num_rejected_cert_in_epoch_boundary: IntCounter,
     num_rejected_tx_during_overload: IntCounterVec,
     num_rejected_cert_during_overload: IntCounterVec,
+    connection_ip_not_found: IntCounter,
+    forwarded_header_parse_error: IntCounter,
+    forwarded_header_invalid: IntCounter,
 }
 
 impl ValidatorServiceMetrics {
@@ -233,6 +236,24 @@ impl ValidatorServiceMetrics {
                 "validator_service_num_rejected_cert_during_overload",
                 "Number of rejected transaction certificate due to system overload",
                 &["error_type"],
+                registry,
+            )
+            .unwrap(),
+            connection_ip_not_found: register_int_counter_with_registry!(
+                "validator_service_connection_ip_not_found",
+                "Number of times connection IP was not extractable from request",
+                registry,
+            )
+            .unwrap(),
+            forwarded_header_parse_error: register_int_counter_with_registry!(
+                "validator_service_forwarded_header_parse_error",
+                "Number of times x-forwarded-for header could not be parsed",
+                registry,
+            )
+            .unwrap(),
+            forwarded_header_invalid: register_int_counter_with_registry!(
+                "validator_service_forwarded_header_invalid",
+                "Number of times x-forwarded-for header was invalid",
                 registry,
             )
             .unwrap(),
@@ -307,33 +328,12 @@ impl ValidatorService {
             traffic_controller: _,
         } = self.clone();
         let transaction = request.into_inner();
-
         let epoch_store = state.load_epoch_store_one_call_per_task();
 
-        transaction.validity_check(epoch_store.protocol_config())?;
-
-        if !epoch_store.protocol_config().zklogin_auth() && transaction.has_zklogin_sig() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "zklogin is not enabled on this network".to_string(),
-            }
-            .into());
-        }
-
-        if !epoch_store.protocol_config().supports_upgraded_multisig()
-            && transaction.has_upgraded_multisig()
-        {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "upgraded multisig format not enabled on this network".to_string(),
-            }
-            .into());
-        }
-
-        if !epoch_store.randomness_state_enabled() && transaction.is_randomness_reader() {
-            return Err(SuiError::UnsupportedFeatureError {
-                error: "randomness is not enabled on this network".to_string(),
-            }
-            .into());
-        }
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        Self::transaction_validity_check(&epoch_store, transaction.data())?;
 
         // When authority is overloaded and decide to reject this tx, we still lock the object
         // and ask the client to retry in the future. This is because without locking, the
@@ -393,31 +393,20 @@ impl ValidatorService {
         Ok(tonic::Response::new(info))
     }
 
-    // TODO: reject certificate if TransactionManager or Narwhal is backlogged.
     async fn handle_certificate(
         &self,
-        request: tonic::Request<CertifiedTransaction>,
+        request: HandleCertificateRequestV3,
+        epoch_store: &Arc<AuthorityPerEpochStore>,
         wait_for_effects: bool,
-    ) -> Result<Option<HandleCertificateResponseV2>, tonic::Status> {
-        let epoch_store = self.state.load_epoch_store_one_call_per_task();
-        let certificate = request.into_inner();
+    ) -> Result<Option<HandleCertificateResponseV3>, tonic::Status> {
+        let certificate = request.certificate;
 
         // Validate if cert can be executed
         // Fullnode does not serve handle_certificate call.
         fp_ensure!(
-            !self.state.is_fullnode(&epoch_store),
+            !self.state.is_fullnode(epoch_store),
             SuiError::FullNodeCantHandleCertificate.into()
         );
-
-        // CRITICAL! Validators should never sign an external system transaction.
-        fp_ensure!(
-            !certificate.is_system_tx(),
-            SuiError::InvalidSystemTransaction.into()
-        );
-
-        certificate
-            .data()
-            .validity_check(epoch_store.protocol_config())?;
 
         let shared_object_tx = certificate.contains_shared_object();
 
@@ -441,18 +430,24 @@ impl ValidatorService {
         let tx_digest = *certificate.digest();
         if let Some(signed_effects) = self
             .state
-            .get_signed_effects_and_maybe_resign(&tx_digest, &epoch_store)?
+            .get_signed_effects_and_maybe_resign(&tx_digest, epoch_store)?
         {
-            let events = if let Some(digest) = signed_effects.events_digest() {
-                self.state.get_transaction_events(digest)?
+            let events = if request.include_events {
+                if let Some(digest) = signed_effects.events_digest() {
+                    Some(self.state.get_transaction_events(digest)?)
+                } else {
+                    None
+                }
             } else {
-                TransactionEvents::default()
+                None
             };
 
-            return Ok(Some(HandleCertificateResponseV2 {
-                signed_effects: signed_effects.into_inner(),
+            return Ok(Some(HandleCertificateResponseV3 {
+                effects: signed_effects.into_inner(),
                 events,
-                fastpath_input_objects: vec![], // unused field
+                input_objects: None,
+                output_objects: None,
+                auxiliary_data: None,
             }));
         }
 
@@ -504,7 +499,7 @@ impl ValidatorService {
                 self.consensus_adapter.submit(
                     transaction,
                     Some(&reconfiguration_lock),
-                    &epoch_store,
+                    epoch_store,
                 )?;
                 // Do not wait for the result, because the transaction might have already executed.
                 // Instead, check or wait for the existence of certificate effects below.
@@ -518,7 +513,7 @@ impl ValidatorService {
             // even when we are not returning effects to user
             if !certificate.contains_shared_object() {
                 self.state
-                    .enqueue_certificates_for_execution(vec![certificate.clone()], &epoch_store);
+                    .enqueue_certificates_for_execution(vec![certificate.clone()], epoch_store);
             }
             return Ok(None);
         }
@@ -527,17 +522,34 @@ impl ValidatorService {
         // the execution results if it contains shared objects.
         let effects = self
             .state
-            .execute_certificate(&certificate, &epoch_store)
+            .execute_certificate(&certificate, epoch_store)
             .await?;
-        let events = if let Some(event_digest) = effects.events_digest() {
-            self.state.get_transaction_events(event_digest)?
+        let events = if request.include_events {
+            if let Some(digest) = effects.events_digest() {
+                Some(self.state.get_transaction_events(digest)?)
+            } else {
+                None
+            }
         } else {
-            TransactionEvents::default()
+            None
         };
-        Ok(Some(HandleCertificateResponseV2 {
-            signed_effects: effects.into_inner(),
+
+        let input_objects = request
+            .include_input_objects
+            .then(|| self.state.get_transaction_input_objects(&effects))
+            .and_then(Result::ok);
+
+        let output_objects = request
+            .include_output_objects
+            .then(|| self.state.get_transaction_output_objects(&effects))
+            .and_then(Result::ok);
+
+        Ok(Some(HandleCertificateResponseV3 {
+            effects: effects.into_inner(),
             events,
-            fastpath_input_objects: vec![], // unused field
+            input_objects,
+            output_objects,
+            auxiliary_data: None, // We don't have any aux data generated presently
         }))
     }
 }
@@ -554,25 +566,79 @@ impl ValidatorService {
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<SubmitCertificateResponse>, tonic::Status> {
-        // The call to digest() assumes the transaction is valid, so we need to verify it first.
-        request.get_ref().verify_user_input()?;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let certificate = request.into_inner();
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        // We need to check this first because we haven't verified the cert signature.
+        Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
-        let span = error_span!("submit_certificate", tx_digest = ?request.get_ref().digest());
-        self.handle_certificate(request, false)
+        let span = error_span!("submit_certificate", tx_digest = ?certificate.digest());
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        self.handle_certificate(request, &epoch_store, false)
             .instrument(span)
             .await
-            .map(|executed| tonic::Response::new(SubmitCertificateResponse { executed }))
+            .map(|executed| {
+                tonic::Response::new(SubmitCertificateResponse {
+                    executed: executed.map(Into::into),
+                })
+            })
     }
 
     async fn handle_certificate_v2_impl(
         &self,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
-        // The call to digest() assumes the transaction is valid, so we need to verify it first.
-        request.get_ref().verify_user_input()?;
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let certificate = request.into_inner();
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        // We need to check this first because we haven't verified the cert signature.
+        Self::transaction_validity_check(&epoch_store, certificate.data())?;
 
-        let span = error_span!("handle_certificate", tx_digest = ?request.get_ref().digest());
-        self.handle_certificate(request, true)
+        let span = error_span!("handle_certificate", tx_digest = ?certificate.digest());
+        let request = HandleCertificateRequestV3 {
+            certificate,
+            include_events: true,
+            include_input_objects: false,
+            include_output_objects: false,
+            include_auxiliary_data: false,
+        };
+        self.handle_certificate(request, &epoch_store, true)
+            .instrument(span)
+            .await
+            .map(|v| {
+                tonic::Response::new(
+                    v.expect(
+                        "handle_certificate should not return none with wait_for_effects=true",
+                    )
+                    .into(),
+                )
+            })
+    }
+
+    async fn handle_certificate_v3_impl(
+        &self,
+        request: tonic::Request<HandleCertificateRequestV3>,
+    ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
+        let epoch_store = self.state.load_epoch_store_one_call_per_task();
+        let request = request.into_inner();
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check before anything else, because the transaction
+        // may not even be valid to access for any other checks.
+        // We need to check this first because we haven't verified the cert signature.
+        Self::transaction_validity_check(&epoch_store, request.certificate.data())?;
+        let span = error_span!("handle_certificate_v3", tx_digest = ?request.certificate.digest());
+
+        self.handle_certificate(request, &epoch_store, true)
             .instrument(span)
             .await
             .map(|v| {
@@ -582,6 +648,37 @@ impl ValidatorService {
                     ),
                 )
             })
+    }
+
+    fn transaction_validity_check(
+        epoch_store: &Arc<AuthorityPerEpochStore>,
+        transaction: &SenderSignedData,
+    ) -> SuiResult<()> {
+        let config = epoch_store.protocol_config();
+        // CRITICAL: DO NOT ADD ANYTHING BEFORE THIS CHECK.
+        // This must be the first thing to check because the transaction may not even be valid to
+        // access for any other checks.
+        transaction.validity_check(config, epoch_store.epoch())?;
+
+        if !config.zklogin_auth() && transaction.has_zklogin_sig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "zklogin is not enabled on this network".to_string(),
+            });
+        }
+
+        if !config.supports_upgraded_multisig() && transaction.has_upgraded_multisig() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "upgraded multisig format not enabled on this network".to_string(),
+            });
+        }
+
+        if !epoch_store.randomness_state_enabled() && transaction.uses_randomness() {
+            return Err(SuiError::UnsupportedFeatureError {
+                error: "randomness is not enabled on this network".to_string(),
+            });
+        }
+
+        Ok(())
     }
 
     async fn object_info_impl(
@@ -638,7 +735,9 @@ impl ValidatorService {
         proxy_ip: Option<SocketAddr>,
     ) -> Result<(), tonic::Status> {
         if let Some(traffic_controller) = &self.traffic_controller {
-            if !traffic_controller.check(connection_ip, proxy_ip).await {
+            let connection = connection_ip.map(|ip| ip.ip());
+            let proxy = proxy_ip.map(|ip| ip.ip());
+            if !traffic_controller.check(connection, proxy).await {
                 // Entity in blocklist
                 Err(tonic::Status::from_error(SuiError::TooManyRequests.into()))
             } else {
@@ -655,17 +754,17 @@ impl ValidatorService {
         proxy_ip: Option<SocketAddr>,
         response: &Result<tonic::Response<T>, tonic::Status>,
     ) {
-        let result: SuiResult = if let Err(status) = response {
-            Err(SuiError::from(status.clone()))
+        let error: Option<SuiError> = if let Err(status) = response {
+            Some(SuiError::from(status.clone()))
         } else {
-            Ok(())
+            None
         };
 
         if let Some(traffic_controller) = self.traffic_controller.clone() {
             traffic_controller.tally(TrafficTally {
                 connection_ip: connection_ip.map(|ip| ip.ip()),
                 proxy_ip: proxy_ip.map(|ip| ip.ip()),
-                result: ServiceResponse::Validator(result),
+                error_weight: error.map(normalize).unwrap_or(Weight::zero()),
                 timestamp: SystemTime::now(),
             })
         }
@@ -684,6 +783,20 @@ fn make_tonic_request_for_testing<T>(message: T) -> tonic::Request<T> {
     request
 }
 
+// TODO: refine error matching here
+fn normalize(err: SuiError) -> Weight {
+    match err {
+        SuiError::UserInputError { .. }
+        | SuiError::InvalidSignature { .. }
+        | SuiError::SignerSignatureAbsent { .. }
+        | SuiError::SignerSignatureNumberMismatch { .. }
+        | SuiError::IncorrectSigner { .. }
+        | SuiError::UnknownSigner { .. }
+        | SuiError::WrongEpoch { .. } => Weight::one(),
+        _ => Weight::zero(),
+    }
+}
+
 /// Implements generic pre- and post-processing. Since this is on the critical
 /// path, any heavy lifting should be done in a separate non-blocking task
 /// unless it is necessary to override the return value.
@@ -695,19 +808,18 @@ macro_rules! handle_with_decoration {
         // throttle a fullnode, or an end user is running a local quorum driver.
         let connection_ip: Option<SocketAddr> = $request.remote_addr();
 
-        // This should never happen except perhaps in simtest or some other non-standard
-        // environment. If we are seeing this, we should investigate
-        // TODO: add metric here
+        // We will hit this case if the IO type used does not
+        // implement Connected or when using a unix domain socket.
+        // TODO: once we have confirmed that no legitimate traffic
+        // is hitting this case, we should reject such requests that
+        // hit this case.
         if connection_ip.is_none() {
-            if cfg!(all(test, not(msim))) {
+            if cfg!(msim) {
+                // Ignore the error from simtests.
+            } else if cfg!(test) {
                 panic!("Failed to get remote address from request");
             } else {
-                // We will hit this case if the IO type used does not
-                // implement Connected or when using a unix domain socket.
-                // TODO: once we have confirmed that no legitimate traffic
-                // is hitting this case, we should reject such requests that
-                // hit this case.
-                // TODO(william) add metric here
+                $self.metrics.connection_ip_not_found.inc();
                 error!("Failed to get remote address from request");
             }
         }
@@ -718,22 +830,21 @@ macro_rules! handle_with_decoration {
                     Ok(ip) => match ip.parse() {
                         Ok(ret) => Some(ret),
                         Err(e) => {
-                            // TODO(william) add metric here
+                            $self.metrics.forwarded_header_parse_error.inc();
                             error!("Failed to parse x-forwarded-for header value to SocketAddr: {:?}", e);
-                            return Err(tonic::Status::internal("Failed to parse tonic request metadata"));
+                            None
                         }
                     },
                     Err(e) => {
-                        // TODO(william) add metric here
                         // TODO: once we have confirmed that no legitimate traffic
                         // is hitting this case, we should reject such requests that
                         // hit this case.
+                        $self.metrics.forwarded_header_invalid.inc();
                         error!("Invalid UTF-8 in x-forwarded-for header: {:?}", e);
-                        return Err(tonic::Status::internal("Invalid tonic request metadata"));
+                        None
                     }
                 }
             } else {
-                // TODO(william) add metric here
                 None
             };
 
@@ -788,6 +899,13 @@ impl Validator for ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<HandleCertificateResponseV2>, tonic::Status> {
         handle_with_decoration!(self, handle_certificate_v2_impl, request)
+    }
+
+    async fn handle_certificate_v3(
+        &self,
+        request: tonic::Request<HandleCertificateRequestV3>,
+    ) -> Result<tonic::Response<HandleCertificateResponseV3>, tonic::Status> {
+        handle_with_decoration!(self, handle_certificate_v3_impl, request)
     }
 
     async fn object_info(

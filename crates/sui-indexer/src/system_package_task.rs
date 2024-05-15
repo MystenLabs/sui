@@ -3,6 +3,8 @@
 
 use std::time::Duration;
 
+use crate::store::diesel_macro::*;
+use diesel::r2d2::R2D2Connection;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 use sui_types::SYSTEM_PACKAGE_ADDRESSES;
 use tokio_util::sync::CancellationToken;
@@ -11,18 +13,18 @@ use crate::{indexer_reader::IndexerReader, schema::epochs};
 
 /// Background task responsible for evicting system packages from the package resolver's cache after
 /// detecting an epoch boundary.
-pub(crate) struct SystemPackageTask {
+pub(crate) struct SystemPackageTask<T: R2D2Connection + 'static> {
     /// Holds the DB connection and also the package resolver to evict packages from.
-    reader: IndexerReader,
+    reader: IndexerReader<T>,
     /// Signal to cancel the task.
     cancel: CancellationToken,
     /// Interval to sleep for between checks.
     interval: Duration,
 }
 
-impl SystemPackageTask {
+impl<T: R2D2Connection> SystemPackageTask<T> {
     pub(crate) fn new(
-        reader: IndexerReader,
+        reader: IndexerReader<T>,
         cancel: CancellationToken,
         interval: Duration,
     ) -> Self {
@@ -44,14 +46,13 @@ impl SystemPackageTask {
                     return;
                 }
                 _ = tokio::time::sleep(self.interval) => {
-                    let next_epoch: i64 = match self.reader.spawn_blocking(move |this| {
-                        this.run_query(|conn| {
+                    let pool = self.reader.get_pool();
+                    let next_epoch = match run_query_async!(&pool, move |conn| {
                             epochs::dsl::epochs
                                 .select(epochs::dsl::epoch)
                                 .order_by(epochs::epoch.desc())
-                                .first(conn)
-                        })
-                    }).await {
+                                .first::<i64>(conn)
+                        }) {
                         Ok(epoch) => epoch,
                         Err(e) => {
                             tracing::error!("Failed to fetch latest epoch: {:?}", e);

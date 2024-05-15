@@ -416,6 +416,7 @@ type AvailableRange {
 }
 
 type ServiceConfig {
+  availableVersions: [String!]
   enabledFeatures: [Feature!]
   isEnabled(feature: Feature!): Boolean!
 

@@ -201,6 +201,12 @@ export type AddressCoinsArgs = {
 
 
 /** The 32-byte address that is an account address (corresponding to a public key). */
+export type AddressDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/** The 32-byte address that is an account address (corresponding to a public key). */
 export type AddressObjectsArgs = {
   after?: InputMaybe<Scalars['String']['input']>;
   before?: InputMaybe<Scalars['String']['input']>;
@@ -442,11 +448,6 @@ export type Checkpoint = {
   digest: Scalars['String']['output'];
   /** The epoch this checkpoint is part of. */
   epoch?: Maybe<Epoch>;
-  /**
-   * A commitment by the committee at the end of epoch on the contents of the live object set at
-   * that time. This can be used to verify state snapshots.
-   */
-  liveObjectSetDigest?: Maybe<Scalars['String']['output']>;
   /** The total number of transaction blocks in the network by the end of this checkpoint. */
   networkTotalTransactions?: Maybe<Scalars['Int']['output']>;
   /** The digest of the checkpoint at the previous sequence number. */
@@ -639,6 +640,12 @@ export type CoinCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** Some 0x2::coin::Coin Move object. */
+export type CoinDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -863,6 +870,12 @@ export type CoinMetadataCoinsArgs = {
 
 
 /** The metadata for a coin type. */
+export type CoinMetadataDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/** The metadata for a coin type. */
 export type CoinMetadataDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -972,6 +985,11 @@ export type DisplayEntry = {
   /** The template string for the key with placeholder values substituted. */
   value?: Maybe<Scalars['String']['output']>;
 };
+
+export enum DomainFormat {
+  At = 'AT',
+  Dot = 'DOT'
+}
 
 export type DryRunEffect = {
   __typename?: 'DryRunEffect';
@@ -1141,6 +1159,11 @@ export type Epoch = {
    */
   fundSize?: Maybe<Scalars['BigInt']['output']>;
   /**
+   * A commitment by the committee at the end of epoch on the contents of the live object set at
+   * that time. This can be used to verify state snapshots.
+   */
+  liveObjectSetDigest?: Maybe<Scalars['String']['output']>;
+  /**
    * The difference between the fund inflow and outflow, representing
    * the net amount of storage fees accumulated in this epoch.
    */
@@ -1182,6 +1205,8 @@ export type Epoch = {
   totalStakeRewards?: Maybe<Scalars['BigInt']['output']>;
   /** The amount added to total gas fees to make up the total stake rewards. */
   totalStakeSubsidies?: Maybe<Scalars['BigInt']['output']>;
+  /** The total number of transaction blocks in this epoch. */
+  totalTransactions?: Maybe<Scalars['Int']['output']>;
   /** The epoch's corresponding transaction blocks. */
   transactionBlocks: TransactionBlockConnection;
   /** Validator related properties, including the active validators. */
@@ -1588,6 +1613,17 @@ export type IOwnerCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * Interface implemented by GraphQL types representing entities that can own objects. Object owners
+ * are identified by an address which can represent either the public key of an account or another
+ * object. The same address can only refer to an account or an object, never both, but it is not
+ * possible to know which up-front.
+ */
+export type IOwnerDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -2022,6 +2058,15 @@ export type MoveObjectCoinsArgs = {
  * The representation of an object as a Move Object, which exposes additional information
  * (content, module that governs it, version, is transferrable, etc.) about this object.
  */
+export type MoveObjectDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/**
+ * The representation of an object as a Move Object, which exposes additional information
+ * (content, module that governs it, version, is transferrable, etc.) about this object.
+ */
 export type MoveObjectDynamicFieldArgs = {
   name: DynamicFieldName;
 };
@@ -2264,6 +2309,15 @@ export type MovePackageCoinsArgs = {
  * A MovePackage is a kind of Move object that represents code that has been published on chain.
  * It exposes information about its modules, type definitions, functions, and dependencies.
  */
+export type MovePackageDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
+};
+
+
+/**
+ * A MovePackage is a kind of Move object that represents code that has been published on chain.
+ * It exposes information about its modules, type definitions, functions, and dependencies.
+ */
 export type MovePackageModuleArgs = {
   name: Scalars['String']['input'];
 };
@@ -2456,14 +2510,18 @@ export type Mutation = {
   /**
    * Execute a transaction, committing its effects on chain.
    *
-   * `txBytes` is a `TransactionData` struct that has been BCS-encoded
-   * and then Base64-encoded.
-   * `signatures` are a list of `flag || signature || pubkey` bytes,
-   * Base64-encoded.
+   * - `txBytes` is a `TransactionData` struct that has been BCS-encoded and then Base64-encoded.
+   * - `signatures` are a list of `flag || signature || pubkey` bytes, Base64-encoded.
    *
-   * Waits until the transaction has been finalized on chain to return
-   * its transaction digest.  If the transaction could not be
-   * finalized, returns the errors that prevented it, instead.
+   * Waits until the transaction has reached finality on chain to return its transaction digest,
+   * or returns the error that prevented finality if that was not possible. A transaction is
+   * final when its effects are guaranteed on chain (it cannot be revoked).
+   *
+   * There may be a delay between transaction finality and when GraphQL requests (including the
+   * request that issued the transaction) reflect its effects. As a result, queries that depend
+   * on indexing the state of the chain (e.g. contents of output objects, address-level balance
+   * information at the time of the transaction), must wait for indexing to catch up by polling
+   * for the transaction digest using `Query.transactionBlock`.
    */
   executeTransactionBlock: ExecutionResult;
 };
@@ -2609,6 +2667,16 @@ export type ObjectCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * An object in Sui is a package (set of Move bytecode modules) or object (typed data structure
+ * with fields) with additional metadata detailing its id, version, transaction digest, owner
+ * field indicating how this object can be accessed.
+ */
+export type ObjectDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -2785,14 +2853,12 @@ export type ObjectKey = {
 };
 
 export enum ObjectKind {
+  /** The object is fetched from the index. */
+  Indexed = 'INDEXED',
   /**
-   * The object is referenced at some version, and thus is fetched from the snapshot or
-   * historical objects table.
+   * The object is loaded from serialized data, such as the contents of a transaction that hasn't
+   * been indexed yet.
    */
-  Historical = 'HISTORICAL',
-  /** The object is currently live and is not deleted or wrapped. */
-  Live = 'LIVE',
-  /** The object is loaded from serialized data, such as the contents of a transaction. */
   NotIndexed = 'NOT_INDEXED',
   /**
    * The object is deleted or wrapped and only partial information can be loaded from the
@@ -2935,6 +3001,16 @@ export type OwnerCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/**
+ * An Owner is an entity that can own an object. Each Owner is identified by a SuiAddress which
+ * represents either an Address (corresponding to a public key of an account) or an Object, but
+ * never both (it is not known up-front whether a given Owner is an Address or an Object).
+ */
+export type OwnerDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -3250,6 +3326,20 @@ export type Query = {
    * Fails if the type is malformed.
    */
   type: MoveType;
+  /**
+   * Verify a zkLogin signature based on the provided transaction or personal message
+   * based on current epoch, chain id, and latest JWKs fetched on-chain. If the
+   * signature is valid, the function returns a `ZkLoginVerifyResult` with success as
+   * true and an empty list of errors. If the signature is invalid, the function returns
+   * a `ZkLoginVerifyResult` with success as false with a list of errors.
+   *
+   * - `bytes` is either the personal message in raw bytes or transaction data bytes in
+   * BCS-encoded and then Base64-encoded.
+   * - `signature` is a serialized zkLogin signature that is Base64-encoded.
+   * - `intentScope` is an enum that specifies the intent scope to be used to parse bytes.
+   * - `author` is the address of the signer of the transaction or personal msg.
+   */
+  verifyZkloginSignature: ZkLoginVerifyResult;
 };
 
 
@@ -3352,6 +3442,14 @@ export type QueryTransactionBlocksArgs = {
 
 export type QueryTypeArgs = {
   type: Scalars['String']['input'];
+};
+
+
+export type QueryVerifyZkloginSignatureArgs = {
+  author: Scalars['SuiAddress']['input'];
+  bytes: Scalars['Base64']['input'];
+  intentScope: ZkLoginIntentScope;
+  signature: Scalars['Base64']['input'];
 };
 
 export type RandomnessStateCreateTransaction = {
@@ -3671,6 +3769,8 @@ export type StakedSui = IMoveObject & IObject & IOwner & {
   objects: MoveObjectConnection;
   /** The owner type of this object: Immutable, Shared, Parent, Address */
   owner?: Maybe<ObjectOwner>;
+  /** The object id of the validator staking pool this stake belongs to. */
+  poolId?: Maybe<Scalars['SuiAddress']['output']>;
   /** The transaction block that created this version of the object. */
   previousTransactionBlock?: Maybe<TransactionBlock>;
   /** The SUI that was initially staked. */
@@ -3729,6 +3829,12 @@ export type StakedSuiCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+/** Represents a `0x3::staking_pool::StakedSui` Move object on-chain. */
+export type StakedSuiDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -3945,6 +4051,11 @@ export type SuinsRegistrationCoinsArgs = {
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
   type?: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type SuinsRegistrationDefaultSuinsNameArgs = {
+  format?: InputMaybe<DomainFormat>;
 };
 
 
@@ -4346,10 +4457,17 @@ export type Validator = {
   /**
    * The validator's current exchange object. The exchange rate is used to determine
    * the amount of SUI tokens that each past SUI staker can withdraw in the future.
+   * @deprecated The exchange object is a wrapped object. Access its dynamic fields through the `exchangeRatesTable` query.
    */
   exchangeRates?: Maybe<MoveObject>;
   /** Number of exchange rates in the table. */
   exchangeRatesSize?: Maybe<Scalars['Int']['output']>;
+  /**
+   * A wrapped object containing the validator's exchange rates. This is a table from epoch
+   * number to `PoolTokenExchangeRate` value. The exchange rate is used to determine the amount
+   * of SUI tokens that each past SUI staker can withdraw in the future.
+   */
+  exchangeRatesTable?: Maybe<Owner>;
   /** The reference gas price for this epoch. */
   gasPrice?: Maybe<Scalars['BigInt']['output']>;
   /** Validator's url containing their custom image. */
@@ -4390,10 +4508,13 @@ export type Validator = {
   /**
    * The validator's current staking pool object, used to track the amount of stake
    * and to compound staking rewards.
+   * @deprecated The staking pool is a wrapped object. Access its fields directly on the `Validator` type.
    */
   stakingPool?: Maybe<MoveObject>;
   /** The epoch at which this pool became active. */
   stakingPoolActivationEpoch?: Maybe<Scalars['Int']['output']>;
+  /** The ID of this validator's `0x3::staking_pool::StakingPool`. */
+  stakingPoolId: Scalars['SuiAddress']['output'];
   /** The total number of SUI tokens in this pool. */
   stakingPoolSuiBalance?: Maybe<Scalars['BigInt']['output']>;
   /** The voting power of this validator in basis points (e.g., 100 = 1% voting power). */
@@ -4445,16 +4566,32 @@ export type ValidatorSet = {
   __typename?: 'ValidatorSet';
   /** The current set of active validators. */
   activeValidators: ValidatorConnection;
+  /** Object ID of the `Table` storing the inactive staking pools. */
+  inactivePoolsId?: Maybe<Scalars['SuiAddress']['output']>;
+  /** Size of the inactive pools `Table`. */
   inactivePoolsSize?: Maybe<Scalars['Int']['output']>;
+  /** Object ID of the wrapped object `TableVec` storing the pending active validators. */
+  pendingActiveValidatorsId?: Maybe<Scalars['SuiAddress']['output']>;
+  /** Size of the pending active validators table. */
   pendingActiveValidatorsSize?: Maybe<Scalars['Int']['output']>;
   /**
    * Validators that are pending removal from the active validator set, expressed as indices in
    * to `activeValidators`.
    */
   pendingRemovals?: Maybe<Array<Scalars['Int']['output']>>;
-  stakePoolMappingsSize?: Maybe<Scalars['Int']['output']>;
+  /**
+   * Object ID of the `Table` storing the mapping from staking pool ids to the addresses
+   * of the corresponding validators. This is needed because a validator's address
+   * can potentially change but the object ID of its pool will not.
+   */
+  stakingPoolMappingsId?: Maybe<Scalars['SuiAddress']['output']>;
+  /** Size of the stake pool mappings `Table`. */
+  stakingPoolMappingsSize?: Maybe<Scalars['Int']['output']>;
   /** Total amount of stake for all active validators at the beginning of the epoch. */
   totalStake?: Maybe<Scalars['BigInt']['output']>;
+  /** Object ID of the `Table` storing the validator candidates. */
+  validatorCandidatesId?: Maybe<Scalars['SuiAddress']['output']>;
+  /** Size of the validator candidates `Table`. */
   validatorCandidatesSize?: Maybe<Scalars['Int']['output']>;
 };
 
@@ -4465,6 +4602,26 @@ export type ValidatorSetActiveValidatorsArgs = {
   before?: InputMaybe<Scalars['String']['input']>;
   first?: InputMaybe<Scalars['Int']['input']>;
   last?: InputMaybe<Scalars['Int']['input']>;
+};
+
+/**
+ * An enum that specifies the intent scope to be used to parse the bytes for signature
+ * verification.
+ */
+export enum ZkLoginIntentScope {
+  /** Indicates that the bytes are to be parsed as a personal message. */
+  PersonalMessage = 'PERSONAL_MESSAGE',
+  /** Indicates that the bytes are to be parsed as transaction data bytes. */
+  TransactionData = 'TRANSACTION_DATA'
+}
+
+/** The result of the zkLogin signature verification. */
+export type ZkLoginVerifyResult = {
+  __typename?: 'ZkLoginVerifyResult';
+  /** The errors field captures any verification error */
+  errors: Array<Scalars['String']['output']>;
+  /** The boolean result of the verification. If true, errors should be empty. */
+  success: Scalars['Boolean']['output'];
 };
 
 export type GetCheckpointQueryVariables = Exact<{
@@ -4506,7 +4663,7 @@ export type DevInspectTransactionBlockQueryVariables = Exact<{
 }>;
 
 
-export type DevInspectTransactionBlockQuery = { __typename?: 'Query', dryRunTransactionBlock: { __typename?: 'DryRunResult', error?: string | null, results?: Array<{ __typename?: 'DryRunEffect', mutatedReferences?: Array<{ __typename?: 'DryRunMutation', bcs: any, input: { __typename: 'GasCoin' } | { __typename: 'Input', inputIndex: number } | { __typename: 'Result', cmd: number, resultIndex?: number | null }, type: { __typename?: 'MoveType', repr: string } }> | null, returnValues?: Array<{ __typename?: 'DryRunReturn', bcs: any, type: { __typename?: 'MoveType', repr: string } }> | null }> | null, transaction?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null } };
+export type DevInspectTransactionBlockQuery = { __typename?: 'Query', dryRunTransactionBlock: { __typename?: 'DryRunResult', error?: string | null, results?: Array<{ __typename?: 'DryRunEffect', mutatedReferences?: Array<{ __typename?: 'DryRunMutation', bcs: any, input: { __typename: 'GasCoin' } | { __typename: 'Input', inputIndex: number } | { __typename: 'Result', cmd: number, resultIndex?: number | null }, type: { __typename?: 'MoveType', repr: string } }> | null, returnValues?: Array<{ __typename?: 'DryRunReturn', bcs: any, type: { __typename?: 'MoveType', repr: string } }> | null }> | null, transaction?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null } | null } };
 
 export type DryRunTransactionBlockQueryVariables = Exact<{
   txBytes: Scalars['String']['input'];
@@ -4519,7 +4676,7 @@ export type DryRunTransactionBlockQueryVariables = Exact<{
 }>;
 
 
-export type DryRunTransactionBlockQuery = { __typename?: 'Query', dryRunTransactionBlock: { __typename?: 'DryRunResult', error?: string | null, transaction?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null } };
+export type DryRunTransactionBlockQuery = { __typename?: 'Query', dryRunTransactionBlock: { __typename?: 'DryRunResult', error?: string | null, transaction?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null } | null } };
 
 export type ExecuteTransactionBlockMutationVariables = Exact<{
   txBytes: Scalars['String']['input'];
@@ -4533,7 +4690,7 @@ export type ExecuteTransactionBlockMutationVariables = Exact<{
 }>;
 
 
-export type ExecuteTransactionBlockMutation = { __typename?: 'Mutation', executeTransactionBlock: { __typename?: 'ExecutionResult', errors?: Array<string> | null, effects: { __typename?: 'TransactionBlockEffects', transactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null } } };
+export type ExecuteTransactionBlockMutation = { __typename?: 'Mutation', executeTransactionBlock: { __typename?: 'ExecutionResult', errors?: Array<string> | null, effects: { __typename?: 'TransactionBlockEffects', transactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null } | null } } };
 
 export type GetAllBalancesQueryVariables = Exact<{
   owner: Scalars['SuiAddress']['input'];
@@ -4612,7 +4769,7 @@ export type GetDynamicFieldObjectQueryVariables = Exact<{
 }>;
 
 
-export type GetDynamicFieldObjectQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicObjectField?: { __typename?: 'DynamicField', value?: { __typename: 'MoveObject', owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any, digest?: string | null, version: number, storageRebate?: any | null, owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared' } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', repr: string, layout: any } } | null } | null } | null } | { __typename: 'Shared' } | null } | { __typename: 'MoveValue' } | null } | null } | null };
+export type GetDynamicFieldObjectQuery = { __typename?: 'Query', owner?: { __typename?: 'Owner', dynamicObjectField?: { __typename?: 'DynamicField', value?: { __typename: 'MoveObject', owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any, digest?: string | null, version: number, storageRebate?: any | null, owner?: { __typename: 'AddressOwner' } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared' } | null, previousTransactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null } | null, asMoveObject?: { __typename?: 'MoveObject', hasPublicTransfer: boolean, contents?: { __typename?: 'MoveValue', data: any, type: { __typename?: 'MoveType', repr: string, layout: any } } | null } | null } | null } | { __typename: 'Shared' } | null } | { __typename: 'MoveValue' } | null } | null } | null };
 
 export type GetDynamicFieldsQueryVariables = Exact<{
   parentId: Scalars['SuiAddress']['input'];
@@ -4621,7 +4778,7 @@ export type GetDynamicFieldsQueryVariables = Exact<{
 }>;
 
 
-export type GetDynamicFieldsQuery = { __typename?: 'Query', object?: { __typename?: 'Object', dynamicFields: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null } | { __typename: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null }> } } | null };
+export type GetDynamicFieldsQuery = { __typename?: 'Query', owner?: { __typename?: 'Owner', dynamicFields: { __typename?: 'DynamicFieldConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'DynamicField', name?: { __typename?: 'MoveValue', bcs: any, json: any, type: { __typename?: 'MoveType', layout: any, repr: string } } | null, value?: { __typename: 'MoveObject', address: any, digest?: string | null, version: number, contents?: { __typename?: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null } | { __typename: 'MoveValue', json: any, type: { __typename?: 'MoveType', repr: string } } | null }> } } | null };
 
 export type GetLatestCheckpointSequenceNumberQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -4631,7 +4788,7 @@ export type GetLatestCheckpointSequenceNumberQuery = { __typename?: 'Query', che
 export type GetLatestSuiSystemStateQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type GetLatestSuiSystemStateQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp: any, endTimestamp?: any | null, referenceGasPrice?: any | null, systemStateVersion?: number | null, safeMode?: { __typename?: 'SafeMode', enabled?: boolean | null, gasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, nonRefundableStorageFee?: any | null, storageCost?: any | null, storageRebate?: any | null } | null } | null, systemStakeSubsidy?: { __typename?: 'StakeSubsidy', balance?: any | null, currentDistributionAmount?: any | null, decreaseRate?: number | null, distributionCounter?: number | null, periodLength?: number | null } | null, storageFund?: { __typename?: 'StorageFund', nonRefundableBalance?: any | null, totalObjectStorageRebates?: any | null } | null, systemParameters?: { __typename?: 'SystemParameters', minValidatorCount?: number | null, maxValidatorCount?: number | null, minValidatorJoiningStake?: any | null, durationMs?: any | null, validatorLowStakeThreshold?: any | null, validatorLowStakeGracePeriod?: any | null, validatorVeryLowStakeThreshold?: any | null, stakeSubsidyStartEpoch?: number | null } | null, protocolConfigs: { __typename?: 'ProtocolConfigs', protocolVersion: number }, validatorSet?: { __typename?: 'ValidatorSet', inactivePoolsSize?: number | null, pendingActiveValidatorsSize?: number | null, stakePoolMappingsSize?: number | null, validatorCandidatesSize?: number | null, pendingRemovals?: Array<number> | null, totalStake?: any | null, activeValidators: { __typename?: 'ValidatorConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', address: any, contents?: { __typename?: 'MoveValue', json: any } | null } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', address: any } | null, stakingPool?: { __typename?: 'MoveObject', address: any } | null, address: { __typename?: 'Address', address: any } }> } } | null } | null };
+export type GetLatestSuiSystemStateQuery = { __typename?: 'Query', epoch?: { __typename?: 'Epoch', epochId: number, startTimestamp: any, endTimestamp?: any | null, referenceGasPrice?: any | null, systemStateVersion?: number | null, safeMode?: { __typename?: 'SafeMode', enabled?: boolean | null, gasSummary?: { __typename?: 'GasCostSummary', computationCost?: any | null, nonRefundableStorageFee?: any | null, storageCost?: any | null, storageRebate?: any | null } | null } | null, systemStakeSubsidy?: { __typename?: 'StakeSubsidy', balance?: any | null, currentDistributionAmount?: any | null, decreaseRate?: number | null, distributionCounter?: number | null, periodLength?: number | null } | null, storageFund?: { __typename?: 'StorageFund', nonRefundableBalance?: any | null, totalObjectStorageRebates?: any | null } | null, systemParameters?: { __typename?: 'SystemParameters', minValidatorCount?: number | null, maxValidatorCount?: number | null, minValidatorJoiningStake?: any | null, durationMs?: any | null, validatorLowStakeThreshold?: any | null, validatorLowStakeGracePeriod?: any | null, validatorVeryLowStakeThreshold?: any | null, stakeSubsidyStartEpoch?: number | null } | null, protocolConfigs: { __typename?: 'ProtocolConfigs', protocolVersion: number }, validatorSet?: { __typename?: 'ValidatorSet', inactivePoolsSize?: number | null, pendingActiveValidatorsSize?: number | null, stakingPoolMappingsSize?: number | null, validatorCandidatesSize?: number | null, pendingRemovals?: Array<number> | null, totalStake?: any | null, activeValidators: { __typename?: 'ValidatorConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Validator', atRisk?: number | null, commissionRate?: number | null, exchangeRatesSize?: number | null, description?: string | null, gasPrice?: any | null, imageUrl?: string | null, name?: string | null, nextEpochCommissionRate?: number | null, nextEpochGasPrice?: any | null, nextEpochStake?: any | null, pendingPoolTokenWithdraw?: any | null, pendingStake?: any | null, pendingTotalSuiWithdraw?: any | null, poolTokenBalance?: any | null, projectUrl?: string | null, rewardsPool?: any | null, stakingPoolActivationEpoch?: number | null, stakingPoolSuiBalance?: any | null, votingPower?: number | null, exchangeRates?: { __typename?: 'MoveObject', address: any, contents?: { __typename?: 'MoveValue', json: any } | null } | null, credentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, nextEpochCredentials?: { __typename?: 'ValidatorCredentials', netAddress?: string | null, networkPubKey?: any | null, p2PAddress?: string | null, primaryAddress?: string | null, workerPubKey?: any | null, workerAddress?: string | null, proofOfPossession?: any | null, protocolPubKey?: any | null } | null, operationCap?: { __typename?: 'MoveObject', address: any } | null, stakingPool?: { __typename?: 'MoveObject', address: any } | null, address: { __typename?: 'Address', address: any } }> } } | null } | null };
 
 export type GetMoveFunctionArgTypesQueryVariables = Exact<{
   packageId: Scalars['SuiAddress']['input'];
@@ -4865,7 +5022,7 @@ export type QueryTransactionBlocksQueryVariables = Exact<{
 }>;
 
 
-export type QueryTransactionBlocksQuery = { __typename?: 'Query', transactionBlocks: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null }> } };
+export type QueryTransactionBlocksQuery = { __typename?: 'Query', transactionBlocks: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null }> } };
 
 export type GetTransactionBlockQueryVariables = Exact<{
   digest: Scalars['String']['input'];
@@ -4878,7 +5035,7 @@ export type GetTransactionBlockQueryVariables = Exact<{
 }>;
 
 
-export type GetTransactionBlockQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null } | null };
+export type GetTransactionBlockQuery = { __typename?: 'Query', transactionBlock?: { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null } | null };
 
 export type MultiGetTransactionBlocksQueryVariables = Exact<{
   digests: Array<Scalars['String']['input']> | Scalars['String']['input'];
@@ -4893,7 +5050,7 @@ export type MultiGetTransactionBlocksQueryVariables = Exact<{
 }>;
 
 
-export type MultiGetTransactionBlocksQuery = { __typename?: 'Query', transactionBlocks: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null }> } };
+export type MultiGetTransactionBlocksQuery = { __typename?: 'Query', transactionBlocks: { __typename?: 'TransactionBlockConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, hasPreviousPage: boolean, startCursor?: string | null, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null }> } };
 
 export type PaginateTransactionBlockListsQueryVariables = Exact<{
   digest: Scalars['String']['input'];
@@ -4912,7 +5069,7 @@ export type PaginateTransactionBlockListsQuery = { __typename?: 'Query', transac
 
 export type Paginate_Transaction_ListsFragment = { __typename?: 'TransactionBlock', effects?: { __typename?: 'TransactionBlockEffects', events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null };
 
-export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null } | null }> } } | null };
+export type Rpc_Transaction_FieldsFragment = { __typename?: 'TransactionBlock', digest?: string | null, signatures?: Array<any> | null, rawTransaction?: any | null, sender?: { __typename?: 'Address', address: any } | null, effects?: { __typename?: 'TransactionBlockEffects', timestamp?: any | null, status?: ExecutionStatus | null, events?: { __typename?: 'EventConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'Event', json: any, bcs: any, timestamp?: any | null, sendingModule?: { __typename?: 'MoveModule', name: string, package: { __typename?: 'MovePackage', address: any } } | null, sender?: { __typename?: 'Address', address: any } | null, type: { __typename?: 'MoveType', repr: string } }> }, checkpoint?: { __typename?: 'Checkpoint', sequenceNumber: number } | null, balanceChanges?: { __typename?: 'BalanceChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'BalanceChange', amount?: any | null, coinType?: { __typename?: 'MoveType', repr: string } | null, owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null }> }, dependencies?: { __typename?: 'DependencyConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'TransactionBlock', digest?: string | null }> }, gasEffects?: { __typename?: 'GasEffects', gasObject?: { __typename?: 'Object', digest?: string | null, version: number, address: any, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, gasSummary?: { __typename?: 'GasCostSummary', storageCost?: any | null, storageRebate?: any | null, nonRefundableStorageFee?: any | null, computationCost?: any | null } | null } | null, executedEpoch?: { __typename?: 'Epoch', epochId: number } | null, objectChanges?: { __typename?: 'ObjectChangeConnection', pageInfo: { __typename?: 'PageInfo', hasNextPage: boolean, endCursor?: string | null }, nodes: Array<{ __typename?: 'ObjectChange', idCreated?: boolean | null, idDeleted?: boolean | null, inputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null, outputState?: { __typename?: 'Object', version: number, digest?: string | null, address: any, asMoveObject?: { __typename?: 'MoveObject', contents?: { __typename?: 'MoveValue', type: { __typename?: 'MoveType', repr: string } } | null } | null, owner?: { __typename: 'AddressOwner', owner?: { __typename?: 'Owner', asObject?: { __typename?: 'Object', address: any } | null, asAddress?: { __typename?: 'Address', address: any } | null } | null } | { __typename: 'Immutable' } | { __typename: 'Parent', parent?: { __typename?: 'Object', address: any } | null } | { __typename: 'Shared', initialSharedVersion: number } | null } | null }> } } | null };
 
 export class TypedDocumentString<TResult, TVariables>
   extends String
@@ -6629,7 +6786,7 @@ export const GetTypeLayoutDocument = new TypedDocumentString(`
     `) as unknown as TypedDocumentString<GetTypeLayoutQuery, GetTypeLayoutQueryVariables>;
 export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
     query getDynamicFieldObject($parentId: SuiAddress!, $name: DynamicFieldName!) {
-  object(address: $parentId) {
+  owner(address: $parentId) {
     dynamicObjectField(name: $name) {
       value {
         __typename
@@ -6674,7 +6831,7 @@ export const GetDynamicFieldObjectDocument = new TypedDocumentString(`
     `) as unknown as TypedDocumentString<GetDynamicFieldObjectQuery, GetDynamicFieldObjectQueryVariables>;
 export const GetDynamicFieldsDocument = new TypedDocumentString(`
     query getDynamicFields($parentId: SuiAddress!, $first: Int, $cursor: String) {
-  object(address: $parentId) {
+  owner(address: $parentId) {
     dynamicFields(first: $first, after: $cursor) {
       pageInfo {
         hasNextPage
@@ -6774,7 +6931,7 @@ export const GetLatestSuiSystemStateDocument = new TypedDocumentString(`
       }
       inactivePoolsSize
       pendingActiveValidatorsSize
-      stakePoolMappingsSize
+      stakingPoolMappingsSize
       validatorCandidatesSize
       pendingRemovals
       totalStake
