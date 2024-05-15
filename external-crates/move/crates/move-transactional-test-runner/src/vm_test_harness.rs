@@ -308,6 +308,7 @@ static PRECOMPILED_MOVE_STDLIB: Lazy<FullyCompiledProgram> = Lazy::new(|| {
         }],
         None,
         move_compiler::Flags::empty(),
+        None,
     )
     .unwrap();
     match program_res {

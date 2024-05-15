@@ -1596,6 +1596,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde_json",
+ "sha2",
  "tempfile",
  "url",
  "vfs",
