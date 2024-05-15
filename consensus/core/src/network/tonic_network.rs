@@ -586,9 +586,20 @@ impl<S: NetworkService> NetworkManager<S> for TonicManager {
                     if let Err(e) = socket.set_reuseaddr(true) {
                         info!("Failed to set SO_REUSEADDR: {e:?}");
                     }
+                    
+                    /*
+                    Due to the use of conditional compilation for the set_reuseport method, 
+                    it will not be compiled on certain systems (such as Windows). 
+                    Use the same conditional compilation tag to ensure that this conditional branch 
+                    is also not compiled when the set_reuseport method is not compiled. 
+                    This can fix compilation errors on specific systems.
+                    */
+                    
+                    #[cfg(all(unix, not(target_os = "solaris"), not(target_os = "illumos")))]
                     if let Err(e) = socket.set_reuseport(true) {
                         info!("Failed to set SO_REUSEPORT: {e:?}");
                     }
+                    
                     if let Err(e) = socket.set_send_buffer_size(BUFFER_SIZE as u32) {
                         info!("Failed to set send buffer size to {BUFFER_SIZE}: {e:?}");
                     }
