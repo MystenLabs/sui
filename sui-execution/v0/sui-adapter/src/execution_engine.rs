@@ -5,6 +5,7 @@ pub use checked::*;
 
 #[sui_macros::with_checked_arithmetic]
 mod checked {
+    use crate::adapter::new_move_vm;
     use crate::gas_charger::GasCharger;
     use crate::programmable_transactions;
     use crate::temporary_store::TemporaryStore;
@@ -12,6 +13,7 @@ mod checked {
     use move_binary_format::CompiledModule;
     use move_vm_runtime::move_vm::MoveVM;
     use std::{collections::HashSet, sync::Arc};
+    use sui_move_natives::all_natives;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::balance::{
         BALANCE_CREATE_REWARDS_FUNCTION_NAME, BALANCE_DESTROY_REBATES_FUNCTION_NAME,
@@ -675,6 +677,13 @@ mod checked {
             }
         }
 
+        let new_vm = new_move_vm(
+            all_natives(/* silent */ true),
+            protocol_config,
+            /* enable_profiler */ None,
+        )
+        .expect("Failed to create new MoveVM");
+
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -695,7 +704,7 @@ mod checked {
                 programmable_transactions::execution::execute::<execution_mode::System>(
                     protocol_config,
                     metrics.clone(),
-                    move_vm,
+                    &new_vm,
                     temporary_store,
                     tx_ctx,
                     gas_charger,

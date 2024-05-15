@@ -26,9 +26,11 @@ mod checked {
     use sui_types::SUI_RANDOMNESS_STATE_OBJECT_ID;
     use tracing::{info, instrument, trace, warn};
 
+    use crate::adapter::new_move_vm;
     use crate::programmable_transactions;
     use crate::type_layout_resolver::TypeLayoutResolver;
     use crate::{gas_charger::GasCharger, temporary_store::TemporaryStore};
+    use sui_move_natives::all_natives;
     use sui_protocol_config::{check_limit_by_meter, LimitThresholdCrossed, ProtocolConfig};
     use sui_types::authenticator_state::{
         AUTHENTICATOR_STATE_CREATE_FUNCTION_NAME, AUTHENTICATOR_STATE_EXPIRE_JWKS_FUNCTION_NAME,
@@ -879,6 +881,13 @@ mod checked {
             }
         }
 
+        let new_vm = new_move_vm(
+            all_natives(/* silent */ true),
+            protocol_config,
+            /* enable_profiler */ None,
+        )
+        .expect("Failed to create new MoveVM");
+
         let binary_config = to_binary_config(protocol_config);
         for (version, modules, dependencies) in change_epoch.system_packages.into_iter() {
             let deserialized_modules: Vec<_> = modules
@@ -899,7 +908,7 @@ mod checked {
                 programmable_transactions::execution::execute::<execution_mode::System>(
                     protocol_config,
                     metrics.clone(),
-                    move_vm,
+                    &new_vm,
                     temporary_store,
                     tx_ctx,
                     gas_charger,
