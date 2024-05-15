@@ -60,10 +60,6 @@ pub struct Test {
     #[clap(name = "report-statistics", short = 's', long = "statistics")]
     pub report_statistics: Option<Option<String>>,
 
-    /// Use the stackless bytecode interpreter to run the tests and cross check its results with
-    /// the execution result from Move VM.
-    #[clap(long = "stackless")]
-    pub check_stackless_vm: bool,
     /// Verbose mode
     #[clap(long = "verbose")]
     pub verbose_mode: bool,
@@ -106,7 +102,6 @@ impl Test {
             list,
             num_threads,
             report_statistics,
-            check_stackless_vm,
             verbose_mode,
             compute_coverage: _,
         } = self;
@@ -116,7 +111,6 @@ impl Test {
             list,
             num_threads,
             report_statistics,
-            check_stackless_vm,
             verbose: verbose_mode,
             ..UnitTestingConfig::default_with_bound(None)
         }
