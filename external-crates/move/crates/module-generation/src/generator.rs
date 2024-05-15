@@ -328,6 +328,7 @@ impl<'a> ModuleGenerator<'a> {
             random_string(gen, len)
         };
         let current_module = ModuleDefinition {
+            specified_version: None,
             loc: Spanned::unsafe_no_loc(0).loc,
             identifier: ModuleIdent {
                 name: ModuleName(module_name.into()),

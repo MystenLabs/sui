@@ -15,7 +15,9 @@ use move_binary_format::{
     file_format_common::VERSION_MAX,
 };
 use move_bytecode_source_map::source_map::SourceMap;
-use move_command_line_common::error_bitset::ErrorBitsetBuilder;
+use move_command_line_common::{
+    env::get_bytecode_version_from_env, error_bitset::ErrorBitsetBuilder,
+};
 use move_core_types::runtime_value::{MoveTypeLayout, MoveValue};
 use move_ir_types::{
     ast::{self, Bytecode as IRBytecode, Bytecode_ as IRBytecode_, *},
@@ -406,7 +408,7 @@ pub fn compile_module<'a>(
         _compiled_deps,
         source_map,
     ) = context.materialize_pools();
-    let module = CompiledModule {
+    let mut compiled_module = CompiledModule {
         version: VERSION_MAX,
         module_handles,
         self_module_handle_idx,
@@ -425,7 +427,14 @@ pub fn compile_module<'a>(
         struct_defs,
         function_defs,
     };
-    Ok((module, source_map))
+    set_module_version(&mut compiled_module, module.specified_version);
+    Ok((compiled_module, source_map))
+}
+
+fn set_module_version(module: &mut CompiledModule, version: Option<u32>) {
+    if let Some(version) = version.or_else(get_bytecode_version_from_env) {
+        module.version = version;
+    }
 }
 
 // Note: DO NOT try to recover from this function as it zeros out the `outer_contexts` dependencies
