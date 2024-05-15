@@ -51,7 +51,7 @@ use sui_types::transaction::{
 use sui_types::utils::{
     to_sender_signed_transaction, to_sender_signed_transaction_with_multi_signers,
 };
-use test_cluster::TestClusterBuilder;
+use test_cluster::{TestCluster, TestClusterBuilder};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
@@ -1504,4 +1504,51 @@ async fn test_full_node_run_with_range_epoch() -> Result<(), anyhow::Error> {
         .is_none());
 
     Ok(())
+}
+
+#[tokio::test]
+async fn test_full_node_checkpoint_sync() {
+    telemetry_subscribers::init_for_testing();
+    let test_cluster = TestClusterBuilder::new().build().await;
+
+    test_cluster.trigger_reconfiguration().await;
+
+    async fn check_seq_nums(test_cluster: &TestCluster) {
+        let avg_seq = test_cluster
+            .all_validator_handles()
+            .iter()
+            .map(|validator| {
+                validator.with(|node| {
+                    let s = node
+                        .state()
+                        .get_checkpoint_store()
+                        .get_highest_executed_checkpoint()
+                        .unwrap()
+                        .unwrap()
+                        .sequence_number;
+                    println!("Validator highest executed checkpoint: {:?}", s);
+                    s
+                })
+            })
+            .sum::<u64>()
+            / test_cluster.all_validator_handles().len() as u64;
+        let fn_seq = &test_cluster
+            .fullnode_handle
+            .sui_node
+            .state()
+            .get_checkpoint_store()
+            .get_highest_executed_checkpoint()
+            .unwrap()
+            .unwrap()
+            .sequence_number;
+        println!("FN highest executed checkpoint: {:?}", fn_seq);
+        // Assert that at any time, the last exccuted checkpoint delta between the fullnode and the average of the validators is smaller than 20.
+        assert!(avg_seq <= fn_seq + 20);
+    }
+
+    // Check a few times to see the gap is not widening
+    for _ in 0..5 {
+        sleep(Duration::from_secs(10)).await;
+        check_seq_nums(&test_cluster).await;
+    }
 }
