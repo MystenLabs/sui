@@ -1319,7 +1319,6 @@ pub fn get_symbols(
     let mut references = BTreeMap::new();
     let mut def_info = BTreeMap::new();
 
-    eprintln!("PREPROCESS REGULAR");
     pre_process_typed_modules(
         &parsed_program,
         &typed_modules,
@@ -1335,7 +1334,6 @@ pub fn get_symbols(
         &edition,
     );
 
-    eprintln!("PREPROCESS DEPS");
     if let Some(libs) = compiled_libs.clone() {
         pre_process_typed_modules(
             &parsed_program,
