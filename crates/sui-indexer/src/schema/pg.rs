@@ -194,7 +194,10 @@ diesel::table! {
 diesel::table! {
     packages (package_id) {
         package_id -> Bytea,
+        original_id -> Bytea,
+        package_version -> Int8,
         move_package -> Bytea,
+        checkpoint_sequence_number -> Int8,
     }
 }
 
