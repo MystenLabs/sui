@@ -821,8 +821,9 @@ impl Model {
 
         // ensure the map is populated for all functions
         let mut function_called_by = function_immediate_deps
-            .keys()
-            .map(|caller| (*caller, BTreeSet::new()))
+            .values()
+            .flatten()
+            .map(|callee| (*callee, BTreeSet::new()))
             .collect::<BTreeMap<_, _>>();
         for (caller, callees) in &function_immediate_deps {
             for callee in callees {
@@ -834,8 +835,10 @@ impl Model {
                 let id = (*a, *m);
                 for (fname, fdata) in &mut data.functions {
                     let qualified_id = (id, *fname);
-                    fdata.calls = function_immediate_deps.remove(&qualified_id).unwrap();
-                    fdata.called_by = function_called_by.remove(&qualified_id).unwrap();
+                    fdata.calls =
+                        function_immediate_deps.remove(&qualified_id).unwrap_or(BTreeSet::new());
+                    fdata.called_by =
+                        function_called_by.remove(&qualified_id).unwrap_or(BTreeSet::new());
                 }
             }
         }
