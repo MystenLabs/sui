@@ -8,7 +8,7 @@ use std::{
     fmt::Display,
     fs::create_dir_all,
     io::Write,
-    path::{Path, PathBuf, MAIN_SEPARATOR},
+    path::{Path, PathBuf},
 };
 
 // TODO get a stable path to this stdlib
@@ -27,6 +27,11 @@ pub const MOVE_STDLIB_ADDR_VALUE: &str = "0x1";
 pub struct New {
     /// The name of the package to be created.
     pub name: String,
+}
+
+fn is_valid_package_name(name: &str) -> bool {
+    let re = regex::Regex::new(r"^[a-z]+(?:_[a-z0-9]+)*$").unwrap();
+    re.is_match(name)
 }
 
 impl New {
@@ -49,8 +54,8 @@ impl New {
         // TODO warn on build config flags
         let Self { name } = self;
 
-        if name.contains(MAIN_SEPARATOR) {
-            return Err(anyhow!("only package name is allowed, cannot be a path"));
+        if !is_valid_package_name(&name) {
+            return Err(anyhow!("invalid package name, only support: lowercase letters, numbers, and underscores, can only start with a lowercase letter."));
         }
 
         let p: PathBuf;
