@@ -37,7 +37,6 @@ move-vm-types.workspace = true
 move-vm-runtime.workspace = true
 move-vm-profiler.workspace = true
 move-vm-test-utils.workspace = true
-move-read-write-set-types.workspace = true
 move-binary-format.workspace = true
 move-package.workspace = true
 move-prover.workspace = true
