@@ -3067,8 +3067,8 @@ type ServiceConfig {
 	"""
 	maxPageSize: Int!
 	"""
-	Maximum time in milliseconds that it will wait to get the results from the execution. Note,
-	that the transaction might be still queued for execution beyond this timeout.
+	Maximum time in milliseconds that it will wait to get the results from the execution. Note
+	that the transaction might take longer to execute than this timeout.
 	"""
 	mutationTimeoutMs: Int!
 	"""

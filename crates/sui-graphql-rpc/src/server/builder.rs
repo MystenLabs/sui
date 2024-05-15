@@ -667,9 +667,10 @@ pub mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
+        async fn test_timeout(delay: Duration, timeout: Duration, query: &str) -> Response {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
 
             let schema = prep_schema(None, Some(cfg))
                 .extension(Timeout)
@@ -678,26 +679,42 @@ pub mod tests {
                 })
                 .build_schema();
 
-            schema.execute("{ chainIdentifier }").await
+            schema.execute(query).await
         }
 
+        let query = "{ chainIdentifier }";
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
 
-        test_timeout(delay, timeout)
+        test_timeout(delay, timeout, query)
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(delay, delay)
+        let errs: Vec<_> = test_timeout(delay, delay, query)
             .await
             .into_result()
             .unwrap_err()
             .into_iter()
             .map(|e| e.message)
             .collect();
-        let exp = format!("Request timed out. Limit: {}s", delay.as_secs_f32());
+        let exp = format!("Query request timed out. Limit: {}s", delay.as_secs_f32());
+        assert_eq!(errs, vec![exp]);
+
+        // Should timeout for mutation
+        let query = "mutation { executeTransactionBlock(txBytes: '', signatures: '') { effects { status }}}";
+        let errs: Vec<_> = test_timeout(delay, delay, query)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let exp = format!(
+            "Mutation request timed out. Limit: {}s",
+            delay.as_secs_f32()
+        );
         assert_eq!(errs, vec![exp]);
     }
 
