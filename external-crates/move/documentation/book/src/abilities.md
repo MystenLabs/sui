@@ -98,19 +98,23 @@ All primitive, builtin types have `copy`, `drop`, and `store`.
 Note that none of the primitive types have `key`, meaning none of them can be used directly with
 storage operations.
 
-## Annotating Structs
+## Annotating Structs and Enums
 
-To declare that a `struct` has an ability, it is declared with `has <ability>` after the struct name
-and either before or after the fields. For example:
+To declare that a `struct` or `enum` has an ability, it is declared with `has <ability>` after the
+datatype name and either before or after the fields/variants. For example:
 
 ```move
 public struct Ignorable has drop { f: u64 }
 public struct Pair has copy, drop, store { x: u64, y: u64 }
 public struct MyVec(vector<u64>) has copy, drop, store;
+
+public enum IgnorableEnum has drop { Variant }
+public enum PairEnum has copy, drop, store { Variant }
+public enum MyVecEnum { Variant } has copy, drop, store;
 ```
 
-In this case: `Ignorable` has the `drop` ability. `Pair` and `MyVec` both have `copy`, `drop`, and
-`store`.
+In this case: `Ignorable*` has the `drop` ability. `Pair*` and `MyVec*` both have `copy`, `drop`,
+and `store`.
 
 All of these abilities have strong guarantees over these gated operations. The operation can be
 performed on the value only if it has that ability; even if the value is deeply nested inside of
@@ -126,6 +130,16 @@ reachability rules for the abilities given above. If a struct is declared with t
 - `key`, all fields must have `store`.
   - `key` is the only ability currently that doesn’t require itself.
 
+An enum can have any of these abilities with the exception of `key` which enums cannot have since
+they cannot be top-level values (objects) in storage. The same rules apply to fields of enum
+variants as they do for struct fields though. In particular, if an enum is declared with the
+ability...
+
+- `copy`, all fields of all variants must have `copy`.
+- `drop`, all fields of all variants must have `drop`.
+- `store`, all fields of all variants must have `store`.
+- `key`, is not allowed on enums as mentioned above.
+
 For example:
 
 ```move
@@ -134,6 +148,11 @@ public struct NoAbilities {}
 
 public struct WantsCopy has copy {
     f: NoAbilities, // ERROR 'NoAbilities' does not have 'copy'
+}
+
+public enum WantsCopyEnum has copy {
+    Variant1
+    Variant2(NoAbilities), // ERROR 'NoAbilities' does not have 'copy'
 }
 ```
 
@@ -145,6 +164,11 @@ public struct NoAbilities {}
 
 public struct MyData has key {
     f: NoAbilities, // Error 'NoAbilities' does not have 'store'
+}
+
+public struct MyDataEnum has store {
+    Variant1,
+    Variant2(NoAbilities), // Error 'NoAbilities' does not have 'store'
 }
 ```
 

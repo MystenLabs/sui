@@ -70,7 +70,7 @@ must be terminated with a semicolon:
 
 ```move
 module a::m {
-    public PreNamedAbilities has copy, drop { x: u64, y: bool }
+    public struct PreNamedAbilities has copy, drop { x: u64, y: bool }
     public struct PostNamedAbilities { x: u64, y: bool } has copy, drop;
     public struct PostNamedAbilitiesInvalid { x: u64, y: bool } has copy, drop
     //                                                                        ^ ERROR! missing semicolon
@@ -78,7 +78,7 @@ module a::m {
     public struct NamedInvalidAbilities has copy { x: u64, y: bool } has drop;
     //                                                               ^ ERROR! duplicate ability declaration
 
-    public PrePositionalAbilities has copy, drop (u64, bool)
+    public struct PrePositionalAbilities has copy, drop (u64, bool)
     public struct PostPositionalAbilities (u64, bool) has copy, drop;
     public struct PostPositionalAbilitiesInvalid (u64, bool) has copy, drop
     //                                                                     ^ ERROR! missing semicolon
@@ -88,7 +88,7 @@ module a::m {
 ```
 
 For more details, see the section on
-[annotating a struct's abilities](./abilities.md#annotating-structs).
+[annotating a struct's abilities](./abilities.md#annotating-structs-and-enums).
 
 ### Naming
 
