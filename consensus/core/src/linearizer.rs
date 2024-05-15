@@ -3,6 +3,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
+use consensus_config::AuthorityIndex;
 use parking_lot::RwLock;
 
 use crate::commit::sort_sub_dag_blocks;
@@ -29,6 +30,7 @@ impl Linearizer {
     fn collect_sub_dag_and_commit(
         &mut self,
         leader_block: VerifiedBlock,
+        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> (CommittedSubDag, TrustedCommit) {
         // Grab latest commit state from dag state
         let dag_state = self.dag_state.read();
@@ -100,6 +102,7 @@ impl Linearizer {
             to_commit,
             timestamp_ms,
             commit.reference(),
+            reputation_scores_desc,
         );
 
         (sub_dag, commit)
@@ -111,11 +114,12 @@ impl Linearizer {
     pub(crate) fn handle_commit(
         &mut self,
         committed_leaders: Vec<VerifiedBlock>,
+        reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
     ) -> Vec<CommittedSubDag> {
         let mut committed_sub_dags = vec![];
         for leader_block in committed_leaders {
             // Collect the sub-dag generated using each of these leaders and the corresponding commit.
-            let (sub_dag, commit) = self.collect_sub_dag_and_commit(leader_block);
+            let (sub_dag, commit) = self.collect_sub_dag_and_commit(leader_block, reputation_scores_desc.clone());
 
             // Buffer commit in dag state for persistence later.
             // This also updates the last committed rounds.
@@ -173,7 +177,12 @@ mod tests {
             .map(Option::unwrap)
             .collect::<Vec<_>>();
 
-        let commits = linearizer.handle_commit(leaders.clone());
+        let reputation_scores = context
+            .committee
+            .authorities()
+            .map(|(authority_index, _)| (authority_index, 1u64))
+            .collect::<Vec<_>>();
+        let commits = linearizer.handle_commit(leaders.clone(), reputation_scores);
         for (idx, subdag) in commits.into_iter().enumerate() {
             tracing::info!("{subdag:?}");
             assert_eq!(subdag.leader, leaders[idx].reference());
@@ -269,7 +278,12 @@ mod tests {
             blocks.clone(),
         );
 
-        let commit = linearizer.handle_commit(vec![leader.clone()]);
+        let reputation_scores = context
+            .committee
+            .authorities()
+            .map(|(authority_index, _)| (authority_index, 1u64))
+            .collect::<Vec<_>>();
+        let commit = linearizer.handle_commit(vec![leader.clone()], reputation_scores);
         assert_eq!(commit.len(), 1);
 
         let subdag = &commit[0];

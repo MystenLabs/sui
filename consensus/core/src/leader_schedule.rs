@@ -841,6 +841,7 @@ mod tests {
             vec![],
             context.clock.timestamp_utc_ms(),
             CommitRef::new(1, CommitDigest::MIN),
+            vec![],
         )];
         dag_state
             .write()
@@ -938,6 +939,7 @@ mod tests {
             blocks,
             context.clock.timestamp_utc_ms(),
             last_commit.reference(),
+            vec![],
         )];
 
         let mut dag_state_write = dag_state.write();

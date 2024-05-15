@@ -129,8 +129,11 @@ impl DagState {
                         .protocol_config
                         .mysticeti_leader_scoring_and_schedule()
                     {
-                        let committed_subdag =
-                            load_committed_subdag_from_store(store.as_ref(), commit.clone());
+                        let committed_subdag = load_committed_subdag_from_store(
+                            store.as_ref(),
+                            commit.clone(),
+                            vec![],
+                        ); // We don't mind recovering the reputation scores
                         unscored_committed_subdags.push(committed_subdag);
                     }
                 });
