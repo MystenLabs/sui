@@ -89,7 +89,9 @@ impl AnemoClient {
         }
 
         let (mut subscriber, _) = network.subscribe().map_err(|e| {
-            ConsensusError::NetworkError(format!("Cannot subscribe to AnemoNetwork updates: {e:?}"))
+            ConsensusError::NetworkClientConnection(format!(
+                "Cannot subscribe to AnemoNetwork updates: {e:?}"
+            ))
         })?;
 
         let sleep = tokio::time::sleep(timeout);
@@ -140,7 +142,7 @@ impl NetworkClient for AnemoClient {
         client
             .send_block(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("send_block failed: {e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkRequest(format!("send_block failed: {e:?}")))?;
         Ok(())
     }
 
@@ -181,7 +183,7 @@ impl NetworkClient for AnemoClient {
                 if e.status() == StatusCode::RequestTimeout {
                     ConsensusError::NetworkRequestTimeout(format!("fetch_blocks timeout: {e:?}"))
                 } else {
-                    ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}"))
+                    ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}"))
                 }
             })?;
         let body = response.into_body();
@@ -200,7 +202,7 @@ impl NetworkClient for AnemoClient {
         let response = client
             .fetch_commits(anemo::Request::new(request).with_timeout(timeout))
             .await
-            .map_err(|e| ConsensusError::NetworkError(format!("fetch_blocks failed: {e:?}")))?;
+            .map_err(|e| ConsensusError::NetworkRequest(format!("fetch_blocks failed: {e:?}")))?;
         let response = response.into_body();
         Ok((response.commits, response.certifier_blocks))
     }
@@ -351,15 +353,17 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
 /// 5. Install `AnemoService` to `AnemoManager` with `AnemoManager::install_service()`.
 pub(crate) struct AnemoManager {
     context: Arc<Context>,
+    network_keypair: Option<NetworkKeyPair>,
     client: Arc<AnemoClient>,
     network: Arc<ArcSwapOption<anemo::Network>>,
     connection_monitor_handle: Option<ConnectionMonitorHandle>,
 }
 
 impl AnemoManager {
-    pub(crate) fn new(context: Arc<Context>) -> Self {
+    pub(crate) fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
         Self {
             context: context.clone(),
+            network_keypair: Some(network_keypair),
             client: Arc::new(AnemoClient::new(context)),
             network: Arc::new(ArcSwapOption::default()),
             connection_monitor_handle: None,
@@ -370,15 +374,15 @@ impl AnemoManager {
 impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     type Client = AnemoClient;
 
-    fn new(context: Arc<Context>) -> Self {
-        AnemoManager::new(context)
+    fn new(context: Arc<Context>, network_keypair: NetworkKeyPair) -> Self {
+        AnemoManager::new(context, network_keypair)
     }
 
     fn client(&self) -> Arc<Self::Client> {
         self.client.clone()
     }
 
-    async fn install_service(&mut self, network_keypair: NetworkKeyPair, service: Arc<S>) {
+    async fn install_service(&mut self, service: Arc<S>) {
         self.context
             .metrics
             .network_metrics
@@ -489,7 +493,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
         let addr = own_address
             .to_anemo_address()
             .unwrap_or_else(|op| panic!("{op}: {own_address}"));
-        let private_key_bytes = network_keypair.private_key_bytes();
+        let private_key_bytes = self.network_keypair.take().unwrap().private_key_bytes();
         let network = loop {
             let network_result = anemo::Network::bind(addr.clone())
                 .server_name("consensus")
@@ -717,122 +721,5 @@ impl Drop for MetricsResponseHandler {
             .inflight_requests
             .with_label_values(&[&self.route])
             .dec();
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::{sync::Arc, time::Duration};
-
-    use parking_lot::Mutex;
-    use tokio::time::sleep;
-
-    use crate::{
-        block::{TestBlock, VerifiedBlock},
-        context::Context,
-        network::{
-            anemo_network::AnemoManager, test_network::TestService, NetworkClient, NetworkManager,
-        },
-    };
-
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn anemo_send_block() {
-        let (context, keys) = Context::new_for_test(4);
-
-        let context_0 = Arc::new(
-            context
-                .clone()
-                .with_authority_index(context.committee.to_authority_index(0).unwrap()),
-        );
-        let mut manager_0 = AnemoManager::new(context_0.clone());
-        let client_0 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_0);
-        let service_0 = Arc::new(Mutex::new(TestService::new()));
-        manager_0
-            .install_service(keys[0].0.clone(), service_0.clone())
-            .await;
-
-        let context_1 = Arc::new(
-            context
-                .clone()
-                .with_authority_index(context.committee.to_authority_index(1).unwrap()),
-        );
-        let mut manager_1 = AnemoManager::new(context_1.clone());
-        let client_1 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_1);
-        let service_1 = Arc::new(Mutex::new(TestService::new()));
-        manager_1
-            .install_service(keys[1].0.clone(), service_1.clone())
-            .await;
-
-        // Wait for anemo to initialize.
-        sleep(Duration::from_secs(5)).await;
-
-        // Test that servers can receive client RPCs.
-        let test_block_0 = VerifiedBlock::new_for_test(TestBlock::new(9, 0).build());
-        client_0
-            .send_block(
-                context.committee.to_authority_index(1).unwrap(),
-                &test_block_0,
-                Duration::from_secs(5),
-            )
-            .await
-            .unwrap();
-        let test_block_1 = VerifiedBlock::new_for_test(TestBlock::new(9, 1).build());
-        client_1
-            .send_block(
-                context.committee.to_authority_index(0).unwrap(),
-                &test_block_1,
-                Duration::from_secs(5),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(service_0.lock().handle_send_block.len(), 1);
-        assert_eq!(service_0.lock().handle_send_block[0].0.value(), 1);
-        assert_eq!(
-            service_0.lock().handle_send_block[0].1,
-            test_block_1.serialized(),
-        );
-        assert_eq!(service_1.lock().handle_send_block.len(), 1);
-        assert_eq!(service_1.lock().handle_send_block[0].0.value(), 0);
-        assert_eq!(
-            service_1.lock().handle_send_block[0].1,
-            test_block_0.serialized(),
-        );
-
-        // `Committee` is generated with the same random seed in Context::new_for_test(),
-        // so the first 4 authorities are the same.
-        let (context_4, keys_4) = Context::new_for_test(5);
-        let context_4 = Arc::new(
-            context_4
-                .clone()
-                .with_authority_index(context_4.committee.to_authority_index(4).unwrap()),
-        );
-        let mut manager_4 = AnemoManager::new(context_4.clone());
-        let client_4 = <AnemoManager as NetworkManager<Mutex<TestService>>>::client(&manager_4);
-        let service_4 = Arc::new(Mutex::new(TestService::new()));
-        manager_4
-            .install_service(keys_4[4].0.clone(), service_4.clone())
-            .await;
-
-        // client_4 should not be able to reach service_0 or service_1, because of the
-        // AllowedPeers filter.
-        let test_block_2 = VerifiedBlock::new_for_test(TestBlock::new(9, 2).build());
-        assert!(client_4
-            .send_block(
-                context.committee.to_authority_index(0).unwrap(),
-                &test_block_2,
-                Duration::from_secs(5),
-            )
-            .await
-            .is_err());
-        let test_block_3 = VerifiedBlock::new_for_test(TestBlock::new(9, 3).build());
-        assert!(client_4
-            .send_block(
-                context.committee.to_authority_index(1).unwrap(),
-                &test_block_3,
-                Duration::from_secs(5),
-            )
-            .await
-            .is_err());
     }
 }
