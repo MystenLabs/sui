@@ -1,5 +1,13 @@
 # @mysten/dapp-kit
 
+## 0.13.1
+
+### Patch Changes
+
+- 2da78f77a3: Update stashed logo and fix detection of stashed wallet
+- Updated dependencies [2da78f77a3]
+  - @mysten/zksend@0.8.1
+
 ## 0.13.0
 
 ### Minor Changes
