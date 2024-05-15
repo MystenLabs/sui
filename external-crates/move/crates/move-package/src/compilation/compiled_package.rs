@@ -31,7 +31,7 @@ use move_compiler::{
     linters,
     shared::{
         program_info::{self, TypingProgramInfo},
-        NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths, SaveTypingInfo,
+        NamedAddressMap, NumericalAddress, PackageConfig, PackagePaths, SaveFlag, SaveHook,
     },
     sui_mode, Compiler,
 };
@@ -545,7 +545,7 @@ impl CompiledPackage {
         )
             -> Result<(FilesSourceText, Vec<AnnotatedCompiledUnit>)>,
     ) -> Result<CompiledPackage> {
-        let program_info_hook = SaveTypingInfo::new();
+        let program_info_hook = SaveHook::new([SaveFlag::TypingInfo]);
         let BuildResult {
             root_package_name,
             sources_package_paths: _,
@@ -563,7 +563,7 @@ impl CompiledPackage {
                 compiler_driver(compiler)
             },
         )?;
-        let program_info = program_info_hook.into_inner();
+        let program_info = program_info_hook.take_typing_info();
         let (file_map, all_compiled_units) = result;
         let mut root_compiled_units = vec![];
         let mut deps_compiled_units = vec![];

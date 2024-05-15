@@ -379,7 +379,12 @@ impl<'env> Docgen<'env> {
                 m.ident(),
                 out_dir,
                 i.target_file,
-                if matches!(m.info().target_kind, TargetKind::Source) {
+                if matches!(
+                    m.info().target_kind,
+                    TargetKind::Source {
+                        is_root_package: true
+                    }
+                ) {
                     "is target"
                 } else {
                     "is a dependency"
@@ -437,10 +442,7 @@ impl<'env> Docgen<'env> {
             .file_name()
             .expect("file name")
             .to_os_string();
-        if !matches!(
-            module_env.info().target_kind,
-            TargetKind::DependencyBeingLinked
-        ) {
+        if !matches!(module_env.info().target_kind, TargetKind::External) {
             // Try to locate the file in the provided search path.
             self.options.doc_path.iter().find_map(|dir| {
                 let mut path = PathBuf::from(dir);
@@ -836,7 +838,12 @@ impl<'env> Docgen<'env> {
         self.begin_items();
         for id in sorted_infos {
             let module_env = env.module(id);
-            if !matches!(module_env.info().target_kind, TargetKind::Source) {
+            if !matches!(
+                module_env.info().target_kind,
+                TargetKind::Source {
+                    is_root_package: true
+                }
+            ) {
                 // Do not include modules which are not target (outside of the package)
                 // into the index.
                 continue;
@@ -1354,7 +1361,14 @@ impl<'env> Docgen<'env> {
             .current_module
             .as_ref()
             .map(|id| module_env.model().module(id))
-            .map(|x| matches!(x.info().target_kind, TargetKind::Source))
+            .map(|x| {
+                matches!(
+                    x.info().target_kind,
+                    TargetKind::Source {
+                        is_root_package: true
+                    }
+                )
+            })
             .unwrap_or(true)
         {
             "../../"
