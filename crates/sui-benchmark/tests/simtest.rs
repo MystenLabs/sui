@@ -399,6 +399,13 @@ mod test {
     }
 
     #[sim_test(config = "test_config()")]
+    async fn test_simulated_load_shared_object_congestion_control() {
+        let test_cluster = build_test_cluster(4, 1000).await;
+
+        test_simulated_load(test_cluster, 120).await;
+    }
+
+    #[sim_test(config = "test_config()")]
     async fn test_data_ingestion_pipeline() {
         let path = nondeterministic!(TempDir::new().unwrap()).into_path();
         let test_cluster = Arc::new(

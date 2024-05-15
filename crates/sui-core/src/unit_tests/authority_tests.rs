@@ -5942,6 +5942,8 @@ async fn test_consensus_handler_per_object_congestion_control() {
         .get_all_deferred_transactions_for_test()
         .unwrap()
         .is_empty());
+
+    // TODO: check roots
 }
 
 // Tests congestion control triggered transaction cancellation in consensus handler:
