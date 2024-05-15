@@ -1558,6 +1558,8 @@ impl CheckpointAggregator {
                 self.current.as_mut().unwrap()
             };
 
+            expect_local!(strong_quorum, "receive_checkp0oin"
+
             let epoch_tables = self
                 .epoch_store
                 .tables()

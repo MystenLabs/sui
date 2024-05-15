@@ -1,12 +1,14 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::CheckpointMetrics;
 use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::StableSyncAuthoritySigner;
 use crate::consensus_adapter::SubmitToConsensus;
 use crate::epoch::reconfiguration::ReconfigurationInitiator;
 use async_trait::async_trait;
 use std::sync::Arc;
+use sui_causality_log::expect;
 use sui_types::base_types::AuthorityName;
 use sui_types::error::SuiResult;
 use sui_types::message_envelope::Message;
@@ -16,8 +18,6 @@ use sui_types::messages_checkpoint::{
 };
 use sui_types::messages_consensus::ConsensusTransaction;
 use tracing::{debug, info, instrument, trace};
-
-use super::CheckpointMetrics;
 
 #[async_trait]
 pub trait CheckpointOutput: Sync + Send + 'static {
@@ -93,6 +93,13 @@ impl<T: SubmitToConsensus + ReconfigurationInitiator> CheckpointOutput
 
         let message = CheckpointSignatureMessage { summary };
         let transaction = ConsensusTransaction::new_checkpoint_signature_message(message);
+
+        event!(
+            "send_checkpoint_sig" {
+                source = self.authority,
+                seq = checkpoint_seq,
+            }
+        );
         self.sender
             .submit_to_consensus(&vec![transaction], epoch_store)
             .await?;

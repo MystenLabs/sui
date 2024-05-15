@@ -79,6 +79,7 @@ narwhal-types.workspace = true
 narwhal-worker.workspace = true
 shared-crypto.workspace = true
 sui-archival.workspace = true
+sui-causality-log.workspace = true
 sui-config.workspace = true
 sui-authority-aggregation.workspace = true
 sui-execution = { path = "../../sui-execution" }

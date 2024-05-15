@@ -94,6 +94,7 @@ members = [
   "crates/sui-bridge",
   "crates/sui-bridge-cli",
   "crates/sui-bridge-indexer",
+  "crates/sui-causality-log",
   "crates/sui-cluster-test",
   "crates/sui-common",
   "crates/sui-config",
@@ -414,7 +415,7 @@ quote = "1.0.23"
 rand = "0.8.5"
 rayon = "1.5.3"
 rcgen = "0.9.2"
-regex = "1.7.1"
+regex = "1.10"
 reqwest = { version = "0.11.20", default_features = false, features = [
   "blocking",
   "json",
@@ -600,6 +601,7 @@ sui-archival = { path = "crates/sui-archival" }
 sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
 sui-bridge = { path = "crates/sui-bridge" }
+sui-causality-log = { path = "crates/sui-causality-log" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-common = { path = "crates/sui-common" }
 sui-config = { path = "crates/sui-config" }
