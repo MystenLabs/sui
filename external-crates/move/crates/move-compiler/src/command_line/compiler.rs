@@ -623,6 +623,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
     targets: Vec<PackagePaths<Paths, NamedAddress>>,
     interface_files_dir_opt: Option<String>,
     flags: Flags,
+    vfs_root: Option<VfsPath>,
 ) -> anyhow::Result<Result<FullyCompiledProgram, (FilesSourceText, Diagnostics)>> {
     let hook = SaveHook::new([
         SaveFlag::Parser,
@@ -634,7 +635,7 @@ pub fn construct_pre_compiled_lib<Paths: Into<Symbol>, NamedAddress: Into<Symbol
         SaveFlag::CFGIR,
     ]);
     let (files, pprog_and_comments_res) = Compiler::from_package_paths(
-        None,
+        vfs_root,
         targets,
         Vec::<PackagePaths<Paths, NamedAddress>>::new(),
     )?
