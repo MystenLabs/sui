@@ -27,6 +27,11 @@ const MAX_TYPE_NODES: u32 = 256;
 const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
 pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
+/// The time to wait for a transaction to be executed such that the effects can be returned to the
+/// GraphQL query. If the transaction takes longer than this time to execute, the query will return
+/// a timeout error, but the transaction will continue its execution.
+/// <https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority_aggregator.rs#L84C1-L84C57>
+/// This value is the default one from [`sui_core::authority_aggregator::TimeoutConfig`]
 pub(crate) const DEFAULT_MUTATION_TIMEOUT_MS: u64 = 60_000;
 
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
@@ -303,13 +308,15 @@ impl ServiceConfig {
         self.limits.max_page_size
     }
 
-    /// Maximum time in milliseconds that it will wait to get the results from the execution. Note
-    /// that the transaction might take longer to execute than this timeout.
+    /// Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+    /// a transaction to execute. Note that the transaction may still succeed even in the case of a
+    /// timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+    /// until the network returns a definite response (success or failure, not timeout).
     async fn mutation_timeout_ms(&self) -> u64 {
         self.limits.mutation_timeout_ms
     }
 
-    /// Maximum time in milliseconds that will be spent to serve one request.
+    /// Maximum time in milliseconds that will be spent to serve one query request.
     async fn request_timeout_ms(&self) -> u64 {
         self.limits.request_timeout_ms
     }

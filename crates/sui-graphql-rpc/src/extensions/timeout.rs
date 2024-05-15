@@ -7,7 +7,10 @@ use async_graphql::{
     Response, ServerError, ServerResult,
 };
 use async_graphql_value::Variables;
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use std::time::Duration;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::time::timeout;
@@ -22,14 +25,14 @@ pub(crate) struct Timeout;
 #[derive(Debug, Default)]
 struct TimeoutExt {
     pub query: Mutex<Option<String>>,
-    pub is_mutation: Mutex<bool>,
+    pub is_mutation: AtomicBool,
 }
 
 impl ExtensionFactory for Timeout {
     fn create(&self) -> Arc<dyn Extension> {
         Arc::new(TimeoutExt {
             query: Mutex::new(None),
-            is_mutation: Mutex::new(false),
+            is_mutation: AtomicBool::new(false),
         })
     }
 }
@@ -48,10 +51,8 @@ impl Extension for TimeoutExt {
             .operations
             .iter()
             .any(|(_, operation)| operation.node.ty == OperationType::Mutation);
-        if is_mutation {
-            *self.is_mutation.lock().unwrap() = true;
-        }
-        *self.query.lock().unwrap() = Some(ctx.stringify_execute_doc(&document, variables));
+        self.is_mutation.store(is_mutation, Ordering::Relaxed);
+
         Ok(document)
     }
 
@@ -64,8 +65,10 @@ impl Extension for TimeoutExt {
         let cfg: &ServiceConfig = ctx
             .data()
             .expect("No service config provided in schema data");
+
         // increase the timeout if the request is a mutation
-        let request_timeout = if *self.is_mutation.lock().unwrap() {
+        let is_mutation = self.is_mutation.load(Ordering::Relaxed);
+        let request_timeout = if is_mutation {
             Duration::from_millis(cfg.limits.mutation_timeout_ms)
         } else {
             Duration::from_millis(cfg.limits.request_timeout_ms)
@@ -89,7 +92,7 @@ impl Extension for TimeoutExt {
                     %error_code,
                     %query
                 );
-                let error_msg = if *self.is_mutation.lock().unwrap() {
+                let error_msg = if is_mutation {
                     format!(
                         "Mutation request timed out. Limit: {}s",
                         request_timeout.as_secs_f32()
