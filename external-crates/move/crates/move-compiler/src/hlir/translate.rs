@@ -1699,8 +1699,9 @@ fn value(
             };
             let names = methods
                 .into_iter()
-                .chain(fields.into_iter())
-                .collect::<BTreeSet<_>>();
+                .map(|(m, f)| format!("{m}::{f}"))
+                .chain(fields.into_iter().map(|n| format!("{n}")))
+                .collect::<Vec<_>>();
             let msg = format!(
                 "Autocompletes to: {}",
                 format_oxford_list!("or", "'{}'", names)

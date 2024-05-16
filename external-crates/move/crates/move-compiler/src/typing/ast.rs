@@ -241,7 +241,7 @@ pub enum UnannotatedExp_ {
     // unfinished dot access (e.g. `some_field.`) with autocomplete information on it.
     AutocompleteDotAccess {
         base_exp: Box<Exp>,
-        methods: BTreeSet<Symbol>,
+        methods: BTreeSet<(ModuleIdent, FunctionName)>,
         fields: BTreeSet<Symbol>,
     },
 
@@ -846,9 +846,12 @@ impl AstDebug for UnannotatedExp_ {
             } => {
                 base_exp.ast_debug(w);
                 w.write(".{");
-                w.comma(methods.iter().chain(fields.iter()), |w, n| {
-                    w.write(format!("{n}"))
-                });
+                let names = methods
+                    .iter()
+                    .map(|(m, f)| format!("{m}::{f}"))
+                    .chain(fields.iter().map(|n| format!("{n}")))
+                    .collect::<Vec<_>>();
+                w.comma(names, |w, n| w.write(n));
                 w.write("}");
             }
             E::UnresolvedError => w.write("_|_"),

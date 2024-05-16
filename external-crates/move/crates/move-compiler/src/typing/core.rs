@@ -868,7 +868,10 @@ impl<'env> Context<'env> {
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
-    pub fn find_all_methods(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
+    pub fn find_all_methods(
+        &mut self,
+        tn: &TypeName,
+    ) -> BTreeSet<(Spanned<ModuleIdent_>, FunctionName)> {
         debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
         if !self
             .env
@@ -884,11 +887,14 @@ impl<'env> Context<'env> {
                 return;
             }
             if let Some(names) = scope.use_funs.get(tn) {
-                let mut new_names = names.key_cloned_iter().map(|(k, _)| k.value).collect();
+                let mut new_names = names
+                    .iter()
+                    .map(|(_, _, use_fun)| use_fun.target_function)
+                    .collect();
                 result.append(&mut new_names);
             }
         });
-        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; fmt));
+        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; dbg));
         result
     }
 
