@@ -46,6 +46,7 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
         .build();
     let test_cluster = TestClusterBuilder::new()
         .set_network_config(network_config)
+        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
 
