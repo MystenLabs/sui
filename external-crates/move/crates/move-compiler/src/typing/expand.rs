@@ -259,10 +259,10 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
         E::ExpandedMacro(i, seq) => {
+            sequence(context, seq);
             for t in i.type_arguments.iter_mut() {
                 type_(context, t);
             }
-            sequence(context, seq);
         }
         E::Assign(assigns, tys, er) => {
             lvalues(context, assigns);

@@ -1049,22 +1049,27 @@ fn exp(context: &mut Context, sp!(eloc, e_): &mut N::Exp) {
                 .collect();
             result.push_back(sp(body_loc, N::SequenceItem_::Seq(labeled_body)));
 
-            // mark blocks representing lambdas with a special label
-            let label = sp(
-                argloc,
-                N::Var_ {
-                    name: N::BlockLabel::LAMBDA_LABEL_SYMBOL,
-                    id: return_label.label.value.id,
-                    color: return_label.label.value.color,
-                },
-            );
-            let lambda_label = BlockLabel {
-                label,
-                is_implicit: true,
+            let lambda_label = if context.core.env.ide_mode() {
+                // mark blocks representing lambdas with a special label (used in the IDE to
+                // recognize lambda locations)
+                let label = sp(
+                    argloc,
+                    N::Var_ {
+                        name: N::BlockLabel::LAMBDA_LABEL_SYMBOL,
+                        id: return_label.label.value.id,
+                        color: return_label.label.value.color,
+                    },
+                );
+                Some(BlockLabel {
+                    label,
+                    is_implicit: true,
+                })
+            } else {
+                None
             };
 
             *e_ = N::Exp_::Block(N::Block {
-                name: Some(lambda_label),
+                name: lambda_label,
                 from_macro_argument: None,
                 seq: (N::UseFuns::new(context.macro_color), result),
             });

@@ -4414,29 +4414,22 @@ fn expected_by_name_arg_type(
 fn expand_macro(
     context: &mut core::Context,
     call_loc: Loc,
-    mod_ident: ModuleIdent,
+    m: ModuleIdent,
     f: FunctionName,
-    m: Option<Name>,
+    method_name: Option<Name>,
     type_args: Vec<N::Type>,
     args: Vec<macro_expand::Arg>,
     return_ty: Type,
 ) -> (Type, T::UnannotatedExp_) {
     use T::{SequenceItem_ as TS, UnannotatedExp_ as TE};
 
-    let valid = context.add_macro_expansion(mod_ident, f, call_loc);
+    let valid = context.add_macro_expansion(m, f, call_loc);
     if !valid {
         assert!(context.env.has_errors());
         return (context.error_type(call_loc), TE::UnresolvedError);
     }
-    let res = match macro_expand::call(
-        context,
-        call_loc,
-        mod_ident,
-        f,
-        type_args.clone(),
-        args,
-        return_ty,
-    ) {
+    let res = match macro_expand::call(context, call_loc, m, f, type_args.clone(), args, return_ty)
+    {
         None => {
             assert!(context.env.has_errors());
             (context.error_type(call_loc), TE::UnresolvedError)
@@ -4473,9 +4466,9 @@ fn expand_macro(
             let e_ = if context.env.ide_mode() {
                 TE::ExpandedMacro(
                     MacroCallInfo {
-                        module: mod_ident,
+                        module: m,
                         name: f,
-                        method_name: m,
+                        method_name,
                         type_arguments: type_args.clone(),
                         by_value_args_num: by_value_num,
                     },
@@ -4487,7 +4480,7 @@ fn expand_macro(
             (ty, e_)
         }
     };
-    if context.pop_macro_expansion(call_loc, &mod_ident, &f) {
+    if context.pop_macro_expansion(call_loc, &m, &f) {
         res
     } else {
         (context.error_type(call_loc), TE::UnresolvedError)
