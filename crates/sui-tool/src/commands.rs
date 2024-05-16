@@ -268,12 +268,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket", group = "auth")]
+        #[clap(long = "snapshot-bucket", conflicts_with = "no_sign_request")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
-            group = "auth",
+            conflicts_with = "no_sign_request",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -287,7 +287,7 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            conflicts_with = "auth",
+            conflicts_with_all = &["snapshot_bucket", "snapshot_bucket_type"],
             help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
@@ -334,12 +334,12 @@ pub enum ToolCommand {
         network: Chain,
         /// Snapshot bucket name. If not specified, defaults are
         /// based on value of `--network` flag.
-        #[clap(long = "snapshot-bucket", group = "auth")]
+        #[clap(long = "snapshot-bucket", conflicts_with = "no_sign_request")]
         snapshot_bucket: Option<String>,
         /// Snapshot bucket type
         #[clap(
             long = "snapshot-bucket-type",
-            group = "auth",
+            conflicts_with = "no_sign_request",
             help = "Required if --no-sign-request is not set"
         )]
         snapshot_bucket_type: Option<ObjectStoreType>,
@@ -356,7 +356,7 @@ pub enum ToolCommand {
         /// If true, no authentication is needed for snapshot restores
         #[clap(
             long = "no-sign-request",
-            conflicts_with = "auth",
+            conflicts_with_all = &["snapshot_bucket", "snapshot_bucket_type"],
             help = "if set, no authentication is needed for snapshot restore"
         )]
         no_sign_request: bool,
