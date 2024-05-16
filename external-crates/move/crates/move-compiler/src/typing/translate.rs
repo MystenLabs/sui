@@ -3166,8 +3166,7 @@ fn process_exp_dotted(
         match ndot_ {
             N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
             N::ExpDotted_::Dot(ndot, field) => {
-                let mut inner =
-                    process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
+                let mut inner = process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
                 if inner.for_autocomplete {
                     return inner;
                 }
@@ -3187,8 +3186,7 @@ fn process_exp_dotted(
                 inner
             }
             N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
-                let mut inner =
-                    process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
+                let mut inner = process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
                 if inner.for_autocomplete {
                     return inner;
                 }
@@ -3199,8 +3197,7 @@ fn process_exp_dotted(
                 inner
             }
             N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
-                let mut inner =
-                    process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
+                let mut inner = process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
                 if inner.for_autocomplete {
                     return inner;
                 }
@@ -3229,8 +3226,7 @@ fn process_exp_dotted(
                 inner
             }
             N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
-                let mut inner =
-                    process_exp_dotted_inner(context, Some("dot access"), *ndot);
+                let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
                 let inner_ty = inner.last_type();
                 let index_access = process_index_access(context, dloc, inner_ty, argloc, nargs_);
                 inner.loc = dloc;
