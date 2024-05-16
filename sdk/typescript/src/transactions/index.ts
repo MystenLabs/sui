@@ -33,11 +33,9 @@ export type {
 	OpenMoveTypeSignatureBody,
 } from './data/internal.js';
 
-<<<<<<< HEAD
 export { TransactionDataBuilder } from './TransactionData.js';
-export { ObjectCache, CachingTransactionExecutor, AsyncCache } from './ObjectCache.js';
-=======
-export { TransactionBlockDataBuilder } from './TransactionBlockData.js';
 export { ObjectCache, AsyncCache } from './ObjectCache.js';
-export { CachingTransactionBlockExecutor, SerialTransactionBlockExecutor } from './executor.js';
->>>>>>> 245638ab1c (Add serial executor)
+export { CachingTransactionBlockExecutor } from './executor/caching.js';
+export { SerialTransactionBlockExecutor } from './executor/serial.js';
+export { ParallelExecutor } from './executor/parallel.js';
+export type { ParallelExecutorOptions } from './executor/parallel.js';

@@ -43,6 +43,11 @@ export const ObjectDigest = bcs.vector(bcs.u8()).transform({
 	name: 'ObjectDigest',
 	input: (value: string) => fromB58(value),
 	output: (value) => toB58(new Uint8Array(value)),
+	// validate: (value) => {
+	// 	if (fromB58(value).length !== 32) {
+	// 		throw new Error('ObjectDigest must be 32 bytes');
+	// 	}
+	// },
 });
 
 export const SuiObjectRef = bcs.struct('SuiObjectRef', {

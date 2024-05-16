@@ -64,11 +64,16 @@ export abstract class AsyncCache {
 		return object;
 	}
 
+	async addObjects(objects: ObjectCacheEntry[]) {
+		await Promise.all(objects.map(async (object) => this.addObject(object)));
+	}
+
 	async deleteObject(id: string) {
-		await Promise.all([
-			await this.delete('OwnedObject', id),
-			await this.delete('SharedOrImmutableObject', id),
-		]);
+		await Promise.all([this.delete('OwnedObject', id), this.delete('SharedOrImmutableObject', id)]);
+	}
+
+	async deleteObjects(ids: string[]) {
+		await Promise.all(ids.map((id) => this.deleteObject(id)));
 	}
 
 	async getMoveFunctionDefinition(ref: { package: string; module: string; function: string }) {
@@ -264,19 +269,21 @@ export class ObjectCache {
 
 		const { lamportVersion, changedObjects } = effects.V2;
 
-		await Promise.all(
-			changedObjects.map(async ([id, change]) => {
-				if (change.outputState.NotExist) {
+		const deletedIds: string[] = [];
+		const addedObjects: ObjectCacheEntry[] = [];
+
+		changedObjects.map(async ([id, change]) => {
+			if (change.outputState.NotExist) {
+				await this.#cache.deleteObject(id);
+			} else if (change.outputState.ObjectWrite) {
+				const [digest, owner] = change.outputState.ObjectWrite;
+
+				// Remove objects not owned by address after transaction
+				if (owner.ObjectOwner || (owner.AddressOwner && owner.AddressOwner !== this.#address)) {
+					deletedIds.push(id);
 					await this.#cache.deleteObject(id);
-				} else if (change.outputState.ObjectWrite) {
-					const [digest, owner] = change.outputState.ObjectWrite;
-
-					// Remove objects not owned by address after transaction
-					if (owner.ObjectOwner || (owner.AddressOwner && owner.AddressOwner !== this.#address)) {
-						await this.#cache.deleteObject(id);
-					}
-
-					await this.#cache.addObject({
+				} else {
+					addedObjects.push({
 						objectId: id,
 						digest,
 						version: lamportVersion,
@@ -284,7 +291,12 @@ export class ObjectCache {
 						initialSharedVersion: owner.Shared?.initialSharedVersion ?? null,
 					});
 				}
-			}),
-		);
+			}
+		});
+
+		await Promise.all([
+			this.#cache.addObjects(addedObjects),
+			this.#cache.deleteObjects(deletedIds),
+		]);
 	}
 }
