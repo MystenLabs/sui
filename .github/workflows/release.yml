@@ -123,6 +123,12 @@ jobs:
           echo "PG_DATABASE_URL=postgres://postgres:root@localhost/" >> $GITHUB_ENV
           echo "PG_EXAMPLE_DATABASE_URL=postgres://postgres:root@localhost/diesel_example" >> $GITHUB_ENV
 
+      - name: Install jq (MacOS arm64)
+        if: ${{ matrix.os == 'macos-arm64-self-hosted' && env.s3_archive_exist == '' }}
+        shell: bash
+        run: |
+          brew install jq        
+
       - name: Check out ${{ env.sui_tag }}
         if: ${{ env.s3_archive_exist == '' }}
         uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # pin@v3
