@@ -103,6 +103,7 @@ use move_compiler::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
+    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::*;
@@ -1667,6 +1668,16 @@ pub fn empty_symbols() -> Symbols {
     }
 }
 
+/// Some functions defined in a module need to be ignored.
+fn ignored_function(name: Symbol) -> bool {
+    // In test mode (that's how IDE compiles Move source files),
+    // the compiler inserts an dummy function preventing preventing
+    // publishing of modules compiled in test mode. We need to
+    // ignore its definition to avoid spurious on-hover display
+    // of this function's info whe hovering close to `module` keyword.
+    name == UNIT_TEST_POISON_FUN_NAME
+}
+
 /// Main AST traversal functions
 
 /// Get symbols for outer definitions in the module (functions, structs, and consts)
@@ -1791,6 +1802,9 @@ fn get_mod_outer_defs(
     }
 
     for (pos, name, fun) in &mod_def.functions {
+        if ignored_function(*name) {
+            continue;
+        }
         let name_start = match get_start_loc(&pos, files, file_id_mapping) {
             Some(s) => s,
             None => {
@@ -1985,6 +1999,9 @@ impl<'a> ParsingSymbolicator<'a> {
             use P::ModuleMember as MM;
             match m {
                 MM::Function(fun) => {
+                    if ignored_function(fun.name.value()) {
+                        continue;
+                    }
                     if let P::FunctionBody_::Defined(seq) = &fun.body.value {
                         self.seq_symbols(seq);
                     };
@@ -2409,6 +2426,9 @@ impl<'a> TypingSymbolicator<'a> {
     /// Get symbols for the whole module
     fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &str) {
         for (pos, name, fun) in &mod_def.functions {
+            if ignored_function(*name) {
+                continue;
+            }
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let doc_string = extract_doc_string(
