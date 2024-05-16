@@ -50,7 +50,7 @@ impl CommitObserver {
     ) -> Self {
         let mut observer = Self {
             context,
-            commit_interpreter: Linearizer::new(dag_state.clone()),
+            commit_interpreter: Linearizer::new(dag_state.clone(), leader_schedule.clone()),
             sender: commit_consumer.sender,
             store,
             leader_schedule,
@@ -72,15 +72,7 @@ impl CommitObserver {
             .with_label_values(&["CommitObserver::handle_commit"])
             .start_timer();
 
-        let reputation_scores_desc = self
-            .leader_schedule
-            .leader_swap_table
-            .read()
-            .reputation_scores_desc
-            .clone();
-        let committed_sub_dags = self
-            .commit_interpreter
-            .handle_commit(committed_leaders, reputation_scores_desc);
+        let committed_sub_dags = self.commit_interpreter.handle_commit(committed_leaders);
         let mut sent_sub_dags = vec![];
         for committed_sub_dag in committed_sub_dags.into_iter() {
             // Failures in sender.send() are assumed to be permanent

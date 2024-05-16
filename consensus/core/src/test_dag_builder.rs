@@ -178,7 +178,7 @@ impl DagBuilder {
             to_commit,
             timestamp_ms,
             commit.reference(),
-            vec![]
+            vec![],
         );
 
         (sub_dag, commit)
