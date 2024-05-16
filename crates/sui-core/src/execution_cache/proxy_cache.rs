@@ -11,7 +11,7 @@ use crate::transaction_outputs::TransactionOutputs;
 
 use futures::future::BoxFuture;
 use futures::FutureExt;
-use parking_lot::Mutex;
+use parking_lot::RwLock;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_protocol_config::ProtocolVersion;
@@ -36,7 +36,7 @@ use super::{
 
 macro_rules! delegate_method {
     ($self:ident.$method:ident($($args:ident),*)) => {
-        match *$self.mode.lock() {
+        match *$self.mode.read() {
             ExecutionCacheConfigType::PassthroughCache => $self.passthrough_cache.$method($($args),*),
             ExecutionCacheConfigType::WritebackCache => $self.writeback_cache.$method($($args),*),
         }
@@ -52,7 +52,7 @@ pub struct ProxyCache {
     // Cache implementations are entirely passive, so the unused one will have no effect.
     passthrough_cache: PassthroughCache,
     writeback_cache: WritebackCache,
-    mode: Mutex<ExecutionCacheConfigType>,
+    mode: RwLock<ExecutionCacheConfigType>,
 }
 
 impl ProxyCache {
@@ -69,7 +69,7 @@ impl ProxyCache {
         Self {
             passthrough_cache,
             writeback_cache,
-            mode: Mutex::new(cache_type),
+            mode: RwLock::new(cache_type),
         }
     }
 
@@ -91,7 +91,7 @@ impl ProxyCache {
             tokio::time::sleep(Duration::from_nanos(100)).await;
             self.writeback_cache.clear_caches_and_assert_empty();
         }
-        *self.mode.lock() = cache_type;
+        *self.mode.write() = cache_type;
     }
 }
 
