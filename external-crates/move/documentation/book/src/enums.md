@@ -1,6 +1,6 @@
 # Enumerations
 
-An _enum_ is a user-defined data structure containing one-or-more _variants_. Each variant can
+An _enum_ is a user-defined data structure containing one or more _variants_. Each variant can
 optionally contain typed fields. The number, and types of these fields can differ for each variant
 in the enumeration. Fields in enums can store any non-reference, non-tuple type, including other
 structs or enums.
@@ -20,13 +20,13 @@ This declares an enum `Action` that represents different actions that can be tak
 can `Stop`, `Pause` for a given duration, `MoveTo` a specific location, or `Jump` to a specific
 height.
 
-Similarly to structs, enums can have [abilities](./abilities.md) that control what operations can be
+Similar to structs, enums can have [abilities](./abilities.md) that control what operations can be
 performed on them. It is important to note however that enums cannot have the `key` ability since
 they cannot be top-level objects.
 
 ## Defining Enums
 
-Enums must be defined in a module, an enum must contain at least on variant, and each variant of an
+Enums must be defined in a module, an enum must contain at least one variant, and each variant of an
 enum can either have no fields, positional fields, or named fields. Here are some examples of each:
 
 ```move
@@ -45,7 +45,9 @@ module a::m {
 ```
 
 Enums cannot be recursive in any of their variants, so the following definitions of an enum are not
-allowed since they would be recursive in at least one variant:
+allowed because they would be recursive in at least one variant.
+
+Incorrect:
 
 ```move
 module a::m {
@@ -63,6 +65,19 @@ module a::m {
         Node { left: BTree<T>, right: BTree<T> },
         //           ^ error: recursive enum variant
     }
+
+    // Mutually recursive enums are also not allowed
+    public enum MutuallyRecursiveA {
+        Base,
+        Other(MutuallyRecursiveB),
+        //    ^^^^^^^^^^^^^^^^^^ error: recursive enum variant
+    }
+
+    public enum MutuallyRecursiveB {
+        Base,
+        Other(MutuallyRecursiveA),
+        //    ^^^^^^^^^^^^^^^^^^ error: recursive enum variant
+    }
 }
 ```
 
@@ -72,13 +87,10 @@ All enums are declared as `public`. This means that the type of the enum can be 
 other module. However, the variants of the enum, the fields within each variant, and the ability to
 create or destroy variants of the enum are internal to the module that defines the enum.
 
-In the future, we plan on adding the ability to declare enums to have public variants, but this is
-currently not supported.
-
 ### Abilities
 
-Just like with structs, by default an enum declaration is linear and ephemeral. In order to use an
-enum value in a non-linear or non-ephemeral way -- i.e., copied, dropped, or stored in an
+Just like with structs, by default an enum declaration is linear and ephemeral. To use an enum value
+in a non-linear or non-ephemeral way -- i.e., copied, dropped, or stored in an
 [object](./abilities/object.md) -- you need to grant it additional [abilities](./abilities.md) by
 annotating them with `has <ability>`:
 
@@ -112,8 +124,8 @@ For more details, see the section on
 ## Naming
 
 Enums and variants within enums must start with a capital letter `A` to `Z`. After the first letter,
-enum names can contain underscores `_`, letters `a` to `z`, letters `A` to `Z`, or digits `0` to
-`9`.
+enum names can contain underscores `_`, lowercase letters `a` to `z`, uppercase letters `A` to `Z`,
+or digits `0` to `9`.
 
 ```move
 public enum Foo { Variant }
@@ -122,7 +134,7 @@ public enum B_a_z_4_2 { V_a_riant_0 }
 ```
 
 This naming restriction of starting with `A` to `Z` is in place to give room for future language
-features. It may or may not be removed later.
+features.
 
 ## Using Enums
 
@@ -133,7 +145,7 @@ a value for each field in the variant. The variant name must always be qualified
 
 Similarly to structs, for a variant with named fields, the order of the fields does not matter but
 the field names need to be provided. For a variant with positional fields, the order of the fields
-matters and the order of the fields must match the order in the variant declaration and it must be
+matters and the order of the fields must match the order in the variant declaration. It must also be
 created using `()` instead of `{}`. If the variant has no fields, the variant name is sufficient and
 no `()` or `{}` needs to be used.
 
@@ -175,8 +187,8 @@ let pause = Action::Pause { duration };
 ### Pattern Matching Enum Variants and Destructuring
 
 Since enum values can take on different shapes, dot access to fields of variants is not allowed like
-it is for struct fields. Instead, in order to access fields within a variant -- either by value, or
-immutable or mutable reference -- you must use pattern matching.
+it is for struct fields. Instead, to access fields within a variant -- either by value, or immutable
+or mutable reference -- you must use pattern matching.
 
 You can pattern match on Move values by value, immutable reference, and mutable reference. When
 pattern matching by value, the value is moved into the match arm. When pattern matching by
@@ -187,9 +199,9 @@ matching using `match` in Move see the [Pattern Matching](./pattern_matching.md)
 A `match` statement is used to pattern match on a Move value and consists of a number of _match
 arms_. Each match arm consists of a pattern, an arrow `=>`, and an expression, followed by a comma
 `,`. The pattern can be a struct, enum variant, binding (`x`, `y`), wildcard (`_` or `..`), constant
-(`ConstValue`), or literal value (`true`, `42` etc). The value is matched against each pattern from
-the top-down, and will match the first pattern that structurally matches the value. Once the value
-is matched the expression on the right hand side of the `=>` is executed.
+(`ConstValue`), or literal value (`true`, `42`, and so on). The value is matched against each
+pattern from the top-down, and will match the first pattern that structurally matches the value.
+Once the value is matched, the expression on the right hand side of the `=>` is executed.
 
 Additionally, match arms can have optional _guards_ that are checked after the pattern matches but
 _before_ the expression is executed. Guards are specified by the `if` keyword followed by an
@@ -233,9 +245,9 @@ module a::m {
 
 ```
 
-To see how to pattern match on an enum to update values within it mutably lets take the following
+To see how to pattern match on an enum to update values within it mutably, let's take the following
 example of a simple enum that has two variants, each with a single field. We can then write two
-functions one that only increments the value of the first variant and another that only increments
+functions, one that only increments the value of the first variant, and another that only increments
 the value of the second variant:
 
 ```move
@@ -274,7 +286,7 @@ incr_enum_variant2(&mut x);
 assert!(x == SimpleEnum::Variant1(11));
 ```
 
-When pattern matching on Move value that does not have the `drop` ability, the value must be
+When pattern matching on a Move value that does not have the `drop` ability, the value must be
 consumed or destructured in each match arm. If the value is not consumed or destructured in a match
 arm, the compiler will raise an error. This is to ensure that all possible values are handled in the
 match statement.
@@ -294,8 +306,8 @@ module a::m {
 }
 ```
 
-In order to properly handle this, you will need to destructure `X` and all its variants in the
-match's arm(s):
+To properly handle this, you will need to destructure `X` and all its variants in the match's
+arm(s):
 
 ```move
 module a::m {

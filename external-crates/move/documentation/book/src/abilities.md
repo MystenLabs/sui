@@ -130,7 +130,7 @@ reachability rules for the abilities given above. If a struct is declared with t
 - `key`, all fields must have `store`.
   - `key` is the only ability currently that doesn’t require itself.
 
-An enum can have any of these abilities with the exception of `key` which enums cannot have since
+An enum can have any of these abilities with the exception of `key`, which enums cannot have because
 they cannot be top-level values (objects) in storage. The same rules apply to fields of enum
 variants as they do for struct fields though. In particular, if an enum is declared with the
 ability...
@@ -138,7 +138,7 @@ ability...
 - `copy`, all fields of all variants must have `copy`.
 - `drop`, all fields of all variants must have `drop`.
 - `store`, all fields of all variants must have `store`.
-- `key`, is not allowed on enums as mentioned above.
+- `key`, is not allowed on enums as previously mentioned.
 
 For example:
 
