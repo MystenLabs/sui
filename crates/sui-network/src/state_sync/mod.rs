@@ -1231,6 +1231,13 @@ async fn sync_checkpoint_contents<S>(
             },
         }
 
+        info!(
+            "ZZZZ current seq {:?} target seq {:?} content tasks {:?} concurrency {:?}",
+            current_sequence,
+            target_sequence_cursor,
+            checkpoint_contents_tasks.len(),
+            checkpoint_content_download_concurrency
+        );
         // Start new tasks up to configured concurrency limits.
         while current_sequence < target_sequence_cursor
             && checkpoint_contents_tasks.len() < checkpoint_content_download_concurrency
@@ -1366,12 +1373,24 @@ where
             .tap_none(|| trace!("peer unable to help sync"))
         {
             if contents.verify_digests(digest).is_ok() {
+                info!("ZZZZZ got content {:?}", checkpoint.sequence_number());
                 let verified_contents = VerifiedCheckpointContents::new_unchecked(contents.clone());
                 store
                     .insert_checkpoint_contents(checkpoint, verified_contents)
                     .expect("store operation should not fail");
                 return Some(contents);
             }
+        } else if let Some(contents) = store
+            .get_full_checkpoint_contents_by_sequence_number(*checkpoint.sequence_number())
+            .expect("store operation should not fail")
+            .or_else(|| {
+                store
+                    .get_full_checkpoint_contents(&digest)
+                    .expect("store operation should not fail")
+            })
+        {
+            debug!("store already contains checkpoint contents");
+            return Some(contents);
         }
     }
     debug!("no peers had checkpoint contents");

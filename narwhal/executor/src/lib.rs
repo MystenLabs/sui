@@ -64,6 +64,7 @@ impl Executor {
     where
         State: ExecutionState + Send + Sync + 'static,
     {
+        info!("About to start consensus subscriber.");
         let metrics = ExecutorMetrics::new(registry);
 
         // This will be needed in the `Subscriber`.
