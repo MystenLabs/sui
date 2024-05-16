@@ -214,6 +214,10 @@ impl CommitDigest {
     /// Lexicographic min & max digest.
     pub const MIN: Self = Self([u8::MIN; consensus_config::DIGEST_LENGTH]);
     pub const MAX: Self = Self([u8::MAX; consensus_config::DIGEST_LENGTH]);
+
+    pub fn into_inner(self) -> [u8; consensus_config::DIGEST_LENGTH] {
+        self.0
+    }
 }
 
 impl Hash for CommitDigest {
@@ -253,8 +257,8 @@ impl fmt::Debug for CommitDigest {
 /// Uniquely identifies a commit with its index and digest.
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct CommitRef {
-    pub(crate) index: CommitIndex,
-    pub(crate) digest: CommitDigest,
+    pub index: CommitIndex,
+    pub digest: CommitDigest,
 }
 
 impl CommitRef {
@@ -292,114 +296,45 @@ pub struct CommittedSubDag {
     pub blocks: Vec<VerifiedBlock>,
     /// The timestamp of the commit, obtained from the timestamp of the leader block.
     pub timestamp_ms: BlockTimestampMs,
-    /// Index of the commit.
+    /// The reference of the commit.
     /// First commit after genesis has a index of 1, then every next commit has a
     /// index incremented by 1.
-    pub commit_index: CommitIndex,
+    pub commit_ref: CommitRef,
     /// Optional scores that are provided as part of the consensus output to Sui
     /// that can then be used by Sui for future submission to consensus.
     pub reputation_scores_desc: Vec<(AuthorityIndex, u64)>,
-    /// The committed sub dag digest. The reputation scores are excluded since there is no strict
-    /// requirements those to be consistent for every committed sub dag.
-    pub digest: CommittedSubDagDigest,
 }
 
 impl CommittedSubDag {
     /// Create new (empty) sub-dag.
     pub(crate) fn new(
         leader: BlockRef,
-        mut blocks: Vec<VerifiedBlock>,
+        blocks: Vec<VerifiedBlock>,
         timestamp_ms: BlockTimestampMs,
-        commit_index: CommitIndex,
+        commit_ref: CommitRef,
     ) -> Self {
-        // Sort the blocks of the sub-dag by round number then authority index. Any
-        // deterministic & stable algorithm works.
-        blocks.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
-
-        let digest = Self::digest(leader, &blocks, timestamp_ms, commit_index);
         Self {
             leader,
             blocks,
             timestamp_ms,
-            commit_index,
+            commit_ref,
             reputation_scores_desc: vec![],
-            digest,
         }
     }
 
     pub(crate) fn update_scores(&mut self, reputation_scores_desc: Vec<(AuthorityIndex, u64)>) {
         self.reputation_scores_desc = reputation_scores_desc;
     }
-
-    fn digest(
-        leader: BlockRef,
-        blocks: &[VerifiedBlock],
-        timestamp_ms: BlockTimestampMs,
-        commit_index: CommitIndex,
-    ) -> CommittedSubDagDigest {
-        let mut hasher = DefaultHashFunction::new();
-        for block in blocks {
-            hasher.update(block.digest());
-        }
-        hasher.update(leader.digest);
-        hasher.update(
-            bcs::to_bytes(&commit_index)
-                .unwrap_or_else(|_| panic!("Serialization of {} should not fail", commit_index)),
-        );
-        hasher.update(
-            bcs::to_bytes(&timestamp_ms)
-                .unwrap_or_else(|_| panic!("Serialization of {} should not fail", timestamp_ms)),
-        );
-        CommittedSubDagDigest(hasher.finalize().into())
-    }
 }
 
-/// Digest of a committed sub dag.
-#[derive(Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
-pub struct CommittedSubDagDigest([u8; DIGEST_LENGTH]);
-
-impl CommittedSubDagDigest {
-    pub const fn into_inner(self) -> [u8; DIGEST_LENGTH] {
-        self.0
-    }
-}
-
-impl Hash for CommittedSubDagDigest {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        state.write(&self.0[..8]);
-    }
-}
-
-impl From<CommittedSubDagDigest> for Digest<{ DIGEST_LENGTH }> {
-    fn from(hd: CommittedSubDagDigest) -> Self {
-        Digest::new(hd.0)
-    }
-}
-
-impl fmt::Display for CommittedSubDagDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}",
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
-                .get(0..4)
-                .ok_or(fmt::Error)?
-        )
-    }
-}
-
-impl fmt::Debug for CommittedSubDagDigest {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(
-            f,
-            "{}",
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, self.0)
-        )
-    }
+// Sort the blocks of the sub-dag blocks by round number then authority index. Any
+// deterministic & stable algorithm works.
+pub(crate) fn sort_sub_dag_blocks(blocks: &mut [VerifiedBlock]) {
+    blocks.sort_by(|a, b| {
+        a.round()
+            .cmp(&b.round())
+            .then_with(|| a.author().cmp(&b.author()))
+    })
 }
 
 impl Display for CommittedSubDag {
@@ -407,7 +342,7 @@ impl Display for CommittedSubDag {
         write!(
             f,
             "CommittedSubDag(leader={}, index={}, blocks=[",
-            self.leader, self.commit_index
+            self.leader, self.commit_ref
         )?;
         for (idx, block) in self.blocks.iter().enumerate() {
             if idx > 0 {
@@ -415,20 +350,20 @@ impl Display for CommittedSubDag {
             }
             write!(f, "{}", block.digest())?;
         }
-        write!(f, "], digest={})", self.digest)
+        write!(f, "], digest={})", self.commit_ref.digest)
     }
 }
 
 impl fmt::Debug for CommittedSubDag {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}@{} ([", self.leader, self.commit_index)?;
+        write!(f, "{}@{} ([", self.leader, self.commit_ref)?;
         for block in &self.blocks {
             write!(f, "{}, ", block.reference())?;
         }
         write!(
             f,
-            "];{}ms;rs{:?},digest:{})",
-            self.timestamp_ms, self.reputation_scores_desc, self.digest
+            "];{}ms;rs{:?})",
+            self.timestamp_ms, self.reputation_scores_desc
         )
     }
 }
@@ -460,7 +395,7 @@ pub fn load_committed_subdag_from_store(
         leader_block_ref,
         blocks,
         commit.timestamp_ms(),
-        commit.index(),
+        commit.reference(),
     )
 }
 
@@ -733,14 +668,17 @@ mod tests {
             leader_ref,
             blocks.clone(),
         );
-        let subdag = load_committed_subdag_from_store(store.as_ref(), commit);
+        let subdag = load_committed_subdag_from_store(store.as_ref(), commit.clone());
         assert_eq!(subdag.leader, leader_ref);
         assert_eq!(subdag.timestamp_ms, leader_block.timestamp_ms());
         assert_eq!(
             subdag.blocks.len(),
             (num_authorities * wave_length) as usize + 1
         );
-        assert_eq!(subdag.commit_index, commit_index);
+        assert_eq!(
+            subdag.commit_ref,
+            commit.reference()
+        );
     }
 
     #[tokio::test]

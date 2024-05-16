@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use std::fmt::Display;
 
-use consensus_core::{BlockAPI, CommittedSubDagDigest};
+use consensus_core::{BlockAPI, CommitDigest};
 use fastcrypto::hash::Hash;
 use narwhal_types::{BatchAPI, CertificateAPI, ConsensusOutputDigest, HeaderAPI};
 use sui_protocol_config::ProtocolConfig;
@@ -132,7 +132,7 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
     }
 
     fn commit_sub_dag_index(&self) -> u64 {
-        self.commit_index.into()
+        self.commit_ref.index.into()
     }
 
     fn transactions(&self) -> ConsensusOutputTransactions {
@@ -165,10 +165,10 @@ impl ConsensusOutputAPI for consensus_core::CommittedSubDag {
 
     fn consensus_digest(&self, protocol_config: &ProtocolConfig) -> ConsensusCommitDigest {
         if protocol_config.mysticeti_use_committed_subdag_digest() {
-            // We port CommittedSubDagDigest, a consensus space object, into ConsensusCommitDigest, a sui-core space object.
+            // We port CommitDigest, a consensus space object, into ConsensusCommitDigest, a sui-core space object.
             // We assume they always have the same format.
-            static_assertions::assert_eq_size!(ConsensusCommitDigest, CommittedSubDagDigest);
-            ConsensusCommitDigest::new(self.digest.into_inner())
+            static_assertions::assert_eq_size!(ConsensusCommitDigest, CommitDigest);
+            ConsensusCommitDigest::new(self.commit_ref.digest.into_inner())
         } else {
             ConsensusCommitDigest::default()
         }

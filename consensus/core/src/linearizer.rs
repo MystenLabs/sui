@@ -5,6 +5,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use parking_lot::RwLock;
 
+use crate::commit::sort_sub_dag_blocks;
 use crate::{
     block::{BlockAPI, VerifiedBlock},
     commit::{Commit, CommittedSubDag, TrustedCommit},
@@ -35,7 +36,6 @@ impl Linearizer {
         let last_commit_digest = dag_state.last_commit_digest();
         let last_commit_timestamp_ms = dag_state.last_commit_timestamp_ms();
         let last_committed_rounds = dag_state.last_committed_rounds();
-        drop(dag_state);
 
         let mut to_commit = Vec::new();
         let mut committed = HashSet::new();
@@ -45,7 +45,6 @@ impl Linearizer {
         let mut buffer = vec![leader_block];
         assert!(committed.insert(leader_block_ref));
 
-        let dag_state = self.dag_state.read();
         while let Some(x) = buffer.pop() {
             to_commit.push(x.clone());
 
@@ -74,19 +73,14 @@ impl Linearizer {
             }
         }
 
-        let commit_index = last_commit_index + 1;
+        drop(dag_state);
 
-        // Sort the blocks of the sub-dag by round number then authority index. Any
-        // deterministic & stable algorithm works.
-        to_commit.sort_by(|a, b| {
-            a.round()
-                .cmp(&b.round())
-                .then_with(|| a.author().cmp(&b.author()))
-        });
+        // Sort the blocks of the sub-dag blocks
+        sort_sub_dag_blocks(&mut to_commit);
 
         // Create the Commit.
         let commit = Commit::new(
-            commit_index,
+            last_commit_index + 1,
             last_commit_digest,
             timestamp_ms,
             leader_block_ref,
@@ -101,7 +95,12 @@ impl Linearizer {
         let commit = TrustedCommit::new_trusted(commit, serialized);
 
         // Create the corresponding committed sub dag
-        let sub_dag = CommittedSubDag::new(leader_block_ref, to_commit, timestamp_ms, commit_index);
+        let sub_dag = CommittedSubDag::new(
+            leader_block_ref,
+            to_commit,
+            timestamp_ms,
+            commit.reference(),
+        );
 
         (sub_dag, commit)
     }
@@ -190,7 +189,7 @@ mod tests {
             for block in subdag.blocks.iter() {
                 assert!(block.round() <= leaders[idx].round());
             }
-            assert_eq!(subdag.commit_index, idx as CommitIndex + 1);
+            assert_eq!(subdag.commit_ref.index, idx as CommitIndex + 1);
         }
     }
 
@@ -277,7 +276,7 @@ mod tests {
         tracing::info!("{subdag:?}");
         assert_eq!(subdag.leader, leader.reference());
         assert_eq!(subdag.timestamp_ms, leader.timestamp_ms());
-        assert_eq!(subdag.commit_index, expected_second_commit.index());
+        assert_eq!(subdag.commit_ref.index, expected_second_commit.index());
 
         // Using the same sorting as used in CommittedSubDag::sort
         blocks.sort_by(|a, b| a.round.cmp(&b.round).then_with(|| a.author.cmp(&b.author)));
