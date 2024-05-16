@@ -332,6 +332,9 @@ pub enum SuiError {
         threshold: u64,
     },
 
+    #[error("Soft bundle must only contain transactions of UserTransaction kind")]
+    InvalidTxKindInSoftBundle,
+
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },

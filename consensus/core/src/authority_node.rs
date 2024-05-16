@@ -616,7 +616,7 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(txn)
+                .submit(vec![txn])
                 .await
                 .unwrap();
         }

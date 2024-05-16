@@ -1682,30 +1682,43 @@ impl AuthorityPerEpochStore {
     /// and verify that it allows new user certificates
     pub fn insert_pending_consensus_transactions(
         &self,
-        transaction: &ConsensusTransaction,
+        transactions: &[ConsensusTransaction],
         lock: Option<&RwLockReadGuard<ReconfigState>>,
     ) -> SuiResult {
+        let key_value_pairs = transactions.iter().map(|tx| (tx.key(), tx));
         self.tables()?
             .pending_consensus_transactions
-            .insert(&transaction.key(), transaction)?;
-        if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
-            let state = lock.expect("Must pass reconfiguration lock when storing certificate");
-            // Caller is responsible for performing graceful check
-            assert!(
-                state.should_accept_user_certs(),
-                "Reconfiguration state should allow accepting user transactions"
-            );
-            self.pending_consensus_certificates
-                .lock()
-                .insert(*cert.digest());
+            .multi_insert(key_value_pairs)?;
+
+        // TODO: lock once for all insert() calls.
+        for transaction in transactions {
+            if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
+                let state = lock.expect("Must pass reconfiguration lock when storing certificate");
+                // Caller is responsible for performing graceful check
+                assert!(
+                    state.should_accept_user_certs(),
+                    "Reconfiguration state should allow accepting user transactions"
+                );
+                self.pending_consensus_certificates
+                    .lock()
+                    .insert(*cert.digest());
+            }
         }
         Ok(())
     }
 
-    pub fn remove_pending_consensus_transaction(&self, key: &ConsensusTransactionKey) -> SuiResult {
-        self.tables()?.pending_consensus_transactions.remove(key)?;
-        if let ConsensusTransactionKey::Certificate(cert) = key {
-            self.pending_consensus_certificates.lock().remove(cert);
+    pub fn remove_pending_consensus_transactions(
+        &self,
+        keys: &[ConsensusTransactionKey],
+    ) -> SuiResult {
+        self.tables()?
+            .pending_consensus_transactions
+            .multi_remove(keys)?;
+        // TODO: lock once for all remove() calls.
+        for key in keys {
+            if let ConsensusTransactionKey::Certificate(cert) = key {
+                self.pending_consensus_certificates.lock().remove(cert);
+            }
         }
         Ok(())
     }
@@ -1764,18 +1777,6 @@ impl AuthorityPerEpochStore {
             .tables()?
             .consensus_message_processed
             .contains_key(key)?)
-    }
-
-    pub async fn consensus_message_processed_notify(
-        &self,
-        key: SequencedConsensusTransactionKey,
-    ) -> Result<(), SuiError> {
-        let registration = self.consensus_notify_read.register_one(&key);
-        if self.is_consensus_message_processed(&key)? {
-            return Ok(());
-        }
-        registration.await;
-        Ok(())
     }
 
     pub fn check_consensus_messages_processed<'a>(
