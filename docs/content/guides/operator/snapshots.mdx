@@ -49,7 +49,7 @@ To restore from a RocksDB snapshot, follow these steps:
    
    An alternative is to use `sui-tool` to copy the files:
    ```
-   sui-tool download-db-snapshot --epoch "<EPOCH-NUMBER>" \
+   sui-tool download-db-snapshot --latest \
        --network <NETWORK> --snapshot-bucket <BUCKET-NAME> \
        --snapshot-bucket-type <TYPE> --path <PATH-TO-NODE-DB> \
        --num-parallel-downloads 25 \
@@ -57,7 +57,7 @@ To restore from a RocksDB snapshot, follow these steps:
        --no-sign-request
    ```
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
-   - `--latest`: Rather than explictly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
+   - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
    - `--network`: Network to download snapshot for. Defaults to "mainnet".
    - `--path`: Path to snapshot directory on local filesystem.
    - `--no-sign-request`: If set, `--snapshot-bucket` and `--snapshot-bucket-type` are ignored, and Cloudflare R2 is used.
@@ -91,12 +91,12 @@ The following steps can be used to restore a node from a Formal snapshot:
 1. If it's running, stop the node.
 2. Run the command:
    ```
-   sui-tool download-formal-snapshot --epoch "<EPOCH-NUMBER>" --genesis "<PATH-TO-GENESIS-BLOB>" \
+   sui-tool download-formal-snapshot --latest --genesis "<PATH-TO-GENESIS-BLOB>" \
         --network <NETWORK> --snapshot-bucket <BUCKET-NAME> --snapshot-bucket-type <TYPE> \
         --path <PATH-TO-NODE-DB> --num-parallel-downloads 50 --no-sign-request
    ```
    - `--epoch`: The epoch that you want to download. Mysten Labs hosted buckets will only keep the last 90 epochs, you can check the most recent epoch on sui explorers like [suivision](https://suivision.xyz/) or [suiscan](https://suiscan.xyz/).
-   - `--latest`: Rather than explictly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
+   - `--latest`: Rather than explicitly passing a epoch via `--epoch`, you can pass the `--latest` flag, which will automatically select the latest snapshot`
    - `--genesis`: The path to the location of the network's `genesis.blob`.
    - `--network`: Network to download snapshot for. Defaults to "mainnet".
    - `--path`: Path to snapshot directory on local filesystem.
