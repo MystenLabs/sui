@@ -390,7 +390,7 @@ async fn submit_to_consensus(
     };
     let client = client.as_ref().unwrap().load();
     client
-        .submit_transaction(vec![transaction])
+        .submit_transactions(vec![transaction])
         .await
         .map_err(|e| eyre::Report::msg(format!("Failed to submit to consensus: {:?}", e)))?;
     Ok(())

@@ -155,7 +155,7 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
         // Send the transaction to Narwhal via the local client.
         let submit_scope = monitored_scope("SubmitTransaction_SubmitTx");
         self.local_client
-            .submit_transaction(transactions.iter().map(|x| x.to_vec()).collect())
+            .submit_transactions(transactions.iter().map(|x| x.to_vec()).collect())
             .await
             .map_err(|e| Status::internal(e.to_string()))?;
         drop(submit_scope);
@@ -191,7 +191,7 @@ impl<V: TransactionValidator> Transactions for TxReceiverHandler<V> {
             // mean that we process only a single message from this stream at a
             // time. Instead we gather them and resolve them once the stream is over.
             let submit_scope = monitored_scope("SubmitTransactionStream_SubmitTx");
-            requests.push(self.local_client.submit_transaction(vec![txn.to_vec()]));
+            requests.push(self.local_client.submit_transactions(vec![txn.to_vec()]));
             drop(submit_scope);
         }
 

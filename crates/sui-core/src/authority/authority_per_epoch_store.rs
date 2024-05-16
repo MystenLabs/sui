@@ -1690,6 +1690,7 @@ impl AuthorityPerEpochStore {
             .pending_consensus_transactions
             .multi_insert(key_value_pairs)?;
 
+        // TODO: lock once for all insert() calls.
         for transaction in transactions {
             if let ConsensusTransactionKind::UserTransaction(cert) = &transaction.kind {
                 let state = lock.expect("Must pass reconfiguration lock when storing certificate");
@@ -1713,6 +1714,7 @@ impl AuthorityPerEpochStore {
         self.tables()?
             .pending_consensus_transactions
             .multi_remove(keys)?;
+        // TODO: lock once for all remove() calls.
         for key in keys {
             if let ConsensusTransactionKey::Certificate(cert) = key {
                 self.pending_consensus_certificates.lock().remove(cert);

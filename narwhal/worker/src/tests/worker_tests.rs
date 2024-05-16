@@ -360,7 +360,7 @@ async fn handle_local_clients_transactions() {
             let inner_client = client.clone();
             fut_list.push_back(async move {
                 inner_client
-                    .submit_transaction(vec![txn.clone()])
+                    .submit_transactions(vec![txn.clone()])
                     .await
                     .unwrap();
             });

@@ -146,7 +146,7 @@ impl LocalNarwhalClient {
     }
 
     /// Submits a transaction to the local Narwhal worker.
-    pub async fn submit_transaction(
+    pub async fn submit_transactions(
         &self,
         transactions: Vec<Transaction>,
     ) -> Result<(), NarwhalError> {

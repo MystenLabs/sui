@@ -242,7 +242,7 @@ impl SubmitToConsensus for LazyNarwhalClient {
         };
         let client = client.as_ref().unwrap().load();
         client
-            .submit_transaction(transactions)
+            .submit_transactions(transactions)
             .await
             .map_err(|e| SuiError::FailedToSubmitToConsensus(format!("{:?}", e)))
             .tap_err(|r| {
@@ -697,7 +697,7 @@ impl ConsensusAdapter {
 
         for transaction in &transactions {
             if matches!(transaction.kind, ConsensusTransactionKind::EndOfPublish(..)) {
-                info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to Narwhal");
+                info!(epoch=?epoch_store.epoch(), "Submitting EndOfPublish message to consensus");
                 epoch_store.record_epoch_pending_certs_process_time_metric();
             }
 
@@ -844,7 +844,7 @@ impl ConsensusAdapter {
 
         let consensus_keys: Vec<_> = transactions.iter().map(|t| t.key()).collect();
         epoch_store
-            .remove_pending_consensus_transactions(&consensus_keys[..])
+            .remove_pending_consensus_transactions(&consensus_keys)
             .expect("Storage error when removing consensus transaction");
 
         let is_user_tx = is_soft_bundle

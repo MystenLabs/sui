@@ -180,8 +180,8 @@ impl TransactionClient {
         )
     }
 
-    /// Submits a transaction to be sequenced. The method returns when the transaction has been successfully
-    /// included to the next proposed block.
+    /// Submits a list of transactions to be sequenced. The method returns when all the transactions have been successfully included
+    /// to next proposed blocks.
     pub async fn submit(&self, transactions: Vec<Vec<u8>>) -> Result<(), ClientError> {
         let included_in_block = self.submit_no_wait(transactions).await?;
         included_in_block
@@ -190,11 +190,13 @@ impl TransactionClient {
             .map_err(|e| ClientError::ConsensusShuttingDown(e.to_string()))
     }
 
-    /// Submits a transaction to be sequenced. The transaction length gets evaluated and rejected from consensus if too big.
+    /// Submits a list of transactions to be sequenced.
+    /// If any transaction's length exceeds `max_transaction_size`, no transaction will be submitted.
     /// That shouldn't be the common case as sizes should be aligned between consensus and client. The method returns
     /// a receiver to wait on until the transactions has been included in the next block to get proposed. The consumer should
     /// wait on it to consider as inclusion acknowledgement. If the receiver errors then consensus is shutting down and transaction
     /// has not been included to any block.
+    /// If multiple transactions are submitted, the receiver will be signalled when the last transaction is included in the block.
     pub(crate) async fn submit_no_wait(
         &self,
         transactions: Vec<Vec<u8>>,
@@ -210,10 +212,7 @@ impl TransactionClient {
         }
 
         let t = TransactionsGuard {
-            transactions: transactions
-                .into_iter()
-                .map(|x| Transaction::new(x))
-                .collect(),
+            transactions: transactions.into_iter().map(Transaction::new).collect(),
             included_in_block_ack: included_in_block_ack_send,
         };
         self.sender
