@@ -76,13 +76,10 @@ impl TransactionConsumer {
                 .transactions
                 .into_iter()
                 .filter_map(|tx| {
-                    if (total_size + tx.data().len()) as u64 > self.max_consumed_bytes_per_request {
-                        // Adding this tx would exceed the size limit, cache it for the next pull.
-                        Some(tx)
-                    } else if transactions.len() as u64
-                        >= self.max_consumed_transactions_per_request
+                    if (total_size + tx.data().len()) as u64 > self.max_consumed_bytes_per_request
+                        || transactions.len() as u64 >= self.max_consumed_transactions_per_request
                     {
-                        // Adding this tx would exceed the number of transactions limit, cache it for the next pull.
+                        // Adding this tx would exceed the size limit or the number of txs limit, cache it for the next pull.
                         Some(tx)
                     } else {
                         total_size += tx.data().len();
