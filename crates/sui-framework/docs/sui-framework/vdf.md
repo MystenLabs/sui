@@ -4,6 +4,7 @@ title: Module `0x2::vdf`
 
 
 
+-  [Constants](#@Constants_0)
 -  [Function `hash_to_input`](#0x2_vdf_hash_to_input)
 -  [Function `hash_to_input_internal`](#0x2_vdf_hash_to_input_internal)
 -  [Function `vdf_verify`](#0x2_vdf_vdf_verify)
@@ -11,6 +12,20 @@ title: Module `0x2::vdf`
 
 
 <pre><code></code></pre>
+
+
+
+<a name="@Constants_0"></a>
+
+## Constants
+
+
+<a name="0x2_vdf_EInvalidInput"></a>
+
+
+
+<pre><code><b>const</b> <a href="vdf.md#0x2_vdf_EInvalidInput">EInvalidInput</a>: u64 = 0;
+</code></pre>
 
 
 
@@ -75,6 +90,8 @@ This uses Wesolowski's VDF construction over imaginary class groups as described
 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in
 fastcrypto.
 
+The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf crate.
+
 
 <pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool
 </code></pre>
@@ -98,7 +115,7 @@ fastcrypto.
 
 ## Function `vdf_verify_internal`
 
-The internal functions for <code>vdf_verify_internal</code>. The discriminant must have been verified to be a negative prime which is 1 mod 8.
+The internal functions for <code>vdf_verify_internal</code>.
 
 
 <pre><code><b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify_internal">vdf_verify_internal</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool

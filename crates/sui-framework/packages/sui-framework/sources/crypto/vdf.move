@@ -3,6 +3,9 @@
 
 module sui::vdf {
 
+    #[allow(unused_const)]
+    const EInvalidInput: u64 = 0;
+
     /// Hash an arbitrary binary `message` to a class group element to be used as input for `vdf_verify`.
     public fun hash_to_input(message: &vector<u8>): vector<u8> {
         hash_to_input_internal(message)
