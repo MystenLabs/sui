@@ -4,63 +4,50 @@ module sui::config {
     use sui::dynamic_field as field;
 
     // #[error]
-    // const EInvalidWriteCap: vector<u8> = b"WriteCap is not valid for the provided Config";
-    const EInvalidWriteCap: u64 = 0;
-
-    // #[error]
     // const EAlreadySetForEpoch: vector<u8> =
     //     b"Setting was already updated at this epoch for the provided Config";
-    const EAlreadySetForEpoch: u64 = 1;
+    const EAlreadySetForEpoch: u64 = 0;
 
     // #[error]
     // const ENotSetForEpoch: vector<u8> =
     //     b"Setting was not updated at this epoch for the provided Config";
-    const ENotSetForEpoch: u64 = 2;
+    const ENotSetForEpoch: u64 = 1;
 
     // #[error]
     // const ENotSetForEpoch: vector<u8> = b"Could not read setting for the provided Config";
-    const EReadSettingFailed: u64 = 3;
+    #[allow(unused_const)]
+    const EReadSettingFailed: u64 = 2;
 
-    public struct Config has key {
+    public struct Config<phantom WriteCap> has key {
         id: UID,
     }
 
-    public struct WriteCap has key, store {
+    public struct Setting<Value: copy + drop + store> has key, store {
         id: UID,
-        config: ID,
-    }
-
-    public struct Setting<V: store> has key, store {
-        id: UID,
-        data: Option<SettingData<V>>,
+        data: Option<SettingData<Value>>,
     }
 
 
-    public struct SettingData<V: store> has store {
+    public struct SettingData<Value: copy + drop + store> has store {
         newer_value_epoch: u64,
-        newer_value: V,
-        older_value_opt: Option<V>,
+        newer_value: Value,
+        older_value_opt: Option<Value>,
     }
 
-    public fun create_config(ctx: &mut TxContext): (Config, WriteCap) {
-        let config = Config { id: object::new(ctx) };
-        let cap = WriteCap {
-            id: object::new(ctx),
-            config: config.id.to_inner(),
-        };
-        (config, cap)
+    public fun create_config<WriteCap>(_cap: &mut WriteCap, ctx: &mut TxContext) {
+        let config = Config<WriteCap> { id: object::new(ctx) };
+        transfer::share_object(config)
     }
 
-    public fun new_for_epoch<K: copy + drop + store, V: store>(
-        cap: &mut WriteCap,
-        config: &mut Config,
-        setting: K,
-        value: V,
+    public fun new_for_epoch<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+        config: &mut Config<WriteCap>,
+        _cap: &mut WriteCap,
+        name: Name,
+        value: Value,
         ctx: &mut TxContext,
-    ): Option<V> {
-        assert!(cap.config == config.id.to_inner(), EInvalidWriteCap);
+    ): Option<Value> {
         let epoch = ctx.epoch();
-        if (!field::exists_(&config.id, setting)) {
+        if (!field::exists_(&config.id, name)) {
             let sobj = Setting {
                 id: object::new(ctx),
                 data: option::some(SettingData {
@@ -69,10 +56,10 @@ module sui::config {
                     older_value_opt: option::none(),
                 }),
             };
-            field::add(&mut config.id, setting, sobj);
+            field::add(&mut config.id, name, sobj);
             option::none()
         } else {
-            let sobj: &mut Setting<V> = field::borrow_mut(&mut config.id, setting);
+            let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
             let SettingData {
                 newer_value_epoch,
                 newer_value,
@@ -88,75 +75,80 @@ module sui::config {
         }
     }
 
-    public fun has_for_epoch<K: copy + drop + store, V: store>(
-        config: &mut Config,
-        setting: K,
+    public fun has_for_epoch<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+        config: &mut Config<WriteCap>,
+        _cap: &mut WriteCap,
+        name: Name,
         ctx: &mut TxContext,
     ): bool {
-        field::exists_(&config.id, setting) && {
+        field::exists_(&config.id, name) && {
             let epoch = ctx.epoch();
-            let sobj: &Setting<V> = field::borrow(&config.id, setting);
+            let sobj: &Setting<Value> = field::borrow(&config.id, name);
             epoch == sobj.data.borrow().newer_value_epoch
         }
     }
 
-    // I believe this is safe
-    public fun borrow_mut<K: copy + drop + store, V: store>(
-        cap: &mut WriteCap,
-        config: &mut Config,
-        setting: K,
+    public fun borrow_mut<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+        config: &mut Config<WriteCap>,
+        _cap: &mut WriteCap,
+        name: Name,
         ctx: &mut TxContext,
-    ): &mut V {
-        assert!(cap.config == config.id.to_inner(), EInvalidWriteCap);
+    ): &mut Value {
         let epoch = ctx.epoch();
-        let sobj: &mut Setting<V> = field::borrow_mut(&mut config.id, setting);
+        let sobj: &mut Setting<Value> = field::borrow_mut(&mut config.id, name);
         let data = sobj.data.borrow_mut();
         assert!(data.newer_value_epoch == epoch, ENotSetForEpoch);
         &mut data.newer_value
     }
 
-    // public macro fun update<K: copy + drop + store, V: store>(
-    //     cap: &mut WriteCap,
-    //     config: &mut Config,
-    //     setting: K,
-    //     ctx: &mut TxContext,
-    //     default: || V,
-    //     update: |&mut V|,
-    // ) {
-    //     if !has_for_epoch(config, setting, ctx) {
-    //         new_for_epoch(cap, config, setting, default(), ctx);
-    //     }
-    //     let new_value = borrow_mut(cap, config, setting, ctx);
-    //     update(new_value);
-    // }
+    public macro fun update<$WriteCap, $Name: copy + drop + store, $Value: copy + drop + store>(
+        $config: &mut Config<$WriteCap>,
+        $cap: &mut $WriteCap,
+        $name: $Name,
+        $initial_for_next_epoch: |&mut Config<$WriteCap>, &mut $WriteCap, &mut TxContext| -> $Value,
+        $update: |Option<$Value>, &mut $Value|,
+        $ctx: &mut TxContext,
+    ) {
+        let config = $config;
+        let cap = $cap;
+        let name = $name;
+        let ctx = $ctx;
+        let old_value_opt = if (config.has_for_epoch<_, _, $Value>(cap, name, ctx)) {
+            let initial = $initial_for_next_epoch(config, cap, ctx);
+            config.new_for_epoch(cap, name, initial, ctx)
+        } else {
+            option::none()
+        };
+        $update(old_value_opt, config.borrow_mut(cap, name, ctx));
+    }
 
-    public fun borrow<K: copy + drop + store, V: copy + drop + store>(
+    public fun read_setting<Name: copy + drop + store, Value: copy + drop + store>(
         config: ID,
-        setting: K,
+        name: Name,
         ctx: &TxContext,
-    ): &V {
+    ): Option<Value> {
         let config_id = config.to_address();
-        let setting_df = field::hash_type_and_key(config_id, setting);
-        borrow_setting_<K, V>(config_id, setting_df, ctx.epoch())
+        let setting_df = field::hash_type_and_key(config_id, name);
+        read_setting_<Name, Value>(config_id, setting_df, ctx.epoch())
     }
 
     /*
     This is kept native to keep gas costing consistent.
     */
-    native fun borrow_setting_<K: copy + drop + store, V: store>(
+    native fun read_setting_<Name: copy + drop + store, Value: copy + drop + store>(
         config: address,
-        setting: address,
+        name: address,
         current_epoch: u64,
-    ): &V;
+    ): Option<Value>;
         /*
     // but the code is essentially
-        assert!(field::exists_with_type<K, V>(&config.id, setting), EReadSettingFailed);
-        let sobj: &Setting<V> = field::borrow(&config.id, setting);
+        assert!(field::exists_with_type<Name, Value>(&config.id, setting), EReadSettingFailed);
+        let sobj: &Setting<Value> = field::borrow(&config.id, setting);
         let data = sobj.data.borrow();
-        if (current_epoch > data.newer_value_epoch) &data.newer_value
+        if (current_epoch > data.newer_value_epoch) data.newer_value
         else {
             assert!(data.older_value_opt.is_some(), EReadSettingFailed); // internal invariant
-            data.older_value_opt.borrow()
+            *data.older_value_opt.borrow()
         }
     }
     */
