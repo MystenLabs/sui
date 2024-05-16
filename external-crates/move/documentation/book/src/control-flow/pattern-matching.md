@@ -2,11 +2,11 @@
 
 A `match` expression is a powerful control structure that allows you to compare a value against a
 series of patterns and then execute code based on which pattern matches first. Patterns can be
-anything from simple literals to complex structures. As opposed to `if` expressions, which require a
-`bool`ean expression, a `match` expression requires a value to be matched against a series of
-patterns.
+anything from simple literals to complex, nested struct and enum definitions . As opposed to `if` expressions, which change control flow based on a `bool`-typed test expression, a `match` expression operates over
+a value of any type and selects on of many arms.
 
-A `match` expression can match either by value, immutable reference, or mutable reference.
+A `match` expression can match Move values, immutable references, or mutable references, binding
+sub-patterns accordingly.
 
 A pattern is matched by a value if the value is equal to the pattern, and where variables and
 wildcards (e.g., `x`, `y`, `_`, or `..`) are "equal" to anything.
@@ -33,7 +33,7 @@ run(0); // returns 0
 A `match` takes an expression and a non-empty series of _match arms_ delimited by commas.
 
 Each match arm consists of a pattern `p`, an optional guard `if (g)` where `g` is an expression of
-type `bool`, followed by an arrow `=>`and an expression `e`. E.g.,
+type `bool`, an arrow `=>`, and an arm expression `e` to execute when the pattern matches. E.g.,
 
 ```move
 match (expression) {
@@ -43,8 +43,8 @@ match (expression) {
 }
 ```
 
-Match arms are checked in order from top to bottom, and the first match arm whose pattern matches
-(and whose guard expression, if any, returns `true`) will be executed.
+Match arms are checked in order from top to bottom, and the first pattern which matches
+(with a guard expression, if present, that evaluates to `true`) will be executed.
 
 Note that the series of match arms within a `match` must be exhaustive, meaning that every possible
 value of the type being matched must be covered by one of the patterns in the `match`. If the series
@@ -131,17 +131,18 @@ pattern = <literal>
         | <constant>
         | <variable>
         | _
-        | C { inner-pattern, inner-pattern, ... } // where C is a struct or enum variant
-        | C ( inner-pattern, inner-pattern, ... ) // where C is a struct or enum variant
+        | C { <variable> : inner-pattern ["," <variable> : inner-pattern]* } // where C is a struct or enum variant
+        | C ( inner-pattern ["," inner-pattern]* ... ) // where C is a struct or enum variant
         | C                                       // where C is an enum variant
         | <variable> @ top-level-pattern
         | pattern | pattern
 inner-pattern = pattern
               | ..
-              | mut pattern
+              | mut <variable>
 ```
 
-Patterns that contain variables bind them to the value being matched. These variables can then be
+Patterns that contain variables bind them to the match subject or subject subcomponent being matched.
+These variables can then be
 used either in any match guard expressions, or on the right-hand side of the match arm. For example:
 
 ```move
@@ -158,13 +159,14 @@ add_under_wrapper_unless_equal(Wrapper(2), 3); // returns Wrapper(5)
 add_under_wrapper_unless_equal(Wrapper(3), 3); // returns Wrapper(3)
 ```
 
-Patterns can be nested, and patterns can be or'd with other patterns. The `..` pattern is a special
+Patterns can be nested, and patterns can be combined used the or operator `|` which will succeed if either
+pattern matches. The `..` pattern is a special
 pattern that matches any number of fields in a struct or enum variant, but it can only occur within
 a constructor pattern, similarly the `mut` pattern can only be used within constructor patterns --
 this is used to specify that we want to use the variable mutably on the right-hand-side of the match
 arm.
 
-Patterns are not expressions, but they are nevertheless typed just like expressions. This means that
+Patterns are not expressions, but they are nevertheless typed. This means that
 the type of a pattern must match the type of the value it matches. For example, the pattern `1` has
 type `u64`, the pattern `MyEnum::Variant(1, true)` has type `MyEnum`, and the pattern
 `MyStruct { x, y }` has type `MyStruct`. If you try to match on an expression which differs from the
@@ -184,8 +186,8 @@ different types:
 
 ```
 match (MyStruct { x: 0, y: 0 }) {
-    MyEnum::Variant(..) => 1,
     // TYPE ERROR: expected type MyEnum, found MyStruct
+    MyEnum::Variant(..) => 1,
 }
 ```
 
@@ -194,7 +196,7 @@ be used in a pattern.
 
 A `mut` modifier can only occur within a constructor pattern, and cannot be a top-level pattern. The
 value being matched on must be either a mutable reference or by value in order for a `mut` pattern
-to be used otherwise the compiler will raise an error.
+to be used.
 
 ```move
 public struct MyStruct(u64)
@@ -240,7 +242,7 @@ fun mut_on_immut(x: &MyStruct): u64 {
 
 The `..` pattern an only be used within a constructor pattern and:
 
-- It can only be used once within the constructor pattern;
+- It can only be used **once** within the constructor pattern;
 - In positional arguments it can be used at the beginning, middle, or end of the patterns within the
   constructor;
 - In named arguments it can only be used at the end of the patterns within the constructor;
@@ -405,10 +407,7 @@ f(MyEnum::Variant(10, true)); // returns 1
 f(MyEnum::Variant(10, false)); // returns 3
 ```
 
-Additionally, when matching ability restrictions on the value being matched must be followed. In
-particular, you cannot wildcard match on a non-droppable value (when matching by value), and if you
-bind a non-droppable value to a variable that variable _must_ be used in the match arm. However, if
-you fully destructure the non-droppable value then you can wildcard match on the fields within it.
+Additionally, match bindings are subject to the same ability restrictions as other aspects of Move. In particular, the compiler will signal an error if you try to match a value (i.e., not-reference) without `drop` using a wildcard, as the wildcard expects to drop the value. Similarly, if you bind a non-`drop` value using a binder, it must be used in the right-hand side of the match arm. In addition, if you fully-destruct that value, you have unpacked it, matching the semantics of  [non-`drop` struct unpacking](link). See [ref section] for more details about the `drop` capability. 
 
 ```move
 public struct NonDrop(u64)
@@ -439,19 +438,19 @@ fun use_nondrop(x: NonDrop): NonDrop {
 
 ## Exhaustiveness
 
-The `match` expression in Move must be _exhaustive_; every possible value of the type being matched
+The `match` expression in Move must be _exhaustive_: every possible value of the type being matched
 must be covered by one of the patterns in one of the match's arms. If the series of match arms is
-not exhaustive, the compiler will raise an error.
+not exhaustive, the compiler will raise an error. Note that any arm with a guard expression
+does not contribute to match exhaustion, as it may fail to match at runtime.
 
 As an example, if we were to match on a `u8` then in order for the match to be exhaustive we would
-need to match on every number from 0 to 255 inclusive, or a wildcard or variable pattern would need
+need to match on _every_ number from 0 to 255 inclusive, or a wildcard or variable pattern would need
 to be present. Similarly if we were to match on a `bool` then we would need to match on both `true`
 and `false`, or a wildcard or variable pattern would need to be present.
 
 For structs, since there is only one type of constructor for the type, only one constructor needs to
-be matched on, but the fields within the struct need to be matched exhaustively as well. Similarly
-for enums, since there are multiple variants that can inhabit the type, each variant needs to be
-matched on, and each field type within each variant needs to be matched in order for the match to be
+be matched, but the fields within the struct need to be matched exhaustively as well. Conversely,
+enums may define multiple variants, and each variant must be matched (including any sub-fields) in order for the match to be
 considered exhaustive.
 
 Since underscores and variables match anything, they count as matching all values of the type they
@@ -535,9 +534,9 @@ match_with_guard(1); // returns 2
 match_with_guard(0); // returns 3
 ```
 
-Guard expressions have access to the variables bound in the pattern, and can use them in the guard.
-However, it is important to note that variables are by immutable reference only in guards regardless
-of the pattern being matched -- even if there are mutability specifiers on the variable -- or if the
+Guard expressions can reference variables bound in the pattern during evaluation.
+However, note that _variables are only available as immutable reference in guards_ regardless
+of the pattern being matched -- even if there are mutability specifiers on the variable or if the
 pattern is being matched by value.
 
 ```move
