@@ -862,9 +862,9 @@ mod tests {
             .wait_for_checkpoint_catchup(0, Duration::from_secs(10))
             .await;
         // timeout test includes mutation timeout, which requies a [SuiClient] to be able to run
-        // the test
-        let sui_client = cluster.validator_fullnode_handle.fullnode_handle.sui_client;
-        test_timeout_impl(sui_client).await;
+        // the test, and a transaction. [WalletContext] gives access to everything that's needed.
+        let wallet = cluster.validator_fullnode_handle.wallet;
+        test_timeout_impl(wallet).await;
     }
 
     #[tokio::test]
