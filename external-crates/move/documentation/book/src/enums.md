@@ -194,7 +194,8 @@ You can pattern match on Move values by value, immutable reference, and mutable 
 pattern matching by value, the value is moved into the match arm. When pattern matching by
 reference, the value is borrowed into the match arm (either immutably or mutably). We'll go through
 a brief description of pattern matching using `match` here, but for more information on pattern
-matching using `match` in Move see the [Pattern Matching](./pattern_matching.md) section.
+matching using `match` in Move see the [Pattern Matching](./control-flow/pattern_matching.md)
+section.
 
 A `match` statement is used to pattern match on a Move value and consists of a number of _match
 arms_. Each match arm consists of a pattern, an arrow `=>`, and an expression, followed by a comma
