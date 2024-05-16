@@ -211,6 +211,7 @@ impl ValidatorConfigBuilder {
             websocket_only: false,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
+            with_client_ip_injection: None,
         }
     }
 
@@ -245,6 +246,7 @@ pub struct FullnodeConfigBuilder {
     run_with_range: Option<RunWithRange>,
     policy_config: Option<PolicyConfig>,
     fw_config: Option<RemoteFirewallConfig>,
+    with_client_ip_injection: Option<bool>,
 }
 
 impl FullnodeConfigBuilder {
@@ -349,6 +351,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
         self.fw_config = config;
+        self
+    }
+
+    pub fn with_client_ip_injection(mut self, with_ip_injection: Option<bool>) -> Self {
+        self.with_client_ip_injection = with_ip_injection;
         self
     }
 
@@ -478,6 +485,7 @@ impl FullnodeConfigBuilder {
             websocket_only: false,
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
+            with_client_ip_injection: self.with_client_ip_injection,
         }
     }
 }

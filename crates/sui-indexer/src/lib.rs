@@ -148,8 +148,13 @@ pub async fn build_json_rpc_server<T: R2D2Connection>(
     config: &IndexerConfig,
     custom_runtime: Option<Handle>,
 ) -> Result<ServerHandle, IndexerError> {
-    let mut builder =
-        JsonRpcServerBuilder::new(env!("CARGO_PKG_VERSION"), prometheus_registry, None, None);
+    let mut builder = JsonRpcServerBuilder::new(
+        env!("CARGO_PKG_VERSION"),
+        prometheus_registry,
+        None,
+        None,
+        None,
+    );
     let http_client = crate::get_http_client(config.rpc_client_url.as_str())?;
 
     builder.register_module(WriteApi::new(http_client.clone()))?;

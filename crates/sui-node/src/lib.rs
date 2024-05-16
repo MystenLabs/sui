@@ -1829,6 +1829,7 @@ pub async fn build_http_server(
             prometheus_registry,
             config.policy_config.clone(),
             config.firewall_config.clone(),
+            config.with_client_ip_injection,
         );
 
         let kv_store = build_kv_store(&state, config, prometheus_registry)?;
