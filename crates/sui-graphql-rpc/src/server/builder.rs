@@ -677,7 +677,7 @@ pub mod tests {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
             cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
-            info!("prepping schema");
+
             let schema = prep_schema(None, Some(cfg))
                 .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
@@ -686,10 +686,7 @@ pub mod tests {
                 })
                 .build_schema();
 
-            info!("executing schema");
-            let result = schema.execute(query).await;
-            info!("finished execution");
-            result
+            schema.execute(query).await
         }
 
         let query = "{ chainIdentifier }";
@@ -732,8 +729,6 @@ pub mod tests {
 
         let tx = wallet.sign_transaction(&tx_data);
         let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
-
-        println!("TX BYTES: {:?}", tx_bytes.encoded());
 
         let signature_base64 = &signatures[0];
         let query = format!(
