@@ -43,9 +43,9 @@ jobs:
       matrix:
         os:
           [
-            # ubuntu-ghcloud,
-            # windows-ghcloud,
-            # macos-latest-xl,
+            ubuntu-ghcloud,
+            windows-ghcloud,
+            macos-latest-xl,
             macos-arm64-self-hosted
           ]
       fail-fast: false
