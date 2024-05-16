@@ -130,7 +130,7 @@ async fn main() -> Result<()> {
         pg_address: Some(format!(
             "postgres://{pg_user}:{pg_password}@{pg_host}:{pg_port}/{pg_db_name}"
         )),
-        faucet_address: Some(format!("127.0.0.1:{}", faucet_port)),
+        faucet_address: Some(format!("0.0.0.0:{}", faucet_port)),
         epoch_duration_ms,
         config_dir,
         graphql_address: graphql_port.map(|p| format!("{}:{}", graphql_host, p)),
