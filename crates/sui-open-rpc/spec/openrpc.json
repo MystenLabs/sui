@@ -1379,6 +1379,7 @@
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
+                "enable_vdf": false,
                 "end_of_epoch_transaction_supported": false,
                 "hardened_otw_check": false,
                 "include_consensus_digest_in_prologue": false,
@@ -1958,7 +1959,9 @@
                 },
                 "validator_validate_metadata_data_cost_per_byte": {
                   "u64": "2"
-                }
+                },
+                "vdf_hash_to_input_cost": null,
+                "vdf_verify_vdf_cost": null
               }
             }
           }
