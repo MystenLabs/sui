@@ -291,7 +291,8 @@ async fn test_traffic_control_manual_set_dead_mans_switch() -> Result<(), anyhow
 #[sim_test]
 async fn test_traffic_sketch_no_blocks() {
     let sketch_config = FreqThresholdConfig {
-        threshold: 10_100,
+        connection_threshold: 10_100,
+        proxy_threshold: 10_100,
         window_size_secs: 4,
         update_interval_secs: 1,
         ..Default::default()
@@ -329,7 +330,8 @@ async fn test_traffic_sketch_no_blocks() {
 #[sim_test]
 async fn test_traffic_sketch_with_slow_blocks() {
     let sketch_config = FreqThresholdConfig {
-        threshold: 9_900,
+        connection_threshold: 9_900,
+        proxy_threshold: 9_900,
         window_size_secs: 4,
         update_interval_secs: 1,
         ..Default::default()
@@ -367,7 +369,8 @@ async fn test_traffic_sketch_with_slow_blocks() {
 #[sim_test]
 async fn test_traffic_sketch_with_sampled_spam() {
     let sketch_config = FreqThresholdConfig {
-        threshold: 4_500,
+        connection_threshold: 4_500,
+        proxy_threshold: 4_500,
         window_size_secs: 4,
         update_interval_secs: 1,
         ..Default::default()

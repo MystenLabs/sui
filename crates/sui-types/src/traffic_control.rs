@@ -83,8 +83,10 @@ fn default_drain_timeout() -> u64 {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct FreqThresholdConfig {
-    #[serde(default = "default_threshold")]
-    pub threshold: u64,
+    #[serde(default = "default_connection_threshold")]
+    pub connection_threshold: u64,
+    #[serde(default = "default_proxy_threshold")]
+    pub proxy_threshold: u64,
     #[serde(default = "default_window_size_secs")]
     pub window_size_secs: u64,
     #[serde(default = "default_update_interval_secs")]
@@ -100,7 +102,8 @@ pub struct FreqThresholdConfig {
 impl Default for FreqThresholdConfig {
     fn default() -> Self {
         Self {
-            threshold: default_threshold(),
+            connection_threshold: default_connection_threshold(),
+            proxy_threshold: default_proxy_threshold(),
             window_size_secs: default_window_size_secs(),
             update_interval_secs: default_update_interval_secs(),
             sketch_capacity: default_sketch_capacity(),
@@ -110,7 +113,16 @@ impl Default for FreqThresholdConfig {
     }
 }
 
-fn default_threshold() -> u64 {
+fn default_connection_threshold() -> u64 {
+    // by default only block connection IPs with unreasonably
+    // high qps, as a single fullnode could be routing the vast
+    // majority of all traffic in normal operations. If used as a
+    // spam policy, all requests would count against this threshold
+    // within the window time. In practice this should always be set
+    1_000_000
+}
+
+fn default_proxy_threshold() -> u64 {
     10
 }
 
