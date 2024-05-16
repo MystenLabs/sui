@@ -439,7 +439,7 @@ mod test {
         let num_txns = if small {
             thread_rng().gen_range(1..5)
         } else {
-            thread_rng().gen_range(100..101)
+            thread_rng().gen_range(1000..1001)
         };
         info!("Adding additional {num_txns} cancelled txns in consensus commit prologue.");
         for _ in 0..num_txns {

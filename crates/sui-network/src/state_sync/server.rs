@@ -17,6 +17,7 @@ use sui_types::{
     storage::WriteStore,
 };
 use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
+use tracing::info;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum GetCheckpointSummaryRequest {
@@ -123,10 +124,20 @@ where
         &self,
         request: Request<CheckpointContentsDigest>,
     ) -> Result<Response<Option<FullCheckpointContents>>, Status> {
+        info!(
+            "ZZZZZ get_checkpoint_contents {:?} checkpoint digest {:?}",
+            request.peer_id(),
+            request.inner(),
+        );
         let contents = self
             .store
             .get_full_checkpoint_contents(request.inner())
             .map_err(|e| Status::internal(e.to_string()))?;
+        info!(
+            "ZZZZZ replying get_checkpoint_contents {:?} checkpoint digest {:?}",
+            request.peer_id(),
+            request.inner(),
+        );
         Ok(Response::new(contents))
     }
 }
