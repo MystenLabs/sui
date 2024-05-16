@@ -10,6 +10,7 @@ use crate::types::{is_route_valid, BridgeAction};
 use anyhow::anyhow;
 use ethers::providers::Middleware;
 use ethers::types::Address as EthAddress;
+use fastcrypto::encoding::{Encoding, Hex};
 use fastcrypto::traits::{EncodeDecodeBase64, KeyPair};
 use futures::{future, StreamExt};
 use serde::{Deserialize, Serialize};
@@ -25,7 +26,7 @@ use sui_sdk::{SuiClient as SuiSdkClient, SuiClientBuilder};
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::bridge::BridgeChainId;
-use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{SuiKeyPair, ToFromBytes};
 use sui_types::digests::{get_mainnet_chain_identifier, get_testnet_chain_identifier};
 use sui_types::event::EventID;
 use sui_types::object::Owner;
@@ -415,6 +416,51 @@ pub fn read_bridge_client_key(path: &PathBuf) -> Result<SuiKeyPair, anyhow::Erro
 
     SuiKeyPair::decode_base64(contents.as_str().trim())
         .map_err(|e| anyhow!("Error decoding authority key: {:?}", e))
+}
+
+/// Read a SuiKeyPair from a file. The content could be any of the following:
+/// - Base64 encoded `flag || privkey` for ECDSA key
+/// - Base64 encoded `privkey` for Raw key
+/// - Bech32 encoded private key prefixed with `suiprivkey`
+/// - Hex encoded `privkey` for Raw key
+/// If `require_secp256k1` is true, it will return an error if the key is not Secp256k1.
+pub fn read_key(path: &PathBuf, require_secp256k1: bool) -> Result<SuiKeyPair, anyhow::Error> {
+    if !path.exists() {
+        return Err(anyhow::anyhow!("Key file not found at path: {:?}", path));
+    }
+    let file_contents = std::fs::read_to_string(path)?;
+    let contents = file_contents.as_str().trim();
+
+    // Try base64 encoded SuiKeyPair `flag || privkey`
+    if let Ok(key) = SuiKeyPair::decode_base64(contents) {
+        if require_secp256k1 && !matches!(key, SuiKeyPair::Secp256k1(_)) {
+            return Err(anyhow!("Key is not Secp256k1"));
+        }
+        return Ok(key);
+    }
+
+    // Try base64 encoded Raw Secp256k1 key `privkey`
+    if let Ok(key) = BridgeAuthorityKeyPair::decode_base64(contents) {
+        return Ok(SuiKeyPair::Secp256k1(key));
+    }
+
+    // Try Bech32 encoded 33-byte `flag || private key` starting with `suiprivkey`A prefix.
+    // This is the format of a private key exported from Sui Wallet or sui.keystore.
+    if let Ok(key) = SuiKeyPair::decode(contents) {
+        if require_secp256k1 && !matches!(key, SuiKeyPair::Secp256k1(_)) {
+            return Err(anyhow!("Key is not Secp256k1"));
+        }
+        return Ok(key);
+    }
+
+    // Try hex encoded Raw key `privkey`
+    if let Ok(bytes) = Hex::decode(contents).map_err(|e| anyhow!("Error decoding hex: {:?}", e)) {
+        if let Ok(key) = BridgeAuthorityKeyPair::from_bytes(&bytes) {
+            return Ok(SuiKeyPair::Secp256k1(key));
+        }
+    }
+
+    Err(anyhow!("Error decoding key from {:?}", path))
 }
 
 #[serde_as]

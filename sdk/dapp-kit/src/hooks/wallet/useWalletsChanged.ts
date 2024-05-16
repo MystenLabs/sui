@@ -20,6 +20,7 @@ export function useWalletsChanged(
 
 	useEffect(() => {
 		const walletsApi = getWallets();
+		setWalletRegistered(getRegisteredWallets(preferredWallets, requiredFeatures));
 
 		const unsubscribeFromRegister = walletsApi.on('register', () => {
 			setWalletRegistered(getRegisteredWallets(preferredWallets, requiredFeatures));

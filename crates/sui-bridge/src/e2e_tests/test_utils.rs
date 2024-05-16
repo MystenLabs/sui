@@ -53,16 +53,10 @@ use crate::BRIDGE_ENABLE_PROTOCOL_VERSION;
 use ethers::prelude::*;
 use std::process::Child;
 use sui_config::local_ip_utils::get_available_port;
-use sui_json_rpc_types::SuiObjectDataOptions;
 use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
-use sui_types::bridge::{MoveTypeBridgeMessageKey, MoveTypeBridgeRecord};
-use sui_types::collection_types::LinkedTableNode;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
-use sui_types::dynamic_field::{DynamicFieldName, Field};
-use sui_types::object::Object;
-use sui_types::TypeTag;
 use tempfile::tempdir;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
@@ -130,6 +124,8 @@ impl BridgeTestClusterBuilder {
 
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
+        std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
         for _ in 0..=3 {
@@ -815,42 +811,11 @@ pub(crate) async fn get_signatures(
     sui_bridge_client: &SuiBridgeClient,
     nonce: u64,
     sui_chain_id: u8,
-    sui_client: &SuiClient,
-    message_type: u8,
 ) -> Vec<Bytes> {
-    // Now collect sigs from the bridge record and submit to eth to claim
-    let summary = sui_bridge_client.get_bridge_summary().await.unwrap();
-    let records_id = summary.bridge_records_id;
-    let key = serde_json::json!(
-        {
-            // u64 is represented as string
-            "bridge_seq_num": nonce.to_string(),
-            "message_type": message_type,
-            "source_chain": sui_chain_id,
-        }
-    );
-    let status_object_id = sui_client.read_api().get_dynamic_field_object(records_id,
-        DynamicFieldName {
-            type_: TypeTag::from_str("0x000000000000000000000000000000000000000000000000000000000000000b::message::BridgeMessageKey").unwrap(),
-            value: key.clone(),
-        },
-    ).await.unwrap().into_object().unwrap().object_id;
-
-    let object_resp = sui_client
-        .read_api()
-        .get_object_with_options(
-            status_object_id,
-            SuiObjectDataOptions::full_content().with_bcs(),
-        )
+    let sigs = sui_bridge_client
+        .get_token_transfer_action_onchain_signatures_until_success(sui_chain_id, nonce)
         .await
         .unwrap();
-
-    let object: Object = object_resp.into_object().unwrap().try_into().unwrap();
-    let record: Field<
-        MoveTypeBridgeMessageKey,
-        LinkedTableNode<MoveTypeBridgeMessageKey, MoveTypeBridgeRecord>,
-    > = object.to_rust().unwrap();
-    let sigs = record.value.value.verified_signatures.unwrap();
 
     sigs.into_iter()
         .map(|sig: Vec<u8>| Bytes::from(sig))

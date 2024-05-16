@@ -475,3 +475,23 @@ pub fn is_bridge_committee_initiated(object_store: &dyn ObjectStore) -> SuiResul
         Err(other) => Err(other),
     }
 }
+
+/// Rust version of the Move message::TokenTransferPayload type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveTypeTokenTransferPayload {
+    pub sender_address: Vec<u8>,
+    pub target_chain: u8,
+    pub target_address: Vec<u8>,
+    pub token_type: u8,
+    pub amount: u64,
+}
+
+/// Rust version of the Move message::ParsedTokenTransferMessage type.
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
+pub struct MoveTypeParsedTokenTransferMessage {
+    pub message_version: u8,
+    pub seq_num: u64,
+    pub source_chain: u8,
+    pub payload: Vec<u8>,
+    pub parsed_payload: MoveTypeTokenTransferPayload,
+}

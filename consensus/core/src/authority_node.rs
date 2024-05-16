@@ -167,7 +167,7 @@ where
 
         let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let mut network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone(), network_keypair);
         let network_client = network_manager.client();
 
         // REQUIRED: Broadcaster must be created before Core, to start listening on the
@@ -287,9 +287,7 @@ where
             None
         };
 
-        network_manager
-            .install_service(network_keypair, network_service)
-            .await;
+        network_manager.install_service(network_service).await;
 
         Self {
             context,

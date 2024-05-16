@@ -101,8 +101,8 @@ create database test;
 
 ```sh
 # an example DATABASE_URL is "mysql://root:password@127.0.0.1:4000/test"
-diesel setup --database-url="<DATABASE_URL> --migration-dir='migrations/mysql'"
-diesel database reset --database-url="<DATABASE_URL> --migration-dir='migrations/mysql'"
+diesel setup --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
+diesel database reset --database-url="<DATABASE_URL>" --migration-dir='migrations/mysql'
 ```
 
 Note that you'll need an existing database for the above to work. Replace `test` with the name of the database created.
