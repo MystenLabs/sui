@@ -80,9 +80,9 @@ impl Parameters {
             // Checkpoint building and execution cannot keep up with high commit rate in simtests,
             // leading to long reconfiguration delays. This is because simtest is single threaded,
             // and spending too much time in consensus can lead to starvation elsewhere.
-            Duration::from_millis(200)
+            Duration::from_millis(400)
         } else {
-            Duration::from_millis(100)
+            Duration::from_millis(50)
         }
     }
 

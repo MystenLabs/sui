@@ -2601,7 +2601,11 @@ fn parse_dot_or_index_chain(context: &mut Context) -> Result<Exp, Box<Diagnostic
                                 context.tokens,
                                 "an identifier or a decimal number",
                             ));
-                            Exp_::DotUnresolved(first_token_loc, Box::new(lhs))
+                            if context.env.ide_mode() {
+                                Exp_::DotUnresolved(first_token_loc, Box::new(lhs))
+                            } else {
+                                Exp_::UnresolvedError
+                            }
                         }
                         Ok(n) => {
                             if is_start_of_call_after_function_name(context, &n) {

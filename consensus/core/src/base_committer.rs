@@ -139,7 +139,7 @@ impl BaseCommitter {
 
     pub fn elect_leader(&self, round: Round) -> Option<Slot> {
         let wave = self.wave_number(round);
-        tracing::debug!(
+        tracing::trace!(
             "elect_leader: round={}, wave={}, leader_round={}, leader_offset={}",
             round,
             wave,

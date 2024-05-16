@@ -271,7 +271,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .await
             .unwrap_or_else(|_| panic!("Server eth signing channel is closed"));
         let signed_action = rx
-            .blocking_recv()
+            .await
             .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
         Ok(Json(signed_action))
     }
@@ -291,7 +291,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .await
             .unwrap_or_else(|_| panic!("Server sui signing channel is closed"));
         let signed_action = rx
-            .blocking_recv()
+            .await
             .unwrap_or_else(|_| panic!("Server signing task's oneshot channel is dropped"))?;
         Ok(Json(signed_action))
     }
@@ -309,7 +309,7 @@ impl BridgeRequestHandlerTrait for BridgeRequestHandler {
             .send((action, tx))
             .await
             .unwrap_or_else(|_| panic!("Server governance action signing channel is closed"));
-        let signed_action = rx.blocking_recv().unwrap_or_else(|_| {
+        let signed_action = rx.await.unwrap_or_else(|_| {
             panic!("Server governance action task's oneshot channel is dropped")
         })?;
         Ok(Json(signed_action))
@@ -323,18 +323,16 @@ mod tests {
     use super::*;
     use crate::{
         eth_mock_provider::EthMockProvider,
-        events::{init_all_struct_tags, MoveTokenBridgeEvent, SuiToEthTokenBridgeV1},
+        events::{init_all_struct_tags, MoveTokenDepositedEvent, SuiToEthTokenBridgeV1},
         sui_mock_client::SuiMockClient,
         test_utils::{
             get_test_log_and_action, get_test_sui_to_eth_bridge_action, mock_last_finalized_block,
         },
-        types::{
-            BridgeActionType, BridgeChainId, EmergencyAction, EmergencyActionType,
-            LimitUpdateAction, TokenId,
-        },
+        types::{EmergencyAction, EmergencyActionType, LimitUpdateAction},
     };
     use ethers::types::{Address as EthAddress, TransactionReceipt};
     use sui_json_rpc_types::SuiEvent;
+    use sui_types::bridge::{BridgeChainId, TOKEN_ID_USDC};
     use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 
     #[tokio::test]
@@ -362,8 +360,15 @@ mod tests {
             .await;
         assert!(entry_.unwrap().lock().await.is_none());
 
-        let action =
-            get_test_sui_to_eth_bridge_action(Some(sui_tx_digest), Some(sui_event_idx), None, None);
+        let action = get_test_sui_to_eth_bridge_action(
+            Some(sui_tx_digest),
+            Some(sui_event_idx),
+            None,
+            None,
+            None,
+            None,
+            None,
+        );
         let sig = BridgeAuthoritySignInfo::new(&action, &signer);
         let signed_action = SignedBridgeAction::new_from_data_and_sig(action.clone(), sig);
         entry.lock().await.replace(Ok(signed_action));
@@ -407,19 +412,16 @@ mod tests {
         // and BridgeEventNotActionable to be cached
 
         // Test `sign` caches Ok result
-        let emitted_event_1 = MoveTokenBridgeEvent {
-            message_type: BridgeActionType::TokenTransfer as u8,
+        let emitted_event_1 = MoveTokenDepositedEvent {
             seq_num: 1,
-            source_chain: BridgeChainId::SuiLocalTest as u8,
+            source_chain: BridgeChainId::SuiCustom as u8,
             sender_address: SuiAddress::random_for_testing_only().to_vec(),
-            target_chain: BridgeChainId::EthLocalTest as u8,
+            target_chain: BridgeChainId::EthCustom as u8,
             target_address: EthAddress::random().as_bytes().to_vec(),
-            token_type: TokenId::USDC as u8,
-            amount: 12345,
+            token_type: TOKEN_ID_USDC,
+            amount_sui_adjusted: 12345,
         };
 
-        // TODO: remove once we don't rely on env var to get package id
-        std::env::set_var("BRIDGE_PACKAGE_ID", "0x0b");
         init_all_struct_tags();
 
         let mut sui_event_1 = SuiEvent::random_for_testing();
@@ -538,13 +540,13 @@ mod tests {
     #[tokio::test]
     async fn test_signer_with_governace_verifier() {
         let action_1 = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             nonce: 1,
             action_type: EmergencyActionType::Pause,
         });
         let action_2 = BridgeAction::LimitUpdateAction(LimitUpdateAction {
-            chain_id: BridgeChainId::EthLocalTest,
-            sending_chain_id: BridgeChainId::SuiLocalTest,
+            chain_id: BridgeChainId::EthCustom,
+            sending_chain_id: BridgeChainId::SuiCustom,
             nonce: 1,
             new_usd_limit: 10000,
         });
@@ -581,7 +583,7 @@ mod tests {
 
         // alter action_1 to action_3
         let action_3 = BridgeAction::EmergencyAction(EmergencyAction {
-            chain_id: BridgeChainId::EthLocalTest,
+            chain_id: BridgeChainId::EthCustom,
             nonce: 1,
             action_type: EmergencyActionType::Unpause,
         });
@@ -598,7 +600,7 @@ mod tests {
         ));
 
         // Non governace action is not signable
-        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None);
+        let action_4 = get_test_sui_to_eth_bridge_action(None, None, None, None, None, None, None);
         assert!(matches!(
             signer_with_cache.sign(action_4.clone()).await.unwrap_err(),
             BridgeError::ActionIsNotGovernanceAction(..)

@@ -37,7 +37,76 @@ env:
   RUSTDOCFLAGS: -D warnings
 
 jobs:
+  diff:
+    runs-on: [ubuntu-latest]
+    outputs:
+      isRust: ${{ steps.diff.outputs.isRust }}
+      isMove: ${{ steps.diff.outputs.isMove }}
+      isReleaseNotesEligible: ${{ steps.diff.outputs.isReleaseNotesEligible }}
+      isMoveAutoFormatter: ${{ steps.diff.outputs.isMoveAutoFormatter }}
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - name: Detect Changes
+        uses: "./.github/actions/diffs"
+        id: diff
+
+  license-check:
+    name: license-check
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@1cd874a5478fdca35d868ccc74640c5aabbb8f1b # pin@v3.0.0
+        with:
+          crate: cargo-hakari
+          locked: true
+      - run: cargo xlint
+
+  release-notes-description-check:
+    name: release-notes-check
+    needs: diff
+    if: needs.diff.outputs.isReleaseNotesEligible == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: actions/setup-python@0a5c61591373683505ea898e09a3ea4f39ef2b9c # pin@v5.0.0
+        with:
+          python-version: 3.10.10
+      - name: Validate PR's release notes
+        shell: bash
+        run: |
+          python ./scripts/release_notes.py check
+
+  move-auto-formatter-ci-test:
+    needs: diff
+    if: needs.diff.outputs.isMoveAutoFormatter == 'true'
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        node-version: [20]
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # Pin v4.1.1
+      - uses: pnpm/action-setup@a3252b78c470c02df07e9d59298aecedc3ccdd6d # pin@v3.0.0
+        with:
+          version: 8.15.6
+      - name: Setup Node
+        uses: actions/setup-node@60edb5dd545a775178f52524783378180af0d1f8 # pin@v4.0.2
+        with:
+          node-version: '20.x'
+          cache: "pnpm"
+      - name: Install dependencies
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        run: npm install && npm i web-tree-sitter
+      - name: Run npm test
+        working-directory: ./external-crates/move/crates/move-analyzer/prettier-plugin
+        shell: bash
+        run: npm run test
+
   test:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
     env:
       # Tests written with #[sim_test] are often flaky if run as #[tokio::test] - this var
       # causes #[sim_test] to only run under the deterministic `simtest` job, and not the

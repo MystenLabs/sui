@@ -9,6 +9,7 @@ use crate::authority::{
 };
 use crate::transaction_outputs::TransactionOutputs;
 use async_trait::async_trait;
+use sui_types::bridge::Bridge;
 
 use futures::{future::BoxFuture, FutureExt};
 use prometheus::{register_int_gauge_with_registry, IntGauge, Registry};
@@ -195,6 +196,12 @@ pub trait ExecutionCacheRead: Send + Sync {
             )?
             .into_iter(),
         ) {
+            assert!(
+                input_key.version().is_none() || input_key.version().unwrap().is_valid(),
+                "Shared objects in cancelled transaction should always be available immediately, 
+                 but it appears that transaction manager is waiting for {:?} to become available",
+                input_key
+            );
             // If the key exists at the specified version, then the object is available.
             if has_key {
                 versioned_results.push((*idx, true))
@@ -416,6 +423,8 @@ pub trait ExecutionCacheRead: Send + Sync {
     }
 
     fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState>;
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge>;
 
     // Marker methods
 

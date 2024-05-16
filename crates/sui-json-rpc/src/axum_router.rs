@@ -192,7 +192,7 @@ fn handle_traffic_resp(
     traffic_controller.tally(TrafficTally {
         connection_ip: Some(client_ip.ip()),
         proxy_ip: None,
-        weight: error.map(normalize).unwrap_or(Weight::zero()),
+        error_weight: error.map(normalize).unwrap_or(Weight::zero()),
         timestamp: SystemTime::now(),
     });
 }

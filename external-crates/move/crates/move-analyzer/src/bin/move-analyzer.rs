@@ -216,8 +216,13 @@ fn main() {
                             },
                         }
                     },
-                    Err(error) =>
-                        eprintln!("symbolicator message error: {:?}", error),
+                    Err(error) => {
+                        eprintln!("symbolicator message error: {:?}", error);
+                        // if the analyzer crashes in a separate thread, this error will keep
+                        // getting generated for a while unless we explicitly end the process
+                        // obscuring the real logged reason for the crash
+                        std::process::exit(-1);
+                    }
                 }
             },
             recv(context.connection.receiver) -> message => {

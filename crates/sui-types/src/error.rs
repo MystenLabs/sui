@@ -393,8 +393,6 @@ pub enum SuiError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSigs,
-    #[error("System Transaction not accepted")]
-    InvalidSystemTransaction,
 
     // Account access
     #[error("Invalid authenticator")]
@@ -500,6 +498,9 @@ pub enum SuiError {
     #[error("Authority Error: {error:?}")]
     GenericAuthorityError { error: String },
 
+    #[error("Generic Bridge Error: {error:?}")]
+    GenericBridgeError { error: String },
+
     #[error("Failed to dispatch subscription: {error:?}")]
     FailedToDispatchSubscription { error: String },
 
@@ -596,6 +597,9 @@ pub enum SuiError {
 
     #[error("Failed to read or deserialize system state related data structures on-chain: {0}")]
     SuiSystemStateReadError(String),
+
+    #[error("Failed to read or deserialize bridge related data structures on-chain: {0}")]
+    SuiBridgeReadError(String),
 
     #[error("Unexpected version error: {0}")]
     UnexpectedVersion(String),

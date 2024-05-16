@@ -4,11 +4,12 @@
 use anyhow::anyhow;
 use std::time::Duration;
 
-use diesel::connection::BoxableConnection;
-use diesel::r2d2::{Pool, PooledConnection, R2D2Connection};
-use diesel::{r2d2::ConnectionManager, sql_query, RunQueryDsl};
-
 use crate::errors::IndexerError;
+use diesel::connection::BoxableConnection;
+#[cfg(feature = "postgres-feature")]
+use diesel::query_dsl::RunQueryDsl;
+use diesel::r2d2::ConnectionManager;
+use diesel::r2d2::{Pool, PooledConnection, R2D2Connection};
 
 pub type ConnectionPool<T> = Pool<ConnectionManager<T>>;
 pub type PoolConnection<T> = PooledConnection<ConnectionManager<T>>;
@@ -77,10 +78,11 @@ pub struct ConnectionConfig {
 impl<T: R2D2Connection + 'static> diesel::r2d2::CustomizeConnection<T, diesel::r2d2::Error>
     for ConnectionConfig
 {
-    fn on_acquire(&self, conn: &mut T) -> std::result::Result<(), diesel::r2d2::Error> {
+    fn on_acquire(&self, _conn: &mut T) -> std::result::Result<(), diesel::r2d2::Error> {
         #[cfg(feature = "postgres-feature")]
         {
-            conn.as_any_mut()
+            _conn
+                .as_any_mut()
                 .downcast_mut::<diesel::PgConnection>()
                 .map_or_else(
                     || {
@@ -93,7 +95,7 @@ impl<T: R2D2Connection + 'static> diesel::r2d2::CustomizeConnection<T, diesel::r
                         ))
                     },
                     |pg_conn| {
-                        sql_query(format!(
+                        diesel::sql_query(format!(
                             "SET statement_timeout = {}",
                             self.statement_timeout.as_millis(),
                         ))
@@ -101,7 +103,7 @@ impl<T: R2D2Connection + 'static> diesel::r2d2::CustomizeConnection<T, diesel::r
                         .map_err(diesel::r2d2::Error::QueryError)?;
 
                         if self.read_only {
-                            sql_query("SET default_transaction_read_only = 't'")
+                            diesel::sql_query("SET default_transaction_read_only = 't'")
                                 .execute(pg_conn)
                                 .map_err(diesel::r2d2::Error::QueryError)?;
                         }
@@ -140,8 +142,7 @@ pub fn new_connection_pool_with_config<T: R2D2Connection + 'static>(
         .build(manager)
         .map_err(|e| {
             IndexerError::PgConnectionPoolInitError(format!(
-                "Failed to initialize connection pool with error: {:?}",
-                e
+                "Failed to initialize connection pool for {db_url} with error: {e:?}"
             ))
         })
 }
@@ -181,8 +182,7 @@ pub fn reset_database<T: R2D2Connection + Send + 'static>(
             .map_or_else(
                 || Err(anyhow!("Failed to downcast connection to PgConnection")),
                 |mysql_conn| {
-                    setup_mysql::reset_database(mysql_conn, drop_all)
-                        .map_err(diesel::r2d2::Error::QueryError)?;
+                    setup_mysql::reset_database(mysql_conn, drop_all)?;
                     Ok(())
                 },
             )?;
@@ -206,7 +206,7 @@ pub mod setup_postgres {
     use secrecy::ExposeSecret;
     use tracing::{error, info};
 
-    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
+    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/pg");
 
     pub fn reset_database(
         conn: &mut PoolConnection<PgConnection>,
@@ -333,22 +333,140 @@ pub mod setup_postgres {
 #[cfg(feature = "mysql-feature")]
 #[cfg(not(feature = "postgres-feature"))]
 pub mod setup_mysql {
-    use crate::db::PoolConnection;
+    use crate::db::{get_pool_connection, new_connection_pool, PoolConnection};
     use crate::errors::IndexerError;
+    use crate::indexer::Indexer;
+    use crate::metrics::IndexerMetrics;
+    use crate::store::PgIndexerStore;
     use crate::IndexerConfig;
-    use diesel::MysqlConnection;
+    use anyhow::anyhow;
+    use diesel::migration::MigrationSource;
+    use diesel::{MysqlConnection, RunQueryDsl};
+    use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
     use prometheus::Registry;
+    use secrecy::ExposeSecret;
+    use tracing::{error, info};
+
+    const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/mysql");
 
     pub fn reset_database(
-        _conn: &mut PoolConnection<MysqlConnection>,
-        _drop_all: bool,
+        conn: &mut PoolConnection<MysqlConnection>,
+        drop_all: bool,
     ) -> Result<(), anyhow::Error> {
-        todo!()
+        info!("Resetting database ...");
+        if drop_all {
+            crate::db::setup_mysql::drop_all_tables(conn)
+                .map_err(|e| anyhow!("Encountering error when dropping all tables {e}"))?;
+        } else {
+            conn.revert_all_migrations(MIGRATIONS)
+                .map_err(|e| anyhow!("Error reverting all migrations {e}"))?;
+        }
+        conn.run_migrations(&MIGRATIONS.migrations().unwrap())
+            .map_err(|e| anyhow!("Failed to run migrations {e}"))?;
+        info!("Reset database complete.");
+        Ok(())
     }
+
+    fn drop_all_tables(conn: &mut MysqlConnection) -> Result<(), diesel::result::Error> {
+        info!("Dropping all tables in the database");
+        let table_names: Vec<String> = diesel::dsl::sql::<diesel::sql_types::Text>(
+            "
+        SELECT TABLE_NAME FROM information_schema.tables WHERE table_schema = DATABASE()
+    ",
+        )
+        .load(conn)?;
+
+        for table_name in table_names {
+            let drop_table_query = format!("DROP TABLE IF EXISTS {}", table_name);
+            diesel::sql_query(drop_table_query).execute(conn)?;
+        }
+
+        // Recreate the __diesel_schema_migrations table
+        diesel::sql_query(
+            "
+        CREATE TABLE __diesel_schema_migrations (
+            version VARCHAR(50) PRIMARY KEY,
+            run_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP()
+        )
+    ",
+        )
+        .execute(conn)?;
+        info!("Dropped all tables in the database");
+        Ok(())
+    }
+
     pub async fn setup(
-        _indexer_config: IndexerConfig,
+        indexer_config: IndexerConfig,
         registry: Registry,
     ) -> Result<(), IndexerError> {
-        todo!()
+        let db_url_secret = indexer_config.get_db_url().map_err(|e| {
+            IndexerError::PgPoolConnectionError(format!(
+                "Failed parsing database url with error {:?}",
+                e
+            ))
+        })?;
+        let db_url = db_url_secret.expose_secret();
+        let blocking_cp = new_connection_pool::<MysqlConnection>(db_url, None).map_err(|e| {
+            error!("Failed creating Mysql connection pool with error {:?}", e);
+            e
+        })?;
+        if indexer_config.reset_db {
+            let mut conn = get_pool_connection(&blocking_cp).map_err(|e| {
+                error!(
+                    "Failed getting Mysql connection from connection pool with error {:?}",
+                    e
+                );
+                e
+            })?;
+            crate::db::setup_mysql::reset_database(&mut conn, /* drop_all */ true).map_err(
+                |e| {
+                    let db_err_msg = format!(
+                        "Failed resetting database with url: {:?} and error: {:?}",
+                        db_url, e
+                    );
+                    error!("{}", db_err_msg);
+                    IndexerError::PostgresResetError(db_err_msg)
+                },
+            )?;
+        }
+        let indexer_metrics = IndexerMetrics::new(&registry);
+        mysten_metrics::init_metrics(&registry);
+
+        let report_cp = blocking_cp.clone();
+        let report_metrics = indexer_metrics.clone();
+        tokio::spawn(async move {
+            loop {
+                let cp_state = report_cp.state();
+                info!(
+                    "DB connection pool size: {}, with idle conn: {}.",
+                    cp_state.connections, cp_state.idle_connections
+                );
+                report_metrics
+                    .db_conn_pool_size
+                    .set(cp_state.connections as i64);
+                report_metrics
+                    .idle_db_conn
+                    .set(cp_state.idle_connections as i64);
+                tokio::time::sleep(tokio::time::Duration::from_secs(60)).await;
+            }
+        });
+        if indexer_config.fullnode_sync_worker {
+            let store =
+                PgIndexerStore::<MysqlConnection>::new(blocking_cp, indexer_metrics.clone());
+            return Indexer::start_writer::<PgIndexerStore<MysqlConnection>, MysqlConnection>(
+                &indexer_config,
+                store,
+                indexer_metrics,
+            )
+            .await;
+        } else if indexer_config.rpc_server_worker {
+            return Indexer::start_reader::<MysqlConnection>(
+                &indexer_config,
+                &registry,
+                db_url.to_string(),
+            )
+            .await;
+        }
+        Ok(())
     }
 }

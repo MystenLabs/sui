@@ -10,6 +10,7 @@ mod checked {
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format_common::VERSION_6,
         normalized, CompiledModule,
     };
     use move_core_types::{
@@ -817,7 +818,7 @@ mod checked {
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap();
+                m.serialize_with_version(VERSION_6, &mut bytes).unwrap();
                 bytes
             })
             .collect();

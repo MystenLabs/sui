@@ -4,7 +4,12 @@
 import type { PureArg } from '@mysten/sui.js/bcs';
 import { bcs } from '@mysten/sui.js/bcs';
 import { getFullnodeUrl, SuiClient } from '@mysten/sui.js/client';
-import type { CoinStruct, SuiTransaction } from '@mysten/sui.js/client';
+import type {
+	CoinStruct,
+	SuiObjectData,
+	SuiTransaction,
+	SuiTransactionBlockResponse,
+} from '@mysten/sui.js/client';
 import type { Keypair } from '@mysten/sui.js/cryptography';
 import { Ed25519Keypair } from '@mysten/sui.js/keypairs/ed25519';
 import { TransactionBlock } from '@mysten/sui.js/transactions';
@@ -29,7 +34,6 @@ const DEFAULT_ZK_SEND_LINK_OPTIONS = {
 	host: 'https://zksend.com',
 	path: '/claim',
 	network: 'mainnet' as const,
-	claimApi: 'https://zksend.com/api',
 };
 
 const SUI_COIN_TYPE = normalizeStructTag(SUI_TYPE_ARG);
@@ -62,13 +66,14 @@ export class ZkSendLink {
 	creatorAddress?: string;
 	assets?: LinkAssets;
 	claimed?: boolean;
+	bagObject?: SuiObjectData | null;
 
 	#client: SuiClient;
 	#contract?: ZkBag<ZkBagContractOptions>;
-	#claimApi: string;
 	#network: 'mainnet' | 'testnet';
-	#host?: string;
-	#path?: string;
+	#host: string;
+	#path: string;
+	#claimApi: string;
 
 	// State for non-contract based links
 	#gasCoin?: CoinStruct;
@@ -82,13 +87,13 @@ export class ZkSendLink {
 
 	constructor({
 		network = DEFAULT_ZK_SEND_LINK_OPTIONS.network,
-		claimApi = DEFAULT_ZK_SEND_LINK_OPTIONS.claimApi,
 		client = new SuiClient({ url: getFullnodeUrl(network) }),
 		keypair,
 		contract = network === 'mainnet' ? MAINNET_CONTRACT_IDS : null,
 		address,
-		host,
-		path,
+		host = DEFAULT_ZK_SEND_LINK_OPTIONS.host,
+		path = DEFAULT_ZK_SEND_LINK_OPTIONS.path,
+		claimApi = `${host}/api`,
 		isContractLink,
 	}: ZkSendLinkOptions) {
 		if (!keypair && !address) {
@@ -163,16 +168,36 @@ export class ZkSendLink {
 		return link;
 	}
 
-	async loadAssets() {
+	async loadClaimedStatus() {
+		await this.#loadBag({ loadAssets: false });
+	}
+
+	async loadAssets(
+		options: {
+			transactionBlock?: SuiTransactionBlockResponse;
+			loadClaimedAssets?: boolean;
+		} = {},
+	) {
 		if (this.#contract) {
-			await this.#loadBag();
+			await this.#loadBag(options);
 		} else {
-			await this.#loadOwnedObjects();
+			await this.#loadOwnedObjects(options);
 		}
 	}
 
-	async claimAssets(address: string) {
-		if (!this.keypair) {
+	async claimAssets(
+		address: string,
+		{
+			reclaim,
+			sign,
+		}:
+			| { reclaim?: false; sign?: never }
+			| {
+					reclaim: true;
+					sign: (transactionBlock: Uint8Array) => Promise<string>;
+			  } = {},
+	) {
+		if (!this.keypair && !sign) {
 			throw new Error('Cannot claim assets without links keypair');
 		}
 
@@ -181,9 +206,16 @@ export class ZkSendLink {
 		}
 
 		if (!this.#contract) {
-			return this.#client.signAndExecuteTransactionBlock({
-				transactionBlock: this.createClaimTransaction(address),
-				signer: this.keypair,
+			const bytes = await this.createClaimTransaction(address).build({
+				client: this.#client,
+			});
+			const signature = sign
+				? await sign(bytes)
+				: (await this.keypair!.signTransactionBlock(bytes)).signature;
+
+			return this.#client.executeTransactionBlock({
+				transactionBlock: bytes,
+				signature,
 			});
 		}
 
@@ -191,12 +223,20 @@ export class ZkSendLink {
 			await this.#loadBag();
 		}
 
-		const txb = this.createClaimTransaction(address);
+		const txb = this.createClaimTransaction(address, { reclaim });
 
-		const { digest } = await this.#executeSponsoredTransactionBlock(
-			await this.#createSponsoredTransactionBlock(txb, address, this.keypair.toSuiAddress()),
-			this.keypair,
+		const sponsored = await this.#createSponsoredTransactionBlock(
+			txb,
+			address,
+			reclaim ? address : this.keypair!.toSuiAddress(),
 		);
+
+		const bytes = fromB64(sponsored.bytes);
+		const signature = sign
+			? await sign(bytes)
+			: (await this.keypair!.signTransactionBlock(bytes)).signature;
+
+		const { digest } = await this.#executeSponsoredTransactionBlock(sponsored, signature);
 
 		return this.#client.waitForTransactionBlock({ digest });
 	}
@@ -299,7 +339,31 @@ export class ZkSendLink {
 		};
 	}
 
-	async #loadBag() {
+	async #loadBagObject() {
+		if (!this.#contract) {
+			throw new Error('Cannot load bag object for non-contract based links');
+		}
+		const bagField = await this.#client.getDynamicFieldObject({
+			parentId: this.#contract.ids.bagStoreTableId,
+			name: {
+				type: 'address',
+				value: this.address,
+			},
+		});
+
+		this.bagObject = bagField.data;
+		this.claimed = !bagField.data;
+	}
+
+	async #loadBag({
+		transactionBlock,
+		loadAssets = true,
+		loadClaimedAssets = loadAssets,
+	}: {
+		transactionBlock?: SuiTransactionBlockResponse;
+		loadAssets?: boolean;
+		loadClaimedAssets?: boolean;
+	} = {}) {
 		if (!this.#contract) {
 			return;
 		}
@@ -310,27 +374,37 @@ export class ZkSendLink {
 			coins: [],
 		};
 
-		const bagField = await this.#client.getDynamicFieldObject({
-			parentId: this.#contract.ids.bagStoreTableId,
-			name: {
-				type: 'address',
-				value: this.address,
-			},
-		});
-
-		if (!bagField.data) {
-			this.claimed = true;
-			await this.#loadClaimedAssets();
-
-			return;
-		} else {
-			this.claimed = false;
+		if (!this.bagObject || !this.claimed) {
+			await this.#loadBagObject();
 		}
 
-		const itemIds: string[] | undefined = (bagField as any).data?.content?.fields?.value?.fields
+		if (!loadAssets) {
+			return;
+		}
+
+		if (!this.bagObject) {
+			if (loadClaimedAssets) {
+				await this.#loadClaimedAssets();
+			}
+			return;
+		}
+
+		const bagId = (this.bagObject as any).content.fields.value.fields?.id?.id;
+
+		if (bagId && transactionBlock?.balanceChanges && transactionBlock.objectChanges) {
+			this.assets = getAssetsFromTxnBlock({
+				transactionBlock,
+				address: bagId,
+				isSent: false,
+			});
+
+			return;
+		}
+
+		const itemIds: string[] | undefined = (this.bagObject as any)?.content?.fields?.value?.fields
 			?.item_ids.fields.contents;
 
-		this.creatorAddress = (bagField as any).data?.content?.fields?.value?.fields?.owner;
+		this.creatorAddress = (this.bagObject as any)?.content?.fields?.value?.fields?.owner;
 
 		if (!itemIds) {
 			throw new Error('Invalid bag field');
@@ -476,12 +550,12 @@ export class ZkSendLink {
 
 	async #executeSponsoredTransactionBlock(
 		input: { digest: string; bytes: string },
-		keypair: Keypair,
+		signature: string,
 	) {
 		return this.#fetch<{ digest: string }>(`transaction-blocks/sponsor/${input.digest}`, {
 			method: 'POST',
 			body: JSON.stringify({
-				signature: (await keypair.signTransactionBlock(fromB64(input.bytes))).signature,
+				signature,
 			}),
 		});
 	}
@@ -618,7 +692,11 @@ export class ZkSendLink {
 		return txb;
 	}
 
-	async #loadOwnedObjects() {
+	async #loadOwnedObjects({
+		loadClaimedAssets = true,
+	}: {
+		loadClaimedAssets?: boolean;
+	} = {}) {
 		this.assets = {
 			nfts: [],
 			balances: [],
@@ -676,7 +754,7 @@ export class ZkSendLink {
 		if (this.#hasSui || this.#ownedObjects.length > 0) {
 			this.claimed = false;
 			this.assets = await this.#listNonContractClaimableAssets();
-		} else if (result.data[0]) {
+		} else if (result.data[0] && loadClaimedAssets) {
 			this.claimed = true;
 			await this.#loadClaimedAssets();
 		}

@@ -8,7 +8,7 @@ use crate::{
     diag,
     diagnostics::{Diagnostic, WarningFilters},
     editions::Flavor,
-    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, Visibility},
+    expansion::ast::{AbilitySet, Fields, ModuleIdent, Mutability, TargetKind, Visibility},
     naming::ast::{
         self as N, BuiltinTypeName_, FunctionSignature, StructFields, Type, TypeName_, Type_, Var,
     },
@@ -114,7 +114,12 @@ impl<'a> TypingVisitorContext for Context<'a> {
             // Skip if not sui
             return true;
         }
-        if config.is_dependency || !mdef.is_source_module {
+        if !matches!(
+            mdef.target_kind,
+            TargetKind::Source {
+                is_root_package: true
+            }
+        ) {
             // Skip non-source, dependency modules
             return true;
         }

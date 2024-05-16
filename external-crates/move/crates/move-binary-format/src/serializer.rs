@@ -175,19 +175,9 @@ fn validate_version(version: u32) -> Result<()> {
 }
 
 impl CompiledModule {
-    /// Serializes a `CompiledModule` into a binary. The mutable `Vec<u8>` will contain the
-    /// binary blob on return.
-    pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_for_version(None, binary)
-    }
-
-    /// Serialize into binary, at given version.
-    pub fn serialize_for_version(
-        &self,
-        bytecode_version: Option<u32>,
-        binary: &mut Vec<u8>,
-    ) -> Result<()> {
-        let version = bytecode_version.unwrap_or(VERSION_MAX);
+    /// Serializes a `CompiledModule` into a binary at `version`. The mutable `Vec<u8>` will
+    /// contain the binary blob on return.
+    pub fn serialize_with_version(&self, version: u32, binary: &mut Vec<u8>) -> Result<()> {
         validate_version(version)?;
         let mut binary_data = BinaryData::from(binary.clone());
         let mut ser = ModuleSerializer::new(version);
@@ -209,6 +199,13 @@ impl CompiledModule {
 
         *binary = binary_data.into_inner();
         Ok(())
+    }
+
+    /// Serializes a `CompiledModule` into a binary at VERSION_MAX. The mutable `Vec<u8>` will
+    /// contain the binary blob on return. To be used for testing only.
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
+        self.serialize_with_version(VERSION_MAX, binary)
     }
 }
 

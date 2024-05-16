@@ -518,6 +518,7 @@ mod checked {
                 modules,
                 self.tx_context.digest(),
                 self.protocol_config.max_move_package_size(),
+                self.protocol_config.move_binary_format_version(),
                 dependencies,
             )
         }

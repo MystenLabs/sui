@@ -12,6 +12,7 @@ exclude = [
   "external-crates/move/crates/invalid-mutations",
   "external-crates/move/crates/language-benchmarks",
   "external-crates/move/crates/module-generation",
+  "external-crates/move/crates/move-abstract-interpreter",
   "external-crates/move/crates/move-abstract-stack",
   "external-crates/move/crates/move-analyzer",
   "external-crates/move/crates/move-binary-format",
@@ -64,6 +65,7 @@ exclude = [
   "external-crates/move/move-execution/v1/crates/move-bytecode-verifier",
   "external-crates/move/move-execution/v1/crates/move-stdlib-natives",
   "external-crates/move/move-execution/v1/crates/move-vm-runtime",
+  "external-crates/move/move-execution/v2/crates/move-abstract-interpreter",
   "external-crates/move/move-execution/v2/crates/move-bytecode-verifier",
   "external-crates/move/move-execution/v2/crates/move-stdlib-natives",
   "external-crates/move/move-execution/v2/crates/move-vm-runtime",
@@ -74,7 +76,7 @@ members = [
   "consensus/config",
   "consensus/core",
   "crates/anemo-benchmark",
-  "crates/data-transform",
+  "crates/bin-version",
   "crates/mamoru-sui-sniffer",
   "crates/mysten-common",
   "crates/mysten-metrics",
@@ -198,7 +200,7 @@ members = [
 
 [workspace.package]
 # This version string will be inherited by sui-core, sui-faucet, sui-node, sui-tools, sui-sdk, sui-move-build, and sui crates.
-version = "1.24.1"
+version = "1.25.0"
 
 [profile.release]
 # debug = 1 means line charts only, which is minimum needed for good stack traces
@@ -558,6 +560,7 @@ move-ir-types = { path = "external-crates/move/crates/move-ir-types" }
 move-prover = { path = "external-crates/move/crates/move-prover" }
 move-stackless-bytecode = { path = "external-crates/move/crates/move-stackless-bytecode" }
 move-symbol-pool = { path = "external-crates/move/crates/move-symbol-pool" }
+move-abstract-interpreter = { path = "external-crates/move/crates/move-abstract-interpreter" }
 move-abstract-stack = { path = "external-crates/move/crates/move-abstract-stack" }
 
 # The mamoru
@@ -566,9 +569,10 @@ mamoru-sui-types = { git = "https://github.com/Mamoru-Foundation/mamoru-core", r
 #mamoru-sniffer = { path = "../mamoru-core/mamoru-sniffer" }
 #mamoru-sui-types = { path = "../mamoru-core/blockchain-types/mamoru-sui-types" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }
-fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05" }
-fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "878492bd2541dce1491791bcadf3cc855ddcdc05", package = "fastcrypto-zkp" }
+
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6" }
+fastcrypto-tbls = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6" }
+fastcrypto-zkp = { git = "https://github.com/MystenLabs/fastcrypto", rev = "4988a4744fcaf8bc7f60bf660d9a223ed0f54cc6", package = "fastcrypto-zkp" }
 
 # anemo dependencies
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb9aa6a2417be3c03c57d6e93c30bd1ad7" }
@@ -578,6 +582,7 @@ anemo-tower = { git = "https://github.com/mystenlabs/anemo.git", rev = "26d415eb
 
 ### Workspace Members ###
 anemo-benchmark = { path = "crates/anemo-benchmark" }
+bin-version = { path = "crates/bin-version" }
 mysten-common = { path = "crates/mysten-common" }
 mysten-metrics = { path = "crates/mysten-metrics" }
 mysten-network = { path = "crates/mysten-network" }
@@ -594,6 +599,7 @@ sui-analytics-indexer-derive = { path = "crates/sui-analytics-indexer-derive" }
 sui-archival = { path = "crates/sui-archival" }
 sui-authority-aggregation = { path = "crates/sui-authority-aggregation" }
 sui-benchmark = { path = "crates/sui-benchmark" }
+sui-bridge = { path = "crates/sui-bridge" }
 sui-cluster-test = { path = "crates/sui-cluster-test" }
 sui-common = { path = "crates/sui-common" }
 sui-config = { path = "crates/sui-config" }

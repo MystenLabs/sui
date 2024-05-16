@@ -410,7 +410,7 @@ pub trait SimpleAbsInt: Sized {
             }
 
             E::Unit { .. } => vec![],
-            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant(_) => {
+            E::Value(_) | E::Constant(_) | E::UnresolvedError | E::ErrorConstant { .. } => {
                 default_values(1)
             }
 

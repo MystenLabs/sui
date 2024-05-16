@@ -68,6 +68,7 @@ pub mod diesel_macro {
             #[cfg(feature = "mysql-feature")]
             #[cfg(not(feature = "postgres-feature"))]
             {
+                use diesel::Connection;
                 let mut pool_conn = get_pool_connection($pool)?;
                 pool_conn
                     .as_any_mut()
@@ -116,6 +117,7 @@ pub mod diesel_macro {
                 #[cfg(feature = "mysql-feature")]
                 #[cfg(not(feature = "postgres-feature"))]
                 {
+                    use diesel::Connection;
                     let mut pool_conn =
                         get_pool_connection($pool).map_err(|e| backoff::Error::Transient {
                             err: IndexerError::PostgresWriteError(e.to_string()),
@@ -187,6 +189,7 @@ pub mod diesel_macro {
                 #[cfg(feature = "mysql-feature")]
                 #[cfg(not(feature = "postgres-feature"))]
                 {
+                    use diesel::Connection;
                     pool_conn
                         .as_any_mut()
                         .downcast_mut::<PoolConnection<diesel::MysqlConnection>>()
@@ -197,6 +200,62 @@ pub mod diesel_macro {
             })
             .await
             .expect("Blocking call failed")
+        }};
+    }
+
+    #[macro_export]
+    macro_rules! insert_or_ignore_into {
+        ($table:expr, $values:expr, $conn:expr) => {{
+            use diesel::RunQueryDsl;
+            let error_message = concat!("Failed to write to ", stringify!($table), " DB");
+            #[cfg(feature = "postgres-feature")]
+            {
+                diesel::insert_into($table)
+                    .values($values)
+                    .on_conflict_do_nothing()
+                    .execute($conn)
+                    .map_err(IndexerError::from)
+                    .context(error_message)?;
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                diesel::insert_or_ignore_into($table)
+                    .values($values)
+                    .execute($conn)
+                    .map_err(IndexerError::from)
+                    .context(error_message)?;
+            }
+        }};
+    }
+
+    #[macro_export]
+    macro_rules! on_conflict_do_update {
+        ($table:expr, $values:expr, $target:expr, $pg_columns:expr, $mysql_columns:expr, $conn:expr) => {{
+            use diesel::ExpressionMethods;
+            use diesel::RunQueryDsl;
+            #[cfg(feature = "postgres-feature")]
+            {
+                diesel::insert_into($table)
+                    .values($values)
+                    .on_conflict($target)
+                    .do_update()
+                    .set($pg_columns)
+                    .execute($conn)?;
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                for excluded_row in $values.iter() {
+                    let columns = $mysql_columns;
+                    diesel::insert_into($table)
+                        .values(excluded_row.clone())
+                        .on_conflict(diesel::dsl::DuplicatedKeys)
+                        .do_update()
+                        .set(columns(excluded_row.clone()))
+                        .execute($conn)?;
+                }
+            }
         }};
     }
 

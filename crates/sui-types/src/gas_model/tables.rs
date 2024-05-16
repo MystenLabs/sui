@@ -566,7 +566,7 @@ impl GasMeter for GasStatus {
         new_val: impl ValueView,
         old_val: impl ValueView,
     ) -> PartialVMResult<()> {
-        // TODO(tzakian): We should account for this elsewhere as the owner of data the the
+        // TODO(tzakian): We should account for this elsewhere as the owner of data the
         // reference points to won't be on the stack. For now though, we treat it as adding to the
         // stack size.
         self.charge(

@@ -5,9 +5,7 @@
 module common::identified_payment {
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, UID};
-    use sui::transfer::{Self, Receiving};
-    use sui::tx_context::{Self, TxContext};
+    use sui::transfer::Receiving;
     use sui::event;
     use sui::dynamic_field;
 

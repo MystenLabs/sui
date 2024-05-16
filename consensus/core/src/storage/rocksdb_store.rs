@@ -136,12 +136,11 @@ impl Store for RocksDBStore {
                 .map_err(ConsensusError::RocksDBFailure)?;
         }
 
-        // CommitInfo can be unavailable in tests, or when we decide to skip writing it.
-        if let Some((commit_ref, last_commit_info)) = write_batch.last_commit_info {
+        for (commit_ref, commit_info) in write_batch.commit_info {
             batch
                 .insert_batch(
                     &self.commit_info,
-                    [((commit_ref.index, commit_ref.digest), last_commit_info)],
+                    [((commit_ref.index, commit_ref.digest), commit_info)],
                 )
                 .map_err(ConsensusError::RocksDBFailure)?;
         }

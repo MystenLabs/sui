@@ -223,18 +223,11 @@ impl ServerBuilder {
         if self.router.is_none() {
             let router: Router = Router::new()
                 .route("/", post(graphql_handler))
+                .route("/:version", post(graphql_handler))
                 .route("/graphql", post(graphql_handler))
                 .route("/graphql/:version", post(graphql_handler))
                 .route("/health", axum::routing::get(health_checks))
                 .with_state(self.state.clone())
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    set_version_middleware,
-                ))
-                .route_layer(middleware::from_fn_with_state(
-                    self.state.version,
-                    check_version_middleware,
-                ))
                 .route_layer(CallbackLayer::new(MetricsMakeCallbackHandler {
                     metrics: self.state.metrics.clone(),
                 }));
@@ -312,6 +305,14 @@ impl ServerBuilder {
         );
 
         let app = router
+            .route_layer(middleware::from_fn_with_state(
+                state.version,
+                set_version_middleware,
+            ))
+            .route_layer(middleware::from_fn_with_state(
+                state.version,
+                check_version_middleware,
+            ))
             .layer(axum::extract::Extension(schema))
             .layer(axum::extract::Extension(watermark_task.lock()))
             .layer(Self::cors()?);

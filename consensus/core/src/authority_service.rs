@@ -8,7 +8,7 @@ use bytes::Bytes;
 use consensus_config::AuthorityIndex;
 use futures::{ready, stream, task, Stream, StreamExt};
 use parking_lot::RwLock;
-use sui_macros::{fail_point, fail_point_async};
+use sui_macros::fail_point_async;
 use tokio::{sync::broadcast, time::sleep};
 use tokio_util::sync::ReusableBoxFuture;
 use tracing::{debug, info, warn};
@@ -386,8 +386,6 @@ impl<T: 'static + Clone + Send> Stream for BroadcastStream<T> {
         let maybe_item = loop {
             let (result, rx) = ready!(self.inner.poll(cx));
             self.inner.set(make_recv_future(rx));
-
-            fail_point!("consensus-rpc-response");
 
             match result {
                 Ok(item) => break Some(item),

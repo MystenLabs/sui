@@ -1,5 +1,62 @@
 # @mysten/dapp-kit
 
+## 0.13.0
+
+### Minor Changes
+
+- 807262f394: The `zksend` property on the `WalletProvider` has been replaced with a `stashedWallet` option.
+
+### Patch Changes
+
+- Updated dependencies [807262f394]
+  - @mysten/zksend@0.8.0
+
+## 0.12.15
+
+### Patch Changes
+
+- Updated dependencies [99b112178c]
+  - @mysten/sui.js@0.54.1
+  - @mysten/wallet-standard@0.11.6
+  - @mysten/zksend@0.7.2
+
+## 0.12.14
+
+### Patch Changes
+
+- Updated dependencies [29d8e45b0e]
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [b7f673dbd9]
+- Updated dependencies [123b42c75c]
+  - @mysten/zksend@0.7.1
+  - @mysten/sui.js@0.54.0
+  - @mysten/wallet-standard@0.11.5
+
+## 0.12.13
+
+### Patch Changes
+
+- Updated dependencies [774bfb41a8]
+- Updated dependencies [879421a5ac]
+  - @mysten/sui.js@0.53.0
+  - @mysten/zksend@0.7.0
+  - @mysten/wallet-standard@0.11.4
+
+## 0.12.12
+
+### Patch Changes
+
+- Updated dependencies [9a9ff3cde1]
+- Updated dependencies [905bc99e88]
+  - @mysten/zksend@0.6.0
+
+## 0.12.11
+
+### Patch Changes
+
+- Updated dependencies [44ba140be0]
+  - @mysten/zksend@0.5.0
+
 ## 0.12.10
 
 ### Patch Changes

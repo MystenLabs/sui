@@ -217,7 +217,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         | E::Copy { .. }
         | E::BorrowLocal(_, _)
         | E::Continue(_)
-        | E::ErrorConstant(_)
+        | E::ErrorConstant { .. }
         | E::UnresolvedError => (),
 
         E::ModuleCall(call) => module_call(context, call),
@@ -244,7 +244,7 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::VariantMatch(subject, _, arms) => {
             context.env.add_diag(ice!((
                 e.exp.loc,
-                "shouldn't find variant match before HLIR lowering"
+                "shouldn't find variant match before match compilation"
             )));
             exp(context, subject);
             for (_, rhs) in arms {

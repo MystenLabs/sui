@@ -491,7 +491,7 @@ impl TransactionBuilder {
         })
     }
 
-    async fn resolve_and_checks_json_args(
+    pub async fn resolve_and_checks_json_args(
         &self,
         builder: &mut ProgrammableTransactionBuilder,
         package_id: ObjectID,

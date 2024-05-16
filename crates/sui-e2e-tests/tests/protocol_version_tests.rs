@@ -56,7 +56,7 @@ mod sim_only_tests {
 
     use super::*;
     use fastcrypto::encoding::Base64;
-    use move_binary_format::CompiledModule;
+    use move_binary_format::{file_format_common::VERSION_MAX, CompiledModule};
     use move_core_types::ident_str;
     use std::path::PathBuf;
     use std::sync::Arc;
@@ -67,6 +67,8 @@ mod sim_only_tests {
     use sui_macros::*;
     use sui_move_build::{BuildConfig, CompiledPackage};
     use sui_protocol_config::SupportedProtocolVersions;
+    use sui_swarm_config::genesis_config::GenesisConfig;
+    use sui_swarm_config::network_config::NetworkConfig;
     use sui_types::base_types::ConciseableName;
     use sui_types::base_types::{ObjectID, ObjectRef};
     use sui_types::effects::{TransactionEffects, TransactionEffectsAPI};
@@ -87,7 +89,8 @@ mod sim_only_tests {
         object::Object,
         programmable_transaction_builder::ProgrammableTransactionBuilder,
         transaction::TransactionKind,
-        MOVE_STDLIB_PACKAGE_ID, SUI_FRAMEWORK_PACKAGE_ID, SUI_SYSTEM_PACKAGE_ID,
+        MOVE_STDLIB_PACKAGE_ID, SUI_BRIDGE_OBJECT_ID, SUI_FRAMEWORK_PACKAGE_ID,
+        SUI_SYSTEM_PACKAGE_ID,
     };
     use sui_types::{
         SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID,
@@ -155,7 +158,7 @@ mod sim_only_tests {
             .with_async(|node| async {
                 // give time for restarted node to catch up, reconfig
                 // to new protocol, and reconfig again
-                sleep(Duration::from_secs(5)).await;
+                sleep(Duration::from_secs(15)).await;
 
                 let epoch_store = node.state().epoch_store_for_testing();
                 assert_eq!(epoch_store.epoch(), 2);
@@ -193,7 +196,7 @@ mod sim_only_tests {
         // verify that the node that didn't support the new version shut itself down.
         for v in test_cluster.swarm.validator_nodes() {
             if !v
-                .config
+                .config()
                 .supported_protocol_versions
                 .unwrap()
                 .is_version_supported(ProtocolVersion::new(FINISH))
@@ -436,6 +439,7 @@ mod sim_only_tests {
                         SUI_CLOCK_OBJECT_ID,
                         SUI_AUTHENTICATOR_STATE_OBJECT_ID,
                         SUI_RANDOMNESS_STATE_OBJECT_ID,
+                        SUI_BRIDGE_OBJECT_ID,
                     ]
                     .contains(&obj.0);
                     (!is_framework_obj).then_some(obj.0)
@@ -787,6 +791,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn test_safe_mode_recovery() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/base");
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
@@ -835,6 +844,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_mock_smoke_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         let test_cluster = TestClusterBuilder::new()
             .with_epoch_duration_ms(20000)
             .with_supported_protocol_versions(SupportedProtocolVersions::new_for_testing(
@@ -849,6 +863,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_shallow_upgrade_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/shallow_upgrade");
 
         let test_cluster = TestClusterBuilder::new()
@@ -881,6 +900,11 @@ mod sim_only_tests {
 
     #[sim_test]
     async fn sui_system_state_deep_upgrade_test() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_disable_bridge_for_testing();
+            config
+        });
+
         override_sui_system_modules("mock_sui_systems/deep_upgrade");
 
         let test_cluster = TestClusterBuilder::new()
@@ -1003,6 +1027,7 @@ mod sim_only_tests {
             &sui_system_modules(fixture),
             TransactionDigest::genesis_marker(),
             u64::MAX,
+            VERSION_MAX,
             &[
                 BuiltInFramework::get_package_by_id(&MOVE_STDLIB_PACKAGE_ID).genesis_move_package(),
                 BuiltInFramework::get_package_by_id(&SUI_FRAMEWORK_PACKAGE_ID)

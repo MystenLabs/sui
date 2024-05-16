@@ -106,7 +106,7 @@ impl SuiTxValidator {
         // all certificates had valid signatures, schedule them for execution prior to sequencing
         // which is unnecessary for owned object transactions.
         // It is unnecessary to write to pending_certificates table because the certs will be written
-        // via Narwhal output.
+        // via consensus output.
         // self.transaction_manager
         //     .enqueue_certificates(owned_tx_certs, &self.epoch_store)
         //     .wrap_err("Failed to schedule certificates for execution")
@@ -177,13 +177,13 @@ impl SuiTxValidatorMetrics {
         Arc::new(Self {
             certificate_signatures_verified: register_int_counter_with_registry!(
                 "certificate_signatures_verified",
-                "Number of certificates verified in narwhal batch verifier",
+                "Number of certificates verified in consensus batch verifier",
                 registry
             )
             .unwrap(),
             checkpoint_signatures_verified: register_int_counter_with_registry!(
                 "checkpoint_signatures_verified",
-                "Number of checkpoint verified in narwhal batch verifier",
+                "Number of checkpoint verified in consensus batch verifier",
                 registry
             )
             .unwrap(),
@@ -216,7 +216,8 @@ mod tests {
         // Initialize an authority with a (owned) gas object and a shared object; then
         // make a test certificate.
         let mut objects = test_gas_objects();
-        objects.push(Object::shared_for_testing());
+        let shared_object = Object::shared_for_testing();
+        objects.push(shared_object.clone());
 
         let latest_protocol_config = &latest_protocol_version();
 
@@ -230,7 +231,7 @@ mod tests {
             .build()
             .await;
         let name1 = state.name;
-        let certificates = test_certificates(&state).await;
+        let certificates = test_certificates(&state, shared_object).await;
 
         let first_transaction = certificates[0].clone();
         let first_transaction_bytes: Vec<u8> = bcs::to_bytes(

@@ -76,6 +76,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+use base64::Engine;
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::{HeaderMap, HeaderValue, HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
@@ -139,6 +140,7 @@ pub struct SuiClientBuilder {
     max_concurrent_requests: usize,
     ws_url: Option<String>,
     ws_ping_interval: Option<Duration>,
+    basic_auth: Option<(String, String)>,
 }
 
 impl Default for SuiClientBuilder {
@@ -148,6 +150,7 @@ impl Default for SuiClientBuilder {
             max_concurrent_requests: 256,
             ws_url: None,
             ws_ping_interval: None,
+            basic_auth: None,
         }
     }
 }
@@ -174,6 +177,12 @@ impl SuiClientBuilder {
     /// Set the WebSocket ping interval
     pub fn ws_ping_interval(mut self, duration: Duration) -> Self {
         self.ws_ping_interval = Some(duration);
+        self
+    }
+
+    /// Set the basic auth credentials for the HTTP client
+    pub fn basic_auth(mut self, username: impl AsRef<str>, password: impl AsRef<str>) -> Self {
+        self.basic_auth = Some((username.as_ref().to_string(), password.as_ref().to_string()));
         self
     }
 
@@ -207,6 +216,15 @@ impl SuiClientBuilder {
             HeaderValue::from_static(client_version),
         );
         headers.insert(CLIENT_SDK_TYPE_HEADER, HeaderValue::from_static("rust"));
+
+        if let Some((username, password)) = self.basic_auth {
+            let auth = base64::engine::general_purpose::STANDARD
+                .encode(format!("{}:{}", username, password));
+            headers.insert(
+                reqwest::header::AUTHORIZATION,
+                HeaderValue::from_str(&format!("Basic {}", auth)).unwrap(),
+            );
+        }
 
         let ws = if let Some(url) = self.ws_url {
             let mut builder = WsClientBuilder::default()

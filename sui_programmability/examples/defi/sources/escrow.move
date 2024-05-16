@@ -35,7 +35,7 @@ module defi::escrow {
         escrowed: T,
         ctx: &mut TxContext
     ) {
-        let sender = tx_context::sender(ctx);
+        let sender = ctx.sender();
         let id = object::new(ctx);
         // escrow the object with the trusted third party
         transfer::public_transfer(
@@ -65,8 +65,8 @@ module defi::escrow {
             exchange_for: exchange_for2,
             escrowed: escrowed2,
         } = obj2;
-        object::delete(id1);
-        object::delete(id2);
+        id1.delete();
+        id2.delete();
         // check sender/recipient compatibility
         assert!(&sender1 == &recipient2, EMismatchedSenderRecipient);
         assert!(&sender2 == &recipient1, EMismatchedSenderRecipient);
@@ -85,7 +85,7 @@ module defi::escrow {
         let EscrowedObj {
             id, sender, recipient: _, exchange_for: _, escrowed
         } = obj;
-        object::delete(id);
+        id.delete();
         transfer::public_transfer(escrowed, sender)
     }
 }
