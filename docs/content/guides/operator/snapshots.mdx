@@ -70,7 +70,7 @@ To restore from a RocksDB snapshot, follow these steps:
    * *GCS*: `GCS_SNAPSHOT_SERVICE_ACCOUNT_FILE_PATH`
    * *AZURE*: `AZURE_SNAPSHOT_STORAGE_ACCOUNT`, `AZURE_SNAPSHOT_STORAGE_ACCESS_KEY`
 
-1. When using `sui-tool download-db-snapshot` the db is copied to the location you've passed to `--path`, in a directory named `epoch_[NUM]`. You'll need to move this directory to the `live/` fullnode db dir, eg: `/opt/sui/db/authorities_db/full_node_db/live`.
+1. When using `sui-tool download-db-snapshot` the database is copied to the location you pass to `--path`, in a directory named `epoch_[NUM]`. Move this directory to the `live/` Full node database directory, for example `/opt/sui/db/authorities_db/full_node_db/live`.
 1. Make sure you update the ownership of the downloaded directory to the sui user (whichever linux user you run `sui-node` as)
    `sudo chown -R sui:sui  /opt/sui/db/authorities_db/full_node_db/live`.
 1. Start the Sui node.
