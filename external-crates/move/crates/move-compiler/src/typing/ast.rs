@@ -239,7 +239,11 @@ pub enum UnannotatedExp_ {
     Annotate(Box<Exp>, Box<Type>),
 
     // unfinished dot access (e.g. `some_field.`) with autocomplete information on it.
-    AutocompleteDotAccess(Box<Exp>, BTreeSet<Symbol>),
+    AutocompleteDotAccess {
+        base_exp: Box<Exp>,
+        methods: BTreeSet<Symbol>,
+        fields: BTreeSet<Symbol>,
+    },
 
     ErrorConstant {
         line_number_loc: Loc,
@@ -835,10 +839,16 @@ impl AstDebug for UnannotatedExp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::AutocompleteDotAccess(e, ns) => {
-                e.ast_debug(w);
+            E::AutocompleteDotAccess {
+                base_exp,
+                methods,
+                fields,
+            } => {
+                base_exp.ast_debug(w);
                 w.write(".{");
-                w.comma(ns, |w, n| w.write(format!("{n}")));
+                w.comma(methods.iter().chain(fields.iter()), |w, n| {
+                    w.write(format!("{n}"))
+                });
                 w.write("}");
             }
             E::UnresolvedError => w.write("_|_"),

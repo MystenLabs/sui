@@ -22,7 +22,17 @@ pub fn is_upper_snake_case(s: &str) -> bool {
 // String Construction Helpers
 //**************************************************************************************************
 
-/// Formats a string into an oxford list as: `format_oxford_list("or", "{}", vs);`
+/// Converts the first letter of a string to uppercase (ascii-only)
+pub fn make_ascii_titlecase(in_s: &str) -> String {
+    let mut s = in_s.to_string();
+    if let Some(c) = s.get_mut(0..1) {
+        c.make_ascii_uppercase();
+    }
+    s
+}
+
+/// Formats a string into an oxford list as: `format_oxford_list("or", "{}", vs);`. Calls `iter()`
+/// and `len()` on `vs`.
 ///
 /// This will use `or` as the separator for the last two elements, interspersing commas as
 /// appropriate:

@@ -23,7 +23,7 @@ use crate::{
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
-        string_utils::debug_print,
+        string_utils::{debug_print, make_ascii_titlecase},
         unique_map::UniqueMap,
         *,
     },
@@ -526,8 +526,12 @@ mod check_valid_constant {
                 exp(context, &call.arguments);
                 "Module calls are"
             }
-            E::AutocompleteDotAccess(inner, _) => {
-                exp(context, inner);
+            E::AutocompleteDotAccess {
+                base_exp,
+                methods: _,
+                fields: _,
+            } => {
+                exp(context, base_exp);
                 "Partial dot access paths are"
             }
             E::Builtin(b, args) => {
@@ -3077,100 +3081,176 @@ impl ExpDotted {
 fn process_exp_dotted(
     context: &mut Context,
     constraint_verb: Option<&str>,
-    sp!(dloc, ndot_): N::ExpDotted,
+    ndotted: N::ExpDotted,
 ) -> ExpDotted {
-    match ndot_ {
-        N::ExpDotted_::Exp(e) => {
-            let base = *exp(context, e);
-            let unfolded = core::unfold_type(&context.subst, base.ty.clone());
-            let (base_kind, base_type) = match unfolded.value {
-                Type_::Ref(true, inner) => (BaseRefKind::ImmRef, *inner.clone()),
-                Type_::Ref(false, inner) => (BaseRefKind::MutRef, *inner.clone()),
-                _ => (BaseRefKind::Owned, base.ty.clone()),
-            };
-            if matches!(base_kind, BaseRefKind::Owned) {
-                if let Some(verb) = constraint_verb {
-                    context.add_single_type_constraint(
-                        dloc,
-                        format!("Invalid {}", verb),
-                        base_type.clone(),
-                    );
-                }
-            }
-            let accessors = vec![];
-            ExpDotted {
-                loc: dloc,
-                base,
-                base_kind,
-                base_type,
-                accessors,
-                warn_on_constant: true,
-                for_autocomplete: false,
+    // These definitions live in here to ensure they are only ever called through
+    // `process_exp_dotted` in order to share definitions while enforcing when and if
+    // autocompletion should occur.
+
+    /// Process a base expression inton an ExpDotted form.
+    #[growing_stack]
+    fn process_base_exp(
+        context: &mut Context,
+        constraint_verb: Option<&str>,
+        dloc: Loc,
+        e: Box<N::Exp>,
+    ) -> ExpDotted {
+        let base = *exp(context, e);
+        let unfolded = core::unfold_type(&context.subst, base.ty.clone());
+        let (base_kind, base_type) = match unfolded.value {
+            Type_::Ref(true, inner) => (BaseRefKind::ImmRef, *inner.clone()),
+            Type_::Ref(false, inner) => (BaseRefKind::MutRef, *inner.clone()),
+            _ => (BaseRefKind::Owned, base.ty.clone()),
+        };
+        if matches!(base_kind, BaseRefKind::Owned) {
+            if let Some(verb) = constraint_verb {
+                context.add_single_type_constraint(
+                    dloc,
+                    format!("Invalid {}", verb),
+                    base_type.clone(),
+                );
             }
         }
-        N::ExpDotted_::Dot(ndot, field) => {
-            let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
-            if inner.for_autocomplete {
-                return inner;
+        let accessors = vec![];
+        ExpDotted {
+            loc: dloc,
+            base,
+            base_kind,
+            base_type,
+            accessors,
+            warn_on_constant: true,
+            for_autocomplete: false,
+        }
+    }
+
+    /// Looks up an index access and builds the appropriate form for later resolution. Always
+    /// returns an `ExpDottedAccess::Index`.
+    #[growing_stack]
+    fn process_index_access(
+        context: &mut Context,
+        dloc: Loc,
+        inner_ty: Type,
+        argloc: Loc,
+        nargs_: Vec<N::Exp>,
+    ) -> ExpDottedAccess {
+        let args_ = exp_vec(context, nargs_);
+        let (syntax_methods, result_type) =
+            resolve_index_funs_and_type(context, dloc, inner_ty, argloc, &args_);
+        let args = sp(argloc, args_);
+        let base_type = match result_type {
+            sp!(_, Type_::Ref(_, base)) => *base,
+            ty @ sp!(_, Type_::UnresolvedError) => ty,
+            _ => {
+                context
+                    .env
+                    .add_diag(ice!((dloc, "Index should have failed in naming")));
+                sp(dloc, Type_::UnresolvedError)
             }
-            let inner_ty = inner.last_type();
-            let field_type = resolve_field(context, dloc, inner_ty, &field);
-            debug_print!(context.debug.autocomplete_resolution, ("field type" => field_type));
-            inner.loc = dloc;
-            if matches!(&field_type.value, Type_::UnresolvedError) && context.env.ide_mode() {
-                // If we failed to resolve a field, mark this as for_autocomplete to provide
-                // suggestions at the error location.
+        };
+        ExpDottedAccess::Index {
+            index_loc: dloc,
+            syntax_methods,
+            args,
+            base_type,
+        }
+    }
+
+    /// Process a dotted expression with autocomplete enabled. Note that this bails after the
+    /// innermost autocomplete, and that is the one that will receive any suggestions.
+    #[growing_stack]
+    fn process_exp_dotted_autocomplete(
+        context: &mut Context,
+        constraint_verb: Option<&str>,
+        sp!(dloc, ndot_): N::ExpDotted,
+    ) -> ExpDotted {
+        match ndot_ {
+            N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
+            N::ExpDotted_::Dot(ndot, field) => {
+                let mut inner =
+                    process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
+                if inner.for_autocomplete {
+                    return inner;
+                }
+                let inner_ty = inner.last_type();
+                let field_type = resolve_field(context, dloc, inner_ty, &field);
+                inner.loc = dloc;
+                debug_print!(context.debug.autocomplete_resolution, ("field type" => field_type));
+                if matches!(&field_type.value, Type_::UnresolvedError) {
+                    // If we failed to resolve a field, mark this as for_autocomplete to provide
+                    // suggestions at the error location.
+                    inner.for_autocomplete = true;
+                } else {
+                    inner
+                        .accessors
+                        .push(ExpDottedAccess::Field(field, field_type));
+                }
+                inner
+            }
+            N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
+                let mut inner =
+                    process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
+                if inner.for_autocomplete {
+                    return inner;
+                }
+                let inner_ty = inner.last_type();
+                let index_access = process_index_access(context, dloc, inner_ty, argloc, nargs_);
+                inner.loc = dloc;
+                inner.accessors.push(index_access);
+                inner
+            }
+            N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
+                let mut inner =
+                    process_exp_dotted_autocomplete(context, Some("dot access"), *ndot);
+                if inner.for_autocomplete {
+                    return inner;
+                }
                 inner.for_autocomplete = true;
-            } else {
+                inner
+            }
+        }
+    }
+
+    #[growing_stack]
+    fn process_exp_dotted_inner(
+        context: &mut Context,
+        constraint_verb: Option<&str>,
+        sp!(dloc, ndot_): N::ExpDotted,
+    ) -> ExpDotted {
+        match ndot_ {
+            N::ExpDotted_::Exp(e) => process_base_exp(context, constraint_verb, dloc, e),
+            N::ExpDotted_::Dot(ndot, field) => {
+                let mut inner = process_exp_dotted_inner(context, Some("dot access"), *ndot);
+                let inner_ty = inner.last_type();
+                let field_type = resolve_field(context, dloc, inner_ty, &field);
+                inner.loc = dloc;
                 inner
                     .accessors
                     .push(ExpDottedAccess::Field(field, field_type));
+                inner
             }
-            inner
-        }
-        N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
-            let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
-            if inner.for_autocomplete {
-                return inner;
+            N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
+                let mut inner =
+                    process_exp_dotted_inner(context, Some("dot access"), *ndot);
+                let inner_ty = inner.last_type();
+                let index_access = process_index_access(context, dloc, inner_ty, argloc, nargs_);
+                inner.loc = dloc;
+                inner.accessors.push(index_access);
+                inner
             }
-            if !context.env.ide_mode() {
+            N::ExpDotted_::DotAutocomplete(_loc, ndot) => {
                 context
                     .env
-                    .add_diag(ice!((dloc, "Found autocomplete form outside of IDE mode")));
-            };
-            inner.for_autocomplete = true;
-            inner
-        }
-        N::ExpDotted_::Index(ndot, sp!(argloc, nargs_)) => {
-            let mut inner = process_exp_dotted(context, Some("dot access"), *ndot);
-            if inner.for_autocomplete {
-                return inner;
+                    .add_diag(ice!((dloc, "Found a dot autocomplete where unsupported")));
+                // Keep going after the ICE.
+                process_exp_dotted_inner(context, constraint_verb, *ndot)
             }
-            let inner_ty = inner.last_type();
-            let args_ = exp_vec(context, nargs_);
-            let (syntax_methods, result_type) =
-                resolve_index_funs_and_type(context, dloc, inner_ty, argloc, &args_);
-            let args = sp(argloc, args_);
-            let base_type = match result_type {
-                sp!(_, Type_::Ref(_, inner)) => *inner,
-                ty @ sp!(_, Type_::UnresolvedError) => ty,
-                _ => {
-                    context
-                        .env
-                        .add_diag(ice!((dloc, "Index should have failed in naming")));
-                    sp(dloc, Type_::UnresolvedError)
-                }
-            };
-            inner.loc = dloc;
-            let accessor = ExpDottedAccess::Index {
-                index_loc: dloc,
-                syntax_methods,
-                args,
-                base_type,
-            };
-            inner.accessors.push(accessor);
-            inner
         }
+    }
+
+    if context.env.ide_mode() {
+        process_exp_dotted_autocomplete(context, constraint_verb, ndotted)
+    } else {
+        process_exp_dotted_inner(context, constraint_verb, ndotted)
     }
 }
 
@@ -3360,10 +3440,13 @@ fn resolve_exp_dotted(
         else {
             return make_error_exp(context, eloc);
         };
-        let mut possible_methods = context.find_all_methods(&tn);
-        let mut possible_fields = context.find_all_fields(&tn);
-        possible_methods.append(&mut possible_fields);
-        let e_ = TE::AutocompleteDotAccess(result, possible_methods);
+        let methods = context.find_all_methods(&tn);
+        let fields = context.find_all_fields(&tn);
+        let e_ = TE::AutocompleteDotAccess {
+            base_exp: result,
+            methods,
+            fields,
+        };
         let ty = sp(eloc, Type_::UnresolvedError);
         Box::new(T::exp(ty, sp(eloc, e_)))
     } else {
@@ -3651,7 +3734,12 @@ fn warn_on_constant_borrow(context: &mut Context, loc: Loc, e: &T::Exp) {
 //**************************************************************************************************
 
 enum ResolvedMethodCall {
-    Resolved(Box<ModuleIdent>, FunctionName, ResolvedFunctionType, DottedUsage),
+    Resolved(
+        Box<ModuleIdent>,
+        FunctionName,
+        ResolvedFunctionType,
+        DottedUsage,
+    ),
     InvalidBaseType,
     UnknownName,
 }
@@ -3721,13 +3809,6 @@ fn type_to_type_name(
 ) -> Option<TypeName> {
     use TypeName_ as TN;
     use Type_ as Ty;
-    fn make_ascii_titlecase(in_s: &str) -> String {
-        let mut s = in_s.to_string();
-        if let Some(c) = s.get_mut(0..1) {
-            c.make_ascii_uppercase();
-        }
-        s
-    }
     match &ty.value {
         Ty::Apply(_, tn @ sp!(_, TN::ModuleType(_, _) | TN::Builtin(_)), _) => Some(tn.clone()),
         t => {

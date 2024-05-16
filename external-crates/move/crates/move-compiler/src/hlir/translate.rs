@@ -1687,12 +1687,20 @@ fn value(
             assert!(context.env.has_errors());
             make_exp(HE::UnresolvedError)
         }
-        E::AutocompleteDotAccess(_, names) => {
+        E::AutocompleteDotAccess {
+            base_exp: _,
+            methods,
+            fields,
+        } => {
             if !(context.env.ide_mode()) {
                 context
                     .env
                     .add_diag(ice!((eloc, "Found autocomplete outside of IDE mode")));
             };
+            let names = methods
+                .into_iter()
+                .chain(fields.into_iter())
+                .collect::<BTreeSet<_>>();
             let msg = format!(
                 "Autocompletes to: {}",
                 format_oxford_list!("or", "'{}'", names)
@@ -2040,7 +2048,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
         | E::Move { .. }
         | E::Copy { .. }
         | E::UnresolvedError
-        | E::AutocompleteDotAccess(_, _)
+        | E::AutocompleteDotAccess { .. }
         | E::NamedBlock(_, _)) => value_statement(context, block, make_exp(e_)),
 
         E::Value(_) | E::Unit { .. } => (),
