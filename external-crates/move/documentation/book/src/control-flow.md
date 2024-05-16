@@ -7,6 +7,6 @@ labels for loops and escapable named blocks. It also supports more more complex 
 structural pattern matching.
 
 - [Conditional Expressions](./control-flow/conditionals.md)
+- [Pattern Matching](./control-flow/pattern-matching.md)
 - [Loops](./control-flow/loops.md)
 - [Labeled Control FLow](./control-flow/labeled-control-flow.md)
-- [Pattern Matching](./control-flow/pattern-matching.md)

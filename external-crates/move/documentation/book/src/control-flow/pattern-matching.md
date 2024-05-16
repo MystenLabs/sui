@@ -2,14 +2,12 @@
 
 A `match` expression is a powerful control structure that allows you to compare a value against a
 series of patterns and then execute code based on which pattern matches first. Patterns can be
-anything from simple literals to complex, nested struct and enum definitions . As opposed to `if` expressions, which change control flow based on a `bool`-typed test expression, a `match` expression operates over
-a value of any type and selects on of many arms.
+anything from simple literals to complex, nested struct and enum definitions . As opposed to `if`
+expressions, which change control flow based on a `bool`-typed test expression, a `match` expression
+operates over a value of any type and selects on of many arms.
 
 A `match` expression can match Move values, immutable references, or mutable references, binding
 sub-patterns accordingly.
-
-A pattern is matched by a value if the value is equal to the pattern, and where variables and
-wildcards (e.g., `x`, `y`, `_`, or `..`) are "equal" to anything.
 
 For example:
 
@@ -28,7 +26,7 @@ run(3); // returns 3
 run(0); // returns 0
 ```
 
-## Syntax
+## `match` Syntax
 
 A `match` takes an expression and a non-empty series of _match arms_ delimited by commas.
 
@@ -43,47 +41,52 @@ match (expression) {
 }
 ```
 
-Match arms are checked in order from top to bottom, and the first pattern which matches
-(with a guard expression, if present, that evaluates to `true`) will be executed.
+Match arms are checked in order from top to bottom, and the first pattern which matches (with a
+guard expression, if present, that evaluates to `true`) will be executed.
 
 Note that the series of match arms within a `match` must be exhaustive, meaning that every possible
 value of the type being matched must be covered by one of the patterns in the `match`. If the series
 of match arms is not exhaustive, the compiler will raise an error.
 
-## Patterns
+## Pattern Syntax
+
+A pattern is matched by a value if the value is equal to the pattern, and where variables and
+wildcards (e.g., `x`, `y`, `_`, or `..`) are "equal" to anything.
 
 Patterns are used to match values. Patterns can be
 
-- literals (`true`, `2`, `@0x4`);
-- constants (`MyConstant`);
-- variables (`a`, `b`, `x`);
-- wildcards (`_`);
-- constructor patterns (`MyStruct { a, b }`, `MyEnum::Variant(x)`);
-- at-patterns `<variable> @ <pattern>`; and
-- or-patterns `<pattern> | <pattern>`.
+| Pattern              | Description                                                            |
+| -------------------- | ---------------------------------------------------------------------- |
+| Literal              | A literal value, e.g., `1`, `true`, `@0x1`                             |
+| Constant             | A constant value, e.g., `MyConstant`                                   |
+| Variable             | A variable, e.g., `x`, `y`, `z`                                        |
+| Wildcard             | A wildcard, e.g., `_`                                                  |
+| Constructor          | A constructor pattern, e.g., `MyStruct { x, y }`, `MyEnum::Variant(x)` |
+| At-pattern           | An at-pattern, e.g., `x @ MyEnum::Variant(..)`                         |
+| Or-pattern           | An or-pattern, e.g., `MyEnum::Variant(..) \| MyEnum::OtherVariant(..)` |
+| Multi-arity wildcard | A multi-arity wildcard, e.g., `MyEnum::Variant(..)`                    |
+| Mutable-binding      | A mutable-binding pattern, e.g., `mut x`                               |
 
-Additionally, depending on the context patterns may also include:
+Patterns in Move have the following grammar:
 
-- multi-arity wildcards (`..`); and
-- mutable-binding patterns (`mut x`).
+```bnf
+pattern = <literal>
+        | <constant>
+        | <variable>
+        | _
+        | C { <variable> : inner-pattern ["," <variable> : inner-pattern]* } // where C is a struct or enum variant
+        | C ( inner-pattern ["," inner-pattern]* ... )                       // where C is a struct or enum variant
+        | C                                                                  // where C is an enum variant
+        | <variable> @ top-level-pattern
+        | pattern | pattern
+        | mut <variable>
+inner-pattern = pattern
+              | ..     // multi-arity wildcard
+```
 
 Some examples of patterns are:
 
 ```move
-public enum MyEnum {
-    Variant(u64, bool),
-    OtherVariant(bool, u64),
-}
-
-public enum OtherEnum {
-    V(MyEnum)
-}
-
-public struct MyStruct {
-    x: u64,
-    y: u64,
-}
-
 // literal pattern
 1
 
@@ -114,7 +117,7 @@ x @ MyEnum::Variant(..)
 // or-pattern that matches either `MyEnum::Variant` or `MyEnum::OtherVariant`
 MyEnum::Variant(..) | MyEnum::OtherVariant(..)
 
-// Same as the above or-pattern, but with explicit wildcards
+// same as the above or-pattern, but with explicit wildcards
 MyEnum::Variant(_, _) | MyEnum::OtherVariant(_, _)
 
 // or-pattern that matches either `MyEnum::Variant` or `MyEnum::OtherVariant` and binds the u64 field to `x`
@@ -124,26 +127,11 @@ MyEnum::Variant(x, _) | MyEnum::OtherVariant(_, x)
 OtherEnum::V(MyEnum::Variant(..))
 ```
 
-More concisely we have the following grammar for patterns in Move:
+### Patterns and Variables
 
-```bnf
-pattern = <literal>
-        | <constant>
-        | <variable>
-        | _
-        | C { <variable> : inner-pattern ["," <variable> : inner-pattern]* } // where C is a struct or enum variant
-        | C ( inner-pattern ["," inner-pattern]* ... ) // where C is a struct or enum variant
-        | C                                       // where C is an enum variant
-        | <variable> @ top-level-pattern
-        | pattern | pattern
-inner-pattern = pattern
-              | ..
-              | mut <variable>
-```
-
-Patterns that contain variables bind them to the match subject or subject subcomponent being matched.
-These variables can then be
-used either in any match guard expressions, or on the right-hand side of the match arm. For example:
+Patterns that contain variables bind them to the match subject or subject subcomponent being
+matched. These variables can then be used either in any match guard expressions, or on the
+right-hand side of the match arm. For example:
 
 ```move
 public struct Wrapper(u64)
@@ -159,18 +147,63 @@ add_under_wrapper_unless_equal(Wrapper(2), 3); // returns Wrapper(5)
 add_under_wrapper_unless_equal(Wrapper(3), 3); // returns Wrapper(3)
 ```
 
-Patterns can be nested, and patterns can be combined used the or operator `|` which will succeed if either
-pattern matches. The `..` pattern is a special
-pattern that matches any number of fields in a struct or enum variant, but it can only occur within
-a constructor pattern, similarly the `mut` pattern can only be used within constructor patterns --
-this is used to specify that we want to use the variable mutably on the right-hand-side of the match
-arm.
+### Combining Patterns
 
-Patterns are not expressions, but they are nevertheless typed. This means that
-the type of a pattern must match the type of the value it matches. For example, the pattern `1` has
-type `u64`, the pattern `MyEnum::Variant(1, true)` has type `MyEnum`, and the pattern
-`MyStruct { x, y }` has type `MyStruct`. If you try to match on an expression which differs from the
-type of the pattern in the match this will result in a type error. For example:
+Patterns can be nested, but patterns can also be combined using the or operator `p1 | p2` which will
+succeed if either pattern `p1` or `p2` matches the subject. This pattern can occur anywhere --
+either as a top-level pattern or a sub-pattern within another pattern.
+
+```move
+public enum MyEnum has drop {
+    Variant(u64, bool),
+    OtherVariant(bool, u64),
+}
+
+fun test_or_pattern(x: u64): u64 {
+    match (x) {
+        MyEnum::Variant(1 | 2 | 3, true) | MyEnum::OtherVariant(true, 1 | 2 | 3) => 1,
+        MyEnum::Variant(8, true) | MyEnum::OtherVariant(_, 6 | 7) => 2,
+        _ => 3,
+    }
+}
+
+test_or_pattern(MyEnum::Variant(3, true)); // returns 1
+test_or_pattern(MyEnum::OtherVariant(true, 2)); // returns 1
+test_or_pattern(MyEnum::Variant(8, true)); // returns 2
+test_or_pattern(MyEnum::OtherVariant(false, 7)); // returns 2
+test_or_pattern(MyEnum::OtherVariant(false, 80)); // returns 3
+```
+
+### Restrictions on Some Patterns
+
+The `mut` and `..` patterns also have specific conditions placed on when, where, and how they can be
+used which we go into more detail in
+[Limitations on Specific Patterns](#limitations-on-specific-patterns). At a high level, the `mut`
+modifier can only be used on variable patterns, and the `..` pattern can only be used once within a
+constructor pattern -- and not as a top-level pattern.
+
+The following is an _invalid_ usage of the `..` pattern since it is used as a top-level pattern:
+
+```move
+match (x) {
+    .. => 1,
+    // ERROR: `..` pattern can only be used within a constructor pattern
+}
+
+match (x) {
+    MyStruct(.., ..) => 1,
+    // ERROR:    ^^  `..` pattern can only be used once within a constructor pattern
+}
+```
+
+### Pattern Typing
+
+Patterns are not expressions, but they are nevertheless typed. This means that the type of a pattern
+must match the type of the value it matches. For example, the pattern `1` has an integer type, the
+pattern `MyEnum::Variant(1, true)` has type `MyEnum`, and the pattern `MyStruct { x, y }` has type
+`MyStruct`, and `OtherStruct<bool> { x: true, y: 1}` has type `OtherStruct<bool>`. If you try to
+match on an expression which differs from the type of the pattern in the match this will result in a
+type error. For example:
 
 ```move
 match (1) {
@@ -186,96 +219,8 @@ different types:
 
 ```
 match (MyStruct { x: 0, y: 0 }) {
-    // TYPE ERROR: expected type MyEnum, found MyStruct
     MyEnum::Variant(..) => 1,
-}
-```
-
-Additionally, there are some restrictions on when the `..` pattern, and `mut` pattern modifier can
-be used in a pattern.
-
-A `mut` modifier can only occur within a constructor pattern, and cannot be a top-level pattern. The
-value being matched on must be either a mutable reference or by value in order for a `mut` pattern
-to be used.
-
-```move
-public struct MyStruct(u64)
-
-fun top_level_mut(x: MyStruct) {
-    match (x) {
-        mut MyStruct(y) => 1,
-        // ERROR: cannot use mut pattern as a top-level pattern
-    }
-}
-
-fun mut_on_non_mut(x: MyStruct): u64 {
-    match (x) {
-        // OK! Since `x` is matched by value
-        MyStruct(mut y) =>  {
-            *y = *y + 1;
-            *y
-        },
-    }
-}
-
-fun mut_on_mut(x: &mut MyStruct): u64 {
-    match (x) {
-        // OK! Since `x` is matched by mutable reference
-        MyStruct(mut y) =>  {
-            *y = *y + 1;
-            *y
-        },
-    }
-}
-
-let mut x = MyStruct(1);
-mut_on_non_mut(&mut x); // returns 2
-x.0; // returns 2
-
-fun mut_on_immut(x: &MyStruct): u64 {
-    match (x) {
-        MyStruct(mut y) => ...,
-        // ERROR: cannot use mut pattern on a non-mutable reference
-    }
-}
-```
-
-The `..` pattern an only be used within a constructor pattern and:
-
-- It can only be used **once** within the constructor pattern;
-- In positional arguments it can be used at the beginning, middle, or end of the patterns within the
-  constructor;
-- In named arguments it can only be used at the end of the patterns within the constructor;
-
-```move
-public struct MyStruct(u64, u64, u64, u64) has drop;
-
-public struct MyStruct2 {
-    x: u64,
-    y: u64,
-    z: u64,
-    w: u64,
-}
-
-fun wild_match(x: MyStruct) {
-    match (x) {
-        MyStruct(.., 1) => 1,
-        // OK! The `..` pattern can be used at the begining of the constructor pattern
-        MyStruct(1, ..) => 2,
-        // OK! The `..` pattern can be used at the end of the constructor pattern
-        MyStruct(1, .., 1) => 3,
-        // OK! The `..` pattern can be used at the middle of the constructor pattern
-        MyStruct(1, .., 1, 1) => 4,
-        MyStruct(..) => 5,
-    }
-}
-
-fun wild_match2(x: MyStruct2) {
-    match (x) {
-        MyStruct2 { x: 1, .. } => 1,
-        MyStruct2 { x: 1, w: 2 .. } => 2,
-        MyStruct2 { .. } => 3,
-    }
+    // TYPE ERROR: expected type MyEnum, found MyStruct
 }
 ```
 
@@ -325,13 +270,8 @@ fun test_or_pattern(x: u64): u64 {
         _ => 3,
     }
 }
-test_or_pattern(1); // returns 1
-test_or_pattern(2); // returns 1
 test_or_pattern(3); // returns 1
-test_or_pattern(4); // returns 2
 test_or_pattern(5); // returns 2
-test_or_pattern(6); // returns 2
-test_or_pattern(7); // returns 3
 test_or_pattern(70); // returns 3
 
 fun test_or_at_pattern(x: u64): u64 {
@@ -341,13 +281,8 @@ fun test_or_at_pattern(x: u64): u64 {
         z => z + 3,
     }
 }
-test_or_pattern(1); // returns 2
 test_or_pattern(2); // returns 3
-test_or_pattern(3); // returns 4
-test_or_pattern(4); // returns 6
 test_or_pattern(5); // returns 7
-test_or_pattern(6); // returns 8
-test_or_pattern(7); // returns 10
 test_or_pattern(70); // returns 73
 ```
 
@@ -361,6 +296,8 @@ pattern `y`.
 A variable `x` matches (or "equals") any value, and a wildcard `_` matches any value (but only one
 value!). Or-patterns are like a logical OR, where a value matches the pattern if it matches any of
 patterns in the or-pattern so `p1 | p2 | p3` should be read "matches p1, or p2, or p3".
+
+### Matching Constructors
 
 The most interesting part of pattern matching are constructor patterns. These patterns allow you
 inspect and access deep within both structs and enums, and are the most powerful part of pattern
@@ -390,7 +327,7 @@ it is `MyEnum::OtherVariant` with any value for the first field, and `3` for the
 `2`, if it is `MyEnum::Variant` with any fields, then return `3`, and if it is
 `MyEnum::OtherVariant` with any fields, then return `4`".
 
-You can also nest patterns, so if I wanted to match either 1, 2, or 10, instead of just matching 1
+You can also nest patterns, so if you wanted to match either 1, 2, or 10, instead of just matching 1
 in the `MyEnum::Variant` above, you could do so with an or-pattern:
 
 ```move
@@ -407,7 +344,14 @@ f(MyEnum::Variant(10, true)); // returns 1
 f(MyEnum::Variant(10, false)); // returns 3
 ```
 
-Additionally, match bindings are subject to the same ability restrictions as other aspects of Move. In particular, the compiler will signal an error if you try to match a value (i.e., not-reference) without `drop` using a wildcard, as the wildcard expects to drop the value. Similarly, if you bind a non-`drop` value using a binder, it must be used in the right-hand side of the match arm. In addition, if you fully-destruct that value, you have unpacked it, matching the semantics of  [non-`drop` struct unpacking](link). See [ref section] for more details about the `drop` capability. 
+### Ability Constraints
+
+Additionally, match bindings are subject to the same ability restrictions as other aspects of Move.
+In particular, the compiler will signal an error if you try to match a value (i.e., not-reference)
+without `drop` using a wildcard, as the wildcard expects to drop the value. Similarly, if you bind a
+non-`drop` value using a binder, it must be used in the right-hand side of the match arm. In
+addition, if you fully-destruct that value, you have unpacked it, matching the semantics of
+[non-`drop` struct unpacking](link). See [ref section] for more details about the `drop` capability.
 
 ```move
 public struct NonDrop(u64)
@@ -440,18 +384,18 @@ fun use_nondrop(x: NonDrop): NonDrop {
 
 The `match` expression in Move must be _exhaustive_: every possible value of the type being matched
 must be covered by one of the patterns in one of the match's arms. If the series of match arms is
-not exhaustive, the compiler will raise an error. Note that any arm with a guard expression
-does not contribute to match exhaustion, as it may fail to match at runtime.
+not exhaustive, the compiler will raise an error. Note that any arm with a guard expression does not
+contribute to match exhaustion, as it may fail to match at runtime.
 
 As an example, if we were to match on a `u8` then in order for the match to be exhaustive we would
-need to match on _every_ number from 0 to 255 inclusive, or a wildcard or variable pattern would need
-to be present. Similarly if we were to match on a `bool` then we would need to match on both `true`
-and `false`, or a wildcard or variable pattern would need to be present.
+need to match on _every_ number from 0 to 255 inclusive, or a wildcard or variable pattern would
+need to be present. Similarly if we were to match on a `bool` then we would need to match on both
+`true` and `false`, or a wildcard or variable pattern would need to be present.
 
 For structs, since there is only one type of constructor for the type, only one constructor needs to
 be matched, but the fields within the struct need to be matched exhaustively as well. Conversely,
-enums may define multiple variants, and each variant must be matched (including any sub-fields) in order for the match to be
-considered exhaustive.
+enums may define multiple variants, and each variant must be matched (including any sub-fields) in
+order for the match to be considered exhaustive.
 
 Since underscores and variables match anything, they count as matching all values of the type they
 are matching on in that position. Additionally, the multi-arity wildcard pattern `..` can be used to
@@ -524,7 +468,7 @@ checked.
 ```move
 fun match_with_guard(x: u64): u64 {
     match (x) {
-        1 if (x == 0) => 1,
+        1 if (false) => 1,
         1 => 2,
         _ => 3,
     }
@@ -534,10 +478,10 @@ match_with_guard(1); // returns 2
 match_with_guard(0); // returns 3
 ```
 
-Guard expressions can reference variables bound in the pattern during evaluation.
-However, note that _variables are only available as immutable reference in guards_ regardless
-of the pattern being matched -- even if there are mutability specifiers on the variable or if the
-pattern is being matched by value.
+Guard expressions can reference variables bound in the pattern during evaluation. However, note that
+_variables are only available as immutable reference in guards_ regardless of the pattern being
+matched -- even if there are mutability specifiers on the variable or if the pattern is being
+matched by value.
 
 ```move
 fun incr(x: &mut u64) {
@@ -564,3 +508,111 @@ fun match_with_guard_incr2(x: &mut u64): u64 {
 Additionally, it is important to note any match arms that have guard expressions will not be
 considered either for exhaustivity purposes since the compiler has no way of evaluating the guard
 expression statically.
+
+## Limitations on Specific Patterns
+
+There are some restrictions on when the `..` pattern, and `mut` pattern modifier can be used in a
+pattern.
+
+### Mutability Usage
+
+A `mut` modifier can be placed on a variable pattern to specify that the _variable_ is to be mutated
+in the right-hand side expression of the match arm. Note that since the `mut` modifier only
+signifies that the variable is to be mutated, not the underlying data, this can be used on all types
+of match (by value, immutable reference, and mutable reference).
+
+Note that the `mut` modifier can only be applied to variables, and not other types of patterns.
+
+```move
+public struct MyStruct(u64)
+
+fun top_level_mut(x: MyStruct) {
+    match (x) {
+        mut MyStruct(y) => 1,
+        // ERROR: cannot use mut on a non-variable pattern
+    }
+}
+
+fun mut_on_immut(x: &MyStruct): u64 {
+    match (x) {
+        MyStruct(mut y) => {
+            y = &(*y + 1);
+            *y
+        }
+    }
+}
+
+fun mut_on_value(x: MyStruct): u64 {
+    match (x) {
+        MyStruct(mut y) =>  {
+            *y = *y + 1;
+            *y
+        },
+    }
+}
+
+fun mut_on_mut(x: &mut MyStruct): u64 {
+    match (x) {
+        MyStruct(mut y) =>  {
+            *y = *y + 1;
+            *y
+        },
+    }
+}
+
+let mut x = MyStruct(1);
+
+mut_on_mut(&mut x); // returns 2
+x.0; // returns 2
+
+mut_on_immut(&x); // returns 3
+x.0; // returns 2
+
+mut_on_value(x); // returns 3
+```
+
+### `..` Usage
+
+The `..` pattern can only be used within a constructor pattern is a wildcard that matches any number
+of fields -- the  
+the compiler expands the `..` to inserting `_` in any missing fields in the constructor pattern (if
+any). So `MyStruct(_, _, _)` is the same as `MyStruct(..)`, `MyStruct(1, _, _)` is the same
+`MyStruct(1, ..)`. Because of this there are some restriction how, and where the `..` pattern can be
+used:
+
+- It can only be used **once** within the constructor pattern;
+- In positional arguments it can be used at the beginning, middle, or end of the patterns within the
+  constructor;
+- In named arguments it can only be used at the end of the patterns within the constructor;
+
+```move
+public struct MyStruct(u64, u64, u64, u64) has drop;
+
+public struct MyStruct2 {
+    x: u64,
+    y: u64,
+    z: u64,
+    w: u64,
+}
+
+fun wild_match(x: MyStruct) {
+    match (x) {
+        MyStruct(.., 1) => 1,
+        // OK! The `..` pattern can be used at the begining of the constructor pattern
+        MyStruct(1, ..) => 2,
+        // OK! The `..` pattern can be used at the end of the constructor pattern
+        MyStruct(1, .., 1) => 3,
+        // OK! The `..` pattern can be used at the middle of the constructor pattern
+        MyStruct(1, .., 1, 1) => 4,
+        MyStruct(..) => 5,
+    }
+}
+
+fun wild_match2(x: MyStruct2) {
+    match (x) {
+        MyStruct2 { x: 1, .. } => 1,
+        MyStruct2 { x: 1, w: 2 .. } => 2,
+        MyStruct2 { .. } => 3,
+    }
+}
+```
