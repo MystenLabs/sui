@@ -220,38 +220,38 @@ impl<'backing> TemporaryStore<'backing> {
             }
         }
 
-        if self.protocol_config.enable_effects_v2() {
-            self.into_effects_v2(
-                shared_object_refs,
-                transaction_digest,
-                transaction_dependencies,
-                gas_cost_summary,
-                status,
-                gas_charger,
-                epoch,
-                call_traces,
-            )
-        } else {
-            let shared_object_refs = shared_object_refs
-                .into_iter()
-                .map(|shared_input| match shared_input {
-                    SharedInput::Existing(oref) => oref,
-                    SharedInput::Deleted(_) => {
-                        unreachable!("Shared object deletion not supported in effects v1")
-                    }
-                })
-                .collect();
-            self.into_effects_v1(
-                shared_object_refs,
-                transaction_digest,
-                transaction_dependencies,
-                gas_cost_summary,
-                status,
-                gas_charger,
-                epoch,
-                call_traces,
-            )
-        }
+        assert!(self.protocol_config.enable_effects_v2());
+
+        // In the case of special transactions that don't require a gas object,
+        // we don't really care about the effects to gas, just use the input for it.
+        // Gas coins are guaranteed to be at least size 1 and if more than 1
+        // the first coin is where all the others are merged.
+        let gas_coin = gas_charger.gas_coin();
+
+        let object_changes = self.get_object_changes();
+
+        let lamport_version = self.lamport_timestamp;
+        let inner = self.into_inner();
+
+        let effects = TransactionEffects::new_from_execution_v2(
+            status,
+            epoch,
+            gas_cost_summary,
+            // TODO: Provide the list of read-only shared objects directly.
+            shared_object_refs,
+            *transaction_digest,
+            lamport_version,
+            object_changes,
+            gas_coin,
+            if inner.events.data.is_empty() {
+                None
+            } else {
+                Some(inner.events.digest())
+            },
+            transaction_dependencies.into_iter().collect(),
+        );
+
+        (inner, effects)
     }
 
     fn into_effects_v1(
