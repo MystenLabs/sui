@@ -586,6 +586,7 @@ pub mod tests {
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_sdk::SuiClient;
     use uuid::Uuid;
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
@@ -641,7 +642,7 @@ pub mod tests {
         Uuid::new_v4()
     }
 
-    pub async fn test_timeout_impl() {
+    pub async fn test_timeout_impl(sui_client: SuiClient) {
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -667,12 +668,18 @@ pub mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration, query: &str) -> Response {
+        async fn test_timeout(
+            delay: Duration,
+            timeout: Duration,
+            query: &str,
+            sui_client: &SuiClient,
+        ) -> Response {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
             cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
 
             let schema = prep_schema(None, Some(cfg))
+                .context_data(sui_client.clone())
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
@@ -686,13 +693,13 @@ pub mod tests {
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
 
-        test_timeout(delay, timeout, query)
+        test_timeout(delay, timeout, query, &sui_client)
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(delay, delay, query)
+        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client)
             .await
             .into_result()
             .unwrap_err()
@@ -711,7 +718,7 @@ mutation {
     }
   }
 }"#;
-        let errs: Vec<_> = test_timeout(delay, delay, query)
+        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client)
             .await
             .into_result()
             .unwrap_err()
