@@ -86,9 +86,10 @@ impl MockConsensusClient {
 impl SubmitToConsensus for MockConsensusClient {
     async fn submit_to_consensus(
         &self,
-        transactions: &Vec<ConsensusTransaction>,
+        transactions: &[ConsensusTransaction],
         _epoch_store: &Arc<AuthorityPerEpochStore>,
     ) -> SuiResult {
+        // TODO: maybe support multi-transactions and remove this check
         assert!(transactions.len() == 1);
         let transaction = &transactions[0];
         self.tx_sender.send(transaction.clone()).await.unwrap();
