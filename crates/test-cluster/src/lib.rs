@@ -57,8 +57,8 @@ use sui_types::bridge::{get_bridge, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, T
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, BridgeSummary, BridgeTrait};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{KeypairTraits, ToFromBytes};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
@@ -1263,7 +1263,7 @@ impl TestClusterBuilder {
                 validator_address,
                 &gas,
                 bridge_arg,
-                kp.copy(),
+                kp.public().as_bytes().to_vec(),
                 &server_url,
                 ref_gas_price,
             )
