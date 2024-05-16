@@ -703,7 +703,8 @@ pub mod tests {
         assert_eq!(errs, vec![exp]);
 
         // Should timeout for mutation
-        let query = "mutation { executeTransactionBlock(txBytes: '', signatures: '') { effects { status }}}";
+        let query = r#"mutation { executeTransactionBlock(txBytes: "testing", \
+                          signatures: "testing") { effects { status }}}"#;
         let errs: Vec<_> = test_timeout(delay, delay, query)
             .await
             .into_result()
