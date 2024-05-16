@@ -16,7 +16,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
-use sui_bridge::config::{read_bridge_authority_key, BridgeCommitteeConfig};
+use sui_bridge::config::BridgeCommitteeConfig;
 use sui_bridge::sui_client::SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::node::Genesis;
@@ -28,6 +28,7 @@ use sui_config::{
 use sui_config::{
     SUI_BENCHMARK_GENESIS_GAS_KEYSTORE_FILENAME, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME,
 };
+use sui_keys::keypair_file::read_key;
 use sui_keys::keystore::{AccountKeystore, FileBasedKeystore, Keystore};
 use sui_move::{self, execute_move_command};
 use sui_move_build::SuiPackageHooks;
@@ -393,7 +394,11 @@ impl SuiCommand {
                         .get_one_gas_object_owned_by_address(sui_address)
                         .await?
                         .expect("Validator does not own any gas objects");
-                    let kp = read_bridge_authority_key(&key_path)?;
+                    let kp = match read_key(&key_path, true)? {
+                        SuiKeyPair::Secp256k1(key) => key,
+                        _ => unreachable!("we required secp256k1 key in `read_key`"),
+                    };
+
                     // build registration tx
                     let tx = build_committee_register_transaction(
                         sui_address,
