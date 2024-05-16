@@ -18,10 +18,6 @@ pub fn is_upper_snake_case(s: &str) -> bool {
         .all(|c| c.is_uppercase() || c.is_numeric() || c == '_')
 }
 
-pub fn is_valid_datatype_or_constant_name(s: &str) -> bool {
-    s.starts_with(|c: char| c.is_ascii_uppercase())
-}
-
 //**************************************************************************************************
 // String Construction Helpers
 //**************************************************************************************************

@@ -3,27 +3,27 @@
 
 use crate::{
     expansion::ast::{self as E, ModuleIdent},
-    expansion::translate::ModuleMemberKind,
-    parser::ast::{self as P},
-    naming::name_resolver::ResolvedMember,
+    naming::{ast as N, name_resolver::ResolvedDefinition},
+    parser::ast as P,
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
-use std::{collections::BTreeSet, fmt};
+use std::fmt;
+
+use super::aliases::NameMapKind;
 
 #[derive(Clone)]
 pub enum AliasMapBuilder {
     Legacy {
         modules: UniqueMap<Name, (ModuleIdent, /* is_implicit */ bool)>,
-        members: UniqueMap<Name, (ResolvedMember, /* is_implicit */ bool)>,
+        members: UniqueMap<Name, (ResolvedDefinition, /* is_implicit */ bool)>,
     },
     Namespaced {
         leading_access: UniqueMap<Name, (LeadingAccessEntry, /* is_implicit */ bool)>,
-        module_members: UniqueMap<Name, (MemberEntry, /* is_implicit */ bool)>,
+        module_members: UniqueMap<Name, (ResolvedDefinition, /* is_implicit */ bool)>,
+        kind: NameMapKind,
     },
 }
-
-pub type MemberName = (ModuleIdent, Name, ModuleMemberKind);
 
 /// Represents an unnecessary and duplicate alias, where the alias was already in scope
 pub struct UnnecessaryAlias {
@@ -35,40 +35,21 @@ pub struct UnnecessaryAlias {
 pub enum AliasEntry {
     Address(Name, NumericalAddress),
     Module(Name, ModuleIdent),
-    Member(Name, ResolvedMember),
-    TypeParam(Name),
+    Definition(Name, ResolvedDefinition),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LeadingAccessEntry {
     Address(NumericalAddress),
     Module(ModuleIdent),
-    Member(ResolvedMember),
-    TypeParam,
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::large_enum_variant)]
-pub enum MemberEntry {
-    Member(ResolvedMember),
-    TypeParam,
+    // Datatypes and Type Parameters
+    Member(ResolvedDefinition),
 }
 
 #[derive(Clone, Copy)]
 pub enum NameSpace {
     LeadingAccess,
     ModuleMembers,
-}
-
-pub struct AliasMap {
-    unused: BTreeSet<AliasEntry>,
-    // the start of an access path, excludes functions
-    leading_access: UniqueMap<Name, LeadingAccessEntry>,
-    // a module member is expected, not a module
-    // For now, this excludes local variables because the only case where this can overlap is with
-    // macro lambdas, but those have to have a leading `$` and cannot conflict with module members
-    module_members: UniqueMap<Name, MemberEntry>,
-    previous: Option<Box<AliasMap>>,
 }
 
 pub struct ParserExplicitUseFun {
@@ -82,7 +63,7 @@ pub struct ParserExplicitUseFun {
 
 pub struct UseFunsBuilder {
     pub explicit: Vec<ParserExplicitUseFun>,
-    pub implicit: UniqueMap<Name, E::ImplicitUseFunCandidate>,
+    pub implicit: UniqueMap<Name, N::ImplicitUseFunCandidate>,
 }
 
 impl AliasEntry {
@@ -90,8 +71,8 @@ impl AliasEntry {
         match self {
             AliasEntry::Address(n, _)
             | AliasEntry::Module(n, _)
-            | AliasEntry::Member(n, _)
-            | AliasEntry::TypeParam(n) => n.loc,
+            | AliasEntry::Definition(n, _)
+            | AliasEntry::TypeParam(n, _) => n.loc,
         }
     }
 }
@@ -113,10 +94,11 @@ impl AliasMapBuilder {
         }
     }
 
-    pub fn namespaced() -> Self {
+    pub fn namespaced(kind: NameMapKind) -> Self {
         Self::Namespaced {
             leading_access: UniqueMap::new(),
             module_members: UniqueMap::new(),
+            kind,
         }
     }
 
@@ -126,6 +108,7 @@ impl AliasMapBuilder {
             Self::Namespaced {
                 leading_access,
                 module_members,
+                kind: _,
             } => leading_access.is_empty() && module_members.is_empty(),
         }
     }
@@ -137,24 +120,29 @@ impl AliasMapBuilder {
         }
     }
 
-    fn remove_member_alias(&mut self, alias: &Name, kind: ModuleMemberKind) -> Result<(), Loc> {
+    fn remove_member_alias(&mut self, alias: &Name, defn: &ResolvedDefinition) -> Result<(), Loc> {
         match self {
             AliasMapBuilder::Legacy { members, .. } => remove_dup(members, alias),
             AliasMapBuilder::Namespaced {
                 leading_access,
                 module_members,
-            } => match kind {
+                kind: _,
+            } => match defn {
                 // constants and functions are not in the leading access namespace
-                ModuleMemberKind::Constant | ModuleMemberKind::Function => {
-                    remove_dup(module_members, alias)
-                }
-                // structs and enums are in the leading access namespace in addition to the module
-                // members namespace
-                ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
+                ResolvedDefinition::Function(_)
+                | ResolvedDefinition::Constant(_)
+                | ResolvedDefinition::BuiltinFun(_) => remove_dup(module_members, alias),
+                // structs, enums, and type parameters are in the leading access namespace in
+                // addition to the module members namespace so that they shadow path prefixes
+                ResolvedDefinition::Datatype(_)
+                | ResolvedDefinition::TypeParam(_, _)
+                | ResolvedDefinition::BuiltinType(_) => {
                     let r1 = remove_dup(module_members, alias);
                     let r2 = remove_dup(leading_access, alias);
                     r1.and(r2)
                 }
+                // we do not support variant aliases
+                ResolvedDefinition::Variant(_) => unreachable!(),
             },
         }
     }
@@ -188,35 +176,38 @@ impl AliasMapBuilder {
     fn add_member_alias_(
         &mut self,
         alias: Name,
-        ident: ModuleIdent,
-        member: Name,
-        kind: ModuleMemberKind,
+        defn: ResolvedDefinition,
         is_implicit: bool,
     ) -> Result<(), Loc> {
-        let result = self.remove_member_alias(&alias, kind);
+        let result = self.remove_member_alias(&alias, &defn);
         match self {
-            AliasMapBuilder::Legacy { members, .. } => members
-                .add(alias, ((ident, member, kind), is_implicit))
-                .unwrap(),
-
+            AliasMapBuilder::Legacy { members, .. } => {
+                members.add(alias, (defn, is_implicit)).unwrap()
+            }
             AliasMapBuilder::Namespaced {
                 leading_access,
                 module_members,
-            } => match kind {
+                kind: _,
+            } => match &defn {
                 // constants and functions are not in the leading access namespace
-                ModuleMemberKind::Constant | ModuleMemberKind::Function => {
-                    let entry = (MemberEntry::Member(member), is_implicit);
+                ResolvedDefinition::Function(_)
+                | ResolvedDefinition::Constant(_)
+                | ResolvedDefinition::BuiltinFun(_) => {
+                    let entry = (defn, is_implicit);
                     module_members.add(alias, entry).unwrap();
                 }
-                // structs and enums are in the leading access namespace in addition to the module
-                // members namespace
-                ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
-                    let member_entry = (MemberEntry::Member(member), is_implicit);
+                // structs, enums, and type parameters are in the leading access namespace in
+                // addition to the module members namespace so that they shadow path prefixes
+                ResolvedDefinition::Datatype(_)
+                | ResolvedDefinition::TypeParam(_, _)
+                | ResolvedDefinition::BuiltinType(_) => {
+                    let member_entry = (defn, is_implicit);
                     module_members.add(alias, member_entry).unwrap();
-                    let leading_access_entry =
-                        (LeadingAccessEntry::Member(member), is_implicit);
+                    let leading_access_entry = (LeadingAccessEntry::Member(defn), is_implicit);
                     leading_access.add(alias, leading_access_entry).unwrap();
                 }
+                // we do not support variant aliases
+                ResolvedDefinition::Variant(_) => unreachable!(),
             },
         }
         result
@@ -247,14 +238,8 @@ impl AliasMapBuilder {
 
     /// Adds a member alias to the map.
     /// Errors if one already bound for that alias
-    pub fn add_member_alias(
-        &mut self,
-        alias: Name,
-        ident: ModuleIdent,
-        member: Name,
-        kind: ModuleMemberKind,
-    ) -> Result<(), Loc> {
-        self.add_member_alias_(alias, ident, member, kind, /* is_implicit */ false)
+    pub fn add_member_alias(&mut self, alias: Name, defn: ResolvedDefinition) -> Result<(), Loc> {
+        self.add_member_alias_(alias, defn, /* is_implicit */ false)
     }
 
     /// Adds an address alias to the map.
@@ -278,11 +263,9 @@ impl AliasMapBuilder {
     pub fn add_implicit_member_alias(
         &mut self,
         alias: Name,
-        ident: ModuleIdent,
-        member: Name,
-        kind: ModuleMemberKind,
+        defn: ResolvedDefinition,
     ) -> Result<(), Loc> {
-        self.add_member_alias_(alias, ident, member, kind, /* is_implicit */ true)
+        self.add_member_alias_(alias, defn, /* is_implicit */ true)
     }
 }
 
@@ -297,18 +280,14 @@ impl From<(Name, LeadingAccessEntry)> for AliasEntry {
         match entry {
             LeadingAccessEntry::Address(addr) => AliasEntry::Address(name, addr),
             LeadingAccessEntry::Module(mident) => AliasEntry::Module(name, mident),
-            LeadingAccessEntry::Member(member) => AliasEntry::Member(name, member),
-            LeadingAccessEntry::TypeParam => AliasEntry::TypeParam(name),
+            LeadingAccessEntry::Member(member) => AliasEntry::Definition(name, member),
         }
     }
 }
 
-impl From<(Name, MemberEntry)> for AliasEntry {
-    fn from((name, entry): (Name, MemberEntry)) -> Self {
-        match entry {
-            MemberEntry::Member(member) => AliasEntry::Member(name, member),
-            MemberEntry::TypeParam => AliasEntry::TypeParam(name),
-        }
+impl From<(Name, ResolvedDefinition)> for AliasEntry {
+    fn from((name, entry): (Name, ResolvedDefinition)) -> Self {
+        AliasEntry::Definition(name, entry)
     }
 }
 
@@ -330,8 +309,10 @@ impl fmt::Debug for AliasEntry {
         match self {
             AliasEntry::Module(alias, mident) => write!(f, "({alias}, m#{mident})"),
             AliasEntry::Address(alias, addr) => write!(f, "({alias}, @{addr})"),
-            AliasEntry::Member(alias, entry) => write!(f, "({alias},{}::{})", entry.mident(), entry.name()),
-            AliasEntry::TypeParam(alias) => write!(f, "({alias},[tparam])"),
+            AliasEntry::Definition(alias, entry) => {
+                write!(f, "({alias},{}::{})", entry.mident(), entry.name())
+            }
+            AliasEntry::TypeParam(alias, tparam) => write!(f, "({alias},[{tparam}])"),
         }
     }
 }
@@ -342,16 +323,7 @@ impl fmt::Debug for LeadingAccessEntry {
             LeadingAccessEntry::Module(mident) => write!(f, "m#{mident}"),
             LeadingAccessEntry::Address(addr) => write!(f, "@{addr}"),
             LeadingAccessEntry::Member(entry) => write!(f, "{}::{}", entry.mident(), entry.name()),
-            LeadingAccessEntry::TypeParam => write!(f, "[tparam]"),
-        }
-    }
-}
-
-impl fmt::Debug for MemberEntry {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        match self {
-            MemberEntry::Member(entry) => write!(f, "{}::{}", entry.mident(), entry.name()),
-            MemberEntry::TypeParam => write!(f, "[tparam]"),
+            LeadingAccessEntry::TypeParam(tparam) => write!(f, "[{tparam}]"),
         }
     }
 }
@@ -362,53 +334,32 @@ impl fmt::Debug for AliasMapBuilder {
             AliasMapBuilder::Legacy { modules, members } => {
                 writeln!(f, "AliasMapBuilder::Legacy(\n  modules: [")?;
                 for (_, key, (target, is_implicit)) in modules {
-                    writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
+                    writeln!(f, "    {key} => {target} <{is_implicit}>,")?;
                 }
                 writeln!(f, "  ],\n  members: [")?;
                 for (_, key, (target, is_implicit)) in members {
-                    writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
+                    writeln!(f, "    {key} => {target} <{is_implicit}>,")?;
                 }
                 writeln!(f, "])")
             }
             AliasMapBuilder::Namespaced {
                 leading_access,
                 module_members,
+                kind,
             } => {
-                writeln!(f, "AliasMapBuilder::Legacy(\n  leading_access: [")?;
+                writeln!(
+                    f,
+                    "AliasMapBuilder::Namespaced( {kind:?}\n  leading_access: ["
+                )?;
                 for (_, key, (target, is_implicit)) in leading_access {
-                    writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
+                    writeln!(f, "    {key} => {target} <{is_implicit}>,")?;
                 }
                 writeln!(f, "  ],\n  module_members: [")?;
                 for (_, key, (target, is_implicit)) in module_members {
-                    writeln!(f, "    {key} => {target:?} <{is_implicit}>,")?;
+                    writeln!(f, "    {key} => {target} <{is_implicit}>,")?;
                 }
                 writeln!(f, "])")
             }
         }
-    }
-}
-
-impl fmt::Debug for AliasMap {
-    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
-        let Self {
-            unused,
-            leading_access,
-            module_members,
-            previous,
-        } = self;
-        writeln!(f, "AliasMap(\n  unused: [")?;
-        for entry in unused {
-            writeln!(f, "    {entry:?},")?;
-        }
-        writeln!(f, "],\n  modules: [")?;
-        for (_, alias, entry) in leading_access {
-            writeln!(f, "    {alias} => {entry:?}")?;
-        }
-        writeln!(f, "],\n  members: [")?;
-        for (_, alias, entry) in module_members {
-            writeln!(f, "    {alias} => {entry:?}")?;
-        }
-        writeln!(f, "])")?;
-        writeln!(f, "--> PREVIOUS \n: {previous:?}")
     }
 }

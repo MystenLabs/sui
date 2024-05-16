@@ -1,11 +1,7 @@
 use crate::{
-    diag,
-    diagnostics::Diagnostic,
-    expansion::ast::{self as E, Address},
-    ice,
-    naming::translate::DefnContext,
     parser::ast as P,
-    shared::{Name, NamedAddressMap},
+    expansion::ast::{self as E, Address},
+    expansion::translate::Context, shared::{NamedAddressMap, Name}, ice, diagnostics::Diagnostic, diag
 };
 
 use move_command_line_common::address::NumericalAddress;
@@ -34,7 +30,9 @@ pub(super) fn top_level_address_(
 ) -> Address {
     let sp!(loc, ln_) = ln;
     match ln_ {
-        P::LeadingNameAccess_::AnonymousAddress(bytes) => Address::anonymous(loc, bytes),
+        P::LeadingNameAccess_::AnonymousAddress(bytes) => {
+            Address::anonymous(loc, bytes)
+        }
         // This should have been handled elsewhere in alias resolution for user-provided paths, and
         // should never occur in compiler-generated ones.
         P::LeadingNameAccess_::GlobalAddress(name) => {
@@ -67,7 +65,9 @@ pub(super) fn top_level_address_opt(
     let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
     let sp!(loc, ln_) = ln;
     match ln_ {
-        P::LeadingNameAccess_::AnonymousAddress(bytes) => Some(Address::anonymous(loc, bytes)),
+        P::LeadingNameAccess_::AnonymousAddress(bytes) => {
+            Some(Address::anonymous(loc, bytes))
+        }
         // This should have been handled elsewhere in alias resolution for user-provided paths, and
         // should never occur in compiler-generated ones.
         P::LeadingNameAccess_::GlobalAddress(_) => {
@@ -84,14 +84,15 @@ pub(super) fn top_level_address_opt(
     }
 }
 
-fn maybe_make_well_known_address(
-    context: &mut DefnContext,
-    loc: Loc,
-    name: Symbol,
-) -> Option<Address> {
+fn maybe_make_well_known_address(context: &mut DefnContext, loc: Loc, name: Symbol) -> Option<Address> {
     let named_address_mapping = context.named_address_mapping.as_ref().unwrap();
     let addr = named_address_mapping.get(&name).copied()?;
-    Some(make_address(context, sp(loc, name), loc, addr))
+    Some(make_address(
+        context,
+        sp(loc, name),
+        loc,
+        addr,
+    ))
 }
 
 fn address_without_value_error(suggest_declaration: bool, loc: Loc, n: &Name) -> Diagnostic {
@@ -140,8 +141,11 @@ fn check_module_address(
     match module_address {
         Some(other_paddr) => {
             let other_loc = other_paddr.loc;
-            let other_addr =
-                top_level_address(context, /* suggest_declaration */ true, other_paddr);
+            let other_addr = top_level_address(
+                context,
+                /* suggest_declaration */ true,
+                other_paddr,
+            );
             let msg = if addr == other_addr {
                 "Redundant address specification"
             } else {
@@ -157,3 +161,4 @@ fn check_module_address(
         None => sp(loc, addr),
     }
 }
+

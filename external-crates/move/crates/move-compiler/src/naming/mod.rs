@@ -3,12 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod address;
+mod alias_map_builder;
+mod aliases;
 pub mod ast;
 pub(crate) mod fake_natives;
+mod legacy_aliases;
+mod name_resolver;
 pub(crate) mod resolve_use_funs;
 pub(crate) mod syntax_methods;
-mod name_resolver;
-mod aliases;
-mod alias_map_builder;
-mod legacy_aliases;
 pub(crate) mod translate;

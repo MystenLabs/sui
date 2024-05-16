@@ -5,35 +5,37 @@
 use crate::{
     diagnostics::Diagnostic,
     expansion::ast::{ModuleIdent, ModuleIdent_},
-    naming::{
-        alias_map_builder::AliasMapBuilder,
-        aliases::AliasSet,
-        name_resolver::ResolvedMember,
-    },
     ice,
+    naming::{
+        alias_map_builder::AliasMapBuilder, aliases::NameSet, name_resolver::ResolvedDefinition,
+    },
     parser::ast::ModuleName,
     shared::{unique_map::UniqueMap, *},
 };
 use move_ir_types::location::*;
 
+use super::aliases::NameMapKind;
+
 type ScopeDepth = usize;
 
 #[derive(Clone, Debug)]
-pub struct AliasMap {
+pub struct NameMap {
     modules: UniqueMap<Name, (Option<ScopeDepth>, ModuleIdent)>,
-    members: UniqueMap<Name, (Option<ScopeDepth>, ResolvedMember)>,
+    members: UniqueMap<Name, (Option<ScopeDepth>, ResolvedDefinition)>,
+    pub kind: NameMapKind, // tracks the kind of the last last alias map builder pushed
     // essentially a mapping from ScopeDepth => AliasSet, which are the unused aliases at that depth
-    unused: Vec<AliasSet>,
+    unused: Vec<NameSet>,
 }
 
-pub struct OldAliasMap(Option<AliasMap>);
+pub struct OldNameMap(NameMapKind, Option<NameMap>);
 
-impl AliasMap {
+impl NameMap {
     pub fn new() -> Self {
         Self {
             modules: UniqueMap::new(),
             members: UniqueMap::new(),
             unused: vec![],
+            kind: NameMapKind::LegacyTopLevel,
         }
     }
 
@@ -67,7 +69,7 @@ impl AliasMap {
         }
     }
 
-    pub fn member_alias_get(&mut self, n: &Name) -> Option<ResolvedMember> {
+    pub fn member_alias_get(&mut self, n: &Name) -> Option<ResolvedDefinition> {
         match self.members.get_mut(n) {
             None => None,
             Some((depth_opt, member)) => {
@@ -90,12 +92,12 @@ impl AliasMap {
         &mut self,
         loc: Loc,
         shadowing: AliasMapBuilder,
-    ) -> Result<OldAliasMap, Box<Diagnostic>> {
+    ) -> Result<OldNameMap, Box<Diagnostic>> {
         if shadowing.is_empty() {
-            return Ok(OldAliasMap(None));
+            return Ok(OldNameMap(self.kind, None));
         }
 
-        let outer_scope = OldAliasMap(Some(self.clone()));
+        let outer_scope = OldNameMap(self.kind, Some(self.clone()));
         let AliasMapBuilder::Legacy {
             modules: new_modules,
             members: new_members,
@@ -109,7 +111,7 @@ impl AliasMap {
         };
 
         let next_depth = self.current_depth();
-        let mut current_scope = AliasSet::new();
+        let mut current_scope = NameSet::new(NameMapKind::Use);
         for (alias, (ident, is_implicit)) in new_modules {
             if !is_implicit {
                 current_scope.modules.add(alias).unwrap();
@@ -127,34 +129,41 @@ impl AliasMap {
                 .unwrap();
         }
         self.unused.push(current_scope);
+        self.kind = NameMapKind::Use;
         Ok(outer_scope)
     }
 
-    /// Similar to add_and_shadow but just removes aliases now shadowed by a type parameter
-    pub fn shadow_for_type_parameters<'a, I: IntoIterator<Item = &'a Name>>(
-        &mut self,
-        tparams: I,
-    ) -> OldAliasMap
-    where
-        I::IntoIter: ExactSizeIterator,
-    {
-        let tparams_iter = tparams.into_iter();
-        if tparams_iter.len() == 0 {
-            return OldAliasMap(None);
-        }
+    // /// Similar to add_and_shadow but just removes aliases now shadowed by a type parameter
+    // pub fn shadow_for_type_parameters<'a, I: IntoIterator<Item = &'a Name>>(
+    //     &mut self,
+    //     tparams: I,
+    // ) -> OldNameMap
+    // where
+    //     I::IntoIter: ExactSizeIterator,
+    // {
+    //     let tparams_iter = tparams.into_iter();
+    //     if tparams_iter.len() == 0 {
+    //         self.kind = NameMapKind::TypeParameters;
+    //         return OldNameMap(self.kind, None);
+    //     }
 
-        let outer_scope = OldAliasMap(Some(self.clone()));
-        self.unused.push(AliasSet::new());
-        for tp_name in tparams_iter {
-            self.members.remove(tp_name);
-        }
-        outer_scope
-    }
+    //     let outer_scope = OldNameMap(self.kind, Some(self.clone()));
+    //     self.kind = NameMapKind::TypeParameters;
+    //     self.unused.push(NameSet::new(NameMapKind::TypeParameters));
+    //     for tp_name in tparams_iter {
+    //         self.members.remove(tp_name);
+    //     }
+    //     outer_scope
+    // }
 
     /// Resets the alias map and gives the set of aliases that were unused
-    pub fn set_to_outer_scope(&mut self, outer_scope: OldAliasMap) -> AliasSet {
-        let outer_scope = match outer_scope.0 {
-            None => return AliasSet::new(),
+    pub fn set_to_outer_scope(&mut self, outer_scope: OldNameMap) -> NameSet {
+        let outer_scope = match outer_scope {
+            OldNameMap(old_kind, None) => {
+                let cur_kind = self.kind;
+                self.kind = old_kind;
+                return NameSet::new(self.kind);
+            }
             Some(outer) => outer,
         };
         let mut inner_scope = std::mem::replace(self, outer_scope);

@@ -6,8 +6,8 @@ use crate::{
     diagnostics::WarningFilters,
     parser::ast::{
         self as P, Ability, Ability_, BinOp, BlockLabel, ConstantName, DatatypeName, Field,
-        FunctionName, ModuleName, QuantKind, UnaryOp, Var, VariantName, ENTRY_MODIFIER,
-        MACRO_MODIFIER, NATIVE_MODIFIER,
+        FunctionName, ModuleName, NameAccessChain, QuantKind, UnaryOp, UseDecl, Var, VariantName,
+        ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::KnownAttribute, unique_map::UniqueMap,
@@ -26,41 +26,7 @@ use std::{collections::VecDeque, fmt, hash::Hash};
 pub struct Program {
     // Map of declared named addresses, and their values if specified
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExplicitUseFun {
-    pub loc: Loc,
-    pub attributes: Attributes,
-    pub is_public: Option<Loc>,
-    pub function: ModuleAccess,
-    pub ty: ModuleAccess,
-    pub method: Name,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ImplicitUseFunKind {
-    // From a function declaration in the module
-    FunctionDeclaration,
-    // From a normal, non 'use fun' use declaration,
-    UseAlias { used: bool },
-}
-
-// These are only candidates as we have not yet checked if they have the proper signature for a
-// use fun declaration
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ImplicitUseFunCandidate {
-    pub loc: Loc,
-    pub attributes: Attributes,
-    pub is_public: Option<Loc>,
-    pub function: (ModuleIdent, Name),
-    pub kind: ImplicitUseFunKind,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UseFuns {
-    pub explicit: Vec<ExplicitUseFun>,
-    pub implicit: UniqueMap<Name, ImplicitUseFunCandidate>,
+    pub named_address_maps: NamedAddressMaps,
 }
 
 //**************************************************************************************************
@@ -70,9 +36,7 @@ pub struct UseFuns {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeValue_ {
     Value(Value),
-    Address(Address),
-    Module(ModuleIdent),
-    ModuleAccess(ModuleAccess),
+    NameAccessChain(NameAccessChain),
 }
 pub type AttributeValue = Spanned<AttributeValue_>;
 
@@ -135,12 +99,13 @@ pub struct ModuleDefinition {
     pub attributes: Attributes,
     pub loc: Loc,
     pub target_kind: TargetKind,
-    pub use_funs: UseFuns,
+    pub uses: Vec<UseDecl>,
     pub friends: UniqueMap<ModuleIdent, Friend>,
     pub structs: UniqueMap<DatatypeName, StructDefinition>,
     pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub functions: UniqueMap<FunctionName, Function>,
     pub constants: UniqueMap<ConstantName, Constant>,
+    pub name_address_map_index: NamedAddressMapIndex,
 }
 
 //**************************************************************************************************
@@ -291,7 +256,8 @@ pub type ModuleAccess = Spanned<ModuleAccess_>;
 pub enum Type_ {
     Unit,
     Multiple(Vec<Type>),
-    Apply(ModuleAccess, Vec<Type>),
+    // Apply(ModuleAccess, Vec<Type>),
+    Apply(NameAccessChain),
     Ref(bool, Box<Type>),
     Fun(Vec<Type>, Box<Type>),
     UnresolvedError,
@@ -317,8 +283,8 @@ pub enum FieldBindings {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum LValue_ {
-    Var(Option<Mutability>, ModuleAccess, Option<Vec<Type>>),
-    Unpack(ModuleAccess, Option<Vec<Type>>, FieldBindings),
+    Var(Option<Mutability>, NameAccessChain),
+    Unpack(NameAccessChain, FieldBindings),
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -380,13 +346,8 @@ pub type Value = Spanned<Value_>;
 pub enum Exp_ {
     Value(Value),
 
-    Name(ModuleAccess, Option<Vec<Type>>),
-    Call(
-        ModuleAccess,
-        /* is_macro */ Option<Loc>,
-        Option<Vec<Type>>,
-        Spanned<Vec<Exp>>,
-    ),
+    Name(NameAccessChain),
+    Call(NameAccessChain, Spanned<Vec<Exp>>),
     MethodCall(
         Box<ExpDotted>,
         Name,
@@ -394,7 +355,7 @@ pub enum Exp_ {
         Option<Vec<Type>>,
         Spanned<Vec<Exp>>,
     ),
-    Pack(ModuleAccess, Option<Vec<Type>>, Fields<Exp>),
+    Pack(NameAccessChain, Fields<Exp>),
     Vector(Loc, Option<Vec<Type>>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
@@ -438,7 +399,7 @@ pub enum Exp_ {
 }
 pub type Exp = Spanned<Exp_>;
 
-pub type Sequence = (UseFuns, VecDeque<SequenceItem>);
+pub type Sequence = (Vec<UseDecl>, VecDeque<SequenceItem>);
 #[derive(Debug, Clone, PartialEq)]
 pub enum SequenceItem_ {
     Seq(Box<Exp>),
@@ -464,19 +425,10 @@ pub enum Ellipsis<T> {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum MatchPattern_ {
-    PositionalConstructor(
-        ModuleAccess,
-        Option<Vec<Type>>,
-        Spanned<Vec<Ellipsis<MatchPattern>>>,
-    ),
-    NamedConstructor(
-        ModuleAccess,
-        Option<Vec<Type>>,
-        Fields<MatchPattern>,
-        Option<Loc>,
-    ),
-    ModuleAccessName(ModuleAccess, Option<Vec<Type>>),
-    Binder(Mutability, Var),
+    PositionalConstructor(NameAccessChain, Spanned<Vec<Ellipsis<MatchPattern>>>),
+    NamedConstructor(NameAccessChain, Fields<MatchPattern>, Option<Loc>),
+    Name(Mutability, NameAccessChain),
+    // Binder(Mutability, Var),
     Literal(Value),
     ErrorPat,
     Or(Box<MatchPattern>, Box<MatchPattern>),
@@ -615,6 +567,7 @@ impl Attributes {
     }
 }
 
+/*
 impl Default for UseFuns {
     fn default() -> Self {
         Self::new()
@@ -634,6 +587,7 @@ impl UseFuns {
         explicit.is_empty() && implicit.is_empty()
     }
 }
+*/
 
 impl Address {
     pub const fn anonymous(loc: Loc, address: NumericalAddress) -> Self {
@@ -995,6 +949,7 @@ impl AstDebug for Program {
     }
 }
 
+/*
 impl AstDebug for ExplicitUseFun {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self {
@@ -1055,6 +1010,7 @@ impl AstDebug for UseFuns {
         }
     }
 }
+*/
 
 impl AstDebug for AttributeValue_ {
     fn ast_debug(&self, w: &mut AstWriter) {
@@ -1118,7 +1074,7 @@ impl AstDebug for ModuleDefinition {
             attributes,
             loc: _loc,
             target_kind,
-            use_funs,
+            uses,
             friends,
             structs,
             enums,
@@ -1140,7 +1096,7 @@ impl AstDebug for ModuleDefinition {
             } => "dependency module",
             TargetKind::External => "external module",
         });
-        use_funs.ast_debug(w);
+        uses.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
             w.write(&format!("friend {};", mident));
             w.new_line();
@@ -1523,24 +1479,11 @@ impl AstDebug for Exp_ {
                 trailing: _trailing,
             } => w.write("/*()*/"),
             E::Value(v) => v.ast_debug(w),
-            E::Name(ma, tys_opt) => {
+            E::Name(ma) => {
                 ma.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
             }
-            E::Call(ma, is_macro, tys_opt, sp!(_, rhs)) => {
+            E::Call(ma, sp!(_, rhs)) => {
                 ma.ast_debug(w);
-                if is_macro.is_some() {
-                    w.write("!");
-                }
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 w.write("(");
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
@@ -1560,13 +1503,8 @@ impl AstDebug for Exp_ {
                 w.comma(rhs, |w, e| e.ast_debug(w));
                 w.write(")");
             }
-            E::Pack(ma, tys_opt, fields) => {
+            E::Pack(ma, fields) => {
                 ma.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 w.write("{");
                 w.comma(fields, |w, (_, f, idx_e)| {
                     let (idx, e) = idx_e;
@@ -1790,26 +1728,16 @@ impl AstDebug for MatchPattern_ {
     fn ast_debug(&self, w: &mut AstWriter) {
         use MatchPattern_::*;
         match self {
-            PositionalConstructor(name, tys_opt, fields) => {
+            PositionalConstructor(name, fields) => {
                 name.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 w.write("(");
                 w.comma(fields.value.iter(), |w, pat| {
                     pat.ast_debug(w);
                 });
                 w.write(") ");
             }
-            NamedConstructor(name, tys_opt, fields, ellipsis) => {
+            NamedConstructor(name, fields, ellipsis) => {
                 name.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
                 w.write(" {");
                 w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
                     w.write(format!(" {}#{} : ", field, idx));
@@ -1820,13 +1748,8 @@ impl AstDebug for MatchPattern_ {
                 }
                 w.write("} ");
             }
-            ModuleAccessName(name, tys_opt) => {
+            Name(name) => {
                 name.ast_debug(w);
-                if let Some(ss) = tys_opt {
-                    w.write("<");
-                    ss.ast_debug(w);
-                    w.write(">");
-                }
             }
             Binder(mut_, name) => {
                 mut_.ast_debug(w);

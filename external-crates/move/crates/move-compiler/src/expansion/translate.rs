@@ -10,6 +10,7 @@ use crate::{
         ast::{self as E, Address, Fields, ModuleIdent, ModuleIdent_, TargetKind},
         byte_string, hex_string,
         translate::known_attributes::{DiagnosticAttribute, KnownAttribute},
+        valid_names::*,
     },
     ice, ice_assert,
     parser::ast::{
@@ -19,7 +20,7 @@ use crate::{
     },
     shared::{
         known_attributes::AttributePosition,
-        string_utils::{is_pascal_case, is_upper_snake_case, is_valid_datatype_or_constant_name},
+        string_utils::{is_pascal_case, is_upper_snake_case},
         unique_map::UniqueMap,
         *,
     },
@@ -40,10 +41,8 @@ use std::{
 // Context
 //**************************************************************************************************
 
-type ModuleMembers = BTreeMap<Name, ModuleMemberKind>;
-
-struct Context<'env, 'map> {
-    env: &'env mut CompilationEnv,
+pub(super) struct Context<'env, 'map> {
+    pub(super) env: &'env mut CompilationEnv,
     address: Option<Address>,
     is_source_definition: bool,
     // Cached warning filters for all available prefixes. Used by non-source defs
@@ -55,11 +54,7 @@ struct Context<'env, 'map> {
 }
 
 impl<'env, 'map> Context<'env, 'map> {
-    fn new(
-        compilation_env: &'env mut CompilationEnv,
-        module_members: UniqueMap<ModuleIdent, ModuleMembers>,
-        address_conflicts: BTreeSet<Symbol>,
-    ) -> Self {
+    fn new(compilation_env: &'env mut CompilationEnv, address_conflicts: BTreeSet<Symbol>) -> Self {
         let mut all_filter_alls = WarningFilters::new_for_dependency();
         for prefix in compilation_env.known_filter_names() {
             for f in compilation_env.filter_from_str(prefix, FILTER_ALL) {
@@ -270,17 +265,32 @@ pub fn program(
         lib_definitions,
     } = prog;
 
-    let mut context = Context::new(compilation_env, module_members, address_conflicts);
+    let mut context = Context::new(compilation_env, address_conflicts);
+
+    // Expansion does a bit of 'early' name resolution:
+    // 1. We pull out any known attributes, so that we can start doing warning filtering.
+    // 2. We resolve any top-level addresses on `address` and `module` forms. This is to allow for
+    //    more-precise indexing during naming.
 
     context.is_source_definition = true;
     for P::PackageDefinition {
         package,
-        named_address_map,
+        named_address_map: map_index,
         def,
     } in source_definitions
     {
-        // context.current_package = package;
-        // let named_address_map = named_address_maps.get(named_address_map);
+        context.current_package = package;
+        let named_address_map = named_address_maps.get(map_index);
+        context.named_address_mapping = Some(named_address_map);
+        definition(
+            &mut context,
+            &mut source_module_map,
+            map_index,
+            package,
+            def,
+        );
+        //     context.path_expander = Some(Box::new(LegacyPathExpander::new()));
+        //     context.path_expander = None;
         // if context
         //     .env()
         //     .supports_feature(package, FeatureGate::Move2024Paths)
@@ -310,12 +320,21 @@ pub fn program(
     context.is_source_definition = false;
     for P::PackageDefinition {
         package,
-        named_address_map,
+        named_address_map: map_index,
         def,
     } in lib_definitions
     {
         context.current_package = package;
-        let named_address_map = named_address_maps.get(named_address_map);
+        let named_address_map = named_address_maps.get(map_index);
+        context.named_address_mapping = Some(named_address_map);
+        definition(
+            &mut context,
+            &mut source_module_map,
+            map_index,
+            package,
+            def,
+        );
+        // let named_address_map = named_address_maps.get(named_address_map);
         // if context
         //     .env()
         //     .supports_feature(package, FeatureGate::Move2024Paths)
@@ -340,20 +359,20 @@ pub fn program(
         // }
     }
 
-    context.defn_context.current_package = None;
+    context.current_package = None;
 
     // Finalization
     //
     for (mident, module) in lib_module_map {
         if let Err((mident, old_loc)) = source_module_map.add(mident, module) {
-            if !context.env().flags().sources_shadow_deps() {
-                duplicate_module(&mut context, &source_module_map, mident, old_loc)
+            if !context.env.flags().sources_shadow_deps() {
+                duplicate_module_error(&mut context, &source_module_map, mident, old_loc)
             }
         }
     }
     let module_map = source_module_map;
 
-    super::primitive_definers::modules(context.env(), pre_compiled_lib, &module_map);
+    super::primitive_definers::modules(context.env, pre_compiled_lib, &module_map);
     E::Program {
         modules: module_map,
     }
@@ -362,6 +381,7 @@ pub fn program(
 fn definition(
     context: &mut Context,
     module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
+    name_addr_map_ndx: NamedAddressMapIndex,
     package_name: Option<Symbol>,
     def: P::Definition,
 ) {
@@ -370,22 +390,34 @@ fn definition(
     match def {
         P::Definition::Module(mut m) => {
             let module_paddr = std::mem::take(&mut m.address);
-            let module_addr = module_paddr.map(|address| {
-                sp(address.loc, address)
-            });
-            module(context, module_map, package_name, module_addr, m)
+            let module_addr = module_paddr.map(|address| sp(address.loc, address));
+            module(
+                context,
+                module_map,
+                name_addr_map_ndx,
+                package_name,
+                module_addr,
+                m,
+            )
         }
         P::Definition::Address(a) => {
             for mut m in a.modules {
                 let module_addr = check_module_address(context, a.loc, a.addr, &mut m);
-                module(context, module_map, package_name, Some(module_addr), m)
+                module(
+                    context,
+                    module_map,
+                    name_addr_map_ndx,
+                    package_name,
+                    Some(module_addr),
+                    m,
+                )
             }
         }
     }
     // context.pop_alias_scope(None);
 }
 
-fn duplicate_module(
+fn duplicate_module_error(
     context: &mut Context,
     module_map: &UniqueMap<ModuleIdent, E::ModuleDefinition>,
     mident: ModuleIdent,
@@ -404,6 +436,7 @@ fn duplicate_module(
 fn module(
     context: &mut Context,
     module_map: &mut UniqueMap<ModuleIdent, E::ModuleDefinition>,
+    name_addr_map_ndx: NamedAddressMapIndex,
     package_name: Option<Symbol>,
     module_address: Option<Spanned<Address>>,
     module_def: P::ModuleDefinition,
@@ -413,9 +446,15 @@ fn module(
         context.spec_deprecated(module_def.name.0.loc, /* is_error */ false);
         return;
     }
-    let (mident, mod_) = module_(context, package_name, module_address, module_def);
+    let (mident, mod_) = module_(
+        context,
+        name_addr_map_ndx,
+        package_name,
+        module_address,
+        module_def,
+    );
     if let Err((mident, old_loc)) = module_map.add(mident, mod_) {
-        duplicate_module(context, module_map, mident, old_loc)
+        duplicate_module_error(context, module_map, mident, old_loc)
     }
     context.address = None
 }
@@ -471,6 +510,7 @@ fn set_module_address(
 
 fn module_(
     context: &mut Context,
+    name_address_map_index: NamedAddressMapIndex,
     package_name: Option<Symbol>,
     module_address: Option<Spanned<Address>>,
     mdef: P::ModuleDefinition,
@@ -494,7 +534,7 @@ fn module_(
     assert!(context.address.is_none());
     assert!(address.is_none());
     set_module_address(context, &name, module_address);
-    let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Module, &name.0);
+    let _ = check_restricted_name_all_cases(context, NameCase::Module, &name.0);
     if name.value().starts_with(|c| c == '_') {
         let msg = format!(
             "Invalid module name '{}'. Module names cannot start with '_'",
@@ -525,6 +565,7 @@ fn module_(
     //     .collect::<Vec<_>>();
     // context.push_alias_scope(loc, new_scope);
 
+    let mut uses = vec![];
     let mut friends = UniqueMap::new();
     let mut functions = UniqueMap::new();
     let mut constants = UniqueMap::new();
@@ -532,7 +573,7 @@ fn module_(
     let mut enums = UniqueMap::new();
     for member in members {
         match member {
-            P::ModuleMember::Use(_) => unreachable!(),
+            P::ModuleMember::Use(use_def) => uses.push(use_def),
             P::ModuleMember::Friend(f) => friend(context, &mut friends, f),
             P::ModuleMember::Function(mut f) => {
                 if !context.is_source_definition && f.macro_.is_none() {
@@ -540,7 +581,6 @@ fn module_(
                 }
                 function(
                     context,
-                    None,
                     // Some((current_module, &mut use_funs_builder)),
                     &mut functions,
                     f,
@@ -567,7 +607,7 @@ fn module_(
         package_name,
         attributes,
         loc,
-        use_funs,
+        uses,
         target_kind,
         friends,
         structs,
@@ -575,6 +615,7 @@ fn module_(
         constants,
         functions,
         warning_filter,
+        name_address_map_index,
     };
     context.env().pop_warning_filter_scope();
     (current_module, def)
@@ -996,6 +1037,54 @@ fn prefixed_warning_filters(
             }
         })
         .collect()
+}
+
+//**************************************************************************************************
+// Addresses
+//**************************************************************************************************
+
+pub fn address(
+    context: &mut Context,
+    suggest_declaration: bool,
+    ln: P::LeadingNameAccess,
+) -> Address {
+    let name_res = check_valid_address_name(context, &ln);
+    let sp!(loc, ln_) = ln;
+    match ln_ {
+        P::LeadingNameAccess_::AnonymousAddress(bytes) => {
+            debug_assert!(name_res.is_ok());
+            Address::anonymous(loc, bytes)
+        }
+        P::LeadingNameAccess_::GlobalAddress(name) => {
+            context.env.add_diag(ice!((
+                loc,
+                "Found an address in top-level address position that uses a global name"
+            )));
+            Address::NamedUnassigned(name)
+        }
+        P::LeadingNameAccess_::Name(name) => {
+            match context.named_address_mapping.get(&name.value).copied() {
+                Some(addr) => Address::Numerical {
+                    name: Some(name),
+                    value: sp(loc, addr),
+                    name_conflict: context.address_conflicts.contains(&name.value),
+                },
+                None => {
+                    let mut msg = format!("address '{}' is not assigned a value", name);
+                    if suggest_declaration {
+                        msg = format!(
+                            "{}. Try assigning it a value when calling the compiler",
+                            msg,
+                        )
+                    }
+                    context
+                        .env
+                        .add_diag(diag!(NameResolution::AddressWithoutValue, (loc, msg)));
+                    Address::NamedUnassigned(name)
+                }
+            }
+        }
+    }
 }
 
 //**************************************************************************************************
@@ -1944,7 +2033,7 @@ fn function_type_parameters(
         .into_iter()
         .map(|(name, constraints_vec)| {
             let constraints = ability_set(context, "constraint", constraints_vec);
-            let _ = check_valid_type_parameter_name(context, is_macro, &name);
+            // let _ = check_valid_type_parameter_name(context, is_macro, &name);
             (name, constraints)
         })
         .collect()
@@ -1957,7 +2046,7 @@ fn datatype_type_parameters(
     pty_params
         .into_iter()
         .map(|param| {
-            let _ = check_valid_type_parameter_name(context, None, &param.name);
+            // let _ = check_valid_type_parameter_name(context, None, &param.name);
             E::DatatypeTypeParameter {
                 is_phantom: param.is_phantom,
                 name: param.name,
@@ -1973,13 +2062,15 @@ fn type_(context: &mut Context, sp!(loc, pt_): P::Type) -> E::Type {
     let t_ = match pt_ {
         PT::Unit => ET::Unit,
         PT::Multiple(ts) => ET::Multiple(types(context, ts)),
-        PT::Apply(pn) => match context.name_access_chain_to_module_access(Access::Type, *pn) {
+
+        PT::Apply(pn) => ET::Apply(pn),
+        /* match context.name_access_chain_to_module_access(Access::Type, *pn) {
             None => {
                 assert!(context.env().has_errors());
                 ET::UnresolvedError
             }
             Some(access_result!(n, ptyargs, _)) => ET::Apply(n, sp_types(context, ptyargs)),
-        },
+        }, */
         PT::Ref(mut_, inner) => ET::Ref(mut_, Box::new(type_(context, *inner))),
         PT::Fun(args, result) => {
             let args = types(context, args);
@@ -2034,9 +2125,9 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     }
     let (puses, pitems, maybe_last_semicolon_loc, pfinal_item) = seq;
 
-    let (new_scope, use_funs_builder) = uses(context, puses);
-    context.push_alias_scope(loc, new_scope);
-    let mut use_funs = use_funs(context, use_funs_builder);
+    // let (new_scope, use_funs_builder) = uses(context, puses);
+    // context.push_alias_scope(loc, new_scope);
+    // let mut use_funs = use_funs(context, use_funs_builder);
     let mut items: VecDeque<E::SequenceItem> = pitems
         .into_iter()
         .map(|item| sequence_item(context, item))
@@ -2060,8 +2151,8 @@ fn sequence(context: &mut Context, loc: Loc, seq: P::Sequence) -> E::Sequence {
     };
     let final_item = sp(final_e.loc, E::SequenceItem_::Seq(final_e));
     items.push_back(final_item);
-    context.pop_alias_scope(Some(&mut use_funs));
-    (use_funs, items)
+    // context.pop_alias_scope(Some(&mut use_funs));
+    (puses, items)
 }
 
 #[growing_stack]
@@ -2160,7 +2251,8 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                 .add_diag(diag!(NameResolution::NamePositionMismatch, (loc, msg)));
             EE::UnresolvedError
         }
-        PE::Name(pn) => {
+        PE::Name(n) => EE::Name(n),
+        /* {
             bind_access_result!(
                 context.name_access_chain_to_module_access(Access::Term, pn) =>
                     Some(access_result!(name, ptys_opt, is_macro)) in {
@@ -2169,30 +2261,35 @@ fn exp(context: &mut Context, pe: Box<P::Exp>) -> Box<E::Exp> {
                         EE::Name(name, None)
                     }
             )
-        }
+        } */
         PE::Call(pn, sp!(rloc, prs)) => {
-            let en_opt = context.name_access_chain_to_module_access(Access::ApplyPositional, pn);
             let ers = sp(rloc, exps(context, prs));
-            bind_access_result!(
-                en_opt =>
-                    Some(access_result!(name, ptys_opt, is_macro))
-                    in EE::Call(name, is_macro, optional_sp_types(context, ptys_opt), ers)
-            )
+            EE::Call(pn, sp(rloc, ers))
         }
+        // PE::Call(pn, sp!(rloc, prs)) => {
+        //     let en_opt = context.name_access_chain_to_module_access(Access::ApplyPositional, pn);
+        //     let ers = sp(rloc, exps(context, prs));
+        //     bind_access_result!(
+        //         en_opt =>
+        //             Some(access_result!(name, ptys_opt, is_macro))
+        //             in EE::Call(name, is_macro, optional_sp_types(context, ptys_opt), ers)
+        //     )
+        // }
         PE::Pack(pn, pfields) => {
-            let en_opt = context.name_access_chain_to_module_access(Access::ApplyNamed, pn);
             let efields_vec = pfields
                 .into_iter()
                 .map(|(f, pe)| (f, *exp(context, Box::new(pe))))
                 .collect();
             let efields = named_fields(context, loc, "construction", "argument", efields_vec);
-            bind_access_result!(
-                en_opt =>
-                    Some(access_result!(name, ptys_opt, is_macro)) in {
-                        assert!(is_macro.is_none());
-                        EE::Pack(name, optional_sp_types(context, ptys_opt), efields)
-                    }
-            )
+            EE::Pack(pn, efields)
+            // let en_opt = context.name_access_chain_to_module_access(Access::ApplyNamed, pn);
+            // bind_access_result!(
+            //     en_opt =>
+            //         Some(access_result!(name, ptys_opt, is_macro)) in {
+            //             assert!(is_macro.is_none());
+            //             EE::Pack(name, optional_sp_types(context, ptys_opt), efields)
+            //         }
+            // )
         }
         PE::Vector(vec_loc, ptys_opt, sp!(args_loc, pargs_)) => {
             let tys_opt = optional_types(context, ptys_opt);
@@ -2520,7 +2617,7 @@ fn move_or_copy_path_(context: &mut Context, case: PathCase, pe: Box<P::Exp>) ->
     let cloc = case.loc();
     match &e.value {
         E::ExpDotted_::Exp(inner) => {
-            if !matches!(&inner.value, E::Exp_::Name(_, _)) {
+            if !matches!(&inner.value, E::Exp_::Name(_)) {
                 let cmsg = format!("Invalid '{}' of expression", case.case());
                 let emsg = "Expected a name or path access, e.g. 'x' or 'e.f'";
                 context.env().add_diag(diag!(
@@ -2641,25 +2738,25 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
         }
     }
 
-    fn resolve_and_validate_name(
-        context: &mut Context,
-        name_chain: P::NameAccessChain,
-        identifier_okay: bool,
-    ) -> Option<(E::ModuleAccess, Option<Spanned<Vec<P::Type>>>)> {
-        let ModuleAccessResult {
-            access,
-            ptys_opt,
-            is_macro,
-        } = context.name_access_chain_to_module_access(Access::Pattern, name_chain)?;
-        let name = head_ctor_okay(context, access, identifier_okay)?;
-        if let Some(loc) = is_macro {
-            context.env().add_diag(diag!(
-                Syntax::InvalidMacro,
-                (loc, "Macros are not allowed in patterns.")
-            ));
-        }
-        Some((name, ptys_opt))
-    }
+    // fn resolve_and_validate_name(
+    //     context: &mut Context,
+    //     name_chain: P::NameAccessChain,
+    //     identifier_okay: bool,
+    // ) -> Option<(E::ModuleAccess, Option<Spanned<Vec<P::Type>>>)> {
+    //     let ModuleAccessResult {
+    //         access,
+    //         ptys_opt,
+    //         is_macro,
+    //     } = context.name_access_chain_to_module_access(Access::Pattern, name_chain)?;
+    //     let name = head_ctor_okay(context, access, identifier_okay)?;
+    //     if let Some(loc) = is_macro {
+    //         context.env().add_diag(diag!(
+    //             Syntax::InvalidMacro,
+    //             (loc, "Macros are not allowed in patterns.")
+    //         ));
+    //     }
+    //     Some((name, ptys_opt))
+    // }
 
     macro_rules! error_pattern {
         () => {{
@@ -2670,130 +2767,166 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 
     match pat_ {
         PP::PositionalConstructor(name_chain, pats) => {
-            let Some((head_ctor_name, pts_opt)) =
-                resolve_and_validate_name(context, name_chain, false)
-            else {
-                return error_pattern!();
-            };
-            let tys = optional_sp_types(context, pts_opt);
-            match head_ctor_name {
-                sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
-                    let ploc = pats.loc;
-                    let mut out_pats = vec![];
-                    let mut ellipsis_locs = vec![];
-                    for pat in pats.value.into_iter() {
-                        match pat {
-                            P::Ellipsis::Binder(p) => {
-                                out_pats.push(E::Ellipsis::Binder(match_pattern(context, p)));
-                            }
-                            P::Ellipsis::Ellipsis(loc) if ellipsis_locs.is_empty() => {
-                                out_pats.push(E::Ellipsis::Ellipsis(loc));
-                                ellipsis_locs.push(loc);
-                            }
-                            P::Ellipsis::Ellipsis(loc) => {
-                                ellipsis_locs.push(loc);
-                            }
-                        }
+            let mut out_pats = vec![];
+            let mut ellipsis_locs = vec![];
+            for pat in pats.value.into_iter() {
+                match pat {
+                    P::Ellipsis::Binder(p) => {
+                        out_pats.push(E::Ellipsis::Binder(match_pattern(context, p)));
                     }
-                    check_ellipsis_usage(context, &ellipsis_locs);
-                    sp(
-                        loc,
-                        EP::PositionalConstructor(head_ctor_name, tys, sp(ploc, out_pats)),
-                    )
+                    P::Ellipsis::Ellipsis(loc) if ellipsis_locs.is_empty() => {
+                        out_pats.push(E::Ellipsis::Ellipsis(loc));
+                        ellipsis_locs.push(loc);
+                    }
+                    P::Ellipsis::Ellipsis(loc) => {
+                        ellipsis_locs.push(loc);
+                    }
                 }
-                _ => error_pattern!(),
             }
+            check_ellipsis_usage(context, &ellipsis_locs);
+            EP::PositionalConstructor(name_chain, out_pats)
+            // let Some((head_ctor_name, pts_opt)) =
+            //     resolve_and_validate_name(context, name_chain, false)
+            // else {
+            //     return error_pattern!();
+            // };
+            // let tys = optional_sp_types(context, pts_opt);
+            // match head_ctor_name {
+            //     sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
+            //         let ploc = pats.loc;
+            //         let mut out_pats = vec![];
+            //         let mut ellipsis_locs = vec![];
+            //         for pat in pats.value.into_iter() {
+            //             match pat {
+            //                 P::Ellipsis::Binder(p) => {
+            //                     out_pats.push(E::Ellipsis::Binder(match_pattern(context, p)));
+            //                 }
+            //                 P::Ellipsis::Ellipsis(loc) if ellipsis_locs.is_empty() => {
+            //                     out_pats.push(E::Ellipsis::Ellipsis(loc));
+            //                     ellipsis_locs.push(loc);
+            //                 }
+            //                 P::Ellipsis::Ellipsis(loc) => {
+            //                     ellipsis_locs.push(loc);
+            //                 }
+            //             }
+            //         }
+            //         check_ellipsis_usage(context, &ellipsis_locs);
+            //         sp(
+            //             loc,
+            //             EP::PositionalConstructor(head_ctor_name, tys, sp(ploc, out_pats)),
+            //         )
+            //     }
+            //     _ => error_pattern!(),
+            // }
         }
         PP::FieldConstructor(name_chain, fields) => {
-            let Some((head_ctor_name, pts_opt)) =
-                resolve_and_validate_name(context, name_chain, false)
-            else {
-                return error_pattern!();
-            };
-            let tys = optional_sp_types(context, pts_opt);
-            match head_ctor_name {
-                head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
-                    let mut ellipsis_locs = vec![];
-                    let mut stripped_fields = vec![];
-                    for field in fields.value.into_iter() {
-                        match field {
-                            P::Ellipsis::Binder((field, pat)) => {
-                                stripped_fields.push((field, match_pattern(context, pat)));
-                            }
-                            P::Ellipsis::Ellipsis(eloc) => {
-                                ellipsis_locs.push(eloc);
-                            }
-                        }
+            let mut ellipsis_locs = vec![];
+            let mut stripped_fields = vec![];
+            for field in fields.value.into_iter() {
+                match field {
+                    P::Ellipsis::Binder((field, pat)) => {
+                        stripped_fields.push((field, match_pattern(context, pat)));
                     }
-                    let fields =
-                        named_fields(context, loc, "pattern", "sub-pattern", stripped_fields);
-                    check_ellipsis_usage(context, &ellipsis_locs);
-                    let ellipsis = ellipsis_locs.first().copied();
-                    sp(
-                        loc,
-                        EP::NamedConstructor(head_ctor_name, tys, fields, ellipsis),
-                    )
-                }
-                _ => error_pattern!(),
-            }
-        }
-        PP::Name(mut_, name_chain) => {
-            let Some((head_ctor_name, pts_opt)) =
-                resolve_and_validate_name(context, name_chain, true)
-            else {
-                return error_pattern!();
-            };
-            match head_ctor_name {
-                sp!(loc, EM::Name(name)) => {
-                    let name_value = name.value;
-                    if !valid_local_variable_name(name_value) {
-                        let msg = format!(
-                            "Invalid pattern variable name '{}'. Pattern variable names must start \
-                            with 'a'..'z' or '_'",
-                            name_value,
-                        );
-                        let mut diag = diag!(Declarations::InvalidName, (name.loc, msg));
-                        if is_pascal_case(&name_value) || is_upper_snake_case(&name_value) {
-                            diag.add_note(
-                                "The compiler may have failed to \
-                                resolve this constant's name",
-                            );
-                        }
-                        context.env().add_diag(diag);
-                        error_pattern!()
-                    } else {
-                        if let Some(_tys) = pts_opt {
-                            let msg = "Invalid type arguments on a pattern variable";
-                            let mut diag = diag!(Declarations::InvalidName, (name.loc, msg));
-                            diag.add_note("Type arguments cannot appear on pattern variables");
-                            context.env().add_diag(diag);
-                        }
-                        sp(loc, EP::Binder(mutability(context, loc, mut_), Var(name)))
-                    }
-                }
-                head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
-                    if let Some(mloc) = mut_ {
-                        let msg = "'mut' can only be used with variable bindings in patterns";
-                        let nmsg =
-                            "Expected a valid 'enum' variant, 'struct', or 'const', not a variable";
-                        context.env().add_diag(diag!(
-                            Declarations::InvalidName,
-                            (mloc, msg),
-                            (head_ctor_name.loc, nmsg)
-                        ));
-                        error_pattern!()
-                    } else {
-                        sp(
-                            loc,
-                            EP::ModuleAccessName(
-                                head_ctor_name,
-                                optional_sp_types(context, pts_opt),
-                            ),
-                        )
+                    P::Ellipsis::Ellipsis(eloc) => {
+                        ellipsis_locs.push(eloc);
                     }
                 }
             }
+            let fields = named_fields(context, loc, "pattern", "sub-pattern", stripped_fields);
+            check_ellipsis_usage(context, &ellipsis_locs);
+            let ellipsis = ellipsis_locs.first().copied();
+            sp(loc, EP::NamedConstructor(name_chain, fields, ellipsis))
+            // let Some((head_ctor_name, pts_opt)) =
+            //     resolve_and_validate_name(context, name_chain, false)
+            // else {
+            //     return error_pattern!();
+            // };
+            // let tys = optional_sp_types(context, pts_opt);
+            // match head_ctor_name {
+            //     head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
+            //         let mut ellipsis_locs = vec![];
+            //         let mut stripped_fields = vec![];
+            //         for field in fields.value.into_iter() {
+            //             match field {
+            //                 P::Ellipsis::Binder((field, pat)) => {
+            //                     stripped_fields.push((field, match_pattern(context, pat)));
+            //                 }
+            //                 P::Ellipsis::Ellipsis(eloc) => {
+            //                     ellipsis_locs.push(eloc);
+            //                 }
+            //             }
+            //         }
+            //         let fields =
+            //             named_fields(context, loc, "pattern", "sub-pattern", stripped_fields);
+            //         check_ellipsis_usage(context, &ellipsis_locs);
+            //         let ellipsis = ellipsis_locs.first().copied();
+            //         sp(
+            //             loc,
+            //             EP::NamedConstructor(head_ctor_name, tys, fields, ellipsis),
+            //         )
+            //     }
+            //     _ => error_pattern!(),
+            // }
         }
+        PP::Name(Some(mut_loc), name_chain) => EP::Name(E::Mutability::Mut(loc), name_chain),
+        PP::Name(None, name_chain) => EP::Name(E::Mutability::Imm, name_chain),
+        // {
+        //     let Some((head_ctor_name, pts_opt)) =
+        //         resolve_and_validate_name(context, name_chain, true)
+        //     else {
+        //         return error_pattern!();
+        //     };
+        //     match head_ctor_name {
+        //         sp!(loc, EM::Name(name)) => {
+        //             let name_value = name.value;
+        //             if !valid_local_variable_name(name_value) {
+        //                 let msg = format!(
+        //                     "Invalid pattern variable name '{}'. Pattern variable names must start \
+        //                     with 'a'..'z' or '_'",
+        //                     name_value,
+        //                 );
+        //                 let mut diag = diag!(Declarations::InvalidName, (name.loc, msg));
+        //                 if is_pascal_case(&name_value) || is_upper_snake_case(&name_value) {
+        //                     diag.add_note(
+        //                         "The compiler may have failed to \
+        //                         resolve this constant's name",
+        //                     );
+        //                 }
+        //                 context.env().add_diag(diag);
+        //                 error_pattern!()
+        //             } else {
+        //                 if let Some(_tys) = pts_opt {
+        //                     let msg = "Invalid type arguments on a pattern variable";
+        //                     let mut diag = diag!(Declarations::InvalidName, (name.loc, msg));
+        //                     diag.add_note("Type arguments cannot appear on pattern variables");
+        //                     context.env().add_diag(diag);
+        //                 }
+        //                 sp(loc, EP::Binder(mutability(context, loc, mut_), Var(name)))
+        //             }
+        //         }
+        //         head_ctor_name @ sp!(_, EM::Variant(_, _) | EM::ModuleAccess(_, _)) => {
+        //             if let Some(mloc) = mut_ {
+        //                 let msg = "'mut' can only be used with variable bindings in patterns";
+        //                 let nmsg =
+        //                     "Expected a valid 'enum' variant, 'struct', or 'const', not a variable";
+        //                 context.env().add_diag(diag!(
+        //                     Declarations::InvalidName,
+        //                     (mloc, msg),
+        //                     (head_ctor_name.loc, nmsg)
+        //                 ));
+        //                 error_pattern!()
+        //             } else {
+        //                 sp(
+        //                     loc,
+        //                     EP::Name(
+        //                         head_ctor_name,
+        //                         optional_sp_types(context, pts_opt),
+        //                     ),
+        //                 )
+        //             }
+        //         }
+        //     }
+        // }
         PP::Literal(v) => {
             if let Some(v) = value(&mut context.defn_context, v) {
                 sp(loc, EP::Literal(v))
@@ -2826,12 +2959,12 @@ fn match_pattern(context: &mut Context, sp!(loc, pat_): P::MatchPattern) -> E::M
 // Values
 //**************************************************************************************************
 
-pub(super) fn value(context: &mut DefnContext, sp!(loc, pvalue_): P::Value) -> Option<E::Value> {
+pub(super) fn value(context: &mut Context, sp!(loc, pvalue_): P::Value) -> Option<E::Value> {
     use E::Value_ as EV;
     use P::Value_ as PV;
     let value_ = match pvalue_ {
         PV::Address(addr) => {
-            let addr = top_level_address(context, /* suggest_declaration */ true, addr);
+            let addr = address(context, /* suggest_declaration */ true, addr);
             EV::Address(addr)
         }
         PV::Num(s) if s.ends_with("u8") => match parse_u8(&s[..s.len() - 2]) {
@@ -2965,13 +3098,13 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
         PB::Var(pmut, v) => {
             let emut = mutability(context, v.loc(), pmut);
             check_valid_local_name(context, &v);
-            EL::Var(Some(emut), sp(loc, E::ModuleAccess_::Name(v.0)), None)
+            EL::Var(Some(emut), v) //  sp(loc, E::ModuleAccess_::Name(v.0)), None)
         }
-        PB::Unpack(ptn, pfields) => {
-            let access_result!(name, ptys_opt, is_macro) =
-                context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
-            ice_assert!(context.env(), is_macro.is_none(), loc, "Found macro in lhs");
-            let tys_opt = optional_sp_types(context, ptys_opt);
+        PB::Unpack(name, pfields) => {
+            // let access_result!(name, ptys_opt, is_macro) =
+            //     context.name_access_chain_to_module_access(Access::ApplyNamed, *ptn)?;
+            // ice_assert!(context.env(), is_macro.is_none(), loc, "Found macro in lhs");
+            // let tys_opt = optional_sp_types(context, ptys_opt);
             let fields = match pfields {
                 FieldBindings::Named(named_bindings) => {
                     let mut vfields = vec![];
@@ -3005,7 +3138,7 @@ fn bind(context: &mut Context, sp!(loc, pb_): P::Bind) -> Option<E::LValue> {
                     E::FieldBindings::Positional(fields)
                 }
             };
-            EL::Unpack(name, tys_opt, fields)
+            EL::Unpack(name, fields)
         }
     };
     Some(sp(loc, b_))
@@ -3070,96 +3203,104 @@ fn assign(context: &mut Context, sp!(loc, e_): P::Exp) -> Option<E::LValue> {
     use E::{LValue_ as EL, ModuleAccess_ as M};
     use P::Exp_ as PE;
     match e_ {
-        PE::Name(name) => {
-            match context.name_access_chain_to_module_access(Access::Term, name.clone()) {
-                Some(access_result!(sp!(_, name @ M::Name(_)), Some(_), _is_macro)) => {
-                    let msg = "Unexpected assignment of instantiated type without fields";
-                    let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
-                    diag.add_note(format!(
-                        "If you are trying to unpack a struct, try adding fields, e.g.'{} {{}}'",
-                        name
-                    ));
-                    context.env().add_diag(diag);
-                    None
-                }
-                Some(access_result!(_, _ptys_opt, Some(_))) => {
-                    let msg = "Unexpected assignment of name with macro invocation";
-                    let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
-                    diag.add_note("Macro invocation '!' must appear on an invocation");
-                    context.env().add_diag(diag);
-                    None
-                }
-                Some(access_result!(sp!(_, name @ M::Name(_)), None, None)) => {
-                    Some(sp(loc, EL::Var(None, sp(loc, name), None)))
-                }
-                Some(access_result!(sp!(_, M::ModuleAccess(_, _)), _ptys_opt, _is_macro)) => {
-                    let msg = "Unexpected assignment of module access without fields";
-                    let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
-                    diag.add_note(format!(
-                        "If you are trying to unpack a struct, try adding fields, e.g.'{} {{}}'",
-                        name
-                    ));
-                    context.env().add_diag(diag);
-                    None
-                }
-                Some(access_result!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
-                    let cur_pkg = context.current_package();
-                    if context
-                        .env()
-                        .check_feature(cur_pkg, FeatureGate::Enums, loc)
-                    {
-                        let msg = "Unexpected assignment of variant";
-                        let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
-                        diag.add_note("If you are trying to unpack an enum variant, use 'match'");
-                        context.env().add_diag(diag);
-                        None
-                    } else {
-                        assert!(context.env().has_errors());
-                        None
-                    }
-                }
-                None => None,
-            }
-        }
-        PE::Pack(pn, pfields) => {
-            let access_result!(name, ptys_opt, is_macro) =
-                context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
-            ice_assert!(
-                context.env(),
-                is_macro.is_none(),
-                loc,
-                "Marked a bind as a macro"
-            );
-            let tys_opt = optional_sp_types(context, ptys_opt);
+        PE::Name(name) => Some(sp(loc, EL::Var(None, sp(loc, name)))),
+        // {
+        //     match context.name_access_chain_to_module_access(Access::Term, name.clone()) {
+        //         Some(access_result!(sp!(_, name @ M::Name(_)), Some(_), _is_macro)) => {
+        //             let msg = "Unexpected assignment of instantiated type without fields";
+        //             let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
+        //             diag.add_note(format!(
+        //                 "If you are trying to unpack a struct, try adding fields, e.g.'{} {{}}'",
+        //                 name
+        //             ));
+        //             context.env().add_diag(diag);
+        //             None
+        //         }
+        //         Some(access_result!(_, _ptys_opt, Some(_))) => {
+        //             let msg = "Unexpected assignment of name with macro invocation";
+        //             let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
+        //             diag.add_note("Macro invocation '!' must appear on an invocation");
+        //             context.env().add_diag(diag);
+        //             None
+        //         }
+        //         Some(access_result!(sp!(_, name @ M::Name(_)), None, None)) => {
+        //             Some(sp(loc, EL::Var(None, sp(loc, name), None)))
+        //         }
+        //         Some(access_result!(sp!(_, M::ModuleAccess(_, _)), _ptys_opt, _is_macro)) => {
+        //             let msg = "Unexpected assignment of module access without fields";
+        //             let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
+        //             diag.add_note(format!(
+        //                 "If you are trying to unpack a struct, try adding fields, e.g.'{} {{}}'",
+        //                 name
+        //             ));
+        //             context.env().add_diag(diag);
+        //             None
+        //         }
+        //         Some(access_result!(sp!(loc, M::Variant(_, _)), _tys_opt, _is_macro)) => {
+        //             let cur_pkg = context.current_package();
+        //             if context
+        //                 .env()
+        //                 .check_feature(cur_pkg, FeatureGate::Enums, loc)
+        //             {
+        //                 let msg = "Unexpected assignment of variant";
+        //                 let mut diag = diag!(Syntax::InvalidLValue, (loc, msg));
+        //                 diag.add_note("If you are trying to unpack an enum variant, use 'match'");
+        //                 context.env().add_diag(diag);
+        //                 None
+        //             } else {
+        //                 assert!(context.env().has_errors());
+        //                 None
+        //             }
+        //         }
+        //         None => None,
+        //     }
+        // }
+        PE::Pack(name, pfields) => {
             let efields = assign_unpack_fields(context, loc, pfields)?;
             Some(sp(
                 loc,
-                EL::Unpack(name, tys_opt, E::FieldBindings::Named(efields, None)),
+                EL::Unpack(name, E::FieldBindings::Named(efields, None)),
             ))
         }
-        PE::Call(pn, sp!(_, exprs)) => {
-            let pkg = context.current_package();
-            context
-                .env()
-                .check_feature(pkg, FeatureGate::PositionalFields, loc);
-            let access_result!(name, ptys_opt, is_macro) =
-                context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
-            ice_assert!(
-                context.env(),
-                is_macro.is_none(),
-                loc,
-                "Marked a bind as a macro"
-            );
-            let tys_opt = optional_sp_types(context, ptys_opt);
-            let pfields: Option<_> = exprs
-                .into_iter()
-                .map(|e| assign(context, e).map(E::Ellipsis::Binder))
-                .collect();
-            Some(sp(
-                loc,
-                EL::Unpack(name, tys_opt, E::FieldBindings::Positional(pfields?)),
-            ))
-        }
+        // {
+        //     let access_result!(name, ptys_opt, is_macro) =
+        //         context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
+        //     ice_assert!(
+        //         context.env(),
+        //         is_macro.is_none(),
+        //         loc,
+        //         "Marked a bind as a macro"
+        //     );
+        //     let tys_opt = optional_sp_types(context, ptys_opt);
+        //     let efields = assign_unpack_fields(context, loc, pfields)?;
+        //     Some(sp(
+        //         loc,
+        //         EL::Unpack(name, tys_opt, E::FieldBindings::Named(efields, None)),
+        //     ))
+        // }
+        // PE::Call(pn, sp!(_, exprs)) => {
+        //     let pkg = context.current_package();
+        //     context
+        //         .env()
+        //         .check_feature(pkg, FeatureGate::PositionalFields, loc);
+        //     let access_result!(name, ptys_opt, is_macro) =
+        //         context.name_access_chain_to_module_access(Access::ApplyNamed, pn)?;
+        //     ice_assert!(
+        //         context.env(),
+        //         is_macro.is_none(),
+        //         loc,
+        //         "Marked a bind as a macro"
+        //     );
+        //     let tys_opt = optional_sp_types(context, ptys_opt);
+        //     let pfields: Option<_> = exprs
+        //         .into_iter()
+        //         .map(|e| assign(context, e).map(E::Ellipsis::Binder))
+        //         .collect();
+        //     Some(sp(
+        //         loc,
+        //         EL::Unpack(name, tys_opt, E::FieldBindings::Positional(pfields?)),
+        //     ))
+        // }
         _ => {
             context.env().add_diag(diag!(
                 Syntax::InvalidLValue,
@@ -3206,385 +3347,4 @@ fn mutability(context: &mut Context, _loc: Loc, pmut: P::Mutability) -> E::Mutab
         // without let mut enabled, all locals are mutable and do not need the annotation
         None => E::Mutability::Either,
     }
-}
-
-//**************************************************************************************************
-// Valid names
-//**************************************************************************************************
-
-fn check_valid_address_name(
-    context: &mut DefnContext,
-    sp!(_, ln_): &P::LeadingNameAccess,
-) -> Result<(), ()> {
-    use P::LeadingNameAccess_ as LN;
-    match ln_ {
-        LN::AnonymousAddress(_) => Ok(()),
-        LN::GlobalAddress(n) | LN::Name(n) => {
-            check_restricted_name_all_cases(context, NameCase::Address, n)
-        }
-    }
-}
-
-fn valid_local_variable_name(s: Symbol) -> bool {
-    s.starts_with('_') || s.starts_with(|c: char| c.is_ascii_lowercase())
-}
-
-fn check_valid_function_parameter_name(context: &mut Context, is_macro: Option<Loc>, v: &Var) {
-    const SYNTAX_IDENTIFIER_NOTE: &str =
-        "'macro' parameters start with '$' to indicate that their arguments are not evaluated \
-        before the macro is expanded, meaning the entire expression is substituted. \
-        This is different from regular function parameters that are evaluated before the \
-        function is called.";
-    let is_syntax_identifier = v.is_syntax_identifier();
-    if let Some(macro_loc) = is_macro {
-        if !is_syntax_identifier && !v.is_underscore() {
-            let msg = format!(
-                "Invalid parameter name '{}'. '{}' parameter names must start with '$' (or must be '_')",
-                v, MACRO_MODIFIER,
-            );
-            let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
-            let mut diag = diag!(
-                Declarations::InvalidName,
-                (v.loc(), msg),
-                (macro_loc, macro_msg),
-            );
-            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            context.env().add_diag(diag);
-        }
-    } else if is_syntax_identifier {
-        let msg = format!(
-            "Invalid parameter name '{}'. Non-'{}' parameter names cannot start with '$'",
-            v, MACRO_MODIFIER,
-        );
-        let mut diag = diag!(Declarations::InvalidName, (v.loc(), msg));
-        diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-        context.env().add_diag(diag);
-    } else if !is_valid_local_variable_name(v.value()) {
-        let msg = format!(
-            "Invalid parameter name '{}'. Local variable names must start with 'a'..'z', '_', \
-            or be a valid name quoted with backticks (`name`)",
-            v,
-        );
-        context
-            .env()
-            .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
-    }
-    let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
-}
-
-fn check_valid_local_name(context: &mut Context, v: &Var) {
-    if !is_valid_local_variable_name(v.value()) {
-        let msg = format!(
-            "Invalid local name '{}'. Local variable names must start with 'a'..'z', '_', \
-            or be a valid name quoted with backticks (`name`)",
-            v,
-        );
-        context
-            .env()
-            .add_diag(diag!(Declarations::InvalidName, (v.loc(), msg)));
-    }
-    let _ = check_restricted_name_all_cases(&mut context.defn_context, NameCase::Variable, &v.0);
-}
-
-fn is_valid_local_variable_name(s: Symbol) -> bool {
-    Var::is_valid_name(s) && !Var::is_syntax_identifier_name(s)
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum ModuleMemberKind {
-    Constant,
-    Function,
-    Struct,
-    Enum,
-}
-
-impl ModuleMemberKind {
-    pub fn case(self) -> NameCase {
-        match self {
-            ModuleMemberKind::Constant => NameCase::Constant,
-            ModuleMemberKind::Function => NameCase::Function,
-            ModuleMemberKind::Struct => NameCase::Struct,
-            ModuleMemberKind::Enum => NameCase::Enum,
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
-pub enum NameCase {
-    Constant,
-    Function,
-    Struct,
-    Enum,
-    Module,
-    ModuleMemberAlias(ModuleMemberKind),
-    ModuleAlias,
-    Variable,
-    Address,
-    TypeParameter,
-}
-
-impl NameCase {
-    pub const fn name(&self) -> &'static str {
-        match self {
-            NameCase::Constant => "constant",
-            NameCase::Function => "function",
-            NameCase::Struct => "struct",
-            NameCase::Enum => "enum",
-            NameCase::Module => "module",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Function) => "function alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Constant) => "constant alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Struct) => "struct alias",
-            NameCase::ModuleMemberAlias(ModuleMemberKind::Enum) => "enum alias",
-            NameCase::ModuleAlias => "module alias",
-            NameCase::Variable => "variable",
-            NameCase::Address => "address",
-            NameCase::TypeParameter => "type parameter",
-        }
-    }
-}
-
-fn check_valid_module_member_name(
-    context: &mut Context,
-    member: ModuleMemberKind,
-    name: Name,
-) -> Option<Name> {
-    match check_valid_module_member_name_impl(context, member, &name, member.case()) {
-        Err(()) => None,
-        Ok(()) => Some(name),
-    }
-}
-
-fn check_valid_module_member_alias(
-    context: &mut Context,
-    member: ModuleMemberKind,
-    alias: Name,
-) -> Option<Name> {
-    match check_valid_module_member_name_impl(
-        context,
-        member,
-        &alias,
-        NameCase::ModuleMemberAlias(member),
-    ) {
-        Err(()) => None,
-        Ok(()) => Some(alias),
-    }
-}
-
-fn check_valid_module_member_name_impl(
-    context: &mut Context,
-    member: ModuleMemberKind,
-    n: &Name,
-    case: NameCase,
-) -> Result<(), ()> {
-    use ModuleMemberKind as M;
-    fn upper_first_letter(s: &str) -> String {
-        let mut chars = s.chars();
-        match chars.next() {
-            None => String::new(),
-            Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
-        }
-    }
-    match member {
-        M::Function => {
-            if n.value.starts_with(|c| c == '_') {
-                let msg = format!(
-                    "Invalid {} name '{}'. {} names cannot start with '_'",
-                    case.name(),
-                    n,
-                    upper_first_letter(case.name()),
-                );
-                context
-                    .env()
-                    .add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
-                return Err(());
-            }
-        }
-        M::Constant | M::Struct | M::Enum => {
-            if !is_valid_datatype_or_constant_name(&n.value) {
-                let msg = format!(
-                    "Invalid {} name '{}'. {} names must start with 'A'..'Z'",
-                    case.name(),
-                    n,
-                    upper_first_letter(case.name()),
-                );
-                context
-                    .env()
-                    .add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
-                return Err(());
-            }
-        }
-    }
-
-    // TODO move these names to a more central place?
-    check_restricted_names(
-        context,
-        case,
-        n,
-        crate::naming::ast::BuiltinFunction_::all_names(),
-    )?;
-    check_restricted_names(
-        context,
-        case,
-        n,
-        crate::naming::ast::BuiltinTypeName_::all_names(),
-    )?;
-
-    // Restricting Self for now in the case where we ever have impls
-    // Otherwise, we could allow it
-    check_restricted_name_all_cases(&mut context.defn_context, case, n)?;
-
-    Ok(())
-}
-
-fn check_valid_type_parameter_name(
-    context: &mut Context,
-    is_macro: Option<Loc>,
-    n: &Name,
-) -> Result<(), ()> {
-    // TODO move these names to a more central place?
-    if n.value == symbol!("_") {
-        let diag = restricted_name_error(NameCase::TypeParameter, n.loc, "_");
-        context.env().add_diag(diag);
-        return Err(());
-    }
-
-    const SYNTAX_IDENTIFIER_NOTE: &str = "Type parameter names starting with '$' indicate that \
-        their arguments do not have to satisfy certain constraints before the macro is expanded, \
-        meaning types like '&mut u64' or '(bool, u8)' may be used as arguments.";
-
-    let is_syntax_ident = Var::is_syntax_identifier_name(n.value);
-    if let Some(macro_loc) = is_macro {
-        if !is_syntax_ident {
-            let msg = format!(
-                "Invalid type parameter name. \
-                '{} fun' type parameter names must start with '$'",
-                MACRO_MODIFIER
-            );
-            let macro_msg = format!("Declared '{}' here", MACRO_MODIFIER);
-            let mut diag = diag!(
-                Declarations::InvalidName,
-                (n.loc, msg),
-                (macro_loc, macro_msg),
-            );
-            diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-            context.env().add_diag(diag);
-        } else {
-            let next_char = n.value.chars().nth(1).unwrap();
-            if !next_char.is_ascii_alphabetic() {
-                let msg = format!(
-                    "Invalid type parameter name '{}'. \
-                    Following the '$', the '{} fun' type parameter must be have a valid type \
-                    parameter name starting with a letter 'a'..'z' or 'A'..'Z'",
-                    n, MACRO_MODIFIER
-                );
-                let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
-                diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-                context.env().add_diag(diag);
-            }
-        }
-    } else if is_syntax_ident {
-        let msg = format!(
-            "Invalid type parameter name. \
-                Only '{} fun' type parameter names cat start with '$'",
-            MACRO_MODIFIER
-        );
-        let mut diag = diag!(Declarations::InvalidName, (n.loc, msg));
-        diag.add_note(SYNTAX_IDENTIFIER_NOTE);
-        context.env().add_diag(diag);
-    }
-
-    // TODO move these names to a more central place?
-    check_restricted_names(
-        context,
-        NameCase::TypeParameter,
-        n,
-        crate::naming::ast::BuiltinFunction_::all_names(),
-    )?;
-    check_restricted_names(
-        context,
-        NameCase::TypeParameter,
-        n,
-        crate::naming::ast::BuiltinTypeName_::all_names(),
-    )?;
-
-    check_restricted_name_all_cases(&mut context.defn_context, NameCase::TypeParameter, n)
-}
-
-// Checks for a restricted name in any decl case
-// Self and vector are not allowed
-fn check_restricted_name_all_cases(
-    context: &mut DefnContext,
-    case: NameCase,
-    n: &Name,
-) -> Result<(), ()> {
-    match case {
-        NameCase::Constant
-        | NameCase::Function
-        | NameCase::Struct
-        | NameCase::Enum
-        | NameCase::Module
-        | NameCase::ModuleMemberAlias(_)
-        | NameCase::ModuleAlias
-        | NameCase::Address => {
-            if Var::is_syntax_identifier_name(n.value) {
-                let msg = format!(
-                    "Invalid {} name '{}'. Identifiers starting with '$' can be used only for \
-                    parameters and type paramters",
-                    case.name(),
-                    n,
-                );
-                context
-                    .env
-                    .add_diag(diag!(Declarations::InvalidName, (n.loc, msg)));
-                return Err(());
-            }
-        }
-        NameCase::Variable | NameCase::TypeParameter => (),
-    }
-
-    let n_str = n.value.as_str();
-    let can_be_vector = matches!(case, NameCase::Module | NameCase::ModuleAlias);
-    if n_str == ModuleName::SELF_NAME
-        || (!can_be_vector && n_str == crate::naming::ast::BuiltinTypeName_::VECTOR)
-    {
-        context
-            .env
-            .add_diag(restricted_name_error(case, n.loc, n_str));
-        Err(())
-    } else {
-        Ok(())
-    }
-}
-
-fn check_restricted_names(
-    context: &mut Context,
-    case: NameCase,
-    sp!(loc, n_): &Name,
-    all_names: &BTreeSet<Symbol>,
-) -> Result<(), ()> {
-    if all_names.contains(n_) {
-        context
-            .env()
-            .add_diag(restricted_name_error(case, *loc, n_));
-        Err(())
-    } else {
-        Ok(())
-    }
-}
-
-fn restricted_name_error(case: NameCase, loc: Loc, restricted: &str) -> Diagnostic {
-    let a_or_an = match case.name().chars().next().unwrap() {
-        // TODO this is not exhaustive to the indefinite article rules in English
-        // but 'case' is never user generated, so it should be okay for a while/forever...
-        'a' | 'e' | 'i' | 'o' | 'u' => "an",
-        _ => "a",
-    };
-    let msg = format!(
-        "Invalid {case} name '{restricted}'. '{restricted}' is restricted and cannot be used to \
-         name {a_or_an} {case}",
-        a_or_an = a_or_an,
-        case = case.name(),
-        restricted = restricted,
-    );
-    diag!(NameResolution::ReservedName, (loc, msg))
 }

@@ -5,17 +5,19 @@
 use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
-        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
-        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, TargetKind,
-        Value, Value_, Visibility,
+        ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, DottedUsage,
+        Fields, Friend, ModuleIdent, Mutability, TargetKind, Value, Value_, Visibility,
     },
     parser::ast::{
         self as P, Ability_, BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp,
         VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
-        ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
-        unique_map::UniqueMap, *,
+        ast_debug::*,
+        known_attributes::{KnownAttribute, SyntaxAttribute},
+        program_info::NamingProgramInfo,
+        unique_map::UniqueMap,
+        *,
     },
 };
 use move_ir_types::location::*;
@@ -25,6 +27,8 @@ use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
 };
+
+use super::name_resolver::{ResolvedDefinition, ResolvedName};
 
 //**************************************************************************************************
 // Program
@@ -40,6 +44,41 @@ pub struct Program {
 pub struct Program_ {
     pub modules: UniqueMap<ModuleIdent, ModuleDefinition>,
 }
+
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct ExplicitUseFun {
+//     pub loc: Loc,
+//     pub attributes: Attributes,
+//     pub is_public: Option<Loc>,
+//     pub function: ModuleAccess,
+//     pub ty: ModuleAccess,
+//     pub method: Name,
+// }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImplicitUseFunKind {
+    // From a function declaration in the module
+    FunctionDeclaration,
+    // From a normal, non 'use fun' use declaration,
+    UseAlias { used: bool },
+}
+
+// These are only candidates as we have not yet checked if they have the proper signature for a
+// use fun declaration
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImplicitUseFunCandidate {
+    pub loc: Loc,
+    pub attributes: Attributes,
+    pub is_public: Option<Loc>,
+    pub function: (ModuleIdent, Name),
+    pub kind: ImplicitUseFunKind,
+}
+
+// #[derive(Debug, Clone, PartialEq, Eq)]
+// pub struct UseFuns {
+//     pub explicit: Vec<ExplicitUseFun>,
+//     pub implicit: UniqueMap<Name, ImplicitUseFunCandidate>,
+// }
 
 #[derive(Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Neighbor_ {
@@ -150,6 +189,39 @@ pub struct ModuleDefinition {
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
 }
+
+//**************************************************************************************************
+// Attributes
+//**************************************************************************************************
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AttributeValue_ {
+    Value(Value),
+    UnresolvedName(Name),
+    Module(Module),
+    Address(Address),
+    Definition(ResolvedDefinition),
+}
+pub type AttributeValue = Spanned<AttributeValue_>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Attribute_ {
+    Name(Name),
+    Assigned(Name, Box<AttributeValue>),
+    Parameterized(Name, InnerAttributes),
+}
+pub type Attribute = Spanned<Attribute_>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AttributeName_ {
+    Unknown(Symbol),
+    Known(KnownAttribute),
+}
+
+pub type AttributeName = Spanned<AttributeName_>;
+
+pub type InnerAttributes = UniqueMap<AttributeName, Attribute>;
+pub type Attributes = UniqueMap<Spanned<KnownAttribute>, Attribute>;
 
 //**************************************************************************************************
 // Data Types
@@ -655,6 +727,14 @@ impl BuiltinTypeName_ {
         &BUILTIN_TYPE_ORDERED
     }
 
+    pub fn all_types() -> &'static UniqueMap<Name, BuiltinTypeName_> {
+        let mut result = UniqueMap::new();
+        for name in BuiltinTypeName_::all_names() {
+            result.add(name, BuiltinTypeName_::resolve(name).unwrap())
+        }
+        result
+    }
+
     pub fn is_numeric(&self) -> bool {
         Self::numeric().contains(self)
     }
@@ -731,6 +811,15 @@ impl BuiltinFunction_ {
 
     pub fn all_names() -> &'static BTreeSet<Symbol> {
         &BUILTIN_FUNCTION_ALL_NAMES
+    }
+
+    // FIXME: this needs to hand back something more-useful for name resolution.
+    pub fn all_types() -> &'static UniqueMap<Name, BuiltinFunction_> {
+        let mut result = UniqueMap::new();
+        for name in BuiltinFunction_::all_names() {
+            result.add(name, BuiltinFunction_::resolve(name, None).unwrap())
+        }
+        result
     }
 
     pub fn resolve(name_str: &str, arg: Option<Type>) -> Option<Self> {
@@ -971,6 +1060,14 @@ impl BlockLabel {
     // base symbol to used when making names for unnamed loops or lambdas
     pub const IMPLICIT_LABEL_SYMBOL: Symbol = symbol!("%implicit");
     pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("%macro");
+
+    pub fn new(loc: Loc, name: Option<Symbol>, id: u16) -> BlockLabel {
+        let is_implicit = name.is_none();
+        let name = name.unwrap_or(BlockLabel::IMPLICIT_LABEL_SYMBOL);
+        let var_ = Var_ { name, id, color: 0 };
+        let label = sp(loc, var_);
+        BlockLabel { label, is_implicit }
+    }
 }
 
 impl Value_ {
@@ -1028,6 +1125,19 @@ impl fmt::Display for TypeName_ {
     }
 }
 
+impl fmt::Display for BuiltinFunction_ {
+    fn fmt(&self, f: &mut fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                BuiltinFunction_::Freeze(_) => BuiltinFunction_::FREEZE,
+                BuiltinFunction_::Assert(_) => BuiltinFunction_::ASSERT_MACRO,
+            }
+        )
+    }
+}
+
 impl std::fmt::Display for NominalBlockUsage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -1048,6 +1158,12 @@ impl fmt::Display for SyntaxMethodKind_ {
             SyntaxMethodKind_::IndexMut | SyntaxMethodKind_::Index => SyntaxAttribute::INDEX,
         };
         write!(f, "{}", msg)
+    }
+}
+
+impl fmt::Display for Var_ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 
