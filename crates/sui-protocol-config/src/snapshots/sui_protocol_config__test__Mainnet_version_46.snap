@@ -2,7 +2,7 @@
 source: crates/sui-protocol-config/src/lib.rs
 expression: "ProtocolConfig::get_for_version(cur, *chain_id)"
 ---
-version: 45
+version: 46
 feature_flags:
   package_upgrades: true
   commit_root_state_digest: true
@@ -43,9 +43,7 @@ feature_flags:
   enable_coin_deny_list: true
   enable_group_ops_native_functions: true
   reject_mutable_random_on_entry_functions: true
-  consensus_choice: SwapEachEpoch
   zklogin_max_epoch_upper_bound_delta: 30
-  mysticeti_leader_scoring_and_schedule: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

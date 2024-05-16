@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 45;
+const MAX_PROTOCOL_VERSION: u64 = 46;
 
 // Record history of protocol version allocations here:
 //
@@ -127,6 +127,7 @@ const MAX_PROTOCOL_VERSION: u64 = 45;
 //             Add native bridge.
 //             Enable native bridge in devnet
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
+// Version 46: Enable native bridge in testnet
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2179,6 +2180,12 @@ impl ProtocolConfig {
 
                     // Also bumps framework snapshot to fix binop issue.
 
+                    // enable bridge in devnet
+                    if chain != Chain::Mainnet && chain != Chain::Testnet {
+                        cfg.feature_flags.bridge = true;
+                    }
+                }
+                46 => {
                     // enable bridge in devnet and testnet
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.bridge = true;
