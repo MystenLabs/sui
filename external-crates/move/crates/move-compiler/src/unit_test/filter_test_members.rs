@@ -212,7 +212,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
         macro_: None,
         signature,
-        name: P::FunctionName(sp(mloc, "unit_test_poison".into())),
+        name: P::FunctionName(sp(mloc, UNIT_TEST_POISON_FUN_NAME.into())),
         body: sp(
             mloc,
             P::FunctionBody_::Defined((
