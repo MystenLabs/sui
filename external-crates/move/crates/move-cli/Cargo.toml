@@ -43,7 +43,6 @@ move-prover.workspace = true
 move-unit-test.workspace = true
 move-errmapgen.workspace = true
 move-bytecode-viewer.workspace = true
-regex.workspace = true
 
 [dev-dependencies]
 datatest-stable.workspace = true

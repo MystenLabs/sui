@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use clap::*;
+use move_core_types::identifier::Identifier;
 use move_package::source_package::layout::SourcePackageLayout;
 use std::{
     fmt::Display,
@@ -29,11 +30,6 @@ pub struct New {
     pub name: String,
 }
 
-fn is_valid_package_name(name: &str) -> bool {
-    let re = regex::Regex::new(r"^[a-z][a-z0-9_]*$").unwrap();
-    re.is_match(name)
-}
-
 impl New {
     pub fn execute_with_defaults(self, path: Option<PathBuf>) -> anyhow::Result<()> {
         self.execute(
@@ -54,11 +50,8 @@ impl New {
         // TODO warn on build config flags
         let Self { name } = self;
 
-        if !is_valid_package_name(&name) {
-            return Err(anyhow!(
-                "invalid package name, only support: lowercase letters, numbers, and underscores, \
-should start with a lowercase letter."
-            ));
+        if !Identifier::is_valid(&name) {
+            return Err(anyhow!("invalid package name, not a valid Move identifier"));
         }
 
         let p: PathBuf;
