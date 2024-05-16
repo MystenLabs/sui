@@ -46,6 +46,7 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
         .build();
     let test_cluster = TestClusterBuilder::new()
         .set_network_config(network_config)
+        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
 
@@ -113,7 +114,6 @@ async fn test_fullnode_traffic_control_dry_run() -> Result<(), anyhow::Error> {
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
-        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
     assert_traffic_control_dry_run(test_cluster, n as usize).await
@@ -136,7 +136,6 @@ async fn test_validator_traffic_control_spam_blocked() -> Result<(), anyhow::Err
         .build();
     let test_cluster = TestClusterBuilder::new()
         .set_network_config(network_config)
-        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
     assert_traffic_control_spam_blocked(test_cluster, n as usize).await
@@ -156,7 +155,6 @@ async fn test_fullnode_traffic_control_spam_blocked() -> Result<(), anyhow::Erro
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
-        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
     assert_traffic_control_spam_blocked(test_cluster, n as usize).await
@@ -189,7 +187,6 @@ async fn test_validator_traffic_control_spam_delegated() -> Result<(), anyhow::E
         .build();
     let test_cluster = TestClusterBuilder::new()
         .set_network_config(network_config)
-        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
     assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await
@@ -219,7 +216,6 @@ async fn test_fullnode_traffic_control_spam_delegated() -> Result<(), anyhow::Er
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
         .with_fullnode_fw_config(Some(firewall_config.clone()))
-        .with_fullnode_client_ip_injection(Some(true))
         .build()
         .await;
     assert_traffic_control_spam_delegated(test_cluster, n as usize, 65000).await

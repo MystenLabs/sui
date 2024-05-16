@@ -226,7 +226,7 @@ impl ValidatorConfigBuilder {
             websocket_only: false,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
-            with_client_ip_injection: Some(false),
+            with_client_ip_injection: None,
         }
     }
 

@@ -41,6 +41,7 @@ pub struct JsonRpcService<L> {
     methods: Methods,
     rpc_router: RpcRouter,
     traffic_controller: Option<Arc<TrafficController>>,
+    // Will eventually remove after stable rollout
     with_client_ip_injection: bool,
 }
 
