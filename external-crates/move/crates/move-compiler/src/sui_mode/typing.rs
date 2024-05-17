@@ -1,6 +1,8 @@
 // Copyright (c) The Move Contributors
 // SPDX-License-Identifier: Apache-2.0
 
+use std::sync::Arc;
+
 use move_ir_types::location::Loc;
 use move_symbol_pool::Symbol;
 
@@ -30,12 +32,8 @@ pub struct SuiTypeChecks;
 
 impl TypingVisitorConstructor for SuiTypeChecks {
     type Context<'a> = Context<'a>;
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        program_info: &'a TypingProgramInfo,
-        _program: &T::Program_,
-    ) -> Self::Context<'a> {
-        Context::new(env, program_info)
+    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a> {
+        Context::new(env, program.info.clone())
     }
 }
 
@@ -46,7 +44,7 @@ impl TypingVisitorConstructor for SuiTypeChecks {
 #[allow(unused)]
 pub struct Context<'a> {
     env: &'a mut CompilationEnv,
-    info: &'a TypingProgramInfo,
+    info: Arc<TypingProgramInfo>,
     sui_transfer_ident: Option<ModuleIdent>,
     current_module: Option<ModuleIdent>,
     otw_name: Option<Symbol>,
@@ -55,7 +53,7 @@ pub struct Context<'a> {
 }
 
 impl<'a> Context<'a> {
-    fn new(env: &'a mut CompilationEnv, info: &'a TypingProgramInfo) -> Self {
+    fn new(env: &'a mut CompilationEnv, info: Arc<TypingProgramInfo>) -> Self {
         let sui_module_ident = info
             .modules
             .key_cloned_iter()
@@ -374,6 +372,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
         ))
     }
 
+    let info = context.info.clone();
     let otw_name: Symbol = context.otw_name();
     if parameters.len() == 1
         && context.one_time_witness.is_some()
@@ -420,8 +419,7 @@ fn init_signature(context: &mut Context, name: FunctionName, signature: &Functio
             );
             diag.add_note(OTW_NOTE);
             context.env.add_diag(diag)
-        } else if let Some(sdef) = context
-            .info
+        } else if let Some(sdef) = info
             .module(context.current_module())
             .structs
             .get_(&otw_name)

@@ -5,7 +5,7 @@
 use crate::{
     cfgir::{
         self,
-        visitor::{AbsIntVisitorObj, CFGIRVisitor},
+        visitor::{AbsIntVisitorObj, CFGIRVisitorObj},
     },
     command_line::{DEFAULT_OUTPUT_DIR, MOVE_COMPILED_INTERFACES_DIR},
     compiled_unit::{self, AnnotatedCompiledUnit},

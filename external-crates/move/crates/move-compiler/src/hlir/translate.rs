@@ -148,7 +148,7 @@ impl<'env> Context<'env> {
     pub fn new(
         env: &'env mut CompilationEnv,
         pre_compiled_lib_opt: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program_,
+        prog: &T::Program,
     ) -> Self {
         fn add_struct_fields(
             env: &mut CompilationEnv,
@@ -243,7 +243,7 @@ impl<'env> Context<'env> {
         let mut structs = UniqueMap::new();
         let mut variant_fields = UniqueMap::new();
         if let Some(pre_compiled_lib) = pre_compiled_lib_opt {
-            for (mident, mdef) in pre_compiled_lib.typing.inner.modules.key_cloned_iter() {
+            for (mident, mdef) in pre_compiled_lib.typing.modules.key_cloned_iter() {
                 add_struct_fields(env, &mut structs, mident, &mdef.structs);
                 add_enums(env, &mut variant_fields, mident, &mdef.enums);
             }
@@ -389,11 +389,14 @@ pub fn program(
 ) -> H::Program {
     detect_dead_code_analysis(compilation_env, &prog);
 
-    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog.inner);
-    let T::Program_ { modules: tmodules } = prog.inner;
+    let mut context = Context::new(compilation_env, pre_compiled_lib, &prog);
+    let T::Program {
+        modules: tmodules,
+        info,
+    } = prog;
     let modules = modules(&mut context, tmodules);
 
-    H::Program { modules }
+    H::Program { modules, info }
 }
 
 fn modules(

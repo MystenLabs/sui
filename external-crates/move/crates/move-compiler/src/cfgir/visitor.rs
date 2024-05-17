@@ -5,7 +5,6 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 use crate::{
     cfgir::{
-        self,
         absint::{AbstractDomain, AbstractInterpreter, JoinResult, TransferFunctions},
         ast as G,
         cfg::ImmForwardCFG,
@@ -14,11 +13,9 @@ use crate::{
     command_line::compiler::Visitor,
     diagnostics::{Diagnostic, Diagnostics, WarningFilters},
     expansion::ast::ModuleIdent,
-    hlir::ast::{
-        self as H, Command, Command_, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var,
-    },
+    hlir::ast::{self as H, Command, Exp, LValue, LValue_, Label, ModuleCall, Type, Type_, Var},
     parser::ast::{ConstantName, DatatypeName, FunctionName},
-    shared::{program_info::TypingProgramInfo, CompilationEnv},
+    shared::CompilationEnv,
 };
 use move_ir_types::location::*;
 use move_proc_macros::growing_stack;
@@ -27,12 +24,7 @@ pub type AbsIntVisitorObj = Box<dyn AbstractInterpreterVisitor>;
 pub type CFGIRVisitorObj = Box<dyn CFGIRVisitor>;
 
 pub trait CFGIRVisitor {
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        program_info: &TypingProgramInfo,
-        program: &mut G::Program,
-    );
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -46,7 +38,6 @@ pub trait AbstractInterpreterVisitor {
     fn verify(
         &mut self,
         env: &CompilationEnv,
-        program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics;
@@ -66,19 +57,10 @@ pub trait AbstractInterpreterVisitor {
 pub trait CFGIRVisitorConstructor {
     type Context<'a>: Sized + CFGIRVisitorContext;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        program_info: &'a TypingProgramInfo,
-        program: &G::Program,
-    ) -> Self::Context<'a>;
+    fn context<'a>(env: &'a mut CompilationEnv, program: &G::Program) -> Self::Context<'a>;
 
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        program_info: &TypingProgramInfo,
-        program: &mut G::Program,
-    ) {
-        let mut context = Self::context(env, program_info, program);
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut G::Program) {
+        let mut context = Self::context(env, program);
         context.visit(program);
     }
 }
@@ -211,9 +193,9 @@ pub trait CFGIRVisitorContext {
             return;
         }
         if let G::FunctionBody_::Defined {
-            locals,
-            start,
-            block_info,
+            locals: _,
+            start: _,
+            block_info: _,
             blocks,
         } = &mut fdef.body.value
         {
@@ -227,7 +209,7 @@ pub trait CFGIRVisitorContext {
     fn visit_block_custom(&mut self, _lbl: Label, _block: &mut G::BasicBlock) -> bool {
         false
     }
-    fn visit_block(&mut self, lbl: Label, block: &mut G::BasicBlock) {
+    fn visit_block(&mut self, _lbl: Label, block: &mut G::BasicBlock) {
         for cmd in block {
             self.visit_command(cmd)
         }
@@ -237,23 +219,25 @@ pub trait CFGIRVisitorContext {
         false
     }
     fn visit_command(&mut self, cmd: &mut H::Command) {
+        use H::Command_ as C;
         if self.visit_command_custom(cmd) {
             return;
         }
         match &mut cmd.value {
-            Command_::Assign(_, _, e)
-            | Command_::Abort(e)
-            | Command_::Return { exp: e, .. }
-            | Command_::IgnoreAndPop { exp: e, .. }
-            | Command_::JumpIf { cond: e, .. }
-            | Command_::VariantSwitch { subject: e, .. } => {
+            C::Assign(_, _, e)
+            | C::Abort(e)
+            | C::Return { exp: e, .. }
+            | C::IgnoreAndPop { exp: e, .. }
+            | C::JumpIf { cond: e, .. }
+            | C::VariantSwitch { subject: e, .. } => {
                 self.visit_exp(e);
             }
-            Command_::Mutate(el, er) => {
+            C::Mutate(el, er) => {
                 self.visit_exp(el);
                 self.visit_exp(er);
             }
-            Command_::Break(_) | Command_::Continue(_) | Command_::Jump { .. } => (),
+            C::Jump { .. } => (),
+            C::Break(_) | C::Continue(_) => panic!("ICE break/continue not translated to jumps"),
         }
     }
 
@@ -268,7 +252,6 @@ pub trait CFGIRVisitorContext {
         }
         match &mut e.exp.value {
             E::Unit { .. }
-            | E::Value(_)
             | E::Move { .. }
             | E::Copy { .. }
             | E::Constant(_)
@@ -276,6 +259,8 @@ pub trait CFGIRVisitorContext {
             | E::BorrowLocal(_, _)
             | E::Unreachable
             | E::UnresolvedError => (),
+
+            E::Value(v) => self.visit_value(v),
 
             E::Freeze(e)
             | E::Dereference(e)
@@ -302,6 +287,32 @@ pub trait CFGIRVisitorContext {
             E::Pack(_, _, es) | E::PackVariant(_, _, _, es) => {
                 for (_, _, e) in es {
                     self.visit_exp(e)
+                }
+            }
+        }
+    }
+
+    fn visit_value_custom(&mut self, _v: &mut H::Value) -> bool {
+        false
+    }
+    #[growing_stack]
+    fn visit_value(&mut self, v: &mut H::Value) {
+        use H::Value_ as V;
+        if self.visit_value_custom(v) {
+            return;
+        }
+        match &mut v.value {
+            V::Address(_)
+            | V::U8(_)
+            | V::U16(_)
+            | V::U32(_)
+            | V::U64(_)
+            | V::U128(_)
+            | V::U256(_)
+            | V::Bool(_) => (),
+            V::Vector(_, vs) => {
+                for v in vs {
+                    self.visit_value(v)
                 }
             }
         }
@@ -430,7 +441,6 @@ pub trait SimpleAbsIntConstructor: Sized {
     /// Return None if it should not be run given this context
     fn new<'a>(
         env: &CompilationEnv,
-        program: &'a cfgir::ast::Program,
         context: &'a CFGContext<'a>,
         init_state: &mut <Self::AI<'a> as SimpleAbsInt>::State,
     ) -> Option<Self::AI<'a>>;
@@ -438,7 +448,6 @@ pub trait SimpleAbsIntConstructor: Sized {
     fn verify(
         &mut self,
         env: &CompilationEnv,
-        program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
@@ -460,7 +469,7 @@ pub trait SimpleAbsIntConstructor: Sized {
             );
         }
         let mut init_state = <Self::AI<'_> as SimpleAbsInt>::State::new(context, locals);
-        let Some(mut ai) = Self::new(env, program, context, &mut init_state) else {
+        let Some(mut ai) = Self::new(env, context, &mut init_state) else {
             return Diagnostics::new();
         };
         let (final_state, ds) = ai.analyze_function(cfg, init_state);
@@ -507,7 +516,7 @@ pub trait SimpleAbsInt: Sized {
         state: &mut Self::State,
         cmd: &Command,
     ) {
-        use Command_ as C;
+        use H::Command_ as C;
         if self.command_custom(context, state, cmd) {
             return;
         }
@@ -744,10 +753,9 @@ impl<V: SimpleAbsIntConstructor> AbstractInterpreterVisitor for V {
     fn verify(
         &mut self,
         env: &CompilationEnv,
-        program: &cfgir::ast::Program,
         context: &CFGContext,
         cfg: &ImmForwardCFG,
     ) -> Diagnostics {
-        SimpleAbsIntConstructor::verify(self, env, program, context, cfg)
+        SimpleAbsIntConstructor::verify(self, env, context, cfg)
     }
 }

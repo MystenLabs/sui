@@ -211,7 +211,7 @@ fn unreachable_code(loc: Loc) -> Option<ControlFlow> {
 
 pub fn program(compilation_env: &mut CompilationEnv, prog: &T::Program) {
     let mut context = Context::new(compilation_env);
-    modules(&mut context, &prog.inner.modules);
+    modules(&mut context, &prog.modules);
 }
 
 fn modules(context: &mut Context, modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>) {

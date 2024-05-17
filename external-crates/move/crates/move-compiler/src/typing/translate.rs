@@ -72,7 +72,6 @@ pub fn program(
     dependency_ordering::program(context.env, &mut modules);
     recursive_datatypes::modules(context.env, &modules);
     infinite_instantiations::modules(context.env, &modules);
-    let mut prog = T::Program_ { modules };
     // we extract module use funs into the module info context
     let module_use_funs = context
         .modules
@@ -80,15 +79,16 @@ pub fn program(
         .into_iter()
         .map(|(mident, minfo)| (mident, minfo.use_funs))
         .collect();
-    let module_info = TypingProgramInfo::new(pre_compiled_lib, &prog, module_use_funs);
+    let module_info = TypingProgramInfo::new(pre_compiled_lib, &modules, module_use_funs);
+    let mut prog = T::Program {
+        modules,
+        info: Arc::new(module_info),
+    };
     for v in &compilation_env.visitors().typing {
         let mut v = v.borrow_mut();
-        v.visit(compilation_env, &module_info, &mut prog);
+        v.visit(compilation_env, &mut prog);
     }
-    T::Program {
-        info: Arc::new(module_info),
-        inner: prog,
-    }
+    prog
 }
 
 fn extract_macros(context: &mut Context, modules: &UniqueMap<ModuleIdent, N::ModuleDefinition>) {

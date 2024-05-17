@@ -6,7 +6,7 @@ use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
 use crate::naming::ast as N;
 use crate::parser::ast::{ConstantName, DatatypeName, FunctionName};
-use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
+use crate::shared::CompilationEnv;
 use crate::typing::ast as T;
 
 use move_proc_macros::growing_stack;
@@ -14,12 +14,7 @@ use move_proc_macros::growing_stack;
 pub type TypingVisitorObj = Box<dyn TypingVisitor>;
 
 pub trait TypingVisitor {
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    );
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program);
 
     fn visitor(self) -> Visitor
     where
@@ -32,19 +27,10 @@ pub trait TypingVisitor {
 pub trait TypingVisitorConstructor {
     type Context<'a>: Sized + TypingVisitorContext;
 
-    fn context<'a>(
-        env: &'a mut CompilationEnv,
-        program_info: &'a TypingProgramInfo,
-        program: &T::Program_,
-    ) -> Self::Context<'a>;
+    fn context<'a>(env: &'a mut CompilationEnv, program: &T::Program) -> Self::Context<'a>;
 
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    ) {
-        let mut context = Self::context(env, program_info, program);
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program) {
+        let mut context = Self::context(env, program);
         context.visit(program);
     }
 }
@@ -64,7 +50,7 @@ pub trait TypingVisitorContext {
     /// By default, the visitor will visit all all expressions in all functions in all modules. A
     /// custom version should of this function should be created if different type of analysis is
     /// required.
-    fn visit(&mut self, program: &mut T::Program_) {
+    fn visit(&mut self, program: &mut T::Program) {
         for (mident, mdef) in program.modules.key_cloned_iter_mut() {
             self.add_warning_filter_scope(mdef.warning_filter.clone());
             if self.visit_module_custom(mident, mdef) {
@@ -299,12 +285,7 @@ impl<V: TypingVisitor + 'static> From<V> for TypingVisitorObj {
 }
 
 impl<V: TypingVisitorConstructor> TypingVisitor for V {
-    fn visit(
-        &mut self,
-        env: &mut CompilationEnv,
-        program_info: &TypingProgramInfo,
-        program: &mut T::Program_,
-    ) {
-        self.visit(env, program_info, program)
+    fn visit(&mut self, env: &mut CompilationEnv, program: &mut T::Program) {
+        self.visit(env, program)
     }
 }

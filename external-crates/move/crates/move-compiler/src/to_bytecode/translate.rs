@@ -134,7 +134,10 @@ pub fn program(
     let mut units = vec![];
 
     let (orderings, ddecls, fdecls) = extract_decls(compilation_env, pre_compiled_lib, &prog);
-    let G::Program { modules: gmodules } = prog;
+    let G::Program {
+        modules: gmodules,
+        info: _,
+    } = prog;
 
     let mut source_modules = gmodules
         .into_iter()

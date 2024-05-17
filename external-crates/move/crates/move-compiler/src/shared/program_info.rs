@@ -115,10 +115,14 @@ macro_rules! program_info {
 impl TypingProgramInfo {
     pub fn new(
         pre_compiled_lib: Option<Arc<FullyCompiledProgram>>,
-        prog: &T::Program_,
+        modules: &UniqueMap<ModuleIdent, T::ModuleDefinition>,
         mut module_use_funs: BTreeMap<ModuleIdent, ResolvedUseFuns>,
     ) -> Self {
+        struct Prog<'a> {
+            modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
+        }
         let mut module_use_funs = Some(&mut module_use_funs);
+        let prog = Prog { modules };
         program_info!(pre_compiled_lib, prog, typing, module_use_funs)
     }
 }

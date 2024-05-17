@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    cfgir::ast as G,
-    cfgir::visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor},
+    cfgir::{
+        ast as G,
+        visitor::{AbsIntVisitorObj, AbstractInterpreterVisitor, CFGIRVisitorObj},
+    },
     command_line as cli,
     diagnostics::{
         codes::{Category, Declarations, DiagnosticsID, Severity, WarningFilter},
@@ -19,8 +21,10 @@ use crate::{
     naming::ast as N,
     parser::ast as P,
     sui_mode,
-    typing::ast as T,
-    typing::visitor::{TypingVisitor, TypingVisitorObj},
+    typing::{
+        ast as T,
+        visitor::{TypingVisitor, TypingVisitorObj},
+    },
 };
 use clap::*;
 use move_command_line_common::files::FileHash;
@@ -882,6 +886,7 @@ impl Default for PackageConfig {
 pub struct Visitors {
     pub typing: Vec<RefCell<TypingVisitorObj>>,
     pub abs_int: Vec<RefCell<AbsIntVisitorObj>>,
+    pub cfgir: Vec<RefCell<CFGIRVisitorObj>>,
 }
 
 impl Visitors {
@@ -890,11 +895,13 @@ impl Visitors {
         let mut vs = Visitors {
             typing: vec![],
             abs_int: vec![],
+            cfgir: vec![],
         };
         for pass in passes {
             match pass {
                 Visitor::AbsIntVisitor(f) => vs.abs_int.push(RefCell::new(f)),
                 Visitor::TypingVisitor(f) => vs.typing.push(RefCell::new(f)),
+                Visitor::CFGIRVisitor(f) => vs.cfgir.push(RefCell::new(f)),
             }
         }
         vs
