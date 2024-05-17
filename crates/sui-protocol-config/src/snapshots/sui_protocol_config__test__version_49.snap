@@ -55,6 +55,7 @@ feature_flags:
   resolve_abort_locations_to_package_id: true
   mysticeti_use_committed_subdag_digest: true
   enable_vdf: true
+  record_consensus_determined_version_assignments_in_prologue: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000

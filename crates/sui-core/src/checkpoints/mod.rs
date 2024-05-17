@@ -628,10 +628,6 @@ impl CheckpointStore {
         checkpoint: &VerifiedCheckpoint,
         full_contents: VerifiedCheckpointContents,
     ) -> Result<(), TypedStoreError> {
-        info!(
-            "ZZZZZZ insert checkpoint content sequence_number={:?}",
-            checkpoint.sequence_number()
-        );
         let mut batch = self.full_checkpoint_content.batch();
         batch.insert_batch(
             &self.checkpoint_sequence_by_contents_digest,

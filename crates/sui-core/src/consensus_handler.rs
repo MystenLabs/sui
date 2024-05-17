@@ -853,10 +853,8 @@ impl ConsensusCommitInfo {
         cancelled_txn_version_assignment: Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
     ) -> VerifiedExecutableTransaction {
         if protocol_config.record_consensus_determined_version_assignments_in_prologue() {
-            info!("ZZZZZZ create V3");
             self.consensus_commit_prologue_v3_transaction(epoch, cancelled_txn_version_assignment)
         } else if protocol_config.include_consensus_digest_in_prologue() {
-            info!("ZZZZZZ create V2");
             self.consensus_commit_prologue_v2_transaction(epoch)
         } else {
             self.consensus_commit_prologue_transaction(epoch)

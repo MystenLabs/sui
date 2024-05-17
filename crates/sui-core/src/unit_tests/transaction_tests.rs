@@ -15,6 +15,7 @@ use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, AccountKeyPair, Signature, SuiKeyPair},
     error::{SuiError, UserInputError},
+    messages_consensus::ConsensusDeterminedVersionAssignments,
     multisig::{MultiSig, MultiSigPublicKey},
     signature::GenericSignature,
     transaction::{
@@ -241,7 +242,8 @@ async fn test_user_sends_consensus_commit_prologue_v3() {
             round: 0,
             commit_timestamp_ms: 42,
             consensus_commit_digest: ConsensusCommitDigest::default(),
-            consensus_determined_version_assignment: Vec::new(),
+            consensus_determined_version_assignments:
+                ConsensusDeterminedVersionAssignments::CancelledTransactions(Vec::new()),
         },
     ))
     .await;

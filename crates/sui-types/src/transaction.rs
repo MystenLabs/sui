@@ -17,6 +17,7 @@ use crate::message_envelope::{Envelope, Message, TrustedEnvelope, VerifiedEnvelo
 use crate::messages_checkpoint::CheckpointTimestamp;
 use crate::messages_consensus::{
     ConsensusCommitPrologue, ConsensusCommitPrologueV2, ConsensusCommitPrologueV3,
+    ConsensusDeterminedVersionAssignments,
 };
 use crate::object::{MoveObject, Object, Owner};
 use crate::programmable_transaction_builder::ProgrammableTransactionBuilder;
@@ -1521,7 +1522,7 @@ impl Display for TransactionKind {
                 writeln!(
                     writer,
                     "Consensus determined version assignment: {:?}",
-                    p.consensus_determined_version_assignment
+                    p.consensus_determined_version_assignments
                 )?;
             }
             Self::ProgrammableTransaction(p) => {
@@ -2652,7 +2653,10 @@ impl VerifiedTransaction {
             round,
             commit_timestamp_ms,
             consensus_commit_digest,
-            consensus_determined_version_assignment: cancelled_txn_version_assignment,
+            consensus_determined_version_assignments:
+                ConsensusDeterminedVersionAssignments::CancelledTransactions(
+                    cancelled_txn_version_assignment,
+                ),
         }
         .pipe(TransactionKind::ConsensusCommitPrologueV3)
         .pipe(Self::new_system_transaction)

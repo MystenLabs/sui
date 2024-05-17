@@ -5620,6 +5620,49 @@
       "ConsensusCommitDigest": {
         "$ref": "#/components/schemas/Digest"
       },
+      "ConsensusDeterminedVersionAssignments": {
+        "description": "Uses an enum to allow for future expansion of the ConsensusDeterminedVersionAssignments.",
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "CancelledTransactions"
+            ],
+            "properties": {
+              "CancelledTransactions": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": [
+                    {
+                      "$ref": "#/components/schemas/TransactionDigest"
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "array",
+                        "items": [
+                          {
+                            "$ref": "#/components/schemas/ObjectID"
+                          },
+                          {
+                            "$ref": "#/components/schemas/SequenceNumber"
+                          }
+                        ],
+                        "maxItems": 2,
+                        "minItems": 2
+                      }
+                    }
+                  ],
+                  "maxItems": 2,
+                  "minItems": 2
+                }
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "Data": {
         "oneOf": [
           {
@@ -10503,7 +10546,7 @@
             "required": [
               "commit_timestamp_ms",
               "consensus_commit_digest",
-              "consensus_determined_version_assignment",
+              "consensus_determined_version_assignments",
               "epoch",
               "kind",
               "round"
@@ -10515,34 +10558,8 @@
               "consensus_commit_digest": {
                 "$ref": "#/components/schemas/ConsensusCommitDigest"
               },
-              "consensus_determined_version_assignment": {
-                "type": "array",
-                "items": {
-                  "type": "array",
-                  "items": [
-                    {
-                      "$ref": "#/components/schemas/TransactionDigest"
-                    },
-                    {
-                      "type": "array",
-                      "items": {
-                        "type": "array",
-                        "items": [
-                          {
-                            "$ref": "#/components/schemas/ObjectID"
-                          },
-                          {
-                            "$ref": "#/components/schemas/SequenceNumber"
-                          }
-                        ],
-                        "maxItems": 2,
-                        "minItems": 2
-                      }
-                    }
-                  ],
-                  "maxItems": 2,
-                  "minItems": 2
-                }
+              "consensus_determined_version_assignments": {
+                "$ref": "#/components/schemas/ConsensusDeterminedVersionAssignments"
               },
               "epoch": {
                 "$ref": "#/components/schemas/BigInt_for_uint64"

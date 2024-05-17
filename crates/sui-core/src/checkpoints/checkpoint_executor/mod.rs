@@ -315,7 +315,7 @@ impl CheckpointExecutor {
                             "Received no new synced checkpoints for {scheduling_timeout:?}. Next checkpoint to be scheduled: {next_to_schedule}",
                         );
                         if scheduling_timeout_config.panic_on_timeout {
-                            panic!("No new synced checkpoints received for {scheduling_timeout:?} {:?}", self.state.name);
+                            panic!("No new synced checkpoints received for {scheduling_timeout:?} on node {:?}", self.state.name);
                         }
                         fail_point!("cp_exec_scheduling_timeout_reached");
                     },

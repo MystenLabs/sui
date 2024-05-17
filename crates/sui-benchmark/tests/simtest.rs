@@ -64,6 +64,10 @@ mod test {
         )
     }
 
+    fn test_config_low_latency() -> SimConfig {
+        env_config(constant_latency_ms(1), [])
+    }
+
     fn get_var<T: FromStr>(name: &str, default: T) -> T
     where
         <T as FromStr>::Err: std::fmt::Debug,
@@ -430,25 +434,22 @@ mod test {
             Blob::from_bytes(&bytes).expect("failed to load checkpoint");
     }
 
-    #[sim_test(config = "test_config()")]
+    // Tests the correctness of large consensus commit transaction due to large number
+    // of cancelled transactions. Note that we use a low latency configuration since
+    // simtest has low timeout tolerance and it is not designed to test performance.
+    #[sim_test(config = "test_config_low_latency()")]
     async fn test_simulated_load_large_consensus_commit_prologue_size() {
-        let test_cluster = build_test_cluster(4, 20_000).await;
+        let test_cluster = build_test_cluster(4, 5_000).await;
 
         let mut additional_cancelled_txns = Vec::new();
-        let small = false;
-        let num_txns = if small {
-            thread_rng().gen_range(1..5)
-        } else {
-            thread_rng().gen_range(1000..1001)
-        };
+        let num_txns = thread_rng().gen_range(500..2000);
         info!("Adding additional {num_txns} cancelled txns in consensus commit prologue.");
+
+        // Note that we need to construct the additional assigned object versions outside of
+        // fail point arg so that the same assigned object versions are used for all nodes in
+        // all consensus commit to preserve the determinism.
         for _ in 0..num_txns {
-            let num_objs = if small {
-                thread_rng().gen_range(1..3)
-            } else {
-                thread_rng().gen_range(1..15)
-            };
-            // info!("Transaction index {i} has {num_objs} shared objects.");
+            let num_objs = thread_rng().gen_range(1..15);
             let mut assigned_object_versions = Vec::new();
             for _ in 0..num_objs {
                 assigned_object_versions.push((ObjectID::random(), SequenceNumber::CONGESTED));
@@ -460,7 +461,7 @@ mod test {
             Some(additional_cancelled_txns.clone())
         });
 
-        test_simulated_load(test_cluster.clone(), 60).await;
+        test_simulated_load(test_cluster.clone(), 30).await;
     }
 
     // TODO add this back once flakiness is resolved

@@ -41,6 +41,7 @@ use sui_types::error::UserInputError;
 use sui_types::execution::SharedInput;
 use sui_types::execution_status::{ExecutionFailureStatus, ExecutionStatus};
 use sui_types::gas_coin::GasCoin;
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
 use sui_types::object::Data;
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::randomness_state::get_randomness_state_obj_initial_shared_version;
@@ -4787,8 +4788,6 @@ async fn test_consensus_commit_prologue_generation() {
         .include_consensus_digest_in_prologue());
 
     // Tests that new consensus commit prologue transaction is added to the batch, and it is the first transaction.
-
-    // TODO(ZZZZZZ): which version is the prologue here?
     assert_eq!(processed_consensus_transactions.len(), 3);
     assert!(matches!(
         processed_consensus_transactions[0]
@@ -6024,31 +6023,27 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     // We shuffle the transactions so that transactions in the list do not have any order in terms of gas price.
     certificates.shuffle(&mut rand::thread_rng());
 
-    // Sends all transactions to consensus. Expect first 2 rounds with 1 transaction per round going through.
+    // Sends all transactions to consensus. Expect first 2 rounds with 1 user transaction per round going through.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &certificates, false).await;
     assert_eq!(scheduled_txns.len(), 2);
-    for cert in scheduled_txns.iter() {
-        assert!(
-            matches!(
-                cert.data().transaction_data().kind(),
-                TransactionKind::ConsensusCommitPrologueV3(..)
-            ) || cert.data().transaction_data().gas_price() == 2000
-        );
-    }
+    // Note that consensus handler also generates consensus commit prologue transaction, and it must be the first one.
+    assert!(matches!(
+        scheduled_txns[0].data().transaction_data().kind(),
+        TransactionKind::ConsensusCommitPrologueV3(..)
+    ));
+    assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
+
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], false).await;
     assert_eq!(scheduled_txns.len(), 2);
-    for cert in scheduled_txns.iter() {
-        assert!(
-            matches!(
-                cert.data().transaction_data().kind(),
-                TransactionKind::ConsensusCommitPrologueV3(..)
-            ) || cert.data().transaction_data().gas_price() == 2000
-        );
-    }
+    assert!(matches!(
+        scheduled_txns[0].data().transaction_data().kind(),
+        TransactionKind::ConsensusCommitPrologueV3(..)
+    ));
+    assert!(scheduled_txns[1].data().transaction_data().gas_price() == 2000);
 
-    // Run consensus round 3. 2 transactions will come out with 1 transaction being cancelled.
+    // Run consensus round 3. 2 user transactions will come out with 1 transaction being cancelled.
     let scheduled_txns = send_batch_consensus_no_execution(&authority, &[], false).await;
-    assert_eq!(scheduled_txns.len(), 3);
+    assert_eq!(scheduled_txns.len(), 3); // 3 = 2 user transactions + 1 consensus commit prologue transaction.
     assert!(authority
         .epoch_store_for_testing()
         .get_all_deferred_transactions_for_test()
@@ -6109,16 +6104,17 @@ async fn test_consensus_handler_congestion_control_transaction_cancellation() {
     if let TransactionKind::ConsensusCommitPrologueV3(prologue_txn) =
         scheduled_txns[0].data().transaction_data().kind()
     {
-        assert_eq!(
-            prologue_txn.consensus_determined_version_assignment,
-            vec![(
-                *cancelled_txn.digest(),
-                vec![
-                    (shared_objects[0].id(), SequenceNumber::CONGESTED),
-                    (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
-                ]
-            )]
-        );
+        assert!(matches!(
+            &prologue_txn.consensus_determined_version_assignments,
+            ConsensusDeterminedVersionAssignments::CancelledTransactions(assignment)
+            if assignment == &vec![(
+                                *cancelled_txn.digest(),
+                                vec![
+                                    (shared_objects[0].id(), SequenceNumber::CONGESTED),
+                                    (shared_objects[1].id(), SequenceNumber::CANCELLED_READ)
+                                ]
+                            )]
+        ));
     } else {
         panic!("First scheduled transaction must be a ConsensusCommitPrologueV3 transaction.");
     }

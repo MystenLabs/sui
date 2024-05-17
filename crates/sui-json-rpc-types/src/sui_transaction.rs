@@ -35,7 +35,8 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::execution_status::ExecutionStatus;
 use sui_types::gas::GasCostSummary;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
-use sui_types::object::Owner;
+use sui_types::messages_consensus::ConsensusDeterminedVersionAssignments;
+use sui_types::object::{MoveObject, Owner};
 use sui_types::parse_sui_type_tag;
 use sui_types::quorum_driver_types::ExecuteTransactionRequestType;
 use sui_types::signature::GenericSignature;
@@ -491,8 +492,8 @@ impl SuiTransactionBlockKind {
                     round: p.round,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                     consensus_commit_digest: p.consensus_commit_digest,
-                    consensus_determined_version_assignment: p
-                        .consensus_determined_version_assignment,
+                    consensus_determined_version_assignments: p
+                        .consensus_determined_version_assignments,
                 })
             }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
@@ -587,8 +588,8 @@ impl SuiTransactionBlockKind {
                     round: p.round,
                     commit_timestamp_ms: p.commit_timestamp_ms,
                     consensus_commit_digest: p.consensus_commit_digest,
-                    consensus_determined_version_assignment: p
-                        .consensus_determined_version_assignment,
+                    consensus_determined_version_assignments: p
+                        .consensus_determined_version_assignments,
                 })
             }
             TransactionKind::ProgrammableTransaction(p) => Self::ProgrammableTransaction(
@@ -1620,8 +1621,7 @@ pub struct SuiConsensusCommitPrologueV3 {
     #[serde_as(as = "BigInt<u64>")]
     pub commit_timestamp_ms: u64,
     pub consensus_commit_digest: ConsensusCommitDigest,
-    pub consensus_determined_version_assignment:
-        Vec<(TransactionDigest, Vec<(ObjectID, SequenceNumber)>)>,
+    pub consensus_determined_version_assignments: ConsensusDeterminedVersionAssignments,
 }
 
 #[serde_as]

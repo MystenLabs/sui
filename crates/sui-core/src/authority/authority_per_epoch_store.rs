@@ -2690,7 +2690,6 @@ impl AuthorityPerEpochStore {
                 TransactionDigest,
                 Vec<(ObjectID, SequenceNumber)>
             )>| {
-                // info!("Additional cancelled_txns  {:?}", additional_cancelled_txns);
                 version_assignment.extend(additional_cancelled_txns);
             }
         );
@@ -2702,8 +2701,6 @@ impl AuthorityPerEpochStore {
         );
         match self.process_consensus_system_transaction(&transaction) {
             ConsensusCertificateResult::SuiTransaction(processed_tx) => {
-                info!("ZZZZZZZ size {:?} txn count {:?}", processed_tx.serialized_size(), transactions.len()+1);
-                info!("ZZZZZZZ txns {:?}", transactions);
                 roots.insert(processed_tx.key());
                 transactions.push_front(processed_tx);
             }

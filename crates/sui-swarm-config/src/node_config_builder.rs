@@ -417,7 +417,7 @@ impl FullnodeConfigBuilder {
                 // Set a shorter timeout for checkpoint content download in tests, since
                 // checkpoint pruning also happens much faster, and network is local.
                 state_sync: Some(StateSyncConfig {
-                    checkpoint_content_timeout_ms: Some(50_000),
+                    checkpoint_content_timeout_ms: Some(10_000),
                     ..Default::default()
                 }),
                 ..Default::default()

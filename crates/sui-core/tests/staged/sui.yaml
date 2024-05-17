@@ -251,14 +251,20 @@ ConsensusCommitPrologueV3:
     - commit_timestamp_ms: U64
     - consensus_commit_digest:
         TYPENAME: ConsensusCommitDigest
-    - consensus_determined_version_assignment:
-        SEQ:
-          TUPLE:
-            - TYPENAME: TransactionDigest
-            - SEQ:
-                TUPLE:
-                  - TYPENAME: ObjectID
-                  - TYPENAME: SequenceNumber
+    - consensus_determined_version_assignments:
+        TYPENAME: ConsensusDeterminedVersionAssignments
+ConsensusDeterminedVersionAssignments:
+  ENUM:
+    0:
+      CancelledTransactions:
+        NEWTYPE:
+          SEQ:
+            TUPLE:
+              - TYPENAME: TransactionDigest
+              - SEQ:
+                  TUPLE:
+                    - TYPENAME: ObjectID
+                    - TYPENAME: SequenceNumber
 Data:
   ENUM:
     0:
