@@ -66,15 +66,6 @@ Generic Move and native functions for group operations.
 ## Constants
 
 
-<a name="0x2_group_ops_EInvalidInput"></a>
-
-
-
-<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>: u64 = 1;
-</code></pre>
-
-
-
 <a name="0x2_group_ops_EInputTooLong"></a>
 
 
@@ -89,6 +80,15 @@ Generic Move and native functions for group operations.
 
 
 <pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidBufferLength">EInvalidBufferLength</a>: u64 = 3;
+</code></pre>
+
+
+
+<a name="0x2_group_ops_EInvalidInput"></a>
+
+
+
+<pre><code><b>const</b> <a href="group_ops.md#0x2_group_ops_EInvalidInput">EInvalidInput</a>: u64 = 1;
 </code></pre>
 
 
