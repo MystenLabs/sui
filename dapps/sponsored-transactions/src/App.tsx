@@ -54,8 +54,8 @@ export function App() {
 	const tx = useMemo(() => {
 		if (!currentAccount) return null;
 		const tx = new TransactionBlock();
-		const [coin] = tx.splitCoins(tx.gas, [tx.pure(1)]);
-		tx.transferObjects([coin], tx.pure(currentAccount.address));
+		const [coin] = tx.splitCoins(tx.gas, [1]);
+		tx.transferObjects([coin], currentAccount.address);
 		return tx;
 	}, [currentAccount]);
 
@@ -125,7 +125,7 @@ export function App() {
 								setLoading(true);
 								try {
 									const executed = await client.executeTransactionBlock({
-										transactionBlock: signedTx!.transactionBlockBytes,
+										transactionBlock: signedTx!.bytes,
 										signature: [signedTx!.signature, sponsoredTx!.signature],
 										options: {
 											showEffects: true,

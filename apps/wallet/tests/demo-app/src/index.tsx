@@ -97,7 +97,7 @@ function App() {
 					try {
 						await suiWallet.features[
 							'sui:signAndExecuteTransactionBlock'
-						].signAndExecuteTransactionBlock({
+						]!.signAndExecuteTransactionBlock({
 							transactionBlock: txb,
 							account: getAccount(accounts[0], useWrongAccounts),
 							chain: 'sui:unknown',
@@ -114,7 +114,7 @@ function App() {
 					setError(null);
 					const txb = getDemoTransaction(accounts[0]?.address || '');
 					try {
-						await suiWallet.features['sui:signTransactionBlock'].signTransactionBlock({
+						await suiWallet.features['sui:signTransactionBlock']!.signTransactionBlock({
 							transactionBlock: txb,
 							account: getAccount(accounts[0], useWrongAccounts),
 							chain: 'sui:unknown',

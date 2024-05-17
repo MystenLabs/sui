@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type { TransactionBlock } from '@mysten/sui/transactions';
 import type {
-	SuiSignTransactionBlockInput,
-	SuiSignTransactionBlockOutput,
+	SuiSignTransactionBlockV2Input,
+	SuiSignTransactionBlockV2Output,
 } from '@mysten/wallet-standard';
 import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
@@ -15,12 +16,18 @@ import {
 } from '../..//errors/walletErrors.js';
 import { walletMutationKeys } from '../../constants/walletMutationKeys.js';
 import type { PartialBy } from '../../types/utilityTypes.js';
+import { useSuiClient } from '../useSuiClient.js';
 import { useCurrentAccount } from './useCurrentAccount.js';
 import { useCurrentWallet } from './useCurrentWallet.js';
 
-type UseSignTransactionBlockArgs = PartialBy<SuiSignTransactionBlockInput, 'account' | 'chain'>;
+type UseSignTransactionBlockArgs = PartialBy<
+	Omit<SuiSignTransactionBlockV2Input, 'transactionBlock'>,
+	'account' | 'chain'
+> & {
+	transactionBlock: TransactionBlock | string;
+};
 
-type UseSignTransactionBlockResult = SuiSignTransactionBlockOutput;
+type UseSignTransactionBlockResult = SuiSignTransactionBlockV2Output;
 
 type UseSignTransactionBlockError =
 	| WalletFeatureNotSupportedError
@@ -51,10 +58,11 @@ export function useSignTransactionBlock({
 > {
 	const { currentWallet } = useCurrentWallet();
 	const currentAccount = useCurrentAccount();
+	const client = useSuiClient();
 
 	return useMutation({
 		mutationKey: walletMutationKeys.signTransactionBlock(mutationKey),
-		mutationFn: async (signTransactionBlockArgs) => {
+		mutationFn: async ({ transactionBlock, ...signTransactionBlockArgs }) => {
 			if (!currentWallet) {
 				throw new WalletNotConnectedError('No wallet is connected.');
 			}
@@ -66,7 +74,7 @@ export function useSignTransactionBlock({
 				);
 			}
 
-			const walletFeature = currentWallet.features['sui:signTransactionBlock'];
+			const walletFeature = currentWallet.features['sui:signTransactionBlock:v2'];
 			if (!walletFeature) {
 				throw new WalletFeatureNotSupportedError(
 					"This wallet doesn't support the `SignTransactionBlock` feature.",
@@ -75,6 +83,16 @@ export function useSignTransactionBlock({
 
 			return await walletFeature.signTransactionBlock({
 				...signTransactionBlockArgs,
+				transactionBlock: {
+					toJSON: async () => {
+						return typeof transactionBlock === 'string'
+							? transactionBlock
+							: await transactionBlock.toJSON({
+									supportedIntents: [],
+									client,
+							  });
+					},
+				},
 				account: signerAccount,
 				chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 			});

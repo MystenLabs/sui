@@ -4,7 +4,7 @@
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { TransactionBlock } from '@mysten/sui/transactions';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { Mock } from 'vitest';
+import { expect, type Mock } from 'vitest';
 
 import {
 	WalletFeatureNotSupportedError,
@@ -61,9 +61,25 @@ describe('useSignAndExecuteTransactionBlock', () => {
 		});
 
 		const suiClient = new SuiClient({ url: getFullnodeUrl('localnet') });
+		const mockSignMessageFeature = mockWallet.features['sui:signTransactionBlock:v2'];
+		const signTransactionBlock = mockSignMessageFeature!.signTransactionBlock as Mock;
+
+		signTransactionBlock.mockReturnValueOnce({
+			bytes: 'abc',
+			signature: '123',
+		});
+
+		const reportEffectsFeature = mockWallet.features['sui:reportTransactionBlockEffects'];
+		const reportEffects = reportEffectsFeature!.reportTransactionBlockEffects as Mock;
+
+		reportEffects.mockImplementation(async () => {});
+
 		const executeTransactionBlock = vi.spyOn(suiClient, 'executeTransactionBlock');
 
-		executeTransactionBlock.mockReturnValueOnce(Promise.resolve({ digest: '123' }));
+		executeTransactionBlock.mockResolvedValueOnce({
+			digest: '123',
+			rawEffects: [10, 20, 30],
+		});
 
 		const wrapper = createWalletProviderContextWrapper({}, suiClient);
 		const { result } = renderHook(
@@ -95,12 +111,20 @@ describe('useSignAndExecuteTransactionBlock', () => {
 			expect(result.current.useSignAndExecuteTransactionBlock.isSuccess).toBe(true),
 		);
 		expect(result.current.useSignAndExecuteTransactionBlock.data).toStrictEqual({
+			bytes: 'abc',
 			digest: '123',
-		});
-		expect(suiClient.executeTransactionBlock).toHaveBeenCalledWith({
-			transactionBlock: 'abc',
+			effects: 'ChQe',
 			signature: '123',
 		});
+		expect(reportEffects).toHaveBeenCalledWith({
+			effects: 'ChQe',
+		});
+
+		const call = signTransactionBlock.mock.calls[0];
+
+		expect(call[0].account).toStrictEqual(mockWallet.accounts[0]);
+		expect(call[0].chain).toBe('sui:testnet');
+		expect(await call[0].transactionBlock.toJSON()).toEqual(await new TransactionBlock().toJSON());
 
 		act(() => unregister());
 	});
