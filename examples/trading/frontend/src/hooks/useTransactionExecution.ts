@@ -24,7 +24,7 @@ export function useTransactionExecution() {
       });
 
       const res = await client.executeTransactionBlock({
-        transactionBlock: signature.transactionBlockBytes,
+        transactionBlock: signature.bytes,
         signature: signature.signature,
         options: {
           showEffects: true,

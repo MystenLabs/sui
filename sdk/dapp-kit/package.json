@@ -29,7 +29,7 @@
 	"scripts": {
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-dapp-kit",
-		"test": "pnpm test:typecheck && pnpm vitest",
+		"test": "pnpm test:typecheck && pnpm vitest run",
 		"test:typecheck": "tsc -b ./test",
 		"prepublishOnly": "pnpm build",
 		"size": "size-limit",

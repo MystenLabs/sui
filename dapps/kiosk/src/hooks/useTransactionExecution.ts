@@ -26,7 +26,7 @@ export function useTransactionExecution() {
 		const signedTx = await signTransactionBlock({ transactionBlock: tx });
 
 		const res = await provider.executeTransactionBlock({
-			transactionBlock: signedTx.transactionBlockBytes,
+			transactionBlock: signedTx.bytes,
 			signature: signedTx.signature,
 			options,
 		});
