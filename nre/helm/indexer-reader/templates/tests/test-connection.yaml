@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "indexer-reader.name" . }}-test-connection"
+  labels:
+    {{- include "indexer-reader.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: curl
+      image: curlimages/curl
+      command: ["sh", "-c", "curl http://{{ include "indexer-reader.name" . }}.svc.cluster.local:{{ .Values.service.port }} -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\", \"method\":\"sui_getObject\", \"params\":[\"0x2\"], \"id\":1}'"]
+      restartPolicy: Never

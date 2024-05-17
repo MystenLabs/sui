@@ -1,17 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "graphql.fullname" . }}
-  namespace: {{ .Values.namespace | default .Release.Namespace }}
+  name: {{ include "indexer-writer.fullname" . }}
   labels:
-    {{- include "graphql.labels" . | nindent 4 }}
+    {{- include "indexer-writer.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "graphql.selectorLabels" . | nindent 6 }}
+      {{- include "indexer-writer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -19,7 +18,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "graphql.labels" . | nindent 8 }}
+        {{- include "indexer-writer.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -28,7 +27,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "graphql.serviceAccountName" . }}
+      serviceAccountName: {{ include "indexer-writer.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -37,14 +36,13 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: {{ .Values.command }}
-          {{ if $.Values.env }}
+          {{- if $.Values.env }}
           env:
           {{- range $name, $item := .Values.env }}
             - name: {{ $name }}
               {{- $item | toYaml | nindent 14 }}
             {{- end }}
-          {{- end }}
+          {{- end }}          
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

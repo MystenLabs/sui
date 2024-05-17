@@ -1,0 +1,22 @@
+{{- range .Values.multiClusterServices }}
+apiVersion: networking.gke.io/v1
+kind: MultiClusterService
+metadata:
+  name: {{ .name }}
+  annotations:
+    beta.cloud.google.com/backend-config: {{ .annotations.backendConfig | quote }}
+spec:
+  template:
+    spec:
+      selector:
+        app: {{ .selector.app }}
+      ports:
+      {{- range .ports }}
+      - name: {{ .name }}
+        protocol: {{ .protocol }}
+        port: {{ .port }}
+        targetPort: {{ .targetPort }}
+      {{- end }}
+---
+{{- end }}
+

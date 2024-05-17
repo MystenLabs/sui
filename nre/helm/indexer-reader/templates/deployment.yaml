@@ -5,8 +5,27 @@ metadata:
   labels:
     {{- include "indexer-reader.labels" . | nindent 4 }}
 spec:
+  {{- if .Values.minReadySeconds }}
+  minReadySeconds: {{ .Values.minReadySeconds }}
+  {{- end }}
+  {{- if .Values.minReadySeconds }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- end }}
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  {{- if .Values.strategy }}
+  strategy:
+    type: {{ .Values.strategy.type }} 
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+      rollingUpdate:
+        {{- if .Values.strategy.rollingupdate.maxSurge }}
+        maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+        {{- end }}
+        {{- if .Values.strategy.rollingupdate.maxUnavailable }}
+        maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavaialable }}
+        {{- end }}
+    {{- end }}
   {{- end }}
   selector:
     matchLabels:
@@ -36,6 +55,13 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if $.Values.env }}
+          env:
+          {{- range $name, $item := .Values.env }}
+            - name: {{ $name }}
+              {{- $item | toYaml | nindent 14 }}
+            {{- end }}
+          {{- end }}
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

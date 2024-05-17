@@ -1,0 +1,21 @@
+{{- range .Values.backendConfigs }}
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: {{ .name }}
+spec:
+  healthCheck:
+    checkIntervalSec: {{ .healthCheck.checkIntervalSec }}
+    timeoutSec: {{ .healthCheck.timeoutSec }}
+    healthyThreshold: {{ .healthCheck.healthyThreshold }}
+    unhealthyThreshold: {{ .healthCheck.unhealthyThreshold }}
+    type: {{ .healthCheck.type }}
+    requestPath: {{ .healthCheck.requestPath }}
+    port: {{ .healthCheck.port }}
+  securityPolicy:
+    name: "{{ .securityPolicy.name }}"
+  sessionAffinity:
+    affinityType: "{{ .sessionAffinity.affinityType }}"
+---
+{{- end }}
+

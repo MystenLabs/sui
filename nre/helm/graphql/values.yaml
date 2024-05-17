@@ -2,13 +2,56 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+
+# DB_URL could conatin sensitive info so create a k8s secret outside of this helm chart. This helm chart will expect the secret to be loaded as an env var.
+# Example: kubectl create secret generic db_url --from-literal=password=<actual db url> --namespace graphql
+#
+# RPC_URL is also expected to be an env var so the command properly populates
+command: ["/opt/sui/bin/sui-graphql-rpc", "start-server","--host","0.0.0.0","--port","8001","--db-url","$DB_URL","--node-rpc-url", "$RPC_URL","--config","/opt/sui/config/graphql.toml","--ide-title","Sui RPC2.0 GraphQL"]
+
+configMapName: graphql-testnet-toml
+
+env:
+  RUST_BACKTRACE:
+    value: 1
+  RUST_LOG:
+    value: "info,jsonrpsee=error,jsonrpsee_types=error"
+  RUST_JSON_LOG:
+    value: true
+  DB_CONNECTION_TIMEOUT:
+    value: 3600
+  DB_STATEMENT_TIMEOUT:
+    value: 3600
+  CHECKPOINT_COMIT_BATCH_SIZE:
+    value: 300
+  RPC_URL: 
+    value: "https://public-rpc.mainnet.sui.io" # you will want to point this to a local fullnode instance like http://<servicename>.<namespace>.svc.cluster.local:900
+  DB_URL:
+    valueFrom:
+      secretKeyRef:
+        name: "indexer-reader-db-secret"
+        key: "db-url"
+
+# Additional volumes on the output Deployment definition.
+volumes:
+ - name: graphql-testnet-toml
+   configMap:
+    name: graphql-testnet-toml
+
+# Additional volumeMounts on the output Deployment definition.
+volumeMounts:
+ - name: graphql-testnet-toml
+   mountPath: "/opt/sui/config/graphql.toml"
+   subPath: "graphql.toml"
+   readOnly: true
+
 replicaCount: 3
 
 image:
   repository: "mysten/sui-graphql-rpc"
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+  tag: "sui-graphql-rpc-v2024.4.0-release"
 
 
 imagePullSecrets: []
@@ -26,7 +69,11 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: "graphql-sa"
 
-podAnnotations: {}
+podAnnotations:
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "9184"
+  prometheus.io/scrape: "true"
+
 podLabels: {}
 
 podSecurityContext: {}
@@ -48,10 +95,7 @@ ingress:
   enabled: false
   className: ""
   annotations:
-    prometheus.io/path: "/metrics"
-    prometheus.io/port: "9184"
-    prometheus.io/scrape: "true"
-    # kubernetes.io/tls-acme: "true"
+        # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
       paths:
