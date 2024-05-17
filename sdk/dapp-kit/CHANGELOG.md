@@ -1,5 +1,13 @@
 # @mysten/dapp-kit
 
+## 0.13.2
+
+### Patch Changes
+
+- 3f8b08dedc: Fix broken theme style tag in canary versions of React when the provider is placed outside of the body tag
+- Updated dependencies [eeb19db837]
+  - @mysten/zksend@0.8.2
+
 ## 0.13.1
 
 ### Patch Changes

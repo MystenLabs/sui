@@ -1,5 +1,11 @@
 # @mysten/zksend
 
+## 0.8.2
+
+### Patch Changes
+
+- eeb19db837: Update stashed icon
+
 ## 0.8.1
 
 ### Patch Changes
