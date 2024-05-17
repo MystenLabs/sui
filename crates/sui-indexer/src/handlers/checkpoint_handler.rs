@@ -123,6 +123,13 @@ where
     T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
+        let cp_download_lag = chrono::Utc::now().timestamp_millis()
+            - checkpoint.checkpoint_summary.timestamp_ms as i64;
+        info!(
+            "checkpoint download lag for cp {}: {} ms",
+            checkpoint.checkpoint_summary.sequence_number, cp_download_lag
+        );
+        self.metrics.download_lag_ms.set(cp_download_lag);
         let checkpoint_data = Self::index_checkpoint(
             self.state.clone().into(),
             checkpoint.clone(),
