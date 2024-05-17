@@ -40,7 +40,7 @@ use sui_swarm_config::network_config::NetworkConfig;
 use sui_swarm_config::network_config_builder::ConfigBuilder;
 use sui_swarm_config::node_config_builder::FullnodeConfigBuilder;
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{SignatureScheme, SuiKeyPair};
+use sui_types::crypto::{SignatureScheme, SuiKeyPair, ToFromBytes};
 use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
@@ -404,7 +404,7 @@ impl SuiCommand {
                         sui_address,
                         &gas_obj_ref,
                         bridge_arg,
-                        kp,
+                        kp.public().as_bytes().to_vec(),
                         &format!("http://127.0.0.1:{port}"),
                         rgp,
                     )

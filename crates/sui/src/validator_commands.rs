@@ -34,10 +34,8 @@ use fastcrypto::{
 };
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use sui_bridge::config::BridgeNodeConfig;
 use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
-use sui_config::Config;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
@@ -169,9 +167,9 @@ pub enum SuiValidatorCommand {
     },
     /// Sui native bridge committee member registration
     BridgeCommitteeRegistration {
-        /// Path to bridge node config
+        /// Path to Bridge Authority Key file
         #[clap(long)]
-        bridge_node_config_path: PathBuf,
+        bridge_authority_key_path: PathBuf,
         /// Bridge authority URL which clients collects action signatures from
         #[clap(long)]
         bridge_authority_url: String,
@@ -469,24 +467,19 @@ impl SuiValidatorCommand {
                 }
             }
             SuiValidatorCommand::BridgeCommitteeRegistration {
-                bridge_node_config_path,
+                bridge_authority_key_path,
                 bridge_authority_url,
             } => {
-                let bridge_config = match BridgeNodeConfig::load(bridge_node_config_path) {
-                    Ok(config) => config,
-                    Err(e) => panic!("Couldn't load BridgeNodeConfig, caused by: {e}"),
-                };
                 // Read bridge keypair
-                let ecdsa_keypair = match read_key(&bridge_config.bridge_authority_key_path, true)?
-                {
+                let ecdsa_keypair = match read_key(&bridge_authority_key_path, true)? {
                     SuiKeyPair::Secp256k1(key) => key,
                     _ => unreachable!("we required secp256k1 key in `read_key`"),
                 };
 
                 let address = context.active_address()?;
                 println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {}", ecdsa_keypair.public);
-
-                let bridge_client = SuiBridgeClient::new(&bridge_config.sui.sui_rpc_url).await?;
+                let sui_rpc_url = &context.config.get_active_env().unwrap().rpc;
+                let bridge_client = SuiBridgeClient::new(sui_rpc_url).await?;
                 let bridge = bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
@@ -501,7 +494,7 @@ impl SuiValidatorCommand {
                     address,
                     &gas,
                     bridge,
-                    ecdsa_keypair,
+                    ecdsa_keypair.public().as_bytes().to_vec(),
                     &bridge_authority_url,
                     gas_price,
                 )
