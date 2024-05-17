@@ -422,15 +422,15 @@ export class TransactionBlock {
 	}
 	makeMoveVec({
 		type,
-		objects,
+		elements,
 	}: {
-		objects: (TransactionObjectArgument | string)[];
+		elements: (TransactionObjectArgument | string)[];
 		type?: string;
 	}) {
 		return this.add(
 			Transactions.MakeMoveVec({
 				type,
-				objects: objects.map((obj) => this.object(obj)),
+				elements: elements.map((obj) => this.object(obj)),
 			}),
 		);
 	}
@@ -545,8 +545,8 @@ export class TransactionBlock {
 	async prepareForSerialization(options: SerializeTransactionBlockOptions) {
 		const intents = new Set<string>();
 		for (const transaction of this.#blockData.transactions) {
-			if (transaction.Intent && options.supportedIntents) {
-				intents.add(transaction.Intent.name);
+			if (transaction.$Intent && options.supportedIntents) {
+				intents.add(transaction.$Intent.name);
 			}
 		}
 

@@ -128,7 +128,7 @@ async function retrieveAllPools() {
 		data.push(...page.data);
 	}
 	return data.map((event) => {
-		return PoolCreated.fromB58(event.bcs);
+		return PoolCreated.fromBase64(event.bcs);
 	});
 }
 
@@ -139,7 +139,7 @@ async function retrieveExpiredOrders(poolId: string) {
 	switch (poolData.dataType) {
 		// Pool is a move object
 		case 'moveObject': {
-			let pool = Pool.fromB64(poolData.bcsBytes);
+			let pool = Pool.fromBase64(poolData.bcsBytes);
 			let asks = await getAllDFPages(pool.asks.leaves.id);
 			let bids = await getAllDFPages(pool.bids.leaves.id);
 
@@ -156,8 +156,8 @@ async function retrieveExpiredOrders(poolId: string) {
 									let tickLevelBcs = response.data?.bcs!;
 									switch (tickLevelBcs.dataType) {
 										case 'moveObject': {
-											return Field(bcs.u64(), Leaf(TickLevel)).fromB64(tickLevelBcs.bcsBytes).value
-												.value;
+											return Field(bcs.u64(), Leaf(TickLevel)).fromBase64(tickLevelBcs.bcsBytes)
+												.value.value;
 										}
 									}
 								} else {
@@ -200,8 +200,8 @@ async function createCleanUpTransaction(poolOrders: { pool: any; expiredOrders: 
 		let orderIds = poolOrder.expiredOrders.map((order) => tx.object(order.order_id));
 		let orderOwners = poolOrder.expiredOrders.map((order) => tx.pure.address(order.owner));
 
-		let orderIdVec = tx.makeMoveVec({ objects: orderIds, type: 'u64' });
-		let orderOwnerVec = tx.makeMoveVec({ objects: orderOwners, type: 'address' });
+		let orderIdVec = tx.makeMoveVec({ elements: orderIds, type: 'u64' });
+		let orderOwnerVec = tx.makeMoveVec({ elements: orderOwners, type: 'address' });
 
 		tx.moveCall({
 			target: `0xdee9::clob_v2::clean_up_expired_orders`,
@@ -254,7 +254,7 @@ async function getOrders(ids: string[]) {
 							let objBCS = response.data?.bcs!;
 							switch (objBCS.dataType) {
 								case 'moveObject': {
-									return Field(bcs.u64(), Node(Order)).fromB64(objBCS.bcsBytes).value.value;
+									return Field(bcs.u64(), Node(Order)).fromBase64(objBCS.bcsBytes).value.value;
 								}
 							}
 						} else {

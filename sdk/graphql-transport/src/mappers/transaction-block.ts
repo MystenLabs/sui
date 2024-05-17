@@ -268,7 +268,7 @@ function mapTransaction(transaction: typeof bcs.Transaction.$inferType): SuiTran
 			return {
 				MakeMoveVec: [
 					transaction.MakeMoveVec.type,
-					transaction.MakeMoveVec.objects.map(mapTransactionArgument),
+					transaction.MakeMoveVec.elements.map(mapTransactionArgument),
 				],
 			};
 		}

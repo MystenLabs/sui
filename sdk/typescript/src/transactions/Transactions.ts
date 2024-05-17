@@ -140,16 +140,16 @@ export const Transactions = {
 	},
 	MakeMoveVec({
 		type,
-		objects,
+		elements,
 	}: {
 		type?: string;
-		objects: Input<typeof Argument>[];
+		elements: Input<typeof Argument>[];
 	}): TransactionShape<'MakeMoveVec'> {
 		return {
 			$kind: 'MakeMoveVec',
 			MakeMoveVec: {
 				type: type ?? null,
-				objects: objects.map((o) => parse(Argument, o)),
+				elements: elements.map((o) => parse(Argument, o)),
 			},
 		};
 	},
