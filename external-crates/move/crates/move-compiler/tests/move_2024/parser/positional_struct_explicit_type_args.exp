@@ -2,7 +2,7 @@ error[E03022]: invalid usage position
    ┌─ tests/move_2024/parser/positional_struct_explicit_type_args.move:16:17
    │
 16 │         let _ = Foo <u64>(0);
-   │                 ^^^ Expected local or constant, found struct 'Foo' in module '0x42::M' instead.
+   │                 ^^^ Expected a local or constant, but found struct 'Foo' in current scope
    │
    = Structs with positional arguments must be written as 'Foo<T>( ... )'
 

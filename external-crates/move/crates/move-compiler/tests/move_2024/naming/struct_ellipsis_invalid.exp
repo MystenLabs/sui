@@ -1,14 +1,20 @@
 error[E03013]: positional call mismatch
   ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:6:13
   │
+3 │     public struct Y{}
+  │                   - 'Y' is declared here
+  ·
 6 │         let Y(..) = x;
-  │             ^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+  │             ^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:10:13
    │
+ 3 │     public struct Y{}
+   │                   - 'Y' is declared here
+   ·
 10 │         let Y(x, ..) = x;
-   │             ^^^^^^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+   │             ^^^^^^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E03010]: unbound field
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:10:13
@@ -27,20 +33,29 @@ warning[W09002]: unused variable
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:14:13
    │
+ 3 │     public struct Y{}
+   │                   - 'Y' is declared here
+   ·
 14 │         let Y() = x;
-   │             ^^^ Invalid deconstruction. Named struct field declarations require named deconstruction
+   │             ^^^ Invalid struct deconstruction. Named struct declarations require named deconstructions
 
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:18:13
    │
+ 2 │     public struct X()
+   │                   - 'X' is declared here
+   ·
 18 │         let X{..} = x;
-   │             ^^^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+   │             ^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:22:13
    │
+ 2 │     public struct X()
+   │                   - 'X' is declared here
+   ·
 22 │         let X{x, ..} = x;
-   │             ^^^^^^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+   │             ^^^^^^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 
 error[E03010]: unbound field
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:22:13
@@ -59,6 +74,9 @@ warning[W09002]: unused variable
 error[E03013]: positional call mismatch
    ┌─ tests/move_2024/naming/struct_ellipsis_invalid.move:26:13
    │
+ 2 │     public struct X()
+   │                   - 'X' is declared here
+   ·
 26 │         let X{} = x;
-   │             ^^^ Invalid deconstruction. Positional struct field declarations require positional deconstruction
+   │             ^^^ Invalid struct deconstruction. Positional struct declarations require positional deconstructions
 

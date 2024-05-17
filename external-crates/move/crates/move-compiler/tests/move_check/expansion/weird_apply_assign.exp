@@ -8,7 +8,7 @@ error[E03022]: invalid usage position
   ┌─ tests/move_check/expansion/weird_apply_assign.move:7:9
   │
 7 │         S f = S { f: 0 };
-  │         ^ Expected local or constant, found struct 'S' in module '0x42::M' instead.
+  │         ^ Expected a local or constant, but found struct 'S' in current scope
   │
   = Struct with named arguments must be written as 'S { ... }'
 
