@@ -69,12 +69,12 @@ describe('Keypair', () => {
 		);
 	});
 
-	it('`signTransactionBlock()` should correctly sign a transaction block', async () => {
+	it('`signTransaction()` should correctly sign a transaction block', async () => {
 		const data = new Uint8Array([0, 0, 0, 5, 72, 101, 108, 108, 111]);
 
-		const sig1 = await k1.signTransactionBlock(data);
-		const sig2 = await k2.signTransactionBlock(data);
-		const sig3 = await k3.signTransactionBlock(data);
+		const sig1 = await k1.signTransaction(data);
+		const sig2 = await k2.signTransaction(data);
+		const sig3 = await k3.signTransaction(data);
 
 		expect(sig1.bytes).toEqual(toB64(data));
 		expect(sig1.bytes).toEqual('AAAABUhlbGxv');

@@ -430,13 +430,7 @@ First, initialize your backend project. To do this, you need to follow these ste
 - Create a new file named `init.ts`
 
 ```typescript title='init.ts'
-import {
-	Connection,
-	Ed25519Keypair,
-	JsonRpcProvider,
-	RawSigner,
-	TransactionBlock,
-} from '@mysten/sui';
+import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, Transaction } from '@mysten/sui';
 import * as dotenv from 'dotenv';
 
 import { City } from './city';
@@ -474,43 +468,43 @@ async function addCityWeather() {
 	});
 
 	let counter = 0;
-	let transactionBlock = new TransactionBlock();
+	let transaction = new Transaction();
 	for (let c in cities) {
 		if (
 			!geonames.includes(cities[c].geonameid) &&
 			thousandGeoNameIds.includes(cities[c].geonameid)
 		) {
-			transactionBlock.moveCall({
+			transaction.moveCall({
 				target: `${packageId}::${moduleName}::add_city`,
 				arguments: [
-					transactionBlock.object(adminCap), // adminCap
-					transactionBlock.object(weatherOracleId), // WeatherOracle
-					transactionBlock.pure(cities[c].geonameid), // geoname_id
-					transactionBlock.pure(cities[c].asciiname), // asciiname
-					transactionBlock.pure(cities[c].countryCode), // country
-					transactionBlock.pure(cities[c].latitude * latitudeMultiplier), // latitude
-					transactionBlock.pure(cities[c].latitude > 0), // positive_latitude
-					transactionBlock.pure(cities[c].longitude * longitudeMultiplier), // longitude
-					transactionBlock.pure(cities[c].longitude > 0), // positive_longitude
+					transaction.object(adminCap), // adminCap
+					transaction.object(weatherOracleId), // WeatherOracle
+					transaction.pure(cities[c].geonameid), // geoname_id
+					transaction.pure(cities[c].asciiname), // asciiname
+					transaction.pure(cities[c].countryCode), // country
+					transaction.pure(cities[c].latitude * latitudeMultiplier), // latitude
+					transaction.pure(cities[c].latitude > 0), // positive_latitude
+					transaction.pure(cities[c].longitude * longitudeMultiplier), // longitude
+					transaction.pure(cities[c].longitude > 0), // positive_longitude
 				],
 			});
 
 			counter++;
 			if (counter === NUMBER_OF_CITIES) {
-				await signAndExecuteTransactionBlock(transactionBlock);
+				await signAndExecuteTransaction(transaction);
 				counter = 0;
-				transactionBlock = new TransactionBlock();
+				transaction = new Transaction();
 			}
 		}
 	}
-	await signAndExecuteTransactionBlock(transactionBlock);
+	await signAndExecuteTransaction(transaction);
 }
 
-async function signAndExecuteTransactionBlock(transactionBlock: TransactionBlock) {
-	transactionBlock.setGasBudget(5000000000);
+async function signAndExecuteTransaction(transaction: Transaction) {
+	transaction.setGasBudget(5000000000);
 	await signer
-		.signAndExecuteTransactionBlock({
-			transactionBlock,
+		.signAndExecuteTransaction({
+			transaction,
 			requestType: 'WaitForLocalExecution',
 			options: {
 				showObjectChanges: true,
@@ -527,7 +521,7 @@ addCityWeather();
 
 The code of init.ts does the following:
 
-- Imports the necessary modules and classes from the library, such as `Connection`, `Ed25519Keypair`, `JsonRpcProvider`, `RawSigner`, and `TransactionBlock`.
+- Imports the necessary modules and classes from the library, such as `Connection`, `Ed25519Keypair`, `JsonRpcProvider`, `RawSigner`, and `Transaction`.
 - Imports the `dotenv` module to load environment variables from a .env file.
 - Imports some custom modules and functions from the local files, such as `City`, `get1000Geonameids`, `getCities`, `getWeatherOracleDynamicFields`, and `logger`.
 - Derives a key pair from a phrase stored in the `ADMIN_PHRASE` environment variable.
@@ -542,19 +536,13 @@ The code of init.ts does the following:
   - Initializes a counter and a transaction block object.
   - Loops through the cities array and checks if the city's geonameid is not in the weather oracle dynamic fields array and is in the 1,000 geonameids array.
   - If the condition is met, adds a `moveCall` to the transaction block, which calls the `add_city` method of the weather oracle contract with the city's information, such as `geonameid`, `asciiname`, `country`, `latitude`, and `longitude`.
-  - Increments the counter and checks if it reaches the `NUMBER_OF_CITIES`. If so, calls another async function, `signAndExecuteTransactionBlock`, with the transaction block as an argument, which signs and executes the transaction block on the blockchain and logs the result. The code then resets the counter and the transaction block.
-  - After the loop ends, calls the `signAndExecuteTransactionBlock` function again with the remaining transaction block.
+  - Increments the counter and checks if it reaches the `NUMBER_OF_CITIES`. If so, calls another async function, `signAndExecuteTransaction`, with the transaction block as an argument, which signs and executes the transaction block on the blockchain and logs the result. The code then resets the counter and the transaction block.
+  - After the loop ends, calls the `signAndExecuteTransaction` function again with the remaining transaction block.
 
 You have now initialized the `WeatherOracle` shared object. The next step is to learn how to update them every 10 minutes with the latest weather data from the OpenWeatherMap API.
 
 ```typescript title='index.ts'
-import {
-	Connection,
-	Ed25519Keypair,
-	JsonRpcProvider,
-	RawSigner,
-	TransactionBlock,
-} from '@mysten/sui';
+import { Connection, Ed25519Keypair, JsonRpcProvider, RawSigner, Transaction } from '@mysten/sui';
 import * as dotenv from 'dotenv';
 
 import { City } from './city';
@@ -603,10 +591,10 @@ async function performUpdates(
 	for (let i = 0; i < filteredCities.length; i += CHUNK_SIZE) {
 		const chunk = filteredCities.slice(i, i + CHUNK_SIZE);
 
-		let transactionBlock = await getTransactionBlock(chunk);
+		let transaction = await getTransaction(chunk);
 		try {
-			await signer.signAndExecuteTransactionBlock({
-				transactionBlock,
+			await signer.signAndExecuteTransaction({
+				transaction,
 			});
 		} catch (e) {
 			logger.error(e);
@@ -622,38 +610,38 @@ async function performUpdates(
 	);
 }
 
-async function getTransactionBlock(cities: City[]) {
-	let transactionBlock = new TransactionBlock();
+async function getTransaction(cities: City[]) {
+	let transaction = new Transaction();
 
 	let counter = 0;
 	for (let c in cities) {
 		const weatherData = await getWeatherData(cities[c].latitude, cities[c].longitude, appid);
 		counter++;
 		if (weatherData?.main?.temp !== undefined) {
-			transactionBlock.moveCall({
+			transaction.moveCall({
 				target: `${packageId}::${moduleName}::update`,
 				arguments: [
-					transactionBlock.object(adminCap), // AdminCap
-					transactionBlock.object(weatherOracleId), // WeatherOracle
-					transactionBlock.pure(cities[c].geonameid), // geoname_id
-					transactionBlock.pure(weatherData.weather[0].id), // weather_id
-					transactionBlock.pure(weatherData.main.temp * tempMultiplier), // temp
-					transactionBlock.pure(weatherData.main.pressure), // pressure
-					transactionBlock.pure(weatherData.main.humidity), // humidity
-					transactionBlock.pure(weatherData.visibility), // visibility
-					transactionBlock.pure(weatherData.wind.speed * windSpeedMultiplier), // wind_speed
-					transactionBlock.pure(weatherData.wind.deg), // wind_deg
-					transactionBlock.pure(
+					transaction.object(adminCap), // AdminCap
+					transaction.object(weatherOracleId), // WeatherOracle
+					transaction.pure(cities[c].geonameid), // geoname_id
+					transaction.pure(weatherData.weather[0].id), // weather_id
+					transaction.pure(weatherData.main.temp * tempMultiplier), // temp
+					transaction.pure(weatherData.main.pressure), // pressure
+					transaction.pure(weatherData.main.humidity), // humidity
+					transaction.pure(weatherData.visibility), // visibility
+					transaction.pure(weatherData.wind.speed * windSpeedMultiplier), // wind_speed
+					transaction.pure(weatherData.wind.deg), // wind_deg
+					transaction.pure(
 						weatherData.wind.gust === undefined ? [] : [weatherData.wind.gust * windGustMultiplier],
 						'vector<u16>',
 					), // wind_gust
-					transactionBlock.pure(weatherData.clouds.all), // clouds
-					transactionBlock.pure(weatherData.dt), // dt
+					transaction.pure(weatherData.clouds.all), // clouds
+					transaction.pure(weatherData.dt), // dt
 				],
 			});
 		} else logger.warn(`No weather data for ${cities[c].asciiname} `);
 	}
-	return transactionBlock;
+	return transaction;
 }
 
 async function run() {
@@ -674,10 +662,10 @@ The code in index.ts does the following:
 - Defines some constants, such as `CHUNK_SIZE`, `MS`, `MINUTE`, and `TEN_MINUTES`. These constants are used to control the frequency and size of the updates that the code performs.
 - Defines an async function called `performUpdates`, which takes two arguments: `cities` and `weatherOracleDynamicFields`. This function is the main logic of the code, and it does the following:
   - Filters the `cities` array based on the `weatherOracleDynamicFields` array, which contains the names and object IDs of the weather oracle dynamic fields that the code needs to update.
-  - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransactionBlock`, which returns a transaction block that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the OpenWeatherMap API.
+  - Loops through the filtered cities in chunks of `CHUNK_SIZE`, and for each chunk, it calls another async function called `getTransaction`, which returns a transaction block that contains the Move calls to update the weather oracle dynamic fields with the latest weather data from the OpenWeatherMap API.
   - Tries to sign and execute the transaction block using the signer, and catches any errors that may occur.
   - Calculates the time it took to perform the updates, and sets a timeout to call itself again after `TEN_MINUTES` minus the elapsed time.
-- The code defines another async function called `getTransactionBlock`, which takes one argument: `cities`. This function does the following:
+- The code defines another async function called `getTransaction`, which takes one argument: `cities`. This function does the following:
   - Creates a new transaction block object.
   - Loops through the `cities` array, and for each city, it calls another async function called `getWeatherData`, which takes the `latitude`, `longitude`, and `appid` as arguments, and returns the weather data for the city from the OpenWeatherMap API.
   - Checks if the weather data is valid, and if so, adds a Move call to the transaction block, which calls the `update` function of the target package and module, and passes the admin cap, the weather oracle id, the geoname id, and the weather data as arguments.

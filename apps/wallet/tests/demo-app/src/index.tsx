@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type SuiWallet } from '_src/dapp-interface/WalletStandardInterface';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { getWallets, ReadonlyWalletAccount, type Wallet } from '@mysten/wallet-standard';
 import { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 
 function getDemoTransaction(address: string) {
-	const txb = new TransactionBlock();
+	const txb = new Transaction();
 	const [coin] = txb.splitCoins(txb.gas, [1]);
 	txb.transferObjects([coin], address);
 	return txb;

@@ -1,9 +1,9 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useSignTransactionBlock, useSuiClient } from '@mysten/dapp-kit';
+import { useSignTransaction, useSuiClient } from '@mysten/dapp-kit';
 import { SuiTransactionBlockResponseOptions } from '@mysten/sui/client';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 
 // A helper to execute transactions by:
 // 1. Signing them using the wallet
@@ -12,18 +12,17 @@ export function useTransactionExecution() {
 	const provider = useSuiClient();
 
 	// sign transaction from the wallet
-	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
+	const { mutateAsync: signTransaction } = useSignTransaction();
 
-	// tx: TransactionBlock
+	// tx: Transaction
 	const signAndExecute = async ({
 		tx,
 		options = { showEffects: true },
 	}: {
-		tx: TransactionBlock;
+		tx: Transaction;
 		options?: SuiTransactionBlockResponseOptions | undefined;
 	}) => {
-		// @ts-expect-error: This is an issue with type references not working together:
-		const signedTx = await signTransactionBlock({ transactionBlock: tx });
+		const signedTx = await signTransaction({ transaction: tx });
 
 		const res = await provider.executeTransactionBlock({
 			transactionBlock: signedTx.bytes,

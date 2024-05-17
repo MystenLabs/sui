@@ -11,7 +11,12 @@ export function createMockAccount(accountOverrides: Partial<WalletAccount> = {})
 		address: keypair.getPublicKey().toSuiAddress(),
 		publicKey: keypair.getPublicKey().toSuiBytes(),
 		chains: ['sui:unknown'],
-		features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
+		features: [
+			'sui:signAndExecuteTransactionBlock',
+			'sui:signTransactionBlock',
+			'sui:signAndExecuteTransaction',
+			'sui:signTransaction',
+		],
 		...accountOverrides,
 	});
 }

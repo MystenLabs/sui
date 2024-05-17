@@ -3,7 +3,7 @@
 
 import { expect, test } from 'vitest';
 
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { setup } from './utils/setup';
 
 test('subscribeTransaction', async () => {
@@ -20,12 +20,12 @@ test('subscribeTransaction', async () => {
 					},
 				});
 
-				const tx = new TransactionBlock();
+				const tx = new Transaction();
 				const [coin] = tx.splitCoins(tx.gas, [1]);
 				tx.transferObjects([coin], toolbox.address());
-				await toolbox.client.signAndExecuteTransactionBlock({
+				await toolbox.client.signAndExecuteTransaction({
 					signer: toolbox.keypair,
-					transactionBlock: tx,
+					transaction: tx,
 				});
 			} catch (e) {
 				reject(e);

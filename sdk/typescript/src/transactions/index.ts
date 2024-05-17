@@ -5,33 +5,33 @@ export { normalizedTypeToMoveTypeSignature, getPureBcsSchema } from './serialize
 
 export { Inputs } from './Inputs.js';
 export {
-	Transactions,
+	Commands,
 	type TransactionArgument,
-	type TransactionBlockInput,
+	type TransactionInput,
 	UpgradePolicy,
-} from './Transactions.js';
+} from './Commands.js';
 
 export {
-	TransactionBlock,
-	isTransactionBlock,
+	Transaction,
+	isTransaction,
 	type TransactionObjectInput,
 	type TransactionObjectArgument,
 	type TransactionResult,
-} from './TransactionBlock.js';
+} from './Transaction.js';
 
-export { type SerializedTransactionBlockDataV2 } from './blockData/v2.js';
-export { type SerializedTransactionBlockDataV1 } from './blockData/v1.js';
+export { type SerializedTransactionDataV2 } from './data/v2.js';
+export { type SerializedTransactionDataV1 } from './data/v1.js';
 
 export type {
-	TransactionBlockData,
+	TransactionData,
 	Argument,
 	ObjectRef,
 	GasData,
 	CallArg,
-	Transaction,
+	Command,
 	OpenMoveTypeSignature,
 	OpenMoveTypeSignatureBody,
-} from './blockData/internal.js';
+} from './data/internal.js';
 
-export { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-export { ObjectCache, CachingTransactionBlockExecutor, AsyncCache } from './ObjectCache.js';
+export { TransactionDataBuilder } from './TransactionData.js';
+export { ObjectCache, CachingTransactionExecutor, AsyncCache } from './ObjectCache.js';

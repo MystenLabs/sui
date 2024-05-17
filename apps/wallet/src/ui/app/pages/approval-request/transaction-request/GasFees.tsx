@@ -3,7 +3,7 @@
 
 import { useTransactionData, useTransactionGasBudget } from '_src/ui/app/hooks';
 import { GAS_SYMBOL } from '_src/ui/app/redux/slices/sui-objects/Coin';
-import { type TransactionBlock } from '@mysten/sui/transactions';
+import { type Transaction } from '@mysten/sui/transactions';
 import { formatAddress } from '@mysten/sui/utils';
 
 import { DescriptionItem, DescriptionList } from './DescriptionList';
@@ -11,7 +11,7 @@ import { SummaryCard } from './SummaryCard';
 
 interface Props {
 	sender?: string;
-	transaction: TransactionBlock;
+	transaction: Transaction;
 }
 
 export function GasFees({ sender, transaction }: Props) {

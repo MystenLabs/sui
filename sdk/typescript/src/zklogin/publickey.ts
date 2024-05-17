@@ -80,16 +80,13 @@ export class ZkLoginPublicIdentifier extends PublicKey {
 	}
 
 	/**
-	 * Verifies that the signature is valid for for the provided TransactionBlock
+	 * Verifies that the signature is valid for for the provided Transaction
 	 */
-	verifyTransactionBlock(
-		transactionBlock: Uint8Array,
-		signature: Uint8Array | string,
-	): Promise<boolean> {
+	verifyTransaction(transaction: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
 		const parsedSignature = parseSerializedZkLoginSignature(signature);
 		return graphqlVerifyZkLoginSignature({
 			address: parsedSignature.zkLogin!.address,
-			bytes: toB64(transactionBlock),
+			bytes: toB64(transaction),
 			signature: parsedSignature.serializedSignature,
 			intentScope: 'TRANSACTION_DATA',
 			client: this.#client,

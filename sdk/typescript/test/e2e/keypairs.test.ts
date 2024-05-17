@@ -80,14 +80,12 @@ describe('Keypairs', () => {
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
+			const { signature: serializedSignature } = await keypair.signTransaction(tx_bytes);
 			const { signature } = parseSerializedSignature(serializedSignature);
 
 			expect(toB64(signature!)).toEqual(t[3]);
 
-			const isValid = await keypair
-				.getPublicKey()
-				.verifyTransactionBlock(tx_bytes, serializedSignature);
+			const isValid = await keypair.getPublicKey().verifyTransaction(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});
@@ -123,14 +121,12 @@ describe('Keypairs', () => {
 			expect(keypair.getPublicKey().toBase64()).toEqual(t[1]);
 			expect(keypair.getPublicKey().toSuiAddress()).toEqual(t[2]);
 
-			const { signature: serializedSignature } = await keypair.signTransactionBlock(tx_bytes);
+			const { signature: serializedSignature } = await keypair.signTransaction(tx_bytes);
 			const { signature } = parseSerializedSignature(serializedSignature);
 
 			expect(toB64(signature!)).toEqual(t[3]);
 
-			const isValid = await keypair
-				.getPublicKey()
-				.verifyTransactionBlock(tx_bytes, serializedSignature);
+			const isValid = await keypair.getPublicKey().verifyTransaction(tx_bytes, serializedSignature);
 			expect(isValid).toBeTruthy();
 		}
 	});

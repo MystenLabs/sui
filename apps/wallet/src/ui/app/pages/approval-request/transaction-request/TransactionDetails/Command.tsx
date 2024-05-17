@@ -3,17 +3,13 @@
 
 import { Text } from '_src/ui/app/shared/text';
 import { ChevronDown12, ChevronRight12 } from '@mysten/icons';
-import {
-	type Argument,
-	type TransactionBlockData,
-	type Transactions,
-} from '@mysten/sui/transactions';
+import { type Argument, type Commands, type TransactionData } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import { useState } from 'react';
 
-type TransactionType = TransactionBlockData['transactions'][0];
-type MakeMoveVecTransaction = ReturnType<(typeof Transactions)['MakeMoveVec']>;
-type PublishTransaction = ReturnType<(typeof Transactions)['Publish']>;
+type TransactionType = TransactionData['commands'][0];
+type MakeMoveVecTransaction = ReturnType<(typeof Commands)['MakeMoveVec']>;
+type PublishTransaction = ReturnType<(typeof Commands)['Publish']>;
 
 function convertCommandArgumentToString(
 	arg:

@@ -3,7 +3,7 @@
 
 import type { SuiMoveNormalizedType } from '../client/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { CallArg } from './blockData/internal.js';
+import type { CallArg } from './data/internal.js';
 
 export function extractMutableReference(
 	normalizedType: SuiMoveNormalizedType,

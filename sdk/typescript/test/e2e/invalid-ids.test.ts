@@ -3,7 +3,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { setup, TestToolbox } from './utils/setup';
 
 describe('Object id/Address/Transaction digest validation', () => {
@@ -52,10 +52,10 @@ describe('Object id/Address/Transaction digest validation', () => {
 		);
 	});
 
-	it('Validates txb.pure.address and txb.pure.id', async () => {
-		const txb = new TransactionBlock();
+	it('Validates tx.pure.address and tx.pure.id', async () => {
+		const tx = new Transaction();
 
-		expect(() => txb.pure.address('')).toThrowError(/Invalid Sui address/);
-		expect(() => txb.pure.id('')).toThrowError(/Invalid Sui address/);
+		expect(() => tx.pure.address('')).toThrowError(/Invalid Sui address/);
+		expect(() => tx.pure.id('')).toThrowError(/Invalid Sui address/);
 	});
 });

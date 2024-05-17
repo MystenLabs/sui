@@ -73,7 +73,7 @@ const $Intent = object({
 });
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
-const Transaction = enumUnion({
+const Command = enumUnion({
 	MoveCall: ProgrammableMoveCall,
 	TransferObjects: object({
 		objects: array(Argument),
@@ -141,12 +141,12 @@ const TransactionExpiration = enumUnion({
 
 type TransactionExpiration = Output<typeof TransactionExpiration>;
 
-export const SerializedTransactionBlockDataV2 = object({
+export const SerializedTransactionDataV2 = object({
 	version: literal(2),
 	sender: nullish(SuiAddress),
 	expiration: nullish(TransactionExpiration),
 	gasData: GasData,
 	inputs: array(CallArg),
-	transactions: array(Transaction),
+	commands: array(Command),
 });
-export type SerializedTransactionBlockDataV2 = Output<typeof SerializedTransactionBlockDataV2>;
+export type SerializedTransactionDataV2 = Output<typeof SerializedTransactionDataV2>;

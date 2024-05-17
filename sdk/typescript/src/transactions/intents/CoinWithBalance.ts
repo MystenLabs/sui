@@ -6,13 +6,13 @@ import { bigint, object, parse, string } from 'valibot';
 
 import type { CoinStruct, SuiClient } from '../../client/index.js';
 import { normalizeStructTag } from '../../utils/sui-types.js';
-import type { Argument } from '../blockData/internal.js';
+import { Commands } from '../Commands.js';
+import type { Argument } from '../data/internal.js';
 import { Inputs } from '../Inputs.js';
-import type { BuildTransactionBlockOptions } from '../json-rpc-resolver.js';
+import type { BuildTransactionOptions } from '../json-rpc-resolver.js';
 import { getClient } from '../json-rpc-resolver.js';
-import type { TransactionBlock } from '../TransactionBlock.js';
-import type { TransactionBlockDataBuilder } from '../TransactionBlockData.js';
-import { Transactions } from '../Transactions.js';
+import type { Transaction } from '../Transaction.js';
+import type { TransactionDataBuilder } from '../TransactionData.js';
 
 const COIN_WITH_BALANCE = 'CoinWithBalance';
 const SUI_TYPE = normalizeStructTag('0x2::sui::SUI');
@@ -26,11 +26,11 @@ export function coinWithBalance({
 	balance: bigint | number;
 	useGasCoin?: boolean;
 }) {
-	return (txb: TransactionBlock) => {
-		txb.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
+	return (tx: Transaction) => {
+		tx.addIntentResolver(COIN_WITH_BALANCE, resolveCoinBalance);
 		const coinType = type === 'gas' ? type : normalizeStructTag(type);
 
-		return txb.add({
+		return tx.add({
 			$kind: '$Intent',
 			$Intent: {
 				name: COIN_WITH_BALANCE,
@@ -50,20 +50,20 @@ const CoinWithBalanceData = object({
 });
 
 async function resolveCoinBalance(
-	blockData: TransactionBlockDataBuilder,
-	buildOptions: BuildTransactionBlockOptions,
+	transactionData: TransactionDataBuilder,
+	buildOptions: BuildTransactionOptions,
 	next: () => Promise<void>,
 ) {
 	const coinTypes = new Set<string>();
 	const totalByType = new Map<string, bigint>();
 
-	if (!blockData.sender) {
+	if (!transactionData.sender) {
 		throw new Error('Sender must be set to resolve CoinWithBalance');
 	}
 
-	for (const transaction of blockData.transactions) {
-		if (transaction.$kind === '$Intent' && transaction.$Intent.name === COIN_WITH_BALANCE) {
-			const { type, balance } = parse(CoinWithBalanceData, transaction.$Intent.data);
+	for (const command of transactionData.commands) {
+		if (command.$kind === '$Intent' && command.$Intent.name === COIN_WITH_BALANCE) {
+			const { type, balance } = parse(CoinWithBalanceData, command.$Intent.data);
 
 			if (type !== 'gas') {
 				coinTypes.add(type);
@@ -74,7 +74,7 @@ async function resolveCoinBalance(
 	}
 	const usedIds = new Set<string>();
 
-	for (const input of blockData.inputs) {
+	for (const input of transactionData.inputs) {
 		if (input.Object?.ImmOrOwnedObject) {
 			usedIds.add(input.Object.ImmOrOwnedObject.objectId);
 		}
@@ -93,7 +93,7 @@ async function resolveCoinBalance(
 					coinType,
 					balance: totalByType.get(coinType)!,
 					client,
-					owner: blockData.sender!,
+					owner: transactionData.sender!,
 					usedIds,
 				}),
 			);
@@ -104,7 +104,7 @@ async function resolveCoinBalance(
 
 	mergedCoins.set('gas', { $kind: 'GasCoin', GasCoin: true });
 
-	for (const [index, transaction] of blockData.transactions.entries()) {
+	for (const [index, transaction] of transactionData.commands.entries()) {
 		if (transaction.$kind !== '$Intent' || transaction.$Intent.name !== COIN_WITH_BALANCE) {
 			continue;
 		}
@@ -114,11 +114,11 @@ async function resolveCoinBalance(
 			balance: bigint;
 		};
 
-		const transactions = [];
+		const commands = [];
 
 		if (!mergedCoins.has(type)) {
 			const [first, ...rest] = coinsByType.get(type)!.map((coin) =>
-				blockData.addInput(
+				transactionData.addInput(
 					'object',
 					Inputs.ObjectRef({
 						objectId: coin.coinObjectId,
@@ -129,25 +129,25 @@ async function resolveCoinBalance(
 			);
 
 			if (rest.length > 0) {
-				transactions.push(Transactions.MergeCoins(first, rest));
+				commands.push(Commands.MergeCoins(first, rest));
 			}
 
 			mergedCoins.set(type, first);
 		}
 
-		transactions.push(
-			Transactions.SplitCoins(mergedCoins.get(type)!, [
-				blockData.addInput('pure', Inputs.Pure(bcs.u64().serialize(balance))),
+		commands.push(
+			Commands.SplitCoins(mergedCoins.get(type)!, [
+				transactionData.addInput('pure', Inputs.Pure(bcs.u64().serialize(balance))),
 			]),
 		);
 
-		blockData.replaceTransaction(index, transactions);
+		transactionData.replaceCommand(index, commands);
 
-		blockData.mapArguments((arg) => {
+		transactionData.mapArguments((arg) => {
 			if (arg.$kind === 'Result' && arg.Result === index) {
 				return {
 					$kind: 'NestedResult',
-					NestedResult: [index + transactions.length - 1, 0],
+					NestedResult: [index + commands.length - 1, 0],
 				};
 			}
 

@@ -7,14 +7,14 @@ import { parse } from 'valibot';
 
 import type { bcs } from '../bcs/index.js';
 import { normalizeSuiObjectId } from '../utils/sui-types.js';
-import { Argument } from './blockData/internal.js';
-import type { CallArg } from './blockData/internal.js';
-import type { TransactionBlock } from './TransactionBlock.js';
+import { Argument } from './data/internal.js';
+import type { CallArg } from './data/internal.js';
+import type { Transaction } from './Transaction.js';
 
 export type TransactionArgument =
 	| Input<typeof Argument>
-	| ((txb: TransactionBlock) => Input<typeof Argument>);
-export type TransactionBlockInput = CallArg;
+	| ((tx: Transaction) => Input<typeof Argument>);
+export type TransactionInput = CallArg;
 
 // Keep in sync with constants in
 // crates/sui-framework/packages/sui-framework/sources/package.move
@@ -31,7 +31,7 @@ type TransactionShape<T extends (typeof bcs.Transaction.$inferType)['$kind']> = 
 /**
  * Simple helpers used to construct transactions:
  */
-export const Transactions = {
+export const Commands = {
 	MoveCall(
 		input:
 			| {

@@ -4,7 +4,7 @@
 import type { SerializedBcs } from '@mysten/bcs';
 
 import { bcs } from '../bcs/index.js';
-import type { Argument } from './blockData/internal.js';
+import type { Argument } from './data/internal.js';
 
 export function createPure(makePure: (value: SerializedBcs<any, any> | Uint8Array) => Argument) {
 	function pure(

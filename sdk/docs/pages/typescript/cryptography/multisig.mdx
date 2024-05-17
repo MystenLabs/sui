@@ -5,7 +5,7 @@ The Sui TypeScript SDK provides a `MultiSigPublicKey` class to support
 transaction and personal message signing.
 
 This class implements the same interface as the `PublicKey` classes that [Keypairs](./keypairs) uses
-and you call the same methods to verify signatures for `PersonalMessages` and `TransactionBlocks`.
+and you call the same methods to verify signatures for `PersonalMessages` and `Transactions`.
 
 ## Creating a MultiSigPublicKey
 
@@ -68,7 +68,7 @@ const isValid = await multiSigPublicKey.verifyPersonalMessage(message, combinedS
 ## Creating a MultiSigSigner
 
 The `MultiSigSigner` class allows you to create a Signer that can be used to sign personal messages
-and TransactionBlocks like any other keypair or signer class. This is often easier than manually
+and Transactions like any other keypair or signer class. This is often easier than manually
 combining signatures, since many methods accept Signers and handle signing directly.
 
 A `MultiSigSigner` is created by providing the underlying Signers to the `getSigner` method on the

@@ -7,16 +7,11 @@ import type { BcsType } from '../bcs/index.js';
 import { bcs } from '../bcs/index.js';
 import type { SuiClient } from '../client/client.js';
 import { normalizeSuiAddress, normalizeSuiObjectId, SUI_TYPE_ARG } from '../utils/index.js';
-import { ObjectRef } from './blockData/internal.js';
-import type {
-	Argument,
-	CallArg,
-	OpenMoveTypeSignature,
-	Transaction,
-} from './blockData/internal.js';
+import { ObjectRef } from './data/internal.js';
+import type { Argument, CallArg, Command, OpenMoveTypeSignature } from './data/internal.js';
 import { Inputs } from './Inputs.js';
 import { getPureBcsSchema, isTxContext, normalizedTypeToMoveTypeSignature } from './serializer.js';
-import type { TransactionBlockDataBuilder } from './TransactionBlockData.js';
+import type { TransactionDataBuilder } from './TransactionData.js';
 
 // The maximum objects that can be fetched at once using multiGetObjects.
 const MAX_OBJECTS_PER_FETCH = 50;
@@ -25,57 +20,57 @@ const MAX_OBJECTS_PER_FETCH = 50;
 const GAS_SAFE_OVERHEAD = 1000n;
 const MAX_GAS = 50_000_000_000;
 
-export interface BuildTransactionBlockOptions {
+export interface BuildTransactionOptions {
 	client?: SuiClient;
 	onlyTransactionKind?: boolean;
 }
 
-export interface SerializeTransactionBlockOptions extends BuildTransactionBlockOptions {
+export interface SerializeTransactionOptions extends BuildTransactionOptions {
 	supportedIntents?: string[];
 }
 
-export type TransactionBlockPlugin = (
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+export type TransactionPlugin = (
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 	next: () => Promise<void>,
 ) => Promise<void>;
 
-export async function resolveTransactionBlockData(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+export async function resolveTransactionData(
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 	next: () => Promise<void>,
 ) {
-	await normalizeInputs(blockData, options);
-	await resolveObjectReferences(blockData, options);
+	await normalizeInputs(transactionData, options);
+	await resolveObjectReferences(transactionData, options);
 
 	if (!options.onlyTransactionKind) {
-		await setGasPrice(blockData, options);
-		await setGasBudget(blockData, options);
-		await setGasPayment(blockData, options);
+		await setGasPrice(transactionData, options);
+		await setGasBudget(transactionData, options);
+		await setGasPayment(transactionData, options);
 	}
-	await validate(blockData);
+	await validate(transactionData);
 	return await next();
 }
 
 async function setGasPrice(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 ) {
-	if (!blockData.gasConfig.price) {
-		blockData.gasConfig.price = String(await getClient(options).getReferenceGasPrice());
+	if (!transactionData.gasConfig.price) {
+		transactionData.gasConfig.price = String(await getClient(options).getReferenceGasPrice());
 	}
 }
 
 async function setGasBudget(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 ) {
-	if (blockData.gasConfig.budget) {
+	if (transactionData.gasConfig.budget) {
 		return;
 	}
 
 	const dryRunResult = await getClient(options).dryRunTransactionBlock({
-		transactionBlock: blockData.build({
+		transactionBlock: transactionData.build({
 			overrides: {
 				gasData: {
 					budget: String(MAX_GAS),
@@ -92,7 +87,7 @@ async function setGasBudget(
 		);
 	}
 
-	const safeOverhead = GAS_SAFE_OVERHEAD * BigInt(blockData.gasConfig.price || 1n);
+	const safeOverhead = GAS_SAFE_OVERHEAD * BigInt(transactionData.gasConfig.price || 1n);
 
 	const baseComputationCostWithOverhead =
 		BigInt(dryRunResult.effects.gasUsed.computationCost) + safeOverhead;
@@ -102,26 +97,26 @@ async function setGasBudget(
 		BigInt(dryRunResult.effects.gasUsed.storageCost) -
 		BigInt(dryRunResult.effects.gasUsed.storageRebate);
 
-	blockData.gasConfig.budget = String(
+	transactionData.gasConfig.budget = String(
 		gasBudget > baseComputationCostWithOverhead ? gasBudget : baseComputationCostWithOverhead,
 	);
 }
 
 // The current default is just picking _all_ coins we can which may not be ideal.
 async function setGasPayment(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 ) {
-	if (!blockData.gasConfig.payment) {
+	if (!transactionData.gasConfig.payment) {
 		const coins = await getClient(options).getCoins({
-			owner: blockData.gasConfig.owner || blockData.sender!,
+			owner: transactionData.gasConfig.owner || transactionData.sender!,
 			coinType: SUI_TYPE_ARG,
 		});
 
 		const paymentCoins = coins.data
 			// Filter out coins that are also used as input:
 			.filter((coin) => {
-				const matchingInput = blockData.inputs.find((input) => {
+				const matchingInput = transactionData.inputs.find((input) => {
 					if (input.Object?.ImmOrOwnedObject) {
 						return coin.coinObjectId === input.Object.ImmOrOwnedObject.objectId;
 					}
@@ -141,17 +136,17 @@ async function setGasPayment(
 			throw new Error('No valid gas coins found for the transaction.');
 		}
 
-		blockData.gasConfig.payment = paymentCoins.map((payment) => parse(ObjectRef, payment));
+		transactionData.gasConfig.payment = paymentCoins.map((payment) => parse(ObjectRef, payment));
 	}
 }
 
 async function resolveObjectReferences(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 ) {
 	// Keep track of the object references that will need to be resolved at the end of the transaction.
 	// We keep the input by-reference to avoid needing to re-resolve it:
-	const objectsToResolve = blockData.inputs.filter((input) => {
+	const objectsToResolve = transactionData.inputs.filter((input) => {
 		return (
 			(input.UnresolvedObject && !input.UnresolvedObject.version) ||
 			input.UnresolvedObject?.initialSharedVersion
@@ -214,7 +209,7 @@ async function resolveObjectReferences(
 		}),
 	);
 
-	for (const [index, input] of blockData.inputs.entries()) {
+	for (const [index, input] of transactionData.inputs.entries()) {
 		if (!input.UnresolvedObject) {
 			continue;
 		}
@@ -227,9 +222,9 @@ async function resolveObjectReferences(
 			updated = Inputs.SharedObjectRef({
 				objectId: id,
 				initialSharedVersion: object.initialSharedVersion,
-				mutable: isUsedAsMutable(blockData, index),
+				mutable: isUsedAsMutable(transactionData, index),
 			});
-		} else if (isUsedAsReceiving(blockData, index)) {
+		} else if (isUsedAsReceiving(transactionData, index)) {
 			updated = Inputs.ReceivingRef(
 				{
 					objectId: id,
@@ -239,7 +234,7 @@ async function resolveObjectReferences(
 			);
 		}
 
-		blockData.inputs[blockData.inputs.indexOf(input)] =
+		transactionData.inputs[transactionData.inputs.indexOf(input)] =
 			updated ??
 			Inputs.ObjectRef({
 				objectId: id,
@@ -250,28 +245,28 @@ async function resolveObjectReferences(
 }
 
 async function normalizeInputs(
-	blockData: TransactionBlockDataBuilder,
-	options: BuildTransactionBlockOptions,
+	transactionData: TransactionDataBuilder,
+	options: BuildTransactionOptions,
 ) {
-	const { inputs, transactions } = blockData;
-	const moveCallsToResolve: Extract<Transaction, { MoveCall: unknown }>['MoveCall'][] = [];
+	const { inputs, commands } = transactionData;
+	const moveCallsToResolve: Extract<Command, { MoveCall: unknown }>['MoveCall'][] = [];
 	const moveFunctionsToResolve = new Set<string>();
 
-	transactions.forEach((transaction) => {
+	commands.forEach((command) => {
 		// Special case move call:
-		if (transaction.MoveCall) {
+		if (command.MoveCall) {
 			// Determine if any of the arguments require encoding.
 			// - If they don't, then this is good to go.
 			// - If they do, then we need to fetch the normalized move module.
 
 			// If we already know the argument types, we don't need to resolve them again
-			if (transaction.MoveCall._argumentTypes) {
+			if (command.MoveCall._argumentTypes) {
 				return;
 			}
 
-			const inputs = transaction.MoveCall.arguments.map((arg) => {
+			const inputs = command.MoveCall.arguments.map((arg) => {
 				if (arg.$kind === 'Input') {
-					return blockData.inputs[arg.Input];
+					return transactionData.inputs[arg.Input];
 				}
 				return null;
 			});
@@ -280,22 +275,22 @@ async function normalizeInputs(
 			);
 
 			if (needsResolution) {
-				const functionName = `${transaction.MoveCall.package}::${transaction.MoveCall.module}::${transaction.MoveCall.function}`;
+				const functionName = `${command.MoveCall.package}::${command.MoveCall.module}::${command.MoveCall.function}`;
 				moveFunctionsToResolve.add(functionName);
-				moveCallsToResolve.push(transaction.MoveCall);
+				moveCallsToResolve.push(command.MoveCall);
 			}
 		}
 
 		// Special handling for values that where previously encoded using the wellKnownEncoding pattern.
 		// This should only happen when transaction block data was hydrated from an old version of the SDK
-		switch (transaction.$kind) {
+		switch (command.$kind) {
 			case 'SplitCoins':
-				transaction.SplitCoins.amounts.forEach((amount) => {
-					normalizeRawArgument(amount, bcs.U64, blockData);
+				command.SplitCoins.amounts.forEach((amount) => {
+					normalizeRawArgument(amount, bcs.U64, transactionData);
 				});
 				break;
 			case 'TransferObjects':
-				normalizeRawArgument(transaction.TransferObjects.address, bcs.Address, blockData);
+				normalizeRawArgument(command.TransferObjects.address, bcs.Address, transactionData);
 				break;
 		}
 	});
@@ -342,12 +337,12 @@ async function normalizeInputs(
 		);
 	}
 
-	transactions.forEach((transaction) => {
-		if (!transaction.MoveCall) {
+	commands.forEach((command) => {
+		if (!command.MoveCall) {
 			return;
 		}
 
-		const moveCall = transaction.MoveCall;
+		const moveCall = command.MoveCall;
 		const fnName = `${moveCall.package}::${moveCall.module}::${moveCall.function}`;
 		const params = moveCall._argumentTypes;
 
@@ -355,7 +350,7 @@ async function normalizeInputs(
 			return;
 		}
 
-		if (params.length !== transaction.MoveCall.arguments.length) {
+		if (params.length !== command.MoveCall.arguments.length) {
 			throw new Error(`Incorrect number of arguments for ${fnName}`);
 		}
 
@@ -403,8 +398,8 @@ async function normalizeInputs(
 	});
 }
 
-function validate(blockData: TransactionBlockDataBuilder) {
-	blockData.inputs.forEach((input, index) => {
+function validate(transactionData: TransactionDataBuilder) {
+	transactionData.inputs.forEach((input, index) => {
 		if (input.$kind !== 'Object' && input.$kind !== 'Pure') {
 			throw new Error(
 				`Input at index ${index} has not been resolved.  Expected a Pure or Object input, but found ${JSON.stringify(
@@ -418,24 +413,24 @@ function validate(blockData: TransactionBlockDataBuilder) {
 function normalizeRawArgument(
 	arg: Argument,
 	schema: BcsType<any>,
-	blockData: TransactionBlockDataBuilder,
+	transactionData: TransactionDataBuilder,
 ) {
 	if (arg.$kind !== 'Input') {
 		return;
 	}
-	const input = blockData.inputs[arg.Input];
+	const input = transactionData.inputs[arg.Input];
 
 	if (input.$kind !== 'UnresolvedPure') {
 		return;
 	}
 
-	blockData.inputs[arg.Input] = Inputs.Pure(schema.serialize(input.UnresolvedPure.value));
+	transactionData.inputs[arg.Input] = Inputs.Pure(schema.serialize(input.UnresolvedPure.value));
 }
 
-function isUsedAsMutable(blockData: TransactionBlockDataBuilder, index: number) {
+function isUsedAsMutable(transactionData: TransactionDataBuilder, index: number) {
 	let usedAsMutable = false;
 
-	blockData.getInputUses(index, (arg, tx) => {
+	transactionData.getInputUses(index, (arg, tx) => {
 		if (tx.MoveCall && tx.MoveCall._argumentTypes) {
 			const argIndex = tx.MoveCall.arguments.indexOf(arg);
 			usedAsMutable = tx.MoveCall._argumentTypes[argIndex].ref !== '&' || usedAsMutable;
@@ -445,10 +440,10 @@ function isUsedAsMutable(blockData: TransactionBlockDataBuilder, index: number) 
 	return usedAsMutable;
 }
 
-function isUsedAsReceiving(blockData: TransactionBlockDataBuilder, index: number) {
+function isUsedAsReceiving(transactionData: TransactionDataBuilder, index: number) {
 	let usedAsReceiving = false;
 
-	blockData.getInputUses(index, (arg, tx) => {
+	transactionData.getInputUses(index, (arg, tx) => {
 		if (tx.MoveCall && tx.MoveCall._argumentTypes) {
 			const argIndex = tx.MoveCall.arguments.indexOf(arg);
 			usedAsReceiving = isReceivingType(tx.MoveCall._argumentTypes[argIndex]) || usedAsReceiving;
@@ -470,7 +465,7 @@ function isReceivingType(type: OpenMoveTypeSignature): boolean {
 	);
 }
 
-export function getClient(options: BuildTransactionBlockOptions): SuiClient {
+export function getClient(options: BuildTransactionOptions): SuiClient {
 	if (!options.client) {
 		throw new Error(
 			`No provider passed to Transaction#build, but transaction data was not sufficient to build offline.`,

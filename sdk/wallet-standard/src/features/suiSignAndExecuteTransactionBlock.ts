@@ -13,7 +13,7 @@ import type { SuiSignTransactionBlockInput } from './suiSignTransactionBlock.js'
 export type SuiSignAndExecuteTransactionBlockVersion = '1.0.0';
 
 /**
- * @deprecated Use `sui:signAndExecuteTransactionBlock:v2` instead.
+ * @deprecated Use `sui:signAndExecuteTransaction` instead.
  *
  * A Wallet Standard feature for signing a transaction, and submitting it to the
  * network. The wallet is expected to submit the transaction to the network via RPC,
@@ -24,12 +24,12 @@ export type SuiSignAndExecuteTransactionBlockFeature = {
 	'sui:signAndExecuteTransactionBlock': {
 		/** Version of the feature API. */
 		version: SuiSignAndExecuteTransactionBlockVersion;
-		/** @deprecated Use `sui:signAndExecuteTransactionBlock:v2` instead. */
+		/** @deprecated Use `sui:signAndExecuteTransaction` instead. */
 		signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod;
 	};
 };
 
-/** @deprecated Use `sui:signAndExecuteTransactionBlock:v2` instead. */
+/** @deprecated Use `sui:signAndExecuteTransaction` instead. */
 export type SuiSignAndExecuteTransactionBlockMethod = (
 	input: SuiSignAndExecuteTransactionBlockInput,
 ) => Promise<SuiSignAndExecuteTransactionBlockOutput>;

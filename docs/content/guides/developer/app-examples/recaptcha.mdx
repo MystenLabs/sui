@@ -376,9 +376,9 @@ import {
 	ConnectButton,
 	useCurrentAccount,
 	useCurrentWallet,
-	useSignAndExecuteTransactionBlock,
+	useSignAndExecuteTransaction,
 } from '@mysten/dapp-kit';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { SUI_CLOCK_OBJECT_ID } from '@mysten/sui/utils';
 import Axios from 'axios';
 import { useEffect, useState } from 'react';
@@ -396,7 +396,7 @@ interface RecaptchaApiResponse {
 
 function App() {
 	const { currentWallet } = useCurrentWallet();
-	const { mutateAsync: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
+	const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 	const currentAccount = useCurrentAccount();
 
 	const SITE_KEY = import.meta.env.VITE_reCAPTCHA_SITE_KEY!;
@@ -455,19 +455,16 @@ function App() {
 				<button
 					disabled={!verificationPassedOneTime}
 					onClick={async () => {
-						const transactionBlock = new TransactionBlock();
+						const transaction = new Transaction();
 
-						transactionBlock.moveCall({
+						transaction.moveCall({
 							target: `${packageId}::${moduleId}::interact`,
-							arguments: [
-								transactionBlock.object(registryId),
-								transactionBlock.object(SUI_CLOCK_OBJECT_ID),
-							],
+							arguments: [transaction.object(registryId), transaction.object(SUI_CLOCK_OBJECT_ID)],
 						});
 
 						console.log(
-							await signAndExecuteTransactionBlock({
-								transactionBlock: transactionBlock,
+							await signAndExecuteTransaction({
+								transaction: transaction,
 							}),
 						);
 					}}
@@ -480,21 +477,21 @@ function App() {
 				<button
 					disabled={!isRecaptchaValid}
 					onClick={async () => {
-						const transactionBlock = new TransactionBlock();
+						const transaction = new Transaction();
 
-						transactionBlock.moveCall({
+						transaction.moveCall({
 							target: `${packageId}::${moduleId}::verify`,
 							arguments: [
-								transactionBlock.object(registryId),
-								transactionBlock.pure(signature),
-								transactionBlock.pure(pubKey),
-								transactionBlock.pure(message),
+								transaction.object(registryId),
+								transaction.pure(signature),
+								transaction.pure(pubKey),
+								transaction.pure(message),
 							],
 						});
 
 						console.log(
-							await signAndExecuteTransactionBlock({
-								transactionBlock,
+							await signAndExecuteTransaction({
+								transaction,
 							}),
 						);
 					}}
@@ -515,7 +512,7 @@ export default App;
 5. Examine the code to see what it does.
 
 - First, import the modules that you need for your app.
-- Next, use hooks from `@mysten/dapp-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransactionBlock` function. These help you connect to the wallet and execute transactions on the blockchain.
+- Next, use hooks from `@mysten/dapp-kit` to get access to the current wallet, the current account, and the `signAndExecuteTransaction` function. These help you connect to the wallet and execute transactions on the blockchain.
 - Then, define some constants for the site key, the secret key, the package ID, the registry ID, and the module ID. These are the values that you use to interact with the reCAPTCHA API and the smart contract.
 - After that, define some state variables to store the status of the reCAPTCHA validation, the verification result, and the message, the public key, and the signature that you get from the backend. Use the `useState` hook from React to manage these state variables.
 - Next, define a function named `onChange` that takes a token as an input and handles the change of the reCAPTCHA component. This function is triggered when the user completes the reCAPTCHA challenge. Here are the steps that you follow in this function:
@@ -532,8 +529,8 @@ export default App;
 - Next, use the `useEffect` hook from React to run some code when the `currentWallet` state changes. In this case, you don't do anything, but you could add some logic here if you want to.
 - Finally, return a JSX element that renders the app. The app consists of the following components:
   - A `ConnectButton` component from `@mysten/dapp-kit` that allows the user to connect to their wallet.
-  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
-  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `TransactionBlock` object from `@mysten/sui` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransactionBlock` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A button that allows the user to interact with the smart contract. This button is disabled unless the user passes the verification at least once. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the `interact` function of the smart contract with the registry ID and the clock object ID as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
+  - A button that allows the user to verify their identity to the smart contract. This button is disabled unless the user passes the reCAPTCHA challenge. When the user clicks this button, create a new `Transaction` object from `@mysten/sui` and add a `moveCall` action that calls the verify function of the smart contract with the registry ID, the signature, the public key, and the message as arguments. Then, use the `signAndExecuteTransaction` function from `@mysten/dapp-kit` to sign and execute the transaction block on the blockchain. You also log the result to the console.
   - A `ReCAPTCHA` component from `react-google-recaptcha` that renders the reCAPTCHA widget. You pass the site key and the `onChange` function as props to this component.
 
 That's it! You have implemented the frontend for the reCAPTCHA. To run the app, you can use `pnpm run dev`. To test the app, you can open the browser and go to the `localhost:5173` URL. You should see the app and can interact with the reCAPTCHA and the smart contract.
