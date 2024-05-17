@@ -160,17 +160,19 @@ impl PTB {
         )
         .await?;
 
-        if let SuiClientCommandResult::DryRun(response) = transaction_response {
-            println!("{}", Pretty(&response));
-            return Ok(());
-        }
-
-        let transaction_response =
-            if let SuiClientCommandResult::TransactionBlock(response) = transaction_response {
-                response
-            } else {
-                anyhow::bail!("Internal error. Cannot run the PTB")
-            };
+        let transaction_response = match transaction_response {
+            SuiClientCommandResult::DryRun(response) => {
+                println!("{}", Pretty(&response));
+                return Ok(());
+            }
+            SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::TransactionBlock(response) => response,
+            _ => anyhow::bail!("Internal error, unexpected response from PTB execution."),
+        };
 
         if let Some(effects) = transaction_response.effects.as_ref() {
             if effects.status().is_err() {
