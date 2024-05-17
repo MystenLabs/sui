@@ -4,6 +4,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use diesel::{dsl::sql, BoolExpressionMethods, Connection, ExpressionMethods, RunQueryDsl};
+use mysten_service::metrics::start_basic_prometheus_server;
 use prometheus::Registry;
 use std::path::PathBuf;
 use sui_data_ingestion_core::{
@@ -124,7 +125,10 @@ async fn main() -> Result<()> {
 
     let (_exit_sender, exit_receiver) = oneshot::channel();
     let progress_store = FileProgressStore::new(PathBuf::from(backfill_progress_file_path));
-    let metrics = DataIngestionMetrics::new(&Registry::new());
+
+    let registry: Registry = mysten_service::metrics::start_basic_prometheus_server();
+    mysten_metrics::init_metrics(&registry);
+    let metrics = DataIngestionMetrics::new(&registry);
     let mut executor = IndexerExecutor::new(progress_store, 1, metrics);
 
     let indexer_setup =
