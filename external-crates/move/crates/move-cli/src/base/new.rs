@@ -51,7 +51,10 @@ impl New {
         let Self { name } = self;
 
         if !Identifier::is_valid(&name) {
-            return Err(anyhow!("invalid package name, not a valid Move identifier"));
+            return Err(anyhow!(
+                "invalid package name, please use lowercase letters, numbers, and underscores, \
+should start with a lowercase letter."
+            ));
         }
 
         let p: PathBuf;
