@@ -34,14 +34,13 @@ use fastcrypto::{
 };
 use serde::Serialize;
 use shared_crypto::intent::{Intent, IntentMessage, IntentScope};
-use sui_bridge::config::{read_bridge_authority_key, BridgeNodeConfig};
+use sui_bridge::config::BridgeNodeConfig;
 use sui_bridge::sui_client::SuiClient as SuiBridgeClient;
 use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_config::Config;
 use sui_json_rpc_types::{
     SuiObjectDataOptions, SuiTransactionBlockResponse, SuiTransactionBlockResponseOptions,
 };
-use sui_keys::keystore::AccountKeystore;
 use sui_keys::{
     key_derive::generate_new_key,
     keypair_file::{
@@ -49,6 +48,7 @@ use sui_keys::{
         write_authority_keypair_to_file, write_keypair_to_file,
     },
 };
+use sui_keys::{keypair_file::read_key, keystore::AccountKeystore};
 use sui_sdk::wallet_context::WalletContext;
 use sui_sdk::SuiClient;
 use sui_types::crypto::{
@@ -477,8 +477,11 @@ impl SuiValidatorCommand {
                     Err(e) => panic!("Couldn't load BridgeNodeConfig, caused by: {e}"),
                 };
                 // Read bridge keypair
-                let ecdsa_keypair =
-                    read_bridge_authority_key(&bridge_config.bridge_authority_key_path_base64_raw)?;
+                let ecdsa_keypair = match read_key(&bridge_config.bridge_authority_key_path, true)?
+                {
+                    SuiKeyPair::Secp256k1(key) => key,
+                    _ => unreachable!("we required secp256k1 key in `read_key`"),
+                };
 
                 let address = context.active_address()?;
                 println!("Starting bridge committee registration for Sui validator: {address}, with bridge public key: {}", ecdsa_keypair.public);
