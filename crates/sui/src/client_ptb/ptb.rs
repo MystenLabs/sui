@@ -14,7 +14,7 @@ use crate::{
 };
 
 use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
-use anyhow::{anyhow, Error};
+use anyhow::{anyhow, ensure, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
@@ -83,9 +83,10 @@ impl PTB {
             Ok(parsed) => parsed,
         };
 
-        if program_metadata.serialize_unsigned_set && program_metadata.serialize_signed_set {
-            anyhow::bail!("Cannot serialize both signed and unsigned PTBs");
-        }
+        ensure!(
+            !program_metadata.serialize_unsigned_set || !program_metadata.serialize_signed_set,
+            "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
+        );
 
         if program_metadata.preview_set {
             println!(
@@ -160,17 +161,19 @@ impl PTB {
         )
         .await?;
 
-        if let SuiClientCommandResult::DryRun(response) = transaction_response {
-            println!("{}", Pretty(&response));
-            return Ok(());
-        }
-
-        let transaction_response =
-            if let SuiClientCommandResult::TransactionBlock(response) = transaction_response {
-                response
-            } else {
-                anyhow::bail!("Internal error. Cannot run the PTB")
-            };
+        let transaction_response = match transaction_response {
+            SuiClientCommandResult::DryRun(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::TransactionBlock(response) => response,
+            _ => anyhow::bail!("Internal error, unexpected response from PTB execution."),
+        };
 
         if let Some(effects) = transaction_response.effects.as_ref() {
             if effects.status().is_err() {
