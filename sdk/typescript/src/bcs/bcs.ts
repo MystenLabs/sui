@@ -30,7 +30,7 @@ function optionEnum<T extends BcsType<any, any>>(type: T) {
 export const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	validate: (val) => {
 		const address = normalizeSuiAddress(typeof val === 'string' ? val : toHEX(val));
-		if (!isValidSuiAddress(address)) {
+		if (!val || !isValidSuiAddress(address)) {
 			throw new Error(`Invalid Sui address ${address}`);
 		}
 	},
@@ -165,7 +165,7 @@ export const Transaction = bcs.enum('Transaction', {
 					  },
 			output: (val) => val.Some ?? null,
 		}),
-		objects: bcs.vector(Argument),
+		elements: bcs.vector(Argument),
 	}),
 	Upgrade: bcs.struct('Upgrade', {
 		modules: bcs.vector(

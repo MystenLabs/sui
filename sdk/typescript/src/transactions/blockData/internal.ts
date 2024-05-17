@@ -182,11 +182,11 @@ const ProgrammableMoveCall = object({
 	// snake case in rust
 	typeArguments: array(string()),
 	arguments: array(Argument),
-	argumentTypes: optional(nullable(array(OpenMoveTypeSignature))),
+	_argumentTypes: optional(nullable(array(OpenMoveTypeSignature))),
 });
 export type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
-export const Intent = object({
+export const $Intent = object({
 	name: string(),
 	inputs: record(string(), union([Argument, array(Argument)])),
 	data: record(string(), unknown()),
@@ -213,7 +213,7 @@ export const Transaction = safeEnum({
 	}),
 	MakeMoveVec: object({
 		type: nullable(string()),
-		objects: array(Argument),
+		elements: array(Argument),
 	}),
 	Upgrade: object({
 		modules: array(BCSBytes),
@@ -221,7 +221,7 @@ export const Transaction = safeEnum({
 		package: ObjectID,
 		ticket: Argument,
 	}),
-	Intent,
+	$Intent,
 });
 
 export type Transaction<Arg = Argument> = EnumOutputShape<{
@@ -231,7 +231,7 @@ export type Transaction<Arg = Argument> = EnumOutputShape<{
 		function: string;
 		typeArguments: string[];
 		arguments: Arg[];
-		argumentTypes?: OpenMoveTypeSignature[] | null;
+		_argumentTypes?: OpenMoveTypeSignature[] | null;
 	};
 	TransferObjects: {
 		objects: Arg[];
@@ -251,7 +251,7 @@ export type Transaction<Arg = Argument> = EnumOutputShape<{
 	};
 	MakeMoveVec: {
 		type: string | null;
-		objects: Arg[];
+		elements: Arg[];
 	};
 	Upgrade: {
 		modules: string[];
@@ -259,7 +259,7 @@ export type Transaction<Arg = Argument> = EnumOutputShape<{
 		package: string;
 		ticket: Arg;
 	};
-	Intent: {
+	$Intent: {
 		name: string;
 		inputs: Record<string, Argument | Argument[]>;
 		data: Record<string, unknown>;
@@ -292,8 +292,6 @@ const CallArg = safeEnum({
 		version: optional(nullable(JsonU64)),
 		digest: optional(nullable(string())),
 		initialSharedVersion: optional(nullable(JsonU64)),
-		mutable: optional(nullable(boolean())),
-		receiving: optional(nullable(boolean())),
 	}),
 });
 export type CallArg = Output<typeof CallArg>;
@@ -314,7 +312,6 @@ export type TransactionExpiration = Output<typeof TransactionExpiration>;
 
 export const TransactionBlockData = object({
 	version: literal(2),
-
 	sender: nullish(SuiAddress),
 	expiration: nullish(TransactionExpiration),
 	gasData: GasData,

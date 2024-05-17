@@ -202,8 +202,8 @@ describe('TXB v1 JSON serialization', () => {
 		if (json) {
 			// Argument types aren't in v1 JSON
 			blockDataFromJson.transactions.forEach((txn) => {
-				if (txn.MoveCall?.argumentTypes) {
-					delete txn.MoveCall.argumentTypes;
+				if (txn.MoveCall?._argumentTypes) {
+					delete txn.MoveCall._argumentTypes;
 				}
 			});
 		}

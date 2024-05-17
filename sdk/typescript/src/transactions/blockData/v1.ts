@@ -273,7 +273,7 @@ export function serializeV1TransactionBlockData(
 						transaction.MakeMoveVec.type === null
 							? { None: true }
 							: { Some: TypeTagSerializer.parseFromStr(transaction.MakeMoveVec.type) },
-					objects: transaction.MakeMoveVec.objects.map((arg) =>
+					objects: transaction.MakeMoveVec.elements.map((arg) =>
 						convertTransactionArgument(arg, inputs),
 					),
 				};
@@ -424,7 +424,7 @@ export function transactionBlockDataFromV1(
 								'Some' in transaction.type
 									? TypeTagSerializer.tagToString(transaction.type.Some)
 									: null,
-							objects: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
+							elements: transaction.objects.map((arg) => parseV1TransactionArgument(arg)),
 						},
 					};
 				case 'MergeCoins': {

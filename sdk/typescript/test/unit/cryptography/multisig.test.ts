@@ -13,7 +13,10 @@ import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
 import { MultiSigPublicKey, MultiSigSigner, parsePartialSignatures } from '../../../src/multisig';
 import { TransactionBlock } from '../../../src/transactions';
-import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
+import {
+	verifyPersonalMessageSignature,
+	verifyTransactionBlockSignature,
+} from '../../../src/verify';
 import { toZkLoginPublicIdentifier } from '../../../src/zklogin/publickey';
 
 describe('Multisig scenarios', () => {
@@ -648,10 +651,10 @@ describe('MultisigKeypair', () => {
 			throw new Error('Expected signature scheme to be MultiSig');
 		}
 
-		const signerPubKey = await verifyTransactionBlock(bytes, multisig.signature);
+		const signerPubKey = await verifyTransactionBlockSignature(bytes, multisig.signature);
 		expect(signerPubKey.toSuiAddress()).toEqual(publicKey.toSuiAddress());
 		expect(await publicKey.verifyTransactionBlock(bytes, multisig.signature)).toEqual(true);
-		const signerPubKey2 = await verifyTransactionBlock(bytes, multisig2.signature);
+		const signerPubKey2 = await verifyTransactionBlockSignature(bytes, multisig2.signature);
 		expect(signerPubKey2.toSuiAddress()).toEqual(publicKey.toSuiAddress());
 		expect(await publicKey.verifyTransactionBlock(bytes, multisig2.signature)).toEqual(true);
 	});
@@ -699,10 +702,10 @@ describe('MultisigKeypair', () => {
 			throw new Error('Expected signature scheme to be MultiSig');
 		}
 
-		const signerPubKey = await verifyPersonalMessage(bytes, multisig.signature);
+		const signerPubKey = await verifyPersonalMessageSignature(bytes, multisig.signature);
 		expect(signerPubKey.toSuiAddress()).toEqual(publicKey.toSuiAddress());
 		expect(await publicKey.verifyPersonalMessage(bytes, multisig.signature)).toEqual(true);
-		const signerPubKey2 = await verifyPersonalMessage(bytes, multisig2.signature);
+		const signerPubKey2 = await verifyPersonalMessageSignature(bytes, multisig2.signature);
 		expect(signerPubKey2.toSuiAddress()).toEqual(publicKey.toSuiAddress());
 		expect(await publicKey.verifyPersonalMessage(bytes, multisig2.signature)).toEqual(true);
 	});

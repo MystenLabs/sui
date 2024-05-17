@@ -66,7 +66,7 @@ const ProgrammableMoveCall = object({
 });
 type ProgrammableMoveCall = Output<typeof ProgrammableMoveCall>;
 
-const Intent = object({
+const $Intent = object({
 	name: string(),
 	inputs: record(string(), union([Argument, array(Argument)])),
 	data: record(string(), unknown()),
@@ -93,7 +93,7 @@ const Transaction = enumUnion({
 	}),
 	MakeMoveVec: object({
 		type: nullable(string()),
-		objects: array(Argument),
+		elements: array(Argument),
 	}),
 	Upgrade: object({
 		modules: array(BCSBytes),
@@ -101,7 +101,7 @@ const Transaction = enumUnion({
 		package: ObjectID,
 		ticket: Argument,
 	}),
-	Intent,
+	$Intent,
 });
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L102-L114
@@ -130,8 +130,6 @@ const CallArg = enumUnion({
 		version: optional(nullable(JsonU64)),
 		digest: optional(nullable(string())),
 		initialSharedVersion: optional(nullable(JsonU64)),
-		mutable: optional(nullable(boolean())),
-		receiving: optional(nullable(boolean())),
 	}),
 });
 type CallArg = Output<typeof CallArg>;

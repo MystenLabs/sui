@@ -31,7 +31,7 @@ describe('Test Move call with a vector of objects as input', () => {
 	async function destroyObjects(objects: string[], withType = false) {
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
-			objects: objects.map((id) => tx.object(id)),
+			elements: objects.map((id) => tx.object(id)),
 			type: withType ? `${packageId}::entry_point_vector::Obj` : undefined,
 		});
 		tx.moveCall({
@@ -76,7 +76,7 @@ describe('Test Move call with a vector of objects as input', () => {
 		const coinIDs = coins.data.map((coin) => coin.coinObjectId);
 		const tx = new TransactionBlock();
 		const vec = tx.makeMoveVec({
-			objects: [coinIDs[1], tx.object(coinIDs[2])],
+			elements: [coinIDs[1], tx.object(coinIDs[2])],
 		});
 		tx.moveCall({
 			target: `${SUI_FRAMEWORK_ADDRESS}::pay::join_vec`,
