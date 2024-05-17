@@ -63,7 +63,7 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					Intent: {
+					$Intent: {
 						data: {
 							balance: '12345',
 							type: 'gas',
@@ -210,7 +210,7 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					Intent: {
+					$Intent: {
 						data: {
 							balance: '1',
 							type: testType,
@@ -359,7 +359,7 @@ describe('coinWithBalance', () => {
 			sender: publishToolbox.keypair.toSuiAddress(),
 			transactions: [
 				{
-					Intent: {
+					$Intent: {
 						data: {
 							balance: '1',
 							type: testType,
@@ -369,7 +369,7 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					Intent: {
+					$Intent: {
 						data: {
 							balance: '2',
 							type: testType,
@@ -379,7 +379,7 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					Intent: {
+					$Intent: {
 						data: {
 							balance: '3',
 							type: 'gas',
@@ -389,7 +389,7 @@ describe('coinWithBalance', () => {
 					},
 				},
 				{
-					Intent: {
+					$Intent: {
 						data: {
 							balance: '4',
 							type: 'gas',

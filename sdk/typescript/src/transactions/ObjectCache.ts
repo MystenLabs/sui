@@ -191,7 +191,7 @@ export class ObjectCache {
 						});
 
 						if (def) {
-							tx.MoveCall.argumentTypes = def.parameters;
+							tx.MoveCall._argumentTypes = def.parameters;
 						}
 					}
 				}),
@@ -201,12 +201,12 @@ export class ObjectCache {
 
 			await Promise.all(
 				blockData.transactions.map(async (tx) => {
-					if (tx.MoveCall?.argumentTypes) {
+					if (tx.MoveCall?._argumentTypes) {
 						await this.#cache.addMoveFunctionDefinition({
 							package: tx.MoveCall.package,
 							module: tx.MoveCall.module,
 							function: tx.MoveCall.function,
-							parameters: tx.MoveCall.argumentTypes,
+							parameters: tx.MoveCall._argumentTypes,
 						});
 					}
 				}),

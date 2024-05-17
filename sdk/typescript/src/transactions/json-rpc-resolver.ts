@@ -214,7 +214,7 @@ async function resolveObjectReferences(
 		}),
 	);
 
-	for (const input of blockData.inputs) {
+	for (const [index, input] of blockData.inputs.entries()) {
 		if (!input.UnresolvedObject) {
 			continue;
 		}
@@ -227,9 +227,9 @@ async function resolveObjectReferences(
 			updated = Inputs.SharedObjectRef({
 				objectId: id,
 				initialSharedVersion: object.initialSharedVersion,
-				mutable: !!input.UnresolvedObject.mutable,
+				mutable: isUsedAsMutable(blockData, index),
 			});
-		} else if (input.UnresolvedObject.receiving) {
+		} else if (isUsedAsReceiving(blockData, index)) {
 			updated = Inputs.ReceivingRef(
 				{
 					objectId: id,
@@ -265,7 +265,7 @@ async function normalizeInputs(
 			// - If they do, then we need to fetch the normalized move module.
 
 			// If we already know the argument types, we don't need to resolve them again
-			if (transaction.MoveCall.argumentTypes) {
+			if (transaction.MoveCall._argumentTypes) {
 				return;
 			}
 
@@ -337,7 +337,7 @@ async function normalizeInputs(
 				const hasTxContext = parameters.length > 0 && isTxContext(parameters.at(-1)!);
 				const params = hasTxContext ? parameters.slice(0, parameters.length - 1) : parameters;
 
-				moveCall.argumentTypes = params;
+				moveCall._argumentTypes = params;
 			}),
 		);
 	}
@@ -349,7 +349,7 @@ async function normalizeInputs(
 
 		const moveCall = transaction.MoveCall;
 		const fnName = `${moveCall.package}::${moveCall.module}::${moveCall.function}`;
-		const params = moveCall.argumentTypes;
+		const params = moveCall._argumentTypes;
 
 		if (!params) {
 			return;
@@ -399,14 +399,6 @@ async function normalizeInputs(
 				: input;
 
 			inputs[arg.Input] = unresolvedObject;
-
-			if (param.ref === '&mut' || !param.ref) {
-				unresolvedObject.UnresolvedObject.mutable = true;
-			}
-
-			if (isReceivingType(param)) {
-				unresolvedObject.UnresolvedObject.receiving = true;
-			}
 		});
 	});
 }
@@ -438,6 +430,32 @@ function normalizeRawArgument(
 	}
 
 	blockData.inputs[arg.Input] = Inputs.Pure(schema.serialize(input.UnresolvedPure.value));
+}
+
+function isUsedAsMutable(blockData: TransactionBlockDataBuilder, index: number) {
+	let usedAsMutable = false;
+
+	blockData.getInputUses(index, (arg, tx) => {
+		if (tx.MoveCall && tx.MoveCall._argumentTypes) {
+			const argIndex = tx.MoveCall.arguments.indexOf(arg);
+			usedAsMutable = tx.MoveCall._argumentTypes[argIndex].ref !== '&' || usedAsMutable;
+		}
+	});
+
+	return usedAsMutable;
+}
+
+function isUsedAsReceiving(blockData: TransactionBlockDataBuilder, index: number) {
+	let usedAsReceiving = false;
+
+	blockData.getInputUses(index, (arg, tx) => {
+		if (tx.MoveCall && tx.MoveCall._argumentTypes) {
+			const argIndex = tx.MoveCall.arguments.indexOf(arg);
+			usedAsReceiving = isReceivingType(tx.MoveCall._argumentTypes[argIndex]) || usedAsReceiving;
+		}
+	});
+
+	return usedAsReceiving;
 }
 
 function isReceivingType(type: OpenMoveTypeSignature): boolean {
