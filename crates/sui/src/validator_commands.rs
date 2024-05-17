@@ -176,7 +176,7 @@ pub enum SuiValidatorCommand {
         bridge_authority_url: String,
         /// If true, only print the unsigned transaction and do not execute it.
         /// This is useful for offline signing.
-        #[clap(long, default_value = "false")]
+        #[clap(name = "print-only", long, default_value = "false")]
         print_unsigned_transaction_only: bool,
         /// Must present if `print_unsigned_transaction_only` is true.
         #[clap(long)]
