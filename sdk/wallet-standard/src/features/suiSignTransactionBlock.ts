@@ -8,6 +8,8 @@ import type { IdentifierString, WalletAccount } from '@wallet-standard/core';
 export type SuiSignTransactionBlockVersion = '1.0.0';
 
 /**
+ * @deprecated Use `sui:signTransactionBlock:v2` instead.
+ *
  * A Wallet Standard feature for signing a transaction, and returning the
  * serialized transaction and transaction signature.
  */
@@ -16,10 +18,12 @@ export type SuiSignTransactionBlockFeature = {
 	'sui:signTransactionBlock': {
 		/** Version of the feature API. */
 		version: SuiSignTransactionBlockVersion;
+		/** @deprecated Use `sui:signTransactionBlock:v2` instead. */
 		signTransactionBlock: SuiSignTransactionBlockMethod;
 	};
 };
 
+/** @deprecated Use `sui:signTransactionBlock:v2` instead. */
 export type SuiSignTransactionBlockMethod = (
 	input: SuiSignTransactionBlockInput,
 ) => Promise<SuiSignTransactionBlockOutput>;
@@ -35,6 +39,8 @@ export interface SuiSignTransactionBlockInput {
 export interface SuiSignTransactionBlockOutput extends SignedTransactionBlock {}
 
 export interface SignedTransactionBlock {
+	/** Transaction block as base64 encoded bcs. */
 	transactionBlockBytes: string;
+	/** Base64 encoded signature */
 	signature: string;
 }

@@ -40,10 +40,6 @@ export function Counter({ id }: { id: string }) {
     signAndExecute(
       {
         transactionBlock: txb,
-        options: {
-          showEffects: true,
-          showObjectChanges: true,
-        },
       },
       {
         onSuccess: (tx) => {

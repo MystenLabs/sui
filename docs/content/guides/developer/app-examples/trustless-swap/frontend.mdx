@@ -167,7 +167,7 @@ export function useTransactionExecution() {
 			});
 
 			const res = await client.executeTransactionBlock({
-				transactionBlock: signature.transactionBlockBytes,
+				transactionBlock: signature.bytes,
 				signature: signature.signature,
 				options: {
 					showEffects: true,
@@ -770,7 +770,7 @@ export function Escrow({ escrow }: { escrow: ApiEscrowObject }) {
 }
 ```
 
-As the last step, reuse the `accept` and `cancel` escrow mutations in corresponding buttons. 
+As the last step, reuse the `accept` and `cancel` escrow mutations in corresponding buttons.
 
 ### Browse locked objects
 

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui/bcs';
+import { TransactionBlock } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
@@ -15,6 +16,8 @@ import type {
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockFeature,
 	SuiSignTransactionBlockMethod,
+	SuiSignTransactionBlockV2Feature,
+	SuiSignTransactionBlockV2Method,
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wallet-standard';
@@ -61,6 +64,7 @@ export class StashedWallet implements Wallet {
 		StandardDisconnectFeature &
 		StandardEventsFeature &
 		SuiSignTransactionBlockFeature &
+		SuiSignTransactionBlockV2Feature &
 		SuiSignPersonalMessageFeature {
 		return {
 			'standard:connect': {
@@ -78,6 +82,10 @@ export class StashedWallet implements Wallet {
 			'sui:signTransactionBlock': {
 				version: '1.0.0',
 				signTransactionBlock: this.#signTransactionBlock,
+			},
+			'sui:signTransactionBlock:v2': {
+				version: '2.0.0',
+				signTransactionBlock: this.#signTransactionBlockV2,
 			},
 			'sui:signPersonalMessage': {
 				version: '1.0.0',
@@ -110,8 +118,12 @@ export class StashedWallet implements Wallet {
 
 		const data = transactionBlock.serialize();
 
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
+		});
+
+		const response = await popup.send({
 			type: 'sign-transaction-block',
 			data,
 			address: account.address,
@@ -123,10 +135,40 @@ export class StashedWallet implements Wallet {
 		};
 	};
 
+	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
+		transactionBlock,
+		account,
+	}) => {
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
+		});
+
+		const txb = TransactionBlock.from(await transactionBlock.toJSON());
+		txb.setSenderIfNotSet(account.address);
+
+		const data = txb.serialize();
+
+		const response = await popup.send({
+			type: 'sign-transaction-block',
+			data,
+			address: account.address,
+		});
+
+		return {
+			bytes: response.bytes,
+			signature: response.signature,
+		};
+	};
+
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
 		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+		const popup = new StashedPopup({
+			name: this.#name,
+			origin: this.#origin,
+		});
+
+		const response = await popup.send({
 			type: 'sign-personal-message',
 			bytes,
 			address: account.address,
@@ -175,9 +217,11 @@ export class StashedWallet implements Wallet {
 		}
 
 		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
-		const response = await popup.createRequest({
+
+		const response = await popup.send({
 			type: 'connect',
 		});
+
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');
 		}

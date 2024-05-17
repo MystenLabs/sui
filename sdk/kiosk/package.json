@@ -21,7 +21,7 @@
 		"src"
 	],
 	"engines": {
-		"node": ">=16"
+		"node": ">=18"
 	},
 	"scripts": {
 		"build": "build-package",

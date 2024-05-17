@@ -3,6 +3,8 @@
 
 import type { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
+import { TransactionBlock } from '@mysten/sui/transactions';
+import { toB64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
 	StandardConnectMethod,
@@ -10,8 +12,10 @@ import type {
 	StandardEventsOnMethod,
 	SuiFeatures,
 	SuiSignAndExecuteTransactionBlockMethod,
+	SuiSignAndExecuteTransactionBlockV2Method,
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockMethod,
+	SuiSignTransactionBlockV2Method,
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, ReadonlyWalletAccount, SUI_CHAINS } from '@mysten/wallet-standard';
@@ -100,6 +104,14 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 					version: '1.0.0',
 					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
 				},
+				'sui:signTransactionBlock:v2': {
+					version: '2.0.0',
+					signTransactionBlock: this.#signTransactionBlockV2,
+				},
+				'sui:signAndExecuteTransactionBlock:v2': {
+					version: '2.0.0',
+					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlockV2,
+				},
 			};
 		}
 
@@ -128,15 +140,63 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			};
 		};
 
+		#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async (transactionInput) => {
+			const { bytes, signature } = await TransactionBlock.from(
+				await transactionInput.transactionBlock.toJSON(),
+			).sign({
+				client: suiClient,
+				signer: keypair,
+			});
+
+			transactionInput.signal?.throwIfAborted();
+
+			return {
+				bytes,
+				signature: signature,
+			};
+		};
+
 		#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (
 			transactionInput,
 		) => {
-			return await suiClient.signAndExecuteTransactionBlock({
+			const { bytes, signature } = await transactionInput.transactionBlock.sign({
+				client: suiClient,
 				signer: keypair,
-				transactionBlock: transactionInput.transactionBlock,
-				options: transactionInput.options,
-				requestType: transactionInput.requestType,
 			});
+
+			return suiClient.executeTransactionBlock({
+				signature,
+				transactionBlock: bytes,
+				options: transactionInput.options,
+			});
+		};
+
+		#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method = async (
+			transactionInput,
+		) => {
+			const { bytes, signature } = await TransactionBlock.from(
+				await transactionInput.transactionBlock.toJSON(),
+			).sign({
+				client: suiClient,
+				signer: keypair,
+			});
+
+			transactionInput.signal?.throwIfAborted();
+
+			const { rawEffects, digest } = await suiClient.executeTransactionBlock({
+				signature,
+				transactionBlock: bytes,
+				options: {
+					showRawEffects: true,
+				},
+			});
+
+			return {
+				bytes,
+				signature,
+				digest,
+				effects: toB64(new Uint8Array(rawEffects!)),
+			};
 		};
 	}
 
