@@ -26,8 +26,6 @@
 		"clean": "rm -rf tsconfig.tsbuildinfo ./dist",
 		"build": "build-package",
 		"prepublishOnly": "pnpm build",
-		"dev": "ts-node src/deepbook_sdk.ts",
-		"bfs": "ts-node src/bfs.ts",
 		"prettier:check": "prettier -c --ignore-unknown .",
 		"prettier:fix": "prettier -w --ignore-unknown .",
 		"eslint:check": "eslint --max-warnings=0 .",

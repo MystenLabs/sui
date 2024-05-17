@@ -124,6 +124,8 @@ impl BridgeTestClusterBuilder {
 
     pub async fn build(self) -> BridgeTestCluster {
         init_all_struct_tags();
+        std::env::set_var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY", "1");
+
         let mut bridge_keys = vec![];
         let mut bridge_keys_copy = vec![];
         for _ in 0..=3 {
@@ -779,7 +781,7 @@ pub(crate) async fn start_bridge_cluster(
         let config = BridgeNodeConfig {
             server_listen_port: *server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: authority_key_path,
+            bridge_authority_key_path: authority_key_path,
             approved_governance_actions,
             run_client: true,
             db_path: Some(db_path),
@@ -793,7 +795,7 @@ pub(crate) async fn start_bridge_cluster(
             sui: SuiConfig {
                 sui_rpc_url: test_cluster.fullnode_handle.rpc_url.clone(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },

@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use fastcrypto::traits::{KeyPair, ToFromBytes};
+use fastcrypto::traits::ToFromBytes;
 use move_core_types::ident_str;
 use std::{collections::HashMap, str::FromStr};
 use sui_types::bridge::{
@@ -17,7 +17,6 @@ use sui_types::{
 };
 use sui_types::{Identifier, BRIDGE_PACKAGE_ID};
 
-use crate::crypto::BridgeAuthorityKeyPair;
 use crate::{
     error::{BridgeError, BridgeResult},
     types::{BridgeAction, VerifiedCertifiedBridgeAction},
@@ -551,16 +550,17 @@ pub fn build_committee_register_transaction(
     validator_address: SuiAddress,
     gas_object_ref: &ObjectRef,
     bridge_object_arg: ObjectArg,
-    bridge_key: BridgeAuthorityKeyPair,
+    bridge_authority_pub_key_bytes: Vec<u8>,
     bridge_url: &str,
     ref_gas_price: u64,
 ) -> BridgeResult<TransactionData> {
     let mut builder = ProgrammableTransactionBuilder::new();
     let system_state = builder.obj(ObjectArg::SUI_SYSTEM_MUT).unwrap();
     let bridge = builder.obj(bridge_object_arg).unwrap();
-    let pub_key = bridge_key.public().as_bytes().to_vec();
     let bridge_pubkey = builder
-        .input(CallArg::Pure(bcs::to_bytes(&pub_key).unwrap()))
+        .input(CallArg::Pure(
+            bcs::to_bytes(&bridge_authority_pub_key_bytes).unwrap(),
+        ))
         .unwrap();
     let url = builder
         .input(CallArg::Pure(bcs::to_bytes(bridge_url.as_bytes()).unwrap()))

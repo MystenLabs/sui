@@ -71,6 +71,7 @@ use lsp_types::{
     Position, Range, ReferenceParams, SymbolKind,
 };
 
+use sha2::{Digest, Sha256};
 use std::{
     cmp,
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -102,6 +103,7 @@ use move_compiler::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
         ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
+    unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
 };
 use move_ir_types::location::*;
@@ -122,6 +124,8 @@ const MANIFEST_FILE_NAME: &str = "Move.toml";
 pub struct PrecompiledPkgDeps {
     /// Hash of the manifest file for a given package
     manifest_hash: Option<FileHash>,
+    /// Hash of dependency source files
+    deps_hash: String,
     /// Precompiled deps
     deps: Arc<FullyCompiledProgram>,
 }
@@ -1149,13 +1153,18 @@ pub fn get_symbols(
     let mut file_id_mapping = HashMap::new();
     let mut file_id_to_lines = HashMap::new();
     let mut file_name_mapping = BTreeMap::new();
-    for (fhash, (fname, source)) in &source_files {
+    let mut hasher = Sha256::new();
+    for (fhash, (fname, source, is_dep)) in &source_files {
+        if *is_dep {
+            hasher.update(fhash.0);
+        }
         let id = files.add(*fname, source.clone());
         file_id_mapping.insert(*fhash, id);
         file_name_mapping.insert(*fhash, PathBuf::from(fname.as_str()));
         let lines: Vec<String> = source.lines().map(String::from).collect();
         file_id_to_lines.insert(id, lines);
     }
+    let deps_hash = format!("{:X}", hasher.finalize());
 
     let compiler_flags = resolution_graph.build_options.compiler_flags().clone();
     let build_plan =
@@ -1185,25 +1194,35 @@ pub fn get_symbols(
 
         let mut pkg_deps = pkg_dependencies.lock().unwrap();
         let compiled_deps = match pkg_deps.get(pkg_path) {
-            Some(d) if manifest_hash.is_some() && manifest_hash == d.manifest_hash => {
+            Some(d)
+                if manifest_hash.is_some()
+                    && manifest_hash == d.manifest_hash
+                    && deps_hash == d.deps_hash =>
+            {
                 eprintln!("found pre-compiled libs for {:?}", pkg_path);
                 Some(d.deps.clone())
             }
-            _ => construct_pre_compiled_lib(src_deps, None, compiler_flags)
-                .ok()
-                .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
-                .map(|libs| {
-                    eprintln!("created pre-compiled libs for {:?}", pkg_path);
-                    let deps = Arc::new(libs);
-                    pkg_deps.insert(
-                        pkg_path.to_path_buf(),
-                        PrecompiledPkgDeps {
-                            manifest_hash,
-                            deps: deps.clone(),
-                        },
-                    );
-                    deps
-                }),
+            _ => construct_pre_compiled_lib(
+                src_deps,
+                None,
+                compiler_flags,
+                Some(overlay_fs_root.clone()),
+            )
+            .ok()
+            .and_then(|pprog_and_comments_res| pprog_and_comments_res.ok())
+            .map(|libs| {
+                eprintln!("created pre-compiled libs for {:?}", pkg_path);
+                let deps = Arc::new(libs);
+                pkg_deps.insert(
+                    pkg_path.to_path_buf(),
+                    PrecompiledPkgDeps {
+                        manifest_hash,
+                        deps_hash,
+                        deps: deps.clone(),
+                    },
+                );
+                deps
+            }),
         };
         if compiled_deps.is_some() {
             // if successful, remove only source deps but keep bytecode deps as they
@@ -1505,7 +1524,7 @@ fn mark_positional_struct(
 
 fn process_typed_modules<'a>(
     typed_modules: &UniqueMap<ModuleIdent, ModuleDefinition>,
-    source_files: &BTreeMap<FileHash, (Symbol, String)>,
+    source_files: &BTreeMap<FileHash, (Symbol, String, bool)>,
     mod_to_alias_lengths: &'a BTreeMap<String, BTreeMap<Position, usize>>,
     typing_symbolicator: &mut TypingSymbolicator<'a>,
     file_use_defs: &mut BTreeMap<PathBuf, UseDefMap>,
@@ -1518,7 +1537,7 @@ fn process_typed_modules<'a>(
         typing_symbolicator.mod_symbols(module_def, &mod_ident_str);
 
         let fpath = match source_files.get(&pos.file_hash()) {
-            Some((p, _)) => p,
+            Some((p, _, _)) => p,
             None => continue,
         };
 
@@ -1536,7 +1555,7 @@ fn process_typed_modules<'a>(
 fn file_sources(
     resolved_graph: &ResolvedGraph,
     overlay_fs: VfsPath,
-) -> BTreeMap<FileHash, (FileName, String)> {
+) -> BTreeMap<FileHash, (FileName, String, bool)> {
     resolved_graph
         .package_table
         .iter()
@@ -1545,6 +1564,7 @@ fn file_sources(
                 .unwrap()
                 .iter()
                 .map(|f| {
+                    let is_dep = rpkg.package_path != resolved_graph.graph.root_path;
                     // dunce does a better job of canonicalization on Windows
                     let fname = dunce::canonicalize(f.as_str())
                         .map(|p| p.to_string_lossy().to_string())
@@ -1562,7 +1582,7 @@ fn file_sources(
                     let _ = vfs_file_path.parent().create_dir_all();
                     let mut vfs_file = vfs_file_path.create_file().unwrap();
                     let _ = vfs_file.write_all(contents.as_bytes());
-                    (fhash, (Symbol::from(fname), contents))
+                    (fhash, (Symbol::from(fname), contents, is_dep))
                 })
                 .collect::<BTreeMap<_, _>>()
         })
@@ -1646,6 +1666,16 @@ pub fn empty_symbols() -> Symbols {
         file_mods: BTreeMap::new(),
         def_info: BTreeMap::new(),
     }
+}
+
+/// Some functions defined in a module need to be ignored.
+fn ignored_function(name: Symbol) -> bool {
+    // In test mode (that's how IDE compiles Move source files),
+    // the compiler inserts an dummy function preventing preventing
+    // publishing of modules compiled in test mode. We need to
+    // ignore its definition to avoid spurious on-hover display
+    // of this function's info whe hovering close to `module` keyword.
+    name == UNIT_TEST_POISON_FUN_NAME
 }
 
 /// Main AST traversal functions
@@ -1772,6 +1802,9 @@ fn get_mod_outer_defs(
     }
 
     for (pos, name, fun) in &mod_def.functions {
+        if ignored_function(*name) {
+            continue;
+        }
         let name_start = match get_start_loc(&pos, files, file_id_mapping) {
             Some(s) => s,
             None => {
@@ -1966,6 +1999,9 @@ impl<'a> ParsingSymbolicator<'a> {
             use P::ModuleMember as MM;
             match m {
                 MM::Function(fun) => {
+                    if ignored_function(fun.name.value()) {
+                        continue;
+                    }
                     if let P::FunctionBody_::Defined(seq) = &fun.body.value {
                         self.seq_symbols(seq);
                     };
@@ -2390,6 +2426,9 @@ impl<'a> TypingSymbolicator<'a> {
     /// Get symbols for the whole module
     fn mod_symbols(&mut self, mod_def: &ModuleDefinition, mod_ident_str: &str) {
         for (pos, name, fun) in &mod_def.functions {
+            if ignored_function(*name) {
+                continue;
+            }
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let doc_string = extract_doc_string(
@@ -2806,8 +2845,12 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
             }
-            E::InvalidAccess(e) => {
-                self.exp_symbols(e, scope);
+            E::AutocompleteDotAccess {
+                base_exp,
+                methods: _,
+                fields: _,
+            } => {
+                self.exp_symbols(base_exp, scope);
             }
             _ => (),
         }

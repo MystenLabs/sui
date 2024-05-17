@@ -5,7 +5,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use rand::{rngs::StdRng, Rng, SeedableRng};
 use sui_core::authority::authority_store_tables::LiveObject;
-use sui_core::state_accumulator::AccumulatorStore;
 use sui_types::{
     base_types::{ObjectRef, SuiAddress},
     object::Owner,
@@ -50,8 +49,8 @@ impl SurferTask {
             .unwrap();
         let all_live_objects: Vec<_> = node.with(|node| {
             node.state()
-                .get_execution_cache()
-                .iter_live_object_set(false)
+                .get_accumulator_store()
+                .iter_cached_live_object_set_for_testing(false)
                 .collect()
         });
         for obj in all_live_objects {

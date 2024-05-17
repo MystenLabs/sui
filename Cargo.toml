@@ -42,7 +42,6 @@ exclude = [
   "external-crates/move/crates/move-proc-macros",
   "external-crates/move/crates/move-prover",
   "external-crates/move/crates/move-prover-test-utils",
-  "external-crates/move/crates/move-read-write-set-types",
   "external-crates/move/crates/move-stackless-bytecode",
   "external-crates/move/crates/move-stackless-bytecode-interpreter",
   "external-crates/move/crates/move-stdlib",
@@ -439,7 +438,7 @@ rusoto_kms = { version = "0.48.0", default_features = false, features = [
 russh = "0.38.0"
 russh-keys = "0.38.0"
 rust-version = "1.56.1"
-rustls = { version = "0.21.11", features = ["dangerous_configuration"] }
+rustls = { version = "0.21.12", features = ["dangerous_configuration"] }
 rustls-pemfile = "1.0.2"
 rustversion = "1.0.9"
 rustyline = "9.1.2"
@@ -487,7 +486,10 @@ tokio-stream = { version = "0.1.14", features = ["sync", "net"] }
 tokio-util = "0.7.10"
 toml = { version = "0.7.4", features = ["preserve_order"] }
 toml_edit = { version = "0.19.10" }
-tonic = { version = "0.11", features = ["transport", "tls"] }
+# NOTE: do not enable the `tls` feature on tonic. It will break custom TLS handling
+# for self signed certificates. Unit tests under consensus/core and other integration
+# tests will fail.
+tonic = { version = "0.11", features = ["transport"] }
 tonic-build = { version = "0.11", features = ["prost", "transport"] }
 tonic-health = "0.11"
 tower = { version = "0.4.12", features = [

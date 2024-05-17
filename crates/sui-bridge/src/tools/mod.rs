@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::abi::{eth_sui_bridge, EthSuiBridge};
-use crate::config::read_key;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
 use crate::error::BridgeResult;
 use crate::sui_client::SuiBridgeClient;
@@ -28,6 +27,7 @@ use std::str::FromStr;
 use std::sync::Arc;
 use sui_config::Config;
 use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_keys::keypair_file::read_key;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -55,7 +55,7 @@ pub enum BridgeValidatorCommand {
     #[clap(name = "create-bridge-client-key")]
     CreateBridgeClientKey {
         path: PathBuf,
-        #[clap(name = "use-ecdsa", long)]
+        #[clap(name = "use-ecdsa", long, default_value = "false")]
         use_ecdsa: bool,
     },
     #[clap(name = "create-bridge-node-config-template")]

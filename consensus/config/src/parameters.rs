@@ -76,7 +76,7 @@ impl Parameters {
     }
 
     pub(crate) fn default_min_round_delay() -> Duration {
-        if cfg!(msim) {
+        if cfg!(msim) || std::env::var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY").is_ok() {
             // Checkpoint building and execution cannot keep up with high commit rate in simtests,
             // leading to long reconfiguration delays. This is because simtest is single threaded,
             // and spending too much time in consensus can lead to starvation elsewhere.
@@ -176,6 +176,12 @@ pub struct TonicParameters {
     #[serde(default = "TonicParameters::default_keepalive_interval")]
     pub keepalive_interval: Duration,
 
+    /// Size of various per-connection buffers.
+    ///
+    /// If unspecified, this will default to 32MiB.
+    #[serde(default = "TonicParameters::default_connection_buffer_size")]
+    pub connection_buffer_size: usize,
+
     /// Message size limits for both requests and responses.
     ///
     /// If unspecified, this will default to 8MiB.
@@ -188,6 +194,10 @@ impl TonicParameters {
         Duration::from_secs(5)
     }
 
+    fn default_connection_buffer_size() -> usize {
+        32 << 20
+    }
+
     fn default_message_size_limit() -> usize {
         8 << 20
     }
@@ -197,6 +207,7 @@ impl Default for TonicParameters {
     fn default() -> Self {
         Self {
             keepalive_interval: TonicParameters::default_keepalive_interval(),
+            connection_buffer_size: TonicParameters::default_connection_buffer_size(),
             message_size_limit: TonicParameters::default_message_size_limit(),
         }
     }

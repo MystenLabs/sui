@@ -17,12 +17,9 @@ use itertools::{Either, Itertools};
 use move_binary_format::file_format::CompiledModule;
 use move_bytecode_source_map::utils::source_map_from_file;
 use move_bytecode_utils::Modules;
-use move_command_line_common::{
-    env::get_bytecode_version_from_env,
-    files::{
-        extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
-        SOURCE_MAP_EXTENSION,
-    },
+use move_command_line_common::files::{
+    extension_equals, find_filenames, try_exists, MOVE_COMPILED_EXTENSION, MOVE_EXTENSION,
+    SOURCE_MAP_EXTENSION,
 };
 use move_compiler::{
     compiled_unit::{AnnotatedCompiledUnit, CompiledUnit, NamedCompiledModule},
@@ -315,10 +312,7 @@ impl OnDiskCompiledPackage {
             category_dir
                 .join(&file_path)
                 .with_extension(MOVE_COMPILED_EXTENSION),
-            compiled_unit
-                .unit
-                .serialize(get_bytecode_version_from_env())
-                .as_slice(),
+            compiled_unit.unit.serialize().as_slice(),
         )?;
         self.save_under(
             CompiledPackageLayout::SourceMaps

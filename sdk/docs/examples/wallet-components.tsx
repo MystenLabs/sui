@@ -65,7 +65,11 @@ function withProviders(Component: React.FunctionComponent<object>) {
 		return (
 			<QueryClientProvider client={queryClient}>
 				<SuiClientProvider networks={networks}>
-					<WalletProvider>
+					<WalletProvider
+						stashedWallet={{
+							name: 'dApp Kit Docs',
+						}}
+					>
 						<Component />
 					</WalletProvider>
 				</SuiClientProvider>

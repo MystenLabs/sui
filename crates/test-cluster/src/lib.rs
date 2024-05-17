@@ -57,8 +57,8 @@ use sui_types::bridge::{get_bridge, TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, T
 use sui_types::bridge::{get_bridge_obj_initial_shared_version, BridgeSummary, BridgeTrait};
 use sui_types::committee::CommitteeTrait;
 use sui_types::committee::{Committee, EpochId};
-use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::crypto::{KeypairTraits, ToFromBytes};
 use sui_types::effects::{TransactionEffects, TransactionEvents};
 use sui_types::error::SuiResult;
 use sui_types::governance::MIN_VALIDATOR_JOINING_STAKE_MIST;
@@ -279,7 +279,7 @@ impl TestCluster {
         self.fullnode_handle
             .sui_node
             .state()
-            .get_cache_reader()
+            .get_object_cache_reader()
             .get_latest_object_ref_or_tombstone(object_id)
             .unwrap()
             .unwrap()
@@ -563,7 +563,7 @@ impl TestCluster {
                 while let Some(tx) = txns.next().await {
                     let digest = *tx.transaction_digest();
                     let tx = state
-                        .get_cache_reader()
+                        .get_transaction_cache_reader()
                         .get_transaction_block(&digest)
                         .unwrap()
                         .unwrap();
@@ -870,6 +870,7 @@ pub struct TestClusterBuilder {
     additional_objects: Vec<Object>,
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
+    with_fullnode_client_ip_injection: Option<bool>,
     enable_fullnode_events: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
@@ -897,6 +898,7 @@ impl TestClusterBuilder {
             network_config: None,
             additional_objects: vec![],
             fullnode_rpc_port: None,
+            with_fullnode_client_ip_injection: None,
             num_validators: None,
             enable_fullnode_events: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
@@ -936,6 +938,11 @@ impl TestClusterBuilder {
 
     pub fn with_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
         self.fullnode_rpc_port = Some(rpc_port);
+        self
+    }
+
+    pub fn with_fullnode_client_ip_injection(mut self, with_ip_injection: Option<bool>) -> Self {
+        self.with_fullnode_client_ip_injection = with_ip_injection;
         self
     }
 
@@ -1256,7 +1263,7 @@ impl TestClusterBuilder {
                 validator_address,
                 &gas,
                 bridge_arg,
-                kp.copy(),
+                kp.public().as_bytes().to_vec(),
                 &server_url,
                 ref_gas_price,
             )
@@ -1394,7 +1401,8 @@ impl TestClusterBuilder {
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
             .with_fullnode_run_with_range(self.fullnode_run_with_range)
             .with_fullnode_policy_config(self.fullnode_policy_config.clone())
-            .with_fullnode_fw_config(self.fullnode_fw_config.clone());
+            .with_fullnode_fw_config(self.fullnode_fw_config.clone())
+            .with_fullnode_client_ip_injection(self.with_fullnode_client_ip_injection);
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);

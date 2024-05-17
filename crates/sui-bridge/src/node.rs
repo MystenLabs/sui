@@ -352,11 +352,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: None,
             },
@@ -406,11 +406,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: None,
+                bridge_client_key_path: None,
                 bridge_client_gas_object: None,
                 sui_bridge_module_last_processed_event_id_override: Some(EventID {
                     tx_digest: TransactionDigest::random(),
@@ -474,11 +474,11 @@ mod tests {
         let config = BridgeNodeConfig {
             server_listen_port,
             metrics_port: get_available_port("127.0.0.1"),
-            bridge_authority_key_path_base64_raw: tmp_dir.join(authority_key_path),
+            bridge_authority_key_path: tmp_dir.join(authority_key_path),
             sui: SuiConfig {
                 sui_rpc_url: bridge_test_cluster.sui_rpc_url(),
                 sui_bridge_chain_id: BridgeChainId::SuiCustom as u8,
-                bridge_client_key_path_base64_sui_key: Some(tmp_dir.join(client_key_path)),
+                bridge_client_key_path: Some(tmp_dir.join(client_key_path)),
                 bridge_client_gas_object: Some(gas_obj),
                 sui_bridge_module_last_processed_event_id_override: Some(EventID {
                     tx_digest: TransactionDigest::random(),

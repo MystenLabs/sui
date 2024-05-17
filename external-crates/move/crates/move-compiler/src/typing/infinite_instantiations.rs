@@ -268,16 +268,20 @@ fn exp(context: &mut Context, e: &T::Exp) {
         E::Block(seq) => sequence(context, seq),
         E::Assign(_, _, er) => exp(context, er),
 
-        E::Builtin(_, er)
-        | E::Vector(_, _, _, er)
-        | E::Return(er)
-        | E::Abort(er)
-        | E::Give(_, er)
-        | E::Dereference(er)
-        | E::UnaryExp(_, er)
-        | E::Borrow(_, er, _)
-        | E::TempBorrow(_, er)
-        | E::InvalidAccess(er) => exp(context, er),
+        E::Builtin(_, base_exp)
+        | E::Vector(_, _, _, base_exp)
+        | E::Return(base_exp)
+        | E::Abort(base_exp)
+        | E::Give(_, base_exp)
+        | E::Dereference(base_exp)
+        | E::UnaryExp(_, base_exp)
+        | E::Borrow(_, base_exp, _)
+        | E::TempBorrow(_, base_exp)
+        | E::AutocompleteDotAccess {
+            base_exp,
+            methods: _,
+            fields: _,
+        } => exp(context, base_exp),
         E::Mutate(el, er) | E::BinopExp(el, _, _, er) => {
             exp(context, el);
             exp(context, er)

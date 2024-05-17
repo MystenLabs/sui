@@ -20,7 +20,10 @@ use crate::{
     parser::ast::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
-    shared::{known_attributes::TestingAttribute, program_info::*, unique_map::UniqueMap, *},
+    shared::{
+        known_attributes::TestingAttribute, program_info::*, string_utils::debug_print,
+        unique_map::UniqueMap, *,
+    },
     typing::match_compilation,
     FullyCompiledProgram,
 };
@@ -79,6 +82,8 @@ pub(super) struct TypingDebugFlags {
     pub(super) match_counterexample: bool,
     pub(super) match_work_queue: bool,
     pub(super) match_constant_conversion: bool,
+    pub(super) autocomplete_resolution: bool,
+    pub(super) function_translation: bool,
 }
 
 pub struct Context<'env> {
@@ -178,6 +183,8 @@ impl<'env> Context<'env> {
             match_counterexample: false,
             match_work_queue: false,
             match_constant_conversion: false,
+            autocomplete_resolution: false,
+            function_translation: false,
         };
         Context {
             use_funs: vec![global_use_funs],
@@ -854,6 +861,67 @@ impl<'env> Context<'env> {
     fn next_match_var_id(&mut self) -> usize {
         self.next_match_var_id += 1;
         self.next_match_var_id
+    }
+
+    //********************************************
+    // IDE Helpers
+    //********************************************
+
+    /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
+    pub fn find_all_methods(
+        &mut self,
+        tn: &TypeName,
+    ) -> BTreeSet<(Spanned<ModuleIdent_>, FunctionName)> {
+        debug_print!(self.debug.autocomplete_resolution, (msg "methods"), ("name" => tn));
+        if !self
+            .env
+            .supports_feature(self.current_package(), FeatureGate::DotCall)
+        {
+            debug_print!(self.debug.autocomplete_resolution, (msg "dot call unsupported"));
+            return BTreeSet::new();
+        }
+        let cur_color = self.use_funs.last().unwrap().color;
+        let mut result = BTreeSet::new();
+        self.use_funs.iter().rev().for_each(|scope| {
+            if scope.color.is_some() && scope.color != cur_color {
+                return;
+            }
+            if let Some(names) = scope.use_funs.get(tn) {
+                let mut new_names = names
+                    .iter()
+                    .map(|(_, _, use_fun)| use_fun.target_function)
+                    .collect();
+                result.append(&mut new_names);
+            }
+        });
+        debug_print!(self.debug.autocomplete_resolution, (lines "result" => &result; dbg));
+        result
+    }
+
+    /// Find all valid fields in scope for a given `TypeName`. This is used for autocomplete.
+    pub fn find_all_fields(&mut self, tn: &TypeName) -> BTreeSet<Symbol> {
+        debug_print!(self.debug.autocomplete_resolution, (msg "fields"), ("name" => tn));
+        let fields = match &tn.value {
+            TypeName_::Multiple(_) => BTreeSet::new(),
+            // TODO(cswords): are there any valid builtin fielsd?
+            TypeName_::Builtin(_) => BTreeSet::new(),
+            TypeName_::ModuleType(m, _n) if !self.is_current_module(m) => BTreeSet::new(),
+            TypeName_::ModuleType(m, n) => match self.datatype_kind(m, n) {
+                DatatypeKind::Enum => BTreeSet::new(),
+                DatatypeKind::Struct => match &self.struct_definition(m, n).fields {
+                    N::StructFields::Native(_) => BTreeSet::new(),
+                    N::StructFields::Defined(is_positional, fields) => {
+                        if *is_positional {
+                            (0..fields.len()).map(|n| format!("{}", n).into()).collect()
+                        } else {
+                            fields.key_cloned_iter().map(|(k, _)| k.value()).collect()
+                        }
+                    }
+                },
+            },
+        };
+        debug_print!(self.debug.autocomplete_resolution, (lines "fields" => &fields; dbg));
+        fields
     }
 }
 

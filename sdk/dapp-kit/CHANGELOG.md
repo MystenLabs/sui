@@ -1,5 +1,21 @@
 # @mysten/dapp-kit
 
+## 0.13.2
+
+### Patch Changes
+
+- 3f8b08dedc: Fix broken theme style tag in canary versions of React when the provider is placed outside of the body tag
+- Updated dependencies [eeb19db837]
+  - @mysten/zksend@0.8.2
+
+## 0.13.1
+
+### Patch Changes
+
+- 2da78f77a3: Update stashed logo and fix detection of stashed wallet
+- Updated dependencies [2da78f77a3]
+  - @mysten/zksend@0.8.1
+
 ## 0.13.0
 
 ### Minor Changes

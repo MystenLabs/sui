@@ -374,7 +374,10 @@ codes!(
         MakePubPackage: { msg: "move 2024 migration: make 'public(package)'", severity: NonblockingError },
         AddressRemove: { msg: "move 2024 migration: address remove", severity: NonblockingError },
         AddressAdd: { msg: "move 2024 migration: address add", severity: NonblockingError },
-    ]
+    ],
+    IDE: [
+        Autocomplete: { msg: "IDE autocomplete", severity: NonblockingError },
+    ],
 );
 
 //**************************************************************************************************

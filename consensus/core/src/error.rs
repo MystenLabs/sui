@@ -152,8 +152,17 @@ pub enum ConsensusError {
     #[error("Peer {0} is disconnected.")]
     PeerDisconnected(String),
 
-    #[error("Network error: {0:?}")]
-    NetworkError(String),
+    #[error("Network config error: {0:?}")]
+    NetworkConfig(String),
+
+    #[error("Failed to connect as client: {0:?}")]
+    NetworkClientConnection(String),
+
+    #[error("Failed to connect as server: {0:?}")]
+    NetworkServerConnection(String),
+
+    #[error("Failed to send request: {0:?}")]
+    NetworkRequest(String),
 
     #[error("Request timeout: {0:?}")]
     NetworkRequestTimeout(String),

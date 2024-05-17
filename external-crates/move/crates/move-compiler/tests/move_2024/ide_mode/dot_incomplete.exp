@@ -1,36 +1,45 @@
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:12:23
+error[E15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:21
    │
-12 │         let _tmp1 = s.;                // incomplete with `;` (next line should parse)
-   │                       ^
-   │                       │
-   │                       Unexpected ';'
-   │                       Expected an identifier or a decimal number
+13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                     ^^^ Autocompletes to: 'a'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:37
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:13:24
    │
-13 │         let _tmp2 = s.another_field.;  // incomplete with `;` (next line should parse)
-   │                                     ^
-   │                                     │
-   │                                     Unexpected ';'
-   │                                     Expected an identifier or a decimal number
+13 │         let _tmp1 = _s.;                // incomplete with `;` (next line should parse)
+   │                        ^
+   │                        │
+   │                        Unexpected ';'
+   │                        Expected an identifier or a decimal number
+
+error[E15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:21
+   │
+14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                     ^^^^^ Autocompletes to: 'x'
 
 error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:9
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:14:26
    │
-15 │         let _tmp4 = s;
+14 │         let _tmp2 = _s.a.;  // incomplete with `;` (next line should parse)
+   │                          ^
+   │                          │
+   │                          Unexpected ';'
+   │                          Expected an identifier or a decimal number
+
+error[E15001]: IDE autocomplete
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:15:21
+   │
+15 │         let _tmp3 = _s.a.   // incomplete without `;` (unexpected `let`)
+   │                     ^^^^^ Autocompletes to: 'x'
+
+error[E01002]: unexpected token
+   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:16:9
+   │
+16 │         let _tmp4 = _s.
    │         ^^^
    │         │
    │         Unexpected 'let'
    │         Expected an identifier or a decimal number
-
-error[E01002]: unexpected token
-   ┌─ tests/move_2024/ide_mode/dot_incomplete.move:17:5
-   │
-17 │     }
-   │     ^
-   │     │
-   │     Unexpected '}'
-   │     Expected an identifier or a decimal number
 
