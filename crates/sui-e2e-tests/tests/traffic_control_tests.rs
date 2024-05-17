@@ -27,6 +27,35 @@ use sui_types::{
 };
 use test_cluster::{TestCluster, TestClusterBuilder};
 
+/// Test the case where the user calls `executeTransactionBlock` without
+/// optional params. Ensure that, if ip injection is enabled, we still
+/// correctly insert the client IP param
+#[tokio::test]
+async fn test_ip_injection_no_optional_exec_params() -> Result<(), anyhow::Error> {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 5,
+        // Test that IP forwarding works through this policy
+        spam_policy_type: PolicyType::TestInspectIp,
+        // This should never be invoked when set as an error policy
+        // as we are not sending requests that error
+        error_policy_type: PolicyType::TestPanicOnInvocation,
+        channel_capacity: 100,
+        dry_run: false,
+        spam_sample_rate: Weight::one(),
+    };
+    let network_config = ConfigBuilder::new_with_temp_dir()
+        .with_policy_config(Some(policy_config.clone()))
+        .build();
+    let test_cluster = TestClusterBuilder::new()
+        .set_network_config(network_config)
+        .with_fullnode_client_ip_injection(Some(true))
+        .build()
+        .await;
+
+    assert_traffic_control_ok(test_cluster, false).await
+}
+
 #[tokio::test]
 async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
     let policy_config = PolicyConfig {
@@ -50,7 +79,7 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
         .build()
         .await;
 
-    assert_traffic_control_ok(test_cluster).await
+    assert_traffic_control_ok(test_cluster, true).await
 }
 
 #[tokio::test]
@@ -70,7 +99,7 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
         .with_fullnode_policy_config(Some(policy_config))
         .build()
         .await;
-    assert_traffic_control_ok(test_cluster).await
+    assert_traffic_control_ok(test_cluster, true).await
 }
 
 #[tokio::test]
@@ -405,7 +434,10 @@ async fn test_traffic_sketch_with_sampled_spam() {
     assert!(metrics.num_blocked > (expected_requests / 5) - 1000);
 }
 
-async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), anyhow::Error> {
+async fn assert_traffic_control_ok(
+    mut test_cluster: TestCluster,
+    with_opt_params: bool,
+) -> Result<(), anyhow::Error> {
     let context = &mut test_cluster.wallet;
     let jsonrpc_client = &test_cluster.fullnode_handle.rpc_client;
 
@@ -422,12 +454,16 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
 
     // Test request with ExecuteTransactionRequestType::WaitForLocalExecution
     let (tx_bytes, signatures) = txn.to_tx_bytes_and_signatures();
-    let params = rpc_params![
-        tx_bytes,
-        signatures,
-        SuiTransactionBlockResponseOptions::new(),
-        ExecuteTransactionRequestType::WaitForLocalExecution
-    ];
+    let params = if with_opt_params {
+        rpc_params![
+            tx_bytes,
+            signatures,
+            SuiTransactionBlockResponseOptions::new(),
+            ExecuteTransactionRequestType::WaitForLocalExecution
+        ]
+    } else {
+        rpc_params![tx_bytes, signatures]
+    };
     let response: SuiTransactionBlockResponse = jsonrpc_client
         .request("sui_executeTransactionBlock", params)
         .await
@@ -439,7 +475,9 @@ async fn assert_traffic_control_ok(mut test_cluster: TestCluster) -> Result<(), 
         ..
     } = response;
     assert_eq!(&digest, tx_digest);
-    assert!(confirmed_local_execution.unwrap());
+    if with_opt_params {
+        assert!(confirmed_local_execution.unwrap());
+    }
 
     let _response: SuiTransactionBlockResponse = jsonrpc_client
         .request("sui_getTransactionBlock", rpc_params![*tx_digest])

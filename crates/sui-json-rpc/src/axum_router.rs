@@ -344,6 +344,12 @@ pub fn monitored_reroute(
 
             let params_str = match parsed_value {
                 Value::Array(mut params_vec) => {
+                    // explictly add null for optional arguments that
+                    // are not present in order to ensure client IP
+                    // is last
+                    for _ in 0..(4 - params_vec.len()) {
+                        params_vec.push(Value::Null);
+                    }
                     params_vec.push(Value::String(client_addr.to_string()));
                     serde_json::to_string(&params_vec).map_err(|err| {
                         SuiError::Unknown(format!("Failed to serialize params: {:?}", err))
