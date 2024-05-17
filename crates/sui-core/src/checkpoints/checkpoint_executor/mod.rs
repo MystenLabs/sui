@@ -287,9 +287,7 @@ impl CheckpointExecutor {
                 // be processed (added to FuturesOrdered) in seq_number order, using FuturesOrdered
                 // guarantees that we will also ratchet the watermarks in order.
                 Some(Ok((checkpoint, tx_digests))) = pending.next() => {
-                    let start = Instant::now();
                     self.process_executed_checkpoint(&epoch_store, &checkpoint, &tx_digests).await;
-                    println!("process_executed_checkpoint: {:?}us", start.elapsed().as_micros());
                     highest_executed = Some(checkpoint.clone());
 
                     // Estimate TPS every 10k transactions or 30 sec
