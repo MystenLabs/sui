@@ -290,7 +290,7 @@ mod test {
             _peer: AuthorityIndex,
             _authorities: Vec<AuthorityIndex>,
             _timeout: Duration,
-        ) -> ConsensusResult<Vec<Vec<Bytes>>> {
+        ) -> ConsensusResult<Vec<Bytes>> {
             unimplemented!("Unimplemented")
         }
     }

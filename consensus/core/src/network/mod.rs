@@ -113,7 +113,7 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         peer: AuthorityIndex,
         authorities: Vec<AuthorityIndex>,
         timeout: Duration,
-    ) -> ConsensusResult<Vec<Vec<Bytes>>>;
+    ) -> ConsensusResult<Vec<Bytes>>;
 }
 
 /// Network service for handling requests from peers.
@@ -156,7 +156,7 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
         &self,
         peer: AuthorityIndex,
         authorities: Vec<AuthorityIndex>,
-    ) -> ConsensusResult<Vec<Vec<Bytes>>>;
+    ) -> ConsensusResult<Vec<Bytes>>;
 }
 
 /// An `AuthorityNode` holds a `NetworkManager` until shutdown.

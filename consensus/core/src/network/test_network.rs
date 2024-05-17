@@ -87,7 +87,7 @@ impl NetworkService for Mutex<TestService> {
         &self,
         _peer: AuthorityIndex,
         _authorities: Vec<AuthorityIndex>,
-    ) -> ConsensusResult<Vec<Vec<Bytes>>> {
+    ) -> ConsensusResult<Vec<Bytes>> {
         unimplemented!("Unimplemented")
     }
 }

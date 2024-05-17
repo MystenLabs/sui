@@ -364,7 +364,7 @@ impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
         &self,
         _peer: AuthorityIndex,
         _authorities: Vec<AuthorityIndex>,
-    ) -> ConsensusResult<Vec<Vec<Bytes>>> {
+    ) -> ConsensusResult<Vec<Bytes>> {
         unimplemented!("Unimplemented");
     }
 }

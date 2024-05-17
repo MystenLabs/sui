@@ -216,7 +216,7 @@ impl NetworkClient for AnemoClient {
         _peer: AuthorityIndex,
         _authorities: Vec<AuthorityIndex>,
         _timeout: Duration,
-    ) -> ConsensusResult<Vec<Vec<Bytes>>> {
+    ) -> ConsensusResult<Vec<Bytes>> {
         unimplemented!("Unimplemented")
     }
 }
@@ -359,9 +359,32 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
 
     async fn fetch_latest_blocks(
         &self,
-        _request: anemo::Request<FetchLatestBlocksRequest>,
+        request: anemo::Request<FetchLatestBlocksRequest>,
     ) -> Result<anemo::Response<FetchLatestBlocksResponse>, anemo::rpc::Status> {
-        unimplemented!("Unimplemented");
+        let Some(peer_id) = request.peer_id() else {
+            return Err(anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer_id not found",
+            ));
+        };
+        let index = self.peer_map.get(peer_id).ok_or_else(|| {
+            anemo::rpc::Status::new_with_message(
+                anemo::types::response::StatusCode::BadRequest,
+                "peer not found",
+            )
+        })?;
+        let body = request.into_body();
+        let blocks = self
+            .service
+            .handle_fetch_latest_blocks(*index, body.authorities)
+            .await
+            .map_err(|e| {
+                anemo::rpc::Status::new_with_message(
+                    anemo::types::response::StatusCode::BadRequest,
+                    format!("{e}"),
+                )
+            })?;
+        Ok(Response::new(FetchLatestBlocksResponse { blocks }))
     }
 }
 
@@ -687,7 +710,7 @@ pub(crate) struct FetchLatestBlocksRequest {
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct FetchLatestBlocksResponse {
     // Serialized SignedBlocks.
-    blocks: Vec<Vec<Bytes>>,
+    blocks: Vec<Bytes>,
 }
 
 #[derive(Clone)]
