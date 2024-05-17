@@ -7,7 +7,6 @@ use async_graphql::*;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
-
 // TODO: calculate proper cost limits
 
 /// These values are set to support TS SDK shim layer queries for json-rpc compatibility.
@@ -89,6 +88,9 @@ pub struct ConnectionConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
     #[serde(default)]
+    pub(crate) versions: Versions,
+
+    #[serde(default)]
     pub(crate) limits: Limits,
 
     #[serde(default)]
@@ -105,6 +107,13 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) zklogin: ZkLoginConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Versions {
+    #[serde(default)]
+    versions: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -254,6 +263,11 @@ impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
     async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
         !self.disabled_features.contains(&feature)
+    }
+
+    /// List the available versions for this GraphQL service.
+    async fn available_versions(&self) -> Vec<String> {
+        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -451,6 +465,18 @@ impl BackgroundTasksConfig {
     pub fn test_defaults() -> Self {
         Self {
             watermark_update_ms: 100, // Set to 100ms for testing
+        }
+    }
+}
+
+impl Default for Versions {
+    fn default() -> Self {
+        Self {
+            versions: vec![format!(
+                "{}.{}",
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                env!("CARGO_PKG_VERSION_MINOR")
+            )],
         }
     }
 }
