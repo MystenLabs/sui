@@ -210,6 +210,15 @@ impl NetworkClient for AnemoClient {
         let response = response.into_body();
         Ok((response.commits, response.certifier_blocks))
     }
+
+    async fn fetch_latest_blocks(
+        &self,
+        _peer: AuthorityIndex,
+        _authorities: Vec<AuthorityIndex>,
+        _timeout: Duration,
+    ) -> ConsensusResult<Vec<Vec<Bytes>>> {
+        unimplemented!("Unimplemented")
+    }
 }
 
 /// Proxies Anemo requests to NetworkService with actual handler implementation.
@@ -346,6 +355,13 @@ impl<S: NetworkService> ConsensusRpc for AnemoServiceProxy<S> {
             commits,
             certifier_blocks,
         }))
+    }
+
+    async fn fetch_latest_blocks(
+        &self,
+        _request: anemo::Request<FetchLatestBlocksRequest>,
+    ) -> Result<anemo::Response<FetchLatestBlocksResponse>, anemo::rpc::Status> {
+        unimplemented!("Unimplemented");
     }
 }
 
@@ -661,4 +677,127 @@ pub(crate) struct FetchCommitsResponse {
     commits: Vec<Bytes>,
     // Serialized SignedBlock that certify the last commit from above.
     certifier_blocks: Vec<Bytes>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchLatestBlocksRequest {
+    authorities: Vec<AuthorityIndex>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct FetchLatestBlocksResponse {
+    // Serialized SignedBlocks.
+    blocks: Vec<Vec<Bytes>>,
+}
+
+#[derive(Clone)]
+pub(crate) struct MetricsMakeCallbackHandler {
+    metrics: Arc<NetworkRouteMetrics>,
+    /// Size in bytes above which a request or response message is considered excessively large
+    excessive_message_size: usize,
+}
+
+impl MetricsMakeCallbackHandler {
+    pub fn new(metrics: Arc<NetworkRouteMetrics>, excessive_message_size: usize) -> Self {
+        Self {
+            metrics,
+            excessive_message_size,
+        }
+    }
+}
+
+impl MakeCallbackHandler for MetricsMakeCallbackHandler {
+    type Handler = MetricsResponseHandler;
+
+    fn make_handler(&self, request: &anemo::Request<bytes::Bytes>) -> Self::Handler {
+        let route = request.route().to_owned();
+
+        self.metrics.requests.with_label_values(&[&route]).inc();
+        self.metrics
+            .inflight_requests
+            .with_label_values(&[&route])
+            .inc();
+        let body_len = request.body().len();
+        self.metrics
+            .request_size
+            .with_label_values(&[&route])
+            .observe(body_len as f64);
+        if body_len > self.excessive_message_size {
+            warn!(
+                "Saw excessively large request with size {body_len} for {route} with peer {:?}",
+                request.peer_id()
+            );
+            self.metrics
+                .excessive_size_requests
+                .with_label_values(&[&route])
+                .inc();
+        }
+
+        let timer = self
+            .metrics
+            .request_latency
+            .with_label_values(&[&route])
+            .start_timer();
+
+        MetricsResponseHandler {
+            metrics: self.metrics.clone(),
+            timer,
+            route,
+            excessive_message_size: self.excessive_message_size,
+        }
+    }
+}
+
+pub(crate) struct MetricsResponseHandler {
+    metrics: Arc<NetworkRouteMetrics>,
+    // The timer is held on to and "observed" once dropped
+    #[allow(unused)]
+    timer: HistogramTimer,
+    route: String,
+    excessive_message_size: usize,
+}
+
+impl ResponseHandler for MetricsResponseHandler {
+    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
+        let body_len = response.body().len();
+        self.metrics
+            .response_size
+            .with_label_values(&[&self.route])
+            .observe(body_len as f64);
+        if body_len > self.excessive_message_size {
+            warn!(
+                "Saw excessively large response with size {body_len} for {} with peer {:?}",
+                self.route,
+                response.peer_id()
+            );
+            self.metrics
+                .excessive_size_responses
+                .with_label_values(&[&self.route])
+                .inc();
+        }
+
+        if !response.status().is_success() {
+            let status = response.status().to_u16().to_string();
+            self.metrics
+                .errors
+                .with_label_values(&[&self.route, &status])
+                .inc();
+        }
+    }
+
+    fn on_error<E>(self, _error: &E) {
+        self.metrics
+            .errors
+            .with_label_values(&[&self.route, "unknown"])
+            .inc();
+    }
+}
+
+impl Drop for MetricsResponseHandler {
+    fn drop(&mut self) {
+        self.metrics
+            .inflight_requests
+            .with_label_values(&[&self.route])
+            .dec();
+    }
 }
