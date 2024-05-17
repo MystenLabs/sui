@@ -294,7 +294,7 @@ You have a `Counter` object, as well as functions that initialize and burn the o
 }
 ```
 
-The `get_vrf_input_and_increment` function is the core of this module. The function takes a mutable reference to the `Counter` object that the `mint` function creates, then appends the `Counter` object's current count to its ID and returns the result as a `vector<u8>`. The function then calls the internal `count` function to increment the count by one.
+The `get_vrf_input_and_increment` function is the core of this module. The function takes a mutable reference to the `Counter` object that the `mint` function creates, then appends the `Counter` object's current count to its ID and returns the result as a `vector<u8>`. The function then calls the internal `increment` function to increment the count by one.
 
 This code also adds a `count` function that returns the current count, and a test-only function that calls the `burn` function.
 
