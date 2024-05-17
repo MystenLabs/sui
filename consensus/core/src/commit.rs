@@ -5,7 +5,7 @@ use std::{
     cmp::Ordering,
     fmt::{self, Display, Formatter},
     hash::{Hash, Hasher},
-    ops::{Deref, Range},
+    ops::{Deref, RangeInclusive},
     sync::Arc,
 };
 
@@ -546,30 +546,30 @@ impl CommitInfo {
 }
 
 /// CommitRange stores a range of CommitIndex. The range contains the start (inclusive)
-/// and end (exclusive) commit indices and can be ordered for use as the key of a table.
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct CommitRange(Range<CommitIndex>);
+/// and end (inclusive) commit indices and can be ordered for use as the key of a table.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct CommitRange(RangeInclusive<CommitIndex>);
 
 #[allow(unused)]
 impl CommitRange {
-    pub(crate) fn new(range: Range<CommitIndex>) -> Self {
+    pub(crate) fn new(range: RangeInclusive<CommitIndex>) -> Self {
         Self(range)
     }
 
     // Inclusive
     pub(crate) fn start(&self) -> CommitIndex {
-        self.0.start
+        *self.0.start()
     }
 
     // Exclusive
     pub(crate) fn end(&self) -> CommitIndex {
-        self.0.end
+        *self.0.end()
     }
 
     /// Check if the provided range is sequentially after this range with the same
     /// range length.
     pub(crate) fn is_next_range(&self, other: &Self) -> bool {
-        self.0.len() == other.0.len() && self.end() == other.start()
+        self.0.size_hint() == other.0.size_hint() && self.end() + 1 == other.start()
     }
 }
 
@@ -587,9 +587,15 @@ impl PartialOrd for CommitRange {
     }
 }
 
-impl From<Range<CommitIndex>> for CommitRange {
-    fn from(range: Range<CommitIndex>) -> Self {
+impl From<RangeInclusive<CommitIndex>> for CommitRange {
+    fn from(range: RangeInclusive<CommitIndex>) -> Self {
         Self(range)
+    }
+}
+
+impl Default for CommitRange {
+    fn default() -> Self {
+        Self(CommitIndex::default()..=CommitIndex::default())
     }
 }
 
@@ -680,14 +686,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_commit_range() {
-        let range1 = CommitRange::new(1..6);
-        let range2 = CommitRange::new(2..6);
-        let range3 = CommitRange::new(5..10);
-        let range4 = CommitRange::new(6..11);
-        let range5 = CommitRange::new(6..9);
+        let range1 = CommitRange::new(1..=5);
+        let range2 = CommitRange::new(2..=6);
+        let range3 = CommitRange::new(5..=10);
+        let range4 = CommitRange::new(6..=10);
+        let range5 = CommitRange::new(6..=9);
 
         assert_eq!(range1.start(), 1);
-        assert_eq!(range1.end(), 6);
+        assert_eq!(range1.end(), 5);
 
         // Test next range check
         assert!(!range1.is_next_range(&range2));

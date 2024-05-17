@@ -47,6 +47,7 @@ use super::{
 };
 use crate::{
     block::{BlockRef, VerifiedBlock},
+    commit::CommitRange,
     context::Context,
     error::{ConsensusError, ConsensusResult},
     network::{
@@ -229,12 +230,14 @@ impl NetworkClient for TonicClient {
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
         let mut client = self.get_client(peer, timeout).await?;
-        let mut request = Request::new(FetchCommitsRequest { start, end });
+        let mut request = Request::new(FetchCommitsRequest {
+            start: commit_range.start(),
+            end: commit_range.end(),
+        });
         request.set_timeout(timeout);
         let response = client
             .fetch_commits(request)
@@ -478,7 +481,7 @@ impl<S: NetworkService> ConsensusService for TonicServiceProxy<S> {
         let request = request.into_inner();
         let (commits, certifier_blocks) = self
             .service
-            .handle_fetch_commits(peer_index, request.start, request.end)
+            .handle_fetch_commits(peer_index, (request.start..=request.end).into())
             .await
             .map_err(|e| tonic::Status::internal(format!("{e:?}")))?;
         let commits = commits

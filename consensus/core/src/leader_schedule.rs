@@ -12,6 +12,7 @@ use parking_lot::RwLock;
 use rand::{prelude::SliceRandom, rngs::StdRng, SeedableRng};
 
 use crate::{
+    commit::CommitRange,
     context::Context,
     dag_state::DagState,
     leader_scoring::{ReputationScoreCalculator, ReputationScores},
@@ -225,7 +226,7 @@ impl LeaderSchedule {
         // of CommitRange(0..0) all future LeaderSwapTables should be calculated
         // from a CommitRange of equal length and immediately following the
         // preceding commit range of the old swap table.
-        if *old_commit_range != (0..0).into() {
+        if *old_commit_range != CommitRange::default() {
             assert!(
                 old_commit_range.is_next_range(new_commit_range),
                 "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable {old_commit_range:?} vs new LeaderSwapTable {new_commit_range:?}",
@@ -675,7 +676,7 @@ mod tests {
 
         // The CommitInfo for the first 10 commits are written to store. This is the
         // info that LeaderSchedule will be recovered from
-        let commit_range = (1..11).into();
+        let commit_range = (1..=10).into();
         let reputation_scores = ReputationScores::new(commit_range, vec![4, 1, 1, 3]);
         let committed_rounds = vec![9, 9, 10, 9];
         let commit_ref = expected_commits[9].reference();
@@ -984,8 +985,10 @@ mod tests {
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
-        let reputation_scores =
-            ReputationScores::new((0..11).into(), (0..4).map(|i| i as u64).collect::<Vec<_>>());
+        let reputation_scores = ReputationScores::new(
+            (0..=10).into(),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
         let leader_swap_table =
             LeaderSwapTable::new_inner(context, swap_stake_threshold, 0, reputation_scores);
 
@@ -1006,8 +1009,10 @@ mod tests {
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
-        let reputation_scores =
-            ReputationScores::new((0..11).into(), (0..4).map(|i| i as u64).collect::<Vec<_>>());
+        let reputation_scores = ReputationScores::new(
+            (0..=10).into(),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
         let leader_swap_table =
             LeaderSwapTable::new_inner(context.clone(), swap_stake_threshold, 0, reputation_scores);
 
@@ -1073,8 +1078,10 @@ mod tests {
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 34;
-        let reputation_scores =
-            ReputationScores::new((0..11).into(), (0..4).map(|i| i as u64).collect::<Vec<_>>());
+        let reputation_scores = ReputationScores::new(
+            (0..=10).into(),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
         LeaderSwapTable::new_inner(context, swap_stake_threshold, 0, reputation_scores);
     }
 
@@ -1084,8 +1091,10 @@ mod tests {
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
-        let reputation_scores =
-            ReputationScores::new((1..11).into(), (0..4).map(|i| i as u64).collect::<Vec<_>>());
+        let reputation_scores = ReputationScores::new(
+            (1..=10).into(),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
         let leader_swap_table =
             LeaderSwapTable::new_inner(context.clone(), swap_stake_threshold, 0, reputation_scores);
 
@@ -1095,7 +1104,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            (11..21).into(),
+            (11..=20).into(),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -1107,15 +1116,17 @@ mod tests {
 
     #[tokio::test]
     #[should_panic(
-        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..21) vs new LeaderSwapTable CommitRange(21..26)"
+        expected = "The new LeaderSwapTable has an invalid CommitRange. Old LeaderSwapTable CommitRange(11..=20) vs new LeaderSwapTable CommitRange(21..=25)"
     )]
     async fn test_update_bad_leader_swap_table() {
         telemetry_subscribers::init_for_testing();
         let context = Arc::new(Context::new_for_test(4).0);
 
         let swap_stake_threshold = 33;
-        let reputation_scores =
-            ReputationScores::new((1..11).into(), (0..4).map(|i| i as u64).collect::<Vec<_>>());
+        let reputation_scores = ReputationScores::new(
+            (1..=10).into(),
+            (0..4).map(|i| i as u64).collect::<Vec<_>>(),
+        );
         let leader_swap_table =
             LeaderSwapTable::new_inner(context.clone(), swap_stake_threshold, 0, reputation_scores);
 
@@ -1125,7 +1136,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            (11..21).into(),
+            (11..=20).into(),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =
@@ -1135,7 +1146,7 @@ mod tests {
         leader_schedule.update_leader_swap_table(leader_swap_table.clone());
 
         let reputation_scores = ReputationScores::new(
-            (21..26).into(),
+            (21..=25).into(),
             (0..4).map(|i| i as u64).collect::<Vec<_>>(),
         );
         let leader_swap_table =

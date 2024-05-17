@@ -25,10 +25,10 @@ use futures::Stream;
 
 use crate::{
     block::{BlockRef, VerifiedBlock},
-    commit::TrustedCommit,
+    commit::{CommitRange, TrustedCommit},
     context::Context,
     error::ConsensusResult,
-    CommitIndex, Round,
+    Round,
 };
 
 // Anemo generated RPC stubs.
@@ -95,14 +95,13 @@ pub(crate) trait NetworkClient: Send + Sync + Sized + 'static {
         timeout: Duration,
     ) -> ConsensusResult<Vec<Bytes>>;
 
-    /// Fetches serialized commits from a peer, with index in [start, end].
+    /// Fetches serialized commits from a peer, with index in CommitRange(start..=end).
     /// Returns a tuple of both the serialized commits, and serialized blocks that contain
     /// votes certifying the last commit.
     async fn fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
         timeout: Duration,
     ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)>;
 }
@@ -139,8 +138,7 @@ pub(crate) trait NetworkService: Send + Sync + 'static {
     async fn handle_fetch_commits(
         &self,
         peer: AuthorityIndex,
-        start: CommitIndex,
-        end: CommitIndex,
+        commit_range: CommitRange,
     ) -> ConsensusResult<(Vec<TrustedCommit>, Vec<VerifiedBlock>)>;
 }
 
