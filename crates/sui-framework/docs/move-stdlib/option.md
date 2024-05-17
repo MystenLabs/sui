@@ -17,7 +17,6 @@ This module defines the Option type and its methods to represent and handle an o
 -  [Function `get_with_default`](#0x1_option_get_with_default)
 -  [Function `fill`](#0x1_option_fill)
 -  [Function `extract`](#0x1_option_extract)
--  [Function `take`](#0x1_option_take)
 -  [Function `borrow_mut`](#0x1_option_borrow_mut)
 -  [Function `swap`](#0x1_option_swap)
 -  [Function `swap_or_fill`](#0x1_option_swap_or_fill)
@@ -348,31 +347,6 @@ Aborts if <code>t</code> does not hold a value
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_extract">extract</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;): Element {
     <b>assert</b>!(t.<a href="../move-stdlib/option.md#0x1_option_is_some">is_some</a>(), <a href="../move-stdlib/option.md#0x1_option_EOPTION_NOT_SET">EOPTION_NOT_SET</a>);
     t.vec.pop_back()
-}
-</code></pre>
-
-
-
-</details>
-
-<a name="0x1_option_take"></a>
-
-## Function `take`
-
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_take">take</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Element&gt;): <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;Element&gt;
-</code></pre>
-
-
-
-<details>
-<summary>Implementation</summary>
-
-
-<pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/option.md#0x1_option_take">take</a>&lt;Element&gt;(t: &<b>mut</b> <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt;): <a href="../move-stdlib/option.md#0x1_option_Option">Option</a>&lt;Element&gt; {
-    <b>if</b> (t.<a href="../move-stdlib/option.md#0x1_option_is_none">is_none</a>()) <a href="../move-stdlib/option.md#0x1_option_none">none</a>()
-    <b>else</b> <a href="../move-stdlib/option.md#0x1_option_some">some</a>(t.vec.pop_back())
 }
 </code></pre>
 
