@@ -93,6 +93,7 @@ export class ParallelExecutor {
 		await transactionBlock.prepareForSerialization({ client: this.#client });
 
 		const execute = async () => {
+			transactionBlock.setSenderIfNotSet(this.#signer.toSuiAddress());
 			const bytes = await this.#buildQueue.runTask(() =>
 				this.#cache.buildTransactionBlock({ transactionBlock }),
 			);

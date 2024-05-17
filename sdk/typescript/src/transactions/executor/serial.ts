@@ -1,63 +1,91 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { bcs } from '../../bcs/index.js';
-import type { ExecuteTransactionBlockParams } from '../../client/index.js';
+import { bcs } from '../../bcs/index.js';
+import type { ExecuteTransactionBlockParams, SuiClient } from '../../client/index.js';
+import type { Signer } from '../../cryptography/keypair.js';
+import type { ObjectCacheOptions } from '../ObjectCache.js';
 import type { TransactionBlock } from '../TransactionBlock.js';
 import { isTransactionBlock } from '../TransactionBlock.js';
 import { CachingTransactionBlockExecutor } from './caching.js';
 import { SerialQueue } from './queue.js';
 
-export class SerialTransactionBlockExecutor extends CachingTransactionBlockExecutor {
+export class SerialTransactionBlockExecutor {
 	#queue = new SerialQueue();
+	#signer: Signer;
+	#cache: CachingTransactionBlockExecutor;
 
-	override async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
+	constructor({
+		signer,
+		...options
+	}: Omit<ObjectCacheOptions, 'address'> & {
+		client: SuiClient;
+		signer: Signer;
+	}) {
+		this.#signer = signer;
+		this.#cache = new CachingTransactionBlockExecutor({
+			address: this.#signer.toSuiAddress(),
+			client: options.client,
+			cache: options.cache,
+		});
+	}
+
+	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
+		return Promise.all([this.#cacheGasCoin(effects), this.#cache.cache.applyEffects(effects)]);
+	}
+
+	#cacheGasCoin = async (effects: typeof bcs.TransactionEffects.$inferType) => {
 		if (!effects.V2) {
 			return;
 		}
 
-		await super.applyEffects(effects);
-
 		const gasCoin = getGasCoinFromEffects(effects);
 		if (gasCoin) {
-			this.cache.setCustom('gasCoin', gasCoin);
+			this.#cache.cache.setCustom('gasCoin', gasCoin);
 		} else {
-			this.cache.deleteCustom('gasCoin');
+			this.#cache.cache.deleteCustom('gasCoin');
 		}
-	}
+	};
 
-	override async buildTransactionBlock(input: { transactionBlock: TransactionBlock }) {
-		return this.#queue.runTask(async () => this.#buildTransactionBlock(input));
-	}
-
-	#buildTransactionBlock = async (input: { transactionBlock: TransactionBlock }) => {
-		const gasCoin = await this.cache.getCustom<{
+	#buildTransactionBlock = async (transactionBlock: TransactionBlock) => {
+		const gasCoin = await this.#cache.cache.getCustom<{
 			objectId: string;
 			version: string;
 			digest: string;
 		}>('gasCoin');
 
 		if (gasCoin) {
-			input.transactionBlock.setGasPayment([gasCoin]);
+			transactionBlock.setGasPayment([gasCoin]);
 		}
 
-		return super.buildTransactionBlock(input);
+		transactionBlock.setSenderIfNotSet(this.#signer.toSuiAddress());
+
+		return this.#cache.buildTransactionBlock({ transactionBlock });
 	};
 
-	override async executeTransactionBlock({
+	executeTransactionBlock({
 		transactionBlock,
 		...input
 	}: {
 		transactionBlock: TransactionBlock | Uint8Array;
-	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
-		return this.#queue.runTask(async () =>
-			super.executeTransactionBlock({
+	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
+		return this.#queue.runTask(async () => {
+			const bytes = isTransactionBlock(transactionBlock)
+				? await this.#buildTransactionBlock(transactionBlock)
+				: transactionBlock;
+
+			const { signature } = await this.#signer.signTransactionBlock(bytes);
+			const results = await this.#cache.executeTransactionBlock({
 				...input,
-				transactionBlock: isTransactionBlock(transactionBlock)
-					? await this.#buildTransactionBlock({ transactionBlock })
-					: transactionBlock,
-			}),
-		);
+				signature,
+				transactionBlock: bytes,
+			});
+
+			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects!));
+			await this.applyEffects(effects);
+
+			return results;
+		});
 	}
 }
 
