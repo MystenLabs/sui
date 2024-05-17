@@ -34,12 +34,16 @@ module sui::config {
         older_value_opt: Option<Value>,
     }
 
-    public fun create_config<WriteCap>(_cap: &mut WriteCap, ctx: &mut TxContext) {
+    public(package) fun create_config<WriteCap>(_cap: &mut WriteCap, ctx: &mut TxContext) {
         let config = Config<WriteCap> { id: object::new(ctx) };
         transfer::share_object(config)
     }
 
-    public fun new_for_epoch<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+    public(package) fun new_for_epoch<
+        WriteCap,
+        Name: copy + drop + store,
+        Value: copy + drop + store,
+    >(
         config: &mut Config<WriteCap>,
         _cap: &mut WriteCap,
         name: Name,
@@ -75,7 +79,12 @@ module sui::config {
         }
     }
 
-    public fun has_for_epoch<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+    #[allow(unused_mut_parameter)]
+    public(package) fun has_for_epoch<
+        WriteCap,
+        Name: copy + drop + store,
+        Value: copy + drop + store,
+    >(
         config: &mut Config<WriteCap>,
         _cap: &mut WriteCap,
         name: Name,
@@ -88,7 +97,8 @@ module sui::config {
         }
     }
 
-    public fun borrow_mut<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
+    #[allow(unused_mut_parameter)]
+    public(package) fun borrow_mut<WriteCap, Name: copy + drop + store, Value: copy + drop + store>(
         config: &mut Config<WriteCap>,
         _cap: &mut WriteCap,
         name: Name,
@@ -101,12 +111,16 @@ module sui::config {
         &mut data.newer_value
     }
 
-    public macro fun update<$WriteCap, $Name: copy + drop + store, $Value: copy + drop + store>(
+    public(package) macro fun update<
+        $WriteCap,
+        $Name: copy + drop + store,
+        $Value: copy + drop + store,
+    >(
         $config: &mut Config<$WriteCap>,
         $cap: &mut $WriteCap,
         $name: $Name,
         $initial_for_next_epoch: |&mut Config<$WriteCap>, &mut $WriteCap, &mut TxContext| -> $Value,
-        $update: |Option<$Value>, &mut $Value|,
+        $update_for_next_epoch: |Option<$Value>, &mut $Value|,
         $ctx: &mut TxContext,
     ) {
         let config = $config;
@@ -119,7 +133,7 @@ module sui::config {
         } else {
             option::none()
         };
-        $update(old_value_opt, config.borrow_mut(cap, name, ctx));
+        $update_for_next_epoch(old_value_opt, config.borrow_mut(cap, name, ctx));
     }
 
     public fun read_setting<Name: copy + drop + store, Value: copy + drop + store>(

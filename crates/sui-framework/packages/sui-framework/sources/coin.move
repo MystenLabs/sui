@@ -12,7 +12,6 @@ module sui::coin {
     use sui::url::{Self, Url};
     use sui::deny_list::{Self, DenyList};
     use std::type_name;
-    use sui::vec_set::{Self, VecSet};
 
     // Allows calling `.split_vec(amounts, ctx)` on `coin`
     public use fun sui::pay::split_vec as Coin.split_vec;
@@ -32,6 +31,10 @@ module sui::coin {
     const EInvalidArg: u64 = 1;
     /// Trying to split a coin more times than its balance allows.
     const ENotEnough: u64 = 2;
+    // #[error]
+    // const EKIllSwitchNotAllowed: vector<u8> =
+    //    b"Kill switch was not allowed at the creation of the DenyCapV2";
+    const EKillSwitchNotAllowed: u64 = 3;
 
     /// A coin of type `T` worth `value`. Transferable and storable
     public struct Coin<phantom T> has key, store {
@@ -77,10 +80,7 @@ module sui::coin {
 
     public struct DenyCapV2<phantom T> has key, store {
         id: UID,
-    }
-
-    public struct DenyListV2<phantom T> has key, store {
-        id: UID,
+        allow_kill_switch: bool,
     }
 
     public struct DenyListV2WriteCap has drop {}
@@ -246,6 +246,7 @@ module sui::coin {
         name: vector<u8>,
         description: vector<u8>,
         icon_url: Option<Url>,
+        allow_kill_switch: bool,
         ctx: &mut TxContext
     ): (TreasuryCap<T>, DenyCapV2<T>, CoinMetadata<T>) {
         let (treasury_cap, metadata) = create_currency(
@@ -259,6 +260,7 @@ module sui::coin {
         );
         let deny_cap = DenyCapV2 {
             id: object::new(ctx),
+            allow_kill_switch,
         };
         transfer::freeze_object(RegulatedCoinMetadata<T> {
             id: object::new(ctx),
@@ -298,42 +300,34 @@ module sui::coin {
 
     public fun deny_list_v2_add<T>(
         deny_list: &mut Config<DenyListV2WriteCap>,
-        _deny_cap: &mut DenyCap<T>,
+        _deny_cap: &mut DenyCapV2<T>,
         addr: address,
         ctx: &mut TxContext,
     ) {
-        let setting_name = deny_list_v2_address_setting_name<T>();
-        deny_list.update!<_, _, VecSet<address>>(
+        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
+        let setting_name = deny_list_v2_address_setting_name<T>(addr);
+        deny_list.update!<_, _, bool>(
             &mut DenyListV2WriteCap {},
             setting_name,
-            |deny_list, _cap, ctx| {
-                config::read_setting(object::id(deny_list), setting_name, ctx)
-                    .destroy_with_default(vec_set::empty())
-            },
-            |_prev, next| if (!next.contains(&addr)) next.insert(addr),
+            |_deny_list, _cap, _ctx| true,
+            |_prev, next| *next = true,
             ctx,
         );
     }
 
     public fun deny_list_v2_remove<T>(
         deny_list: &mut Config<DenyListV2WriteCap>,
-        _deny_cap: &mut DenyCap<T>,
+        _deny_cap: &mut DenyCapV2<T>,
         addr: address,
         ctx: &mut TxContext,
     ) {
-        let setting_name = deny_list_v2_address_setting_name<T>();
-        deny_list.update!<_, vector<u8>, VecSet<address>>(
+        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
+        let setting_name = deny_list_v2_address_setting_name<T>(addr);
+        deny_list.update!<_, vector<u8>, bool>(
             &mut DenyListV2WriteCap {},
             setting_name,
-            |deny_list, _cap, ctx| {
-                config::read_setting(object::id(deny_list), setting_name, ctx)
-                    .destroy_with_default(vec_set::empty())
-            },
-            |_prev, next| {
-                // TODO error code
-                assert!(next.contains(&addr));
-                next.insert(addr)
-            },
+            |_deny_list, _cap, _ctx| false,
+            |_prev, next| *next = false,
             ctx,
         );
     }
@@ -343,18 +337,19 @@ module sui::coin {
         addr: address,
         ctx: &TxContext,
     ): bool {
-        let setting_name = deny_list_v2_address_setting_name<T>();
+        let setting_name = deny_list_v2_address_setting_name<T>(addr);
         let denied =
-            config::read_setting<_, VecSet<address>>(object::id(deny_list), setting_name, ctx);
-        if (denied.is_none()) false
-        else denied.destroy_some().contains(&addr)
+            config::read_setting<_, bool>(object::id(deny_list), setting_name, ctx);
+        denied.is_some() && denied.destroy_some()
     }
 
     public fun deny_list_v2_enable_kill_switch<T>(
         deny_list: &mut Config<DenyListV2WriteCap>,
-        _deny_cap: &mut DenyCap<T>,
+        deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
+        assert!(deny_cap.allow_kill_switch, EKillSwitchNotAllowed);
+        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
         let setting_name = deny_list_v2_kill_switch_setting_name<T>();
         deny_list.update!<_, vector<u8>, bool>(
             &mut DenyListV2WriteCap {},
@@ -367,9 +362,11 @@ module sui::coin {
 
     public fun deny_list_v2_disable_kill_switch<T>(
         deny_list: &mut Config<DenyListV2WriteCap>,
-        _deny_cap: &mut DenyCap<T>,
+        deny_cap: &mut DenyCapV2<T>,
         ctx: &mut TxContext,
     ) {
+        assert!(deny_cap.allow_kill_switch, EKillSwitchNotAllowed);
+        maybe_create_deny_list_v2_marker<T>(deny_list, ctx);
         let setting_name = deny_list_v2_kill_switch_setting_name<T>();
         deny_list.update!<_, vector<u8>, bool>(
             &mut DenyListV2WriteCap {},
@@ -443,21 +440,46 @@ module sui::coin {
 
     // === Internal code ===
 
-    const DL_V2_ADDRESSES: vector<u8> = b"::addresses";
+    const DL_V2_MARKER: vector<u8> = b"::marker";
+    const DL_V2_ADDRESSES: vector<u8> = b"::address::";
     const DL_V2_KILL_SWITCH: vector<u8> = b"::kill_switch";
 
-    fun deny_list_v2_address_setting_name<T>(): vector<u8> {
+    // b"{type}::marker"
+    fun deny_list_v2_marker_setting_name<T>(): vector<u8> {
         let mut setting_name =
             type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
-        setting_name.append(DL_V2_ADDRESSES);
+        setting_name.append(DL_V2_MARKER);
         setting_name
     }
 
+    // b"{type}::address::{addr:x}"
+    fun deny_list_v2_address_setting_name<T>(addr: address): vector<u8> {
+        let mut setting_name =
+            type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
+        setting_name.append(DL_V2_ADDRESSES);
+        setting_name.append(sui::hex::encode(sui::address::to_bytes(addr)));
+        setting_name
+    }
+
+    // b"{type}::kill_switch"
     fun deny_list_v2_kill_switch_setting_name<T>(): vector<u8> {
         let mut setting_name =
             type_name::into_string(type_name::get_with_original_ids<T>()).into_bytes();
         setting_name.append(DL_V2_KILL_SWITCH);
         setting_name
+    }
+
+    fun maybe_create_deny_list_v2_marker<T>(
+        deny_list: &mut Config<DenyListV2WriteCap>,
+        ctx: &mut TxContext,
+    ) {
+        let setting_name = deny_list_v2_marker_setting_name<T>();
+        let setting =
+            config::read_setting<vector<u8>, bool>(object::id(deny_list), setting_name, ctx);
+        if (setting.is_some()) return;
+        let cap = &mut DenyListV2WriteCap {};
+        if (deny_list.has_for_epoch<_, vector<u8>, bool>(cap, setting_name, ctx)) return;
+        deny_list.new_for_epoch<_, vector<u8>, bool>(cap, setting_name, false, ctx);
     }
 
     // === Test-only code ===
