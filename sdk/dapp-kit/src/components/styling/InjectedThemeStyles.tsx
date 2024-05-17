@@ -16,11 +16,13 @@ export function InjectedThemeStyles({ theme }: InjectedThemeStylesProps) {
 		? getDynamicThemeStyles(theme)
 		: getStaticThemeStyles(theme);
 
+	console.log(themeStyles);
+
 	return (
 		<style
 			// @ts-expect-error The precedence prop hasn't made it to the stable release of React, but we
 			// don't want this to break in frameworks like Next which use the latest canary build.
-			precedence="medium"
+			precedence="default"
 			href="mysten-dapp-kit-theme"
 			dangerouslySetInnerHTML={{
 				__html: themeStyles,
