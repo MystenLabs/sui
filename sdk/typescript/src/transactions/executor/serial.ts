@@ -6,29 +6,10 @@ import type { ExecuteTransactionBlockParams } from '../../client/index.js';
 import type { TransactionBlock } from '../TransactionBlock.js';
 import { isTransactionBlock } from '../TransactionBlock.js';
 import { CachingTransactionBlockExecutor } from './caching.js';
+import { SerialQueue } from './queue.js';
 
 export class SerialTransactionBlockExecutor extends CachingTransactionBlockExecutor {
-	#queue: (() => Promise<void>)[] = [];
-
-	async #runTask<T>(task: () => Promise<T>): Promise<T> {
-		return new Promise((resolve, reject) => {
-			this.#queue.push(async () => {
-				const promise = task();
-				promise.then(resolve, reject);
-
-				promise.finally(() => {
-					this.#queue.shift();
-					if (this.#queue.length > 0) {
-						this.#queue[0]();
-					}
-				});
-			});
-
-			if (this.#queue.length === 1) {
-				this.#queue[0]();
-			}
-		});
-	}
+	#queue = new SerialQueue();
 
 	override async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
 		if (!effects.V2) {
@@ -46,7 +27,7 @@ export class SerialTransactionBlockExecutor extends CachingTransactionBlockExecu
 	}
 
 	override async buildTransactionBlock(input: { transactionBlock: TransactionBlock }) {
-		return this.#runTask(async () => this.#buildTransactionBlock(input));
+		return this.#queue.runTask(async () => this.#buildTransactionBlock(input));
 	}
 
 	#buildTransactionBlock = async (input: { transactionBlock: TransactionBlock }) => {
@@ -69,7 +50,7 @@ export class SerialTransactionBlockExecutor extends CachingTransactionBlockExecu
 	}: {
 		transactionBlock: TransactionBlock | Uint8Array;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
-		return this.#runTask(async () =>
+		return this.#queue.runTask(async () =>
 			super.executeTransactionBlock({
 				...input,
 				transactionBlock: isTransactionBlock(transactionBlock)

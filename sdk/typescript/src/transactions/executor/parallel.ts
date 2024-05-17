@@ -7,6 +7,7 @@ import type { Signer } from '../../cryptography/index.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { TransactionBlock } from '../TransactionBlock.js';
 import { CachingTransactionBlockExecutor } from './caching.js';
+import { ParallelQueue, SerialQueue } from './queue.js';
 
 const PARALLEL_EXECUTOR_DEFAULTS = {
 	coinBatchSize: 20,
@@ -37,12 +38,13 @@ export class ParallelExecutor {
 	#initialCoinBalance: bigint;
 	#minimumCoinBalance: bigint;
 	#maxPoolSize: number;
-	#sourceCoinIds: string[] | null = null;
-	#sourceCoins: SuiObjectRef[] | null = null;
+	#sourceCoins: Map<string, SuiObjectRef | null> | null;
 	#coinPool = new Set<CoinWithBalance>();
 	#cache: CachingTransactionBlockExecutor;
 	#objectIdQueues = new Map<string, (() => void)[]>();
 	#refillPromise: Promise<void> | null = null;
+	#buildQueue = new SerialQueue();
+	#executeQueue: ParallelQueue;
 
 	constructor(options: ParallelExecutorOptions) {
 		this.#signer = options.signer;
@@ -53,19 +55,26 @@ export class ParallelExecutor {
 		this.#minimumCoinBalance =
 			options.minimumCoinBalance ?? PARALLEL_EXECUTOR_DEFAULTS.minimumCoinBalance;
 		this.#maxPoolSize = options.maxPoolSize ?? PARALLEL_EXECUTOR_DEFAULTS.maxPoolSize;
-		this.#sourceCoinIds = options.sourceCoins ? options.sourceCoins : null;
 		this.#cache = new CachingTransactionBlockExecutor({
 			address: this.#signer.toSuiAddress(),
 			client: options.client,
 			cache: options.cache,
 		});
+		this.#executeQueue = new ParallelQueue(this.#maxPoolSize);
+		this.#sourceCoins = new Map(options.sourceCoins?.map((id) => [id, null]));
 	}
 
 	async executeTransactionBlock(transactionBlock: TransactionBlock) {
 		const { promise, resolve, reject } = promiseWithResolvers<SuiTransactionBlockResponse>();
 		const usedObjects = new Set<string>();
+		let serialized = false;
 		transactionBlock.addSerializationPlugin(async (blockData, _options, next) => {
 			await next();
+
+			if (serialized) {
+				return;
+			}
+			serialized = true;
 
 			blockData.inputs.forEach((input) => {
 				if (input.Object?.ImmOrOwnedObject?.objectId) {
@@ -84,13 +93,13 @@ export class ParallelExecutor {
 		await transactionBlock.prepareForSerialization({ client: this.#client });
 
 		const execute = async () => {
-			const bytes = await this.#runSequentialTask(() =>
+			const bytes = await this.#buildQueue.runTask(() =>
 				this.#cache.buildTransactionBlock({ transactionBlock }),
 			);
 
 			const { signature } = await this.#signer.signTransactionBlock(bytes);
 
-			await this.#runParallelTask(async () => {
+			await this.#executeQueue.runTask(async () => {
 				let gasCoin: CoinWithBalance | null = null;
 				try {
 					gasCoin = await this.#getGasCoin();
@@ -124,37 +133,26 @@ export class ParallelExecutor {
 
 						if (gasCoin.balance >= this.#minimumCoinBalance) {
 							this.#coinPool.add(gasCoin);
-						} else if (this.#sourceCoins) {
-							this.#sourceCoins.push({
+						} else {
+							if (!this.#sourceCoins) {
+								this.#sourceCoins = new Map();
+							}
+							this.#sourceCoins.set(gasCoin.id, {
 								objectId: gasCoin.id,
 								version: gasCoin.version,
 								digest: gasCoin.digest,
 							});
-						} else if (this.#sourceCoinIds) {
-							this.#sourceCoinIds.push(gasCoin.id);
-						} else {
-							this.#sourceCoins = [
-								{
-									objectId: gasCoin.id,
-									version: gasCoin.version,
-									digest: gasCoin.digest,
-								},
-							];
 						}
 					}
 
 					resolve(results);
 				} catch (error) {
 					if (gasCoin) {
-						// Coin might have been used to pay for gas of failed transaction
-						// Add it to the list of source coins and throw out the versions/digests
-						if (!this.#sourceCoinIds) {
-							this.#sourceCoinIds = [gasCoin.id];
-							this.#sourceCoins?.forEach((coin) => {
-								this.#sourceCoinIds!.push(coin.objectId);
-							});
-							this.#sourceCoins = null;
+						if (!this.#sourceCoins) {
+							this.#sourceCoins = new Map();
 						}
+
+						this.#sourceCoins.set(gasCoin.id, null);
 					}
 					reject(error);
 				} finally {
@@ -171,7 +169,8 @@ export class ParallelExecutor {
 		};
 
 		const conflicts = new Set<string>();
-		[...usedObjects].forEach((objectId) => {
+
+		usedObjects.forEach((objectId) => {
 			const queue = this.#objectIdQueues.get(objectId);
 			if (queue) {
 				conflicts.add(objectId);
@@ -193,65 +192,8 @@ export class ParallelExecutor {
 		return promise;
 	}
 
-	#sequentialQueue: (() => Promise<void>)[] = [];
-	async #runSequentialTask<T>(task: () => Promise<T>): Promise<T> {
-		return new Promise((resolve, reject) => {
-			this.#sequentialQueue.push(async () => {
-				const promise = task();
-				promise.then(resolve, reject);
-
-				promise.finally(() => {
-					this.#sequentialQueue.shift();
-					if (this.#sequentialQueue.length > 0) {
-						this.#sequentialQueue[0]();
-					}
-				});
-			});
-
-			if (this.#sequentialQueue.length === 1) {
-				this.#sequentialQueue[0]();
-			}
-		});
-	}
-
-	#activeTasks = 0;
-	#parallelQueue: (() => Promise<void>)[] = [];
-	#runParallelTask<T>(task: () => Promise<T>): Promise<T> {
-		return new Promise<T>((resolve, reject) => {
-			if (this.#activeTasks < this.#maxPoolSize) {
-				this.#activeTasks++;
-
-				const promise = task().then(resolve, reject);
-
-				promise.finally(() => {
-					if (this.#parallelQueue.length > 0) {
-						this.#parallelQueue.shift()!();
-					} else {
-						this.#activeTasks--;
-					}
-				});
-			} else {
-				this.#parallelQueue.push(async () => {
-					try {
-						const result = await task();
-						resolve(result);
-					} catch (error) {
-						reject(error);
-					} finally {
-						this.#parallelQueue.shift();
-						if (this.#parallelQueue.length > 0) {
-							this.#parallelQueue.shift()!();
-						} else {
-							this.#activeTasks--;
-						}
-					}
-				});
-			}
-		});
-	}
-
 	async #getGasCoin() {
-		if (this.#coinPool.size === 0 && this.#activeTasks < this.#maxPoolSize) {
+		if (this.#coinPool.size === 0 && this.#executeQueue.activeTasks < this.#maxPoolSize) {
 			await this.#refillCoinPool();
 		}
 
@@ -278,7 +220,7 @@ export class ParallelExecutor {
 		}
 		const batchSize = Math.min(
 			this.#coinBatchSize,
-			this.#maxPoolSize - (this.#coinPool.size + this.#activeTasks),
+			this.#maxPoolSize - (this.#coinPool.size + this.#executeQueue.activeTasks),
 		);
 
 		if (batchSize === 0) {
@@ -289,25 +231,34 @@ export class ParallelExecutor {
 		const address = this.#signer.toSuiAddress();
 		txb.setSender(address);
 
-		if (this.#sourceCoinIds) {
-			const coins = await this.#client.multiGetObjects({
-				ids: this.#sourceCoinIds,
-			});
+		if (this.#sourceCoins) {
+			const refs = [];
+			const ids = [];
+			for (const [id, ref] of this.#sourceCoins) {
+				if (ref) {
+					refs.push(ref);
+				} else {
+					ids.push(id);
+				}
+			}
 
-			const payment = coins
-				.filter((coin): coin is typeof coin & { data: object } => coin.data !== null)
-				.map(({ data }) => ({
-					objectId: data.objectId,
-					version: data.version,
-					digest: data.digest,
-				}));
+			if (ids.length > 0) {
+				const coins = await this.#client.multiGetObjects({
+					ids,
+				});
+				refs.push(
+					...coins
+						.filter((coin): coin is typeof coin & { data: object } => coin.data !== null)
+						.map(({ data }) => ({
+							objectId: data.objectId,
+							version: data.version,
+							digest: data.digest,
+						})),
+				);
+			}
 
-			txb.setGasPayment(payment);
-			this.#sourceCoinIds = null;
-			this.#sourceCoins = [];
-		} else if (this.#sourceCoins) {
-			txb.setGasPayment(this.#sourceCoins);
-			this.#sourceCoins = [];
+			txb.setGasPayment(refs);
+			this.#sourceCoins = new Map();
 		}
 
 		const amounts = new Array(batchSize).fill(this.#initialCoinBalance);
@@ -341,11 +292,10 @@ export class ParallelExecutor {
 			}
 		});
 
-		if (!this.#sourceCoins) {
-			this.#sourceCoins = [];
-		}
-
-		this.#sourceCoins.push(result.effects!.gasObject.reference);
+		this.#sourceCoins!.set(
+			result.effects!.gasObject.reference.objectId,
+			result.effects!.gasObject.reference,
+		);
 	}
 }
 
