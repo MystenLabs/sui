@@ -104,8 +104,8 @@ impl Worker for SuinsIndexerWorker {
         let checkpoint_seq_number = checkpoint.checkpoint_summary.sequence_number;
         let (updates, removals) = self.indexer.process_checkpoint(&checkpoint);
 
-        /// every 1000 checkpoints, we will print the checkpoint sequence number
-        /// to the console to keep track of progress
+        // every 1000 checkpoints, we will print the checkpoint sequence number
+        // to the console to keep track of progress
         if checkpoint_seq_number % 1000 == 0 {
             info!("Checkpoint sequence number: {}", checkpoint_seq_number);
         }
