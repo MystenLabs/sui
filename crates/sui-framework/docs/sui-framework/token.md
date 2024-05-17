@@ -1121,7 +1121,7 @@ Rule itself. Configuration is stored per <code>Rule</code> and not per <code>Rul
 the <code><a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a></code> owner.
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_add_rule_config">add_rule_config</a>&lt;T, Rule: drop, Config: store&gt;(_rule: Rule, self: &<b>mut</b> <a href="token.md#0x2_token_TokenPolicy">token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="token.md#0x2_token_TokenPolicyCap">token::TokenPolicyCap</a>&lt;T&gt;, config: Config, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_add_rule_config">add_rule_config</a>&lt;T, Rule: drop, Config: store&gt;(_rule: Rule, self: &<b>mut</b> <a href="token.md#0x2_token_TokenPolicy">token::TokenPolicy</a>&lt;T&gt;, cap: &<a href="token.md#0x2_token_TokenPolicyCap">token::TokenPolicyCap</a>&lt;T&gt;, <a href="config.md#0x2_config">config</a>: Config, _ctx: &<b>mut</b> <a href="tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1134,11 +1134,11 @@ the <code><a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a></code> owner.
     _rule: Rule,
     self: &<b>mut</b> <a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;,
     cap: &<a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</a>&lt;T&gt;,
-    config: Config,
+    <a href="config.md#0x2_config">config</a>: Config,
     _ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
-    df::add(&<b>mut</b> self.id, <a href="token.md#0x2_token_key">key</a>&lt;Rule&gt;(), config)
+    df::add(&<b>mut</b> self.id, <a href="token.md#0x2_token_key">key</a>&lt;Rule&gt;(), <a href="config.md#0x2_config">config</a>)
 }
 </code></pre>
 

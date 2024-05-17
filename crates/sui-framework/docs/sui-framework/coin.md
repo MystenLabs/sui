@@ -11,8 +11,10 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Resource `CoinMetadata`](#0x2_coin_CoinMetadata)
 -  [Resource `RegulatedCoinMetadata`](#0x2_coin_RegulatedCoinMetadata)
 -  [Resource `TreasuryCap`](#0x2_coin_TreasuryCap)
--  [Resource `DenyCap`](#0x2_coin_DenyCap)
+-  [Resource `DenyCapV2`](#0x2_coin_DenyCapV2)
+-  [Struct `DenyListV2WriteCap`](#0x2_coin_DenyListV2WriteCap)
 -  [Struct `CurrencyCreated`](#0x2_coin_CurrencyCreated)
+-  [Resource `DenyCap`](#0x2_coin_DenyCap)
 -  [Constants](#@Constants_0)
 -  [Function `total_supply`](#0x2_coin_total_supply)
 -  [Function `treasury_into_supply`](#0x2_coin_treasury_into_supply)
@@ -31,13 +33,15 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `zero`](#0x2_coin_zero)
 -  [Function `destroy_zero`](#0x2_coin_destroy_zero)
 -  [Function `create_currency`](#0x2_coin_create_currency)
--  [Function `create_regulated_currency`](#0x2_coin_create_regulated_currency)
+-  [Function `create_regulated_currency_v2`](#0x2_coin_create_regulated_currency_v2)
 -  [Function `mint`](#0x2_coin_mint)
 -  [Function `mint_balance`](#0x2_coin_mint_balance)
 -  [Function `burn`](#0x2_coin_burn)
--  [Function `deny_list_add`](#0x2_coin_deny_list_add)
--  [Function `deny_list_remove`](#0x2_coin_deny_list_remove)
--  [Function `deny_list_contains`](#0x2_coin_deny_list_contains)
+-  [Function `deny_list_v2_add`](#0x2_coin_deny_list_v2_add)
+-  [Function `deny_list_v2_remove`](#0x2_coin_deny_list_v2_remove)
+-  [Function `deny_list_v2_contains`](#0x2_coin_deny_list_v2_contains)
+-  [Function `deny_list_v2_enable_kill_switch`](#0x2_coin_deny_list_v2_enable_kill_switch)
+-  [Function `deny_list_v2_disable_kill_switch`](#0x2_coin_deny_list_v2_disable_kill_switch)
 -  [Function `mint_and_transfer`](#0x2_coin_mint_and_transfer)
 -  [Function `update_name`](#0x2_coin_update_name)
 -  [Function `update_symbol`](#0x2_coin_update_symbol)
@@ -48,15 +52,27 @@ tokens and coins. <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a
 -  [Function `get_symbol`](#0x2_coin_get_symbol)
 -  [Function `get_description`](#0x2_coin_get_description)
 -  [Function `get_icon_url`](#0x2_coin_get_icon_url)
+-  [Function `deny_list_v2_marker_setting_name`](#0x2_coin_deny_list_v2_marker_setting_name)
+-  [Function `deny_list_v2_address_setting_name`](#0x2_coin_deny_list_v2_address_setting_name)
+-  [Function `deny_list_v2_kill_switch_setting_name`](#0x2_coin_deny_list_v2_kill_switch_setting_name)
+-  [Function `maybe_create_deny_list_v2_marker`](#0x2_coin_maybe_create_deny_list_v2_marker)
 -  [Function `supply`](#0x2_coin_supply)
+-  [Function `create_regulated_currency`](#0x2_coin_create_regulated_currency)
+-  [Function `deny_list_add`](#0x2_coin_deny_list_add)
+-  [Function `deny_list_remove`](#0x2_coin_deny_list_remove)
+-  [Function `deny_list_contains`](#0x2_coin_deny_list_contains)
 
 
 <pre><code><b>use</b> <a href="../move-stdlib/ascii.md#0x1_ascii">0x1::ascii</a>;
 <b>use</b> <a href="../move-stdlib/option.md#0x1_option">0x1::option</a>;
 <b>use</b> <a href="../move-stdlib/string.md#0x1_string">0x1::string</a>;
 <b>use</b> <a href="../move-stdlib/type_name.md#0x1_type_name">0x1::type_name</a>;
+<b>use</b> <a href="../move-stdlib/vector.md#0x1_vector">0x1::vector</a>;
+<b>use</b> <a href="../sui-framework/address.md#0x2_address">0x2::address</a>;
 <b>use</b> <a href="../sui-framework/balance.md#0x2_balance">0x2::balance</a>;
+<b>use</b> <a href="../sui-framework/config.md#0x2_config">0x2::config</a>;
 <b>use</b> <a href="../sui-framework/deny_list.md#0x2_deny_list">0x2::deny_list</a>;
+<b>use</b> <a href="../sui-framework/hex.md#0x2_hex">0x2::hex</a>;
 <b>use</b> <a href="../sui-framework/object.md#0x2_object">0x2::object</a>;
 <b>use</b> <a href="../sui-framework/transfer.md#0x2_transfer">0x2::transfer</a>;
 <b>use</b> <a href="../sui-framework/tx_context.md#0x2_tx_context">0x2::tx_context</a>;
@@ -238,15 +254,13 @@ coins of type <code>T</code>. Transferable
 
 </details>
 
-<a name="0x2_coin_DenyCap"></a>
+<a name="0x2_coin_DenyCapV2"></a>
 
-## Resource `DenyCap`
-
-Capability allowing the bearer to freeze addresses, preventing those addresses from
-interacting with the coin as an input to a transaction.
+## Resource `DenyCapV2`
 
 
-<pre><code><b>struct</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt; <b>has</b> store, key
+
+<pre><code><b>struct</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt; <b>has</b> store, key
 </code></pre>
 
 
@@ -258,6 +272,39 @@ interacting with the coin as an input to a transaction.
 <dl>
 <dt>
 <code>id: <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a></code>
+</dt>
+<dd>
+
+</dd>
+<dt>
+<code>allow_kill_switch: bool</code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
+<a name="0x2_coin_DenyListV2WriteCap"></a>
+
+## Struct `DenyListV2WriteCap`
+
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> <b>has</b> drop
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>dummy_field: bool</code>
 </dt>
 <dd>
 
@@ -294,6 +341,35 @@ interacting with the coin as an input to a transaction.
 
 </details>
 
+<a name="0x2_coin_DenyCap"></a>
+
+## Resource `DenyCap`
+
+Capability allowing the bearer to freeze addresses, preventing those addresses from
+interacting with the coin as an input to a transaction.
+
+
+<pre><code><b>struct</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt; <b>has</b> store, key
+</code></pre>
+
+
+
+<details>
+<summary>Fields</summary>
+
+
+<dl>
+<dt>
+<code>id: <a href="../sui-framework/object.md#0x2_object_UID">object::UID</a></code>
+</dt>
+<dd>
+
+</dd>
+</dl>
+
+
+</details>
+
 <a name="@Constants_0"></a>
 
 ## Constants
@@ -319,6 +395,33 @@ The index into the deny list vector for the <code>sui::coin::Coin</code> type.
 
 
 
+<a name="0x2_coin_DL_V2_ADDRESSES"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_DL_V2_ADDRESSES">DL_V2_ADDRESSES</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 97, 100, 100, 114, 101, 115, 115, 101, 115];
+</code></pre>
+
+
+
+<a name="0x2_coin_DL_V2_KILL_SWITCH"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_DL_V2_KILL_SWITCH">DL_V2_KILL_SWITCH</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 107, 105, 108, 108, 95, 115, 119, 105, 116, 99, 104];
+</code></pre>
+
+
+
+<a name="0x2_coin_DL_V2_MARKER"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_DL_V2_MARKER">DL_V2_MARKER</a>: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; = [58, 58, 109, 97, 114, 107, 101, 114];
+</code></pre>
+
+
+
 <a name="0x2_coin_EBadWitness"></a>
 
 A type passed to create_supply is not a one-time witness.
@@ -335,6 +438,15 @@ Invalid arguments are passed to a function.
 
 
 <pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>: u64 = 1;
+</code></pre>
+
+
+
+<a name="0x2_coin_EKillSwitchNotAllowed"></a>
+
+
+
+<pre><code><b>const</b> <a href="../sui-framework/coin.md#0x2_coin_EKillSwitchNotAllowed">EKillSwitchNotAllowed</a>: u64 = 3;
 </code></pre>
 
 
@@ -825,16 +937,13 @@ type, ensuring that there's only one <code><a href="../sui-framework/coin.md#0x2
 
 </details>
 
-<a name="0x2_coin_create_regulated_currency"></a>
+<a name="0x2_coin_create_regulated_currency_v2"></a>
 
-## Function `create_regulated_currency`
-
-This creates a new currency, via <code>create_currency</code>, but with an extra capability that
-allows for specific addresses to have their coins frozen. Those addresses cannot interact
-with the coin as input objects.
+## Function `create_regulated_currency_v2`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, allow_kill_switch: bool, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
 </code></pre>
 
 
@@ -843,15 +952,16 @@ with the coin as input objects.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency_v2">create_regulated_currency_v2</a>&lt;T: drop&gt;(
     witness: T,
     decimals: u8,
     symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     icon_url: Option&lt;Url&gt;,
+    allow_kill_switch: bool,
     ctx: &<b>mut</b> TxContext
-): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
+): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
     <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
         witness,
         decimals,
@@ -861,8 +971,9 @@ with the coin as input objects.
         icon_url,
         ctx
     );
-    <b>let</b> deny_cap = <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a> {
+    <b>let</b> deny_cap = <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+        allow_kill_switch,
     };
     <a href="../sui-framework/transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(<a href="../sui-framework/coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
@@ -965,15 +1076,13 @@ accordingly.
 
 </details>
 
-<a name="0x2_coin_deny_list_add"></a>
+<a name="0x2_coin_deny_list_v2_add"></a>
 
-## Function `deny_list_add`
-
-Adds the given address to the deny list, preventing it
-from interacting with the specified coin type as an input to a transaction.
+## Function `deny_list_v2_add`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -982,20 +1091,21 @@ from interacting with the specified coin type as an input to a transaction.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(
-   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
-   _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
-   addr: <b>address</b>,
-   _ctx: &<b>mut</b> TxContext
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_add">deny_list_v2_add</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+    _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
+    addr: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> `type` =
-        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_add">deny_list::add</a>(
-        <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
-        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        `type`,
-        addr,
-    )
+    <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>&lt;T&gt;(addr);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<b>update</b>!&lt;_, _, bool&gt;(
+        &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> {},
+        setting_name,
+        |_deny_list, _cap, _ctx| <b>true</b>,
+        |_prev, next| *next = <b>true</b>,
+        ctx,
+    );
 }
 </code></pre>
 
@@ -1003,15 +1113,13 @@ from interacting with the specified coin type as an input to a transaction.
 
 </details>
 
-<a name="0x2_coin_deny_list_remove"></a>
+<a name="0x2_coin_deny_list_v2_remove"></a>
 
-## Function `deny_list_remove`
-
-Removes an address from the deny list.
-Aborts with <code>ENotFrozen</code> if the address is not already in the list.
+## Function `deny_list_v2_remove`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, addr: <b>address</b>, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -1020,20 +1128,21 @@ Aborts with <code>ENotFrozen</code> if the address is not already in the list.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(
-   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
-   _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
-   addr: <b>address</b>,
-   _ctx: &<b>mut</b> TxContext
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_remove">deny_list_v2_remove</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+    _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
+    addr: <b>address</b>,
+    ctx: &<b>mut</b> TxContext,
 ) {
-    <b>let</b> `type` =
-        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_remove">deny_list::remove</a>(
-        <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
-        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        `type`,
-        addr,
-    )
+    <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>&lt;T&gt;(addr);
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<b>update</b>!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+        &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> {},
+        setting_name,
+        |_deny_list, _cap, _ctx| <b>false</b>,
+        |_prev, next| *next = <b>false</b>,
+        ctx,
+    );
 }
 </code></pre>
 
@@ -1041,15 +1150,13 @@ Aborts with <code>ENotFrozen</code> if the address is not already in the list.
 
 </details>
 
-<a name="0x2_coin_deny_list_contains"></a>
+<a name="0x2_coin_deny_list_v2_contains"></a>
 
-## Function `deny_list_contains`
-
-Returns true iff the given address is denied for the given coin type. It will
-return false if given a non-coin type.
+## Function `deny_list_v2_contains`
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(freezer: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains">deny_list_v2_contains</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, addr: <b>address</b>, ctx: &<a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): bool
 </code></pre>
 
 
@@ -1058,15 +1165,89 @@ return false if given a non-coin type.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(
-   freezer: &DenyList,
-   addr: <b>address</b>,
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_contains">deny_list_v2_contains</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+    addr: <b>address</b>,
+    ctx: &TxContext,
 ): bool {
-    <b>let</b> name = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
-    <b>if</b> (<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">type_name::is_primitive</a>(&name)) <b>return</b> <b>false</b>;
+    <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>&lt;T&gt;(addr);
+    <b>let</b> denied =
+        <a href="../sui-framework/config.md#0x2_config_read_setting">config::read_setting</a>&lt;_, bool&gt;(<a href="../sui-framework/object.md#0x2_object_id">object::id</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>), setting_name, ctx);
+    denied.is_some() && denied.destroy_some()
+}
+</code></pre>
 
-    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name).into_bytes();
-    freezer.contains(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_enable_kill_switch"></a>
+
+## Function `deny_list_v2_enable_kill_switch`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_kill_switch">deny_list_v2_enable_kill_switch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_enable_kill_switch">deny_list_v2_enable_kill_switch</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+    deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(deny_cap.allow_kill_switch, <a href="../sui-framework/coin.md#0x2_coin_EKillSwitchNotAllowed">EKillSwitchNotAllowed</a>);
+    <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_kill_switch_setting_name">deny_list_v2_kill_switch_setting_name</a>&lt;T&gt;();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<b>update</b>!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+        &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> {},
+        setting_name,
+        |_deny_list, _cap, _ctx| <b>true</b>,
+        |_prev, next| *next = <b>true</b>,
+        ctx,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_disable_kill_switch"></a>
+
+## Function `deny_list_v2_disable_kill_switch`
+
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_kill_switch">deny_list_v2_disable_kill_switch</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">coin::DenyCapV2</a>&lt;T&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_disable_kill_switch">deny_list_v2_disable_kill_switch</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+    deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCapV2">DenyCapV2</a>&lt;T&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>assert</b>!(deny_cap.allow_kill_switch, <a href="../sui-framework/coin.md#0x2_coin_EKillSwitchNotAllowed">EKillSwitchNotAllowed</a>);
+    <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>, ctx);
+    <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_kill_switch_setting_name">deny_list_v2_kill_switch_setting_name</a>&lt;T&gt;();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.<b>update</b>!&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(
+        &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> {},
+        setting_name,
+        |_deny_list, _cap, _ctx| <b>false</b>,
+        |_prev, next| *next = <b>false</b>,
+        ctx,
+    )
 }
 </code></pre>
 
@@ -1329,6 +1510,121 @@ Update the url of the coin in <code><a href="../sui-framework/coin.md#0x2_coin_C
 
 </details>
 
+<a name="0x2_coin_deny_list_v2_marker_setting_name"></a>
+
+## Function `deny_list_v2_marker_setting_name`
+
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_marker_setting_name">deny_list_v2_marker_setting_name</a>&lt;T&gt;(): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_marker_setting_name">deny_list_v2_marker_setting_name</a>&lt;T&gt;(): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+    <b>let</b> <b>mut</b> setting_name =
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    setting_name.append(<a href="../sui-framework/coin.md#0x2_coin_DL_V2_MARKER">DL_V2_MARKER</a>);
+    setting_name
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_address_setting_name"></a>
+
+## Function `deny_list_v2_address_setting_name`
+
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>&lt;T&gt;(addr: <b>address</b>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_address_setting_name">deny_list_v2_address_setting_name</a>&lt;T&gt;(addr: <b>address</b>): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+    <b>let</b> <b>mut</b> setting_name =
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    setting_name.append(<a href="../sui-framework/coin.md#0x2_coin_DL_V2_ADDRESSES">DL_V2_ADDRESSES</a>);
+    setting_name.append(sui::hex::encode(sui::address::to_bytes(addr)));
+    setting_name
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_v2_kill_switch_setting_name"></a>
+
+## Function `deny_list_v2_kill_switch_setting_name`
+
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_kill_switch_setting_name">deny_list_v2_kill_switch_setting_name</a>&lt;T&gt;(): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_kill_switch_setting_name">deny_list_v2_kill_switch_setting_name</a>&lt;T&gt;(): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt; {
+    <b>let</b> <b>mut</b> setting_name =
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    setting_name.append(<a href="../sui-framework/coin.md#0x2_coin_DL_V2_KILL_SWITCH">DL_V2_KILL_SWITCH</a>);
+    setting_name
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_maybe_create_deny_list_v2_marker"></a>
+
+## Function `maybe_create_deny_list_v2_marker`
+
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/config.md#0x2_config_Config">config::Config</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">coin::DenyListV2WriteCap</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_maybe_create_deny_list_v2_marker">maybe_create_deny_list_v2_marker</a>&lt;T&gt;(
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> Config&lt;<a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a>&gt;,
+    ctx: &<b>mut</b> TxContext,
+) {
+    <b>let</b> setting_name = <a href="../sui-framework/coin.md#0x2_coin_deny_list_v2_marker_setting_name">deny_list_v2_marker_setting_name</a>&lt;T&gt;();
+    <b>let</b> setting =
+        <a href="../sui-framework/config.md#0x2_config_read_setting">config::read_setting</a>&lt;<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(<a href="../sui-framework/object.md#0x2_object_id">object::id</a>(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>), setting_name, ctx);
+    <b>if</b> (setting.is_some()) <b>return</b>;
+    <b>let</b> cap = &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyListV2WriteCap">DenyListV2WriteCap</a> {};
+    <b>if</b> (<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.has_for_epoch&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(cap, setting_name, ctx)) <b>return</b>;
+    <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>.new_for_epoch&lt;_, <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, bool&gt;(cap, setting_name, <b>false</b>, ctx);
+}
+</code></pre>
+
+
+
+</details>
+
 <a name="0x2_coin_supply"></a>
 
 ## Function `supply`
@@ -1346,6 +1642,167 @@ Update the url of the coin in <code><a href="../sui-framework/coin.md#0x2_coin_C
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_supply">supply</a>&lt;T&gt;(treasury: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): &Supply&lt;T&gt; {
     &treasury.total_supply
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_create_regulated_currency"></a>
+
+## Function `create_regulated_currency`
+
+This creates a new currency, via <code>create_currency</code>, but with an extra capability that
+allows for specific addresses to have their coins frozen. Those addresses cannot interact
+with the coin as input objects.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(witness: T, decimals: u8, symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, icon_url: <a href="../move-stdlib/option.md#0x1_option_Option">option::Option</a>&lt;<a href="../sui-framework/url.md#0x2_url_Url">url::Url</a>&gt;, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">coin::TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">coin::CoinMetadata</a>&lt;T&gt;)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_create_regulated_currency">create_regulated_currency</a>&lt;T: drop&gt;(
+    witness: T,
+    decimals: u8,
+    symbol: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
+    icon_url: Option&lt;Url&gt;,
+    ctx: &<b>mut</b> TxContext
+): (<a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin_CoinMetadata">CoinMetadata</a>&lt;T&gt;) {
+    <b>let</b> (treasury_cap, metadata) = <a href="../sui-framework/coin.md#0x2_coin_create_currency">create_currency</a>(
+        witness,
+        decimals,
+        symbol,
+        name,
+        description,
+        icon_url,
+        ctx
+    );
+    <b>let</b> deny_cap = <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a> {
+        id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+    };
+    <a href="../sui-framework/transfer.md#0x2_transfer_freeze_object">transfer::freeze_object</a>(<a href="../sui-framework/coin.md#0x2_coin_RegulatedCoinMetadata">RegulatedCoinMetadata</a>&lt;T&gt; {
+        id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
+        coin_metadata_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&metadata),
+        deny_cap_object: <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&deny_cap),
+    });
+    (treasury_cap, deny_cap, metadata)
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_add"></a>
+
+## Function `deny_list_add`
+
+Adds the given address to the deny list, preventing it
+from interacting with the specified coin type as an input to a transaction.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_add">deny_list_add</a>&lt;T&gt;(
+   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+   _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+   addr: <b>address</b>,
+   _ctx: &<b>mut</b> TxContext
+) {
+    <b>let</b> `type` =
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_add">deny_list::add</a>(
+        <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
+        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
+        `type`,
+        addr,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_remove"></a>
+
+## Function `deny_list_remove`
+
+Removes an address from the deny list.
+Aborts with <code>ENotFrozen</code> if the address is not already in the list.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(<a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> <a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">coin::DenyCap</a>&lt;T&gt;, addr: <b>address</b>, _ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_remove">deny_list_remove</a>&lt;T&gt;(
+   <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>: &<b>mut</b> DenyList,
+   _deny_cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_DenyCap">DenyCap</a>&lt;T&gt;,
+   addr: <b>address</b>,
+   _ctx: &<b>mut</b> TxContext
+) {
+    <b>let</b> `type` =
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
+    <a href="../sui-framework/deny_list.md#0x2_deny_list_remove">deny_list::remove</a>(
+        <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
+        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
+        `type`,
+        addr,
+    )
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_coin_deny_list_contains"></a>
+
+## Function `deny_list_contains`
+
+Returns true iff the given address is denied for the given coin type. It will
+return false if given a non-coin type.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(freezer: &<a href="../sui-framework/deny_list.md#0x2_deny_list_DenyList">deny_list::DenyList</a>, addr: <b>address</b>): bool
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_deny_list_contains">deny_list_contains</a>&lt;T&gt;(
+   freezer: &DenyList,
+   addr: <b>address</b>,
+): bool {
+    <b>let</b> name = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
+    <b>if</b> (<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">type_name::is_primitive</a>(&name)) <b>return</b> <b>false</b>;
+
+    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name).into_bytes();
+    freezer.contains(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
 }
 </code></pre>
 
