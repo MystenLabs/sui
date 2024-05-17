@@ -269,8 +269,10 @@ struct Moderator has key {
 }
 ```
 
-This example follows a [capabilities pattern](../../../concepts/sui-move-concepts/patterns/capabilities.mdx) to manage authorizations.
+This example follows a capabilities pattern to manage authorizations.
 For example, `SERVICE OWNERS` are given `AdminCap` and `MODERATORS` are given `Moderator` such that only they are allowed to perform privileged operations.
+
+To learn more about the capabilities pattern, see [The Move Book](https://move-book.com/programmability/capability.html).
 
 ## Deployment
 

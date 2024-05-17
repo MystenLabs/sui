@@ -96,7 +96,7 @@ The `Listed` struct represents a listed item. The only field the struct includes
 public struct Listed has store, copy, drop { id: ID }
 ```
 
-The `Promise` struct is created for borrowing by value. The `Promise` operates as the [hot potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx) that can only be resolved by returning the item back to the extension's `Bag`.
+The `Promise` struct is created for borrowing by value. The `Promise` operates as the hot potato (a struct that has no capabilities that you can only pack and unpack it in its module) that can only be resolved by returning the item back to the extension's `Bag`.
 
 The `Promise` field lacks the `store` ability as it shouldn't be wrapped inside other objects.
 It also lacks the `drop` ability because only the `return_val` function can consume it.
@@ -650,6 +650,5 @@ rect rgba(191, 223, 255, 0.2)
 
 - [NFT Rental example](https://github.com/MystenLabs/sui-nft-rental): The source code that this document references.
 - [Sui Kiosk](../kiosk.mdx): Kiosk is a decentralized system for commerce applications on Sui.
-- [Kiosk Apps](../kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk. 
-- [Hot Potato](../../concepts/sui-move-concepts/patterns/hot-potato.mdx): The hot potato coding pattern the `Promise` struct uses. 
+- [Kiosk Apps](../kiosk-apps.mdx): The Kiosk Apps standard extends the functionality of Sui Kiosk.  
 - [Custom Transfer Rules](../../concepts/transfers/custom-rules.mdx): Custom transfer rules are used in this example to define rental policies.
