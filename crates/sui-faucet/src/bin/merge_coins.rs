@@ -39,7 +39,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let recipient =
         SuiAddress::from_str("0x6511dd9aa26e2f49cf0c7011478d74c745e1e575cd3341f58ebd4e64bfbf1dd4")?;
 
-    // let wallet = create_wallet_context(60).await?;
+    // let wallet = create_wallet_context(60)?;
     // let mut rng = rand::thread_rng(); // Initialize the random number generator
     // let mut coins_vec = coins_before.iter().map(|c| c.1).collect::<Vec<_>>();
 
@@ -48,7 +48,7 @@ async fn main() -> Result<(), anyhow::Error> {
     // let random_10_elements: Vec<_> = coins_vec.iter().take(10).cloned().collect();
     let mut success_count = 0;
     for _ in 0..3 {
-        let wallet = create_wallet_context(60).await?;
+        let wallet = create_wallet_context(60)?;
         let result = transfer_sui(wallet, recipient, transfer_balance).await;
         if result.is_ok() {
             success_count += 1;
@@ -56,7 +56,7 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 
     println!("Success count: {} attempt count 3", success_count);
-    // let wallet = create_wallet_context(60).await?;
+    // let wallet = create_wallet_context(60)?;
     // let coins_after = get_owned_objects(wallet).await?;
 
     // let total_balance_after: u64 = coins_after.iter().map(|c| c.0).sum();
@@ -174,7 +174,7 @@ async fn transfer_sui(
         .keystore
         .sign_secure(&active_address, &tx_data, Intent::sui_transaction())
         .unwrap();
-    let tx = Transaction::from_data(tx_data, Intent::sui_transaction(), vec![signature]);
+    let tx = Transaction::from_data(tx_data, vec![signature]);
 
     let resp = client
         .quorum_driver_api()
