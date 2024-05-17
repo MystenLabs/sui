@@ -577,8 +577,7 @@ pub mod tests {
     use crate::{
         config::{ConnectionConfig, Limits, ServiceConfig, Version},
         context_data::db_data_provider::PgManager,
-        extensions::query_limits_checker::QueryLimitsChecker,
-        extensions::timeout::Timeout,
+        extensions::{query_limits_checker::QueryLimitsChecker, timeout::Timeout},
     };
     use async_graphql::{
         extensions::{Extension, ExtensionContext, NextExecute},
@@ -586,6 +585,8 @@ pub mod tests {
     };
     use std::sync::Arc;
     use std::time::Duration;
+    use sui_sdk::{wallet_context::WalletContext, SuiClient};
+    use sui_types::transaction::TransactionData;
     use uuid::Uuid;
 
     /// Prepares a schema for tests dealing with extensions. Returns a `ServerBuilder` that can be
@@ -641,7 +642,7 @@ pub mod tests {
         Uuid::new_v4()
     }
 
-    pub async fn test_timeout_impl() {
+    pub async fn test_timeout_impl(wallet: WalletContext) {
         struct TimedExecuteExt {
             pub min_req_delay: Duration,
         }
@@ -667,37 +668,92 @@ pub mod tests {
             }
         }
 
-        async fn test_timeout(delay: Duration, timeout: Duration) -> Response {
+        async fn test_timeout(
+            delay: Duration,
+            timeout: Duration,
+            query: &str,
+            sui_client: &SuiClient,
+        ) -> Response {
             let mut cfg = ServiceConfig::default();
             cfg.limits.request_timeout_ms = timeout.as_millis() as u64;
+            cfg.limits.mutation_timeout_ms = timeout.as_millis() as u64;
 
             let schema = prep_schema(None, Some(cfg))
+                .context_data(Some(sui_client.clone()))
                 .extension(Timeout)
                 .extension(TimedExecuteExt {
                     min_req_delay: delay,
                 })
                 .build_schema();
 
-            schema.execute("{ chainIdentifier }").await
+            schema.execute(query).await
         }
 
+        let query = "{ chainIdentifier }";
         let timeout = Duration::from_millis(1000);
         let delay = Duration::from_millis(100);
+        let sui_client = wallet.get_client().await.unwrap();
 
-        test_timeout(delay, timeout)
+        test_timeout(delay, timeout, query, &sui_client)
             .await
             .into_result()
             .expect("Should complete successfully");
 
         // Should timeout
-        let errs: Vec<_> = test_timeout(delay, delay)
+        let errs: Vec<_> = test_timeout(delay, delay, query, &sui_client)
             .await
             .into_result()
             .unwrap_err()
             .into_iter()
             .map(|e| e.message)
             .collect();
-        let exp = format!("Request timed out. Limit: {}s", delay.as_secs_f32());
+        let exp = format!("Query request timed out. Limit: {}s", delay.as_secs_f32());
+        assert_eq!(errs, vec![exp]);
+
+        // Should timeout for mutation
+        // Create a transaction and sign it, and use the tx_bytes + signatures for the GraphQL
+        // executeTransactionBlock mutation call.
+        let addresses = wallet.get_addresses();
+        let gas = wallet
+            .get_one_gas_object_owned_by_address(addresses[0])
+            .await
+            .unwrap();
+        let tx_data = TransactionData::new_transfer_sui(
+            addresses[1],
+            addresses[0],
+            Some(1000),
+            gas.unwrap(),
+            1_000_000,
+            wallet.get_reference_gas_price().await.unwrap(),
+        );
+
+        let tx = wallet.sign_transaction(&tx_data);
+        let (tx_bytes, signatures) = tx.to_tx_bytes_and_signatures();
+
+        let signature_base64 = &signatures[0];
+        let query = format!(
+            r#"
+            mutation {{
+              executeTransactionBlock(txBytes: "{}", signatures: "{}") {{
+                effects {{
+                  status
+                }}
+              }}
+            }}"#,
+            tx_bytes.encoded(),
+            signature_base64.encoded()
+        );
+        let errs: Vec<_> = test_timeout(delay, delay, &query, &sui_client)
+            .await
+            .into_result()
+            .unwrap_err()
+            .into_iter()
+            .map(|e| e.message)
+            .collect();
+        let exp = format!(
+            "Mutation request timed out. Limit: {}s",
+            delay.as_secs_f32()
+        );
         assert_eq!(errs, vec![exp]);
     }
 
