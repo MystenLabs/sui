@@ -4,7 +4,8 @@
 use crate::command_line::compiler::Visitor;
 use crate::diagnostics::WarningFilters;
 use crate::expansion::ast::ModuleIdent;
-use crate::parser::ast::{ConstantName, FunctionName};
+use crate::naming::ast as N;
+use crate::parser::ast::{ConstantName, DatatypeName, FunctionName};
 use crate::shared::{program_info::TypingProgramInfo, CompilationEnv};
 use crate::typing::ast as T;
 
@@ -71,6 +72,12 @@ pub trait TypingVisitorContext {
                 continue;
             }
 
+            for (struct_name, sdef) in mdef.structs.key_cloned_iter_mut() {
+                self.visit_struct(mident, struct_name, sdef)
+            }
+            for (enum_name, edef) in mdef.enums.key_cloned_iter_mut() {
+                self.visit_enum(mident, enum_name, edef)
+            }
             for (constant_name, cdef) in mdef.constants.key_cloned_iter_mut() {
                 self.visit_constant(mident, constant_name, cdef)
             }
@@ -82,7 +89,51 @@ pub trait TypingVisitorContext {
         }
     }
 
-    // TODO struct and type visiting
+    // TODO  type visiting
+
+    fn visit_struct_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _struct_name: DatatypeName,
+        _sdef: &mut N::StructDefinition,
+    ) -> bool {
+        false
+    }
+    fn visit_struct(
+        &mut self,
+        module: ModuleIdent,
+        struct_name: DatatypeName,
+        sdef: &mut N::StructDefinition,
+    ) {
+        self.add_warning_filter_scope(sdef.warning_filter.clone());
+        if self.visit_struct_custom(module, struct_name, sdef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
+
+    fn visit_enum_custom(
+        &mut self,
+        _module: ModuleIdent,
+        _enum_name: DatatypeName,
+        _edef: &mut N::EnumDefinition,
+    ) -> bool {
+        false
+    }
+    fn visit_enum(
+        &mut self,
+        module: ModuleIdent,
+        enum_name: DatatypeName,
+        edef: &mut N::EnumDefinition,
+    ) {
+        self.add_warning_filter_scope(edef.warning_filter.clone());
+        if self.visit_enum_custom(module, enum_name, edef) {
+            self.pop_warning_filter_scope();
+            return;
+        }
+        self.pop_warning_filter_scope();
+    }
 
     fn visit_constant_custom(
         &mut self,
