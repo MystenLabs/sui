@@ -22,13 +22,13 @@ use std::str::FromStr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
+use sui_core::authority::epoch_start_configuration::EpochFlag;
 use sui_core::authority::RandomnessRoundReceiver;
 use sui_core::authority::CHAIN_IDENTIFIER;
 use sui_core::consensus_adapter::SubmitToConsensus;
 use sui_core::consensus_manager::ConsensusClient;
 use sui_core::epoch::randomness::RandomnessManager;
-use sui_core::execution_cache::ExecutionCacheMetrics;
-use sui_core::execution_cache::NotifyReadWrapper;
+use sui_core::execution_cache::build_execution_cache;
 use sui_core::traffic_controller::metrics::TrafficControllerMetrics;
 use sui_json_rpc::bridge_api::BridgeReadApi;
 use sui_json_rpc::ServerType;
@@ -84,7 +84,6 @@ use sui_core::epoch::committee_store::CommitteeStore;
 use sui_core::epoch::data_removal::EpochDataRemover;
 use sui_core::epoch::epoch_metrics::EpochMetrics;
 use sui_core::epoch::reconfiguration::ReconfigurationInitiator;
-use sui_core::execution_cache::{ExecutionCache, ExecutionCacheReconfigAPI};
 use sui_core::module_cache_metrics::ResolverMetrics;
 use sui_core::overload_monitor::overload_monitor;
 use sui_core::signature_verifier::SignatureVerifierMetrics;
@@ -446,18 +445,9 @@ impl SuiNode {
         let is_genesis = perpetual_tables
             .database_is_empty()
             .expect("Database read should not fail at init.");
-        let store = AuthorityStore::open(
-            perpetual_tables,
-            genesis,
-            config.indirect_objects_threshold,
-            config
-                .expensive_safety_check_config
-                .enable_epoch_sui_conservation_check(),
-            &prometheus_registry,
-        )
-        .await?;
-        let execution_cache_metrics = Arc::new(ExecutionCacheMetrics::new(&prometheus_registry));
-        let execution_cache = Arc::new(ExecutionCache::new(store.clone(), execution_cache_metrics));
+
+        let store =
+            AuthorityStore::open(perpetual_tables, genesis, &config, &prometheus_registry).await?;
 
         let cur_epoch = store.get_recovery_epoch_at_restart()?;
         let committee = committee_store
@@ -469,6 +459,9 @@ impl SuiNode {
         let cache_metrics = Arc::new(ResolverMetrics::new(&prometheus_registry));
         let signature_verifier_metrics = SignatureVerifierMetrics::new(&prometheus_registry);
 
+        let cache_traits =
+            build_execution_cache(&epoch_start_configuration, &prometheus_registry, &store);
+
         let epoch_options = default_db_options().optimize_db_for_write_throughput(4);
         let epoch_store = AuthorityPerEpochStore::new(
             config.protocol_public_key(),
@@ -477,7 +470,8 @@ impl SuiNode {
             Some(epoch_options.options),
             EpochMetrics::new(&registry_service.default_registry()),
             epoch_start_configuration,
-            execution_cache.clone(),
+            cache_traits.backing_package_store.clone(),
+            cache_traits.object_store.clone(),
             cache_metrics,
             signature_verifier_metrics,
             &config.expensive_safety_check_config,
@@ -496,7 +490,8 @@ impl SuiNode {
             // check SUI conservation is at genesis. Otherwise we may be in the middle of
             // an epoch and the SUI conservation check will fail. This also initialize
             // the expected_network_sui_amount table.
-            execution_cache
+            cache_traits
+                .reconfig_api
                 .expensive_check_sui_conservation(&epoch_store)
                 .expect("SUI conservation check cannot fail at genesis");
         }
@@ -521,7 +516,7 @@ impl SuiNode {
         );
 
         let state_sync_store = RocksDbStore::new(
-            execution_cache.clone(),
+            cache_traits.clone(),
             committee_store.clone(),
             checkpoint_store.clone(),
         );
@@ -606,7 +601,7 @@ impl SuiNode {
             secret,
             config.supported_protocol_versions.unwrap(),
             store.clone(),
-            execution_cache.clone(),
+            cache_traits.clone(),
             epoch_store.clone(),
             committee_store.clone(),
             index_store.clone(),
@@ -684,7 +679,9 @@ impl SuiNode {
         )
         .await?;
 
-        let accumulator = Arc::new(StateAccumulator::new(execution_cache));
+        let accumulator = Arc::new(StateAccumulator::new(
+            cache_traits.accumulator_store.clone(),
+        ));
 
         let authority_names_to_peer_ids = epoch_store
             .epoch_start_state()
@@ -1303,12 +1300,11 @@ impl SuiNode {
         let max_checkpoint_size_bytes =
             epoch_store.protocol_config().max_checkpoint_size_bytes() as usize;
 
-        let notify_read: NotifyReadWrapper<_> = state.get_effects_notify_read().clone();
         CheckpointService::spawn(
             state.clone(),
             checkpoint_store,
             epoch_store,
-            Arc::new(notify_read),
+            state.get_transaction_cache_reader().clone(),
             accumulator,
             checkpoint_output,
             Box::new(certified_checkpoint_output),
@@ -1478,7 +1474,7 @@ impl SuiNode {
             // Safe to call because we are in the middle of reconfiguration.
             let latest_system_state = self
                 .state
-                .get_cache_reader()
+                .get_object_cache_reader()
                 .get_sui_system_state_object_unsafe()
                 .expect("Read Sui System State object cannot fail");
 
@@ -1679,7 +1675,7 @@ impl SuiNode {
             next_epoch_start_system_state,
             *last_checkpoint.digest(),
             state.get_object_store().as_ref(),
-            None,
+            EpochFlag::default_flags_for_new_epoch(&state.config),
         )
         .expect("EpochStartConfiguration construction cannot fail");
 

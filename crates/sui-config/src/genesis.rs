@@ -323,7 +323,7 @@ impl UnsignedGenesis {
     }
 
     pub fn authenticator_state_object(&self) -> Option<AuthenticatorStateInner> {
-        get_authenticator_state(&self.objects()).expect("read from genesis cannot fail")
+        get_authenticator_state(self.objects()).expect("read from genesis cannot fail")
     }
 
     pub fn has_randomness_state_object(&self) -> bool {

@@ -185,6 +185,19 @@ pub struct NodeConfig {
     /// in validator requests for eligible rpc endpoints.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub with_client_ip_injection: Option<bool>,
+
+    #[serde(default)]
+    pub execution_cache: ExecutionCacheConfig,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionCacheConfig {
+    #[default]
+    PassthroughCache,
+    WritebackCache {
+        max_cache_size: Option<usize>,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]

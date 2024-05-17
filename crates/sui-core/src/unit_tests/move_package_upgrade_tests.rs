@@ -265,7 +265,7 @@ async fn test_upgrade_package_happy_path() {
 
     let package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&runner.package.0)
         .unwrap()
         .unwrap();
@@ -834,7 +834,7 @@ async fn test_publish_override_happy_path() {
 
     let package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&new_package.0)
         .unwrap()
         .unwrap();
@@ -887,7 +887,7 @@ async fn test_publish_transitive_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();
@@ -978,7 +978,7 @@ async fn test_publish_transitive_override_happy_path() {
 
     let root_move_package = runner
         .authority_state
-        .get_cache_reader()
+        .get_object_cache_reader()
         .get_package_object(&root_package.0)
         .unwrap()
         .unwrap();

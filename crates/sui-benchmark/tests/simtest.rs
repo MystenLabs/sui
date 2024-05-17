@@ -213,7 +213,10 @@ mod test {
                 return;
             }
         }
-        state.prune_objects_and_compact_for_testing().await;
+        state
+            .database_for_testing()
+            .prune_objects_and_compact_for_testing(state.get_checkpoint_store())
+            .await;
     }
 
     async fn delay_failpoint<R>(range_ms: R, probability: f64)
@@ -253,6 +256,8 @@ mod test {
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_reconfig_with_crashes_and_delays() {
         sui_protocol_config::ProtocolConfig::poison_get_for_min_version();
+
+        register_fail_point_if("select-random-cache", || true);
 
         let test_cluster = Arc::new(
             init_test_cluster_builder(4, 1000)

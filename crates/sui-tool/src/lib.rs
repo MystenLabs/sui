@@ -18,7 +18,7 @@ use std::time::Duration;
 use std::{fs, io};
 use sui_config::{genesis::Genesis, NodeConfig};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_core::execution_cache::ExecutionCache;
+use sui_core::execution_cache::build_execution_cache_from_env;
 use sui_network::default_mysten_network_config;
 use sui_protocol_config::Chain;
 use sui_sdk::SuiClient;
@@ -650,11 +650,9 @@ fn start_summary_sync(
         info!("Starting summary sync");
         let store =
             AuthorityStore::open_no_genesis(perpetual_db, usize::MAX, false, &Registry::default())?;
-        let state_sync_store = RocksDbStore::new(
-            Arc::new(ExecutionCache::new_for_tests(store, &Registry::default())),
-            committee_store,
-            checkpoint_store.clone(),
-        );
+        let cache_traits = build_execution_cache_from_env(&Registry::default(), &store);
+        let state_sync_store =
+            RocksDbStore::new(cache_traits, committee_store, checkpoint_store.clone());
         // Only insert the genesis checkpoint if the DB is empty and doesn't have it already
         if checkpoint_store
             .get_checkpoint_by_digest(genesis.checkpoint().digest())

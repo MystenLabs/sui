@@ -33,7 +33,8 @@ fn make_transaction_manager(
     // transaction_manager output from rx_ready_certificates.
     let (tx_ready_certificates, rx_ready_certificates) = unbounded_channel();
     let transaction_manager = TransactionManager::new(
-        state.get_cache_reader().clone(),
+        state.get_object_cache_reader().clone(),
+        state.get_transaction_cache_reader().clone(),
         &state.epoch_store_for_testing(),
         tx_ready_certificates,
         state.metrics.clone(),
