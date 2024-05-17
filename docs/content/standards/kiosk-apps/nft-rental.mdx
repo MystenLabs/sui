@@ -96,7 +96,7 @@ The `Listed` struct represents a listed item. The only field the struct includes
 public struct Listed has store, copy, drop { id: ID }
 ```
 
-The `Promise` struct is created for borrowing by value. The `Promise` operates as the hot potato (a struct that has no capabilities that you can only pack and unpack it in its module) that can only be resolved by returning the item back to the extension's `Bag`.
+The `Promise` struct is created for borrowing by value. The `Promise` operates as the hot potato (a struct that has no capabilities that you can only pack and unpack in its module) that can only be resolved by returning the item back to the extension's `Bag`.
 
 The `Promise` field lacks the `store` ability as it shouldn't be wrapped inside other objects.
 It also lacks the `drop` ability because only the `return_val` function can consume it.
