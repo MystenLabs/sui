@@ -870,7 +870,6 @@ pub struct TestClusterBuilder {
     additional_objects: Vec<Object>,
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
-    with_fullnode_client_ip_injection: Option<bool>,
     enable_fullnode_events: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
@@ -898,7 +897,6 @@ impl TestClusterBuilder {
             network_config: None,
             additional_objects: vec![],
             fullnode_rpc_port: None,
-            with_fullnode_client_ip_injection: None,
             num_validators: None,
             enable_fullnode_events: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
@@ -938,11 +936,6 @@ impl TestClusterBuilder {
 
     pub fn with_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
         self.fullnode_rpc_port = Some(rpc_port);
-        self
-    }
-
-    pub fn with_fullnode_client_ip_injection(mut self, with_ip_injection: Option<bool>) -> Self {
-        self.with_fullnode_client_ip_injection = with_ip_injection;
         self
     }
 
@@ -1401,8 +1394,7 @@ impl TestClusterBuilder {
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
             .with_fullnode_run_with_range(self.fullnode_run_with_range)
             .with_fullnode_policy_config(self.fullnode_policy_config.clone())
-            .with_fullnode_fw_config(self.fullnode_fw_config.clone())
-            .with_fullnode_client_ip_injection(self.with_fullnode_client_ip_injection);
+            .with_fullnode_fw_config(self.fullnode_fw_config.clone());
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);

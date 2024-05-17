@@ -165,10 +165,6 @@ pub enum PolicyType {
     /// is encountered in tally N times. If used in an error policy, this would trigger
     /// after N errors
     TestNConnIP(u64),
-    /// Test policy that inspects the proxy_ip and connection_ip to ensure they are present
-    /// in the tally. Tests IP forwarding. To be used only in tests that submit transactions
-    /// through a client
-    TestInspectIp,
     /// Test policy that panics when invoked. To be used as an error policy in tests that do
     /// not expect request errors in order to verify that the error policy is not invoked
     TestPanicOnInvocation,
