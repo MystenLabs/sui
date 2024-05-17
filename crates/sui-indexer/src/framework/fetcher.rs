@@ -117,6 +117,9 @@ impl CheckpointFetcher {
                 checkpoint = checkpoint.checkpoint_summary.sequence_number(),
                 "successfully downloaded checkpoint"
             );
+            tracing::warn!("checkpoint download lag: {}", chrono::Utc::now().timestamp_millis() - checkpoint.checkpoint_summary.timestamp_ms as i64);
+            tracing::warn!("time now: {}", chrono::Utc::now().timestamp_millis());
+            tracing::warn!("checkpoint timestamp: {}", checkpoint.checkpoint_summary.timestamp_ms);
             self.metrics.download_lag_ms.set(
                 chrono::Utc::now().timestamp_millis()
                     - checkpoint.checkpoint_summary.timestamp_ms as i64,
