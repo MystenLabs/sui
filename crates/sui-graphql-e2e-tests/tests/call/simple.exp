@@ -270,12 +270,12 @@ created: object(24,0)
 mutated: object(0,1)
 gas summary: computation_cost: 235000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 25 'run-graphql'. lines 183-188:
+task 25 'run-graphql'. lines 186-191:
 Response: {
   "data": {
     "serviceConfig": {
       "availableVersions": [
-        "2024.4"
+        "2024.1"
       ]
     }
   }
