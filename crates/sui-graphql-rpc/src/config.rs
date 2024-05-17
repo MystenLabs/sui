@@ -27,12 +27,15 @@ const MAX_TYPE_NODES: u32 = 256;
 const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
 pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
+
 /// The time to wait for a transaction to be executed such that the effects can be returned to the
 /// GraphQL query. If the transaction takes longer than this time to execute, the query will return
 /// a timeout error, but the transaction will continue its execution.
-/// <https://github.com/MystenLabs/sui/blob/main/crates/sui-core/src/authority_aggregator.rs#L84C1-L84C57>
-/// This value is the default one from [`sui_core::authority_aggregator::TimeoutConfig`]
-pub(crate) const DEFAULT_MUTATION_TIMEOUT_MS: u64 = 60_000;
+///
+/// It's the sum of pre+post quorum timeouts from [`sui_core::authority_aggregator::TimeoutConfig`]
+/// plus a small buffer of 10% rounded up: 60 + 7 => round_up(67 * 1.1) = 74
+/// <https://github.com/MystenLabs/sui/blob/eaf05fe5d293c06e3a2dfc22c87ba2aef419d8ea/crates/sui-core/src/authority_aggregator.rs#L84-L85>
+pub(crate) const DEFAULT_MUTATION_TIMEOUT_MS: u64 = 74_000;
 
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
 
@@ -554,7 +557,7 @@ mod tests {
                 max-db-query-cost = 50
                 default-page-size = 20
                 max-page-size = 50
-                mutation-timeout-ms = 60000
+                mutation-timeout-ms = 74000
                 request-timeout-ms = 27000
                 max-type-argument-depth = 32
                 max-type-argument-width = 64
@@ -573,7 +576,7 @@ mod tests {
                 max_db_query_cost: 50,
                 default_page_size: 20,
                 max_page_size: 50,
-                mutation_timeout_ms: 60_000,
+                mutation_timeout_ms: 74_000,
                 request_timeout_ms: 27_000,
                 max_type_argument_depth: 32,
                 max_type_argument_width: 64,
@@ -636,7 +639,7 @@ mod tests {
                 max-db-query-cost = 20
                 default-page-size = 10
                 max-page-size = 20
-                mutation-timeout-ms = 60000
+                mutation-timeout-ms = 74000
                 request-timeout-ms = 30000
                 max-type-argument-depth = 32
                 max-type-argument-width = 64
@@ -658,7 +661,7 @@ mod tests {
                 max_db_query_cost: 20,
                 default_page_size: 10,
                 max_page_size: 20,
-                mutation_timeout_ms: 60_000,
+                mutation_timeout_ms: 74_000,
                 request_timeout_ms: 30_000,
                 max_type_argument_depth: 32,
                 max_type_argument_width: 64,
