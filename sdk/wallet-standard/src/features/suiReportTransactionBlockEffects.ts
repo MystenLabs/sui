@@ -21,5 +21,6 @@ export type SuiReportTransactionBlockEffectsMethod = (
 
 /** Input for signing transactions. */
 export interface SuiReportTransactionBlockEffectsInput {
+	/** Transaction block effects as base64 encoded bcs. */
 	effects: string;
 }

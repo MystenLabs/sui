@@ -61,11 +61,25 @@ describe('useSignAndExecuteTransactionBlock', () => {
 		});
 
 		const suiClient = new SuiClient({ url: getFullnodeUrl('localnet') });
-		const mockSignMessageFeature = mockWallet.features['sui:signAndExecuteTransactionBlock:v2'];
-		const signAndExecuteTransactionBlock = mockSignMessageFeature!
-			.signAndExecuteTransactionBlock as Mock;
+		const mockSignMessageFeature = mockWallet.features['sui:signTransactionBlock:v2'];
+		const signTransactionBlock = mockSignMessageFeature!.signTransactionBlock as Mock;
 
-		signAndExecuteTransactionBlock.mockReturnValueOnce({ digest: '123' });
+		signTransactionBlock.mockReturnValueOnce({
+			bytes: 'abc',
+			signature: '123',
+		});
+
+		const reportEffectsFeature = mockWallet.features['sui:reportTransactionBlockEffects'];
+		const reportEffects = reportEffectsFeature!.reportTransactionBlockEffects as Mock;
+
+		reportEffects.mockImplementation(async () => {});
+
+		const executeTransactionBlock = vi.spyOn(suiClient, 'executeTransactionBlock');
+
+		executeTransactionBlock.mockResolvedValueOnce({
+			digest: '123',
+			rawEffects: [10, 20, 30],
+		});
 
 		const wrapper = createWalletProviderContextWrapper({}, suiClient);
 		const { result } = renderHook(
@@ -97,10 +111,16 @@ describe('useSignAndExecuteTransactionBlock', () => {
 			expect(result.current.useSignAndExecuteTransactionBlock.isSuccess).toBe(true),
 		);
 		expect(result.current.useSignAndExecuteTransactionBlock.data).toStrictEqual({
+			bytes: 'abc',
 			digest: '123',
+			effects: 'ChQe',
+			signature: '123',
+		});
+		expect(reportEffects).toHaveBeenCalledWith({
+			effects: 'ChQe',
 		});
 
-		const call = signAndExecuteTransactionBlock.mock.calls[0];
+		const call = signTransactionBlock.mock.calls[0];
 
 		expect(call[0].account).toStrictEqual(mockWallet.accounts[0]);
 		expect(call[0].chain).toBe('sui:testnet');

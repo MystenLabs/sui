@@ -33,6 +33,8 @@ export interface SuiSignTransactionBlockV2Input {
 
 /** Output of signing transactions. */
 export interface SuiSignTransactionBlockV2Output {
+	/** Transaction block as base64 encoded bcs. */
 	bytes: string;
+	/** Base64 encoded signature */
 	signature: string;
 }

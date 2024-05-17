@@ -12,58 +12,69 @@ export const DEFAULT_STASHED_ORIGIN = 'https://getstashed.com';
 
 export { StashedRequest, StashedResponse };
 
-interface StashedPopupOptions<T extends StashedRequestData['type']> {
-	origin?: string;
-	name: string;
-	type: T;
-}
+export class StashedPopup {
+	#popup: Window;
 
-export class StashedPopup<T extends StashedRequestData['type']> {
-	#popup: Window | null;
-	#name: string;
-	#origin: string;
 	#id: string;
-	#interval: ReturnType<typeof setInterval> | null = null;
-	#type: string;
-	#resolve: (data: StashedResponseTypes[T]) => void;
-	#reject: (error: Error) => void;
-	#promise: Promise<StashedResponseTypes[T]>;
+	#origin: string;
+	#name: string;
 
-	constructor({ origin = DEFAULT_STASHED_ORIGIN, name, type }: StashedPopupOptions<T>) {
+	#promise: Promise<unknown>;
+	#resolve: (data: unknown) => void;
+	#reject: (error: Error) => void;
+
+	#interval: ReturnType<typeof setInterval> | null = null;
+
+	constructor({ name, origin = DEFAULT_STASHED_ORIGIN }: { name: string; origin?: string }) {
+		const popup = window.open('about:blank', '_blank');
+
+		if (!popup) {
+			throw new Error('Failed to open new window');
+		}
+		this.#popup = popup;
+
+		this.#id = crypto.randomUUID();
+		this.#origin = origin;
+		this.#name = name;
+
 		const { promise, resolve, reject } = withResolvers();
 		this.#promise = promise;
 		this.#resolve = resolve;
 		this.#reject = reject;
 
-		this.#id = crypto.randomUUID();
-		this.#popup = window.open('about:blank', '_blank');
-
-		if (!this.#popup) {
-			throw new Error('Failed to open new window');
-		}
-
-		this.#origin = origin;
-		this.#name = name;
-		this.#type = type;
-
-		window.addEventListener('message', this.#listener);
+		this.#interval = setInterval(() => {
+			try {
+				if (this.#popup.closed) {
+					this.#cleanup();
+					reject(new Error('User closed the Stashed window'));
+				}
+			} catch {
+				// This can error during the login flow, but that's fine.
+			}
+		}, 1000);
 	}
 
-	send(data: Omit<Extract<StashedRequestData, { type: T }>, 'type'>) {
-		this.#popup?.location.assign(
-			`${this.#origin}/dapp/${this.#type}?${new URLSearchParams({
+	send<T extends StashedRequestData['type']>({
+		type,
+		...data
+	}: {
+		type: T;
+	} & Extract<StashedRequestData, { type: T }>): Promise<StashedResponseTypes[T]> {
+		window.addEventListener('message', this.#listener);
+		this.#popup.location.assign(
+			`${this.#origin}/dapp/${type}?${new URLSearchParams({
 				id: this.#id,
 				origin: window.origin,
 				name: this.#name,
 			})}${data ? `#${new URLSearchParams(data as never)}` : ''}`,
 		);
 
-		return this.#promise;
+		return this.#promise as Promise<StashedResponseTypes[T]>;
 	}
 
 	close() {
 		this.#cleanup();
-		this.#popup?.close();
+		this.#popup.close();
 	}
 
 	#listener(event: MessageEvent) {
@@ -78,13 +89,14 @@ export class StashedPopup<T extends StashedRequestData['type']> {
 		if (output.payload.type === 'reject') {
 			this.#reject(new Error('User rejected the request'));
 		} else if (output.payload.type === 'resolve') {
-			this.#resolve(output.payload.data as StashedResponseTypes[T]);
+			this.#resolve(output.payload.data);
 		}
 	}
 
 	#cleanup() {
 		if (this.#interval) {
 			clearInterval(this.#interval);
+			this.#interval = null;
 		}
 		window.removeEventListener('message', this.#listener);
 	}

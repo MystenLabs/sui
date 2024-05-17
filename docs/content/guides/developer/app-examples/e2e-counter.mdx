@@ -214,35 +214,33 @@ Finally, construct your `TransactionBlock`:
 
 ```ts
 function create() {
-  const txb = new TransactionBlock();
-    txb.moveCall({
-      arguments: [],
-      target: `${COUNTER_PACKAGE_ID}::counter::create`,
-    });
+	const txb = new TransactionBlock();
+	txb.moveCall({
+		arguments: [],
+		target: `${COUNTER_PACKAGE_ID}::counter::create`,
+	});
 
-    signAndExecute(
-      {
-        transactionBlock: txb,
-      },
-      {
-        onSuccess: ({ digest }) => {
-			suiClient.waitForTransactionBlock({
-				digest,
-				options: {
-					showEffects: true,
-				}
-			})
-			.then((ex) => {
+	signAndExecute(
+		{
+			transactionBlock: txb,
+		},
+		{
+			onSuccess: async ({ digest }) => {
+				const tx = await suiClient.waitForTransactionBlock({
+					digest,
+					options: {
+						showEffects: true,
+					},
+				});
+
 				// The first created object in this TransactionBlock should be the new Counter
 				const objectId = tx.effects?.created?.[0]?.reference?.objectId;
 				if (objectId) {
 					props.onCreated(objectId);
 				}
-			});
-        },
-      },
-    );
-  }
+			},
+		},
+	);
 }
 ```
 
@@ -430,10 +428,9 @@ export function Counter({ id }: { id: string }) {
 				transactionBlock: txb,
 			},
 			{
-				onSuccess: (tx) => {
-					suiClient.waitForTransactionBlock({ digest: tx.digest }).then(() => {
-						refetch();
-					});
+				onSuccess: async (tx) => {
+					await suiClient.waitForTransactionBlock({ digest: tx.digest });
+					refetch();
 				},
 			},
 		);

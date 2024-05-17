@@ -4,11 +4,13 @@
 import { bcs } from '@mysten/sui/bcs';
 import { TransactionBlock } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
-import type { Wallet, WalletWithFeatures } from '@wallet-standard/core';
-import { getWallets } from '@wallet-standard/core';
+import type { WalletWithFeatures } from '@wallet-standard/core';
 
-import { isWalletWithRequiredFeatureSet } from './detect.js';
-import type { MinimallyRequiredFeatures, SuiWalletFeatures } from './features/index.js';
+import type {
+	SuiSignAndExecuteTransactionBlockV2Input,
+	SuiSignTransactionBlockV2Input,
+	SuiWalletFeatures,
+} from './features/index.js';
 
 declare module '@wallet-standard/core' {
 	export interface Wallet {
@@ -27,104 +29,72 @@ declare module '@wallet-standard/core' {
 
 export type { Wallet } from '@wallet-standard/core';
 
-export function getNormalizedSuiWallets<
-	AdditionalFeatures extends keyof KnownFeatures & keyof Wallet['features'] = never,
-	KnownFeatures extends Wallet['features'] = SuiWalletFeatures,
->(
-	features: AdditionalFeatures[] = [],
-): WalletWithFeatures<Pick<KnownFeatures, AdditionalFeatures | keyof MinimallyRequiredFeatures>>[] {
-	const wallets = getWallets().get();
-
-	return wallets
-		.map((wallet) => normalizeWalletFeatures(wallet))
-		.filter((wallet) => isWalletWithRequiredFeatureSet(wallet, features)) as WalletWithFeatures<
-		Pick<KnownFeatures, AdditionalFeatures | keyof MinimallyRequiredFeatures>
-	>[];
-}
-
-function normalizeWalletFeatures(wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>) {
-	const features = {
-		...wallet.features,
-	};
-
-	if (
-		wallet.features['sui:signTransactionBlock'] &&
-		!wallet.features['sui:signTransactionBlock:v2']
-	) {
-		const { signTransactionBlock } = wallet.features['sui:signTransactionBlock'];
-		features['sui:signTransactionBlock:v2'] = {
-			version: '2.0.0',
-			signTransactionBlock: async (input) => {
-				const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
-				const { transactionBlockBytes, signature } = await signTransactionBlock({
-					...input,
-					transactionBlock,
-				});
-
-				return { bytes: transactionBlockBytes, signature };
-			},
-		};
+export async function signAndExecuteTransactionBlock(
+	wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>,
+	input: SuiSignAndExecuteTransactionBlockV2Input,
+) {
+	if (wallet.features['sui:signAndExecuteTransactionBlock:v2']) {
+		return wallet.features['sui:signAndExecuteTransactionBlock:v2'].signAndExecuteTransactionBlock(
+			input,
+		);
 	}
 
-	if (
-		wallet.features['sui:signAndExecuteTransactionBlock'] &&
-		!wallet.features['sui:signAndExecuteTransactionBlock:v2']
-	) {
-		const { signAndExecuteTransactionBlock } =
-			wallet.features['sui:signAndExecuteTransactionBlock'];
-		features['sui:signAndExecuteTransactionBlock:v2'] = {
-			version: '2.0.0',
-			signAndExecuteTransactionBlock: async (input) => {
-				const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
-				const { digest, rawEffects, rawTransaction } = await signAndExecuteTransactionBlock({
-					...input,
-					transactionBlock,
-					options: {
-						showRawEffects: true,
-						showRawInput: true,
-					},
-				});
-
-				const [
-					{
-						txSignatures: [signature],
-						intentMessage: { value: bcsTransaction },
-					},
-				] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
-
-				const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
-
-				return {
-					digest,
-					signature,
-					bytes,
-					effects: toB64(new Uint8Array(rawEffects!)),
-				};
-			},
-		};
+	if (!wallet.features['sui:signAndExecuteTransactionBlock']) {
+		throw new Error(
+			`Provided wallet (${wallet.name}) does not support the signAndExecuteTransactionBlock feature.`,
+		);
 	}
+
+	const { signAndExecuteTransactionBlock } = wallet.features['sui:signAndExecuteTransactionBlock'];
+
+	const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
+	const { digest, rawEffects, rawTransaction } = await signAndExecuteTransactionBlock({
+		...input,
+		transactionBlock,
+		options: {
+			showRawEffects: true,
+			showRawInput: true,
+		},
+	});
+
+	const [
+		{
+			txSignatures: [signature],
+			intentMessage: { value: bcsTransaction },
+		},
+	] = bcs.SenderSignedData.parse(fromB64(rawTransaction!));
+
+	const bytes = bcs.TransactionData.serialize(bcsTransaction).toBase64();
 
 	return {
-		get id() {
-			return wallet.id;
-		},
-		get name() {
-			return wallet.name;
-		},
-		get version() {
-			return wallet.version;
-		},
-		get icon() {
-			return wallet.icon;
-		},
-		get chains() {
-			return wallet.chains;
-		},
-		get features() {
-			return features;
-		},
-		get accounts() {
-			return wallet.accounts;
-		},
+		digest,
+		signature,
+		bytes,
+		effects: toB64(new Uint8Array(rawEffects!)),
 	};
+}
+
+export async function signTransactionBlock(
+	wallet: WalletWithFeatures<Partial<SuiWalletFeatures>>,
+	input: SuiSignTransactionBlockV2Input,
+) {
+	if (wallet.features['sui:signTransactionBlock:v2']) {
+		return wallet.features['sui:signTransactionBlock:v2'].signTransactionBlock(input);
+	}
+
+	if (!wallet.features['sui:signTransactionBlock']) {
+		throw new Error(
+			`Provided wallet (${wallet.name}) does not support the signTransactionBlock feature.`,
+		);
+	}
+
+	const { signTransactionBlock } = wallet.features['sui:signTransactionBlock'];
+
+	const transactionBlock = TransactionBlock.from(await input.transactionBlock.toJSON());
+	const { transactionBlockBytes, signature } = await signTransactionBlock({
+		...input,
+		transactionBlock,
+	});
+
+	return { bytes: transactionBlockBytes, signature };
 }

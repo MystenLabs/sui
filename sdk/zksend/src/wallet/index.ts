@@ -121,10 +121,10 @@ export class StashedWallet implements Wallet {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
-			type: 'sign-transaction-block',
 		});
 
 		const response = await popup.send({
+			type: 'sign-transaction-block',
 			data,
 			address: account.address,
 		});
@@ -142,7 +142,6 @@ export class StashedWallet implements Wallet {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
-			type: 'sign-transaction-block',
 		});
 
 		const txb = TransactionBlock.from(await transactionBlock.toJSON());
@@ -151,6 +150,7 @@ export class StashedWallet implements Wallet {
 		const data = txb.serialize();
 
 		const response = await popup.send({
+			type: 'sign-transaction-block',
 			data,
 			address: account.address,
 		});
@@ -166,10 +166,10 @@ export class StashedWallet implements Wallet {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
-			type: 'sign-personal-message',
 		});
 
 		const response = await popup.send({
+			type: 'sign-personal-message',
 			bytes,
 			address: account.address,
 		});
@@ -216,9 +216,11 @@ export class StashedWallet implements Wallet {
 			return { accounts: this.accounts };
 		}
 
-		const popup = new StashedPopup({ name: this.#name, origin: this.#origin, type: 'connect' });
+		const popup = new StashedPopup({ name: this.#name, origin: this.#origin });
 
-		const response = await popup.send({});
+		const response = await popup.send({
+			type: 'connect',
+		});
 
 		if (!('address' in response)) {
 			throw new Error('Unexpected response');

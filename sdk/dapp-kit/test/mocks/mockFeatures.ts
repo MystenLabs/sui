@@ -39,4 +39,8 @@ export const suiFeatures: SuiFeatures = {
 		version: '2.0.0',
 		signAndExecuteTransactionBlock: vi.fn(),
 	},
+	'sui:reportTransactionBlockEffects': {
+		version: '1.0.0',
+		reportTransactionBlockEffects: vi.fn(),
+	},
 };

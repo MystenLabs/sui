@@ -7,6 +7,7 @@ import type {
 	SuiSignAndExecuteTransactionBlockV2Input,
 	SuiSignAndExecuteTransactionBlockV2Output,
 } from '@mysten/wallet-standard';
+import { signAndExecuteTransactionBlock, signTransactionBlock } from '@mysten/wallet-standard';
 import type { UseMutationOptions, UseMutationResult } from '@tanstack/react-query';
 import { useMutation } from '@tanstack/react-query';
 
@@ -75,22 +76,23 @@ export function useSignAndExecuteTransactionBlock({
 				);
 			}
 
-			const canExecuteFromWallet =
-				!!currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
-
 			const reportEffects =
 				currentWallet.features['sui:reportTransactionBlockEffects']
 					?.reportTransactionBlockEffects ?? (() => {});
 
-			if (canExecuteFromWallet) {
-				const walletFeature = currentWallet.features['sui:signAndExecuteTransactionBlock:v2'];
-				if (!walletFeature) {
+			if (
+				!currentWallet.features['sui:signTransactionBlock'] &&
+				!currentWallet.features['sui:signTransactionBlock:v2']
+			) {
+				if (
+					!currentWallet.features['sui:signAndExecuteTransactionBlock'] &&
+					!currentWallet.features['sui:signAndExecuteTransactionBlock:v2']
+				) {
 					throw new WalletFeatureNotSupportedError(
 						"This wallet doesn't support the `signAndExecuteTransactionBlock` feature.",
 					);
 				}
-
-				const result = await walletFeature.signAndExecuteTransactionBlock({
+				return signAndExecuteTransactionBlock(currentWallet, {
 					...signTransactionBlockArgs,
 					transactionBlock: {
 						async toJSON() {
@@ -105,20 +107,9 @@ export function useSignAndExecuteTransactionBlock({
 					account: signerAccount,
 					chain: signTransactionBlockArgs.chain ?? signerAccount.chains[0],
 				});
-
-				await reportEffects({ effects: result.effects });
-
-				return result;
 			}
 
-			const walletFeature = currentWallet.features['sui:signTransactionBlock:v2'];
-			if (!walletFeature) {
-				throw new WalletFeatureNotSupportedError(
-					"This wallet doesn't support the `signTransactionBlock` feature.",
-				);
-			}
-
-			const { signature, bytes } = await walletFeature.signTransactionBlock({
+			const { signature, bytes } = await signTransactionBlock(currentWallet, {
 				...signTransactionBlockArgs,
 				transactionBlock: {
 					async toJSON() {
