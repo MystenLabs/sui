@@ -32,7 +32,7 @@ mod test {
         register_fail_points, sim_test,
     };
     use sui_protocol_config::{
-        PerObjectCongestionControlMode, ProtocolVersion, SupportedProtocolVersions,
+        PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion, SupportedProtocolVersions,
     };
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
