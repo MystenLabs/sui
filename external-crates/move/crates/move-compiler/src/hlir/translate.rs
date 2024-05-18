@@ -1041,7 +1041,7 @@ fn tail(
             })
         }
         E::Block((_, seq)) => tail_block(context, block, expected_type, seq),
-        E::ExpandedMacro(_, (_, seq)) => tail_block(context, block, expected_type, seq),
+        E::ExpandedMacro(_, e) => tail(context, block, expected_type, *e),
 
         // -----------------------------------------------------------------------------------------
         //  statements that need to be hoisted out
@@ -1350,7 +1350,7 @@ fn value(
             bound_exp
         }
         E::Block((_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
-        E::ExpandedMacro(_, (_, seq)) => value_block(context, block, Some(&out_type), eloc, seq),
+        E::ExpandedMacro(_, e) => value(context, block, expected_type, *e),
 
         // -----------------------------------------------------------------------------------------
         //  calls
@@ -1974,7 +1974,7 @@ fn statement(context: &mut Context, block: &mut Block, e: T::Exp) {
             }
         }
         E::Block((_, seq)) => statement_block(context, block, seq),
-        E::ExpandedMacro(_, (_, seq)) => statement_block(context, block, seq),
+        E::ExpandedMacro(_, e) => statement(context, block, *e),
         E::Return(rhs) => {
             let expected_type = context.signature.as_ref().map(|s| s.return_type.clone());
             let exp = value(context, block, expected_type.as_ref(), *rhs);

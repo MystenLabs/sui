@@ -490,8 +490,8 @@ mod check_valid_constant {
                 sequence(context, seq);
                 return;
             }
-            E::ExpandedMacro(_, seq) => {
-                sequence(context, seq);
+            E::ExpandedMacro(_, er) => {
+                exp(context, er);
                 return;
             }
             E::UnaryExp(_, er) => {
@@ -4457,12 +4457,13 @@ fn expand_macro(
                     sp(b.loc, TS::Bind(b, lvalue_ty, Box::new(e)))
                 })
                 .collect();
-            let by_value_num = seq.len();
+            let by_value_args = seq.iter().cloned().collect::<Vec<_>>();
             // add the body
             let body = exp(context, body);
             let ty = body.ty.clone();
             seq.push_back(sp(body.exp.loc, TS::Seq(body)));
             let use_funs = N::UseFuns::new(context.current_call_color());
+            let block = TE::Block((use_funs, seq));
             let e_ = if context.env.ide_mode() {
                 TE::ExpandedMacro(
                     MacroCallInfo {
@@ -4470,12 +4471,15 @@ fn expand_macro(
                         name: f,
                         method_name,
                         type_arguments: type_args.clone(),
-                        by_value_args_num: by_value_num,
+                        by_value_args,
                     },
-                    (use_funs, seq),
+                    Box::new(T::Exp {
+                        ty: ty.clone(),
+                        exp: sp(call_loc, block),
+                    }),
                 )
             } else {
-                TE::Block((use_funs, seq))
+                block
             };
             (ty, e_)
         }

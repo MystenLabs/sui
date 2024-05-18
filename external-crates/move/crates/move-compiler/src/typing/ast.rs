@@ -184,8 +184,8 @@ pub struct MacroCallInfo {
     pub method_name: Option<Name>,
     /// Type params at macro's call site
     pub type_arguments: Vec<Type>,
-    /// Number of by-value args
-    pub by_value_args_num: usize,
+    /// By-value args (at this point there should only be one, representing receiver arg)
+    pub by_value_args: Vec<SequenceItem>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -224,7 +224,7 @@ pub enum UnannotatedExp_ {
     },
     NamedBlock(BlockLabel, Sequence),
     Block(Sequence),
-    ExpandedMacro(MacroCallInfo, /* inlined macro body */ Sequence),
+    ExpandedMacro(MacroCallInfo, /* inlined macro body */ Box<Exp>),
     Assign(LValueList, Vec<Option<Type>>, Box<Exp>),
     Mutate(Box<Exp>, Box<Exp>),
     Return(Box<Exp>),

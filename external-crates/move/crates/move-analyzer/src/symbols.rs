@@ -678,7 +678,7 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
         UE::Constant(mod_ident, name) => Some(format!("{mod_ident}::{name}")),
         UE::Value(v) => Some(ast_value_to_ide_string(v)),
         UE::Vector(_, _, _, exp) => ast_exp_to_ide_string(exp).map(|s| format!("[{s}]")),
-        UE::Block((_, seq)) | UE::NamedBlock(_, (_, seq)) | UE::ExpandedMacro(_, (_, seq)) => {
+        UE::Block((_, seq)) | UE::NamedBlock(_, (_, seq)) => {
             let seq_items = seq
                 .iter()
                 .map(ast_seq_item_to_ide_string)
@@ -695,6 +695,7 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
                     .join(", "),
             )
         }
+        UE::ExpandedMacro(_, exp) => ast_exp_to_ide_string(exp),
         UE::ExpList(list) => {
             let items = list
                 .iter()
@@ -2846,24 +2847,15 @@ impl<'a> TypingSymbolicator<'a> {
                 }
             }
             E::ExpandedMacro(MacroCallInfo {
-                module,name,method_name, type_arguments, by_value_args_num
-            }, (use_funs, sequence)) => {
+                module,name,method_name, type_arguments, by_value_args
+            }, exp) => {
                 self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
-                // a block is a new var scope
-                let mut new_scope = scope.clone();
-
-                // add use-defs etc. for by-value arguments, if any
-                for seq_item in sequence.range(0..(*by_value_args_num)) {
-                    self.seq_item_symbols(&mut new_scope, seq_item);
-                }
+                by_value_args.iter().for_each(|a| self.seq_item_symbols(scope, a));
 
                 let old_traverse_mode = self.traverse_only;
                 // stop adding new use-defs etc.
                 self.traverse_only = true;
-                self.use_funs_symbols(use_funs);
-                for seq_item in sequence.range((*by_value_args_num)..) {
-                    self.seq_item_symbols(&mut new_scope, seq_item);
-                }
+                self.exp_symbols(exp, scope);
                 self.traverse_only = old_traverse_mode;
             }
             E::Assign(lvalues, opt_types, e) => {

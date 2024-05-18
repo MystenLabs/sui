@@ -419,7 +419,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         E::Loop { body, .. } => exp(context, body),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
-        E::ExpandedMacro(_, seq) => sequence(context, seq),
+        E::ExpandedMacro(_, e) => exp(context, e),
         E::Assign(sp!(_, lvs_), ty_opts, e) => {
             lvalues(context, lvs_);
             for ty_opt in ty_opts {
