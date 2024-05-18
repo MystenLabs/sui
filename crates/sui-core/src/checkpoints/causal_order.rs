@@ -48,7 +48,7 @@ impl CausalOrder {
         Some(self.not_seen.remove(&key).unwrap())
     }
 
-    // effect is already removed from self.not_seen at this point
+    // `transaction` is already removed from self.not_seen at this point
     fn insert(&mut self, transaction: TransactionDependencies) {
         let initial_state = InsertState::new(transaction);
         let mut states = vec![initial_state];
@@ -265,6 +265,48 @@ mod tests {
                                            // both [5] and [2] are present (but order is not fixed)
         assert!(r.contains(&5));
         assert!(r.contains(&2));
+    }
+
+    // Two objects: O1, O2
+    // T1: read O1, write O2
+    // T2: read O2, write O1
+    // Object initial state: O1@V1, O2_deleted@V100
+    // Consensus ordering: T1 -> T2
+    // Say consensus handler assigns following version
+    //   T1: O1 R@V1, O2 W@V100->V101
+    //   T2: O2 W@V1->V2, O2 R@V101
+    //
+    // When calculating txn dependency, for O1 T2 depends on T1,
+    // but for O2, T1 and T2 both are considered operating on V100, the version at which
+    // O2 is deleted. Since T1 writes O2, T2 reads O2, T1 is also considered to depend on T2.
+    // Now we have a circular dependency.
+
+    #[test]
+    pub fn test_causal_order_shared_object_deletion() {
+        let mut e1 = e(d(11), vec![]);
+        let mut e2 = e(d(22), vec![]);
+        let obj_digest = ObjectDigest::new(Default::default());
+        e1.unsafe_add_input_shared_object_for_testing(InputSharedObject::ReadOnly((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
+        e1.unsafe_add_input_shared_object_for_testing(InputSharedObject::MutateDeleted(
+            o(2),
+            SequenceNumber::from_u64(100),
+        ));
+        e2.unsafe_add_input_shared_object_for_testing(InputSharedObject::Mutate((
+            o(1),
+            SequenceNumber::from_u64(1),
+            obj_digest,
+        )));
+        e2.unsafe_add_input_shared_object_for_testing(InputSharedObject::ReadDeleted(
+            o(2),
+            SequenceNumber::from_u64(100),
+        ));
+
+        let r = extract(CausalOrder::causal_sort(vec![e1, e2]));
+        println!("ZZZZZZ {:?}", r);
     }
 
     fn extract(e: Vec<TransactionEffects>) -> Vec<u8> {
