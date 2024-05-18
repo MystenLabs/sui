@@ -2794,7 +2794,7 @@ impl AuthorityPerEpochStore {
         cache_reader: &dyn ObjectCacheRead,
         consensus_commit_info: &ConsensusCommitInfo,
         roots: &mut BTreeSet<TransactionKey>,
-        _randomness_roots: &mut BTreeSet<TransactionKey>,
+        randomness_roots: &mut BTreeSet<TransactionKey>,
         previously_deferred_tx_digests: HashMap<TransactionDigest, DeferralKey>,
         mut randomness_manager: Option<&mut RandomnessManager>,
         dkg_failed: bool,
