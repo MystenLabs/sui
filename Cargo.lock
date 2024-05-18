@@ -12088,6 +12088,7 @@ dependencies = [
  "sui-config",
  "sui-json-rpc-api",
  "sui-json-rpc-types",
+ "sui-keys",
  "sui-sdk",
  "sui-test-transaction-builder",
  "sui-types",
@@ -12100,6 +12101,30 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "url",
+]
+
+[[package]]
+name = "sui-bridge-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ethers",
+ "fastcrypto",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "shared-crypto",
+ "sui-bridge",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-sdk",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -14254,6 +14279,7 @@ dependencies = [
  "futures",
  "move-core-types",
  "mysten-metrics",
+ "mysten-service",
  "notify",
  "object_store 0.7.0",
  "prometheus",

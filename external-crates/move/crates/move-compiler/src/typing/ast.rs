@@ -238,8 +238,12 @@ pub enum UnannotatedExp_ {
     Cast(Box<Exp>, Box<Type>),
     Annotate(Box<Exp>, Box<Type>),
 
-    // unfinished dot access (e.g. `some_field.`)
-    InvalidAccess(Box<Exp>),
+    // unfinished dot access (e.g. `some_field.`) with autocomplete information on it.
+    AutocompleteDotAccess {
+        base_exp: Box<Exp>,
+        methods: BTreeSet<(ModuleIdent, FunctionName)>,
+        fields: BTreeSet<Symbol>,
+    },
 
     ErrorConstant {
         line_number_loc: Loc,
@@ -835,9 +839,20 @@ impl AstDebug for UnannotatedExp_ {
                 ty.ast_debug(w);
                 w.write(")");
             }
-            E::InvalidAccess(e) => {
-                e.ast_debug(w);
-                w.write(".");
+            E::AutocompleteDotAccess {
+                base_exp,
+                methods,
+                fields,
+            } => {
+                base_exp.ast_debug(w);
+                w.write(".{");
+                let names = methods
+                    .iter()
+                    .map(|(m, f)| format!("{m}::{f}"))
+                    .chain(fields.iter().map(|n| format!("{n}")))
+                    .collect::<Vec<_>>();
+                w.comma(names, |w, n| w.write(n));
+                w.write("}");
             }
             E::UnresolvedError => w.write("_|_"),
             E::ErrorConstant {

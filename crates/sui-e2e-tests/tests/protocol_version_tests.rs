@@ -653,10 +653,11 @@ mod sim_only_tests {
 
         node_handle
             .with_async(|node| async {
-                let store = node.state().get_cache_reader().clone();
+                let store = node.state().get_object_cache_reader().clone();
                 let framework = store.get_object(package);
                 let digest = framework.unwrap().unwrap().previous_transaction;
-                let effects = store.get_executed_effects(&digest);
+                let tx_store = node.state().get_transaction_cache_reader().clone();
+                let effects = tx_store.get_executed_effects(&digest);
                 effects.unwrap().unwrap()
             })
             .await
@@ -668,7 +669,7 @@ mod sim_only_tests {
         node_handle
             .with_async(|node| async {
                 node.state()
-                    .get_cache_reader()
+                    .get_object_cache_reader()
                     .get_object(object_id)
                     .unwrap()
                     .unwrap()

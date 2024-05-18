@@ -12,6 +12,7 @@ use std::str::FromStr;
 use expect_test::expect;
 use move_package::{lock_file::schema::ManagedPackage, BuildConfig as MoveBuildConfig};
 use serde_json::json;
+use sui::client_ptb::ptb::PTB;
 use sui::key_identity::{get_identity_address, KeyIdentity};
 use sui_sdk::SuiClient;
 use sui_test_transaction_builder::batch_make_transfer_transactions;
@@ -2803,6 +2804,28 @@ async fn test_serialize_tx() -> Result<(), anyhow::Error> {
     }
     .execute(context)
     .await?;
+
+    let ptb_args = vec![
+        "--split-coins".to_string(),
+        "gas".to_string(),
+        "[1000]".to_string(),
+        "--assign".to_string(),
+        "new_coin".to_string(),
+        "--transfer-objects".to_string(),
+        "[new_coin]".to_string(),
+        format!("@{}", address1),
+        "--gas-budget".to_string(),
+        "50000000".to_string(),
+    ];
+    let mut args = ptb_args.clone();
+    args.push("--serialize-signed-transaction".to_string());
+    let ptb = PTB { args };
+    SuiClientCommands::PTB(ptb).execute(context).await.unwrap();
+    let mut args = ptb_args.clone();
+    args.push("--serialize-unsigned-transaction".to_string());
+    let ptb = PTB { args };
+    SuiClientCommands::PTB(ptb).execute(context).await.unwrap();
+
     Ok(())
 }
 

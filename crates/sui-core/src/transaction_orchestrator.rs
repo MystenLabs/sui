@@ -72,7 +72,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
         let safe_client_metrics_base = SafeClientMetricsBase::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let validators = AuthorityAggregator::new_from_local_system_state(
-            validator_state.get_cache_reader(),
+            validator_state.get_object_cache_reader(),
             validator_state.committee_store(),
             safe_client_metrics_base.clone(),
             auth_agg_metrics.clone(),
@@ -80,7 +80,7 @@ impl TransactiondOrchestrator<NetworkAuthorityClient> {
 
         let observer = OnsiteReconfigObserver::new(
             reconfig_channel,
-            validator_state.get_cache_reader().clone(),
+            validator_state.get_object_cache_reader().clone(),
             validator_state.clone_committee_store(),
             safe_client_metrics_base,
             auth_agg_metrics,
@@ -378,7 +378,7 @@ where
         // So we also subscribe to that. If we hear from `effects_await` first, it means
         // the ticket misses the previous notification, and we want to ask quorum driver
         // to form a certificate for us again, to serve this request.
-        let cache_reader = self.validator_state.get_cache_reader().clone();
+        let cache_reader = self.validator_state.get_transaction_cache_reader().clone();
         let qd = self.clone_quorum_driver();
         Ok(async move {
             let digests = [tx_digest];

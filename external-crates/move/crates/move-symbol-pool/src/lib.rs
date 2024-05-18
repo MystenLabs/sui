@@ -47,6 +47,7 @@ static_symbols!(
     "_",
     "init",
     "unit_test",
+    "unit_test_poison",
     "legacy",
     "2024",
     "alpha",

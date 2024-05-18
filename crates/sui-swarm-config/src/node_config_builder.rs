@@ -12,8 +12,9 @@ use std::time::Duration;
 use sui_config::node::{
     default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
     AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExpensiveSafetyCheckConfig, Genesis,
-    KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
+    Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
+    DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -226,6 +227,8 @@ impl ValidatorConfigBuilder {
             websocket_only: false,
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
+            with_client_ip_injection: None,
+            execution_cache: ExecutionCacheConfig::default(),
         }
     }
 
@@ -260,6 +263,7 @@ pub struct FullnodeConfigBuilder {
     run_with_range: Option<RunWithRange>,
     policy_config: Option<PolicyConfig>,
     fw_config: Option<RemoteFirewallConfig>,
+    with_client_ip_injection: Option<bool>,
 }
 
 impl FullnodeConfigBuilder {
@@ -364,6 +368,11 @@ impl FullnodeConfigBuilder {
 
     pub fn with_fw_config(mut self, config: Option<RemoteFirewallConfig>) -> Self {
         self.fw_config = config;
+        self
+    }
+
+    pub fn with_client_ip_injection(mut self, with_ip_injection: Option<bool>) -> Self {
+        self.with_client_ip_injection = with_ip_injection;
         self
     }
 
@@ -493,6 +502,8 @@ impl FullnodeConfigBuilder {
             websocket_only: false,
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
+            with_client_ip_injection: self.with_client_ip_injection,
+            execution_cache: ExecutionCacheConfig::default(),
         }
     }
 }

@@ -83,6 +83,7 @@ impl FilterContext for Context<'_> {
 
 const UNIT_TEST_MODULE_NAME: Symbol = symbol!("unit_test");
 const STDLIB_ADDRESS_NAME: Symbol = symbol!("std");
+pub const UNIT_TEST_POISON_FUN_NAME: Symbol = symbol!("unit_test_poison");
 
 // This filters out all test, and test-only annotated module member from `prog` if the `test` flag
 // in `compilation_env` is not set. If the test flag is set, no filtering is performed, and instead
@@ -211,7 +212,7 @@ fn create_test_poison(mloc: Loc) -> P::ModuleMember {
         entry: Some(mloc), // it's a bit of a hack to avoid treating this function as unused
         macro_: None,
         signature,
-        name: P::FunctionName(sp(mloc, "unit_test_poison".into())),
+        name: P::FunctionName(sp(mloc, UNIT_TEST_POISON_FUN_NAME)),
         body: sp(
             mloc,
             P::FunctionBody_::Defined((

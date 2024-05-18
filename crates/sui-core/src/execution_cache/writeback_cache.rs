@@ -41,13 +41,9 @@ use crate::authority::authority_per_epoch_store::AuthorityPerEpochStore;
 use crate::authority::authority_store::{
     ExecutionLockWriteGuard, LockDetailsDeprecated, ObjectLockStatus, SuiLockResult,
 };
-use crate::authority::authority_store_pruner::{
-    AuthorityStorePruner, AuthorityStorePruningMetrics, EPOCH_DURATION_MS_FOR_TESTING,
-};
 use crate::authority::authority_store_tables::LiveObject;
 use crate::authority::epoch_start_configuration::{EpochFlag, EpochStartConfiguration};
 use crate::authority::AuthorityStore;
-use crate::checkpoints::CheckpointStore;
 use crate::state_accumulator::AccumulatorStore;
 use crate::transaction_outputs::TransactionOutputs;
 
@@ -65,7 +61,6 @@ use prometheus::Registry;
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hash;
 use std::sync::Arc;
-use sui_config::node::AuthorityStorePruningConfig;
 use sui_macros::fail_point_async;
 use sui_protocol_config::ProtocolVersion;
 use sui_types::accumulator::Accumulator;
@@ -82,13 +77,13 @@ use sui_types::object::Object;
 use sui_types::storage::{MarkerValue, ObjectKey, ObjectOrTombstone, ObjectStore, PackageObject};
 use sui_types::sui_system_state::{get_sui_system_state, SuiSystemState};
 use sui_types::transaction::{VerifiedSignedTransaction, VerifiedTransaction};
-use tracing::{debug, info, instrument, trace};
+use tracing::{debug, info, instrument, trace, warn};
 
 use super::ExecutionCacheAPI;
 use super::{
     cache_types::CachedVersionMap, implement_passthrough_traits, object_locks::ObjectLocks,
-    CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheRead,
-    ExecutionCacheReconfigAPI, ExecutionCacheWrite, NotifyReadWrapper, StateSyncAPI,
+    CheckpointCache, ExecutionCacheCommit, ExecutionCacheMetrics, ExecutionCacheReconfigAPI,
+    ExecutionCacheWrite, ObjectCacheRead, StateSyncAPI, TestingAPI, TransactionCacheRead,
 };
 
 #[cfg(test)]
@@ -281,6 +276,34 @@ impl CachedCommittedData {
             _transaction_objects: transaction_objects,
         }
     }
+
+    fn clear_and_assert_empty(&self) {
+        self.object_cache.invalidate_all();
+        self.marker_cache.invalidate_all();
+        self.transactions.invalidate_all();
+        self.transaction_effects.invalidate_all();
+        self.transaction_events.invalidate_all();
+        self.executed_effects_digests.invalidate_all();
+        self._transaction_objects.invalidate_all();
+
+        assert_empty(&self.object_cache);
+        assert_empty(&self.marker_cache);
+        assert_empty(&self.transactions);
+        assert_empty(&self.transaction_effects);
+        assert_empty(&self.transaction_events);
+        assert_empty(&self.executed_effects_digests);
+        assert_empty(&self._transaction_objects);
+    }
+}
+
+fn assert_empty<K, V>(cache: &MokaCache<K, V>)
+where
+    K: std::hash::Hash + std::cmp::Eq + std::cmp::PartialEq + Send + Sync + 'static,
+    V: std::clone::Clone + std::marker::Send + std::marker::Sync + 'static,
+{
+    if cache.iter().next().is_some() {
+        panic!("cache should be empty");
+    }
 }
 
 pub struct WritebackCache {
@@ -337,7 +360,7 @@ macro_rules! check_cache_entry_by_latest {
 }
 
 impl WritebackCache {
-    fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
+    pub fn new(store: Arc<AuthorityStore>, metrics: Arc<ExecutionCacheMetrics>) -> Self {
         let packages = MokaCache::builder()
             .max_capacity(MAX_CACHE_SIZE)
             .max_capacity(MAX_CACHE_SIZE)
@@ -643,7 +666,13 @@ impl WritebackCache {
                 .get(tx)
                 .map(|o| o.clone())
             else {
-                panic!("Attempt to commit unknown transaction {:?}", tx);
+                // This can happen in the following rare case:
+                // All transactions in the checkpoint are committed to the db (by commit_transaction_outputs,
+                // called in CheckpointExecutor::process_executed_transactions), but the process crashes before
+                // the checkpoint water mark is bumped. We will then re-commit thhe checkpoint at startup,
+                // despite that all transactions are already executed.
+                warn!("Attempt to commit unknown transaction {:?}", tx);
+                continue;
             };
             all_outputs.push(outputs);
         }
@@ -655,13 +684,14 @@ impl WritebackCache {
             .write_transaction_outputs(epoch, &all_outputs)
             .await?;
 
-        for (tx_digest, outputs) in digests.iter().zip(all_outputs.into_iter()) {
+        for outputs in all_outputs.iter() {
+            let tx_digest = outputs.transaction.digest();
             assert!(self
                 .dirty
                 .pending_transaction_writes
                 .remove(tx_digest)
                 .is_some());
-            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, &outputs);
+            self.flush_transactions_from_dirty_to_cached(epoch, *tx_digest, outputs);
         }
 
         Ok(())
@@ -835,35 +865,6 @@ impl WritebackCache {
         }
     }
 
-    pub async fn prune_objects_and_compact_for_testing(
-        &self,
-        checkpoint_store: &Arc<CheckpointStore>,
-    ) {
-        let pruning_config = AuthorityStorePruningConfig {
-            num_epochs_to_retain: 0,
-            ..Default::default()
-        };
-        let _ = AuthorityStorePruner::prune_objects_for_eligible_epochs(
-            &self.store.perpetual_tables,
-            checkpoint_store,
-            &self.store.objects_lock_table,
-            pruning_config,
-            AuthorityStorePruningMetrics::new_for_test(),
-            usize::MAX,
-            EPOCH_DURATION_MS_FOR_TESTING,
-        )
-        .await;
-        let _ = AuthorityStorePruner::compact(&self.store.perpetual_tables);
-    }
-
-    pub fn store_for_testing(&self) -> &Arc<AuthorityStore> {
-        &self.store
-    }
-
-    pub fn as_notify_read_wrapper(self: Arc<Self>) -> NotifyReadWrapper<Self> {
-        NotifyReadWrapper(self)
-    }
-
     fn clear_state_end_of_epoch_impl(&self, _execution_guard: &ExecutionLockWriteGuard<'_>) {
         info!("clearing state at end of epoch");
         assert!(
@@ -903,12 +904,11 @@ impl WritebackCache {
         Ok(())
     }
 
-    #[cfg(test)]
-    pub fn clear_caches(&self) {
-        self.cached.object_cache.invalidate_all();
+    pub fn clear_caches_and_assert_empty(&self) {
+        info!("clearing caches");
+        self.cached.clear_and_assert_empty();
         self.packages.invalidate_all();
-        self.cached.marker_cache.invalidate_all();
-        self.cached._transaction_objects.invalidate_all();
+        assert_empty(&self.packages);
     }
 }
 
@@ -931,7 +931,7 @@ impl ExecutionCacheCommit for WritebackCache {
     }
 }
 
-impl ExecutionCacheRead for WritebackCache {
+impl ObjectCacheRead for WritebackCache {
     fn get_package_object(&self, package_id: &ObjectID) -> SuiResult<Option<PackageObject>> {
         if let Some(p) = self.packages.get(package_id) {
             if cfg!(debug_assertions) {
@@ -950,7 +950,7 @@ impl ExecutionCacheRead for WritebackCache {
         // We try the dirty objects cache as well before going to the database. This is necessary
         // because the package could be evicted from the package cache before it is committed
         // to the database.
-        if let Some(p) = ExecutionCacheRead::get_object(self, package_id)? {
+        if let Some(p) = ObjectCacheRead::get_object(self, package_id)? {
             if p.is_package() {
                 let p = PackageObject::new(p);
                 tracing::trace!(
@@ -1135,6 +1135,122 @@ impl ExecutionCacheRead for WritebackCache {
         )
     }
 
+    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
+        get_sui_system_state(self)
+    }
+
+    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
+        get_bridge(self)
+    }
+
+    fn get_marker_value(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<MarkerValue>> {
+        match self.get_marker_value_cache_only(object_id, version, epoch_id) {
+            CacheResult::Hit(marker) => Ok(Some(marker)),
+            CacheResult::NegativeHit => Ok(None),
+            CacheResult::Miss => self.store.get_marker_value(object_id, &version, epoch_id),
+        }
+    }
+
+    fn get_latest_marker(
+        &self,
+        object_id: &ObjectID,
+        epoch_id: EpochId,
+    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
+        match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
+            CacheResult::Hit((v, marker)) => Ok(Some((v, marker))),
+            CacheResult::NegativeHit => {
+                panic!("cannot have negative hit when getting latest marker")
+            }
+            CacheResult::Miss => self.store.get_latest_marker(object_id, epoch_id),
+        }
+    }
+
+    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
+        let cur_epoch = epoch_store.epoch();
+        match self.get_object_by_id_cache_only(&obj_ref.0) {
+            CacheResult::Hit((_, obj)) => {
+                let actual_objref = obj.compute_object_reference();
+                if obj_ref != actual_objref {
+                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
+                        locked_ref: actual_objref,
+                    })
+                } else {
+                    // requested object ref is live, check if there is a lock
+                    Ok(
+                        match self
+                            .object_locks
+                            .get_transaction_lock(&obj_ref, epoch_store)?
+                        {
+                            Some(tx_digest) => ObjectLockStatus::LockedToTx {
+                                locked_by_tx: LockDetailsDeprecated {
+                                    epoch: cur_epoch,
+                                    tx_digest,
+                                },
+                            },
+                            None => ObjectLockStatus::Initialized,
+                        },
+                    )
+                }
+            }
+            CacheResult::NegativeHit => {
+                Err(SuiError::from(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    // even though we know the requested version, we leave it as None to indicate
+                    // that the object does not exist at any version
+                    version: None,
+                }))
+            }
+            CacheResult::Miss => self.store.get_lock(obj_ref, epoch_store),
+        }
+    }
+
+    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
+        let obj = ObjectCacheRead::get_object(self, &object_id)?.ok_or(
+            UserInputError::ObjectNotFound {
+                object_id,
+                version: None,
+            },
+        )?;
+        Ok(obj.compute_object_reference())
+    }
+
+    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
+        do_fallback_lookup(
+            owned_object_refs,
+            |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
+                CacheResult::Hit((version, obj)) => {
+                    if obj.compute_object_reference() != *obj_ref {
+                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
+                            provided_obj_ref: *obj_ref,
+                            current_version: version,
+                        }
+                        .into())
+                    } else {
+                        Ok(CacheResult::Hit(()))
+                    }
+                }
+                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
+                    object_id: obj_ref.0,
+                    version: None,
+                }
+                .into()),
+                CacheResult::Miss => Ok(CacheResult::Miss),
+            },
+            |remaining| {
+                self.store.check_owned_objects_are_live(remaining)?;
+                Ok(vec![(); remaining.len()])
+            },
+        )?;
+        Ok(())
+    }
+}
+
+impl TransactionCacheRead for WritebackCache {
     fn multi_get_transaction_blocks(
         &self,
         digests: &[TransactionDigest],
@@ -1259,120 +1375,6 @@ impl ExecutionCacheRead for WritebackCache {
             },
             |digests| self.store.multi_get_events(digests),
         )
-    }
-
-    fn get_sui_system_state_object_unsafe(&self) -> SuiResult<SuiSystemState> {
-        get_sui_system_state(self)
-    }
-
-    fn get_bridge_object_unsafe(&self) -> SuiResult<Bridge> {
-        get_bridge(self)
-    }
-
-    fn get_marker_value(
-        &self,
-        object_id: &ObjectID,
-        version: SequenceNumber,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<MarkerValue>> {
-        match self.get_marker_value_cache_only(object_id, version, epoch_id) {
-            CacheResult::Hit(marker) => Ok(Some(marker)),
-            CacheResult::NegativeHit => Ok(None),
-            CacheResult::Miss => self.store.get_marker_value(object_id, &version, epoch_id),
-        }
-    }
-
-    fn get_latest_marker(
-        &self,
-        object_id: &ObjectID,
-        epoch_id: EpochId,
-    ) -> SuiResult<Option<(SequenceNumber, MarkerValue)>> {
-        match self.get_latest_marker_value_cache_only(object_id, epoch_id) {
-            CacheResult::Hit((v, marker)) => Ok(Some((v, marker))),
-            CacheResult::NegativeHit => {
-                panic!("cannot have negative hit when getting latest marker")
-            }
-            CacheResult::Miss => self.store.get_latest_marker(object_id, epoch_id),
-        }
-    }
-
-    fn get_lock(&self, obj_ref: ObjectRef, epoch_store: &AuthorityPerEpochStore) -> SuiLockResult {
-        let cur_epoch = epoch_store.epoch();
-        match self.get_object_by_id_cache_only(&obj_ref.0) {
-            CacheResult::Hit((_, obj)) => {
-                let actual_objref = obj.compute_object_reference();
-                if obj_ref != actual_objref {
-                    Ok(ObjectLockStatus::LockedAtDifferentVersion {
-                        locked_ref: actual_objref,
-                    })
-                } else {
-                    // requested object ref is live, check if there is a lock
-                    Ok(
-                        match self
-                            .object_locks
-                            .get_transaction_lock(&obj_ref, epoch_store)?
-                        {
-                            Some(tx_digest) => ObjectLockStatus::LockedToTx {
-                                locked_by_tx: LockDetailsDeprecated {
-                                    epoch: cur_epoch,
-                                    tx_digest,
-                                },
-                            },
-                            None => ObjectLockStatus::Initialized,
-                        },
-                    )
-                }
-            }
-            CacheResult::NegativeHit => {
-                Err(SuiError::from(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    // even though we know the requested version, we leave it as None to indicate
-                    // that the object does not exist at any version
-                    version: None,
-                }))
-            }
-            CacheResult::Miss => self.store.get_lock(obj_ref, epoch_store),
-        }
-    }
-
-    fn _get_live_objref(&self, object_id: ObjectID) -> SuiResult<ObjectRef> {
-        let obj = ExecutionCacheRead::get_object(self, &object_id)?.ok_or(
-            UserInputError::ObjectNotFound {
-                object_id,
-                version: None,
-            },
-        )?;
-        Ok(obj.compute_object_reference())
-    }
-
-    fn check_owned_objects_are_live(&self, owned_object_refs: &[ObjectRef]) -> SuiResult {
-        do_fallback_lookup(
-            owned_object_refs,
-            |obj_ref| match self.get_object_by_id_cache_only(&obj_ref.0) {
-                CacheResult::Hit((version, obj)) => {
-                    if obj.compute_object_reference() != *obj_ref {
-                        Err(UserInputError::ObjectVersionUnavailableForConsumption {
-                            provided_obj_ref: *obj_ref,
-                            current_version: version,
-                        }
-                        .into())
-                    } else {
-                        Ok(CacheResult::Hit(()))
-                    }
-                }
-                CacheResult::NegativeHit => Err(UserInputError::ObjectNotFound {
-                    object_id: obj_ref.0,
-                    version: None,
-                }
-                .into()),
-                CacheResult::Miss => Ok(CacheResult::Miss),
-            },
-            |remaining| {
-                self.store.check_owned_objects_are_live(remaining)?;
-                Ok(vec![(); remaining.len()])
-            },
-        )?;
-        Ok(())
     }
 }
 

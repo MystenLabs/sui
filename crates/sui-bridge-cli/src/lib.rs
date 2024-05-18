@@ -1,16 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::abi::{eth_sui_bridge, EthSuiBridge};
-use crate::config::read_key;
-use crate::crypto::BridgeAuthorityPublicKeyBytes;
-use crate::error::BridgeResult;
-use crate::sui_client::SuiBridgeClient;
-use crate::types::{
-    AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
-    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
-};
-use crate::utils::{get_eth_signer_client, EthSigner};
 use anyhow::anyhow;
 use clap::*;
 use ethers::providers::Middleware;
@@ -26,8 +16,19 @@ use shared_crypto::intent::IntentMessage;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_bridge::abi::{eth_sui_bridge, EthSuiBridge};
+use sui_bridge::crypto::BridgeAuthorityPublicKeyBytes;
+use sui_bridge::error::BridgeResult;
+use sui_bridge::sui_client::SuiBridgeClient;
+use sui_bridge::types::BridgeAction;
+use sui_bridge::types::{
+    AssetPriceUpdateAction, BlocklistCommitteeAction, BlocklistType, EmergencyAction,
+    EmergencyActionType, EvmContractUpgradeAction, LimitUpdateAction,
+};
+use sui_bridge::utils::{get_eth_signer_client, EthSigner};
 use sui_config::Config;
 use sui_json_rpc_types::SuiObjectDataOptions;
+use sui_keys::keypair_file::read_key;
 use sui_sdk::SuiClientBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -37,8 +38,6 @@ use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, Transaction, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
 use tracing::info;
-
-use crate::types::BridgeAction;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -55,7 +54,7 @@ pub enum BridgeValidatorCommand {
     #[clap(name = "create-bridge-client-key")]
     CreateBridgeClientKey {
         path: PathBuf,
-        #[clap(name = "use-ecdsa", long)]
+        #[clap(name = "use-ecdsa", long, default_value = "false")]
         use_ecdsa: bool,
     },
     #[clap(name = "create-bridge-node-config-template")]
@@ -566,7 +565,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_encode_call_data() {
-        let abi_json = std::fs::read_to_string("abi/tests/mock_sui_bridge_v2.json").unwrap();
+        let abi_json =
+            std::fs::read_to_string("../sui-bridge/abi/tests/mock_sui_bridge_v2.json").unwrap();
         let abi: ethers::abi::Abi = serde_json::from_str(&abi_json).unwrap();
 
         let function_selector = "initializeV2Params(uint256,bool,string)";

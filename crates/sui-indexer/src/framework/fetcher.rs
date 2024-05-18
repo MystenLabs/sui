@@ -117,11 +117,6 @@ impl CheckpointFetcher {
                 checkpoint = checkpoint.checkpoint_summary.sequence_number(),
                 "successfully downloaded checkpoint"
             );
-            self.metrics.download_lag_ms.set(
-                chrono::Utc::now().timestamp_millis()
-                    - checkpoint.checkpoint_summary.timestamp_ms as i64,
-            );
-
             let checkpoint_bytes_size = bcs::serialized_size(&checkpoint)?;
             self.metrics
                 .checkpoint_download_bytes_size
