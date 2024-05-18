@@ -29,7 +29,7 @@
 		}
 	},
 	"engines": {
-		"pnpm": ">=9.1.0"
+		"pnpm": ">=9.0.0"
 	},
 	"manypkg": {
 		"ignoredRules": [
