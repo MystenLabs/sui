@@ -31,7 +31,7 @@ export const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	validate: (val) => {
 		const address = normalizeSuiAddress(typeof val === 'string' ? val : toHEX(val));
 		if (!val || !isValidSuiAddress(address)) {
-			throw new Error(`Invalid Sui address ${address}`);
+			throw new Error(`Invalid Sui address "${val}"`);
 		}
 	},
 	input: (val: string | Uint8Array) =>
