@@ -13,6 +13,7 @@ mod test {
     use sui_benchmark::bank::BenchmarkBank;
     use sui_benchmark::system_state_observer::SystemStateObserver;
     use sui_benchmark::workloads::adversarial::AdversarialPayloadCfg;
+    use sui_benchmark::workloads::workload::MAX_BUDGET;
     use sui_benchmark::workloads::workload_configuration::WorkloadConfiguration;
     use sui_benchmark::{
         drivers::{bench_driver::BenchDriver, driver::Driver, Interval},
@@ -30,7 +31,9 @@ mod test {
         clear_fail_point, nondeterministic, register_fail_point_async, register_fail_point_if,
         register_fail_points, sim_test,
     };
-    use sui_protocol_config::{ProtocolVersion, SupportedProtocolVersions};
+    use sui_protocol_config::{
+        PerObjectCongestionControlMode, ProtocolVersion, SupportedProtocolVersions,
+    };
     use sui_simulator::tempfile::TempDir;
     use sui_simulator::{configs::*, SimConfig};
     use sui_storage::blob::Blob;
@@ -400,9 +403,17 @@ mod test {
 
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
+        let _guard = ProtocolConfig::apply_overrides_for_testing(|_, mut config| {
+            config.set_per_object_congestion_control_mode(
+                PerObjectCongestionControlMode::TotalGasBudget,
+            );
+            config.set_max_accumulated_txn_cost_per_object_in_checkpoint(5 * MAX_BUDGET);
+            config
+        });
+
         let test_cluster = build_test_cluster(4, 1000).await;
 
-        test_simulated_load(test_cluster, 120).await;
+        test_simulated_load(test_cluster, 30).await;
     }
 
     #[sim_test(config = "test_config()")]
