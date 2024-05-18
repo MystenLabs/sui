@@ -1305,6 +1305,7 @@ where
         PeerCheckpointRequestType::Content,
     )
     .with_checkpoint(*checkpoint.sequence_number());
+    let now = tokio::time::Instant::now();
     let Some(_contents) = get_full_checkpoint_contents(peers, &store, &checkpoint, timeout).await
     else {
         // Delay completion in case of error so we don't hammer the network with retries.
@@ -1312,8 +1313,11 @@ where
             .read()
             .unwrap()
             .wait_interval_when_no_peer_to_sync_content();
-        info!("retrying checkpoint sync after {:?}", duration);
-        tokio::time::sleep(duration).await;
+        if now.elapsed() < duration {
+            let duration = duration - now.elapsed();
+            info!("retrying checkpoint sync after {:?}", duration);
+            tokio::time::sleep(duration).await;
+        }
         return Err(checkpoint);
     };
     debug!("completed checkpoint contents sync");

@@ -120,8 +120,10 @@ pub trait SimulatorStore:
 
     fn backing_store(&self) -> &dyn BackingStore;
 
-    // TODO: After we abstract object storage into the ExecutionCache trait, we can replace this with
-    // sui_core::TransactionInputLoad using an appropriate cache implementation.
+    // TODO: This function is now out-of-sync with read_objects_for_execution from transaction_input_loader.rs.
+    // For instance, it does not support the use of deleted shared objects.
+    // We will need to make SimulatorStore implement ExecutionCacheRead, and keep track of deleted shared objects
+    // in a marker table in order to merge this function.
     fn read_objects_for_synchronous_execution(
         &self,
         _tx_digest: &TransactionDigest,

@@ -14,9 +14,7 @@ use crate::execution_status::ExecutionStatus;
 use crate::gas::GasCostSummary;
 #[cfg(debug_assertions)]
 use crate::is_system_package;
-use crate::message_envelope::Message;
 use crate::object::{Owner, OBJECT_START_VERSION};
-use crate::transaction::SenderSignedData;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 #[cfg(debug_assertions)]
@@ -119,6 +117,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
                     }
                     UnchangedSharedKind::ReadDeleted(seqno) => {
                         InputSharedObject::ReadDeleted(*id, *seqno)
+                    }
+                    UnchangedSharedKind::Cancelled(seqno) => {
+                        InputSharedObject::Cancelled(*id, *seqno)
                     }
                 },
             ))
@@ -356,6 +357,9 @@ impl TransactionEffectsAPI for TransactionEffectsV2 {
             InputSharedObject::MutateDeleted(obj_id, seqno) => self
                 .unchanged_shared_objects
                 .push((obj_id, UnchangedSharedKind::MutateDeleted(seqno))),
+            InputSharedObject::Cancelled(obj_id, seqno) => self
+                .unchanged_shared_objects
+                .push((obj_id, UnchangedSharedKind::Cancelled(seqno))),
         }
     }
 
@@ -422,6 +426,10 @@ impl TransactionEffectsV2 {
                         Some((id, UnchangedSharedKind::ReadDeleted(version)))
                     }
                 }
+                SharedInput::Cancelled((id, version)) => {
+                    debug_assert!(!changed_objects.contains_key(&id));
+                    Some((id, UnchangedSharedKind::Cancelled(version)))
+                }
             })
             .collect();
         let changed_objects: Vec<_> = changed_objects.into_iter().collect();
@@ -450,34 +458,6 @@ impl TransactionEffectsV2 {
         result.check_invariant();
 
         result
-    }
-
-    pub fn new_with_tx_and_gas(tx: &SenderSignedData, gas_object: (ObjectRef, Owner)) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            lamport_version: gas_object.0 .1,
-            changed_objects: vec![(
-                gas_object.0 .0,
-                EffectsObjectChange {
-                    input_state: ObjectIn::Exist((
-                        (SequenceNumber::default(), ObjectDigest::MIN),
-                        gas_object.1,
-                    )),
-                    output_state: ObjectOut::ObjectWrite((gas_object.0 .2, gas_object.1)),
-                    id_operation: IDOperation::None,
-                },
-            )],
-            gas_object_index: Some(0),
-            ..Default::default()
-        }
-    }
-
-    pub fn new_with_tx_and_status(tx: &SenderSignedData, status: ExecutionStatus) -> Self {
-        Self {
-            transaction_digest: tx.digest(),
-            status,
-            ..Default::default()
-        }
     }
 
     /// This function demonstrates what's the invariant of the effects.
@@ -605,4 +585,6 @@ pub enum UnchangedSharedKind {
     MutateDeleted(SequenceNumber),
     /// Deleted shared objects that appear as read-only in the input.
     ReadDeleted(SequenceNumber),
+    /// Shared objects in cancelled transaction. The sequence number embed cancellation reason.
+    Cancelled(SequenceNumber),
 }

@@ -63,18 +63,18 @@ while (i < 3) {
 
 ## Usage
 
-As the example indicates, if you define a datatype and an associated index syntax method, anyone
-can invoke that method by writing index syntax on a value of that type:
+As the example indicates, if you define a datatype and an associated index syntax method, anyone can
+invoke that method by writing index syntax on a value of that type:
 
 ```move
 let mat = matrix::make_matrix(...);
 let m_0_0 = mat[0, 0];
 ```
 
-During compilation, the compiler translates these into the appropriate function invocations
-based on the position and mutable usage of the expression:
+During compilation, the compiler translates these into the appropriate function invocations based on
+the position and mutable usage of the expression:
 
-```move
+````move
 let mut mat = matrix::make_matrix(...);
 
 let m_0_0 = mat[0, 0];
@@ -98,7 +98,7 @@ fun borrow_first(input: &Vs): &u64 {
     input.vs[0].v[0]
     // translates to vector::borrow(vector::borrow(input.vs, 0).v, 0)
 }
-```
+````
 
 ### Index Functions Take Flexible Arguments
 
@@ -134,7 +134,6 @@ let entry: &mut u64 = &mut table[string_key, 0];
 This sort of extensible power allows you to write precise index interfaces for your types,
 concretely enforcing bespoke behavior.
 
-
 ## Defining Index Syntax Functions
 
 This powerful syntax form allows all of your user-defined datatypes to behave in this way, assuming
@@ -147,18 +146,18 @@ your definitions adhere to the following rules:
    matching references type (`mut` if the subject was `mut`).
 1. Each type has only a single mutable and single immutable definition.
 1. Immutable and mutable versions have type agreement:
-    - The subject types match, differing only in mutability.
-    - The return types match the mutability of their subject types.
-    - Type parameters, if present, have identical constraints between both versions.
-    - All parameters beyond the subject type are identical.
+   - The subject types match, differing only in mutability.
+   - The return types match the mutability of their subject types.
+   - Type parameters, if present, have identical constraints between both versions.
+   - All parameters beyond the subject type are identical.
 
 The following content and additional examples describe these rules in greater detail.
 
 ### Declaration
 
-To declare an index syntax method, add the `#[syntax(index)]` attribute above the relevant
-function definition in the same module as the subject type's definition. This signals to the
-compiler that the function is an index accessor for the specified type.
+To declare an index syntax method, add the `#[syntax(index)]` attribute above the relevant function
+definition in the same module as the subject type's definition. This signals to the compiler that
+the function is an index accessor for the specified type.
 
 #### Immutable Accessor
 
@@ -176,8 +175,8 @@ public fun borrow<Element>(v: &vector<Element>, i: u64): &Element {
 #### Mutable Accessor
 
 The mutable index syntax method is the dual of the immutable one, allowing for both read and write
-operations. It takes a mutable reference of the subject type and returns a mutable reference to
-the element type. The `borrow_mut` function defined in `std::vector` is an example of this:
+operations. It takes a mutable reference of the subject type and returns a mutable reference to the
+element type. The `borrow_mut` function defined in `std::vector` is an example of this:
 
 ```move
 #[syntax(index)]
@@ -194,9 +193,9 @@ Move.
 
 #### No Duplicates
 
-In addition to the above requirements, we restrict each subject base type to defining a single
-index syntax method for immutable references and a single index syntax method for mutable
-references. For example, you cannot define a specialized version for a polymorphic type:
+In addition to the above requirements, we restrict each subject base type to defining a single index
+syntax method for immutable references and a single index syntax method for mutable references. For
+example, you cannot define a specialized version for a polymorphic type:
 
 ```move
 #[syntax(index)]
@@ -208,16 +207,16 @@ public fun borrow_matrix<T>(s: &Matrix<T>, i: u64, j: u64): &T { ... }
     // for its immutable index syntax method
 ```
 
-This ensures that you can always tell which method is being invoked, without the need to
-inspect type instantiation.
+This ensures that you can always tell which method is being invoked, without the need to inspect
+type instantiation.
 
 ### Type Constraints
 
 By default, an index syntax method has the following type constraints:
 
 **Its subject type (first argument) must be a reference to a single type defined in the same module
-as the marked function.** This means that you cannot define index syntax methods for tuples,
-type parameters, or values:
+as the marked function.** This means that you cannot define index syntax methods for tuples, type
+parameters, or values:
 
 ```move
 #[syntax(index)]
@@ -234,9 +233,9 @@ public fun borrow_value(x: Matrix<u64>, ...): &u64 { ... }
 ```
 
 **The subject type must match mutability with the return type.** This restriction allows you to
-clarify the expected behavior when borrowing an indexed expression as `&vec[i]` versus `&mut
-vec[i]`. The Move compiler uses the mutability marker to determine which borrow form to call to
-produce a reference of the appropriate mutability. As a result, we disallow index syntax methods
+clarify the expected behavior when borrowing an indexed expression as `&vec[i]` versus
+`&mut vec[i]`. The Move compiler uses the mutability marker to determine which borrow form to call
+to produce a reference of the appropriate mutability. As a result, we disallow index syntax methods
 whose subject and return mutability differ:
 
 ```move
@@ -258,8 +257,8 @@ compatibility constraints:
 1. Their return types must match exactly except for the mutability.
 1. All other parameter types must match exactly.
 
-These constraints are to ensure that index syntax behaves identically
-regardless of being in a mutable or immutable position.
+These constraints are to ensure that index syntax behaves identically regardless of being in a
+mutable or immutable position.
 
 To illustrate some of these errors, recall the previous `Matrix` definition:
 
@@ -297,4 +296,3 @@ public fun borrow_mut<T, U>(s: &mut Matrix<U>, i: u64, j: u32):  &mut U { ... }
 Again, the goal here is to make the usage across the immutable and mutable versions consistent. This
 allows index syntax methods to work without changing out the behavior or constraints based on
 mutable versus immutable usage, ultimately ensuring a consistent interface to program against.
-

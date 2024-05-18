@@ -69,14 +69,17 @@ fn add_to_sui_dockerfile(path: &Path) -> Result<()> {
 fn add_member_to_workspace(path: &Path) -> Result<()> {
     // test
     let path = path.canonicalize().context("canonicalizing service path")?;
-    let crates_dir = path.parent().unwrap();
+    let crates_dir = path.parent().context("getting path parent").unwrap();
     if !crates_dir.ends_with("sui/crates") {
         panic!("directory wasn't in the sui repo");
     }
     let workspace_toml_path = &crates_dir.join("../Cargo.toml");
     // read the workspace toml
-    let toml_content = fs::read_to_string(workspace_toml_path)?;
-    let mut toml = toml_content.parse::<toml_edit::Document>()?;
+    let toml_content =
+        fs::read_to_string(workspace_toml_path).context("reading workspace cargo file")?;
+    let mut toml = toml_content
+        .parse::<toml_edit::Document>()
+        .context("parsing workspace cargo file")?;
     toml["workspace"]["members"]
         .as_array_mut()
         .unwrap()
@@ -98,7 +101,7 @@ fn add_member_to_workspace(path: &Path) -> Result<()> {
 fn create_rust_service(path: &Path) -> Result<()> {
     info!("creating rust service in {}", path.to_string_lossy());
     // create the dir to ensure we can canonicalize any relative paths
-    create_dir_all(path)?;
+    create_dir_all(path).context("creating rust service dirs")?;
     let is_sui_service = path
         // expand relative paths and symlinks
         .canonicalize()
@@ -107,30 +110,51 @@ fn create_rust_service(path: &Path) -> Result<()> {
         .contains("sui/crates");
     debug!("sui service: {:?}", is_sui_service);
     let cargo_toml_path = if is_sui_service {
-        "Cargo.toml"
+        "Cargo-sui.toml"
     } else {
-        "Cargo-external.toml"
+        "Cargo-ext.toml"
     };
-    let cargo_toml = PROJECT_DIR.get_file(cargo_toml_path).unwrap();
-    let main_rs = PROJECT_DIR.get_file("src/main.rs").unwrap();
+    let cargo_toml = PROJECT_DIR
+        .get_file(cargo_toml_path)
+        .context("getting cargo toml file from boilerplate")
+        .unwrap();
+    let main_rs = PROJECT_DIR
+        .get_file("src/main.rs")
+        .context("getting main.rs file from boilerplate")
+        .unwrap();
     let main_body = main_rs.contents();
-    let cargo_body = std::str::from_utf8(cargo_toml.contents())?;
-    let mut toml_content = cargo_body.parse::<toml_edit::Document>()?;
-    toml_content["package"]["name"] = toml_edit::value(path.file_name().unwrap().to_str().unwrap());
-    create_dir_all(path.join("src"))?;
-    let mut main_file = File::create(path.join("src/main.rs"))?;
-    main_file.write_all(main_body)?;
-    let mut cargo_file = File::create(path.join("Cargo.toml"))?;
-    cargo_file.write_all(toml_content.to_string().as_bytes())?;
+    let cargo_body =
+        std::str::from_utf8(cargo_toml.contents()).context("decoding cargo toml body")?;
+    let mut toml_content = cargo_body
+        .parse::<toml_edit::Document>()
+        .context("parsing cargo toml file")?;
+    toml_content["package"]["name"] = toml_edit::value(
+        path.file_name()
+            .context("peeling tail off of path")
+            .unwrap()
+            .to_str()
+            .context("decoding dir to str")
+            .unwrap(),
+    );
+    create_dir_all(path.join("src")).context("creating src dir")?;
+    let mut main_file = File::create(path.join("src/main.rs")).context("creating main.rs file")?;
+    main_file
+        .write_all(main_body)
+        .context("writing main.rs file")?;
+    let mut cargo_file =
+        File::create(path.join("Cargo.toml")).context("creating cargo toml file")?;
+    cargo_file
+        .write_all(toml_content.to_string().as_bytes())
+        .context("writing cargo toml file")?;
 
     // add the project as a member of the cargo workspace
     if is_sui_service {
-        add_member_to_workspace(path)?;
+        add_member_to_workspace(path).context("adding crate to sui workspace")?;
     }
     // now that the source directory works, let's update/add a dockerfile
     if is_sui_service {
         // update sui-services dockerfile
-        add_to_sui_dockerfile(path)?;
+        add_to_sui_dockerfile(path).context("adding crate to sui services dockerfile")?;
     } else {
         // TODO: create a new dockerfile where the user designates
     }

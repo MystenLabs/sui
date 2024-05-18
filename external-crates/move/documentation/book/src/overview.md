@@ -4,7 +4,10 @@ title: Overview
 sidebar_label: Move
 ---
 
-Move is a next generation language for secure asset programming. Its primary use case is in blockchain environments, where Move programs are used to construct state changes. Move allows developers to write programs that flexibly manage and transfer assets, while providing the security and protections against attacks on those assets.
+Move is a next generation language for secure asset programming. Its primary use case is in
+blockchain environments, where Move programs are used to construct state changes. Move allows
+developers to write programs that flexibly manage and transfer assets, while providing the security
+and protections against attacks on those assets.
 
 ### Start Here
 
@@ -45,7 +48,7 @@ Move is a next generation language for secure asset programming. Its primary use
   <SimpleTextCard
     icon="img/address.svg"
     iconDark="img/address-dark.svg"
-    overlay="address is a built-in type in Move that is used to represent locations in global storage"
+    overlay="address is a built-in type in Move that is used to represent locations in storage"
     title="Address"
     to="/docs/move/move-address"
   />

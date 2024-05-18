@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::available_range::AvailableRange;
 use super::cursor::{self, Page, RawPaginated, Target};
 use super::{big_int::BigInt, move_type::MoveType, sui_address::SuiAddress};
-use crate::consistency::{consistent_range, Checkpointed};
+use crate::consistency::Checkpointed;
 use crate::data::{Db, DbConnection, QueryExecutor};
 use crate::error::Error;
 use crate::raw_query::RawQuery;
@@ -63,17 +64,16 @@ impl Balance {
         db: &Db,
         address: SuiAddress,
         coin_type: TypeTag,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Option<Balance>, Error> {
         let stored: Option<StoredBalance> = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
                 conn.result(move || {
-                    balance_query(address, Some(coin_type.clone()), lhs as i64, rhs as i64)
-                        .into_boxed()
+                    balance_query(address, Some(coin_type.clone()), range).into_boxed()
                 })
                 .optional()
             })
@@ -88,38 +88,36 @@ impl Balance {
         db: &Db,
         page: Page<Cursor>,
         address: SuiAddress,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Balance>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        let response = db
+        let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
                 let result = page.paginate_raw_query::<StoredBalance>(
                     conn,
-                    rhs,
-                    balance_query(address, None, lhs as i64, rhs as i64),
+                    checkpoint_viewed_at,
+                    balance_query(address, None, range),
                 )?;
 
-                Ok(Some((result, rhs)))
+                Ok(Some(result))
             })
-            .await?;
-
-        let Some(((prev, next, results), checkpoint_viewed_at)) = response else {
+            .await?
+        else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));
         };
 
         let mut conn = Connection::new(prev, next);
-
         for stored in results {
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
             let balance = Balance::try_from(stored)?;
@@ -194,7 +192,11 @@ impl TryFrom<StoredBalance> for Balance {
 /// Query the database for a `page` of coin balances. Each balance represents the total balance for
 /// a particular coin type, owned by `address`. This function is meant to be called within a thunk
 /// and returns a RawQuery that can be converted into a BoxedSqlQuery with `.into_boxed()`.
-fn balance_query(address: SuiAddress, coin_type: Option<TypeTag>, lhs: i64, rhs: i64) -> RawQuery {
+fn balance_query(
+    address: SuiAddress,
+    coin_type: Option<TypeTag>,
+    range: AvailableRange,
+) -> RawQuery {
     // Construct the filtered inner query - apply the same filtering criteria to both
     // objects_snapshot and objects_history tables.
     let mut snapshot_objs = query!("SELECT * FROM objects_snapshot");
@@ -206,7 +208,10 @@ fn balance_query(address: SuiAddress, coin_type: Option<TypeTag>, lhs: i64, rhs:
     history_objs = filter(history_objs, address, coin_type.clone());
     history_objs = filter!(
         history_objs,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+        format!(
+            r#"checkpoint_sequence_number BETWEEN {} AND {}"#,
+            range.first, range.last
+        )
     );
 
     // Combine the two queries, and select the most recent version of each object.
@@ -224,7 +229,10 @@ fn balance_query(address: SuiAddress, coin_type: Option<TypeTag>, lhs: i64, rhs:
     let mut newer = query!("SELECT object_id, object_version FROM objects_history");
     newer = filter!(
         newer,
-        format!(r#"checkpoint_sequence_number BETWEEN {} AND {}"#, lhs, rhs)
+        format!(
+            r#"checkpoint_sequence_number BETWEEN {} AND {}"#,
+            range.first, range.last
+        )
     );
     let final_ = query!(
         r#"SELECT

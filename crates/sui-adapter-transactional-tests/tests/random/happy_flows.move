@@ -7,9 +7,6 @@
 module test::random {
     use sui::clock::Clock;
     use sui::random::Random;
-    use sui::transfer;
-    use sui::object;
-    use sui::tx_context:: TxContext;
 
     public struct Obj has key, store {
         id: object::UID,

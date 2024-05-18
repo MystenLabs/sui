@@ -5,10 +5,6 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer;
-
     public struct PrologueReceipt {}
     public struct Witness has key { id: UID }
 

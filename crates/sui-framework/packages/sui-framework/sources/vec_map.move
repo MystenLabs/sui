@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::vec_map {
-    use std::option::{Self, Option};
-    use std::vector;
 
     /// This key already exists in the map
     const EKeyAlreadyExists: u64 = 0;
@@ -38,43 +36,45 @@ module sui::vec_map {
 
     /// Create an empty `VecMap`
     public fun empty<K: copy, V>(): VecMap<K,V> {
-        VecMap { contents: vector::empty() }
+        VecMap { contents: vector[] }
     }
 
     /// Insert the entry `key` |-> `value` into `self`.
     /// Aborts if `key` is already bound in `self`.
     public fun insert<K: copy, V>(self: &mut VecMap<K,V>, key: K, value: V) {
-        assert!(!contains(self, &key), EKeyAlreadyExists);
-        vector::push_back(&mut self.contents, Entry { key, value })
+        assert!(!self.contains(&key), EKeyAlreadyExists);
+        self.contents.push_back(Entry { key, value })
     }
 
     /// Remove the entry `key` |-> `value` from self. Aborts if `key` is not bound in `self`.
     public fun remove<K: copy, V>(self: &mut VecMap<K,V>, key: &K): (K, V) {
-        let idx = get_idx(self, key);
-        let Entry { key, value } = vector::remove(&mut self.contents, idx);
+        let idx = self.get_idx(key);
+        let Entry { key, value } = self.contents.remove(idx);
         (key, value)
     }
 
     /// Pop the most recently inserted entry from the map. Aborts if the map is empty.
     public fun pop<K: copy, V>(self: &mut VecMap<K,V>): (K, V) {
-        assert!(!vector::is_empty(&self.contents), EMapEmpty);
-        let Entry { key, value } = vector::pop_back(&mut self.contents);
+        assert!(!self.contents.is_empty(), EMapEmpty);
+        let Entry { key, value } = self.contents.pop_back();
         (key, value)
     }
 
+    #[syntax(index)]
     /// Get a mutable reference to the value bound to `key` in `self`.
     /// Aborts if `key` is not bound in `self`.
     public fun get_mut<K: copy, V>(self: &mut VecMap<K,V>, key: &K): &mut V {
-        let idx = get_idx(self, key);
-        let entry = vector::borrow_mut(&mut self.contents, idx);
+        let idx = self.get_idx(key);
+        let entry = &mut self.contents[idx];
         &mut entry.value
     }
 
+    #[syntax(index)]
     /// Get a reference to the value bound to `key` in `self`.
     /// Aborts if `key` is not bound in `self`.
     public fun get<K: copy, V>(self: &VecMap<K,V>, key: &K): &V {
-        let idx = get_idx(self, key);
-        let entry = vector::borrow(&self.contents, idx);
+        let idx = self.get_idx(key);
+        let entry = &self.contents[idx];
         &entry.value
     }
 
@@ -82,7 +82,7 @@ module sui::vec_map {
     /// Return Some(V) if the value exists, None otherwise.
     /// Only works for a "copyable" value as references cannot be stored in `vector`.
     public fun try_get<K: copy, V: copy>(self: &VecMap<K,V>, key: &K): Option<V> {
-        if (contains(self, key)) {
+        if (self.contains(key)) {
             option::some(*get(self, key))
         } else {
             option::none()
@@ -91,24 +91,24 @@ module sui::vec_map {
 
     /// Return true if `self` contains an entry for `key`, false otherwise
     public fun contains<K: copy, V>(self: &VecMap<K, V>, key: &K): bool {
-        option::is_some(&get_idx_opt(self, key))
+        get_idx_opt(self, key).is_some()
     }
 
     /// Return the number of entries in `self`
     public fun size<K: copy, V>(self: &VecMap<K,V>): u64 {
-        vector::length(&self.contents)
+        self.contents.length()
     }
 
     /// Return true if `self` has 0 elements, false otherwise
     public fun is_empty<K: copy, V>(self: &VecMap<K,V>): bool {
-        size(self) == 0
+        self.size() == 0
     }
 
     /// Destroy an empty map. Aborts if `self` is not empty
     public fun destroy_empty<K: copy, V>(self: VecMap<K, V>) {
         let VecMap { contents } = self;
-        assert!(vector::is_empty(&contents), EMapNotEmpty);
-        vector::destroy_empty(contents)
+        assert!(contents.is_empty(), EMapNotEmpty);
+        contents.destroy_empty()
     }
 
     /// Unpack `self` into vectors of its keys and values.
@@ -116,18 +116,18 @@ module sui::vec_map {
     public fun into_keys_values<K: copy, V>(self: VecMap<K, V>): (vector<K>, vector<V>) {
         let VecMap { mut contents } = self;
         // reverse the vector so the output keys and values will appear in insertion order
-        vector::reverse(&mut contents);
+        contents.reverse();
         let mut i = 0;
-        let n = vector::length(&contents);
-        let mut keys = vector::empty();
-        let mut values = vector::empty();
+        let n = contents.length();
+        let mut keys = vector[];
+        let mut values = vector[];
         while (i < n) {
-            let Entry { key, value } = vector::pop_back(&mut contents);
-            vector::push_back(&mut keys, key);
-            vector::push_back(&mut values, value);
+            let Entry { key, value } = contents.pop_back();
+            keys.push_back(key);
+            values.push_back(value);
             i = i + 1;
         };
-        vector::destroy_empty(contents);
+        contents.destroy_empty();
         (keys, values)
     }
 
@@ -135,11 +135,11 @@ module sui::vec_map {
     /// Do not assume any particular ordering.
     public fun keys<K: copy, V>(self: &VecMap<K, V>): vector<K> {
         let mut i = 0;
-        let n = vector::length(&self.contents);
-        let mut keys = vector::empty();
+        let n = self.contents.length();
+        let mut keys = vector[];
         while (i < n) {
-            let entry = vector::borrow(&self.contents, i);
-            vector::push_back(&mut keys, entry.key);
+            let entry = self.contents.borrow(i);
+            keys.push_back(entry.key);
             i = i + 1;
         };
         keys
@@ -151,7 +151,7 @@ module sui::vec_map {
         let mut i = 0;
         let n = size(self);
         while (i < n) {
-            if (&vector::borrow(&self.contents, i).key == key) {
+            if (&self.contents[i].key == key) {
                 return option::some(i)
             };
             i = i + 1;
@@ -162,9 +162,9 @@ module sui::vec_map {
     /// Find the index of `key` in `self`. Aborts if `key` is not in `self`.
     /// Note that map entries are stored in insertion order, *not* sorted by key.
     public fun get_idx<K: copy, V>(self: &VecMap<K,V>, key: &K): u64 {
-        let idx_opt = get_idx_opt(self, key);
-        assert!(option::is_some(&idx_opt), EKeyDoesNotExist);
-        option::destroy_some(idx_opt)
+        let idx_opt = self.get_idx_opt(key);
+        assert!(idx_opt.is_some(), EKeyDoesNotExist);
+        idx_opt.destroy_some()
     }
 
     /// Return a reference to the `idx`th entry of `self`. This gives direct access into the backing array of the map--use with caution.
@@ -172,7 +172,7 @@ module sui::vec_map {
     /// Aborts if `idx` is greater than or equal to `size(self)`
     public fun get_entry_by_idx<K: copy, V>(self: &VecMap<K, V>, idx: u64): (&K, &V) {
         assert!(idx < size(self), EIndexOutOfBounds);
-        let entry = vector::borrow(&self.contents, idx);
+        let entry = &self.contents[idx];
         (&entry.key, &entry.value)
     }
 
@@ -181,7 +181,7 @@ module sui::vec_map {
     /// Aborts if `idx` is greater than or equal to `size(self)`
     public fun get_entry_by_idx_mut<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (&K, &mut V) {
         assert!(idx < size(self), EIndexOutOfBounds);
-        let entry = vector::borrow_mut(&mut self.contents, idx);
+        let entry = &mut self.contents[idx];
         (&entry.key, &mut entry.value)
     }
 
@@ -189,7 +189,7 @@ module sui::vec_map {
     /// Aborts if `idx` is greater than or equal to `size(self)`
     public fun remove_entry_by_idx<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (K, V) {
         assert!(idx < size(self), EIndexOutOfBounds);
-        let Entry { key, value } = vector::remove(&mut self.contents, idx);
+        let Entry { key, value } = self.contents.remove(idx);
         (key, value)
     }
 }

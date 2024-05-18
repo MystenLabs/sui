@@ -2,35 +2,30 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    client_commands::{dry_run_or_execute_or_serialize, Opts, OptsWithGas, SuiClientCommandResult},
     client_ptb::{
         ast::{ParsedProgram, Program},
         builder::PTBBuilder,
-        displays::Pretty,
         error::{build_error_reports, PTBError},
         token::{Lexeme, Token},
     },
+    displays::Pretty,
     sp,
 };
 
-use anyhow::{anyhow, Error};
+use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
+use anyhow::{anyhow, ensure, Error};
 use clap::{arg, Args, ValueHint};
 use move_core_types::account_address::AccountAddress;
 use serde::Serialize;
-use shared_crypto::intent::Intent;
-use std::collections::BTreeSet;
-use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionBlockEffectsAPI, SuiTransactionBlockResponseOptions,
-};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionBlockEffectsAPI};
 use sui_keys::keystore::AccountKeystore;
 use sui_sdk::{wallet_context::WalletContext, SuiClient};
 use sui_types::{
     digests::TransactionDigest,
     gas::GasCostSummary,
-    quorum_driver_types::ExecuteTransactionRequestType,
-    transaction::{ProgrammableTransaction, Transaction, TransactionData},
+    transaction::{ProgrammableTransaction, TransactionKind},
 };
-
-use super::{ast::ProgramMetadata, lexer::Lexer, parser::ProgramParser};
 
 #[derive(Clone, Debug, Args)]
 #[clap(disable_help_flag = true)]
@@ -88,6 +83,11 @@ impl PTB {
             Ok(parsed) => parsed,
         };
 
+        ensure!(
+            !program_metadata.serialize_unsigned_set || !program_metadata.serialize_signed_set,
+            "Cannot specify both flags: --serialize-unsigned-transaction and --serialize-signed-transaction."
+        );
+
         if program_metadata.preview_set {
             println!(
                 "{}",
@@ -126,55 +126,54 @@ impl PTB {
         };
 
         // get all the metadata needed for executing the PTB: sender, gas, signing tx
-        // get sender's address -- active address
-        let Some(sender) = context.config.active_address else {
-            anyhow::bail!("No active address, cannot execute PTB");
-        };
+        let gas = program_metadata.gas_object_id.map(|x| x.value);
 
-        // find the gas coins if we have no gas coin given
-        let coins = if let Some(gas) = program_metadata.gas_object_id {
-            context.get_object_ref(gas.value).await?
-        } else {
-            context
-                .gas_for_owner_budget(sender, program_metadata.gas_budget.value, BTreeSet::new())
-                .await?
-                .1
-                .object_ref()
-        };
-
-        // get the gas price
-        let gas_price = context
-            .get_client()
-            .await?
-            .read_api()
-            .get_reference_gas_price()
-            .await?;
-        // create the transaction data that will be sent to the network
-        let tx_data = TransactionData::new_programmable(
-            sender,
-            vec![coins],
-            ptb,
-            program_metadata.gas_budget.value,
-            gas_price,
-        );
-        // sign the tx
-        let signature =
-            context
+        // the sender is the gas object if gas is provided, otherwise the active address
+        let sender = match gas {
+            Some(gas) => context
+                .get_object_owner(&gas)
+                .await
+                .map_err(|_| anyhow!("Could not find owner for gas object ID"))?,
+            None => context
                 .config
-                .keystore
-                .sign_secure(&sender, &tx_data, Intent::sui_transaction())?;
+                .active_address
+                .ok_or_else(|| anyhow!("No active address, cannot execute PTB"))?,
+        };
 
-        // execute the transaction
-        let transaction_response = context
-            .get_client()
-            .await?
-            .quorum_driver_api()
-            .execute_transaction_block(
-                Transaction::from_data(tx_data, vec![signature]),
-                SuiTransactionBlockResponseOptions::full_content(),
-                Some(ExecuteTransactionRequestType::WaitForLocalExecution),
-            )
-            .await?;
+        // build the tx kind
+        let tx_kind = TransactionKind::ProgrammableTransaction(ProgrammableTransaction {
+            inputs: ptb.inputs,
+            commands: ptb.commands,
+        });
+
+        let opts = OptsWithGas {
+            gas: program_metadata.gas_object_id.map(|x| x.value),
+            rest: Opts {
+                dry_run: program_metadata.dry_run_set,
+                gas_budget: program_metadata.gas_budget.map(|x| x.value),
+                serialize_unsigned_transaction: program_metadata.serialize_unsigned_set,
+                serialize_signed_transaction: program_metadata.serialize_signed_set,
+            },
+        };
+
+        let transaction_response = dry_run_or_execute_or_serialize(
+            sender, tx_kind, context, None, None, opts.gas, opts.rest,
+        )
+        .await?;
+
+        let transaction_response = match transaction_response {
+            SuiClientCommandResult::DryRun(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::SerializedUnsignedTransaction(_)
+            | SuiClientCommandResult::SerializedSignedTransaction(_) => {
+                println!("{}", transaction_response);
+                return Ok(());
+            }
+            SuiClientCommandResult::TransactionBlock(response) => response,
+            _ => anyhow::bail!("Internal error, unexpected response from PTB execution."),
+        };
 
         if let Some(effects) = transaction_response.effects.as_ref() {
             if effects.status().is_err() {
@@ -293,13 +292,20 @@ pub fn ptb_description() -> clap::Command {
         )
         .value_names(["NAME", "VALUE"]))
         .arg(arg!(
+            --"dry-run"
+            "Perform a dry run of the PTB instead of executing it."
+        ))
+        .arg(arg!(
             --"gas-coin" <ID> ...
             "The object ID of the gas coin to use. If not specified, it will try to use the first \
             gas coin that it finds that has at least the requested gas-budget balance."
         ))
         .arg(arg!(
             --"gas-budget" <MIST>
-            "The gas budget for the transaction, in MIST."
+            "An optional gas budget for this PTB (in MIST). If gas budget is not provided, the \
+            tool will first perform a dry run to estimate the gas cost, and then it will execute \
+            the transaction. Please note that this incurs a small cost in performance due to the \
+            additional dry run call."
         ))
         .arg(arg!(
             --"make-move-vec" <MAKE_MOVE_VEC>
@@ -381,6 +387,16 @@ pub fn ptb_description() -> clap::Command {
         .arg(arg!(
             --"preview"
             "Preview the list of PTB transactions instead of executing them."
+        ))
+        .arg(arg!(
+            --"serialize-unsigned-transaction"
+            "Instead of executing the transaction, serialize the bcs bytes of the unsigned \
+            transaction data using base64 encoding."
+        ))
+        .arg(arg!(
+            --"serialize-signed-transaction"
+            "Instead of executing the transaction, serialize the bcs bytes of the signed \
+            transaction data using base64 encoding."
         ))
         .arg(arg!(
             --"summary"

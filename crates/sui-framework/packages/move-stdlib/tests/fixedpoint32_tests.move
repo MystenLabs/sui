@@ -33,7 +33,7 @@ module std::fixed_point32_tests {
     #[test]
     fun create_zero() {
         let x = fixed_point32::create_from_rational(0, 1);
-        assert!(fixed_point32::is_zero(x), 0);
+        assert!(x.is_zero(), 0);
     }
 
     #[test]
@@ -99,7 +99,7 @@ module std::fixed_point32_tests {
         assert!(not_three == 2, 0);
 
         // Try again with a fraction slightly larger than 1/3.
-        let f = fixed_point32::create_from_raw_value(fixed_point32::get_raw_value(f) + 1);
+        let f = fixed_point32::create_from_raw_value(f.get_raw_value() + 1);
         let three = fixed_point32::multiply_u64(9, f);
         assert!(three == 3, 1);
     }
@@ -108,7 +108,7 @@ module std::fixed_point32_tests {
     fun create_from_rational_max_numerator_denominator() {
         // Test creating a 1.0 fraction from the maximum u64 value.
         let f = fixed_point32::create_from_rational(18446744073709551615, 18446744073709551615);
-        let one = fixed_point32::get_raw_value(f);
+        let one = f.get_raw_value();
         assert!(one == 4294967296, 0); // 0x1.00000000
     }
 }

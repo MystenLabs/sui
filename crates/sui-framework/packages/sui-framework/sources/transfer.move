@@ -4,11 +4,6 @@
 #[allow(unused_const)]
 module sui::transfer {
 
-    use sui::object::{Self, ID, UID};
-
-    /* #[test_only] */
-    /* friend sui::test_scenario; */
-
     /// This represents the ability to `receive` an object of type `T`.
     /// This type is ephemeral per-transaction and cannot be stored on-chain.
     /// This does not represent the obligation to receive the object that it
@@ -110,7 +105,7 @@ module sui::transfer {
             id,
             version,
         } = to_receive;
-        receive_impl(object::uid_to_address(parent), id, version)
+        receive_impl(parent.to_address(), id, version)
     }
 
     /// Given mutable (i.e., locked) access to the `parent` and a `Receiving` argument
@@ -122,7 +117,7 @@ module sui::transfer {
             id,
             version,
         } = to_receive;
-        receive_impl(object::uid_to_address(parent), id, version)
+        receive_impl(parent.to_address(), id, version)
     }
 
     /// Return the object ID that the given `Receiving` argument references.
@@ -136,5 +131,18 @@ module sui::transfer {
 
     public(package) native fun transfer_impl<T: key>(obj: T, recipient: address);
 
-    native fun receive_impl<T: key>(parent: address, to_receive: object::ID, version: u64): T;
+    native fun receive_impl<T: key>(parent: address, to_receive: ID, version: u64): T;
+
+    #[test_only]
+    public(package) fun make_receiver<T: key>(id: ID, version: u64): Receiving<T> {
+        Receiving {
+            id,
+            version,
+        }
+    }
+
+    #[test_only]
+    public(package) fun receiving_id<T: key>(r: &Receiving<T>): ID {
+        r.id
+    }
 }

@@ -9,18 +9,19 @@
 //! the stack height by the number of values returned by the function as indicated in its
 //! signature. Additionally, the stack height must not dip below that at the beginning of the
 //! block for any basic block.
-use crate::meter::Meter;
+use crate::absint::FunctionContext;
+use move_abstract_interpreter::control_flow_graph::{BlockId, ControlFlowGraph};
 use move_binary_format::{
-    binary_views::{BinaryIndexedView, FunctionView},
-    control_flow_graph::{BlockId, ControlFlowGraph},
     errors::{PartialVMError, PartialVMResult},
     file_format::{Bytecode, CodeUnit, FunctionDefinitionIndex, Signature, StructFieldInformation},
+    CompiledModule,
 };
+use move_bytecode_verifier_meter::Meter;
 use move_core_types::vm_status::StatusCode;
 use move_vm_config::verifier::VerifierConfig;
 
 pub(crate) struct StackUsageVerifier<'a> {
-    resolver: &'a BinaryIndexedView<'a>,
+    resolver: &'a CompiledModule,
     current_function: Option<FunctionDefinitionIndex>,
     code: &'a CodeUnit,
     return_: &'a Signature,
@@ -29,19 +30,19 @@ pub(crate) struct StackUsageVerifier<'a> {
 impl<'a> StackUsageVerifier<'a> {
     pub(crate) fn verify(
         config: &VerifierConfig,
-        resolver: &'a BinaryIndexedView<'a>,
-        function_view: &'a FunctionView,
-        _meter: &mut impl Meter, // TODO: metering
+        resolver: &'a CompiledModule,
+        function_context: &'a FunctionContext,
+        _meter: &mut (impl Meter + ?Sized), // TODO: metering
     ) -> PartialVMResult<()> {
         let verifier = Self {
             resolver,
-            current_function: function_view.index(),
-            code: function_view.code(),
-            return_: function_view.return_(),
+            current_function: function_context.index(),
+            code: function_context.code(),
+            return_: function_context.return_(),
         };
 
-        for block_id in function_view.cfg().blocks() {
-            verifier.verify_block(config, block_id, function_view.cfg())?
+        for block_id in function_context.cfg().blocks() {
+            verifier.verify_block(config, block_id, function_context.cfg())?
         }
         Ok(())
     }
@@ -225,7 +226,7 @@ impl<'a> StackUsageVerifier<'a> {
 
             // Pack performs `num_fields` pops and one push
             Bytecode::Pack(idx) => {
-                let struct_definition = self.resolver.struct_def_at(*idx)?;
+                let struct_definition = self.resolver.struct_def_at(*idx);
                 let field_count = match &struct_definition.field_information {
                     // 'Native' here is an error that will be caught by the bytecode verifier later
                     StructFieldInformation::Native => 0,
@@ -234,8 +235,8 @@ impl<'a> StackUsageVerifier<'a> {
                 (field_count as u64, 1)
             }
             Bytecode::PackGeneric(idx) => {
-                let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                let struct_definition = self.resolver.struct_def_at(struct_inst.def)?;
+                let struct_inst = self.resolver.struct_instantiation_at(*idx);
+                let struct_definition = self.resolver.struct_def_at(struct_inst.def);
                 let field_count = match &struct_definition.field_information {
                     // 'Native' here is an error that will be caught by the bytecode verifier later
                     StructFieldInformation::Native => 0,
@@ -246,7 +247,7 @@ impl<'a> StackUsageVerifier<'a> {
 
             // Unpack performs one pop and `num_fields` pushes
             Bytecode::Unpack(idx) => {
-                let struct_definition = self.resolver.struct_def_at(*idx)?;
+                let struct_definition = self.resolver.struct_def_at(*idx);
                 let field_count = match &struct_definition.field_information {
                     // 'Native' here is an error that will be caught by the bytecode verifier later
                     StructFieldInformation::Native => 0,
@@ -255,8 +256,8 @@ impl<'a> StackUsageVerifier<'a> {
                 (1, field_count as u64)
             }
             Bytecode::UnpackGeneric(idx) => {
-                let struct_inst = self.resolver.struct_instantiation_at(*idx)?;
-                let struct_definition = self.resolver.struct_def_at(struct_inst.def)?;
+                let struct_inst = self.resolver.struct_instantiation_at(*idx);
+                let struct_definition = self.resolver.struct_def_at(struct_inst.def);
                 let field_count = match &struct_definition.field_information {
                     // 'Native' here is an error that will be caught by the bytecode verifier later
                     StructFieldInformation::Native => 0,

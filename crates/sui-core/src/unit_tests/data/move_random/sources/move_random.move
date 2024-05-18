@@ -7,7 +7,7 @@ module examples::move_random {
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    struct Object has key, store {
+    public struct Object has key, store {
         id: UID,
         data: vector<u64>,
     }
@@ -18,8 +18,8 @@ module examples::move_random {
     }
 
     // create an object with a vector of size `size` and transfer to recipient
-    public entry fun storage_heavy(size: u64, recipient: address, ctx: &mut TxContext) {
-        let data = vector::empty();
+    public entry fun storage_heavy(mut size: u64, recipient: address, ctx: &mut TxContext) {
+        let mut data = vector::empty();
         while (size > 0) {
             vector::push_back(&mut data, size);
             size = size - 1;

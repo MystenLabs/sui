@@ -252,30 +252,6 @@ impl FromStr for StructTag {
 /// Represents the initial key into global storage where we first index by the address, and then
 /// the struct tag
 #[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
-pub struct ResourceKey {
-    pub address: AccountAddress,
-    pub type_: StructTag,
-}
-
-impl ResourceKey {
-    pub fn address(&self) -> AccountAddress {
-        self.address
-    }
-
-    pub fn type_(&self) -> &StructTag {
-        &self.type_
-    }
-}
-
-impl ResourceKey {
-    pub fn new(address: AccountAddress, type_: StructTag) -> Self {
-        ResourceKey { address, type_ }
-    }
-}
-
-/// Represents the initial key into global storage where we first index by the address, and then
-/// the struct tag
-#[derive(Serialize, Deserialize, Debug, PartialEq, Hash, Eq, Clone, PartialOrd, Ord)]
 #[cfg_attr(any(test, feature = "fuzzing"), derive(Arbitrary))]
 #[cfg_attr(any(test, feature = "fuzzing"), proptest(no_params))]
 pub struct ModuleId {
@@ -386,12 +362,6 @@ impl Display for TypeTag {
             TypeTag::Signer => write!(f, "signer"),
             TypeTag::Bool => write!(f, "bool"),
         }
-    }
-}
-
-impl Display for ResourceKey {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "0x{}/{}", self.address.short_str_lossless(), self.type_)
     }
 }
 

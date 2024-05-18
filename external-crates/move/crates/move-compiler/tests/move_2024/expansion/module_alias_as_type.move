@@ -1,10 +1,6 @@
-address 0x2 {
+module 0x2::X {}
 
-module X {}
-
-module M {
+module 0x2::M {
     use 0x2::X;
     fun foo(x: X) { x; }
-}
-
 }

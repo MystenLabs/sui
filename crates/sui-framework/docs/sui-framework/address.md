@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::address`
 ---
@@ -174,7 +173,7 @@ Convert <code>a</code> to a hex-encoded ASCII string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a: <b>address</b>): <a href="../move-stdlib/ascii.md#0x1_ascii_String">ascii::String</a> {
-    <a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(<a href="../sui-framework/hex.md#0x2_hex_encode">hex::encode</a>(<a href="../sui-framework/address.md#0x2_address_to_bytes">to_bytes</a>(a)))
+    <a href="../sui-framework/hex.md#0x2_hex_encode">hex::encode</a>(<a href="../sui-framework/address.md#0x2_address_to_bytes">to_bytes</a>(a)).<a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>()
 }
 </code></pre>
 
@@ -186,7 +185,7 @@ Convert <code>a</code> to a hex-encoded ASCII string
 
 ## Function `to_string`
 
-Convert <code>a</code> to a hex-encoded ASCII string
+Convert <code>a</code> to a hex-encoded string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_to_string">to_string</a>(a: <b>address</b>): <a href="../move-stdlib/string.md#0x1_string_String">string::String</a>
@@ -199,7 +198,7 @@ Convert <code>a</code> to a hex-encoded ASCII string
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_to_string">to_string</a>(a: <b>address</b>): <a href="../move-stdlib/string.md#0x1_string_String">string::String</a> {
-    <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a))
+    <a href="../sui-framework/address.md#0x2_address_to_ascii_string">to_ascii_string</a>(a).<a href="../sui-framework/address.md#0x2_address_to_string">to_string</a>()
 }
 </code></pre>
 
@@ -229,13 +228,13 @@ or if an invalid character is encountered.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/address.md#0x2_address_from_ascii_bytes">from_ascii_bytes</a>(bytes: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <b>address</b> {
-    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(bytes) == 64, <a href="../sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a>);
+    <b>assert</b>!(bytes.<a href="../sui-framework/address.md#0x2_address_length">length</a>() == 64, <a href="../sui-framework/address.md#0x2_address_EAddressParseError">EAddressParseError</a>);
     <b>let</b> <b>mut</b> hex_bytes = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; 64) {
-        <b>let</b> hi = <a href="../sui-framework/address.md#0x2_address_hex_char_value">hex_char_value</a>(*<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(bytes, i));
-        <b>let</b> lo = <a href="../sui-framework/address.md#0x2_address_hex_char_value">hex_char_value</a>(*<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(bytes, i + 1));
-        <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> hex_bytes, (hi &lt;&lt; 4) | lo);
+        <b>let</b> hi = <a href="../sui-framework/address.md#0x2_address_hex_char_value">hex_char_value</a>(bytes[i]);
+        <b>let</b> lo = <a href="../sui-framework/address.md#0x2_address_hex_char_value">hex_char_value</a>(bytes[i+1]);
+        hex_bytes.push_back((hi &lt;&lt; 4) | lo);
         i = i + 2;
     };
     <a href="../sui-framework/address.md#0x2_address_from_bytes">from_bytes</a>(hex_bytes)

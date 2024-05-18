@@ -16,9 +16,9 @@ module games::shared_tic_tac_toe_tests {
         let player_o = @0x1;
 
         // Anyone can create a game, because the game object will be eventually shared.
-        let scenario_val = test_scenario::begin(player_x);
+        let mut scenario_val = test_scenario::begin(player_x);
         let scenario = &mut scenario_val;
-        shared_tic_tac_toe::create_game(copy player_x, copy player_o, test_scenario::ctx(scenario));
+        shared_tic_tac_toe::create_game(copy player_x, copy player_o, scenario.ctx());
         // Player1 places an X in (1, 1).
         place_mark(1, 1, player_x, scenario);
         /*
@@ -47,7 +47,7 @@ module games::shared_tic_tac_toe_tests {
         */
 
         // Player2 places an O in (1, 0).
-        let status = place_mark(1, 0, player_o, scenario);
+        let mut status = place_mark(1, 0, player_o, scenario);
         assert!(status == IN_PROGRESS, 1);
         /*
         Current game board:
@@ -69,19 +69,19 @@ module games::shared_tic_tac_toe_tests {
         assert!(status == X_WIN, 2);
 
         // X has the Trophy
-        test_scenario::next_tx(scenario, player_x);
+        scenario.next_tx(player_x);
         assert!(
-            test_scenario::has_most_recent_for_sender<Trophy>(scenario),
+            scenario.has_most_recent_for_sender<Trophy>(),
             1
         );
 
-        test_scenario::next_tx(scenario, player_o);
+        scenario.next_tx(player_o);
         // O has no Trophy
         assert!(
-            !test_scenario::has_most_recent_for_sender<Trophy>(scenario),
+            !scenario.has_most_recent_for_sender<Trophy>(),
             2
         );
-        test_scenario::end(scenario_val);
+        scenario_val.end();
     }
 
 
@@ -91,11 +91,11 @@ module games::shared_tic_tac_toe_tests {
         let player_o = @0x1;
 
         // Anyone can create a game, because the game object will be eventually shared.
-        let scenario_val = test_scenario::begin(player_x);
+        let mut scenario_val = test_scenario::begin(player_x);
         let scenario = &mut scenario_val;
-        shared_tic_tac_toe::create_game(copy player_x, copy player_o, test_scenario::ctx(scenario));
+        shared_tic_tac_toe::create_game(copy player_x, copy player_o, scenario.ctx());
         // Player1 places an X in (0, 1).
-        let status = place_mark(0, 1, player_x, scenario);
+        let mut status = place_mark(0, 1, player_x, scenario);
         assert!(status == IN_PROGRESS, 1);
         /*
         Current game board:
@@ -187,17 +187,17 @@ module games::shared_tic_tac_toe_tests {
         assert!(status == DRAW, 2);
 
         // No one has the trophy
-        test_scenario::next_tx(scenario, player_x);
+        scenario.next_tx(player_x);
         assert!(
-            !test_scenario::has_most_recent_for_sender<Trophy>(scenario),
+            !scenario.has_most_recent_for_sender<Trophy>(),
             1
         );
-        test_scenario::next_tx(scenario, player_o);
+        scenario.next_tx(player_o);
         assert!(
-            !test_scenario::has_most_recent_for_sender<Trophy>(scenario),
+            !scenario.has_most_recent_for_sender<Trophy>(),
             1
         );
-        test_scenario::end(scenario_val);
+        scenario_val.end();
     }
 
 
@@ -209,13 +209,13 @@ module games::shared_tic_tac_toe_tests {
     ): u8  {
         // The gameboard is now a shared object.
         // Any player can place a mark on it directly.
-        test_scenario::next_tx(scenario, player);
+        scenario.next_tx(player);
         let status;
         {
-            let game_val = test_scenario::take_shared<TicTacToe>(scenario);
+            let mut game_val = scenario.take_shared<TicTacToe>();
             let game = &mut game_val;
-            shared_tic_tac_toe::place_mark(game, row, col, test_scenario::ctx(scenario));
-            status = shared_tic_tac_toe::get_status(game);
+            game.place_mark(row, col, scenario.ctx());
+            status = game.get_status();
             test_scenario::return_shared(game_val);
         };
         status

@@ -4,7 +4,7 @@
 import { bcs } from '@mysten/sui.js/bcs';
 import type { SuiClient } from '@mysten/sui.js/client';
 import { SuiGraphQLClient } from '@mysten/sui.js/graphql';
-import { graphql } from '@mysten/sui.js/graphql/schemas/2024-01';
+import { graphql } from '@mysten/sui.js/graphql/schemas/2024.4';
 import { fromB64, normalizeSuiAddress } from '@mysten/sui.js/utils';
 
 import { ZkSendLink } from './claim.js';
@@ -66,22 +66,27 @@ export async function listCreatedLinks({
 	cursor,
 	network,
 	contract = MAINNET_CONTRACT_IDS,
+	fetch: fetchFn,
 	...linkOptions
 }: {
 	address: string;
 	contract?: ZkBagContractOptions;
 	cursor?: string;
 	network?: 'mainnet' | 'testnet';
+
 	// Link options:
 	host?: string;
 	path?: string;
+	claimApi?: string;
 	client?: SuiClient;
+	fetch?: typeof fetch;
 }) {
 	const gqlClient = new SuiGraphQLClient({
 		url:
 			network === 'testnet'
 				? 'https://sui-testnet.mystenlabs.com/graphql'
 				: 'https://sui-mainnet.mystenlabs.com/graphql',
+		fetch: fetchFn,
 	});
 
 	const packageId = normalizeSuiAddress(contract.packageId);

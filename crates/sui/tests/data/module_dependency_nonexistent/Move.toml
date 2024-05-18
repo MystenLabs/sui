@@ -2,6 +2,7 @@
 name = "Nonexistent"
 version = "0.0.1"
 published-at = "0xabc123"
+edition = "2024.beta"
 
 [addresses]
 nonexistent = "0x0"

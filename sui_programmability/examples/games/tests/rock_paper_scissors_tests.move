@@ -3,9 +3,8 @@
 
 #[test_only]
 module games::rock_paper_scissors_tests {
-    use games::rock_paper_scissors::{Self as Game, Game, PlayerTurn, Secret, ThePrize};
+    use games::rock_paper_scissors::{Self as game, Game, PlayerTurn, Secret, ThePrize};
     use sui::test_scenario::{Self};
-    use std::vector;
     use std::hash;
 
     #[test]
@@ -15,97 +14,96 @@ module games::rock_paper_scissors_tests {
         let mr_lizard = @0xA55555;
         let mr_spock = @0x590C;
 
-        let scenario_val = test_scenario::begin(the_main_guy);
-        let scenario = &mut scenario_val;
+        let mut scenario = test_scenario::begin(the_main_guy);
 
         // Let the game begin!
-        Game::new_game(mr_spock, mr_lizard, test_scenario::ctx(scenario));
+        game::new_game(mr_spock, mr_lizard, scenario.ctx());
 
         // Mr Spock makes his move. He does it secretly and hashes the gesture with a salt
         // so that only he knows what it is.
-        test_scenario::next_tx(scenario, mr_spock);
+        scenario.next_tx(mr_spock);
         {
-            let hash = hash(Game::rock(), b"my_phaser_never_failed_me!");
-            Game::player_turn(the_main_guy, hash, test_scenario::ctx(scenario));
+            let hash = hash(game::rock(), b"my_phaser_never_failed_me!");
+            game::player_turn(the_main_guy, hash, scenario.ctx());
         };
 
         // Now it's time for The Main Guy to accept his turn.
-        test_scenario::next_tx(scenario, the_main_guy);
+        scenario.next_tx(the_main_guy);
         {
-            let game = test_scenario::take_from_sender<Game>(scenario);
-            let cap = test_scenario::take_from_sender<PlayerTurn>(scenario);
+            let mut game = scenario.take_from_sender<Game>();
+            let cap = scenario.take_from_sender<PlayerTurn>();
 
-            assert!(Game::status(&game) == 0, 0); // STATUS_READY
+            assert!(game.status() == 0, 0); // STATUS_READY
 
-            Game::add_hash(&mut game, cap);
+            game.add_hash(cap);
 
-            assert!(Game::status(&game) == 1, 0); // STATUS_HASH_SUBMISSION
+            assert!(game.status() == 1, 0); // STATUS_HASH_SUBMISSION
 
-            test_scenario::return_to_sender(scenario, game);
+            scenario.return_to_sender(game);
         };
 
         // Same for Mr Lizard. He uses his secret phrase to encode his turn.
-        test_scenario::next_tx(scenario, mr_lizard);
+        scenario.next_tx(mr_lizard);
         {
-            let hash = hash(Game::scissors(), b"sssssss_you_are_dead!");
-            Game::player_turn(the_main_guy, hash, test_scenario::ctx(scenario));
+            let hash = hash(game::scissors(), b"sssssss_you_are_dead!");
+            game::player_turn(the_main_guy, hash, scenario.ctx());
         };
 
-        test_scenario::next_tx(scenario, the_main_guy);
+        scenario.next_tx(the_main_guy);
         {
-            let game = test_scenario::take_from_sender<Game>(scenario);
-            let cap = test_scenario::take_from_sender<PlayerTurn>(scenario);
-            Game::add_hash(&mut game, cap);
+            let mut game = scenario.take_from_sender<Game>();
+            let cap = scenario.take_from_sender<PlayerTurn>();
+            game.add_hash(cap);
 
-            assert!(Game::status(&game) == 2, 0); // STATUS_HASHES_SUBMITTED
+            assert!(game.status() == 2, 0); // STATUS_HASHES_SUBMITTED
 
-            test_scenario::return_to_sender(scenario, game);
+            scenario.return_to_sender(game);
         };
 
         // Now that both sides made their moves, it's time for  Mr Spock and Mr Lizard to
         // reveal their secrets. The Main Guy will then be able to determine the winner. Who's
         // gonna win The Prize? We'll see in a bit!
-        test_scenario::next_tx(scenario, mr_spock);
-        Game::reveal(the_main_guy, b"my_phaser_never_failed_me!", test_scenario::ctx(scenario));
+        scenario.next_tx(mr_spock);
+        game::reveal(the_main_guy, b"my_phaser_never_failed_me!", scenario.ctx());
 
-        test_scenario::next_tx(scenario, the_main_guy);
+        scenario.next_tx(the_main_guy);
         {
-            let game = test_scenario::take_from_sender<Game>(scenario);
-            let secret = test_scenario::take_from_sender<Secret>(scenario);
-            Game::match_secret(&mut game, secret);
+            let mut game = scenario.take_from_sender<Game>();
+            let secret = scenario.take_from_sender<Secret>();
+            game.match_secret(secret);
 
-            assert!(Game::status(&game) == 3, 0); // STATUS_REVEALING
+            assert!(game.status() == 3, 0); // STATUS_REVEALING
 
-            test_scenario::return_to_sender(scenario, game);
+            scenario.return_to_sender(game);
         };
 
-        test_scenario::next_tx(scenario, mr_lizard);
-        Game::reveal(the_main_guy, b"sssssss_you_are_dead!", test_scenario::ctx(scenario));
+        scenario.next_tx(mr_lizard);
+        game::reveal(the_main_guy, b"sssssss_you_are_dead!", scenario.ctx());
 
         // The final step. The Main Guy matches and reveals the secret of the Mr Lizard and
         // calls the [`select_winner`] function to release The Prize.
-        test_scenario::next_tx(scenario, the_main_guy);
+        scenario.next_tx(the_main_guy);
         {
-            let game = test_scenario::take_from_sender<Game>(scenario);
-            let secret = test_scenario::take_from_sender<Secret>(scenario);
-            Game::match_secret(&mut game, secret);
+            let mut game = scenario.take_from_sender<Game>();
+            let secret = scenario.take_from_sender<Secret>();
+            game.match_secret(secret);
 
-            assert!(Game::status(&game) == 4, 0); // STATUS_REVEALED
+            assert!(game.status() == 4, 0); // STATUS_REVEALED
 
-            Game::select_winner(game, test_scenario::ctx(scenario));
+            game.select_winner(scenario.ctx());
         };
 
-        test_scenario::next_tx(scenario, mr_spock);
+        scenario.next_tx(mr_spock);
         // If it works, then MrSpock is in possession of the prize;
-        let prize = test_scenario::take_from_sender<ThePrize>(scenario);
+        let prize = scenario.take_from_sender<ThePrize>();
         // Don't forget to give it back!
-        test_scenario::return_to_sender(scenario, prize);
-        test_scenario::end(scenario_val);
+        scenario.return_to_sender(prize);
+        scenario.end();
     }
 
     // Copy of the hashing function from the main module.
-    fun hash(gesture: u8, salt: vector<u8>): vector<u8> {
-        vector::push_back(&mut salt, gesture);
+    fun hash(gesture: u8, mut salt: vector<u8>): vector<u8> {
+        salt.push_back(gesture);
         hash::sha2_256(salt)
     }
 }

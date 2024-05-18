@@ -19,8 +19,6 @@
 //# publish --sender A
 module P0::fake {
     use sui::coin;
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
 
     public struct FAKE has drop {}
 

@@ -19,14 +19,13 @@ use move_command_line_common::{
     address::ParsedAddress, files::verify_and_create_named_address_mapping,
 };
 use move_compiler::{
-    editions::Edition,
+    editions::{Edition, Flavor},
     shared::{NumberFormat, NumericalAddress, PackageConfig, PackagePaths},
     Flags, FullyCompiledProgram,
 };
 use move_core_types::ident_str;
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::MoveStruct,
     identifier::IdentStr,
     language_storage::{ModuleId, TypeTag},
 };
@@ -69,11 +68,11 @@ use sui_types::effects::{TransactionEffects, TransactionEffectsAPI, TransactionE
 use sui_types::messages_checkpoint::{
     CheckpointContents, CheckpointContentsDigest, CheckpointSequenceNumber, VerifiedCheckpoint,
 };
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::storage::ObjectStore;
 use sui_types::storage::ReadStore;
 use sui_types::transaction::Command;
 use sui_types::transaction::ProgrammableTransaction;
-use sui_types::MOVE_STDLIB_PACKAGE_ID;
 use sui_types::SUI_SYSTEM_ADDRESS;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, SUI_ADDRESS_LENGTH},
@@ -93,9 +92,10 @@ use sui_types::{
     programmable_transaction_builder::ProgrammableTransactionBuilder, SUI_FRAMEWORK_PACKAGE_ID,
 };
 use sui_types::{utils::to_sender_signed_transaction, SUI_SYSTEM_PACKAGE_ID};
+use sui_types::{BRIDGE_ADDRESS, MOVE_STDLIB_PACKAGE_ID};
 use sui_types::{DEEPBOOK_ADDRESS, SUI_DENY_LIST_OBJECT_ID};
 use sui_types::{DEEPBOOK_PACKAGE_ID, SUI_RANDOMNESS_STATE_OBJECT_ID};
-use tempfile::NamedTempFile;
+use tempfile::{tempdir, NamedTempFile};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum FakeID {
@@ -217,6 +217,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             default_gas_price,
             object_snapshot_min_checkpoint_lag,
             object_snapshot_max_checkpoint_lag,
+            flavor,
         ) = match task_opt.map(|t| t.command) {
             Some((
                 InitCommand { named_addresses },
@@ -231,6 +232,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 },
             )) => {
                 let map = verify_and_create_named_address_mapping(named_addresses).unwrap();
@@ -269,6 +271,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     default_gas_price,
                     object_snapshot_min_checkpoint_lag,
                     object_snapshot_max_checkpoint_lag,
+                    flavor,
                 )
             }
             None => {
@@ -279,6 +282,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     protocol_config,
                     false,
                     false,
+                    None,
                     None,
                     None,
                     None,
@@ -328,7 +332,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     AccountAddress::ZERO.into_bytes(),
                     NumberFormat::Hex,
                 )),
-                Some(Edition::E2024_ALPHA),
+                Some(Edition::DEVELOPMENT),
+                flavor.or(Some(Flavor::Sui)),
             ),
             package_upgrade_mapping: BTreeMap::new(),
             accounts,
@@ -384,7 +389,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes).unwrap();
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)
+                    .unwrap();
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<_>>()?;
@@ -643,10 +650,11 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     object::Data::Move(move_obj) => {
                         let layout = move_obj.get_layout(&&*self).unwrap();
                         let move_struct =
-                            MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                            BoundedVisitor::deserialize_struct(move_obj.contents(), &layout)
+                                .unwrap();
 
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nContents: {:#}",
                             &obj.owner,
                             obj.version().value(),
                             move_struct
@@ -744,7 +752,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                                     .iter()
                                     .map(|m| {
                                         let mut buf = vec![];
-                                        m.module.serialize(&mut buf).unwrap();
+                                        m.module
+                                            .serialize_with_version(m.module.version, &mut buf)
+                                            .unwrap();
                                         buf
                                     })
                                     .collect();
@@ -936,7 +946,9 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter {
                     .iter()
                     .map(|m| {
                         let mut buf = vec![];
-                        m.module.serialize(&mut buf).unwrap();
+                        m.module
+                            .serialize_with_version(m.module.version, &mut buf)
+                            .unwrap();
                         buf
                     })
                     .collect::<Vec<_>>();
@@ -1250,7 +1262,8 @@ impl<'a> SuiTestAdapter {
             .iter()
             .map(|m| {
                 let mut module_bytes = vec![];
-                m.module.serialize(&mut module_bytes)?;
+                m.module
+                    .serialize_with_version(m.module.version, &mut module_bytes)?;
                 Ok(module_bytes)
             })
             .collect::<anyhow::Result<Vec<Vec<u8>>>>()?;
@@ -1836,6 +1849,13 @@ static NAMED_ADDRESSES: Lazy<BTreeMap<String, NumericalAddress>> = Lazy::new(|| 
             move_compiler::shared::NumberFormat::Hex,
         ),
     );
+    map.insert(
+        "bridge".to_string(),
+        NumericalAddress::new(
+            BRIDGE_ADDRESS.into_bytes(),
+            move_compiler::shared::NumberFormat::Hex,
+        ),
+    );
     map
 });
 
@@ -1865,16 +1885,29 @@ pub static PRE_COMPILED: Lazy<FullyCompiledProgram> = Lazy::new(|| {
     };
     let config = PackageConfig {
         edition: Edition::E2024_BETA,
+        flavor: Flavor::Sui,
         ..Default::default()
+    };
+    let bridge_sources = {
+        let mut buf = sui_files.to_path_buf();
+        buf.extend(["packages", "bridge", "sources"]);
+        buf.to_string_lossy().to_string()
     };
     let fully_compiled_res = move_compiler::construct_pre_compiled_lib(
         vec![PackagePaths {
             name: Some(("sui-framework".into(), config)),
-            paths: vec![sui_system_sources, sui_sources, sui_deps, deepbook_sources],
+            paths: vec![
+                sui_system_sources,
+                sui_sources,
+                sui_deps,
+                deepbook_sources,
+                bridge_sources,
+            ],
             named_address_map: NAMED_ADDRESSES.clone(),
         }],
         None,
         Flags::empty(),
+        None,
     )
     .unwrap();
     match fully_compiled_res {
@@ -2061,15 +2094,18 @@ async fn init_sim_executor(
 
     // Create the simulator with the specific account configs, which also crates objects
 
-    let (sim, read_replica) = PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
-        rng,
-        DEFAULT_CHAIN_START_TIMESTAMP,
-        protocol_config.version,
-        acc_cfgs,
-        key_copy.map(|q| vec![q]),
-        reference_gas_price,
-        None,
-    );
+    let (mut sim, read_replica) =
+        PersistedStore::new_sim_replica_with_protocol_version_and_accounts(
+            rng,
+            DEFAULT_CHAIN_START_TIMESTAMP,
+            protocol_config.version,
+            acc_cfgs,
+            key_copy.map(|q| vec![q]),
+            reference_gas_price,
+            None,
+        );
+    let data_ingestion_path = tempdir().unwrap().into_path();
+    sim.set_data_ingestion_path(data_ingestion_path.clone());
 
     // Hash the file path to create custom unique DB name
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
@@ -2096,6 +2132,7 @@ async fn init_sim_executor(
             object_snapshot_max_checkpoint_lag,
             Some(1),
         )),
+        data_ingestion_path,
     )
     .await;
 

@@ -3,12 +3,8 @@
 
 /// An escrow for atomic swap of objects that trusts a third party for liveness, but not safety.
 module defi::escrow {
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     /// An object held in escrow
-    struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
+    public struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: UID,
         /// owner of the escrowed object
         sender: address,
@@ -39,7 +35,7 @@ module defi::escrow {
         escrowed: T,
         ctx: &mut TxContext
     ) {
-        let sender = tx_context::sender(ctx);
+        let sender = ctx.sender();
         let id = object::new(ctx);
         // escrow the object with the trusted third party
         transfer::public_transfer(
@@ -69,8 +65,8 @@ module defi::escrow {
             exchange_for: exchange_for2,
             escrowed: escrowed2,
         } = obj2;
-        object::delete(id1);
-        object::delete(id2);
+        id1.delete();
+        id2.delete();
         // check sender/recipient compatibility
         assert!(&sender1 == &recipient2, EMismatchedSenderRecipient);
         assert!(&sender2 == &recipient1, EMismatchedSenderRecipient);
@@ -89,7 +85,7 @@ module defi::escrow {
         let EscrowedObj {
             id, sender, recipient: _, exchange_for: _, escrowed
         } = obj;
-        object::delete(id);
+        id.delete();
         transfer::public_transfer(escrowed, sender)
     }
 }

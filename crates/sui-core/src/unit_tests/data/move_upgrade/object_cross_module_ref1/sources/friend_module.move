@@ -3,15 +3,15 @@
 
 module base_addr::friend_module {
 
-    struct X has store, drop {
+    public struct X has store, drop {
         v: bool,
     }
 
-    struct Y has store, drop {
+    public struct Y has store, drop {
         v: u64,
     }
 
-    struct Z has store, drop {
+    public struct Z has store, drop {
         x: X,
     }
 

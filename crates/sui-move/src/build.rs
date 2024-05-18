@@ -37,8 +37,8 @@ impl Build {
         path: Option<PathBuf>,
         build_config: MoveBuildConfig,
     ) -> anyhow::Result<()> {
-        let rerooted_path = base::reroot_path(path.clone())?;
-        let build_config = resolve_lock_file_path(build_config, path)?;
+        let rerooted_path = base::reroot_path(path)?;
+        let build_config = resolve_lock_file_path(build_config, Some(rerooted_path.clone()))?;
         Self::execute_internal(
             rerooted_path,
             build_config,
@@ -60,7 +60,7 @@ impl Build {
             run_bytecode_verifier: true,
             print_diags_to_stderr: true,
         }
-        .build(rerooted_path)?;
+        .build(rerooted_path.clone())?;
         if dump_bytecode_as_base64 {
             check_invalid_dependencies(&pkg.dependency_ids.invalid)?;
             if !with_unpublished_deps {
@@ -88,6 +88,11 @@ impl Build {
             layout_filename.push(STRUCT_LAYOUTS_FILENAME);
             fs::write(layout_filename, layout_str)?
         }
+
+        pkg.package
+            .compiled_package_info
+            .build_flags
+            .update_lock_file_toolchain_version(&rerooted_path, env!("CARGO_PKG_VERSION").into())?;
 
         Ok(())
     }

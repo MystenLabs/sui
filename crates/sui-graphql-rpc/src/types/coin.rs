@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::consistency::{build_objects_query, consistent_range, View};
+use crate::consistency::{build_objects_query, View};
 use crate::data::{Db, QueryExecutor};
 use crate::error::Error;
 use crate::filter;
 use crate::raw_query::RawQuery;
 
+use super::available_range::AvailableRange;
 use super::balance::{self, Balance};
 use super::base64::Base64;
 use super::big_int::BigInt;
@@ -19,7 +20,7 @@ use super::object::{self, Object, ObjectFilter, ObjectImpl, ObjectOwner, ObjectS
 use super::owner::OwnerImpl;
 use super::stake::StakedSui;
 use super::sui_address::SuiAddress;
-use super::suins_registration::SuinsRegistration;
+use super::suins_registration::{DomainFormat, SuinsRegistration};
 use super::transaction_block::{self, TransactionBlock, TransactionBlockFilter};
 use super::type_filter::ExactTypeFilter;
 use async_graphql::*;
@@ -124,9 +125,13 @@ impl Coin {
     }
 
     /// The domain explicitly configured as the default domain pointing to this object.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
         OwnerImpl::from(&self.super_.super_)
-            .default_suins_name(ctx)
+            .default_suins_name(ctx, format)
             .await
     }
 
@@ -298,31 +303,28 @@ impl Coin {
         page: Page<object::Cursor>,
         coin_type: TypeTag,
         owner: Option<SuiAddress>,
-        checkpoint_viewed_at: Option<u64>,
+        checkpoint_viewed_at: u64,
     ) -> Result<Connection<String, Coin>, Error> {
         // If cursors are provided, defer to the `checkpoint_viewed_at` in the cursor if they are
         // consistent. Otherwise, use the value from the parameter, or set to None. This is so that
         // paginated queries are consistent with the previous query that created the cursor.
         let cursor_viewed_at = page.validate_cursor_consistency()?;
-        let checkpoint_viewed_at: Option<u64> = cursor_viewed_at.or(checkpoint_viewed_at);
+        let checkpoint_viewed_at = cursor_viewed_at.unwrap_or(checkpoint_viewed_at);
 
-        let response = db
+        let Some((prev, next, results)) = db
             .execute_repeatable(move |conn| {
-                let Some((lhs, rhs)) = consistent_range(conn, checkpoint_viewed_at)? else {
+                let Some(range) = AvailableRange::result(conn, checkpoint_viewed_at)? else {
                     return Ok::<_, diesel::result::Error>(None);
                 };
 
-                let result = page.paginate_raw_query::<StoredHistoryObject>(
+                Ok(Some(page.paginate_raw_query::<StoredHistoryObject>(
                     conn,
-                    rhs,
-                    coins_query(coin_type, owner, lhs as i64, rhs as i64, &page),
-                )?;
-
-                Ok(Some((result, rhs)))
+                    checkpoint_viewed_at,
+                    coins_query(coin_type, owner, range, &page),
+                )?))
             })
-            .await?;
-
-        let Some(((prev, next, results), checkpoint_viewed_at)) = response else {
+            .await?
+        else {
             return Err(Error::Client(
                 "Requested data is outside the available range".to_string(),
             ));
@@ -334,8 +336,7 @@ impl Coin {
             // To maintain consistency, the returned cursor should have the same upper-bound as the
             // checkpoint found on the cursor.
             let cursor = stored.cursor(checkpoint_viewed_at).encode_cursor();
-            let object =
-                Object::try_from_stored_history_object(stored, Some(checkpoint_viewed_at))?;
+            let object = Object::try_from_stored_history_object(stored, checkpoint_viewed_at)?;
 
             let move_ = MoveObject::try_from(&object).map_err(|_| {
                 Error::Internal(format!(
@@ -377,14 +378,12 @@ impl TryFrom<&MoveObject> for Coin {
 fn coins_query(
     coin_type: TypeTag,
     owner: Option<SuiAddress>,
-    lhs: i64,
-    rhs: i64,
+    range: AvailableRange,
     page: &Page<object::Cursor>,
 ) -> RawQuery {
     build_objects_query(
         View::Consistent,
-        lhs,
-        rhs,
+        range,
         page,
         move |query| apply_filter(query, &coin_type, owner),
         move |newer| newer,

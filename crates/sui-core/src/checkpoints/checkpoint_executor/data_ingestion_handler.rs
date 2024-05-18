@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::checkpoints::CheckpointStore;
-use crate::execution_cache::ExecutionCacheRead;
+use crate::execution_cache::{ObjectCacheRead, TransactionCacheRead};
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,7 +17,8 @@ use sui_types::storage::ObjectKey;
 pub(crate) fn store_checkpoint_locally(
     path: PathBuf,
     checkpoint: VerifiedCheckpoint,
-    cache_reader: &dyn ExecutionCacheRead,
+    object_cache_reader: &dyn ObjectCacheRead,
+    transaction_cache_reader: &dyn TransactionCacheRead,
     checkpoint_store: Arc<CheckpointStore>,
     transaction_digests: Vec<TransactionDigest>,
 ) -> SuiResult {
@@ -25,14 +26,14 @@ pub(crate) fn store_checkpoint_locally(
         .get_checkpoint_contents(&checkpoint.content_digest)?
         .expect("checkpoint content has to be stored");
 
-    let transactions = cache_reader
+    let transactions = transaction_cache_reader
         .multi_get_transaction_blocks(&transaction_digests)?
         .into_iter()
         .zip(&transaction_digests)
         .map(|(tx, digest)| tx.ok_or(SuiError::TransactionNotFound { digest: *digest }))
         .collect::<SuiResult<Vec<_>>>()?;
 
-    let effects = cache_reader
+    let effects = transaction_cache_reader
         .multi_get_executed_effects(&transaction_digests)?
         .into_iter()
         .zip(transaction_digests)
@@ -44,7 +45,7 @@ pub(crate) fn store_checkpoint_locally(
         .flat_map(|fx| fx.events_digest().copied())
         .collect::<Vec<_>>();
 
-    let events = cache_reader
+    let events = transaction_cache_reader
         .multi_get_events(&event_digests)?
         .into_iter()
         .zip(&event_digests)
@@ -85,7 +86,7 @@ pub(crate) fn store_checkpoint_locally(
             .filter(|key| !unwrapped_then_deleted_obj_ids.contains(&key.0))
             .collect::<Vec<_>>();
 
-        let input_objects = cache_reader
+        let input_objects = object_cache_reader
             .multi_get_objects_by_key(&input_object_keys)?
             .into_iter()
             .zip(&input_object_keys)
@@ -105,7 +106,7 @@ pub(crate) fn store_checkpoint_locally(
             .map(|(object_ref, _owner, _kind)| ObjectKey::from(object_ref))
             .collect::<Vec<_>>();
 
-        let output_objects = cache_reader
+        let output_objects = object_cache_reader
             .multi_get_objects_by_key(&output_object_keys)?
             .into_iter()
             .zip(&output_object_keys)

@@ -11,7 +11,6 @@
 /// previous version of this file: https://github.com/MystenLabs/sui/blob/92df778310679626f00bc4226d7f7a281322cfdd/sui_programmability/examples/games/sources/drand_lib.move
 module games::drand_lib {
     use std::hash::sha2_256;
-    use std::vector;
 
     use sui::bls12381;
 
@@ -36,15 +35,15 @@ module games::drand_lib {
     }
 
     /// Check a drand output.
-    public fun verify_drand_signature(sig: vector<u8>, round: u64) {
+    public fun verify_drand_signature(sig: vector<u8>, mut round: u64) {
         // Convert round to a byte array in big-endian order.
-        let round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
-        let i = 7;
+        let mut round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
+        let mut i = 7;
 
         // Note that this loop never copies the last byte of round_bytes, though it is not expected to ever be non-zero.
         while (i > 0) {
             let curr_byte = round % 0x100;
-            let curr_element = vector::borrow_mut(&mut round_bytes, i);
+            let curr_element = &mut round_bytes[i];
             *curr_element = (curr_byte as u8);
             round = round >> 8;
             i = i - 1;
@@ -65,12 +64,12 @@ module games::drand_lib {
     // Converts the first 16 bytes of rnd to a u128 number and outputs its modulo with input n.
     // Since n is u64, the output is at most 2^{-64} biased assuming rnd is uniformly random.
     public fun safe_selection(n: u64, rnd: &vector<u8>): u64 {
-        assert!(vector::length(rnd) >= 16, EInvalidRndLength);
-        let m: u128 = 0;
-        let i = 0;
+        assert!(rnd.length() >= 16, EInvalidRndLength);
+        let mut m: u128 = 0;
+        let mut i = 0;
         while (i < 16) {
             m = m << 8;
-            let curr_byte = *vector::borrow(rnd, i);
+            let curr_byte = rnd[i];
             m = m + (curr_byte as u128);
             i = i + 1;
         };

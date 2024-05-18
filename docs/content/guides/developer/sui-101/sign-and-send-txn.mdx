@@ -2,9 +2,6 @@
 title: Signing and Sending Transactions
 ---
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
 Transactions in Sui represent calls to specific functionality (like calling a smart contract function) that execute on inputs to define the result of the transaction.
 
 Inputs can either be an object reference (either to an owned object, an immutable object, or a shared object), or an encoded value (for example, a vector of bytes used as an argument to a Move call). After a transaction is constructed, usually through using [programmable transaction blocks](./building-ptb) (PTBs), the user signs the transaction and submits it to be executed on chain.
@@ -235,6 +232,8 @@ sui keytool import "$MNEMONICS" secp256r1
 ```
 
 Create a transfer transaction in CLI. Set the $SUI_ADDRESS to the one corresponding to the keypair used to sign. $GAS_COIN_ID refers to the object ID that is owned by the sender to be used as gas. $GAS_BUDGET refers to the budget used to execute transaction. Then sign with the private key corresponding to the sender address. $MNEMONICS refers to 12/15/18/21/24 words from the wordlist, e.g. "retire skin goose will hurry this field stadium drastic label husband venture cruel toe wire". Refer to [Keys and Addresses](/concepts/cryptography/transaction-auth/keys-addresses.mdx) for more.
+
+{@include: ../../../snippets/info-gas-budget.mdx}
 
 ```shell
 sui client gas

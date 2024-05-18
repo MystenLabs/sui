@@ -26,15 +26,15 @@ use move_ir_types::location::*;
 use move_symbol_pool::Symbol;
 
 use super::{
-    base_type, LinterDiagCategory, FREEZE_FUN, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    base_type, LinterDiagnosticCategory, LinterDiagnosticCode, FREEZE_FUN, LINT_WARNING_PREFIX,
     PUBLIC_FREEZE_FUN, SUI_PKG_NAME, TRANSFER_MOD_NAME,
 };
 
 const FREEZE_WRAPPING_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::FreezeWrapped as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::FreezeWrapped as u8,
     "attempting to freeze wrapped objects",
 );
 
@@ -68,7 +68,8 @@ impl WrappingFieldInfo {
 }
 
 /// Structs (per-module) that have fields wrapping other objects.
-type WrappingFields = BTreeMap<E::ModuleIdent, BTreeMap<P::StructName, Option<WrappingFieldInfo>>>;
+type WrappingFields =
+    BTreeMap<E::ModuleIdent, BTreeMap<P::DatatypeName, Option<WrappingFieldInfo>>>;
 
 pub struct FreezeWrappedVisitor;
 
@@ -200,7 +201,7 @@ impl<'a> Context<'a> {
     fn find_wrapping_field_loc(
         &mut self,
         mident: E::ModuleIdent,
-        sname: P::StructName,
+        sname: P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
         let memoized_info = self
             .wrapping_fields
@@ -223,10 +224,10 @@ impl<'a> Context<'a> {
     fn find_wrapping_field_loc_impl(
         &mut self,
         mident: E::ModuleIdent,
-        sname: P::StructName,
+        sname: P::DatatypeName,
     ) -> Option<WrappingFieldInfo> {
         let sdef = self.program_info.struct_definition(&mident, &sname);
-        let N::StructFields::Defined(sfields) = &sdef.fields else {
+        let N::StructFields::Defined(_, sfields) = &sdef.fields else {
             return None;
         };
         sfields.iter().find_map(|(_, fname, (_, ftype))| {

@@ -7,8 +7,8 @@ use crate::{
     diagnostics::{self, codes::*},
     editions::FeatureGate,
     expansion::{
-        ast::{self as E, AbilitySet, ModuleIdent, Mutability, Visibility},
-        translate::is_valid_struct_or_constant_name as is_constant_name,
+        ast::{self as E, AbilitySet, Ellipsis, ModuleIdent, Mutability, Visibility},
+        translate::is_valid_datatype_or_constant_name as is_constant_name,
     },
     ice,
     naming::{
@@ -16,7 +16,9 @@ use crate::{
         fake_natives,
         syntax_methods::resolve_syntax_attributes,
     },
-    parser::ast::{self as P, ConstantName, Field, FunctionName, StructName, MACRO_MODIFIER},
+    parser::ast::{
+        self as P, ConstantName, DatatypeName, Field, FunctionName, VariantName, MACRO_MODIFIER,
+    },
     shared::{program_info::NamingProgramInfo, unique_map::UniqueMap, *},
     FullyCompiledProgram,
 };
@@ -29,14 +31,15 @@ use std::{
 };
 
 //**************************************************************************************************
-// Context
+// Resolver Types
 //**************************************************************************************************
 
 #[derive(Debug, Clone)]
 pub(super) enum ResolvedType {
-    Module(Box<ResolvedModuleType>),
+    ModuleType(Box<ResolvedModuleType>),
     TParam(Loc, N::TParam),
     BuiltinType(N::BuiltinTypeName_),
+    Hole, // '_' type
     Unbound,
 }
 
@@ -49,11 +52,51 @@ pub(super) struct ResolvedModuleType {
 }
 
 #[derive(Debug, Clone)]
-pub(super) struct ModuleType {
-    pub original_mident: ModuleIdent,
-    pub decl_loc: Loc,
-    pub arity: usize,
-    pub is_positional: bool,
+pub(super) enum ModuleType {
+    Struct(Box<StructType>),
+    Enum(Box<EnumType>),
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct StructType {
+    original_mident: ModuleIdent,
+    decl_loc: Loc,
+    arity: usize,
+    field_info: FieldInfo,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct EnumType {
+    original_mident: ModuleIdent,
+    decl_loc: Loc,
+    arity: usize,
+    variants: UniqueMap<VariantName, VariantConstructor>,
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub(super) struct VariantConstructor {
+    original_variant_name: Name,
+    decl_loc: Loc,
+    field_info: FieldInfo,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum FieldInfo {
+    Positional(usize),
+    Named(BTreeSet<Field>),
+    Empty,
+}
+
+#[derive(Debug, Clone)]
+pub(super) enum ResolvedConstructor {
+    Struct(DatatypeName, Box<StructType>),
+    Variant(
+        Box<EnumType>,
+        VariantName,
+        /* variant decl loc */ Loc,
+        Box<FieldInfo>,
+    ),
 }
 
 enum ResolvedFunction {
@@ -76,6 +119,18 @@ enum ResolveFunctionCase {
     Call,
 }
 
+enum ResolvedModuleAccess {
+    Function(FunctionName),
+    Constant(ConstantName),
+    Datatype(ModuleType),
+}
+
+enum ModuleAccessKind {
+    Function,
+    Datatype,
+    Constant,
+}
+
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 enum LoopType {
     While,
@@ -90,13 +145,158 @@ enum NominalBlockType {
     LambdaLoopCapture,
 }
 
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
+enum TypeAnnotation {
+    StructField,
+    VariantField,
+    ConstantSignature,
+    FunctionSignature,
+    MacroSignature,
+    Expression,
+}
+
+impl ResolvedType {
+    fn is_struct(&self) -> bool {
+        match self {
+            ResolvedType::ModuleType(rt) => match rt.module_type {
+                ModuleType::Struct(..) => true,
+                ModuleType::Enum(..) => false,
+            },
+            _ => false,
+        }
+    }
+
+    #[allow(dead_code)]
+    fn is_enum(&self) -> bool {
+        match self {
+            ResolvedType::ModuleType(rt) => match rt.module_type {
+                ModuleType::Struct(..) => false,
+                ModuleType::Enum(..) => true,
+            },
+            _ => false,
+        }
+    }
+}
+
+//************************************************
+// impls
+//************************************************
+
+impl ModuleType {
+    fn decl_loc(&self) -> Loc {
+        match self {
+            ModuleType::Struct(stype) => stype.decl_loc,
+            ModuleType::Enum(etype) => etype.decl_loc,
+        }
+    }
+
+    fn original_mident(&self) -> ModuleIdent {
+        match self {
+            ModuleType::Struct(stype) => stype.original_mident,
+            ModuleType::Enum(etype) => etype.original_mident,
+        }
+    }
+
+    fn with_original_mident(self, mident: ModuleIdent) -> ModuleType {
+        match self {
+            ModuleType::Struct(stype) => {
+                let st = StructType {
+                    original_mident: mident,
+                    ..*stype
+                };
+                ModuleType::Struct(Box::new(st))
+            }
+            ModuleType::Enum(etype) => {
+                let et = EnumType {
+                    original_mident: mident,
+                    ..*etype
+                };
+                ModuleType::Enum(Box::new(et))
+            }
+        }
+    }
+
+    fn datatype_kind_str(&self) -> String {
+        match self {
+            ModuleType::Struct(_) => "struct".to_string(),
+            ModuleType::Enum(_) => "enum".to_string(),
+        }
+    }
+}
+
+impl FieldInfo {
+    pub fn is_empty(&self) -> bool {
+        matches!(self, FieldInfo::Empty)
+    }
+
+    pub fn is_positional(&self) -> bool {
+        matches!(self, FieldInfo::Positional(_))
+    }
+
+    pub fn field_count(&self) -> usize {
+        match self {
+            FieldInfo::Positional(n) => *n,
+            FieldInfo::Named(fields) => fields.len(),
+            FieldInfo::Empty => 0,
+        }
+    }
+}
+
+impl ResolvedConstructor {
+    fn type_arity(&self) -> usize {
+        match self {
+            ResolvedConstructor::Struct(_, stype) => stype.arity,
+            ResolvedConstructor::Variant(etype, _, _, _) => etype.arity,
+        }
+    }
+
+    fn field_info(&self) -> &FieldInfo {
+        match self {
+            ResolvedConstructor::Struct(_, stype) => &stype.field_info,
+            ResolvedConstructor::Variant(_, _, _, field_info) => field_info,
+        }
+    }
+
+    fn name(&self) -> String {
+        match self {
+            ResolvedConstructor::Struct(name, _) => name.to_string(),
+            ResolvedConstructor::Variant(_, vname, _, _) => vname.to_string(),
+        }
+    }
+}
+
+impl std::fmt::Display for ResolvedModuleAccess {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ResolvedModuleAccess::Function(_) => write!(f, "function"),
+            ResolvedModuleAccess::Constant(_) => write!(f, "constant"),
+            ResolvedModuleAccess::Datatype(ty) => write!(f, "{}", ty.datatype_kind_str()),
+        }
+    }
+}
+
+impl std::fmt::Display for ModuleAccessKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleAccessKind::Function => write!(f, "function"),
+            ModuleAccessKind::Constant => write!(f, "constant"),
+            ModuleAccessKind::Datatype => write!(f, "type"),
+        }
+    }
+}
+
+//**************************************************************************************************
+// Context
+//**************************************************************************************************
+
 pub(super) struct Context<'env> {
     pub env: &'env mut CompilationEnv,
     current_module: Option<ModuleIdent>,
     scoped_types: BTreeMap<ModuleIdent, BTreeMap<Symbol, ModuleType>>,
-    unscoped_types: BTreeMap<Symbol, ResolvedType>,
+    unscoped_types: Vec<BTreeMap<Symbol, ResolvedType>>,
     scoped_functions: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
     scoped_constants: BTreeMap<ModuleIdent, BTreeMap<Symbol, Loc>>,
+    modules: BTreeSet<ModuleIdent>,
     local_scopes: Vec<BTreeMap<Symbol, u16>>,
     local_count: BTreeMap<Symbol, u16>,
     used_locals: BTreeSet<N::Var_>,
@@ -108,6 +308,42 @@ pub(super) struct Context<'env> {
     /// to translate a function and to false after translation is over).
     translating_fun: bool,
     pub current_package: Option<Symbol>,
+}
+
+macro_rules! resolve_from_module_access {
+    ($context:expr, $loc:expr, $mident:expr, $name:expr, $expected_pat:pat, $rhs:expr, $expected_kind:expr) => {{
+        if !$context.modules.contains($mident) {
+            $context.env.add_diag(diag!(
+                NameResolution::UnboundModule,
+                ($mident.loc, format!("Unbound module '{}'", $mident)),
+            ));
+            return None;
+        }
+        match $context.resolve_module_access($mident, $name, $expected_kind) {
+            Some($expected_pat) => $rhs,
+            Some(other) => {
+                let msg = format!(
+                    "Invalid module access. \
+                        Expected a {}, but found {} '{}' in module '{}'",
+                    $expected_kind, other, $name, $mident
+                );
+                $context
+                    .env
+                    .add_diag(diag!(NameResolution::UnboundModuleMember, ($loc, msg)));
+                None
+            }
+            None => {
+                let msg = format!(
+                    "Invalid module access. Unbound {} '{}' in module '{}'",
+                    $expected_kind, $name, $mident
+                );
+                $context
+                    .env
+                    .add_diag(diag!(NameResolution::UnboundModuleMember, ($loc, msg)));
+                None
+            }
+        }
+    }};
 }
 
 impl<'env> Context<'env> {
@@ -128,24 +364,71 @@ impl<'env> Context<'env> {
                         .filter(|(mident, _m)| !prog.modules.contains_key(mident))
                 }))
         };
+        let modules = all_modules().map(|(mident, _)| mident).collect();
         let scoped_types = all_modules()
             .map(|(mident, mdef)| {
-                let mems = mdef
-                    .structs
-                    .key_cloned_iter()
-                    .map(|(s, sdef)| {
-                        let arity = sdef.type_parameters.len();
-                        let sname = s.value();
-                        let is_positional = matches!(sdef.fields, E::StructFields::Positional(_));
-                        let type_info = ModuleType {
-                            original_mident: mident,
-                            decl_loc: s.loc(),
-                            arity,
-                            is_positional,
-                        };
-                        (sname, type_info)
-                    })
-                    .collect();
+                let mems = {
+                    let mut smems = mdef
+                        .structs
+                        .key_cloned_iter()
+                        .map(|(s, sdef)| {
+                            let arity = sdef.type_parameters.len();
+                            let sname = s.value();
+                            let field_info = match &sdef.fields {
+                                E::StructFields::Positional(fields) => {
+                                    FieldInfo::Positional(fields.len())
+                                }
+                                E::StructFields::Named(f) => {
+                                    FieldInfo::Named(f.key_cloned_iter().map(|(k, _)| k).collect())
+                                }
+                                E::StructFields::Native(_) => FieldInfo::Empty,
+                            };
+                            let st = StructType {
+                                original_mident: mident,
+                                decl_loc: s.loc(),
+                                arity,
+                                field_info,
+                            };
+                            let type_info = ModuleType::Struct(Box::new(st));
+                            (sname, type_info)
+                        })
+                        .collect::<BTreeMap<_, _>>();
+                    let mut emems = mdef
+                        .enums
+                        .key_cloned_iter()
+                        .map(|(e, edef)| {
+                            let arity = edef.type_parameters.len();
+                            let ename = e.value();
+                            let variants = edef.variants.clone().map(|name, v| {
+                                let field_info = match &v.fields {
+                                    E::VariantFields::Named(fields) => FieldInfo::Named(
+                                        fields.key_cloned_iter().map(|(k, _)| k).collect(),
+                                    ),
+                                    E::VariantFields::Positional(tys) => {
+                                        FieldInfo::Positional(tys.len())
+                                    }
+                                    E::VariantFields::Empty => FieldInfo::Empty,
+                                };
+                                VariantConstructor {
+                                    original_variant_name: name.0,
+                                    decl_loc: v.loc,
+                                    field_info,
+                                }
+                            });
+                            let et = EnumType {
+                                original_mident: mident,
+                                arity,
+                                decl_loc: e.loc(),
+                                variants,
+                            };
+                            let type_info = ModuleType::Enum(Box::new(et));
+                            (ename, type_info)
+                        })
+                        .collect::<BTreeMap<_, _>>();
+                    /* duplicates were already reported by expasion */
+                    smems.append(&mut emems);
+                    smems
+                };
                 (mident, mems)
             })
             .collect();
@@ -169,16 +452,17 @@ impl<'env> Context<'env> {
                 (mident, mems)
             })
             .collect();
-        let unscoped_types = N::BuiltinTypeName_::all_names()
+        let unscoped_types = vec![N::BuiltinTypeName_::all_names()
             .iter()
             .map(|s| {
                 let b_ = RT::BuiltinType(N::BuiltinTypeName_::resolve(s.as_str()).unwrap());
                 (*s, b_)
             })
-            .collect();
+            .collect()];
         Self {
             env: compilation_env,
             current_module: None,
+            modules,
             scoped_types,
             scoped_functions,
             scoped_constants,
@@ -208,29 +492,58 @@ impl<'env> Context<'env> {
         resolved
     }
 
-    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
-        let types = match self.scoped_types.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match types.get(&n.value) {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound struct '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(module_type) => Some(module_type.clone()),
+    fn resolve_module_type_opt(&self, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
+        if let Some(types) = self.scoped_types.get(m) {
+            types.get(&n.value).cloned()
+        } else {
+            None
         }
+    }
+
+    fn resolve_function_opt(&self, m: &ModuleIdent, n: &Name) -> Option<FunctionName> {
+        self.scoped_functions
+            .get(m)
+            .and_then(|functions| functions.get(&n.value).map(|_| FunctionName(*n)))
+    }
+
+    fn resolve_constant_opt(&self, m: &ModuleIdent, n: &Name) -> Option<ConstantName> {
+        self.scoped_constants
+            .get(m)
+            .and_then(|constants| constants.get(&n.value).map(|_| ConstantName(*n)))
+    }
+
+    fn resolve_module_access(
+        &mut self,
+        m: &ModuleIdent,
+        n: &Name,
+        expected_access_type: ModuleAccessKind,
+    ) -> Option<ResolvedModuleAccess> {
+        let function_opt = self
+            .resolve_function_opt(m, n)
+            .map(ResolvedModuleAccess::Function);
+        let constant_opt = self
+            .resolve_constant_opt(m, n)
+            .map(ResolvedModuleAccess::Constant);
+        let datatype_opt = self
+            .resolve_module_type_opt(m, n)
+            .map(ResolvedModuleAccess::Datatype);
+        match expected_access_type {
+            ModuleAccessKind::Function => function_opt.or(datatype_opt).or(constant_opt),
+            ModuleAccessKind::Constant => constant_opt.or(datatype_opt).or(function_opt),
+            ModuleAccessKind::Datatype => datatype_opt.or(constant_opt).or(function_opt),
+        }
+    }
+
+    fn resolve_module_type(&mut self, loc: Loc, m: &ModuleIdent, n: &Name) -> Option<ModuleType> {
+        resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleAccess::Datatype(module_type),
+            Some(module_type),
+            ModuleAccessKind::Datatype
+        )
     }
 
     fn resolve_module_function(
@@ -239,65 +552,28 @@ impl<'env> Context<'env> {
         m: &ModuleIdent,
         n: &Name,
     ) -> Option<FunctionName> {
-        let functions = match self.scoped_functions.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match functions.get(&n.value).cloned() {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound function '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(_) => Some(FunctionName(*n)),
-        }
-    }
-
-    fn resolve_module_constant(
-        &mut self,
-        loc: Loc,
-        m: &ModuleIdent,
-        n: Name,
-    ) -> Option<ConstantName> {
-        let constants = match self.scoped_constants.get(m) {
-            None => {
-                self.env.add_diag(diag!(
-                    NameResolution::UnboundModule,
-                    (m.loc, format!("Unbound module '{}'", m)),
-                ));
-                return None;
-            }
-            Some(members) => members,
-        };
-        match constants.get(&n.value).cloned() {
-            None => {
-                let msg = format!(
-                    "Invalid module access. Unbound constant '{}' in module '{}'",
-                    n, m
-                );
-                self.env
-                    .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
-                None
-            }
-            Some(_) => Some(ConstantName(n)),
-        }
+        resolve_from_module_access!(
+            self,
+            loc,
+            m,
+            n,
+            ResolvedModuleAccess::Function(name),
+            Some(name),
+            ModuleAccessKind::Function
+        )
     }
 
     pub fn resolve_type(&mut self, sp!(nloc, ma_): E::ModuleAccess) -> ResolvedType {
         use E::ModuleAccess_ as EN;
         match ma_ {
+            EN::Name(sp!(_, n)) if n == symbol!("_") => {
+                let current_package = self.current_package;
+                self.env
+                    .check_feature(current_package, FeatureGate::TypeHoles, nloc);
+                ResolvedType::Hole
+            }
             EN::Name(n) => self.resolve_unscoped_type(nloc, n),
-            EN::ModuleAccess(m, n) => {
+            EN::ModuleAccess(m, n) | EN::Variant(sp!(_, (m, n)), _) => {
                 let Some(module_type) = self.resolve_module_type(nloc, &m, &n) else {
                     assert!(self.env.has_errors());
                     return ResolvedType::Unbound;
@@ -305,18 +581,20 @@ impl<'env> Context<'env> {
                 let mt = ResolvedModuleType {
                     original_loc: nloc,
                     original_type_name: n,
-                    module_type: ModuleType {
-                        original_mident: m,
-                        ..module_type
-                    },
+                    module_type: module_type.with_original_mident(m),
                 };
-                ResolvedType::Module(Box::new(mt))
+                ResolvedType::ModuleType(Box::new(mt))
             }
         }
     }
 
     fn resolve_unscoped_type(&mut self, loc: Loc, n: Name) -> ResolvedType {
-        match self.unscoped_types.get(&n.value) {
+        match self
+            .unscoped_types
+            .iter()
+            .rev()
+            .find_map(|unscoped_types| unscoped_types.get(&n.value))
+        {
             None => {
                 let msg = format!("Unbound type '{}' in current scope", n);
                 self.env
@@ -327,13 +605,129 @@ impl<'env> Context<'env> {
         }
     }
 
-    fn resolves_to_struct(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+    fn resolve_datatype_constructor(
+        &mut self,
+        ma: E::ModuleAccess,
+        verb: &str,
+    ) -> Option<(ModuleIdent, DatatypeName, ResolvedConstructor)> {
+        use E::ModuleAccess_ as EN;
+        match self.resolve_type(ma) {
+            ResolvedType::Unbound => {
+                assert!(self.env.has_errors());
+                None
+            }
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
+                let (rtloc, rtmsg) = match rt {
+                    ResolvedType::TParam(loc, tp) => (
+                        loc,
+                        format!(
+                            "But '{}' was declared as a type parameter here",
+                            tp.user_specified_name
+                        ),
+                    ),
+                    ResolvedType::BuiltinType(n) => {
+                        (ma.loc, format!("But '{n}' is a builtin type"))
+                    }
+                    ResolvedType::Hole => (
+                        ma.loc,
+                        "The '_' is a placeholder for type inference".to_owned(),
+                    ),
+                    _ => unreachable!(),
+                };
+                let msg = if self
+                    .env
+                    .supports_feature(self.current_package, FeatureGate::Enums)
+                {
+                    format!("Invalid {}. Expected a datatype name", verb)
+                } else {
+                    format!("Invalid {}. Expected a struct name", verb)
+                };
+                self.env.add_diag(diag!(
+                    NameResolution::NamePositionMismatch,
+                    (ma.loc, msg),
+                    (rtloc, rtmsg)
+                ));
+                None
+            }
+            ResolvedType::ModuleType(mt) => {
+                let ResolvedModuleType {
+                    module_type,
+                    original_type_name: name,
+                    ..
+                } = *mt;
+                let mident_name = module_type.original_mident();
+                match (&ma.value, module_type) {
+                    (EN::Name(_) | EN::ModuleAccess(_, _), ModuleType::Struct(struct_type)) => {
+                        let dname = DatatypeName(name);
+                        Some((
+                            mident_name,
+                            dname,
+                            ResolvedConstructor::Struct(dname, struct_type),
+                        ))
+                    }
+                    (EN::Variant(_, variant_name), ModuleType::Enum(enum_type)) => {
+                        let vname = VariantName(*variant_name);
+                        let Some(variant_info) = enum_type.variants.get(&vname).cloned() else {
+                            let primary_msg = format!(
+                                "Invalid {verb}. Variant '{variant_name}' is not part of this enum",
+                            );
+                            let decl_msg = format!("Enum '{name}' is defined here");
+                            self.env.add_diag(diag!(
+                                NameResolution::UnboundVariant,
+                                (ma.loc, primary_msg),
+                                (name.loc, decl_msg),
+                            ));
+                            return None;
+                        };
+                        Some((
+                            mident_name,
+                            DatatypeName(name),
+                            ResolvedConstructor::Variant(
+                                enum_type,
+                                vname,
+                                variant_info.decl_loc,
+                                Box::new(variant_info.field_info.clone()),
+                            ),
+                        ))
+                    }
+                    (EN::Name(_) | EN::ModuleAccess(_, _), ModuleType::Enum(_)) => {
+                        self.env.add_diag(diag!(
+                            NameResolution::NamePositionMismatch,
+                            (ma.loc, format!("Invalid {verb}. Expected a struct")),
+                            (name.loc, format!("But '{name}' is an enum"))
+                        ));
+                        None
+                    }
+                    (EN::Variant(sp!(sloc, _), _), ModuleType::Struct(_)) => {
+                        self.env.add_diag(diag!(
+                            NameResolution::NamePositionMismatch,
+                            (*sloc, format!("Invalid {verb}. Expected an enum")),
+                            (name.loc, format!("But '{name}' is a struct"))
+                        ));
+                        None
+                    }
+                }
+            }
+        }
+    }
+
+    fn resolves_to_datatype(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
         use E::ModuleAccess_ as EA;
         match ma_ {
-            EA::Name(n) => self.unscoped_types.get(&n.value).is_some_and(|rt| {
-                matches!(rt, ResolvedType::Module(_) | ResolvedType::BuiltinType(_))
-            }),
+            EA::Name(n) => self
+                .unscoped_types
+                .iter()
+                .rev()
+                .find_map(|unscoped_types| unscoped_types.get(&n.value))
+                .is_some_and(|rt| rt.is_struct() || matches!(rt, ResolvedType::BuiltinType(_))),
             EA::ModuleAccess(m, n) => self
+                .scoped_types
+                .get(m)
+                .and_then(|types| types.get(&n.value))
+                .is_some(),
+            EA::Variant(sp!(_, (m, n)), _) => self
                 .scoped_types
                 .get(m)
                 .and_then(|types| types.get(&n.value))
@@ -347,13 +741,15 @@ impl<'env> Context<'env> {
         verb: &str,
         ma: E::ModuleAccess,
         etys_opt: Option<Vec<E::Type>>,
-    ) -> Option<(ModuleIdent, StructName, Option<Vec<N::Type>>, bool)> {
+    ) -> Option<(ModuleIdent, DatatypeName, Option<Vec<N::Type>>, FieldInfo)> {
         match self.resolve_type(ma) {
             ResolvedType::Unbound => {
                 assert!(self.env.has_errors());
                 None
             }
-            rt @ (ResolvedType::BuiltinType(_) | ResolvedType::TParam(_, _)) => {
+            rt @ (ResolvedType::BuiltinType(_)
+            | ResolvedType::TParam(_, _)
+            | ResolvedType::Hole) => {
                 let (rtloc, msg) = match rt {
                     ResolvedType::TParam(loc, tp) => (
                         loc,
@@ -365,6 +761,10 @@ impl<'env> Context<'env> {
                     ResolvedType::BuiltinType(n) => {
                         (ma.loc, format!("But '{n}' is a builtin type"))
                     }
+                    ResolvedType::Hole => (
+                        ma.loc,
+                        "The '_' is a placeholder for type inference".to_owned(),
+                    ),
                     _ => unreachable!(),
                 };
                 self.env.add_diag(diag!(
@@ -374,25 +774,45 @@ impl<'env> Context<'env> {
                 ));
                 None
             }
-            ResolvedType::Module(mt) => {
+            ResolvedType::ModuleType(mt) => {
                 let ResolvedModuleType {
-                    module_type:
-                        ModuleType {
-                            original_mident: m,
-                            arity,
-                            is_positional,
-                            ..
-                        },
+                    module_type,
                     original_type_name: n,
                     ..
                 } = *mt;
-                let tys_opt = etys_opt.map(|etys| {
-                    let tys = types(self, etys);
-                    let name_f = || format!("{}::{}", &m, &n);
-                    check_type_argument_arity(self, loc, name_f, tys, arity)
-                });
-                Some((m, StructName(n), tys_opt, is_positional))
+                match module_type {
+                    ModuleType::Struct(struct_type) => {
+                        let m = struct_type.original_mident;
+                        let tys_opt = etys_opt.map(|etys| {
+                            let tys = types(self, TypeAnnotation::Expression, etys);
+                            let name_f = || format!("{}::{}", &m, &n);
+                            check_type_argument_arity(self, loc, name_f, tys, struct_type.arity)
+                        });
+                        Some((m, DatatypeName(n), tys_opt, struct_type.field_info))
+                    }
+                    ModuleType::Enum(..) => {
+                        self.env.add_diag(diag!(
+                            NameResolution::NamePositionMismatch,
+                            (ma.loc, format!("Invalid {}. Expected a struct", verb)),
+                            (n.loc, format!("But '{}' is an enum", n))
+                        ));
+                        None
+                    }
+                }
             }
+        }
+    }
+
+    fn resolves_to_constant(&self, sp!(_, ma_): &E::ModuleAccess) -> bool {
+        use E::ModuleAccess_ as EA;
+        match ma_ {
+            EA::Name(_) => false, // constants are expanded during naming
+            EA::ModuleAccess(m, n) => self
+                .scoped_constants
+                .get(m)
+                .and_then(|constants| constants.get(&n.value))
+                .is_some(),
+            EA::Variant(_, _) => false,
         }
     }
 
@@ -409,31 +829,111 @@ impl<'env> Context<'env> {
                 ));
                 None
             }
-            EA::ModuleAccess(m, n) => match self.resolve_module_constant(loc, &m, n) {
-                None => {
-                    assert!(self.env.has_errors());
-                    None
+            EA::ModuleAccess(m, n) => {
+                if !self.modules.contains(&m) {
+                    self.env.add_diag(diag!(
+                        NameResolution::UnboundModule,
+                        (m.loc, format!("Unbound module '{m}'")),
+                    ));
+                    return None;
                 }
-                Some(cname) => Some((m, cname)),
-            },
+                match self.resolve_module_access(&m, &n, ModuleAccessKind::Constant) {
+                    Some(ResolvedModuleAccess::Constant(cname)) => Some((m, cname)),
+                    Some(ResolvedModuleAccess::Datatype(module_type)) => {
+                        match module_type {
+                            ModuleType::Struct(stype) => {
+                                let tyargs = arity_string(stype.arity);
+                                let msg = format!(
+                                    "Expected local or constant, \
+                                     found struct '{n}' in module '{m}' instead."
+                                );
+                                let mut diag = diag!(NameResolution::InvalidPosition, (loc, msg));
+                                if stype.field_info.is_positional() {
+                                    diag.add_note(format!(
+                                        "Structs with positional arguments must be written as \
+                                        '{n}{tyargs}( ... )'"
+                                    ));
+                                } else {
+                                    diag.add_note(format!(
+                                        "Struct with named arguments must be written as \
+                                        '{n}{tyargs} {{ ... }}'"
+                                    ));
+                                }
+                                self.env.add_diag(diag);
+                            }
+                            ModuleType::Enum(etype) => {
+                                let tyargs = arity_string(etype.arity);
+                                let msg = format!(
+                                    "Expected local or constant, \
+                                     found enum '{n}' in module '{m}' instead."
+                                );
+                                let mut diag =
+                                    diag!(NameResolution::UnboundModuleMember, (loc, msg));
+                                if let Some((_, vname, ctor)) = etype.variants.iter().next() {
+                                    if ctor.field_info.is_empty() {
+                                        diag.add_note(format!(
+                                            "Enum variants with no arguments must be \
+                                            written as '{n}::{vname}{tyargs}'"
+                                        ));
+                                    } else if ctor.field_info.is_positional() {
+                                        diag.add_note(format!(
+                                            "Enum variants with positional arguments must be \
+                                            written as '{n}::{vname}( ... ){tyargs}'"
+                                        ));
+                                    } else {
+                                        diag.add_note(format!(
+                                            "Enum variants with named arguments must be \
+                                            written as '{n}::{vname}{tyargs} {{ ... }}'"
+                                        ));
+                                    }
+                                    self.env.add_diag(diag);
+                                }
+                            }
+                        }
+                        None
+                    }
+                    Some(ResolvedModuleAccess::Function(_)) => {
+                        let msg = format!(
+                            "Expected local or constant, \
+                             found function '{n}' in module '{m}' instead."
+                        );
+                        let mut diag = diag!(NameResolution::UnboundModuleMember, (loc, msg));
+                        diag.add_note("Functions should be called as '{n}( ... )'");
+                        self.env.add_diag(diag);
+                        None
+                    }
+                    None => {
+                        let msg = format!(
+                            "Invalid module access. Unbound constant '{n}' in module '{m}'"
+                        );
+                        self.env
+                            .add_diag(diag!(NameResolution::UnboundModuleMember, (loc, msg)));
+                        None
+                    }
+                }
+            }
+            EA::Variant(_, _) => {
+                self.env
+                    .add_diag(ice!((loc, "Treated variant as a constant during naming")));
+                None
+            }
         }
     }
 
     fn bind_type(&mut self, s: Symbol, rt: ResolvedType) {
-        self.unscoped_types.insert(s, rt);
+        self.unscoped_types.last_mut().unwrap().insert(s, rt);
     }
 
-    fn save_unscoped(&self) -> BTreeMap<Symbol, ResolvedType> {
-        self.unscoped_types.clone()
+    fn push_unscoped_types_scope(&mut self) {
+        self.unscoped_types.push(BTreeMap::new())
     }
 
-    fn restore_unscoped(&mut self, types: BTreeMap<Symbol, ResolvedType>) {
-        self.unscoped_types = types;
+    fn pop_unscoped_types_scope(&mut self) {
+        self.unscoped_types.pop().unwrap();
     }
 
     fn new_local_scope(&mut self) {
-        let cur = self.local_scopes.last().unwrap().clone();
-        self.local_scopes.push(cur)
+        self.local_scopes.push(BTreeMap::new());
     }
 
     fn close_local_scope(&mut self) {
@@ -461,7 +961,11 @@ impl<'env> Context<'env> {
         variable_msg: impl FnOnce(Symbol) -> S,
         sp!(vloc, name): Name,
     ) -> Option<N::Var> {
-        let id_opt = self.local_scopes.last().unwrap().get(&name).copied();
+        let id_opt = self
+            .local_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(&name).copied());
         match id_opt {
             None => {
                 let msg = variable_msg(name);
@@ -473,6 +977,24 @@ impl<'env> Context<'env> {
                 // they will be incremented when substituted for macros
                 let nvar_ = N::Var_ { name, id, color: 0 };
                 self.used_locals.insert(nvar_);
+                Some(sp(vloc, nvar_))
+            }
+        }
+    }
+
+    // Like resolve_local, but with an ICE on failure because these are precomputed and should
+    // always exist. This also does not mark usage, as this is ostensibly the binding form.
+    // This is so that we can walk through or-patterns and reuse the bindings for both sides.
+    fn resolve_pattern_binder(&mut self, loc: Loc, sp!(vloc, name): Name) -> Option<N::Var> {
+        let id_opt = self.local_scopes.last().unwrap().get(&name).copied();
+        match id_opt {
+            None => {
+                let msg = format!("Failed to resolve pattern binder {}", name);
+                self.env.add_diag(ice!((loc, msg)));
+                None
+            }
+            Some(id) => {
+                let nvar_ = N::Var_ { name, id, color: 0 };
                 Some(sp(vloc, nvar_))
             }
         }
@@ -673,6 +1195,14 @@ impl std::fmt::Display for NominalBlockType {
     }
 }
 
+fn arity_string(arity: usize) -> &'static str {
+    match arity {
+        0 => "",
+        1 => "<T>",
+        _ => "<T0,...>",
+    }
+}
+
 //**************************************************************************************************
 // Entry
 //**************************************************************************************************
@@ -709,30 +1239,58 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         use_funs: euse_funs,
         friends: efriends,
         structs: estructs,
+        enums: eenums,
         functions: efunctions,
         constants: econstants,
     } = mdef;
     context.current_package = package_name;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let unscoped = context.save_unscoped();
     let mut use_funs = use_funs(context, euse_funs);
     let mut syntax_methods = N::SyntaxMethods::new();
     let friends = efriends.filter_map(|mident, f| friend(context, mident, f));
+    let struct_names = estructs
+        .key_cloned_iter()
+        .map(|(k, _)| k)
+        .collect::<BTreeSet<_>>();
+    let enum_names = eenums
+        .key_cloned_iter()
+        .map(|(k, _)| k)
+        .collect::<BTreeSet<_>>();
+    let enum_struct_intersection = enum_names
+        .intersection(&struct_names)
+        .collect::<BTreeSet<_>>();
     let structs = estructs.map(|name, s| {
-        context.restore_unscoped(unscoped.clone());
-        struct_def(context, name, s)
+        context.push_unscoped_types_scope();
+        let s = struct_def(context, name, s);
+        context.pop_unscoped_types_scope();
+        s
+    });
+    // simply for compilation to continue in the presence of errors, we remove the duplicates
+    let enums = eenums.filter_map(|name, e| {
+        context.push_unscoped_types_scope();
+        let result = if enum_struct_intersection.contains(&name) {
+            None
+        } else {
+            Some(enum_def(context, name, e))
+        };
+        context.pop_unscoped_types_scope();
+        result
     });
     let functions = efunctions.map(|name, f| {
-        context.restore_unscoped(unscoped.clone());
-        function(context, &mut syntax_methods, ident, name, f)
+        context.push_unscoped_types_scope();
+        let f = function(context, &mut syntax_methods, ident, name, f);
+        context.pop_unscoped_types_scope();
+        f
     });
     let constants = econstants.map(|name, c| {
-        context.restore_unscoped(unscoped.clone());
-        constant(context, name, c)
+        context.push_unscoped_types_scope();
+        let c = constant(context, name, c);
+        context.pop_unscoped_types_scope();
+        c
     });
     // Silence unused use fun warnings if a module has macros.
     // For public macros, the macro will pull in the use fun, and we will which case we will be
@@ -745,7 +1303,6 @@ fn module(
     if has_macro {
         mark_all_use_funs_as_used(&mut use_funs);
     }
-    context.restore_unscoped(unscoped);
     context.env.pop_warning_filter_scope();
     context.current_package = None;
     N::ModuleDefinition {
@@ -753,11 +1310,12 @@ fn module(
         warning_filter,
         package_name,
         attributes,
-        is_source_module,
+        target_kind,
         use_funs,
         syntax_methods,
         friends,
         structs,
+        enums,
         constants,
         functions,
     }
@@ -834,31 +1392,46 @@ fn explicit_use_fun(
             None
         }
     };
+    let ty_loc = ty.loc;
     let tn_opt = match context.resolve_type(ty) {
         ResolvedType::Unbound => {
             assert!(context.env.has_errors());
             None
         }
+        ResolvedType::Hole => {
+            let msg = "Invalid 'use fun'. Cannot associate a method with an inferred type";
+            let tmsg = "The '_' type is a placeholder for type inference";
+            context.env.add_diag(diag!(
+                Declarations::InvalidUseFun,
+                (loc, msg),
+                (ty_loc, tmsg)
+            ));
+            None
+        }
         ResolvedType::TParam(tloc, tp) => {
+            let msg = "Invalid 'use fun'. Cannot associate a method with a type parameter";
             let tmsg = format!(
                 "But '{}' was declared as a type parameter here",
                 tp.user_specified_name
             );
             context.env.add_diag(diag!(
                 Declarations::InvalidUseFun,
-                (
-                    loc,
-                    "Invalid 'use fun'. Cannot associate a method with a type parameter"
-                ),
+                (loc, msg,),
                 (tloc, tmsg)
             ));
             None
         }
         ResolvedType::BuiltinType(bt_) => Some(N::TypeName_::Builtin(sp(ty.loc, bt_))),
-        ResolvedType::Module(mt) => Some(N::TypeName_::ModuleType(
-            mt.module_type.original_mident,
-            StructName(mt.original_type_name),
-        )),
+        ResolvedType::ModuleType(mt) => match mt.module_type {
+            ModuleType::Struct(stype) => Some(N::TypeName_::ModuleType(
+                stype.original_mident,
+                DatatypeName(mt.original_type_name),
+            )),
+            ModuleType::Enum(etype) => Some(N::TypeName_::ModuleType(
+                etype.original_mident,
+                DatatypeName(mt.original_type_name),
+            )),
+        },
     };
     let tn_ = tn_opt?;
     let tn = sp(ty.loc, tn_);
@@ -912,17 +1485,17 @@ fn use_fun_module_defines(
                 }
             }
         }
-        N::TypeName_::ModuleType(m, s) => {
-            if specified.as_ref().is_some_and(|s| s == m) {
+        N::TypeName_::ModuleType(m, n) => {
+            if specified.as_ref().is_some_and(|n| n == m) {
                 Ok(())
             } else {
-                let ModuleType { decl_loc, .. } = context
+                let mod_type = context
                     .scoped_types
                     .get(m)
                     .unwrap()
-                    .get(&s.value())
+                    .get(&n.value())
                     .unwrap();
-                Err(Some(*decl_loc))
+                Err(Some(mod_type.decl_loc()))
             }
         }
         ty @ N::TypeName_::Multiple(_) => {
@@ -1020,7 +1593,12 @@ fn function(
     context.local_scopes = vec![BTreeMap::new()];
     context.local_count = BTreeMap::new();
     context.translating_fun = true;
-    let signature = function_signature(context, signature);
+    let case = if macro_.is_some() {
+        TypeAnnotation::MacroSignature
+    } else {
+        TypeAnnotation::FunctionSignature
+    };
+    let signature = function_signature(context, case, signature);
     let body = function_body(context, body);
 
     if !matches!(body.value, N::FunctionBody_::Native) {
@@ -1059,7 +1637,11 @@ fn function(
     f
 }
 
-fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::FunctionSignature {
+fn function_signature(
+    context: &mut Context,
+    case: TypeAnnotation,
+    sig: E::FunctionSignature,
+) -> N::FunctionSignature {
     let type_parameters = fun_type_parameters(context, sig.type_parameters);
 
     let mut declared = UniqueMap::new();
@@ -1097,11 +1679,11 @@ fn function_signature(context: &mut Context, sig: E::FunctionSignature) -> N::Fu
             }
             let is_parameter = true;
             let nparam = context.declare_local(is_parameter, param.0);
-            let nparam_ty = type_(context, param_ty);
+            let nparam_ty = type_(context, case, param_ty);
             (mut_, nparam, nparam_ty)
         })
         .collect();
-    let return_type = type_(context, sig.return_type);
+    let return_type = type_(context, case, sig.return_type);
     N::FunctionSignature {
         type_parameters,
         parameters,
@@ -1125,7 +1707,7 @@ const ASSIGN_SYNTAX_IDENTIFIER_NOTE: &str = "'macro' parameters are substituted 
 
 fn struct_def(
     context: &mut Context,
-    _name: StructName,
+    _name: DatatypeName,
     sdef: E::StructDefinition,
 ) -> N::StructDefinition {
     let E::StructDefinition {
@@ -1138,7 +1720,7 @@ fn struct_def(
         fields,
     } = sdef;
     context.env.add_warning_filter_scope(warning_filter.clone());
-    let type_parameters = struct_type_parameters(context, type_parameters);
+    let type_parameters = datatype_type_parameters(context, type_parameters);
     let fields = struct_fields(context, fields);
     context.env.pop_warning_filter_scope();
     N::StructDefinition {
@@ -1158,19 +1740,93 @@ fn positional_field_name(loc: Loc, idx: usize) -> Field {
 fn struct_fields(context: &mut Context, efields: E::StructFields) -> N::StructFields {
     match efields {
         E::StructFields::Native(loc) => N::StructFields::Native(loc),
-        E::StructFields::Named(em) => {
-            N::StructFields::Defined(em.map(|_f, (idx, t)| (idx, type_(context, t))))
-        }
+        E::StructFields::Named(em) => N::StructFields::Defined(
+            false,
+            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::StructField, t))),
+        ),
         E::StructFields::Positional(tys) => {
             let fields = tys
                 .into_iter()
-                .map(|ty| type_(context, ty))
+                .map(|ty| type_(context, TypeAnnotation::StructField, ty))
                 .enumerate()
                 .map(|(idx, ty)| {
                     let field_name = positional_field_name(ty.loc, idx);
                     (field_name, (idx, ty))
                 });
-            N::StructFields::Defined(UniqueMap::maybe_from_iter(fields).unwrap())
+            N::StructFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
+        }
+    }
+}
+
+//**************************************************************************************************
+// Enums
+//**************************************************************************************************
+
+fn enum_def(
+    context: &mut Context,
+    _name: DatatypeName,
+    edef: E::EnumDefinition,
+) -> N::EnumDefinition {
+    let E::EnumDefinition {
+        warning_filter,
+        index,
+        attributes,
+        loc: _loc,
+        abilities,
+        type_parameters,
+        variants,
+    } = edef;
+    context.env.add_warning_filter_scope(warning_filter.clone());
+    let type_parameters = datatype_type_parameters(context, type_parameters);
+    let variants = enum_variants(context, variants);
+    context.env.pop_warning_filter_scope();
+    N::EnumDefinition {
+        warning_filter,
+        index,
+        attributes,
+        abilities,
+        type_parameters,
+        variants,
+    }
+}
+
+fn enum_variants(
+    context: &mut Context,
+    evariants: UniqueMap<VariantName, E::VariantDefinition>,
+) -> UniqueMap<VariantName, N::VariantDefinition> {
+    let variants = evariants
+        .into_iter()
+        .map(|(key, defn)| (key, variant_def(context, defn)));
+    UniqueMap::maybe_from_iter(variants).unwrap()
+}
+
+fn variant_def(context: &mut Context, variant: E::VariantDefinition) -> N::VariantDefinition {
+    let E::VariantDefinition { loc, index, fields } = variant;
+
+    N::VariantDefinition {
+        index,
+        loc,
+        fields: variant_fields(context, fields),
+    }
+}
+
+fn variant_fields(context: &mut Context, efields: E::VariantFields) -> N::VariantFields {
+    match efields {
+        E::VariantFields::Empty => N::VariantFields::Empty,
+        E::VariantFields::Named(em) => N::VariantFields::Defined(
+            false,
+            em.map(|_f, (idx, t)| (idx, type_(context, TypeAnnotation::VariantField, t))),
+        ),
+        E::VariantFields::Positional(tys) => {
+            let fields = tys
+                .into_iter()
+                .map(|ty| type_(context, TypeAnnotation::VariantField, ty))
+                .enumerate()
+                .map(|(idx, ty)| {
+                    let field_name = positional_field_name(ty.loc, idx);
+                    (field_name, (idx, ty))
+                });
+            N::VariantFields::Defined(true, UniqueMap::maybe_from_iter(fields).unwrap())
         }
     }
 }
@@ -1193,7 +1849,7 @@ fn constant(context: &mut Context, _name: ConstantName, econstant: E::Constant) 
     assert!(context.used_locals.is_empty());
     context.env.add_warning_filter_scope(warning_filter.clone());
     context.local_scopes = vec![BTreeMap::new()];
-    let signature = type_(context, esignature);
+    let signature = type_(context, TypeAnnotation::ConstantSignature, esignature);
     let value = *exp(context, Box::new(evalue));
     context.local_scopes = vec![];
     context.local_count = BTreeMap::new();
@@ -1225,17 +1881,17 @@ fn fun_type_parameters(
         .collect()
 }
 
-fn struct_type_parameters(
+fn datatype_type_parameters(
     context: &mut Context,
-    type_parameters: Vec<E::StructTypeParameter>,
-) -> Vec<N::StructTypeParameter> {
+    type_parameters: Vec<E::DatatypeTypeParameter>,
+) -> Vec<N::DatatypeTypeParameter> {
     let mut unique_tparams = UniqueMap::new();
     type_parameters
         .into_iter()
         .map(|param| {
             let is_phantom = param.is_phantom;
             let param = type_parameter(context, &mut unique_tparams, param.name, param.constraints);
-            N::StructTypeParameter { param, is_phantom }
+            N::DatatypeTypeParameter { param, is_phantom }
         })
         .collect()
 }
@@ -1266,20 +1922,35 @@ fn type_parameter(
     tp
 }
 
-fn types(context: &mut Context, tys: Vec<E::Type>) -> Vec<N::Type> {
-    tys.into_iter().map(|t| type_(context, t)).collect()
+fn opt_types_with_arity_check<F: FnOnce() -> String>(
+    context: &mut Context,
+    case: TypeAnnotation,
+    loc: Loc,
+    name_f: F,
+    ty_args: Option<Vec<E::Type>>,
+    arity: usize,
+) -> Option<Vec<N::Type>> {
+    ty_args.map(|etys| {
+        let tys = types(context, case, etys);
+        check_type_argument_arity(context, loc, name_f, tys, arity)
+    })
 }
 
-fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
+fn types(context: &mut Context, case: TypeAnnotation, tys: Vec<E::Type>) -> Vec<N::Type> {
+    tys.into_iter().map(|t| type_(context, case, t)).collect()
+}
+
+fn type_(context: &mut Context, case: TypeAnnotation, sp!(loc, ety_): E::Type) -> N::Type {
     use ResolvedType as RT;
     use E::Type_ as ET;
     use N::{TypeName_ as NN, Type_ as NT};
     let ty_ = match ety_ {
         ET::Unit => NT::Unit,
-        ET::Multiple(tys) => {
-            NT::multiple_(loc, tys.into_iter().map(|t| type_(context, t)).collect())
-        }
-        ET::Ref(mut_, inner) => NT::Ref(mut_, Box::new(type_(context, *inner))),
+        ET::Multiple(tys) => NT::multiple_(
+            loc,
+            tys.into_iter().map(|t| type_(context, case, t)).collect(),
+        ),
+        ET::Ref(mut_, inner) => NT::Ref(mut_, Box::new(type_(context, case, *inner))),
         ET::UnresolvedError => {
             assert!(context.env.has_errors());
             NT::UnresolvedError
@@ -1289,10 +1960,41 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                 assert!(context.env.has_errors());
                 NT::UnresolvedError
             }
+            RT::Hole => {
+                let case_str_opt = match case {
+                    TypeAnnotation::StructField => {
+                        Some(("Struct fields", " or consider adding a new type parameter"))
+                    }
+                    TypeAnnotation::VariantField => Some((
+                        "Enum variant fields",
+                        " or consider adding a new type parameter",
+                    )),
+                    TypeAnnotation::ConstantSignature => Some(("Constants", "")),
+                    TypeAnnotation::FunctionSignature => {
+                        Some(("Functions", " or consider adding a new type parameter"))
+                    }
+                    TypeAnnotation::MacroSignature | TypeAnnotation::Expression => None,
+                };
+                if let Some((case_str, help_str)) = case_str_opt {
+                    let msg = format!(
+                          "Invalid usage of a placeholder for type inference '_'. \
+                          {case_str} require fully specified types. Replace '_' with a specific type{help_str}"
+                      );
+                    let mut diag = diag!(NameResolution::InvalidTypeAnnotation, (loc, msg));
+                    if let TypeAnnotation::FunctionSignature = case {
+                        diag.add_note("Only 'macro' functions can use '_' in their signatures");
+                    }
+                    context.env.add_diag(diag);
+                    NT::UnresolvedError
+                } else {
+                    // replaced with a type variable during type instantiation
+                    NT::Anything
+                }
+            }
             RT::BuiltinType(bn_) => {
                 let name_f = || format!("{}", &bn_);
                 let arity = bn_.tparam_constraints(loc).len();
-                let tys = types(context, tys);
+                let tys = types(context, case, tys);
                 let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
                 NT::builtin_(sp(ma.loc, bn_), tys)
             }
@@ -1310,27 +2012,39 @@ fn type_(context: &mut Context, sp!(loc, ety_): E::Type) -> N::Type {
                     NT::Param(tp)
                 }
             }
-            RT::Module(mt) => {
+            RT::ModuleType(mt) => {
                 let ResolvedModuleType {
-                    original_loc: nloc,
-                    original_type_name: n,
-                    module_type:
-                        ModuleType {
-                            original_mident: m,
-                            arity,
-                            ..
-                        },
+                    original_loc,
+                    original_type_name,
+                    module_type,
                 } = *mt;
-                let tn = sp(nloc, NN::ModuleType(m, StructName(n)));
-                let tys = types(context, tys);
+                let (tn, arity) = match module_type {
+                    ModuleType::Struct(stype) => {
+                        let tn = sp(
+                            original_loc,
+                            NN::ModuleType(stype.original_mident, DatatypeName(original_type_name)),
+                        );
+                        let arity = stype.arity;
+                        (tn, arity)
+                    }
+                    ModuleType::Enum(etype) => {
+                        let tn = sp(
+                            original_loc,
+                            NN::ModuleType(etype.original_mident, DatatypeName(original_type_name)),
+                        );
+                        let arity = etype.arity;
+                        (tn, arity)
+                    }
+                };
+                let tys = types(context, case, tys);
                 let name_f = || format!("{}", tn);
                 let tys = check_type_argument_arity(context, loc, name_f, tys, arity);
                 NT::Apply(None, tn, tys)
             }
         },
         ET::Fun(tys, ty) => {
-            let tys = types(context, tys);
-            let ty = Box::new(type_(context, *ty));
+            let tys = types(context, case, tys);
+            let ty = Box::new(type_(context, case, *ty));
             NT::Fun(tys, ty)
         }
     };
@@ -1393,7 +2107,7 @@ fn sequence_item(context: &mut Context, sp!(loc, ns_): E::SequenceItem) -> N::Se
         ES::Seq(e) => NS::Seq(exp(context, e)),
         ES::Declare(b, ty_opt) => {
             let bind_opt = bind_list(context, b);
-            let tys = ty_opt.map(|t| type_(context, t));
+            let tys = ty_opt.map(|t| type_(context, TypeAnnotation::Expression, t));
             match bind_opt {
                 None => {
                     assert!(context.env.has_errors());
@@ -1433,27 +2147,67 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
     let ne_ = match e_ {
         EE::Unit { trailing } => NE::Unit { trailing },
         EE::Value(val) => NE::Value(val),
-        EE::Name(sp!(aloc, E::ModuleAccess_::Name(v)), None) => {
-            if is_constant_name(&v.value) {
-                access_constant(context, sp(aloc, E::ModuleAccess_::Name(v)))
-            } else {
-                match context.resolve_local(
-                    eloc,
-                    NameResolution::UnboundVariable,
-                    |name| format!("Unbound variable '{name}'"),
-                    v,
-                ) {
-                    None => {
-                        debug_assert!(context.env.has_errors());
-                        NE::UnresolvedError
-                    }
-                    Some(nv) => NE::Var(nv),
+        EE::Name(sp!(_, E::ModuleAccess_::Name(v)), None) if !is_constant_name(&v.value) => {
+            match context.resolve_local(
+                eloc,
+                NameResolution::UnboundVariable,
+                |name| format!("Unbound variable '{name}'"),
+                v,
+            ) {
+                None => {
+                    debug_assert!(context.env.has_errors());
+                    NE::UnresolvedError
+                }
+                Some(nv) => NE::Var(nv),
+            }
+        }
+        EE::Name(ma @ sp!(_, E::ModuleAccess_::Variant(_, _)), etys_opt) => {
+            context
+                .env
+                .check_feature(context.current_package, FeatureGate::Enums, eloc);
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(ma, "construction") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(eloc, NE::UnresolvedError));
+            };
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                eloc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+            check_constructor_form(context, eloc, ConstructorForm::None, "instantiation", &ty);
+            match ty {
+                ResolvedConstructor::Struct(_, _stype) => {
+                    assert!(context.env.has_errors());
+                    NE::UnresolvedError
+                }
+                ResolvedConstructor::Variant(_etype, variant, _, _) => {
+                    NE::PackVariant(m, n, variant, tys_opt, UniqueMap::new())
                 }
             }
         }
         EE::Name(ma, None) => access_constant(context, ma),
 
         EE::IfElse(eb, et, ef) => NE::IfElse(exp(context, eb), exp(context, et), exp(context, ef)),
+        EE::Match(esubject, sp!(_aloc, arms)) if arms.is_empty() => {
+            exp(context, esubject); // for error effect
+            let msg = "Invalid 'match' form. 'match' must have at least one arm";
+            context
+                .env
+                .add_diag(diag!(Syntax::InvalidMatch, (eloc, msg)));
+            NE::UnresolvedError
+        }
+        EE::Match(esubject, sp!(aloc, arms)) => NE::Match(
+            exp(context, esubject),
+            sp(
+                aloc,
+                arms.into_iter()
+                    .map(|arm| match_arm(context, arm))
+                    .collect(),
+            ),
+        ),
         EE::While(name_opt, eb, el) => {
             let cond = exp(context, eb);
             context.enter_nominal_block(eloc, name_opt, NominalBlockType::Loop(LoopType::While));
@@ -1488,7 +2242,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
         EE::Lambda(elambda_binds, ety_opt, body) => {
             context.new_local_scope();
             let nlambda_binds_opt = lambda_bind_list(context, elambda_binds);
-            let return_type = ety_opt.map(|t| type_(context, t));
+            let return_type = ety_opt.map(|t| type_(context, TypeAnnotation::Expression, t));
             context.enter_nominal_block(eloc, None, NominalBlockType::LambdaLoopCapture);
             context.enter_nominal_block(eloc, None, NominalBlockType::LambdaReturn);
             let body = exp(context, body);
@@ -1606,26 +2360,26 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             .value
         }
 
-        EE::Pack(tn, etys_opt, efields) => {
-            match context.resolve_struct_name(eloc, "construction", tn, etys_opt) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some((m, sn, tys_opt, is_positional)) => {
-                    if is_positional {
-                        let msg = "Invalid struct instantiation. Positional struct declarations \
-                             require positional instantiations.";
-                        context
-                            .env
-                            .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
-                    }
-                    NE::Pack(
-                        m,
-                        sn,
-                        tys_opt,
-                        efields.map(|_, (idx, e)| (idx, *exp(context, Box::new(e)))),
-                    )
+        EE::Pack(ma, etys_opt, efields) => {
+            // Process fields for errors either way.
+            let fields = efields.map(|_, (idx, e)| (idx, *exp(context, Box::new(e))));
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(ma, "construction") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(eloc, NE::UnresolvedError));
+            };
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                eloc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+            check_constructor_form(context, eloc, ConstructorForm::Braces, "instantiation", &ty);
+            match ty {
+                ResolvedConstructor::Struct(_, _stype) => NE::Pack(m, n, tys_opt, fields),
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NE::PackVariant(m, n, variant, tys_opt, fields)
                 }
             }
         }
@@ -1642,52 +2396,48 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             Some(ndot) => NE::ExpDotted(case, ndot),
         },
 
-        EE::Cast(e, t) => NE::Cast(exp(context, e), type_(context, t)),
-        EE::Annotate(e, t) => NE::Annotate(exp(context, e), type_(context, t)),
+        EE::Cast(e, t) => NE::Cast(
+            exp(context, e),
+            type_(context, TypeAnnotation::Expression, t),
+        ),
+        EE::Annotate(e, t) => NE::Annotate(
+            exp(context, e),
+            type_(context, TypeAnnotation::Expression, t),
+        ),
 
-        EE::Call(ma, is_macro, tys_opt, rhs) if context.resolves_to_struct(&ma) => {
+        EE::Call(ma, is_macro, etys_opt, rhs) if context.resolves_to_datatype(&ma) => {
             context
                 .env
                 .check_feature(context.current_package, FeatureGate::PositionalFields, eloc);
-            if let Some(mloc) = is_macro {
-                let msg = "Unexpected macro invocation. Structs cannot be invoked as macros";
-                context
-                    .env
-                    .add_diag(diag!(NameResolution::PositionalCallMismatch, (mloc, msg)));
-            }
+            report_invalid_macro(context, is_macro, "Datatypes");
             let nes = call_args(context, rhs);
-            match context.resolve_struct_name(eloc, "construction", ma, tys_opt) {
-                None => {
-                    assert!(context.env.has_errors());
-                    NE::UnresolvedError
-                }
-                Some((m, sn, tys_opt, is_positional)) => {
-                    if !is_positional {
-                        let msg = "Invalid struct instantiation. Named struct declarations \
-                                   require named instantiations.";
-                        context
-                            .env
-                            .add_diag(diag!(NameResolution::PositionalCallMismatch, (eloc, msg)));
-                    }
-                    NE::Pack(
-                        m,
-                        sn,
-                        tys_opt,
-                        UniqueMap::maybe_from_iter(nes.value.into_iter().enumerate().map(
-                            |(idx, e)| {
-                                let field = Field::add_loc(e.loc, format!("{idx}").into());
-                                (field, (idx, e))
-                            },
-                        ))
-                        .unwrap(),
-                    )
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(ma, "construction") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(eloc, NE::UnresolvedError));
+            };
+            let tys_opt = etys_opt.map(|etys| {
+                let tys = types(context, TypeAnnotation::Expression, etys);
+                let name_f = || format!("{}::{}", &m, &n);
+                check_type_argument_arity(context, eloc, name_f, tys, ty.type_arity())
+            });
+            check_constructor_form(context, eloc, ConstructorForm::Parens, "instantiation", &ty);
+            let fields =
+                UniqueMap::maybe_from_iter(nes.value.into_iter().enumerate().map(|(idx, e)| {
+                    let field = Field::add_loc(e.loc, format!("{idx}").into());
+                    (field, (idx, e))
+                }))
+                .unwrap();
+            match ty {
+                ResolvedConstructor::Struct(_, _stype) => NE::Pack(m, n, tys_opt, fields),
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NE::PackVariant(m, n, variant, tys_opt, fields)
                 }
             }
         }
         EE::Call(ma, is_macro, tys_opt, rhs) => {
             use N::BuiltinFunction_ as BF;
-            let ty_args = tys_opt.map(|tys| types(context, tys));
-            let nes = call_args(context, rhs);
+            let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
+            let mut nes = call_args(context, rhs);
             match resolve_function(context, ResolveFunctionCase::Call, eloc, ma, ty_args) {
                 ResolvedFunction::Builtin(sp!(bloc, BF::Assert(_))) => {
                     if is_macro.is_none() {
@@ -1705,6 +2455,21 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                             Uncategorized::DeprecatedWillBeRemoved,
                             (bloc, dep_msg),
                             (bloc, help_msg),
+                        ));
+                    }
+                    // If no abort code is given for the assert, we add in the abort code as the
+                    // bitset-line-number if `CleverAssertions` is set.
+                    if nes.value.len() == 1 && is_macro.is_some() {
+                        context.env.check_feature(
+                            context.current_package,
+                            FeatureGate::CleverAssertions,
+                            bloc,
+                        );
+                        nes.value.push(sp(
+                            bloc,
+                            NE::ErrorConstant {
+                                line_number_loc: bloc,
+                            },
                         ));
                     }
                     NE::Builtin(sp(bloc, BF::Assert(is_macro)), nes)
@@ -1761,7 +2526,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
                 NE::UnresolvedError
             }
             Some(d) => {
-                let ty_args = tys_opt.map(|tys| types(context, tys));
+                let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
                 let nes = call_args(context, rhs);
                 if is_macro.is_some() {
                     context.env.check_feature(
@@ -1774,7 +2539,7 @@ fn exp(context: &mut Context, e: Box<E::Exp>) -> Box<N::Exp> {
             }
         },
         EE::Vector(vec_loc, tys_opt, rhs) => {
-            let ty_args = tys_opt.map(|tys| types(context, tys));
+            let ty_args = tys_opt.map(|tys| types(context, TypeAnnotation::Expression, tys));
             let nes = call_args(context, rhs);
             let ty_opt = check_builtin_ty_args_impl(
                 context,
@@ -1848,6 +2613,9 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
             }
         }
         E::ExpDotted_::Dot(d, f) => N::ExpDotted_::Dot(Box::new(dotted(context, *d)?), Field(f)),
+        E::ExpDotted_::DotUnresolved(loc, d) => {
+            N::ExpDotted_::DotAutocomplete(loc, Box::new(dotted(context, *d)?))
+        }
         E::ExpDotted_::Index(inner, args) => {
             let args = call_args(context, args);
             let inner = Box::new(dotted(context, *inner)?);
@@ -1856,6 +2624,682 @@ fn dotted(context: &mut Context, edot: E::ExpDotted) -> Option<N::ExpDotted> {
     };
     Some(sp(loc, nedot_))
 }
+
+enum ConstructorForm {
+    None,
+    Parens,
+    Braces,
+}
+
+fn check_constructor_form(
+    context: &mut Context,
+    loc: Loc,
+    form: ConstructorForm,
+    position: &str,
+    ty: &ResolvedConstructor,
+) {
+    use ConstructorForm as CF;
+    use ResolvedConstructor as RC;
+    const NAMED_UPCASE: &str = "Named";
+    const NAMED: &str = "named";
+    const EMPTY_UPCASE: &str = "Empty";
+    const EMPTY: &str = "empty";
+    const POSNL_UPCASE: &str = "Positional";
+    const POSNL: &str = "positional";
+
+    fn defn_loc_error(name: &str) -> String {
+        format!("'{name}' is declared here")
+    }
+
+    macro_rules! invalid_inst_msg {
+        ($ty:expr, $upcase:ident, $kind:ident) => {{
+            let ty = $ty;
+            let upcase = $upcase;
+            let kind = $kind;
+            format!(
+                "Invalid {ty} {position}. \
+                {upcase} {ty} declarations require {kind} {position}s"
+            )
+        }};
+    }
+    macro_rules! posnl_note {
+        () => {
+            format!("{POSNL_UPCASE} {position}s take arguments using '()'")
+        };
+    }
+    macro_rules! named_note {
+        () => {
+            format!("{NAMED_UPCASE} {position}s take arguments using '{{ }}'")
+        };
+    }
+
+    let name = ty.name();
+    match ty {
+        RC::Struct(_, stype) => match form {
+            CF::None => {
+                let (form_upcase, form) = if stype.field_info.is_positional() {
+                    (POSNL_UPCASE, POSNL)
+                } else {
+                    (NAMED_UPCASE, NAMED)
+                };
+                let msg = invalid_inst_msg!("struct", form_upcase, form);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, msg),
+                    (stype.decl_loc, defn_loc_error(&name)),
+                );
+                if stype.field_info.is_positional() {
+                    diag.add_note(posnl_note!());
+                } else {
+                    diag.add_note(named_note!());
+                }
+                context.env.add_diag(diag);
+            }
+            CF::Parens if stype.field_info.is_positional() => (),
+            CF::Parens => {
+                let msg = invalid_inst_msg!("struct", NAMED_UPCASE, NAMED);
+                let diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (stype.decl_loc, defn_loc_error(&name)),
+                );
+                context.env.add_diag(diag);
+            }
+            CF::Braces if stype.field_info.is_positional() => {
+                let msg = invalid_inst_msg!("struct", POSNL_UPCASE, POSNL);
+                let diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (stype.decl_loc, defn_loc_error(&name)),
+                );
+                context.env.add_diag(diag);
+            }
+            CF::Braces => (),
+        },
+        RC::Variant(_, _, vloc, vfields) => match form {
+            CF::None if vfields.is_empty() => (),
+            CF::None => {
+                let (form_upcase, form) = if vfields.is_positional() {
+                    (POSNL_UPCASE, POSNL)
+                } else {
+                    (NAMED_UPCASE, NAMED)
+                };
+                let msg = invalid_inst_msg!("variant", form_upcase, form);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                if vfields.is_positional() {
+                    diag.add_note(posnl_note!());
+                } else {
+                    diag.add_note(named_note!());
+                }
+                context.env.add_diag(diag);
+            }
+            CF::Parens if vfields.is_empty() => {
+                let msg = invalid_inst_msg!("variant", EMPTY_UPCASE, EMPTY);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(format!("Remove '()' arguments from this {position}"));
+                context.env.add_diag(diag);
+            }
+            CF::Parens if vfields.is_positional() => (),
+            CF::Parens => {
+                let msg = invalid_inst_msg!("variant", NAMED_UPCASE, NAMED);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(named_note!());
+                context.env.add_diag(diag);
+            }
+            CF::Braces if vfields.is_empty() => {
+                let msg = invalid_inst_msg!("variant", EMPTY_UPCASE, EMPTY);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(format!("Remove '{{ }}' arguments from this {position}"));
+                context.env.add_diag(diag);
+            }
+            CF::Braces if vfields.is_positional() => {
+                let msg = invalid_inst_msg!("variant", POSNL_UPCASE, POSNL);
+                let mut diag = diag!(
+                    NameResolution::PositionalCallMismatch,
+                    (loc, &msg),
+                    (*vloc, defn_loc_error(&name)),
+                );
+                diag.add_note(posnl_note!());
+                context.env.add_diag(diag);
+            }
+            CF::Braces => (),
+        },
+    }
+}
+
+fn report_invalid_macro(context: &mut Context, is_macro: Option<Loc>, kind: &str) {
+    if let Some(mloc) = is_macro {
+        let msg = format!(
+            "Unexpected macro invocation. {} cannot be invoked as macros",
+            kind
+        );
+        context
+            .env
+            .add_diag(diag!(NameResolution::PositionalCallMismatch, (mloc, msg)));
+    }
+}
+
+//************************************************
+// Match Arms and Patterns
+//************************************************
+
+fn match_arm(context: &mut Context, sp!(aloc, arm): E::MatchArm) -> N::MatchArm {
+    let E::MatchArm_ {
+        pattern,
+        guard,
+        rhs,
+    } = arm;
+
+    let pat_binders = unique_pattern_binders(context, &pattern);
+
+    context.new_local_scope();
+    // NB: we just checked the binders for duplicates and listed them all, so now we just need to
+    // set up the map and recur down everything.
+    let binders: Vec<(Mutability, N::Var)> = pat_binders
+        .clone()
+        .into_iter()
+        .map(|(mut_, binder)| {
+            (
+                mut_,
+                context.declare_local(/* is_parameter */ false, binder.0),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    // Guards are a little tricky: we need them to have similar binders, but they must be different
+    // because they may be typed differently than the actual binders (as they are always immutable
+    // references). So we push a new scope with new binders paired with the pattern ones, process the
+    // guard, and then update the usage of the old binders to account for guard usage.
+    context.new_local_scope();
+    let guard_binder_pairs: Vec<(N::Var, N::Var)> = binders
+        .clone()
+        .into_iter()
+        .map(|(_, pat_var)| {
+            let guard_var = context.declare_local(
+                /* is_parameter */ false,
+                sp(pat_var.loc, pat_var.value.name),
+            );
+            (pat_var, guard_var)
+        })
+        .collect::<Vec<_>>();
+    // Next we process the guard to mark guard usage for the guard variables.
+    let guard = guard.map(|guard| exp(context, guard));
+
+    // Next we compute the used guard variables, and add the pattern/guard pairs to the guard
+    // binders. We assume we don't need to mark unused guard bindings as used (to avoid incorrect
+    // unused errors) because we will never check their usage in the unused-checking pass.
+    //
+    // We also need to mark usage for the pattern variables we do use, but we postpone that until
+    // after we handle the right-hand side.
+    let mut guard_binders = UniqueMap::new();
+    for (pat_var, guard_var) in guard_binder_pairs {
+        if context.used_locals.contains(&guard_var.value) {
+            guard_binders
+                .add(pat_var, guard_var)
+                .expect("ICE guard pattern issue");
+        }
+    }
+    context.close_local_scope();
+
+    // Then we visit the right-hand side to mark binder usage there, then compute all the pattern
+    // binders used in the right-hand side. Since we didn't mark pattern variables as used by the
+    // guard yet, this allows us to record exactly those pattern variables used in the right-hand
+    // side so that we can avoid binding them later.
+    let rhs = exp(context, rhs);
+    let rhs_binders: BTreeSet<N::Var> = binders
+        .iter()
+        .filter(|(_, binder)| context.used_locals.contains(&binder.value))
+        .map(|(_, binder)| *binder)
+        .collect();
+
+    // Now we mark usage for the guard-used pattern variables.
+    for (pat_var, _) in guard_binders.key_cloned_iter() {
+        context.used_locals.insert(pat_var.value);
+    }
+
+    // Finally we handle the pattern, replacing unused variables with wildcards
+    let pattern = *match_pattern(context, Box::new(pattern));
+
+    context.close_local_scope();
+
+    let arm = N::MatchArm_ {
+        pattern,
+        binders,
+        guard,
+        guard_binders,
+        rhs_binders,
+        rhs,
+    };
+    sp(aloc, arm)
+}
+
+fn unique_pattern_binders(
+    context: &mut Context,
+    pattern: &E::MatchPattern,
+) -> Vec<(Mutability, P::Var)> {
+    use E::MatchPattern_ as EP;
+
+    fn report_duplicate(context: &mut Context, var: P::Var, locs: &Vec<(Mutability, Loc)>) {
+        assert!(locs.len() > 1, "ICE pattern duplicate detection error");
+        let (_, first_loc) = locs.first().unwrap();
+        let mut diag = diag!(
+            NameResolution::InvalidPattern,
+            (*first_loc, format!("binder '{}' is defined here", var))
+        );
+        for (_, loc) in locs.iter().skip(1) {
+            diag.add_secondary_label((*loc, "and repeated here"));
+        }
+        diag.add_note("A pattern variable must be unique, and must appear once in each or-pattern alternative.");
+        context.env.add_diag(diag);
+    }
+
+    enum OrPosn {
+        Left,
+        Right,
+    }
+
+    fn report_mismatched_or(context: &mut Context, posn: OrPosn, var: &P::Var, other_loc: Loc) {
+        let (primary_side, secondary_side) = match posn {
+            OrPosn::Left => ("left", "right"),
+            OrPosn::Right => ("right", "left"),
+        };
+        let primary_msg = format!("{} or-pattern binds variable {}", primary_side, var);
+        let secondary_msg = format!("{} or-pattern does not", secondary_side);
+        let mut diag = diag!(NameResolution::InvalidPattern, (var.loc(), primary_msg));
+        diag.add_secondary_label((other_loc, secondary_msg));
+        diag.add_note("Both sides of an or-pattern must bind the same variables.");
+        context.env.add_diag(diag);
+    }
+
+    fn report_mismatched_or_mutability(
+        context: &mut Context,
+        mutable_loc: Loc,
+        immutable_loc: Loc,
+        var: &P::Var,
+        posn: OrPosn,
+    ) {
+        let (primary_side, secondary_side) = match posn {
+            OrPosn::Left => ("left", "right"),
+            OrPosn::Right => ("right", "left"),
+        };
+        let primary_msg = format!("{} or-pattern binds variable {} mutably", primary_side, var);
+        let secondary_msg = format!("{} or-pattern binds it immutably", secondary_side);
+        let mut diag = diag!(NameResolution::InvalidPattern, (mutable_loc, primary_msg));
+        diag.add_secondary_label((immutable_loc, secondary_msg));
+        diag.add_note(
+            "Both sides of an or-pattern must bind the same variables with the same mutability.",
+        );
+        context.env.add_diag(diag);
+    }
+
+    type Bindings = BTreeMap<P::Var, Vec<(Mutability, Loc)>>;
+
+    fn report_duplicates_and_combine(
+        context: &mut Context,
+        all_bindings: Vec<Bindings>,
+    ) -> Bindings {
+        match all_bindings.len() {
+            0 => BTreeMap::new(),
+            1 => all_bindings[0].clone(),
+            _ => {
+                let mut out_bindings = all_bindings[0].clone();
+                let mut duplicates = BTreeSet::new();
+                for bindings in all_bindings.into_iter().skip(1) {
+                    for (key, mut locs) in bindings {
+                        if out_bindings.contains_key(&key) {
+                            duplicates.insert(key);
+                        }
+                        out_bindings.entry(key).or_default().append(&mut locs);
+                    }
+                }
+                for key in duplicates {
+                    report_duplicate(context, key, out_bindings.get(&key).unwrap());
+                }
+                out_bindings
+            }
+        }
+    }
+
+    fn check_duplicates(context: &mut Context, sp!(ploc, pattern): &E::MatchPattern) -> Bindings {
+        match pattern {
+            EP::Binder(_, var) if var.is_underscore() => BTreeMap::new(),
+            EP::Binder(mut_, var) => [(*var, vec![(*mut_, *ploc)])].into_iter().collect(),
+            EP::At(var, inner) => {
+                let mut bindings: Bindings = BTreeMap::new();
+                if !var.is_underscore() {
+                    bindings
+                        .entry(*var)
+                        .or_default()
+                        .push((Mutability::Imm, *ploc));
+                }
+                let new_bindings = check_duplicates(context, inner);
+                bindings = report_duplicates_and_combine(context, vec![bindings, new_bindings]);
+                bindings
+            }
+            EP::PositionalConstructor(_, _, sp!(_, patterns)) => {
+                let bindings = patterns
+                    .iter()
+                    .filter_map(|pat| match pat {
+                        E::Ellipsis::Binder(p) => Some(check_duplicates(context, p)),
+                        E::Ellipsis::Ellipsis(_) => None,
+                    })
+                    .collect();
+                report_duplicates_and_combine(context, bindings)
+            }
+            EP::NamedConstructor(_, _, fields, _) => {
+                let mut bindings = vec![];
+                for (_, _, (_, pat)) in fields {
+                    bindings.push(check_duplicates(context, pat));
+                }
+                report_duplicates_and_combine(context, bindings)
+            }
+            EP::Or(left, right) => {
+                let mut left_bindings = check_duplicates(context, left);
+                let mut right_bindings = check_duplicates(context, right);
+                for (key, mut_and_locs) in left_bindings.iter_mut() {
+                    if !right_bindings.contains_key(key) {
+                        report_mismatched_or(context, OrPosn::Left, key, right.loc);
+                    } else {
+                        let lhs_mutability = mut_and_locs.first().map(|(m, _)| *m).unwrap();
+                        let rhs_mutability = right_bindings
+                            .get(key)
+                            .map(|mut_and_locs| mut_and_locs.first().map(|(m, _)| *m).unwrap())
+                            .unwrap();
+                        match (lhs_mutability, rhs_mutability) {
+                            // LHS variable mutable, RHS variable immutable
+                            (Mutability::Mut(lhs_loc), Mutability::Imm) => {
+                                report_mismatched_or_mutability(
+                                    context,
+                                    lhs_loc,
+                                    right.loc,
+                                    key,
+                                    OrPosn::Left,
+                                );
+                                // Mutabilities are mismatched so update them to all be mutable to
+                                // avoid further errors further down the line.
+                                if let Some(mut_and_locs) = right_bindings.get_mut(key) {
+                                    for m in mut_and_locs
+                                        .iter_mut()
+                                        .filter(|(m, _)| matches!(m, Mutability::Imm))
+                                    {
+                                        m.0 = Mutability::Mut(lhs_loc);
+                                    }
+                                }
+                            }
+                            (Mutability::Imm, Mutability::Mut(rhs_loc)) => {
+                                // RHS variable mutable, LHS variable immutable
+                                report_mismatched_or_mutability(
+                                    context,
+                                    rhs_loc,
+                                    key.loc(),
+                                    key,
+                                    OrPosn::Right,
+                                );
+                                // Mutabilities are mismatched so update them to all be mutable to
+                                // avoid further errors further down the line.
+                                for m in mut_and_locs
+                                    .iter_mut()
+                                    .filter(|(m, _)| matches!(m, Mutability::Imm))
+                                {
+                                    m.0 = Mutability::Mut(rhs_loc);
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+
+                let right_keys = right_bindings.keys().copied().collect::<Vec<_>>();
+                for key in right_keys {
+                    let lhs_entry = left_bindings.get_mut(&key);
+                    let rhs_entry = right_bindings.remove(&key);
+                    match (lhs_entry, rhs_entry) {
+                        (Some(left_locs), Some(mut right_locs)) => {
+                            left_locs.append(&mut right_locs);
+                        }
+                        (None, Some(right_locs)) => {
+                            report_mismatched_or(context, OrPosn::Right, &key, left.loc);
+                            left_bindings.insert(key, right_locs);
+                        }
+                        (_, None) => panic!("ICE pattern key missing"),
+                    }
+                }
+                left_bindings
+            }
+            EP::ModuleAccessName(_, _) | EP::Literal(_) | EP::ErrorPat => BTreeMap::new(),
+        }
+    }
+
+    check_duplicates(context, pattern)
+        .into_iter()
+        .map(|(var, vs)| (vs.first().map(|x| x.0).unwrap(), var))
+        .collect::<Vec<_>>()
+}
+
+fn expand_positional_ellipsis<T>(
+    missing: isize,
+    args: Vec<E::Ellipsis<Spanned<T>>>,
+    replacement: impl Fn(Loc) -> Spanned<T>,
+) -> Vec<(Field, (usize, Spanned<T>))> {
+    args.into_iter()
+        .flat_map(|p| match p {
+            E::Ellipsis::Binder(p) => vec![p],
+            E::Ellipsis::Ellipsis(eloc) => {
+                (0..=missing).map(|_| replacement(eloc)).collect::<Vec<_>>()
+            }
+        })
+        .enumerate()
+        .map(|(idx, p)| {
+            let field = Field::add_loc(p.loc, format!("{idx}").into());
+            (field, (idx, p))
+        })
+        .collect()
+}
+
+fn expand_named_ellipsis<T>(
+    field_info: &FieldInfo,
+    head_loc: Loc,
+    eloc: Loc,
+    args: &mut UniqueMap<Field, (usize, Spanned<T>)>,
+    replacement: impl Fn(Loc) -> Spanned<T>,
+) {
+    let mut fields = match field_info {
+        FieldInfo::Empty => BTreeSet::new(),
+        FieldInfo::Named(fields) => fields.clone(),
+        FieldInfo::Positional(num_fields) => (0..*num_fields)
+            .map(|i| Field::add_loc(head_loc, format!("{i}").into()))
+            .collect(),
+    };
+
+    for (k, _) in args.key_cloned_iter() {
+        fields.remove(&k);
+    }
+
+    let start_idx = args.len();
+    for (i, f) in fields.into_iter().enumerate() {
+        args.add(
+            Field(sp(eloc, f.value())),
+            (start_idx + i, replacement(eloc)),
+        )
+        .unwrap();
+    }
+}
+
+fn match_pattern(context: &mut Context, in_pat: Box<E::MatchPattern>) -> Box<N::MatchPattern> {
+    use E::MatchPattern_ as EP;
+    use N::MatchPattern_ as NP;
+
+    let sp!(ploc, pat_) = *in_pat;
+
+    let pat_: N::MatchPattern_ = match pat_ {
+        EP::PositionalConstructor(name, etys_opt, args) => {
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(ploc, NP::ErrorPat));
+            };
+
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                ploc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+
+            check_constructor_form(context, ploc, ConstructorForm::Parens, "pattern", &ty);
+
+            let field_info = ty.field_info();
+            let n_pats = args
+                .value
+                .into_iter()
+                .map(|ellipsis| match ellipsis {
+                    Ellipsis::Binder(pat) => {
+                        Ellipsis::Binder(*match_pattern(context, Box::new(pat)))
+                    }
+                    Ellipsis::Ellipsis(loc) => Ellipsis::Ellipsis(loc),
+                })
+                .collect::<Vec<_>>();
+            // NB: We may have more args than fields! Since we allow `..` to be zero-or-more
+            // wildcards.
+            let missing = (field_info.field_count() as isize) - n_pats.len() as isize;
+            let args = expand_positional_ellipsis(missing, n_pats, |eloc| sp(eloc, NP::Wildcard));
+            let result_args =
+                UniqueMap::maybe_from_iter(args.into_iter()).expect("ICE naming failed");
+
+            match ty {
+                ResolvedConstructor::Struct(_name, _stype) => {
+                    NP::Struct(m, n, tys_opt, result_args)
+                }
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NP::Variant(m, n, variant, tys_opt, result_args)
+                }
+            }
+        }
+        EP::NamedConstructor(name, etys_opt, args, ellipsis) => {
+            let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
+                assert!(context.env.has_errors());
+                return Box::new(sp(ploc, NP::ErrorPat));
+            };
+            let tys_opt = opt_types_with_arity_check(
+                context,
+                TypeAnnotation::Expression,
+                ploc,
+                || format!("{}::{}", &m, &n),
+                etys_opt,
+                ty.type_arity(),
+            );
+
+            check_constructor_form(context, ploc, ConstructorForm::Braces, "pattern", &ty);
+
+            let field_info = ty.field_info();
+            let mut args = args.map(|_, (idx, p)| (idx, *match_pattern(context, Box::new(p))));
+            // If we have an ellipsis fill in any missing patterns
+            if let Some(ellipsis_loc) = ellipsis {
+                expand_named_ellipsis(field_info, ploc, ellipsis_loc, &mut args, |eloc| {
+                    sp(eloc, NP::Wildcard)
+                });
+            }
+
+            match ty {
+                ResolvedConstructor::Struct(_name, _stype) => NP::Struct(m, n, tys_opt, args),
+                ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                    NP::Variant(m, n, variant, tys_opt, args)
+                }
+            }
+        }
+        EP::ModuleAccessName(name, etys_opt) => {
+            let resolves_to_constant = context.resolves_to_constant(&name);
+            let resolves_to_datatype = context.resolves_to_datatype(&name);
+            if resolves_to_constant && resolves_to_datatype {
+                // If this happened, we should have already thrown an error about it in
+                // expansion alias map construction.
+                assert!(context.env.has_errors());
+                return Box::new(sp(ploc, NP::ErrorPat));
+            } else if resolves_to_constant {
+                let Some((m, n)) = context.resolve_constant(name) else {
+                    unreachable!()
+                };
+                if etys_opt.is_some() {
+                    context.env.add_diag(diag!(
+                        NameResolution::TooManyTypeArguments,
+                        (ploc, "Constants in patterns do not take type arguments")
+                    ));
+                }
+                NP::Constant(m, n)
+            } else {
+                let Some((m, n, ty)) = context.resolve_datatype_constructor(name, "pattern") else {
+                    assert!(context.env.has_errors());
+                    return Box::new(sp(ploc, NP::ErrorPat));
+                };
+                let tys_opt = opt_types_with_arity_check(
+                    context,
+                    TypeAnnotation::Expression,
+                    ploc,
+                    || format!("{}::{}", &m, &n),
+                    etys_opt,
+                    ty.type_arity(),
+                );
+
+                match ty {
+                    ResolvedConstructor::Struct(_name, _stype) => {
+                        // No need to chck is_empty / is_positional because typing will report the errors.
+                        NP::Struct(m, n, tys_opt, UniqueMap::new())
+                    }
+                    ResolvedConstructor::Variant(_etype, variant, _vloc, _vfields) => {
+                        // No need to chck is_empty / is_positional because typing will report the errors.
+                        NP::Variant(m, n, variant, tys_opt, UniqueMap::new())
+                    }
+                }
+            }
+        }
+        EP::Binder(_, binder) if binder.is_underscore() => NP::Wildcard,
+        EP::Binder(mut_, binder) => {
+            if let Some(binder) = context.resolve_pattern_binder(binder.loc(), binder.0) {
+                NP::Binder(mut_, binder, false)
+            } else {
+                assert!(context.env.has_errors());
+                NP::ErrorPat
+            }
+        }
+        EP::ErrorPat => NP::ErrorPat,
+        EP::Literal(v) => NP::Literal(v),
+        EP::Or(lhs, rhs) => NP::Or(match_pattern(context, lhs), match_pattern(context, rhs)),
+        EP::At(binder, body) => {
+            if let Some(binder) = context.resolve_pattern_binder(binder.loc(), binder.0) {
+                NP::At(
+                    binder,
+                    /* unused_binding */ false,
+                    match_pattern(context, body),
+                )
+            } else {
+                assert!(context.env.has_errors());
+                match_pattern(context, body).value
+            }
+        }
+    };
+    Box::new(sp(ploc, pat_))
+}
+
+//************************************************
+// LValues
+//************************************************
 
 #[derive(Clone, Copy)]
 enum LValueCase {
@@ -1940,9 +3384,9 @@ fn lvalue(
                 C::Bind => "deconstructing binding",
                 C::Assign => "deconstructing assignment",
             };
-            let (m, sn, tys_opt, is_positional) =
+            let (m, sn, tys_opt, field_info) =
                 context.resolve_struct_name(loc, msg, tn, etys_opt)?;
-            if is_positional && !matches!(efields, E::FieldBindings::Positional(_)) {
+            if field_info.is_positional() && !matches!(efields, E::FieldBindings::Positional(_)) {
                 let msg = "Invalid deconstruction. Positional struct field declarations require \
                            positional deconstruction";
                 context
@@ -1950,21 +3394,38 @@ fn lvalue(
                     .add_diag(diag!(NameResolution::PositionalCallMismatch, (loc, msg)));
             }
 
-            if !is_positional && matches!(efields, E::FieldBindings::Positional(_)) {
+            if !field_info.is_positional() && matches!(efields, E::FieldBindings::Positional(_)) {
                 let msg = "Invalid deconstruction. Named struct field declarations require \
                            named deconstruction";
                 context
                     .env
                     .add_diag(diag!(NameResolution::PositionalCallMismatch, (loc, msg)));
             }
+            let make_ignore = |loc| {
+                let var = sp(loc, Symbol::from("_"));
+                let name = E::ModuleAccess::new(loc, E::ModuleAccess_::Name(var));
+                sp(loc, E::LValue_::Var(None, name, None))
+            };
             let efields = match efields {
-                E::FieldBindings::Named(efields) => efields,
+                E::FieldBindings::Named(mut efields, ellipsis) => {
+                    if let Some(ellipsis_loc) = ellipsis {
+                        expand_named_ellipsis(
+                            &field_info,
+                            loc,
+                            ellipsis_loc,
+                            &mut efields,
+                            make_ignore,
+                        );
+                    }
+
+                    efields
+                }
                 E::FieldBindings::Positional(lvals) => {
-                    let lvals = lvals.into_iter().enumerate().map(|(idx, l)| {
-                        let field_name = Field::add_loc(l.loc, format!("{idx}").into());
-                        (field_name, (idx, l))
-                    });
-                    UniqueMap::maybe_from_iter(lvals).unwrap()
+                    let fields = field_info.field_count();
+                    let missing = (fields as isize) - lvals.len() as isize;
+
+                    let expanded_lvals = expand_positional_ellipsis(missing, lvals, make_ignore);
+                    UniqueMap::maybe_from_iter(expanded_lvals.into_iter()).unwrap()
                 }
             };
             let nfields =
@@ -2014,7 +3475,7 @@ fn lambda_bind_list(
         .into_iter()
         .map(|(pbs, ty_opt)| {
             let bs = bind_list(context, pbs)?;
-            let ety = ty_opt.map(|t| type_(context, t));
+            let ety = ty_opt.map(|t| type_(context, TypeAnnotation::Expression, t));
             Some((bs, ety))
         })
         .collect::<Option<_>>()?;
@@ -2096,6 +3557,13 @@ fn resolve_function(
                     ResolvedFunction::Var(v)
                 }
             }
+        }
+        (EA::Variant(_, _), _) => {
+            context.env.add_diag(ice!((
+                mloc,
+                "Tried to resovle variant '{}' as a function in current scope"
+            ),));
+            ResolvedFunction::Unbound
         }
     }
 }
@@ -2282,6 +3750,7 @@ fn remove_unused_bindings_exp(
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant { .. }
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
@@ -2296,6 +3765,16 @@ fn remove_unused_bindings_exp(
             remove_unused_bindings_exp(context, used, econd);
             remove_unused_bindings_exp(context, used, et);
             remove_unused_bindings_exp(context, used, ef);
+        }
+        N::Exp_::Match(esubject, arms) => {
+            remove_unused_bindings_exp(context, used, esubject);
+            for arm in &mut arms.value {
+                remove_unused_bindings_pattern(context, used, &mut arm.value.pattern);
+                if let Some(guard) = arm.value.guard.as_mut() {
+                    remove_unused_bindings_exp(context, used, guard)
+                }
+                remove_unused_bindings_exp(context, used, &mut arm.value.rhs);
+            }
         }
         N::Exp_::While(_, econd, ebody) => {
             remove_unused_bindings_exp(context, used, econd);
@@ -2331,6 +3810,12 @@ fn remove_unused_bindings_exp(
                 remove_unused_bindings_exp(context, used, e)
             }
         }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                remove_unused_bindings_exp(context, used, e)
+            }
+        }
+
         N::Exp_::Builtin(_, sp!(_, es))
         | N::Exp_::Vector(_, _, sp!(_, es))
         | N::Exp_::ModuleCall(_, _, _, _, sp!(_, es))
@@ -2358,12 +3843,54 @@ fn remove_unused_bindings_exp_dotted(
 ) {
     match ed_ {
         N::ExpDotted_::Exp(e) => remove_unused_bindings_exp(context, used, e),
-        N::ExpDotted_::Dot(ed, _) => remove_unused_bindings_exp_dotted(context, used, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+            remove_unused_bindings_exp_dotted(context, used, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             for e in es {
                 remove_unused_bindings_exp(context, used, e);
             }
             remove_unused_bindings_exp_dotted(context, used, ed)
+        }
+    }
+}
+
+fn remove_unused_bindings_pattern(
+    context: &mut Context,
+    used: &BTreeSet<N::Var_>,
+    sp!(_, pat_): &mut N::MatchPattern,
+) {
+    use N::MatchPattern_ as NP;
+    match pat_ {
+        NP::Constant(_, _) | NP::Literal(_) | NP::Wildcard | NP::ErrorPat => (),
+        NP::Variant(_, _, _, _, fields) => {
+            for (_, _, (_, pat)) in fields {
+                remove_unused_bindings_pattern(context, used, pat)
+            }
+        }
+        NP::Struct(_, _, _, fields) => {
+            for (_, _, (_, pat)) in fields {
+                remove_unused_bindings_pattern(context, used, pat)
+            }
+        }
+        NP::Binder(_, var, unused_binding) => {
+            if !used.contains(&var.value) {
+                report_unused_local(context, var);
+                *unused_binding = true;
+            }
+        }
+        NP::Or(lhs, rhs) => {
+            remove_unused_bindings_pattern(context, used, lhs);
+            remove_unused_bindings_pattern(context, used, rhs);
+        }
+        NP::At(var, unused_binding, inner) => {
+            if !used.contains(&var.value) {
+                report_unused_local(context, var);
+                *unused_binding = true;
+                remove_unused_bindings_pattern(context, used, inner);
+            } else {
+                remove_unused_bindings_pattern(context, used, &mut *inner);
+            }
         }
     }
 }

@@ -24,6 +24,12 @@ pub enum AliasMapBuilder {
 
 pub type MemberName = (ModuleIdent, Name, ModuleMemberKind);
 
+/// Represents an unnecessary and duplicate alias, where the alias was already in scope
+pub struct UnnecessaryAlias {
+    pub entry: AliasEntry,
+    pub prev: Loc,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AliasEntry {
     Address(Name, NumericalAddress),
@@ -32,7 +38,7 @@ pub enum AliasEntry {
     TypeParam(Name),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum LeadingAccessEntry {
     Address(NumericalAddress),
     Module(ModuleIdent),
@@ -40,7 +46,7 @@ pub enum LeadingAccessEntry {
     TypeParam,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::large_enum_variant)]
 pub enum MemberEntry {
     Member(ModuleIdent, Name),
@@ -78,6 +84,16 @@ pub struct UseFunsBuilder {
     pub implicit: UniqueMap<Name, E::ImplicitUseFunCandidate>,
 }
 
+impl AliasEntry {
+    pub fn loc(&self) -> Loc {
+        match self {
+            AliasEntry::Address(n, _)
+            | AliasEntry::Module(n, _)
+            | AliasEntry::Member(n, _, _)
+            | AliasEntry::TypeParam(n) => n.loc,
+        }
+    }
+}
 /// Remove a duplicate element in the map, returning its location as an error if it exists
 fn remove_dup<K: TName, V>(map: &mut UniqueMap<K, V>, alias: &K) -> Result<(), K::Loc> {
     let loc = map.get_loc(alias).copied();
@@ -131,9 +147,9 @@ impl AliasMapBuilder {
                 ModuleMemberKind::Constant | ModuleMemberKind::Function => {
                     remove_dup(module_members, alias)
                 }
-                // structs are in the leading access namespace in addition to the module members
-                // namespace
-                ModuleMemberKind::Struct => {
+                // structs and enums are in the leading access namespace in addition to the module
+                // members namespace
+                ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
                     let r1 = remove_dup(module_members, alias);
                     let r2 = remove_dup(leading_access, alias);
                     r1.and(r2)
@@ -191,9 +207,9 @@ impl AliasMapBuilder {
                     let entry = (MemberEntry::Member(ident, member), is_implicit);
                     module_members.add(alias, entry).unwrap();
                 }
-                // structs are in the leading access namespace in addition to the module members
-                // namespace
-                ModuleMemberKind::Struct => {
+                // structs and enums are in the leading access namespace in addition to the module
+                // members namespace
+                ModuleMemberKind::Struct | ModuleMemberKind::Enum => {
                     let member_entry = (MemberEntry::Member(ident, member), is_implicit);
                     module_members.add(alias, member_entry).unwrap();
                     let leading_access_entry =

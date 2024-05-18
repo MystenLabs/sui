@@ -1,11 +1,11 @@
-name: Simulator Tests with Mysticeti Enabled
+name: Simulator Tests with Mysticeti
 
 concurrency:
   group: ${{ github.workflow }}
 
 on:
   schedule:
-    - cron: '0 13 * * *' # UTC timing is every day at 5am PST
+    - cron: '0 15 * * *' # equivalent to 7am PST
   workflow_dispatch:
     inputs:
       sui_ref:
@@ -20,7 +20,7 @@ on:
         default: "30"
 
 env:
-  # Enable Mysticeti in tests.
+  # Test Mysticeti consensus before it becomes the default.
   CONSENSUS: "mysticeti"
 
   SUI_REF: "${{ github.event.inputs.sui_ref || 'main' }}"
@@ -28,7 +28,8 @@ env:
 
 jobs:
   simtest:
-    timeout-minutes: 240
+    # Allow running the job for up to 6 hours, maximum for GitHub Actions.
+    timeout-minutes: 360
     permissions:
       # The "id-token: write" permission is required or Machine ID will not be
       # able to authenticate with the cluster.

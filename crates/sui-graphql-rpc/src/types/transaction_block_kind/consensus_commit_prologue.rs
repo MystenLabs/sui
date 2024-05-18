@@ -34,7 +34,7 @@ pub(crate) struct ConsensusCommitPrologueTransaction {
 impl ConsensusCommitPrologueTransaction {
     /// Epoch of the commit prologue transaction.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx, Some(self.epoch), Some(self.checkpoint_viewed_at))
+        Epoch::query(ctx, Some(self.epoch), self.checkpoint_viewed_at)
             .await
             .extend()
     }

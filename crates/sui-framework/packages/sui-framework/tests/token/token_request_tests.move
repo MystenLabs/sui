@@ -5,7 +5,6 @@
 /// This module implements tests for the request formation and approval in the
 /// `TokenPolicy`.
 module sui::token_request_tests {
-    use std::string;
     use std::option::none;
     use sui::token;
     use sui::token_test_utils::{Self as test, TEST};
@@ -18,13 +17,13 @@ module sui::token_request_tests {
     fun test_request_confirm() {
         let ctx = &mut test::ctx(@0x0);
         let (mut policy, cap) = test::get_policy(ctx);
-        let action = string::utf8(b"test");
+        let action = b"test".to_string();
 
-        token::allow(&mut policy, &cap, action, ctx);
+        policy.allow(&cap, action, ctx);
 
         let request = token::new_request(action, 100, none(), none(), ctx);
 
-        token::confirm_request(&policy, request, ctx);
+        policy.confirm_request(request, ctx);
         test::return_policy(policy, cap)
     }
 
@@ -35,8 +34,8 @@ module sui::token_request_tests {
         let (policy, cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
 
-        let request = token::transfer(token, @0x2, ctx);
-        token::confirm_with_policy_cap(&cap, request, ctx);
+        let request = token.transfer(@0x2, ctx);
+        cap.confirm_with_policy_cap(request, ctx);
         test::return_policy(policy, cap);
     }
 
@@ -46,16 +45,16 @@ module sui::token_request_tests {
     fun test_request_confirm_excessive_approvals_pass() {
         let ctx = &mut test::ctx(@0x0);
         let (mut policy, cap) = test::get_policy(ctx);
-        let action = string::utf8(b"test");
+        let action = b"test".to_string();
 
-        token::add_rule_for_action<TEST, Rule1>(&mut policy, &cap, action, ctx);
+        policy.add_rule_for_action<TEST, Rule1>(&cap, action, ctx);
 
         let mut request = token::new_request(action, 100, none(), none(), ctx);
 
         token::add_approval(Rule1 {}, &mut request, ctx);
         token::add_approval(Rule2 {}, &mut request, ctx);
 
-        token::confirm_request(&policy, request, ctx);
+        policy.confirm_request(request, ctx);
         test::return_policy(policy, cap)
     }
 
@@ -64,11 +63,11 @@ module sui::token_request_tests {
     fun test_request_confirm_unknown_action_fail() {
         let ctx = &mut test::ctx(@0x0);
         let (policy, cap) = test::get_policy(ctx);
-        let action = string::utf8(b"test");
+        let action = b"test".to_string();
 
         let request = token::new_request(action, 100, none(), none(), ctx);
 
-        token::confirm_request(&policy, request, ctx);
+        policy.confirm_request(request, ctx);
         test::return_policy(policy, cap)
     }
 
@@ -77,14 +76,14 @@ module sui::token_request_tests {
     fun test_request_confirm_not_approved_fail() {
         let ctx = &mut test::ctx(@0x0);
         let (mut policy, cap) = test::get_policy(ctx);
-        let action = string::utf8(b"test");
+        let action = b"test".to_string();
 
-        token::add_rule_for_action<TEST, Rule1>(&mut policy, &cap, action, ctx);
+        policy.add_rule_for_action<TEST, Rule1>(&cap, action, ctx);
 
         let mut request = token::new_request(action, 100, none(), none(), ctx);
 
         token::add_approval(Rule2 {}, &mut request, ctx);
-        token::confirm_request(&policy, request, ctx);
+        policy.confirm_request(request, ctx);
 
         abort 1337
     }
@@ -95,9 +94,9 @@ module sui::token_request_tests {
         let ctx = &mut test::ctx(@0x0);
         let (_policy, cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
-        let request = token::spend(token, ctx);
+        let request = token.spend(ctx);
 
-        token::confirm_with_policy_cap(&cap, request, ctx);
+        cap.confirm_with_policy_cap(request, ctx);
 
         abort 1337
     }
@@ -108,10 +107,10 @@ module sui::token_request_tests {
         let ctx = &mut test::ctx(@0x0);
         let (mut policy, cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
-        let request = token::transfer(token, @0x2, ctx);
+        let request = token.transfer(@0x2, ctx);
 
-        token::allow(&mut policy, &cap, token::transfer_action(), ctx);
-        token::confirm_request_mut(&mut policy, request, ctx);
+        policy.allow(&cap, token::transfer_action(), ctx);
+        policy.confirm_request_mut(request, ctx);
 
         abort 1337
     }
@@ -122,9 +121,9 @@ module sui::token_request_tests {
         let ctx = &mut test::ctx(@0x0);
         let (mut policy, _cap) = test::get_policy(ctx);
         let token = test::mint(100, ctx);
-        let request = token::spend(token, ctx);
+        let request = token.spend(ctx);
 
-        token::confirm_request_mut(&mut policy, request, ctx);
+        policy.confirm_request_mut(request, ctx);
 
         abort 1337
     }

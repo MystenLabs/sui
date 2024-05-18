@@ -18,11 +18,11 @@ module sui::token_treasury_cap_tests {
         let mut treasury_cap = test::get_treasury_cap(ctx);
 
         let token = token::mint(&mut treasury_cap, 1000, ctx);
-        let request = token::spend(token, ctx);
+        let request = token.spend(ctx);
 
-        token::allow(&mut policy, &cap, token::spend_action(), ctx);
-        token::confirm_request_mut(&mut policy, request, ctx);
-        token::flush(&mut policy, &mut treasury_cap, ctx);
+        policy.allow(&cap, token::spend_action(), ctx);
+        policy.confirm_request_mut(request, ctx);
+        policy.flush(&mut treasury_cap, ctx);
 
         test::return_treasury_cap(treasury_cap);
         test::return_policy(policy, cap);
@@ -36,7 +36,7 @@ module sui::token_treasury_cap_tests {
         let mut treasury_cap = test::get_treasury_cap(ctx);
 
         let token = token::mint(&mut treasury_cap, 1000, ctx);
-        let request = token::spend(token, ctx);
+        let request = token.spend(ctx);
 
         token::confirm_with_treasury_cap(&mut treasury_cap, request, ctx);
         test::return_treasury_cap(treasury_cap);

@@ -1,0 +1,28 @@
+[package]
+name = "bytecode-verifier-prop-tests"
+version = "0.1.0"
+authors = ["Diem Association <opensource@diem.com>"]
+description = "Diem bytecode verifier tests"
+repository = "https://github.com/diem/diem"
+homepage = "https://diem.com"
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[dev-dependencies]
+petgraph.workspace = true
+proptest.workspace = true
+fail = { workspace = true, features = ["failpoints"] }
+hex.workspace = true
+
+invalid-mutations.workspace = true
+move-binary-format = { workspace = true, features = ["fuzzing"] }
+move-bytecode-verifier.workspace = true
+move-bytecode-verifier-meter.workspace = true
+move-core-types.workspace = true
+move-vm-config.workspace = true
+
+[features]
+fuzzing = ["move-binary-format/fuzzing"]
+
+[dependencies]

@@ -6,7 +6,7 @@ module sod::sod {
     use sui::tx_context::TxContext;
     use sui::transfer;
 
-    struct A has key, store {
+    public struct A has key, store {
         id: UID,
     }
 

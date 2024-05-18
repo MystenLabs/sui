@@ -3,14 +3,11 @@
 
 /// A flash loan that works for any Coin type
 module defi::flash_lender {
-    use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::{coin::{Self, Coin}, balance::Balance};
+
 
     /// A shared object offering flash loans to any buyer willing to pay `fee`.
-    struct FlashLender<phantom T> has key {
+    public struct FlashLender<phantom T> has key {
         id: UID,
         /// Coins available to be lent to prospective borrowers
         to_lend: Balance<T>,
@@ -27,7 +24,7 @@ module defi::flash_lender {
     /// it cannot be discarded. Thus, the only way to get rid of this
     /// struct is to call `repay` sometime during the transaction that created it,
     /// which is exactly what we want from a flash loan.
-    struct Receipt<phantom T> {
+    public struct Receipt<phantom T> {
         /// ID of the flash lender object the debt holder borrowed from
         flash_lender_id: ID,
         /// Total amount of funds the borrower must repay: amount borrowed + the fee
@@ -37,7 +34,7 @@ module defi::flash_lender {
     /// An object conveying the privilege to withdraw funds from and deposit funds to the
     /// `FlashLender` instance with ID `flash_lender_id`. Initially granted to the creator
     /// of the `FlashLender`, and only one `AdminCap` per lender exists.
-    struct AdminCap has key, store {
+    public struct AdminCap has key, store {
         id: UID,
         flash_lender_id: ID,
     }
@@ -69,7 +66,7 @@ module defi::flash_lender {
     /// current transaction.
     public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
         let id = object::new(ctx);
-        let flash_lender_id = object::uid_to_inner(&id);
+        let flash_lender_id = id.to_inner();
         let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         transfer::share_object(flash_lender);
@@ -80,10 +77,10 @@ module defi::flash_lender {
 
     /// Same as `new`, but transfer `AdminCap` to the transaction sender
     public entry fun create<T>(to_lend: Coin<T>, fee: u64, ctx: &mut TxContext) {
-        let balance = coin::into_balance(to_lend);
+        let balance = to_lend.into_balance();
         let admin_cap = new(balance, fee, ctx);
 
-        transfer::public_transfer(admin_cap, tx_context::sender(ctx))
+        transfer::public_transfer(admin_cap, ctx.sender())
     }
 
     // === Core functionality: requesting a loan and repaying it ===
@@ -95,7 +92,7 @@ module defi::flash_lender {
         self: &mut FlashLender<T>, amount: u64, ctx: &mut TxContext
     ): (Coin<T>, Receipt<T>) {
         let to_lend = &mut self.to_lend;
-        assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
+        assert!(to_lend.value() >= amount, ELoanTooLarge);
         let loan = coin::take(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
         let receipt = Receipt { flash_lender_id: object::id(self), repay_amount };
@@ -109,7 +106,7 @@ module defi::flash_lender {
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
         assert!(object::id(self) == flash_lender_id, ERepayToWrongLender);
-        assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
+        assert!(payment.value() == repay_amount, EInvalidRepaymentAmount);
 
         coin::put(&mut self.to_lend, payment)
     }
@@ -127,7 +124,7 @@ module defi::flash_lender {
         check_admin(self, admin_cap);
 
         let to_lend = &mut self.to_lend;
-        assert!(balance::value(to_lend) >= amount, EWithdrawTooLarge);
+        assert!(to_lend.value() >= amount, EWithdrawTooLarge);
         coin::take(to_lend, amount, ctx)
     }
 
@@ -163,7 +160,7 @@ module defi::flash_lender {
 
     /// Return the maximum amount available for borrowing
     public fun max_loan<T>(self: &FlashLender<T>): u64 {
-        balance::value(&self.to_lend)
+        self.to_lend.value()
     }
 
     /// Return the amount that the holder of `self` must repay

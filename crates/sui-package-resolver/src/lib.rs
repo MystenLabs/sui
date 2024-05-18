@@ -7,6 +7,9 @@ use move_binary_format::file_format::{
     AbilitySet, FunctionDefinitionIndex, Signature as MoveSignature, SignatureIndex,
     StructTypeParameter, Visibility,
 };
+use move_command_line_common::error_bitset::ErrorBitset;
+use move_core_types::language_storage::ModuleId;
+use move_core_types::u256::U256;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeSet;
 use std::num::NonZeroUsize;
@@ -18,7 +21,6 @@ use sui_types::transaction::{Argument, CallArg, Command, ProgrammableTransaction
 use crate::error::Error;
 use move_binary_format::errors::Location;
 use move_binary_format::{
-    access::ModuleAccess,
     file_format::{
         SignatureToken, StructDefinitionIndex, StructFieldInformation, StructHandleIndex,
         TableIndex,
@@ -30,9 +32,9 @@ use move_core_types::{
     annotated_value::{MoveFieldLayout, MoveStructLayout, MoveTypeLayout},
     language_storage::{StructTag, TypeTag},
 };
-use sui_types::move_package::TypeOrigin;
+use sui_types::move_package::{MovePackage, TypeOrigin};
 use sui_types::object::Object;
-use sui_types::{base_types::SequenceNumber, is_system_package, Identifier};
+use sui_types::{base_types::SequenceNumber, Identifier};
 
 pub mod error;
 
@@ -85,14 +87,68 @@ pub struct Package {
     /// is referred to by in other packages) to its storage ID (the ID it is loaded from on chain).
     linkage: Linkage,
 
-    /// The version this package was loaded at -- necessary for cache invalidation of system
-    /// packages.
+    /// The version this package was loaded at -- necessary for handling race conditions when
+    /// loading system packages.
     version: SequenceNumber,
 
     modules: BTreeMap<String, Module>,
 }
 
 type Linkage = BTreeMap<AccountAddress, AccountAddress>;
+
+/// A `CleverError` is a special kind of abort code that is used to encode more information than a
+/// normal abort code. These clever errors are used to encode the line number, error constant name,
+/// and error constant value as pool indicies packed into a format satisfying the `ErrorBitset`
+/// format. This struct is the "inflated" view of that data, providing the module ID, line number,
+/// and error constant name and value (if available).
+#[derive(Clone, Debug)]
+pub struct CleverError {
+    /// The (storage) module ID of the module that the assertion failed in.
+    pub module_id: ModuleId,
+    /// Inner error information. This is either a complete error, just a line number, or bytes that
+    /// should be treated opaquely.
+    pub error_info: ErrorConstants,
+    /// The line number in the source file where the error occured.
+    pub source_line_number: u16,
+}
+
+/// The `ErrorConstants` enum is used to represent the different kinds of error information that
+/// can be returned from a clever error when looking at the constant values for the clever error.
+/// These values are either:
+/// * `None` - No constant information is available, only a line number.
+/// * `Rendered` - The error is a complete error, with an error identifier and constant that can be
+///    rendered in a human-readable format (see in-line doc comments for exact types of values
+///    supported).
+/// * `Raw` - If there is an error constant value, but it is not a renderable type (e.g., a
+///   `vector<address>`), then it is treated as opaque and the bytes are returned.
+#[derive(Clone, Debug)]
+pub enum ErrorConstants {
+    /// No constant information is available, only a line number.
+    None,
+    /// The error is a complete error, with an error identifier and constant that can be rendered.
+    /// The the rendered string representation of the constant is returned only when the contant
+    /// value is one of the following types:
+    /// * A vector of bytes convertible to a valid UTF-8 string; or
+    /// * A numeric value (u8, u16, u32, u64, u128, u256); or
+    /// * A boolean value; or
+    /// * An address value
+    /// Otherwise, the `Raw` bytes of the error constant are returned.
+    Rendered {
+        /// The name of the error constant.
+        identifier: String,
+        /// The value of the error constant.
+        constant: String,
+    },
+    /// If there is an error constant value, but ii is not one of the above types, then it is
+    /// treated as opaque and the bytes are returned. The caller is responsible for determining how
+    /// best to display the error constant in this case.
+    Raw {
+        /// The name of the error constant.
+        identifier: String,
+        /// The raw (BCS) bytes of the error constant.
+        bytes: Vec<u8>,
+    },
+}
 
 #[derive(Clone, Debug)]
 pub struct Module {
@@ -206,8 +262,6 @@ struct ResolutionContext<'l> {
 /// store during testing.
 #[async_trait]
 pub trait PackageStore: Send + Sync + 'static {
-    /// Latest version of the object at `id`.
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber>;
     /// Read package contents. Fails if `id` is not an object, not a package, or is malformed in
     /// some way.
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>>;
@@ -217,9 +271,6 @@ macro_rules! as_ref_impl {
     ($type:ty) => {
         #[async_trait]
         impl PackageStore for $type {
-            async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-                self.as_ref().version(id).await
-            }
             async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
                 self.as_ref().fetch(id).await
             }
@@ -449,6 +500,117 @@ impl<S: PackageStore> Resolver<S> {
             .map(|t| t.as_ref().and_then(|t| layouts.get(t).cloned()))
             .collect())
     }
+
+    /// Resolves a runtime address in a `ModuleId` to a storage `ModuleId` according to the linkage
+    /// table in the `context` which must refer to a package.
+    /// * Will fail if the wrong context is provided, i.e., is not a package, or
+    ///   does not exist.
+    /// * Will fail if an invalid `context` is provided for the `location`, i.e., the package at
+    ///   `context` does not contain the module that `location` refers to.
+    pub async fn resolve_module_id(
+        &self,
+        module_id: ModuleId,
+        context: AccountAddress,
+    ) -> Result<ModuleId> {
+        let package = self.package_store.fetch(context).await?;
+        let storage_id = package.relocate(*module_id.address())?;
+        Ok(ModuleId::new(storage_id, module_id.name().to_owned()))
+    }
+
+    /// Resolves an abort code following the clever error format to a `CleverError` enum.
+    /// The `module_id` must be the storage ID of the module (which can e.g., be gotten from the
+    /// `resolve_module_id` function) and not the runtime ID.
+    ///
+    /// If the `abort_code` is not a clever error (i.e., does not follow the tagging and layout as
+    /// defined in `ErrorBitset`), this function will return `None`.
+    ///
+    /// In the case where it is a clever error but only a line number is present (i.e., the error
+    /// is the result of an `assert!(<cond>)` source expression) a `CleverError::LineNumberOnly` is
+    /// returned. Otherwise a `CleverError::CompleteError` is returned.
+    ///
+    /// If for any reason we are unable to resolve the abort code to a `CleverError`, this function
+    /// will return `None`.
+    pub async fn resolve_clever_error(
+        &self,
+        module_id: ModuleId,
+        abort_code: u64,
+    ) -> Option<CleverError> {
+        let bitset = ErrorBitset::from_u64(abort_code)?;
+        let package = self.package_store.fetch(*module_id.address()).await.ok()?;
+        let module = package.module(module_id.name().as_str()).ok()?.bytecode();
+        let source_line_number = bitset.line_number()?;
+
+        // We only have a line number in our clever error, so return early.
+        if bitset.identifier_index().is_none() && bitset.constant_index().is_none() {
+            return Some(CleverError {
+                module_id,
+                error_info: ErrorConstants::None,
+                source_line_number,
+            });
+        } else if bitset.identifier_index().is_none() || bitset.constant_index().is_none() {
+            return None;
+        }
+
+        let error_identifier_constant = module
+            .constant_pool()
+            .get(bitset.identifier_index()? as usize)?;
+        let error_value_constant = module
+            .constant_pool()
+            .get(bitset.constant_index()? as usize)?;
+
+        if !matches!(&error_identifier_constant.type_, SignatureToken::Vector(x) if x.as_ref() == &SignatureToken::U8)
+        {
+            return None;
+        };
+
+        let error_identifier = bcs::from_bytes::<Vec<u8>>(&error_identifier_constant.data)
+            .ok()
+            .and_then(|x| String::from_utf8(x).ok())?;
+        let bytes = error_value_constant.data.clone();
+
+        let rendered = match &error_value_constant.type_ {
+            SignatureToken::Vector(inner_ty) if inner_ty.as_ref() == &SignatureToken::U8 => {
+                bcs::from_bytes::<Vec<u8>>(&bytes)
+                    .ok()
+                    .and_then(|x| String::from_utf8(x).ok())
+            }
+            SignatureToken::U8 => bcs::from_bytes::<u8>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U16 => bcs::from_bytes::<u16>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U32 => bcs::from_bytes::<u32>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U64 => bcs::from_bytes::<u64>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U128 => bcs::from_bytes::<u128>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::U256 => bcs::from_bytes::<U256>(&bytes).ok().map(|x| x.to_string()),
+            SignatureToken::Address => bcs::from_bytes::<AccountAddress>(&bytes)
+                .ok()
+                .map(|x| x.to_canonical_string(true)),
+            SignatureToken::Bool => bcs::from_bytes::<bool>(&bytes).ok().map(|x| x.to_string()),
+
+            SignatureToken::Signer
+            | SignatureToken::Vector(_)
+            | SignatureToken::Struct(_)
+            | SignatureToken::StructInstantiation(_)
+            | SignatureToken::Reference(_)
+            | SignatureToken::MutableReference(_)
+            | SignatureToken::TypeParameter(_) => None,
+        };
+
+        let error_info = match rendered {
+            None => ErrorConstants::Raw {
+                identifier: error_identifier,
+                bytes,
+            },
+            Some(error_constant) => ErrorConstants::Rendered {
+                identifier: error_identifier,
+                constant: error_constant,
+            },
+        };
+
+        Some(CleverError {
+            module_id,
+            error_info,
+            source_line_number,
+        })
+    }
 }
 
 impl<T> PackageStoreWithLruCache<T> {
@@ -456,29 +618,30 @@ impl<T> PackageStoreWithLruCache<T> {
         let packages = Mutex::new(LruCache::new(PACKAGE_CACHE_SIZE));
         Self { packages, inner }
     }
+
+    /// Removes all packages with ids in `ids` from the cache, if they exist. Does nothing for ids
+    /// that are not in the cache. Accepts `self` immutably as it operates under the lock.
+    pub fn evict(&self, ids: impl IntoIterator<Item = AccountAddress>) {
+        let mut packages = self.packages.lock().unwrap();
+        for id in ids {
+            packages.pop(&id);
+        }
+    }
 }
 
 #[async_trait]
 impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
-    async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-        self.inner.version(id).await
-    }
-
     async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
-        let candidate = {
+        if let Some(package) = {
             // Release the lock after getting the package
             let mut packages = self.packages.lock().unwrap();
             packages.get(&id).map(Arc::clone)
+        } {
+            return Ok(package);
         };
 
-        // System packages can be invalidated in the cache if a newer version exists.
-        match candidate {
-            Some(package) if !is_system_package(id) => return Ok(package),
-            Some(package) if self.version(id).await? <= package.version => return Ok(package),
-            Some(_) | None => { /* nop */ }
-        }
-
         let package = self.inner.fetch(id).await?;
+
         // Try and insert the package into the cache, accounting for races.  In most cases the
         // racing fetches will produce the same package, but for system packages, they may not, so
         // favour the package that has the newer version, or if they are the same, the package that
@@ -501,12 +664,17 @@ impl<T: PackageStore> PackageStore for PackageStoreWithLruCache<T> {
 }
 
 impl Package {
-    pub fn read(object: &Object) -> Result<Self> {
+    pub fn read_from_object(object: &Object) -> Result<Self> {
         let storage_id = AccountAddress::from(object.id());
         let Some(package) = object.data.try_as_package() else {
             return Err(Error::NotAPackage(storage_id));
         };
 
+        Self::read_from_package(package)
+    }
+
+    pub fn read_from_package(package: &MovePackage) -> Result<Self> {
+        let storage_id = AccountAddress::from(package.id());
         let mut type_origins: BTreeMap<String, BTreeMap<String, AccountAddress>> = BTreeMap::new();
         for TypeOrigin {
             module_name,
@@ -1291,7 +1459,7 @@ impl<'l> ResolutionContext<'l> {
                 )
                 // This error is unexpected because the only reason it would fail is because of a
                 // type parameter arity mismatch, which we check for above.
-                .map_err(|e| Error::UnexpectedError(Box::new(e)))?
+                .map_err(|e| Error::UnexpectedError(Arc::new(e)))?
             }
         })
     }
@@ -1611,6 +1779,9 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
+        // Evict the package from the cache
+        resolver.package_store().evict([addr("0x1")]);
+
         let layout = resolver.type_layout(type_("0x1::m::T1")).await.unwrap();
         insta::assert_snapshot!(format!("{layout:#}"));
     }
@@ -1623,37 +1794,30 @@ mod tests {
         ]);
         let resolver = Resolver::new(cache);
 
-        let stats = |inner: &Arc<RwLock<InnerStore>>| {
-            let i = inner.read().unwrap();
-            (i.fetches, i.version_checks)
-        };
-
-        assert_eq!(stats(&inner), (0, 0));
+        assert_eq!(inner.read().unwrap().fetches, 0);
         let l0 = resolver.type_layout(type_("0xa0::m::T0")).await.unwrap();
 
         // Load A0.
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
-        // Layouts are the same, no need to reload the package.  Not a system package, so no version
-        // check needed.
+        // Layouts are the same, no need to reload the package.
         let l1 = resolver.type_layout(type_("0xa0::m::T0")).await.unwrap();
         assert_eq!(format!("{l0}"), format!("{l1}"));
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
         // Different type, but same package, so no extra fetch.
         let l2 = resolver.type_layout(type_("0xa0::m::T2")).await.unwrap();
         assert_ne!(format!("{l0}"), format!("{l2}"));
-        assert_eq!(stats(&inner), (1, 0));
+        assert_eq!(inner.read().unwrap().fetches, 1);
 
-        // New package to load.  It's a system package, which would need a version check if it
-        // already existed in the cache, but it doesn't yet, so we only see a fetch.
+        // New package to load.
         let l3 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
-        assert_eq!(stats(&inner), (2, 0));
+        assert_eq!(inner.read().unwrap().fetches, 2);
 
-        // Reload the same system package type, which will cause a version check.
+        // Reload the same system package type, it gets fetched from cache
         let l4 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l3}"), format!("{l4}"));
-        assert_eq!(stats(&inner), (2, 1));
+        assert_eq!(inner.read().unwrap().fetches, 2);
 
         // Upgrade the system package
         inner.write().unwrap().replace(
@@ -1661,12 +1825,15 @@ mod tests {
             cached_package(2, BTreeMap::new(), &build_package("s1"), &s1_types()),
         );
 
-        // Reload the same system type again.  The version check fails and the system package is
-        // refetched (even though the type is the same as before).  This usage pattern (layouts for
-        // system types) is why a layout cache would be particularly helpful (future optimisation).
+        // Evict the package from the cache
+        resolver.package_store().evict([addr("0x1")]);
+
+        // Reload the system system type again. It will be refetched (even though the type is the
+        // same as before). This usage pattern (layouts for system types) is why a layout cache
+        // would be particularly helpful (future optimisation).
         let l5 = resolver.type_layout(type_("0x1::m::T0")).await.unwrap();
         assert_eq!(format!("{l4}"), format!("{l5}"));
-        assert_eq!(stats(&inner), (3, 2));
+        assert_eq!(inner.read().unwrap().fetches, 3);
     }
 
     #[tokio::test]
@@ -2324,7 +2491,10 @@ mod tests {
     /// have a 'published-at' address), and their transitive dependencies are also in `packages`.
     fn package_cache(
         packages: impl IntoIterator<Item = (u64, CompiledPackage, TypeOriginTable)>,
-    ) -> (Arc<RwLock<InnerStore>>, Box<dyn PackageStore>) {
+    ) -> (
+        Arc<RwLock<InnerStore>>,
+        PackageStoreWithLruCache<InMemoryPackageStore>,
+    ) {
         let packages_by_storage_id: BTreeMap<AccountAddress, _> = packages
             .into_iter()
             .map(|(version, package, origins)| {
@@ -2360,16 +2530,13 @@ mod tests {
         let inner = Arc::new(RwLock::new(InnerStore {
             packages,
             fetches: 0,
-            version_checks: 0,
         }));
 
         let store = InMemoryPackageStore {
             inner: inner.clone(),
         };
 
-        let store_with_cache = PackageStoreWithLruCache::new(store);
-
-        (inner, Box::new(store_with_cache))
+        (inner, PackageStoreWithLruCache::new(store))
     }
 
     fn cached_package(
@@ -2463,21 +2630,10 @@ mod tests {
     struct InnerStore {
         packages: BTreeMap<AccountAddress, Package>,
         fetches: usize,
-        version_checks: usize,
     }
 
     #[async_trait]
     impl PackageStore for InMemoryPackageStore {
-        async fn version(&self, id: AccountAddress) -> Result<SequenceNumber> {
-            let mut inner = self.inner.as_ref().write().unwrap();
-            inner.version_checks += 1;
-            inner
-                .packages
-                .get(&id)
-                .ok_or_else(|| Error::PackageNotFound(id))
-                .map(|p| p.version)
-        }
-
         async fn fetch(&self, id: AccountAddress) -> Result<Arc<Package>> {
             let mut inner = self.inner.as_ref().write().unwrap();
             inner.fetches += 1;

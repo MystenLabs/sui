@@ -58,6 +58,13 @@ pub trait AccumulatorStore: ObjectStore + Send + Sync {
         &self,
         include_wrapped_tombstone: bool,
     ) -> Box<dyn Iterator<Item = LiveObject> + '_>;
+
+    fn iter_cached_live_object_set_for_testing(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Box<dyn Iterator<Item = LiveObject> + '_> {
+        self.iter_live_object_set(include_wrapped_tombstone)
+    }
 }
 
 impl AccumulatorStore for InMemoryStorage {
@@ -459,23 +466,43 @@ impl StateAccumulator {
         Ok(root_state_accumulator)
     }
 
+    pub fn accumulate_cached_live_object_set_for_testing(
+        &self,
+        include_wrapped_tombstone: bool,
+    ) -> Accumulator {
+        Self::accumulate_live_object_set_impl(
+            self.store
+                .iter_cached_live_object_set_for_testing(include_wrapped_tombstone),
+        )
+    }
+
     /// Returns the result of accumulating the live object set, without side effects
     pub fn accumulate_live_object_set(&self, include_wrapped_tombstone: bool) -> Accumulator {
+        Self::accumulate_live_object_set_impl(
+            self.store.iter_live_object_set(include_wrapped_tombstone),
+        )
+    }
+
+    fn accumulate_live_object_set_impl(iter: impl Iterator<Item = LiveObject>) -> Accumulator {
         let mut acc = Accumulator::default();
-        for live_object in self.store.iter_live_object_set(include_wrapped_tombstone) {
-            match live_object {
-                LiveObject::Normal(object) => {
-                    acc.insert(object.compute_object_reference().2);
-                }
-                LiveObject::Wrapped(key) => {
-                    acc.insert(
-                        bcs::to_bytes(&WrappedObject::new(key.0, key.1))
-                            .expect("Failed to serialize WrappedObject"),
-                    );
-                }
+        iter.for_each(|live_object| {
+            Self::accumulate_live_object(&mut acc, &live_object);
+        });
+        acc
+    }
+
+    pub fn accumulate_live_object(acc: &mut Accumulator, live_object: &LiveObject) {
+        match live_object {
+            LiveObject::Normal(object) => {
+                acc.insert(object.compute_object_reference().2);
+            }
+            LiveObject::Wrapped(key) => {
+                acc.insert(
+                    bcs::to_bytes(&WrappedObject::new(key.0, key.1))
+                        .expect("Failed to serialize WrappedObject"),
+                );
             }
         }
-        acc
     }
 
     pub fn digest_live_object_set(

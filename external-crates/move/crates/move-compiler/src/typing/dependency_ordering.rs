@@ -5,6 +5,7 @@
 use crate::{
     diagnostics::{codes::*, Diagnostic},
     expansion::ast::{Address, ModuleIdent, Value_},
+    ice,
     naming::ast::{self as N, Neighbor, Neighbor_},
     shared::{unique_map::UniqueMap, *},
     typing::ast as T,
@@ -23,7 +24,7 @@ pub fn program(
     modules: &mut UniqueMap<ModuleIdent, T::ModuleDefinition>,
 ) {
     let imm_modules = &modules;
-    let mut context = Context::new(imm_modules);
+    let mut context = Context::new(compilation_env, imm_modules);
     module_defs(&mut context, modules);
 
     let Context {
@@ -61,7 +62,8 @@ enum DepType {
     Friend,
 }
 
-struct Context<'a> {
+struct Context<'a, 'env> {
+    env: &'env mut CompilationEnv,
     modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
     // A union of uses and friends for modules (used for cyclyc dependency checking)
     // - if A uses B,    add edge A -> B
@@ -75,9 +77,13 @@ struct Context<'a> {
     current_node: Option<ModuleIdent>,
 }
 
-impl<'a> Context<'a> {
-    fn new(modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>) -> Self {
+impl<'a, 'env> Context<'a, 'env> {
+    fn new(
+        env: &'env mut CompilationEnv,
+        modules: &'a UniqueMap<ModuleIdent, T::ModuleDefinition>,
+    ) -> Self {
         Context {
+            env,
             modules,
             module_neighbors: BTreeMap::new(),
             neighbors_by_node: BTreeMap::new(),
@@ -242,6 +248,9 @@ fn module(context: &mut Context, mident: ModuleIdent, mdef: &T::ModuleDefinition
     mdef.structs
         .iter()
         .for_each(|(_, _, sdef)| struct_def(context, sdef));
+    mdef.enums
+        .iter()
+        .for_each(|(_, _, edef)| enum_def(context, edef));
     mdef.functions
         .iter()
         .for_each(|(_, _, fdef)| function(context, fdef));
@@ -264,12 +273,20 @@ fn function_signature(context: &mut Context, sig: &N::FunctionSignature) {
 }
 
 //**************************************************************************************************
-// Struct
+// Data Types
 //**************************************************************************************************
 
 fn struct_def(context: &mut Context, sdef: &N::StructDefinition) {
-    if let N::StructFields::Defined(fields) = &sdef.fields {
+    if let N::StructFields::Defined(_, fields) = &sdef.fields {
         fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+    }
+}
+
+fn enum_def(context: &mut Context, edef: &N::EnumDefinition) {
+    for (_, _, variant) in &edef.variants {
+        if let N::VariantFields::Defined(_, fields) = &variant.fields {
+            fields.iter().for_each(|(_, _, (_, bt))| type_(context, bt));
+        }
     }
 }
 
@@ -342,7 +359,10 @@ fn lvalue(context: &mut Context, sp!(loc, lv_): &T::LValue) {
     match lv_ {
         L::Ignore => (),
         L::Var { ty, .. } => type_(context, ty),
-        L::Unpack(m, _, tys, fields) | L::BorrowUnpack(_, m, _, tys, fields) => {
+        L::Unpack(m, _, tys, fields)
+        | L::BorrowUnpack(_, m, _, tys, fields)
+        | L::UnpackVariant(m, _, _, tys, fields)
+        | L::BorrowUnpackVariant(_, m, _, _, tys, fields) => {
             context.add_usage(*m, *loc);
             types(context, tys);
             for (_, _, (_, (_, field))) in fields {
@@ -379,6 +399,19 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e2);
             exp(context, e3);
         }
+        E::Match(_subject, _arms) => {
+            context.env.add_diag(ice!((
+                e.exp.loc,
+                "shouldn't find match after match compilation step"
+            )));
+        }
+        E::VariantMatch(subject, (module, _), arms) => {
+            exp(context, subject);
+            context.add_usage(*module, e.exp.loc);
+            for (_, rhs) in arms {
+                exp(context, rhs);
+            }
+        }
         E::While(_, e1, e2) => {
             exp(context, e1);
             exp(context, e2);
@@ -413,6 +446,13 @@ fn exp(context: &mut Context, e: &T::Exp) {
                 exp(context, e)
             }
         }
+        E::PackVariant(m, _, _, tys, fields) => {
+            context.add_usage(*m, e.exp.loc);
+            types(context, tys);
+            for (_, _, (_, (_, e))) in fields {
+                exp(context, e)
+            }
+        }
         E::ExpList(list) => {
             for l in list {
                 match l {
@@ -431,6 +471,11 @@ fn exp(context: &mut Context, e: &T::Exp) {
             exp(context, e);
             type_(context, ty)
         }
+        E::AutocompleteDotAccess {
+            base_exp,
+            methods: _,
+            fields: _,
+        } => exp(context, base_exp),
         E::Unit { .. }
         | E::Value(_)
         | E::Move { .. }
@@ -439,6 +484,7 @@ fn exp(context: &mut Context, e: &T::Exp) {
         | E::Constant(..)
         | E::Continue(_)
         | E::BorrowLocal(..)
+        | E::ErrorConstant { .. }
         | E::UnresolvedError => (),
     }
 }

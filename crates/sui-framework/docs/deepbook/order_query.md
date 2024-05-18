@@ -1,4 +1,3 @@
-
 ---
 title: Module `0xdee9::order_query`
 ---

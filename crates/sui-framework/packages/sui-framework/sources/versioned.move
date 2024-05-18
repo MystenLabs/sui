@@ -2,9 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::versioned {
-    use sui::object::{UID, ID};
-    use sui::tx_context::TxContext;
-    use sui::object;
     use sui::dynamic_field;
 
     /// Failed to upgrade the inner object due to invalid capability or new version.
@@ -80,7 +77,7 @@ module sui::versioned {
     public fun destroy<T: store>(self: Versioned): T {
         let Versioned { mut id, version } = self;
         let ret = dynamic_field::remove(&mut id, version);
-        object::delete(id);
+        id.delete();
         ret
     }
 }

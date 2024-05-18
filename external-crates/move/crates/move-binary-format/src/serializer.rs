@@ -21,45 +21,6 @@ use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, metadata::Metadata,
 };
 
-impl CompiledScript {
-    /// Serializes a `CompiledScript` into a binary. The mutable `Vec<u8>` will contain the
-    /// binary blob on return.
-    pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_for_version(None, binary)
-    }
-
-    /// Serialize into binary, at given version.
-    pub fn serialize_for_version(
-        &self,
-        bytecode_version: Option<u32>,
-        binary: &mut Vec<u8>,
-    ) -> Result<()> {
-        let version = bytecode_version.unwrap_or(VERSION_MAX);
-        validate_version(version)?;
-        let mut binary_data = BinaryData::from(binary.clone());
-        let mut ser = ScriptSerializer::new(version);
-        let mut temp = BinaryData::new();
-
-        ser.common.serialize_common_tables(&mut temp, self)?;
-        if temp.len() > TABLE_CONTENT_SIZE_MAX as usize {
-            bail!(
-                "table content size ({}) cannot exceed ({})",
-                temp.len(),
-                TABLE_CONTENT_SIZE_MAX
-            );
-        }
-        ser.common.serialize_header(&mut binary_data)?;
-        ser.common.serialize_table_indices(&mut binary_data)?;
-
-        binary_data.extend(temp.as_inner())?;
-
-        ser.serialize_main(&mut binary_data, self)?;
-
-        *binary = binary_data.into_inner();
-        Ok(())
-    }
-}
-
 fn write_as_uleb128<T1, T2>(binary: &mut BinaryData, x: T1, max: T2) -> Result<()>
 where
     T1: Into<u64>,
@@ -214,19 +175,9 @@ fn validate_version(version: u32) -> Result<()> {
 }
 
 impl CompiledModule {
-    /// Serializes a `CompiledModule` into a binary. The mutable `Vec<u8>` will contain the
-    /// binary blob on return.
-    pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
-        self.serialize_for_version(None, binary)
-    }
-
-    /// Serialize into binary, at given version.
-    pub fn serialize_for_version(
-        &self,
-        bytecode_version: Option<u32>,
-        binary: &mut Vec<u8>,
-    ) -> Result<()> {
-        let version = bytecode_version.unwrap_or(VERSION_MAX);
+    /// Serializes a `CompiledModule` into a binary at `version`. The mutable `Vec<u8>` will
+    /// contain the binary blob on return.
+    pub fn serialize_with_version(&self, version: u32, binary: &mut Vec<u8>) -> Result<()> {
         validate_version(version)?;
         let mut binary_data = BinaryData::from(binary.clone());
         let mut ser = ModuleSerializer::new(version);
@@ -248,6 +199,13 @@ impl CompiledModule {
 
         *binary = binary_data.into_inner();
         Ok(())
+    }
+
+    /// Serializes a `CompiledModule` into a binary at VERSION_MAX. The mutable `Vec<u8>` will
+    /// contain the binary blob on return. To be used for testing only.
+    #[cfg(any(test, feature = "fuzzing"))]
+    pub fn serialize(&self, binary: &mut Vec<u8>) -> Result<()> {
+        self.serialize_with_version(VERSION_MAX, binary)
     }
 }
 
@@ -283,12 +241,6 @@ struct ModuleSerializer {
     field_handles: (u32, u32),
     field_instantiations: (u32, u32),
     friend_decls: (u32, u32),
-}
-
-/// Holds data to compute the header of a transaction script binary.
-#[derive(Debug)]
-struct ScriptSerializer {
-    common: CommonSerializer,
 }
 
 //
@@ -338,44 +290,6 @@ trait CommonTables {
     fn get_constant_pool(&self) -> &[Constant];
     fn get_signatures(&self) -> &[Signature];
     fn get_metadata(&self) -> &[Metadata];
-}
-
-impl CommonTables for CompiledScript {
-    fn get_module_handles(&self) -> &[ModuleHandle] {
-        &self.module_handles
-    }
-
-    fn get_struct_handles(&self) -> &[StructHandle] {
-        &self.struct_handles
-    }
-
-    fn get_function_handles(&self) -> &[FunctionHandle] {
-        &self.function_handles
-    }
-
-    fn get_function_instantiations(&self) -> &[FunctionInstantiation] {
-        &self.function_instantiations
-    }
-
-    fn get_identifiers(&self) -> &[Identifier] {
-        &self.identifiers
-    }
-
-    fn get_address_identifiers(&self) -> &[AccountAddress] {
-        &self.address_identifiers
-    }
-
-    fn get_constant_pool(&self) -> &[Constant] {
-        &self.constant_pool
-    }
-
-    fn get_signatures(&self) -> &[Signature] {
-        &self.signatures
-    }
-
-    fn get_metadata(&self) -> &[Metadata] {
-        &self.metadata
-    }
 }
 
 impl CommonTables for CompiledModule {
@@ -1454,22 +1368,6 @@ impl ModuleSerializer {
             }
             self.friend_decls.1 = checked_calculate_table_size(binary, self.friend_decls.0)?;
         }
-        Ok(())
-    }
-}
-
-impl ScriptSerializer {
-    fn new(major_version: u32) -> ScriptSerializer {
-        ScriptSerializer {
-            common: CommonSerializer::new(major_version),
-        }
-    }
-
-    /// Serializes the main function.
-    fn serialize_main(&mut self, binary: &mut BinaryData, script: &CompiledScript) -> Result<()> {
-        serialize_ability_sets(binary, &script.type_parameters)?;
-        serialize_signature_index(binary, &script.parameters)?;
-        serialize_code_unit(self.common.major_version(), binary, &script.code)?;
         Ok(())
     }
 }

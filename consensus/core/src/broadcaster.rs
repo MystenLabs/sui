@@ -38,6 +38,7 @@ pub(crate) struct Broadcaster {
 
 impl Broadcaster {
     const LAST_BLOCK_RETRY_INTERVAL: Duration = Duration::from_secs(2);
+    const MIN_SEND_BLOCK_NETWORK_TIMEOUT: Duration = Duration::from_secs(5);
 
     pub(crate) fn new<C: NetworkClient>(
         context: Arc<Context>,
@@ -76,7 +77,7 @@ impl Broadcaster {
         mut rx_block_broadcast: broadcast::Receiver<VerifiedBlock>,
         peer: AuthorityIndex,
     ) {
-        let peer_hostname = context.committee.authority(peer).hostname.clone();
+        let peer_hostname = &context.committee.authority(peer).hostname;
 
         // Record the last block to be broadcasted, to retry in case no new block is produced for awhile.
         // Even if the peer has acknowledged the last block, the block might have been dropped afterwards
@@ -106,9 +107,12 @@ impl Broadcaster {
         ) -> (Result<ConsensusResult<()>, Elapsed>, Instant, VerifiedBlock) {
             let start = Instant::now();
             let req_timeout = rtt_estimate.mul_f64(TIMEOUT_THRESHOLD_MULTIPLIER);
+            // Use a minimum timeout of 5s so the receiver does not terminate the request too early.
+            let network_timeout =
+                std::cmp::max(req_timeout, Broadcaster::MIN_SEND_BLOCK_NETWORK_TIMEOUT);
             let resp = timeout(
                 req_timeout,
-                network_client.send_block(peer, block.serialized()),
+                network_client.send_block(peer, &block, network_timeout),
             )
             .await;
             if matches!(resp, Ok(Err(_))) {
@@ -175,7 +179,7 @@ impl Broadcaster {
                 .metrics
                 .node_metrics
                 .broadcaster_rtt_estimate_ms
-                .with_label_values(&[&peer_hostname])
+                .with_label_values(&[peer_hostname])
                 .set(rtt_estimate.as_millis() as i64);
         }
     }
@@ -194,6 +198,8 @@ mod test {
     use crate::{
         block::{BlockRef, TestBlock},
         core::CoreSignals,
+        network::BlockStream,
+        Round,
     };
 
     struct FakeNetworkClient {
@@ -217,22 +223,46 @@ mod test {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
+        const SUPPORT_STREAMING: bool = false;
+
         async fn send_block(
             &self,
             peer: AuthorityIndex,
-            serialized_block: &Bytes,
+            block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
             let mut blocks_sent = self.blocks_sent.lock();
             let blocks = blocks_sent.entry(peer).or_default();
-            blocks.push(serialized_block.clone());
+            blocks.push(block.serialized().clone());
             Ok(())
+        }
+
+        async fn subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<BlockStream> {
+            unimplemented!("Unimplemented")
         }
 
         async fn fetch_blocks(
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: AuthorityIndex,
+            _start: Round,
+            _end: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
     }

@@ -6,6 +6,7 @@ import { blake2b } from '@noble/hashes/blake2b';
 import { bytesToHex } from '@noble/hashes/utils';
 
 import { bcs } from '../bcs/index.js';
+import type { Signer } from '../cryptography/keypair.js';
 import { bytesEqual, PublicKey } from '../cryptography/publickey.js';
 import {
 	SIGNATURE_FLAG_TO_SCHEME,
@@ -14,10 +15,12 @@ import {
 import type { SignatureFlag, SignatureScheme } from '../cryptography/signature-scheme.js';
 import { parseSerializedSignature } from '../cryptography/signature.js';
 import type { SerializedSignature } from '../cryptography/signature.js';
+import type { SuiGraphQLClient } from '../graphql/client.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 // eslint-disable-next-line import/no-cycle
 import { publicKeyFromRawBytes } from '../verify/index.js';
 import { toZkLoginPublicIdentifier } from '../zklogin/publickey.js';
+import { MultiSigSigner } from './signer.js';
 
 type CompressedSignature =
 	| { ED25519: number[] }
@@ -74,6 +77,7 @@ export class MultiSigPublicKey extends PublicKey {
 		 *  MultiSig public key as buffer or base-64 encoded string
 		 */
 		value: string | Uint8Array | MultiSigPublicKeyStruct,
+		options: { client?: SuiGraphQLClient } = {},
 	) {
 		super();
 
@@ -108,7 +112,7 @@ export class MultiSigPublicKey extends PublicKey {
 			}
 
 			return {
-				publicKey: publicKeyFromRawBytes(scheme, Uint8Array.from(bytes)),
+				publicKey: publicKeyFromRawBytes(scheme, Uint8Array.from(bytes), options),
 				weight,
 			};
 		});
@@ -169,6 +173,14 @@ export class MultiSigPublicKey extends PublicKey {
 		return this.publicKeys;
 	}
 
+	getThreshold() {
+		return this.multisigPublicKey.threshold;
+	}
+
+	getSigner(...signers: [signer: Signer]) {
+		return new MultiSigSigner(this, signers);
+	}
+
 	/**
 	 * Return the Sui address associated with this MultiSig public key
 	 */
@@ -202,11 +214,13 @@ export class MultiSigPublicKey extends PublicKey {
 	 */
 	async verify(message: Uint8Array, multisigSignature: SerializedSignature): Promise<boolean> {
 		// Multisig verification only supports serialized signature
-		const { signatureScheme, multisig } = parseSerializedSignature(multisigSignature);
+		const parsed = parseSerializedSignature(multisigSignature);
 
-		if (signatureScheme !== 'MultiSig') {
+		if (parsed.signatureScheme !== 'MultiSig') {
 			throw new Error('Invalid signature scheme');
 		}
+
+		const { multisig } = parsed;
 
 		let signatureWeight = 0;
 
@@ -297,7 +311,10 @@ export class MultiSigPublicKey extends PublicKey {
 /**
  * Parse multisig structure into an array of individual signatures: signature scheme, the actual individual signature, public key and its weight.
  */
-export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialMultiSigSignature[] {
+export function parsePartialSignatures(
+	multisig: MultiSigStruct,
+	options: { client?: SuiGraphQLClient } = {},
+): ParsedPartialMultiSigSignature[] {
 	let res: ParsedPartialMultiSigSignature[] = new Array(multisig.sigs.length);
 	for (let i = 0; i < multisig.sigs.length; i++) {
 		const [signatureScheme, signature] = Object.entries(multisig.sigs[i])[0] as [
@@ -312,7 +329,7 @@ export function parsePartialSignatures(multisig: MultiSigStruct): ParsedPartialM
 			throw new Error('MultiSig is not supported inside MultiSig');
 		}
 
-		const publicKey = publicKeyFromRawBytes(signatureScheme, pkBytes);
+		const publicKey = publicKeyFromRawBytes(signatureScheme, pkBytes, options);
 
 		res[i] = {
 			signatureScheme,

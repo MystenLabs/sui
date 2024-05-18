@@ -1,5 +1,4 @@
-address 0x42 {
-module M {
+module 0x42::M {
     public struct Foo<T>(T, u64) has drop;
 
     public struct Bar<T> {
@@ -27,5 +26,4 @@ module M {
         let Bar(Foo(Bar(Foo(x, y)), z)) = y;
         x + y + z
     }
-}
 }

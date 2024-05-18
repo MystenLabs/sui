@@ -317,6 +317,7 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
         | N::Exp_::Constant(_, _)
         | N::Exp_::Continue(_)
         | N::Exp_::Unit { .. }
+        | N::Exp_::ErrorConstant { .. }
         | N::Exp_::UnresolvedError => (),
         N::Exp_::Return(e)
         | N::Exp_::Abort(e)
@@ -339,6 +340,15 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, et);
             exp(context, ef);
         }
+        N::Exp_::Match(esubject, arms) => {
+            exp(context, esubject);
+            for arm in &mut arms.value {
+                if let Some(guard) = arm.value.guard.as_mut() {
+                    exp(context, guard)
+                }
+                exp(context, &mut arm.value.rhs);
+            }
+        }
         N::Exp_::While(_, econd, ebody) => {
             exp(context, econd);
             exp(context, ebody)
@@ -357,6 +367,11 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
             exp(context, er)
         }
         N::Exp_::Pack(_, _, _, fields) => {
+            for (_, _, (_, e)) in fields {
+                exp(context, e)
+            }
+        }
+        N::Exp_::PackVariant(_, _, _, _, fields) => {
             for (_, _, (_, e)) in fields {
                 exp(context, e)
             }
@@ -385,7 +400,9 @@ fn exp(context: &mut Context, sp!(_, e_): &mut N::Exp) {
 fn exp_dotted(context: &mut Context, sp!(_, ed_): &mut N::ExpDotted) {
     match ed_ {
         N::ExpDotted_::Exp(e) => exp(context, e),
-        N::ExpDotted_::Dot(ed, _) => exp_dotted(context, ed),
+        N::ExpDotted_::Dot(ed, _) | N::ExpDotted_::DotAutocomplete(_, ed) => {
+            exp_dotted(context, ed)
+        }
         N::ExpDotted_::Index(ed, sp!(_, es)) => {
             exp_dotted(context, ed);
             for e in es {

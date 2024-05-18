@@ -330,16 +330,17 @@ module policy::day_of_week {
 
 Use the `sui client publish` command to publish the policy.
 
+{@include: ../../../snippets/info-gas-budget.mdx}
+
 ```bash
 sui client publish --gas-budget 100000000
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show output
+  Toggle output
   </summary>
-```
+
 A successful publish returns the following:
 
 ```bash
@@ -421,9 +422,8 @@ Array [
 ]
 ```
 
-```mdx-code-block
 </details>
-```
+
 
 Following best practices, use the Sui Client CLI to call `sui::package::make_immutable` on the `UpgradeCap` to make the policy immutable.
 
@@ -435,12 +435,10 @@ sui client call --gas-budget 10000000 \
     --args '<POLICY-UPGRADE-CAP>'
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show output
+  Toggle output
   </summary>
-```
 
 A successful call returns the following:
 
@@ -497,9 +495,8 @@ Array [
 ]
 ```
 
-```mdx-code-block
 </details>
-```
+
 
 ### Creating a package for testing {#creating-testing-package}
 
@@ -645,12 +642,11 @@ const result = await client.signAndExecuteTransactionBlock({
 console.log(result)
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show complete script
+  Toggle complete script
   </summary>
-```
+
 
 The complete `publish.js` script follows:
 
@@ -726,9 +722,9 @@ const result = await client.signAndExecuteTransactionBlock({
 
 console.log(result)
 ```
-```mdx-code-block
+
 </details>
-```
+
 
 Save your `publish.js` file, and then use Node.js to run the script:
 
@@ -736,12 +732,10 @@ Save your `publish.js` file, and then use Node.js to run the script:
 node publish.js
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show output
+  Toggle output
   </summary>
-```
 
 If the script is successful, the console prints the following response:
 
@@ -803,9 +797,9 @@ BUILDING example
   confirmedLocalExecution: true
 }
 ```
-```mdx-code-block
+
 </details>
-```
+
 
 :::tip
 
@@ -822,12 +816,12 @@ sui client call --gas-budget 10000000 \
     --function 'nudge' \
 ```
 
-```mdx-code-block
+
 <details>
   <summary>
-  Show output
+  Toggle output
   </summary>
-```
+
 
 A successful call responds with the following:
 
@@ -897,9 +891,8 @@ Array [
 ]
 ```
 
-```mdx-code-block
 </details>
-```
+
 
 If you used the example package provided, notice you have an `Events` section that contains a field `x` with value `41`.
 
@@ -999,12 +992,11 @@ If today is not Tuesday, wait until next Tuesday to run the script, when your po
 node upgrade.js
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show output
+  Toggle output
   </summary>
-```
+
 If the script is successful (and today is Tuesday), your console displays the following response:
 
 ```bash
@@ -1068,9 +1060,8 @@ BUILDING example
 }
 ```
 
-```mdx-code-block
 </details>
-```
+
 
 Use the Sui Client CLI to test the upgraded package (the package ID is **different** from the original version of your example package):
 
@@ -1081,12 +1072,10 @@ sui client call --gas-budget 10000000 \
     --function 'nudge'
 ```
 
-```mdx-code-block
 <details>
   <summary>
-  Show output
+  Toggle output
   </summary>
-```
 
 If successful, the console prints the following response:
 
@@ -1156,9 +1145,7 @@ Array [
 ]
 ```
 
-```mdx-code-block
 </details>
-```
 
 Now, the `Events` section emitted for the `x` field has a value of `42` (changed from the original `41`).
 

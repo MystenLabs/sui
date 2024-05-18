@@ -3,38 +3,18 @@
 
 #[allow(unused_const)]
 module sui_system::validator {
-    use std::ascii;
-    use std::vector;
     use std::bcs;
 
-    use sui::balance::{Self, Balance};
+    use sui::balance::Balance;
     use sui::sui::SUI;
-    use sui::tx_context::{Self, TxContext};
     use sui_system::validator_cap::{Self, ValidatorOperationCap};
-    use sui::object::{Self, ID};
-    use std::option::{Option, Self};
     use sui_system::staking_pool::{Self, PoolTokenExchangeRate, StakedSui, StakingPool};
-    use std::string::{Self, String};
-    use sui::transfer;
+    use std::string::String;
     use sui::url::Url;
     use sui::url;
     use sui::event;
     use sui::bag::Bag;
     use sui::bag;
-    /* friend sui_system::genesis; */
-    /* friend sui_system::sui_system_state_inner; */
-    /* friend sui_system::validator_wrapper; */
-    /* friend sui_system::validator_set; */
-    /* friend sui_system::voting_power; */
-
-    /* #[test_only] */
-    /* friend sui_system::validator_tests; */
-    /* #[test_only] */
-    /* friend sui_system::validator_set_tests; */
-    /* #[test_only] */
-    /* friend sui_system::sui_system_tests; */
-    /* #[test_only] */
-    /* friend sui_system::governance_test_utils; */
 
     /// Invalid proof_of_possession field in ValidatorMetadata
     const EInvalidProofOfPossession: u64 = 0;
@@ -242,14 +222,14 @@ module sui_system::validator {
         ctx: &mut TxContext
     ): Validator {
         assert!(
-            vector::length(&net_address) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&p2p_address) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&primary_address) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&worker_address) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&name) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&description) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&image_url) <= MAX_VALIDATOR_METADATA_LENGTH
-                && vector::length(&project_url) <= MAX_VALIDATOR_METADATA_LENGTH,
+            net_address.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && p2p_address.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && primary_address.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && worker_address.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && name.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && description.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && image_url.length() <= MAX_VALIDATOR_METADATA_LENGTH
+                && project_url.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
         assert!(commission_rate <= MAX_COMMISSION_RATE, ECommissionRateTooHigh);
@@ -261,14 +241,14 @@ module sui_system::validator {
             network_pubkey_bytes,
             worker_pubkey_bytes,
             proof_of_possession,
-            string::from_ascii(ascii::string(name)),
-            string::from_ascii(ascii::string(description)),
+            name.to_ascii_string().to_string(),
+            description.to_ascii_string().to_string(),
             url::new_unsafe_from_bytes(image_url),
             url::new_unsafe_from_bytes(project_url),
-            string::from_ascii(ascii::string(net_address)),
-            string::from_ascii(ascii::string(p2p_address)),
-            string::from_ascii(ascii::string(primary_address)),
-            string::from_ascii(ascii::string(worker_address)),
+            net_address.to_ascii_string().to_string(),
+            p2p_address.to_ascii_string().to_string(),
+            primary_address.to_ascii_string().to_string(),
+            worker_address.to_ascii_string().to_string(),
             bag::new(ctx),
         );
 
@@ -285,11 +265,11 @@ module sui_system::validator {
 
     /// Deactivate this validator's staking pool
     public(package) fun deactivate(self: &mut Validator, deactivation_epoch: u64) {
-        staking_pool::deactivate_staking_pool(&mut self.staking_pool, deactivation_epoch)
+        self.staking_pool.deactivate_staking_pool(deactivation_epoch)
     }
 
     public(package) fun activate(self: &mut Validator, activation_epoch: u64) {
-        staking_pool::activate_staking_pool(&mut self.staking_pool, activation_epoch);
+        self.staking_pool.activate_staking_pool(activation_epoch);
     }
 
     /// Process pending stake and pending withdraws, and update the gas price.
@@ -305,15 +285,13 @@ module sui_system::validator {
         staker_address: address,
         ctx: &mut TxContext,
     ) : StakedSui {
-        let stake_amount = balance::value(&stake);
+        let stake_amount = stake.value();
         assert!(stake_amount > 0, EInvalidStakeAmount);
-        let stake_epoch = tx_context::epoch(ctx) + 1;
-        let staked_sui = staking_pool::request_add_stake(
-            &mut self.staking_pool, stake, stake_epoch, ctx
-        );
+        let stake_epoch = ctx.epoch() + 1;
+        let staked_sui = self.staking_pool.request_add_stake(stake, stake_epoch, ctx);
         // Process stake right away if staking pool is preactive.
-        if (staking_pool::is_preactive(&self.staking_pool)) {
-            staking_pool::process_pending_stake(&mut self.staking_pool);
+        if (self.staking_pool.is_preactive()) {
+            self.staking_pool.process_pending_stake();
         };
         self.next_epoch_stake = self.next_epoch_stake + stake_amount;
         event::emit(
@@ -321,7 +299,7 @@ module sui_system::validator {
                 pool_id: staking_pool_id(self),
                 validator_address: self.metadata.sui_address,
                 staker_address,
-                epoch: tx_context::epoch(ctx),
+                epoch: ctx.epoch(),
                 amount: stake_amount,
             }
         );
@@ -335,12 +313,11 @@ module sui_system::validator {
         staker_address: address,
         ctx: &mut TxContext,
     ) {
-        assert!(tx_context::epoch(ctx) == 0, ECalledDuringNonGenesis);
-        let stake_amount = balance::value(&stake);
+        assert!(ctx.epoch() == 0, ECalledDuringNonGenesis);
+        let stake_amount = stake.value();
         assert!(stake_amount > 0, EInvalidStakeAmount);
 
-        let staked_sui = staking_pool::request_add_stake(
-            &mut self.staking_pool,
+        let staked_sui = self.staking_pool.request_add_stake(
             stake,
             0, // epoch 0 -- genesis
             ctx
@@ -349,7 +326,7 @@ module sui_system::validator {
         transfer::public_transfer(staked_sui, staker_address);
 
         // Process stake right away
-        staking_pool::process_pending_stake(&mut self.staking_pool);
+        self.staking_pool.process_pending_stake();
         self.next_epoch_stake = self.next_epoch_stake + stake_amount;
     }
 
@@ -359,20 +336,19 @@ module sui_system::validator {
         staked_sui: StakedSui,
         ctx: &TxContext,
     ) : Balance<SUI> {
-        let principal_amount = staking_pool::staked_sui_amount(&staked_sui);
-        let stake_activation_epoch = staking_pool::stake_activation_epoch(&staked_sui);
-        let withdrawn_stake = staking_pool::request_withdraw_stake(
-                &mut self.staking_pool, staked_sui, ctx);
-        let withdraw_amount = balance::value(&withdrawn_stake);
+        let principal_amount = staked_sui.staked_sui_amount();
+        let stake_activation_epoch = staked_sui.stake_activation_epoch();
+        let withdrawn_stake = self.staking_pool.request_withdraw_stake(staked_sui, ctx);
+        let withdraw_amount = withdrawn_stake.value();
         let reward_amount = withdraw_amount - principal_amount;
         self.next_epoch_stake = self.next_epoch_stake - withdraw_amount;
         event::emit(
             UnstakingRequestEvent {
                 pool_id: staking_pool_id(self),
                 validator_address: self.metadata.sui_address,
-                staker_address: tx_context::sender(ctx),
+                staker_address: ctx.sender(),
                 stake_activation_epoch,
-                unstaking_epoch: tx_context::epoch(ctx),
+                unstaking_epoch: ctx.epoch(),
                 principal_amount,
                 reward_amount,
             }
@@ -388,7 +364,7 @@ module sui_system::validator {
         new_price: u64,
     ) {
         assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
-        let validator_address = *validator_cap::verified_operation_cap_address(&verified_cap);
+        let validator_address = *verified_cap.verified_operation_cap_address();
         assert!(validator_address == self.metadata.sui_address, EInvalidCap);
         self.next_epoch_gas_price = new_price;
     }
@@ -401,7 +377,7 @@ module sui_system::validator {
     ) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         assert!(new_price < MAX_VALIDATOR_GAS_PRICE, EGasPriceHigherThanThreshold);
-        let validator_address = *validator_cap::verified_operation_cap_address(&verified_cap);
+        let validator_address = *verified_cap.verified_operation_cap_address();
         assert!(validator_address == self.metadata.sui_address, EInvalidCap);
         self.next_epoch_gas_price = new_price;
         self.gas_price = new_price;
@@ -422,19 +398,19 @@ module sui_system::validator {
 
     /// Deposit stakes rewards into the validator's staking pool, called at the end of the epoch.
     public(package) fun deposit_stake_rewards(self: &mut Validator, reward: Balance<SUI>) {
-        self.next_epoch_stake = self.next_epoch_stake + balance::value(&reward);
-        staking_pool::deposit_rewards(&mut self.staking_pool, reward);
+        self.next_epoch_stake = self.next_epoch_stake + reward.value();
+        self.staking_pool.deposit_rewards(reward);
     }
 
     /// Process pending stakes and withdraws, called at the end of the epoch.
     public(package) fun process_pending_stakes_and_withdraws(self: &mut Validator, ctx: &TxContext) {
-        staking_pool::process_pending_stakes_and_withdraws(&mut self.staking_pool, ctx);
+        self.staking_pool.process_pending_stakes_and_withdraws(ctx);
         assert!(stake_amount(self) == self.next_epoch_stake, EInvalidStakeAmount);
     }
 
     /// Returns true if the validator is preactive.
     public fun is_preactive(self: &Validator): bool {
-        staking_pool::is_preactive(&self.staking_pool)
+        self.staking_pool.is_preactive()
     }
 
     public fun metadata(self: &Validator): &ValidatorMetadata {
@@ -536,11 +512,11 @@ module sui_system::validator {
     // TODO: this and `delegate_amount` and `total_stake` all seem to return the same value?
     // two of the functions can probably be removed.
     public fun total_stake_amount(self: &Validator): u64 {
-        staking_pool::sui_balance(&self.staking_pool)
+        self.staking_pool.sui_balance()
     }
 
     public fun stake_amount(self: &Validator): u64 {
-        staking_pool::sui_balance(&self.staking_pool)
+        self.staking_pool.sui_balance()
     }
 
     /// Return the total amount staked with this validator
@@ -559,11 +535,11 @@ module sui_system::validator {
     }
 
     public fun pending_stake_amount(self: &Validator): u64 {
-        staking_pool::pending_stake_amount(&self.staking_pool)
+        self.staking_pool.pending_stake_amount()
     }
 
     public fun pending_stake_withdraw_amount(self: &Validator): u64 {
-        staking_pool::pending_stake_withdraw_amount(&self.staking_pool)
+        self.staking_pool.pending_stake_withdraw_amount()
     }
 
     public fun gas_price(self: &Validator): u64 {
@@ -575,7 +551,7 @@ module sui_system::validator {
     }
 
     public fun pool_token_exchange_rate_at_epoch(self: &Validator, epoch: u64): PoolTokenExchangeRate {
-        staking_pool::pool_token_exchange_rate_at_epoch(&self.staking_pool, epoch)
+        self.staking_pool.pool_token_exchange_rate_at_epoch(epoch)
     }
 
     public fun staking_pool_id(self: &Validator): ID {
@@ -620,18 +596,18 @@ module sui_system::validator {
     }
 
     fun is_equal_some_and_value<T>(a: &Option<T>, b: &T): bool {
-        if (option::is_none(a)) {
+        if (a.is_none()) {
             false
         } else {
-            option::borrow(a) == b
+            a.borrow() == b
         }
     }
 
     fun is_equal_some<T>(a: &Option<T>, b: &Option<T>): bool {
-        if (option::is_none(a) || option::is_none(b)) {
+        if (a.is_none() || b.is_none()) {
             false
         } else {
-            option::borrow(a) == option::borrow(b)
+            a.borrow() == b.borrow()
         }
     }
 
@@ -640,7 +616,7 @@ module sui_system::validator {
     /// Create a new `UnverifiedValidatorOperationCap`, transfer to the validator,
     /// and registers it, thus revoking the previous cap's permission.
     public(package) fun new_unverified_validator_operation_cap_and_transfer(self: &mut Validator, ctx: &mut TxContext) {
-        let address = tx_context::sender(ctx);
+        let address = ctx.sender();
         assert!(address == self.metadata.sui_address, ENewCapNotCreatedByValidatorItself);
         let new_id = validator_cap::new_unverified_validator_operation_cap_and_transfer(address, ctx);
         self.operation_cap_id = new_id;
@@ -649,25 +625,25 @@ module sui_system::validator {
     /// Update name of the validator.
     public(package) fun update_name(self: &mut Validator, name: vector<u8>) {
         assert!(
-            vector::length(&name) <= MAX_VALIDATOR_METADATA_LENGTH,
+            name.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        self.metadata.name = string::from_ascii(ascii::string(name));
+        self.metadata.name = name.to_ascii_string().to_string();
     }
 
     /// Update description of the validator.
     public(package) fun update_description(self: &mut Validator, description: vector<u8>) {
         assert!(
-            vector::length(&description) <= MAX_VALIDATOR_METADATA_LENGTH,
+            description.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        self.metadata.description = string::from_ascii(ascii::string(description));
+        self.metadata.description = description.to_ascii_string().to_string();
     }
 
     /// Update image url of the validator.
     public(package) fun update_image_url(self: &mut Validator, image_url: vector<u8>) {
         assert!(
-            vector::length(&image_url) <= MAX_VALIDATOR_METADATA_LENGTH,
+            image_url.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
         self.metadata.image_url = url::new_unsafe_from_bytes(image_url);
@@ -676,7 +652,7 @@ module sui_system::validator {
     /// Update project url of the validator.
     public(package) fun update_project_url(self: &mut Validator, project_url: vector<u8>) {
         assert!(
-            vector::length(&project_url) <= MAX_VALIDATOR_METADATA_LENGTH,
+            project_url.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
         self.metadata.project_url = url::new_unsafe_from_bytes(project_url);
@@ -685,10 +661,10 @@ module sui_system::validator {
     /// Update network address of this validator, taking effects from next epoch
     public(package) fun update_next_epoch_network_address(self: &mut Validator, net_address: vector<u8>) {
         assert!(
-            vector::length(&net_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            net_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let net_address = string::from_ascii(ascii::string(net_address));
+        let net_address = net_address.to_ascii_string().to_string();
         self.metadata.next_epoch_net_address = option::some(net_address);
         validate_metadata(&self.metadata);
     }
@@ -697,10 +673,10 @@ module sui_system::validator {
     public(package) fun update_candidate_network_address(self: &mut Validator, net_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         assert!(
-            vector::length(&net_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            net_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let net_address = string::from_ascii(ascii::string(net_address));
+        let net_address = net_address.to_ascii_string().to_string();
         self.metadata.net_address = net_address;
         validate_metadata(&self.metadata);
     }
@@ -708,10 +684,10 @@ module sui_system::validator {
     /// Update p2p address of this validator, taking effects from next epoch
     public(package) fun update_next_epoch_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
         assert!(
-            vector::length(&p2p_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            p2p_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let p2p_address = string::from_ascii(ascii::string(p2p_address));
+        let p2p_address = p2p_address.to_ascii_string().to_string();
         self.metadata.next_epoch_p2p_address = option::some(p2p_address);
         validate_metadata(&self.metadata);
     }
@@ -720,10 +696,10 @@ module sui_system::validator {
     public(package) fun update_candidate_p2p_address(self: &mut Validator, p2p_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         assert!(
-            vector::length(&p2p_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            p2p_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let p2p_address = string::from_ascii(ascii::string(p2p_address));
+        let p2p_address = p2p_address.to_ascii_string().to_string();
         self.metadata.p2p_address = p2p_address;
         validate_metadata(&self.metadata);
     }
@@ -731,10 +707,10 @@ module sui_system::validator {
     /// Update primary address of this validator, taking effects from next epoch
     public(package) fun update_next_epoch_primary_address(self: &mut Validator, primary_address: vector<u8>) {
         assert!(
-            vector::length(&primary_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            primary_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let primary_address = string::from_ascii(ascii::string(primary_address));
+        let primary_address = primary_address.to_ascii_string().to_string();
         self.metadata.next_epoch_primary_address = option::some(primary_address);
         validate_metadata(&self.metadata);
     }
@@ -743,10 +719,10 @@ module sui_system::validator {
     public(package) fun update_candidate_primary_address(self: &mut Validator, primary_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         assert!(
-            vector::length(&primary_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            primary_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let primary_address = string::from_ascii(ascii::string(primary_address));
+        let primary_address = primary_address.to_ascii_string().to_string();
         self.metadata.primary_address = primary_address;
         validate_metadata(&self.metadata);
     }
@@ -754,10 +730,10 @@ module sui_system::validator {
     /// Update worker address of this validator, taking effects from next epoch
     public(package) fun update_next_epoch_worker_address(self: &mut Validator, worker_address: vector<u8>) {
         assert!(
-            vector::length(&worker_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            worker_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let worker_address = string::from_ascii(ascii::string(worker_address));
+        let worker_address = worker_address.to_ascii_string().to_string();
         self.metadata.next_epoch_worker_address = option::some(worker_address);
         validate_metadata(&self.metadata);
     }
@@ -766,10 +742,10 @@ module sui_system::validator {
     public(package) fun update_candidate_worker_address(self: &mut Validator, worker_address: vector<u8>) {
         assert!(is_preactive(self), ENotValidatorCandidate);
         assert!(
-            vector::length(&worker_address) <= MAX_VALIDATOR_METADATA_LENGTH,
+            worker_address.length() <= MAX_VALIDATOR_METADATA_LENGTH,
             EValidatorMetadataExceedingLengthLimit
         );
-        let worker_address = string::from_ascii(ascii::string(worker_address));
+        let worker_address = worker_address.to_ascii_string().to_string();
         self.metadata.worker_address = worker_address;
         validate_metadata(&self.metadata);
     }
@@ -819,40 +795,40 @@ module sui_system::validator {
     /// NOTE: this function SHOULD ONLY be called by validator_set when
     /// advancing an epoch.
     public(package) fun effectuate_staged_metadata(self: &mut Validator) {
-        if (option::is_some(next_epoch_network_address(self))) {
-            self.metadata.net_address = option::extract(&mut self.metadata.next_epoch_net_address);
+        if (next_epoch_network_address(self).is_some()) {
+            self.metadata.net_address = self.metadata.next_epoch_net_address.extract();
             self.metadata.next_epoch_net_address = option::none();
         };
 
-        if (option::is_some(next_epoch_p2p_address(self))) {
-            self.metadata.p2p_address = option::extract(&mut self.metadata.next_epoch_p2p_address);
+        if (next_epoch_p2p_address(self).is_some()) {
+            self.metadata.p2p_address = self.metadata.next_epoch_p2p_address.extract();
             self.metadata.next_epoch_p2p_address = option::none();
         };
 
-        if (option::is_some(next_epoch_primary_address(self))) {
-            self.metadata.primary_address = option::extract(&mut self.metadata.next_epoch_primary_address);
+        if (next_epoch_primary_address(self).is_some()) {
+            self.metadata.primary_address = self.metadata.next_epoch_primary_address.extract();
             self.metadata.next_epoch_primary_address = option::none();
         };
 
-        if (option::is_some(next_epoch_worker_address(self))) {
-            self.metadata.worker_address = option::extract(&mut self.metadata.next_epoch_worker_address);
+        if (next_epoch_worker_address(self).is_some()) {
+            self.metadata.worker_address = self.metadata.next_epoch_worker_address.extract();
             self.metadata.next_epoch_worker_address = option::none();
         };
 
-        if (option::is_some(next_epoch_protocol_pubkey_bytes(self))) {
-            self.metadata.protocol_pubkey_bytes = option::extract(&mut self.metadata.next_epoch_protocol_pubkey_bytes);
+        if (next_epoch_protocol_pubkey_bytes(self).is_some()) {
+            self.metadata.protocol_pubkey_bytes = self.metadata.next_epoch_protocol_pubkey_bytes.extract();
             self.metadata.next_epoch_protocol_pubkey_bytes = option::none();
-            self.metadata.proof_of_possession = option::extract(&mut self.metadata.next_epoch_proof_of_possession);
+            self.metadata.proof_of_possession = self.metadata.next_epoch_proof_of_possession.extract();
             self.metadata.next_epoch_proof_of_possession = option::none();
         };
 
-        if (option::is_some(next_epoch_network_pubkey_bytes(self))) {
-            self.metadata.network_pubkey_bytes = option::extract(&mut self.metadata.next_epoch_network_pubkey_bytes);
+        if (next_epoch_network_pubkey_bytes(self).is_some()) {
+            self.metadata.network_pubkey_bytes = self.metadata.next_epoch_network_pubkey_bytes.extract();
             self.metadata.next_epoch_network_pubkey_bytes = option::none();
         };
 
-        if (option::is_some(next_epoch_worker_pubkey_bytes(self))) {
-            self.metadata.worker_pubkey_bytes = option::extract(&mut self.metadata.next_epoch_worker_pubkey_bytes);
+        if (next_epoch_worker_pubkey_bytes(self).is_some()) {
+            self.metadata.worker_pubkey_bytes = self.metadata.next_epoch_worker_pubkey_bytes.extract();
             self.metadata.next_epoch_worker_pubkey_bytes = option::none();
         };
     }
@@ -931,14 +907,14 @@ module sui_system::validator {
                 network_pubkey_bytes,
                 worker_pubkey_bytes,
                 proof_of_possession,
-                string::from_ascii(ascii::string(name)),
-                string::from_ascii(ascii::string(description)),
+                name.to_ascii_string().to_string(),
+                description.to_ascii_string().to_string(),
                 url::new_unsafe_from_bytes(image_url),
                 url::new_unsafe_from_bytes(project_url),
-                string::from_ascii(ascii::string(net_address)),
-                string::from_ascii(ascii::string(p2p_address)),
-                string::from_ascii(ascii::string(primary_address)),
-                string::from_ascii(ascii::string(worker_address)),
+                net_address.to_ascii_string().to_string(),
+                p2p_address.to_ascii_string().to_string(),
+                primary_address.to_ascii_string().to_string(),
+                worker_address.to_ascii_string().to_string(),
                 bag::new(ctx),
             ),
             gas_price,
@@ -947,15 +923,15 @@ module sui_system::validator {
         );
 
         // Add the validator's starting stake to the staking pool if there exists one.
-        if (option::is_some(&initial_stake_option)) {
+        if (initial_stake_option.is_some()) {
             request_add_stake_at_genesis(
                 &mut validator,
-                option::extract(&mut initial_stake_option),
+                initial_stake_option.extract(),
                 sui_address, // give the stake to the validator
                 ctx
             );
         };
-        option::destroy_none(initial_stake_option);
+        initial_stake_option.destroy_none();
 
         if (is_active_at_genesis) {
             activate(&mut validator, 0);

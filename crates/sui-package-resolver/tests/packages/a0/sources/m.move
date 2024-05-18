@@ -3,18 +3,18 @@
 
 #[allow(unused_field)]
 module a::m {
-    struct T0 {
+    public struct T0 {
         b: bool,
         v: vector<T1<T2, u128>>,
     }
 
-    struct T1<P0, P1> {
+    public struct T1<P0, P1> {
         a: address,
         p: P0,
         q: vector<P1>,
     }
 
-    struct T2 {
+    public struct T2 {
         x: u8,
     }
 }

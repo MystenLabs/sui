@@ -314,7 +314,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bytecode-verifier-tests"
+name = "bytecode-verifier-prop-tests"
 version = "0.1.0"
 dependencies = [
  "fail",
@@ -322,10 +322,71 @@ dependencies = [
  "invalid-mutations",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "petgraph",
  "proptest",
+]
+
+[[package]]
+name = "bytecode-verifier-tests"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter",
+ "move-binary-format",
+ "move-bytecode-verifier",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v0"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter-v2",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v0",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v1"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter-v2",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v1",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "bytecode-verifier-tests-v2"
+version = "0.1.0"
+dependencies = [
+ "fail",
+ "hex",
+ "move-abstract-interpreter-v2",
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+ "move-bytecode-verifier-v2",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
 ]
 
 [[package]]
@@ -1317,6 +1378,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",
@@ -1328,6 +1390,12 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
+name = "leb128"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
@@ -1489,6 +1557,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "move-abstract-interpreter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
+name = "move-abstract-interpreter-v2"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-verifier-meter",
+]
+
+[[package]]
 name = "move-abstract-stack"
 version = "0.0.1"
 
@@ -1512,6 +1596,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde_json",
+ "sha2",
  "tempfile",
  "url",
  "vfs",
@@ -1569,10 +1654,65 @@ name = "move-bytecode-verifier"
 version = "0.1.0"
 dependencies = [
  "hex-literal",
- "invalid-mutations",
+ "move-abstract-interpreter",
  "move-abstract-stack",
  "move-binary-format",
  "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-meter"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-config",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v0"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "move-abstract-interpreter-v2",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v1"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "move-abstract-interpreter-v2",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
+ "move-core-types",
+ "move-vm-config",
+ "petgraph",
+]
+
+[[package]]
+name = "move-bytecode-verifier-v2"
+version = "0.1.0"
+dependencies = [
+ "hex-literal",
+ "move-abstract-interpreter-v2",
+ "move-abstract-stack",
+ "move-binary-format",
+ "move-borrow-graph",
+ "move-bytecode-verifier-meter",
  "move-core-types",
  "move-vm-config",
  "petgraph",
@@ -1617,8 +1757,8 @@ dependencies = [
  "move-ir-types",
  "move-package",
  "move-prover",
- "move-read-write-set-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-unit-test",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -1641,6 +1781,7 @@ dependencies = [
  "move-core-types",
  "num-bigint",
  "once_cell",
+ "proptest",
  "serde",
  "sha2",
  "vfs",
@@ -1670,10 +1811,10 @@ dependencies = [
  "move-stdlib",
  "move-symbol-pool",
  "once_cell",
- "pathdiff",
  "petgraph",
  "regex",
  "serde",
+ "serde_json",
  "similar",
  "stacker",
  "tempfile",
@@ -1698,6 +1839,7 @@ dependencies = [
  "enum-compat-util",
  "ethnum",
  "hex",
+ "leb128",
  "move-proc-macros",
  "num",
  "once_cell",
@@ -1710,6 +1852,7 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+ "thiserror",
  "uint",
 ]
 
@@ -1722,6 +1865,7 @@ dependencies = [
  "clap 4.4.1",
  "codespan",
  "colored",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -1740,6 +1884,7 @@ dependencies = [
  "clap 4.4.1",
  "colored",
  "hex",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-command-line-common",
@@ -1801,6 +1946,7 @@ dependencies = [
  "anyhow",
  "bcs",
  "clap 4.4.1",
+ "move-abstract-interpreter",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -1914,6 +2060,7 @@ dependencies = [
  "toml",
  "toml_edit 0.14.4",
  "treeline",
+ "vfs",
  "walkdir",
  "whoami",
 ]
@@ -1964,15 +2111,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-read-write-set-types"
-version = "0.0.3"
-dependencies = [
- "move-binary-format",
- "move-core-types",
- "serde",
-]
-
-[[package]]
 name = "move-stackless-bytecode"
 version = "0.1.0"
 dependencies = [
@@ -1990,7 +2128,6 @@ dependencies = [
  "move-core-types",
  "move-model",
  "move-prover-test-utils",
- "move-read-write-set-types",
  "move-stdlib",
  "num",
  "paste",
@@ -2033,6 +2170,7 @@ dependencies = [
  "move-errmapgen",
  "move-package",
  "move-prover",
+ "move-stdlib-natives",
  "move-unit-test",
  "move-vm-runtime",
  "move-vm-types",
@@ -2040,6 +2178,65 @@ dependencies = [
  "sha3",
  "smallvec",
  "tempfile",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-natives"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+]
+
+[[package]]
+name = "move-stdlib-natives-v0"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime-v0",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-natives-v1"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime-v1",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
+ "walkdir",
+]
+
+[[package]]
+name = "move-stdlib-natives-v2"
+version = "0.1.1"
+dependencies = [
+ "hex",
+ "move-binary-format",
+ "move-core-types",
+ "move-vm-runtime-v2",
+ "move-vm-types",
+ "sha2",
+ "sha3",
+ "smallvec",
  "walkdir",
 ]
 
@@ -2072,6 +2269,7 @@ dependencies = [
  "move-ir-compiler",
  "move-ir-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-config",
  "move-vm-runtime",
@@ -2089,6 +2287,7 @@ name = "move-unit-test"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "better_any",
  "clap 4.4.1",
  "codespan-reporting",
@@ -2105,6 +2304,7 @@ dependencies = [
  "move-model",
  "move-stackless-bytecode-interpreter",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-symbol-pool",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2135,6 +2335,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-config",
  "move-vm-profiler",
  "move-vm-runtime",
@@ -2164,6 +2365,78 @@ dependencies = [
  "hex",
  "move-binary-format",
  "move-bytecode-verifier",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v0"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v0",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v1"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v1",
+ "move-compiler",
+ "move-core-types",
+ "move-ir-compiler",
+ "move-vm-config",
+ "move-vm-profiler",
+ "move-vm-types",
+ "once_cell",
+ "parking_lot 0.11.2",
+ "proptest",
+ "sha3",
+ "smallvec",
+ "tracing",
+]
+
+[[package]]
+name = "move-vm-runtime-v2"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "better_any",
+ "fail",
+ "hex",
+ "move-binary-format",
+ "move-bytecode-verifier-v2",
  "move-compiler",
  "move-core-types",
  "move-ir-compiler",
@@ -2456,12 +2729,6 @@ name = "paste"
 version = "1.0.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f746c4065a8fa3fe23974dd82f15431cc8d40779821001404d10d2e79ca7d79"
-
-[[package]]
-name = "pathdiff"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
 
 [[package]]
 name = "percent-encoding"
@@ -3365,6 +3632,7 @@ dependencies = [
  "move-compiler",
  "move-core-types",
  "move-stdlib",
+ "move-stdlib-natives",
  "move-vm-runtime",
  "move-vm-test-utils",
  "move-vm-types",

@@ -7,9 +7,6 @@
 /// a transaction, use it and put back in the end. Hot-potato `Borrow` makes
 /// sure the object is returned and was not swapped for another one.
 module sui::borrow {
-    use sui::object::{Self, ID};
-    use std::option::{Self, Option};
-    use sui::tx_context::{Self, TxContext};
 
     /// The `Borrow` does not match the `Referent`.
     const EWrongBorrow: u64 = 0;
@@ -36,7 +33,7 @@ module sui::borrow {
     /// Borrow the `T` from the `Referent` receiving the `T` and a `Borrow`
     /// hot potato.
     public fun borrow<T: key + store>(self: &mut Referent<T>): (T, Borrow) {
-        let value = option::extract(&mut self.value);
+        let value = self.value.extract();
         let id = object::id(&value);
 
         (value, Borrow {
@@ -51,13 +48,13 @@ module sui::borrow {
 
         assert!(object::id(&value) == obj, EWrongValue);
         assert!(self.id == ref, EWrongBorrow);
-        option::fill(&mut self.value, value);
+        self.value.fill(value);
     }
 
     /// Unpack the `Referent` struct and return the value.
     public fun destroy<T: key + store>(self: Referent<T>): T {
         let Referent { id: _, value } = self;
-        option::destroy_some(value)
+        value.destroy_some()
     }
 
     #[test_only]
@@ -74,7 +71,7 @@ module sui::borrow {
         put_back(&mut ref, value, borrow);
 
         let Test { id } = destroy(ref);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -92,10 +89,10 @@ module sui::borrow {
         put_back(&mut ref_2, v_1, b_2);
 
         let Test { id } = destroy(ref_1);
-        object::delete(id);
+        id.delete();
 
         let Test { id } = destroy(ref_2);
-        object::delete(id);
+        id.delete();
     }
 
     #[test]
@@ -113,9 +110,9 @@ module sui::borrow {
         put_back(&mut ref_2, v_1, b_1);
 
         let Test { id } = destroy(ref_1);
-        object::delete(id);
+        id.delete();
 
         let Test { id } = destroy(ref_2);
-        object::delete(id);
+        id.delete();
     }
 }

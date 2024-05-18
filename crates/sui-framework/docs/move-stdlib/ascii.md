@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x1::ascii`
 ---
@@ -149,11 +148,8 @@ Convert a vector of bytes <code>bytes</code> into an <code><a href="../move-stdl
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/string.md#0x1_string">string</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a> {
    <b>let</b> x = <a href="../move-stdlib/ascii.md#0x1_ascii_try_string">try_string</a>(bytes);
-   <b>assert</b>!(
-        <a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&x),
-        <a href="../move-stdlib/ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>
-   );
-   <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(x)
+   <b>assert</b>!(x.is_some(), <a href="../move-stdlib/ascii.md#0x1_ascii_EINVALID_ASCII_CHARACTER">EINVALID_ASCII_CHARACTER</a>);
+   x.destroy_some()
 }
 </code></pre>
 
@@ -180,10 +176,10 @@ characters. Otherwise returns <code>None</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_try_string">try_string</a>(bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;): Option&lt;<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>&gt; {
-    <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&bytes);
+    <b>let</b> len = bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
-        <b>let</b> possible_byte = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&bytes, i);
+        <b>let</b> possible_byte = bytes[i];
         <b>if</b> (!<a href="../move-stdlib/ascii.md#0x1_ascii_is_valid_char">is_valid_char</a>(possible_byte)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
         i = i + 1;
     };
@@ -213,10 +209,10 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_all_characters_printable">all_characters_printable</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): bool {
-    <b>let</b> len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes);
+    <b>let</b> len = <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
-        <b>let</b> byte = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&<a href="../move-stdlib/string.md#0x1_string">string</a>.bytes, i);
+        <b>let</b> byte = <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes[i];
         <b>if</b> (!<a href="../move-stdlib/ascii.md#0x1_ascii_is_printable_char">is_printable_char</a>(byte)) <b>return</b> <b>false</b>;
         i = i + 1;
     };
@@ -244,7 +240,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_push_char">push_char</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>, char: <a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a>) {
-    <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes, char.byte);
+    <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.push_back(char.byte);
 }
 </code></pre>
 
@@ -268,7 +264,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_pop_char">pop_char</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<b>mut</b> <a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): <a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a> {
-    <a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a> { byte: <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes) }
+    <a href="../move-stdlib/ascii.md#0x1_ascii_Char">Char</a> { byte: <a href="../move-stdlib/string.md#0x1_string">string</a>.bytes.pop_back() }
 }
 </code></pre>
 
@@ -292,7 +288,7 @@ Returns <code><b>false</b></code> otherwise. Not all <code><a href="../move-stdl
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>: &<a href="../move-stdlib/ascii.md#0x1_ascii_String">String</a>): u64 {
-    <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>(<a href="../move-stdlib/string.md#0x1_string">string</a>))
+    <a href="../move-stdlib/string.md#0x1_string">string</a>.<a href="../move-stdlib/ascii.md#0x1_ascii_as_bytes">as_bytes</a>().<a href="../move-stdlib/ascii.md#0x1_ascii_length">length</a>()
 }
 </code></pre>
 

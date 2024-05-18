@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::table`
 ---
@@ -322,7 +321,7 @@ Aborts with <code><a href="../sui-framework/table.md#0x2_table_ETableNotEmpty">E
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table.md#0x2_table_destroy_empty">destroy_empty</a>&lt;K: <b>copy</b> + drop + store, V: store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: <a href="../sui-framework/table.md#0x2_table_Table">Table</a>&lt;K, V&gt;) {
     <b>let</b> <a href="../sui-framework/table.md#0x2_table_Table">Table</a> { id, size } = <a href="../sui-framework/table.md#0x2_table">table</a>;
     <b>assert</b>!(size == 0, <a href="../sui-framework/table.md#0x2_table_ETableNotEmpty">ETableNotEmpty</a>);
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 
@@ -349,7 +348,7 @@ Usable only if the value type <code>V</code> has the <code>drop</code> ability
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table.md#0x2_table_drop">drop</a>&lt;K: <b>copy</b> + drop + store, V: drop + store&gt;(<a href="../sui-framework/table.md#0x2_table">table</a>: <a href="../sui-framework/table.md#0x2_table_Table">Table</a>&lt;K, V&gt;) {
     <b>let</b> <a href="../sui-framework/table.md#0x2_table_Table">Table</a> { id, size: _ } = <a href="../sui-framework/table.md#0x2_table">table</a>;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 

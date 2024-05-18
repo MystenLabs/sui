@@ -97,7 +97,7 @@ export default function OfflineSigner() {
 				<TabsContent value="transaction">
 					<div className="flex flex-col items-start gap-4">
 						<Textarea value={bytes} onChange={(e) => setBytes(e.target.value.trim())} />
-						<div className="flex gap-4 mb-3">
+						<div className="flex flex-wrap gap-4 mb-3">
 							<ConnectWallet />
 							<Button disabled={!currentAccount || !bytes || isPending} onClick={() => mutate()}>
 								Sign Transaction

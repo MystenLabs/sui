@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::coin`
 ---
@@ -386,7 +385,7 @@ to different security guarantees (TreasuryCap can be created only once for a typ
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_treasury_into_supply">treasury_into_supply</a>&lt;T&gt;(treasury: <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;): Supply&lt;T&gt; {
     <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a> { id, total_supply } = treasury;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
     total_supply
 }
 </code></pre>
@@ -462,7 +461,7 @@ Public getter for the coin's value
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_value">value</a>&lt;T&gt;(self: &<a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;): u64 {
-    <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>)
+    self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_value">value</a>()
 }
 </code></pre>
 
@@ -563,7 +562,7 @@ Destruct a Coin wrapper and keep the balance.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_into_balance">into_balance</a>&lt;T&gt;(<a href="../sui-framework/coin.md#0x2_coin">coin</a>: <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;): Balance&lt;T&gt; {
     <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> { id, <a href="../sui-framework/balance.md#0x2_balance">balance</a> } = <a href="../sui-framework/coin.md#0x2_coin">coin</a>;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
     <a href="../sui-framework/balance.md#0x2_balance">balance</a>
 }
 </code></pre>
@@ -594,7 +593,7 @@ Aborts if <code>value &gt; <a href="../sui-framework/balance.md#0x2_balance">bal
 ): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>, value)
+        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_split">split</a>(value)
     }
 }
 </code></pre>
@@ -620,7 +619,7 @@ Put a <code><a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;</
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_put">put</a>&lt;T&gt;(<a href="../sui-framework/balance.md#0x2_balance">balance</a>: &<b>mut</b> Balance&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin">coin</a>: <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
-    <a href="../sui-framework/balance.md#0x2_balance_join">balance::join</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>, <a href="../sui-framework/coin.md#0x2_coin_into_balance">into_balance</a>(<a href="../sui-framework/coin.md#0x2_coin">coin</a>));
+    <a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_join">join</a>(<a href="../sui-framework/coin.md#0x2_coin_into_balance">into_balance</a>(<a href="../sui-framework/coin.md#0x2_coin">coin</a>));
 }
 </code></pre>
 
@@ -647,8 +646,8 @@ Aborts if <code>c.value + self.value &gt; U64_MAX</code>
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;, c: <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
     <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> { id, <a href="../sui-framework/balance.md#0x2_balance">balance</a> } = c;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
-    <a href="../sui-framework/balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>, <a href="../sui-framework/balance.md#0x2_balance">balance</a>);
+    id.delete();
+    self.<a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_join">join</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>);
 }
 </code></pre>
 
@@ -707,11 +706,11 @@ Split coin <code>self</code> into <code>n - 1</code> coins with equal balances. 
     <b>assert</b>!(n &gt; 0, <a href="../sui-framework/coin.md#0x2_coin_EInvalidArg">EInvalidArg</a>);
     <b>assert</b>!(n &lt;= <a href="../sui-framework/coin.md#0x2_coin_value">value</a>(self), <a href="../sui-framework/coin.md#0x2_coin_ENotEnough">ENotEnough</a>);
 
-    <b>let</b> <b>mut</b> vec = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>&lt;<a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;&gt;();
+    <b>let</b> <b>mut</b> vec = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 0;
     <b>let</b> split_amount = <a href="../sui-framework/coin.md#0x2_coin_value">value</a>(self) / n;
     <b>while</b> (i &lt; n - 1) {
-        <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> vec, <a href="../sui-framework/coin.md#0x2_coin_split">split</a>(self, split_amount, ctx));
+        vec.push_back(self.<a href="../sui-framework/coin.md#0x2_coin_split">split</a>(split_amount, ctx));
         i = i + 1;
     };
     vec
@@ -766,8 +765,8 @@ Destroy a coin with value zero
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_destroy_zero">destroy_zero</a>&lt;T&gt;(c: <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;) {
     <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> { id, <a href="../sui-framework/balance.md#0x2_balance">balance</a> } = c;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
-    <a href="../sui-framework/balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(<a href="../sui-framework/balance.md#0x2_balance">balance</a>)
+    id.delete();
+    <a href="../sui-framework/balance.md#0x2_balance">balance</a>.<a href="../sui-framework/coin.md#0x2_coin_destroy_zero">destroy_zero</a>()
 }
 </code></pre>
 
@@ -900,7 +899,7 @@ in <code>cap</code> accordingly.
 ): <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt; {
     <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> {
         id: <a href="../sui-framework/object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: <a href="../sui-framework/balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> cap.total_supply, value)
+        <a href="../sui-framework/balance.md#0x2_balance">balance</a>: cap.total_supply.increase_supply(value)
     }
 }
 </code></pre>
@@ -930,7 +929,7 @@ Aborts if <code>value</code> + <code>cap.total_supply</code> >= U64_MAX
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_mint_balance">mint_balance</a>&lt;T&gt;(
     cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, value: u64
 ): Balance&lt;T&gt; {
-    <a href="../sui-framework/balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(&<b>mut</b> cap.total_supply, value)
+    cap.total_supply.increase_supply(value)
 }
 </code></pre>
 
@@ -957,8 +956,8 @@ accordingly.
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/coin.md#0x2_coin_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_TreasuryCap">TreasuryCap</a>&lt;T&gt;, c: <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a>&lt;T&gt;): u64 {
     <b>let</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">Coin</a> { id, <a href="../sui-framework/balance.md#0x2_balance">balance</a> } = c;
-    <a href="../sui-framework/object.md#0x2_object_delete">object::delete</a>(id);
-    <a href="../sui-framework/balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(&<b>mut</b> cap.total_supply, <a href="../sui-framework/balance.md#0x2_balance">balance</a>)
+    id.delete();
+    cap.total_supply.decrease_supply(<a href="../sui-framework/balance.md#0x2_balance">balance</a>)
 }
 </code></pre>
 
@@ -990,7 +989,7 @@ from interacting with the specified coin type as an input to a transaction.
    _ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> `type` =
-        <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()));
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
     <a href="../sui-framework/deny_list.md#0x2_deny_list_add">deny_list::add</a>(
         <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
         <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
@@ -1028,7 +1027,7 @@ Aborts with <code>ENotFrozen</code> if the address is not already in the list.
    _ctx: &<b>mut</b> TxContext
 ) {
     <b>let</b> `type` =
-        <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()));
+        <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;()).into_bytes();
     <a href="../sui-framework/deny_list.md#0x2_deny_list_remove">deny_list::remove</a>(
         <a href="../sui-framework/deny_list.md#0x2_deny_list">deny_list</a>,
         <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
@@ -1066,13 +1065,8 @@ return false if given a non-coin type.
     <b>let</b> name = <a href="../move-stdlib/type_name.md#0x1_type_name_get_with_original_ids">type_name::get_with_original_ids</a>&lt;T&gt;();
     <b>if</b> (<a href="../move-stdlib/type_name.md#0x1_type_name_is_primitive">type_name::is_primitive</a>(&name)) <b>return</b> <b>false</b>;
 
-    <b>let</b> `type` = <a href="../move-stdlib/ascii.md#0x1_ascii_into_bytes">ascii::into_bytes</a>(<a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name));
-    <a href="../sui-framework/deny_list.md#0x2_deny_list_contains">deny_list::contains</a>(
-        freezer,
-        <a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>,
-        `type`,
-        addr,
-    )
+    <b>let</b> `type` = <a href="../move-stdlib/type_name.md#0x1_type_name_into_string">type_name::into_string</a>(name).into_bytes();
+    freezer.contains(<a href="../sui-framework/coin.md#0x2_coin_DENY_LIST_COIN_INDEX">DENY_LIST_COIN_INDEX</a>, `type`, addr)
 }
 </code></pre>
 

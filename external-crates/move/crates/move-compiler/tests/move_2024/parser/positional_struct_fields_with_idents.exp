@@ -1,8 +1,6 @@
 error[E01002]: unexpected token
-  ┌─ tests/move_2024/parser/positional_struct_fields_with_idents.move:4:24
+  ┌─ tests/move_2024/parser/positional_struct_fields_with_idents.move:3:23
   │
-4 │     public struct Foo(x: u64) has copy, drop;
-  │                      - ^ Expected ')'
-  │                      │  
-  │                      To match this '('
+3 │     public struct Foo(x: u64) has copy, drop;
+  │                       ^ Cannot use named fields in a positional definition
 

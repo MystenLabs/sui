@@ -1,4 +1,3 @@
-
 ---
 title: Module `0xdee9::critbit`
 ---
@@ -575,7 +574,7 @@ title: Module `0xdee9::critbit`
     <b>assert</b>!(closest_key != key, <a href="critbit.md#0xdee9_critbit_EKeyAlreadyExist">EKeyAlreadyExist</a>);
 
     // Note that we reserve count_leading_zeros of form u128 for future <b>use</b>
-    <b>let</b> <a href="critbit.md#0xdee9_critbit">critbit</a> = 64 - (count_leading_zeros(((closest_key ^ key) <b>as</b> u128) ) -64);
+    <b>let</b> <a href="critbit.md#0xdee9_critbit">critbit</a> = 64 - (count_leading_zeros((closest_key ^ key) <b>as</b> u128) - 64);
     <b>let</b> new_mask = 1u64 &lt;&lt; (<a href="critbit.md#0xdee9_critbit">critbit</a> - 1);
 
     <b>let</b> new_internal_node= <a href="critbit.md#0xdee9_critbit_InternalNode">InternalNode</a> {
@@ -743,7 +742,7 @@ title: Module `0xdee9::critbit`
 
         <b>if</b> (removed_leaf_grand_parent_index == <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>) {
             // Parent of the removed leaf is the tree root
-            // Update the parent of the sibling node and and set sibling <b>as</b> the tree root
+            // Update the parent of the sibling node and set sibling <b>as</b> the tree root
             <b>if</b> (sibling_index &lt; <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>) {
                 // sibling is an <b>internal</b> node
                 <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> tree.internal_nodes, sibling_index).parent = <a href="critbit.md#0xdee9_critbit_PARTITION_INDEX">PARTITION_INDEX</a>;

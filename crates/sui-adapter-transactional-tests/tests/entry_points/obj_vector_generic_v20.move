@@ -7,11 +7,6 @@
 
 //# publish
 module Test::M {
-    use sui::object::{Self, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-    use std::vector;
-
     public struct ObjAny<phantom Any> has key, store {
         id: UID,
         value: u64

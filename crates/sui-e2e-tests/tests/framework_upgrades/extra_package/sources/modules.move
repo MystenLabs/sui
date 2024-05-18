@@ -6,7 +6,7 @@ module sui_extra::msim_extra_1 {
     use sui::transfer;
     use sui::tx_context::TxContext;
 
-    struct S has key { id: UID }
+    public struct S has key { id: UID }
 
     fun init(ctx: &mut TxContext) {
         transfer::share_object(S {

@@ -27,15 +27,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 18,
-                    end: 32,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 18,
+                        end: 32,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -62,15 +67,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 22,
-                    end: 36,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 22,
+                        end: 36,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -106,15 +116,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 19,
-                    end: 33,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 19,
+                        end: 33,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -169,15 +184,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 28,
-                    end: 42,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 28,
+                        end: 42,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -223,15 +243,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 25,
-                    end: 39,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 25,
+                        end: 39,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -292,15 +317,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 27,
-                    end: 41,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 27,
+                        end: 41,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -355,15 +385,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 23,
-                    end: 37,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 23,
+                        end: 37,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -409,15 +444,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 20,
-                    end: 34,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 20,
+                        end: 34,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -472,15 +512,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 23,
-                    end: 37,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 23,
+                        end: 37,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -526,15 +571,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 20,
-                    end: 34,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 20,
+                        end: 34,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -568,15 +618,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 25,
-                    end: 39,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 25,
+                        end: 39,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -629,15 +684,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 32,
-                    end: 46,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 32,
+                        end: 46,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -737,15 +797,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 72,
-                    end: 86,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 72,
+                        end: 86,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -822,15 +887,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 41,
-                    end: 55,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 41,
+                        end: 55,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -907,15 +977,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 40,
-                    end: 54,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 40,
+                        end: 54,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -943,15 +1018,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 11,
-                    end: 25,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 11,
+                        end: 25,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1004,15 +1084,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 15,
-                    end: 29,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 15,
+                        end: 29,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1050,15 +1135,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 15,
-                    end: 29,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 15,
+                        end: 29,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1096,15 +1186,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 16,
-                    end: 30,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 16,
+                        end: 30,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1170,15 +1265,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 27,
-                    end: 41,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 27,
+                        end: 41,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1222,15 +1322,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 16,
-                    end: 30,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 16,
+                        end: 30,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1278,15 +1383,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 19,
-                    end: 33,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 19,
+                        end: 33,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1297,6 +1407,8 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: Some(
                 Spanned {
                     span: Span {
@@ -1307,13 +1419,16 @@ expression: parsed
                 },
             ),
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 16,
-                    end: 30,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 16,
+                        end: 30,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1324,15 +1439,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: true,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 10,
-                    end: 24,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 10,
+                        end: 24,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1343,15 +1463,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: true,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 7,
-                    end: 21,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 7,
+                        end: 21,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1362,15 +1487,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: true,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 10,
-                    end: 24,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 10,
+                        end: 24,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
     (
@@ -1381,15 +1511,20 @@ expression: parsed
         ProgramMetadata {
             preview_set: false,
             summary_set: false,
+            serialize_unsigned_set: false,
+            serialize_signed_set: false,
             gas_object_id: None,
             json_set: false,
-            gas_budget: Spanned {
-                span: Span {
-                    start: 15,
-                    end: 29,
+            dry_run_set: false,
+            gas_budget: Some(
+                Spanned {
+                    span: Span {
+                        start: 15,
+                        end: 29,
+                    },
+                    value: 1,
                 },
-                value: 1,
-            },
+            ),
         },
     ),
 ]

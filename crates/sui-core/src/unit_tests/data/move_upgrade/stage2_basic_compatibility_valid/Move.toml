@@ -1,6 +1,7 @@
 [package]
 name = "stage2_basic_compatibility_valid"
 version = "0.0.3"
+edition = "2024.beta"
 
 [dependencies]
 Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
@@ -8,3 +9,6 @@ Sui = { local = "../../../../../../sui-framework/packages/sui-framework" }
 [addresses]
 base_addr = "0x0"
 sui = "0x2"
+
+[dev-addresses]
+dep_on_upgrading_package = "0x0"

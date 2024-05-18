@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { fromB64, toB58, toB64 } from '@mysten/bcs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, test } from 'vitest';
 
 import { bcs } from '../../../src/bcs';
 import { parseSerializedSignature, SIGNATURE_SCHEME_TO_FLAG } from '../../../src/cryptography';
-// import { setup, TestToolbox } from './utils/setup';
 import { SignatureWithBytes } from '../../../src/cryptography/keypair';
 import { PublicKey } from '../../../src/cryptography/publickey';
 import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519';
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
-import { MultiSigPublicKey, parsePartialSignatures } from '../../../src/multisig';
+import { MultiSigPublicKey, MultiSigSigner, parsePartialSignatures } from '../../../src/multisig';
 import { TransactionBlock } from '../../../src/transactions';
+import { verifyPersonalMessage, verifyTransactionBlock } from '../../../src/verify';
 import { toZkLoginPublicIdentifier } from '../../../src/zklogin/publickey';
 
 describe('Multisig scenarios', () => {
@@ -67,6 +67,9 @@ describe('Multisig scenarios', () => {
 		expect(await k3.getPublicKey().verifyTransactionBlock(bytes, signature)).toEqual(true);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey2 = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// multisig (sig3 weight 3 >= threshold ) verifies ok
@@ -132,6 +135,9 @@ describe('Multisig scenarios', () => {
 		).toThrowError(new Error('Received signature from unknown public key'));
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		await expect(publicKey.verifyPersonalMessage(signData, multisig)).rejects.toThrow(
@@ -194,6 +200,9 @@ describe('Multisig scenarios', () => {
 		).toThrowError(new Error('Received multiple signatures from the same public key'));
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		await expect(publicKey.verifyPersonalMessage(signData, multisig)).rejects.toThrow(
@@ -265,6 +274,9 @@ describe('Multisig scenarios', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig2.signature, sig1.signature]);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Invalid order can't be verified.
@@ -301,6 +313,9 @@ describe('Multisig scenarios', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([sig1.signature, sig2.signature]);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Invalid intentScope.
@@ -337,6 +352,9 @@ describe('Multisig scenarios', () => {
 		const multisig = multiSigPublicKey.combinePartialSignatures([]);
 
 		const parsed = parseSerializedSignature(multisig);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Rejects verification.
@@ -571,5 +589,215 @@ describe('Multisig address creation:', () => {
 				],
 			}),
 		).toThrow(new Error('Multisig does not support duplicate public keys'));
+	});
+});
+
+describe('MultisigKeypair', () => {
+	test('signTransactionBlock', async () => {
+		const k1 = new Ed25519Keypair();
+		const pk1 = k1.getPublicKey();
+
+		const k2 = new Secp256k1Keypair();
+		const pk2 = k2.getPublicKey();
+
+		const k3 = new Secp256r1Keypair();
+		const pk3 = k3.getPublicKey();
+
+		const pubkeyWeightPairs = [
+			{
+				publicKey: pk1,
+				weight: 1,
+			},
+			{
+				publicKey: pk2,
+				weight: 2,
+			},
+			{
+				publicKey: pk3,
+				weight: 3,
+			},
+		];
+
+		const txb = new TransactionBlock();
+		txb.setSender(k3.getPublicKey().toSuiAddress());
+		txb.setGasPrice(5);
+		txb.setGasBudget(100);
+		txb.setGasPayment([
+			{
+				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
+				version: String((Math.random() * 10000).toFixed(0)),
+				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
+			},
+		]);
+
+		const bytes = await txb.build();
+
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: 3,
+			publicKeys: pubkeyWeightPairs,
+		});
+
+		const signer = publicKey.getSigner(k3);
+		const signer2 = new MultiSigSigner(publicKey, [k1, k2]);
+
+		const multisig = await signer.signTransactionBlock(bytes);
+		const multisig2 = await signer2.signTransactionBlock(bytes);
+
+		const parsed = parseSerializedSignature(multisig.signature);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
+
+		const signerPubKey = await verifyTransactionBlock(bytes, multisig.signature);
+		expect(signerPubKey.toSuiAddress()).toEqual(publicKey.toSuiAddress());
+		expect(await publicKey.verifyTransactionBlock(bytes, multisig.signature)).toEqual(true);
+		const signerPubKey2 = await verifyTransactionBlock(bytes, multisig2.signature);
+		expect(signerPubKey2.toSuiAddress()).toEqual(publicKey.toSuiAddress());
+		expect(await publicKey.verifyTransactionBlock(bytes, multisig2.signature)).toEqual(true);
+	});
+
+	test('signPersonalMessage', async () => {
+		const k1 = new Ed25519Keypair();
+		const pk1 = k1.getPublicKey();
+
+		const k2 = new Secp256k1Keypair();
+		const pk2 = k2.getPublicKey();
+
+		const k3 = new Secp256r1Keypair();
+		const pk3 = k3.getPublicKey();
+
+		const pubkeyWeightPairs = [
+			{
+				publicKey: pk1,
+				weight: 1,
+			},
+			{
+				publicKey: pk2,
+				weight: 2,
+			},
+			{
+				publicKey: pk3,
+				weight: 3,
+			},
+		];
+
+		const bytes = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: 3,
+			publicKeys: pubkeyWeightPairs,
+		});
+
+		const signer = publicKey.getSigner(k3);
+		const signer2 = new MultiSigSigner(publicKey, [k1, k2]);
+
+		const multisig = await signer.signPersonalMessage(bytes);
+		const multisig2 = await signer2.signPersonalMessage(bytes);
+
+		const parsed = parseSerializedSignature(multisig.signature);
+		if (parsed.signatureScheme !== 'MultiSig') {
+			throw new Error('Expected signature scheme to be MultiSig');
+		}
+
+		const signerPubKey = await verifyPersonalMessage(bytes, multisig.signature);
+		expect(signerPubKey.toSuiAddress()).toEqual(publicKey.toSuiAddress());
+		expect(await publicKey.verifyPersonalMessage(bytes, multisig.signature)).toEqual(true);
+		const signerPubKey2 = await verifyPersonalMessage(bytes, multisig2.signature);
+		expect(signerPubKey2.toSuiAddress()).toEqual(publicKey.toSuiAddress());
+		expect(await publicKey.verifyPersonalMessage(bytes, multisig2.signature)).toEqual(true);
+	});
+
+	test('duplicate signers', async () => {
+		const k1 = new Ed25519Keypair();
+		const pk1 = k1.getPublicKey();
+
+		const k2 = new Secp256k1Keypair();
+		const pk2 = k2.getPublicKey();
+
+		const k3 = new Secp256r1Keypair();
+		const pk3 = k3.getPublicKey();
+
+		const pubkeyWeightPairs = [
+			{
+				publicKey: pk1,
+				weight: 1,
+			},
+			{
+				publicKey: pk2,
+				weight: 2,
+			},
+			{
+				publicKey: pk3,
+				weight: 3,
+			},
+		];
+
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: 3,
+			publicKeys: pubkeyWeightPairs,
+		});
+
+		expect(() => new MultiSigSigner(publicKey, [k1, k1])).toThrow(
+			new Error(`Can't create MultiSigSigner with duplicate signers`),
+		);
+	});
+
+	test('insufficient weight', async () => {
+		const k1 = new Ed25519Keypair();
+		const pk1 = k1.getPublicKey();
+
+		const k2 = new Secp256k1Keypair();
+		const pk2 = k2.getPublicKey();
+
+		const k3 = new Secp256r1Keypair();
+		const pk3 = k3.getPublicKey();
+
+		const pubkeyWeightPairs = [
+			{
+				publicKey: pk1,
+				weight: 1,
+			},
+			{
+				publicKey: pk2,
+				weight: 2,
+			},
+			{
+				publicKey: pk3,
+				weight: 3,
+			},
+		];
+
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: 3,
+			publicKeys: pubkeyWeightPairs,
+		});
+
+		expect(() => publicKey.getSigner(k1)).toThrow(
+			new Error(`Combined weight of signers is less than threshold`),
+		);
+	});
+
+	test('unknown signers', async () => {
+		const k1 = new Ed25519Keypair();
+		const pk1 = k1.getPublicKey();
+
+		const k2 = new Secp256k1Keypair();
+		const pk2 = k2.getPublicKey();
+
+		const pubkeyWeightPairs = [
+			{
+				publicKey: pk1,
+				weight: 1,
+			},
+		];
+
+		const publicKey = MultiSigPublicKey.fromPublicKeys({
+			threshold: 1,
+			publicKeys: pubkeyWeightPairs,
+		});
+
+		expect(() => publicKey.getSigner(k2)).toThrow(
+			new Error(`Signer ${pk2.toSuiAddress()} is not part of the MultiSig public key`),
+		);
 	});
 });

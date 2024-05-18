@@ -24,7 +24,7 @@ module regulated_token::denylist_rule {
     const EUserBlocked: u64 = 0;
 
     /// The Rule witness.
-    struct Denylist has drop {}
+    public struct Denylist has drop {}
 
     /// Verifies that the sender and the recipient (if set) are not on the
     /// denylist for the given action.
@@ -60,7 +60,7 @@ module regulated_token::denylist_rule {
     public fun add_records<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        addresses: vector<address>,
+        mut addresses: vector<address>,
         ctx: &mut TxContext
     ) {
         if (!has_config(policy)) {
@@ -78,7 +78,7 @@ module regulated_token::denylist_rule {
     public fun remove_records<T>(
         policy: &mut TokenPolicy<T>,
         cap: &TokenPolicyCap<T>,
-        addresses: vector<address>,
+        mut addresses: vector<address>,
         _ctx: &mut TxContext
     ) {
         let config_mut = config_mut(policy, cap);

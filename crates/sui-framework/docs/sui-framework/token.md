@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::token`
 ---
@@ -570,7 +569,7 @@ to be used in verification.
 <pre><code><b>public</b> <b>fun</b> <a href="transfer.md#0x2_transfer">transfer</a>&lt;T&gt;(
     t: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
 ): <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
-    <b>let</b> amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&t.<a href="balance.md#0x2_balance">balance</a>);
+    <b>let</b> amount = t.<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>();
     <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(t, recipient);
 
     <a href="token.md#0x2_token_new_request">new_request</a>(
@@ -610,11 +609,11 @@ request and join the spent balance with the <code><a href="token.md#0x2_token_To
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_spend">spend</a>&lt;T&gt;(t: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext): <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt; {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = t;
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    id.delete();
 
     <a href="token.md#0x2_token_new_request">new_request</a>(
         <a href="token.md#0x2_token_spend_action">spend_action</a>(),
-        <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="balance.md#0x2_balance">balance</a>),
+        <a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>(),
         <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>(),
         <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="balance.md#0x2_balance">balance</a>),
         ctx
@@ -647,11 +646,11 @@ Convert <code><a href="token.md#0x2_token_Token">Token</a></code> into an open <
     t: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext
 ): (Coin&lt;T&gt;, <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = t;
-    <b>let</b> amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="balance.md#0x2_balance">balance</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    <b>let</b> amount = <a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>();
+    id.delete();
 
     (
-        <a href="coin.md#0x2_coin_from_balance">coin::from_balance</a>(<a href="balance.md#0x2_balance">balance</a>, ctx),
+        <a href="balance.md#0x2_balance">balance</a>.into_coin(ctx),
         <a href="token.md#0x2_token_new_request">new_request</a>(
             <a href="token.md#0x2_token_to_coin_action">to_coin_action</a>(),
             amount,
@@ -687,10 +686,10 @@ the "from_coin" action.
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_from_coin">from_coin</a>&lt;T&gt;(
     <a href="coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;, ctx: &<b>mut</b> TxContext
 ): (<a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;) {
-    <b>let</b> amount = <a href="coin.md#0x2_coin_value">coin::value</a>(&<a href="coin.md#0x2_coin">coin</a>);
+    <b>let</b> amount = <a href="coin.md#0x2_coin">coin</a>.<a href="token.md#0x2_token_value">value</a>();
     <b>let</b> <a href="token.md#0x2_token">token</a> = <a href="token.md#0x2_token_Token">Token</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="balance.md#0x2_balance">balance</a>: <a href="coin.md#0x2_coin_into_balance">coin::into_balance</a>(<a href="coin.md#0x2_coin">coin</a>)
+        <a href="balance.md#0x2_balance">balance</a>: <a href="coin.md#0x2_coin">coin</a>.into_balance()
     };
 
     (
@@ -728,8 +727,8 @@ Join two <code><a href="token.md#0x2_token_Token">Token</a></code>s into one, al
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_join">join</a>&lt;T&gt;(<a href="token.md#0x2_token">token</a>: &<b>mut</b> <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, another: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = another;
-    <a href="balance.md#0x2_balance_join">balance::join</a>(&<b>mut</b> <a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>, <a href="balance.md#0x2_balance">balance</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    <a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_join">join</a>(<a href="balance.md#0x2_balance">balance</a>);
+    id.delete();
 }
 </code></pre>
 
@@ -757,10 +756,10 @@ Aborts if the <code><a href="token.md#0x2_token_Token">Token</a>.<a href="balanc
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_split">split</a>&lt;T&gt;(
     <a href="token.md#0x2_token">token</a>: &<b>mut</b> <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, amount: u64, ctx: &<b>mut</b> TxContext
 ): <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt; {
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>) &gt;= amount, <a href="token.md#0x2_token_EBalanceTooLow">EBalanceTooLow</a>);
+    <b>assert</b>!(<a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>() &gt;= amount, <a href="token.md#0x2_token_EBalanceTooLow">EBalanceTooLow</a>);
     <a href="token.md#0x2_token_Token">Token</a> {
         id: <a href="object.md#0x2_object_new">object::new</a>(ctx),
-        <a href="balance.md#0x2_balance">balance</a>: <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> <a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>, amount),
+        <a href="balance.md#0x2_balance">balance</a>: <a href="token.md#0x2_token">token</a>.<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_split">split</a>(amount),
     }
 }
 </code></pre>
@@ -816,9 +815,9 @@ Aborts if the <code><a href="token.md#0x2_token_Token">Token</a>.<a href="balanc
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_destroy_zero">destroy_zero</a>&lt;T&gt;(<a href="token.md#0x2_token">token</a>: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = <a href="token.md#0x2_token">token</a>;
-    <b>assert</b>!(<a href="balance.md#0x2_balance_value">balance::value</a>(&<a href="balance.md#0x2_balance">balance</a>) == 0, <a href="token.md#0x2_token_ENotZero">ENotZero</a>);
-    <a href="balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(<a href="balance.md#0x2_balance">balance</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    <b>assert</b>!(<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>() == 0, <a href="token.md#0x2_token_ENotZero">ENotZero</a>);
+    <a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_destroy_zero">destroy_zero</a>();
+    id.delete();
 }
 </code></pre>
 
@@ -843,7 +842,7 @@ Transfer the <code><a href="token.md#0x2_token_Token">Token</a></code> to the tr
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_keep">keep</a>&lt;T&gt;(<a href="token.md#0x2_token">token</a>: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;, ctx: &<b>mut</b> TxContext) {
-    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="token.md#0x2_token">token</a>, <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
+    <a href="transfer.md#0x2_transfer_transfer">transfer::transfer</a>(<a href="token.md#0x2_token">token</a>, ctx.<a href="token.md#0x2_token_sender">sender</a>())
 }
 </code></pre>
 
@@ -880,7 +879,7 @@ Publicly available method to allow for custom actions.
         amount,
         recipient,
         spent_balance,
-        sender: <a href="tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx),
+        sender: ctx.<a href="token.md#0x2_token_sender">sender</a>(),
         approvals: <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>(),
     }
 }
@@ -920,8 +919,8 @@ Aborts if:
     request: <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext
 ): (String, u64, <b>address</b>, Option&lt;<b>address</b>&gt;) {
-    <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(&request.spent_balance), <a href="token.md#0x2_token_ECantConsumeBalance">ECantConsumeBalance</a>);
-    <b>assert</b>!(<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&policy.rules, &request.name), <a href="token.md#0x2_token_EUnknownAction">EUnknownAction</a>);
+    <b>assert</b>!(request.spent_balance.is_none(), <a href="token.md#0x2_token_ECantConsumeBalance">ECantConsumeBalance</a>);
+    <b>assert</b>!(policy.rules.contains(&request.name), <a href="token.md#0x2_token_EUnknownAction">EUnknownAction</a>);
 
     <b>let</b> <a href="token.md#0x2_token_ActionRequest">ActionRequest</a> {
         name, approvals,
@@ -929,15 +928,15 @@ Aborts if:
         amount, sender, recipient,
     } = request;
 
-    <a href="../move-stdlib/option.md#0x1_option_destroy_none">option::destroy_none</a>(spent_balance);
+    spent_balance.destroy_none();
 
-    <b>let</b> rules = &<a href="vec_set.md#0x2_vec_set_into_keys">vec_set::into_keys</a>(*<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(&policy.rules, &name));
-    <b>let</b> rules_len = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(rules);
+    <b>let</b> rules = &(*policy.rules.get(&name)).into_keys();
+    <b>let</b> rules_len = rules.length();
     <b>let</b> <b>mut</b> i = 0;
 
     <b>while</b> (i &lt; rules_len) {
-        <b>let</b> rule = <a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(rules, i);
-        <b>assert</b>!(<a href="vec_set.md#0x2_vec_set_contains">vec_set::contains</a>(&approvals, rule), <a href="token.md#0x2_token_ENotApproved">ENotApproved</a>);
+        <b>let</b> rule = &rules[i];
+        <b>assert</b>!(approvals.contains(rule), <a href="token.md#0x2_token_ENotApproved">ENotApproved</a>);
         i = i + 1;
     };
 
@@ -977,13 +976,10 @@ See <code>confirm_request</code> for the list of abort conditions.
     <b>mut</b> request: <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;,
     ctx: &<b>mut</b> TxContext
 ): (String, u64, <b>address</b>, Option&lt;<b>address</b>&gt;) {
-    <b>assert</b>!(<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&policy.rules, &request.name), <a href="token.md#0x2_token_EUnknownAction">EUnknownAction</a>);
-    <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&request.spent_balance), <a href="token.md#0x2_token_EUseImmutableConfirm">EUseImmutableConfirm</a>);
+    <b>assert</b>!(policy.rules.contains(&request.name), <a href="token.md#0x2_token_EUnknownAction">EUnknownAction</a>);
+    <b>assert</b>!(request.spent_balance.is_some(), <a href="token.md#0x2_token_EUseImmutableConfirm">EUseImmutableConfirm</a>);
 
-    <a href="balance.md#0x2_balance_join">balance::join</a>(
-        &<b>mut</b> policy.spent_balance,
-        <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> request.spent_balance)
-    );
+    policy.spent_balance.<a href="token.md#0x2_token_join">join</a>(request.spent_balance.extract());
 
     <a href="token.md#0x2_token_confirm_request">confirm_request</a>(policy, request, ctx)
 }
@@ -1020,13 +1016,13 @@ Aborts if request contains <code>spent_balance</code> due to inability of the
     request: <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext
 ): (String, u64, <b>address</b>, Option&lt;<b>address</b>&gt;) {
-    <b>assert</b>!(<a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(&request.spent_balance), <a href="token.md#0x2_token_ECantConsumeBalance">ECantConsumeBalance</a>);
+    <b>assert</b>!(request.spent_balance.is_none(), <a href="token.md#0x2_token_ECantConsumeBalance">ECantConsumeBalance</a>);
 
     <b>let</b> <a href="token.md#0x2_token_ActionRequest">ActionRequest</a> {
         name, amount, sender, recipient, approvals: _, spent_balance
     } = request;
 
-    <a href="../move-stdlib/option.md#0x1_option_destroy_none">option::destroy_none</a>(spent_balance);
+    spent_balance.destroy_none();
 
     (name, amount, sender, recipient)
 }
@@ -1067,13 +1063,10 @@ to be consumed, decreasing the <code>total_supply</code> of the <code><a href="t
         spent_balance
     } = request;
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&spent_balance)) {
-        <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(
-            <a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(treasury_cap),
-            <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(spent_balance)
-        );
+    <b>if</b> (spent_balance.is_some()) {
+        treasury_cap.supply_mut().decrease_supply(spent_balance.destroy_some());
     } <b>else</b> {
-        <a href="../move-stdlib/option.md#0x1_option_destroy_none">option::destroy_none</a>(spent_balance);
+        spent_balance.destroy_none();
     };
 
     (name, amount, sender, recipient)
@@ -1106,7 +1099,7 @@ required by the <code><a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a></
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_add_approval">add_approval</a>&lt;T, W: drop&gt;(
     _t: W, request: &<b>mut</b> <a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;, _ctx: &<b>mut</b> TxContext
 ) {
-    <a href="vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(&<b>mut</b> request.approvals, <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;W&gt;())
+    request.approvals.insert(<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;W&gt;())
 }
 </code></pre>
 
@@ -1343,7 +1336,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     _ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
-    <a href="vec_map.md#0x2_vec_map_insert">vec_map::insert</a>(&<b>mut</b> self.rules, action, <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
+    self.rules.insert(action, <a href="vec_set.md#0x2_vec_set_empty">vec_set::empty</a>());
 }
 </code></pre>
 
@@ -1377,7 +1370,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     _ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
-    <a href="vec_map.md#0x2_vec_map_remove">vec_map::remove</a>(&<b>mut</b> self.rules, &action);
+    self.rules.remove(&action);
 }
 </code></pre>
 
@@ -1410,14 +1403,11 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
     ctx: &<b>mut</b> TxContext
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
-    <b>if</b> (!<a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.rules, &action)) {
+    <b>if</b> (!self.rules.contains(&action)) {
         <a href="token.md#0x2_token_allow">allow</a>(self, cap, action, ctx);
     };
 
-    <a href="vec_set.md#0x2_vec_set_insert">vec_set::insert</a>(
-        <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.rules, &action),
-        <a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;()
-    )
+    self.rules.get_mut(&action).insert(<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -1452,10 +1442,7 @@ Aborts if the <code><a href="token.md#0x2_token_TokenPolicyCap">TokenPolicyCap</
 ) {
     <b>assert</b>!(<a href="object.md#0x2_object_id">object::id</a>(self) == cap.`for`, <a href="token.md#0x2_token_ENotAuthorized">ENotAuthorized</a>);
 
-    <a href="vec_set.md#0x2_vec_set_remove">vec_set::remove</a>(
-        <a href="vec_map.md#0x2_vec_map_get_mut">vec_map::get_mut</a>(&<b>mut</b> self.rules, &action),
-        &<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;()
-    )
+    self.rules.get_mut(&action).remove(&<a href="../move-stdlib/type_name.md#0x1_type_name_get">type_name::get</a>&lt;Rule&gt;())
 }
 </code></pre>
 
@@ -1482,7 +1469,7 @@ Mint a <code><a href="token.md#0x2_token_Token">Token</a></code> with a given <c
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_mint">mint</a>&lt;T&gt;(
     cap: &<b>mut</b> TreasuryCap&lt;T&gt;, amount: u64, ctx: &<b>mut</b> TxContext
 ): <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt; {
-    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="balance.md#0x2_balance_increase_supply">balance::increase_supply</a>(<a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(cap), amount);
+    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = cap.supply_mut().increase_supply(amount);
     <a href="token.md#0x2_token_Token">Token</a> { id: <a href="object.md#0x2_object_new">object::new</a>(ctx), <a href="balance.md#0x2_balance">balance</a> }
 }
 </code></pre>
@@ -1509,8 +1496,8 @@ Burn a <code><a href="token.md#0x2_token_Token">Token</a></code> using the <code
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_burn">burn</a>&lt;T&gt;(cap: &<b>mut</b> TreasuryCap&lt;T&gt;, <a href="token.md#0x2_token">token</a>: <a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;) {
     <b>let</b> <a href="token.md#0x2_token_Token">Token</a> { id, <a href="balance.md#0x2_balance">balance</a> } = <a href="token.md#0x2_token">token</a>;
-    <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(<a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(cap), <a href="balance.md#0x2_balance">balance</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id);
+    cap.supply_mut().decrease_supply(<a href="balance.md#0x2_balance">balance</a>);
+    id.delete();
 }
 </code></pre>
 
@@ -1540,9 +1527,9 @@ action is only available to the <code>TreasuryCap</code> owner.
     cap: &<b>mut</b> TreasuryCap&lt;T&gt;,
     _ctx: &<b>mut</b> TxContext
 ): u64 {
-    <b>let</b> amount = <a href="balance.md#0x2_balance_value">balance::value</a>(&self.spent_balance);
-    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = <a href="balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> self.spent_balance, amount);
-    <a href="balance.md#0x2_balance_decrease_supply">balance::decrease_supply</a>(<a href="coin.md#0x2_coin_supply_mut">coin::supply_mut</a>(cap), <a href="balance.md#0x2_balance">balance</a>)
+    <b>let</b> amount = self.spent_balance.<a href="token.md#0x2_token_value">value</a>();
+    <b>let</b> <a href="balance.md#0x2_balance">balance</a> = self.spent_balance.<a href="token.md#0x2_token_split">split</a>(amount);
+    cap.supply_mut().decrease_supply(<a href="balance.md#0x2_balance">balance</a>)
 }
 </code></pre>
 
@@ -1567,7 +1554,7 @@ Check whether an action is present in the rules VecMap.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_is_allowed">is_allowed</a>&lt;T&gt;(self: &<a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;, action: &String): bool {
-    <a href="vec_map.md#0x2_vec_map_contains">vec_map::contains</a>(&self.rules, action)
+    self.rules.contains(action)
 }
 </code></pre>
 
@@ -1594,7 +1581,7 @@ Returns the rules required for a specific action.
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_rules">rules</a>&lt;T&gt;(
     self: &<a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;, action: &String
 ): VecSet&lt;TypeName&gt; {
-    *<a href="vec_map.md#0x2_vec_map_get">vec_map::get</a>(&self.rules, action)
+    *self.rules.get(action)
 }
 </code></pre>
 
@@ -1619,7 +1606,7 @@ Returns the <code>spent_balance</code> of the <code><a href="token.md#0x2_token_
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_spent_balance">spent_balance</a>&lt;T&gt;(self: &<a href="token.md#0x2_token_TokenPolicy">TokenPolicy</a>&lt;T&gt;): u64 {
-    <a href="balance.md#0x2_balance_value">balance::value</a>(&self.spent_balance)
+    self.spent_balance.<a href="token.md#0x2_token_value">value</a>()
 }
 </code></pre>
 
@@ -1644,7 +1631,7 @@ Returns the <code><a href="balance.md#0x2_balance">balance</a></code> of the <co
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_value">value</a>&lt;T&gt;(t: &<a href="token.md#0x2_token_Token">Token</a>&lt;T&gt;): u64 {
-    <a href="balance.md#0x2_balance_value">balance::value</a>(&t.<a href="balance.md#0x2_balance">balance</a>)
+    t.<a href="balance.md#0x2_balance">balance</a>.<a href="token.md#0x2_token_value">value</a>()
 }
 </code></pre>
 
@@ -1668,7 +1655,10 @@ Name of the Transfer action.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_transfer_action">transfer_action</a>(): String { <a href="../move-stdlib/string.md#0x1_string_utf8">string::utf8</a>(<a href="token.md#0x2_token_TRANSFER">TRANSFER</a>) }
+<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_transfer_action">transfer_action</a>(): String {
+    <b>let</b> transfer_str = <a href="token.md#0x2_token_TRANSFER">TRANSFER</a>;
+    transfer_str.to_string()
+}
 </code></pre>
 
 
@@ -1691,7 +1681,10 @@ Name of the <code>Spend</code> action.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_spend_action">spend_action</a>(): String { <a href="../move-stdlib/string.md#0x1_string_utf8">string::utf8</a>(<a href="token.md#0x2_token_SPEND">SPEND</a>) }
+<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_spend_action">spend_action</a>(): String {
+    <b>let</b> spend_str = <a href="token.md#0x2_token_SPEND">SPEND</a>;
+    spend_str.to_string()
+}
 </code></pre>
 
 
@@ -1714,7 +1707,10 @@ Name of the <code>ToCoin</code> action.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_to_coin_action">to_coin_action</a>(): String { <a href="../move-stdlib/string.md#0x1_string_utf8">string::utf8</a>(<a href="token.md#0x2_token_TO_COIN">TO_COIN</a>) }
+<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_to_coin_action">to_coin_action</a>(): String {
+    <b>let</b> to_coin_str = <a href="token.md#0x2_token_TO_COIN">TO_COIN</a>;
+    to_coin_str.to_string()
+}
 </code></pre>
 
 
@@ -1737,7 +1733,10 @@ Name of the <code>FromCoin</code> action.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_from_coin_action">from_coin_action</a>(): String { <a href="../move-stdlib/string.md#0x1_string_utf8">string::utf8</a>(<a href="token.md#0x2_token_FROM_COIN">FROM_COIN</a>) }
+<pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_from_coin_action">from_coin_action</a>(): String {
+    <b>let</b> from_coin_str = <a href="token.md#0x2_token_FROM_COIN">FROM_COIN</a>;
+    from_coin_str.to_string()
+}
 </code></pre>
 
 
@@ -1880,8 +1879,8 @@ Burned balance of the <code><a href="token.md#0x2_token_ActionRequest">ActionReq
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="token.md#0x2_token_spent">spent</a>&lt;T&gt;(self: &<a href="token.md#0x2_token_ActionRequest">ActionRequest</a>&lt;T&gt;): Option&lt;u64&gt; {
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&self.spent_balance)) {
-        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="balance.md#0x2_balance_value">balance::value</a>(<a href="../move-stdlib/option.md#0x1_option_borrow">option::borrow</a>(&self.spent_balance)))
+    <b>if</b> (self.spent_balance.is_some()) {
+        <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(self.spent_balance.<a href="borrow.md#0x2_borrow">borrow</a>().<a href="token.md#0x2_token_value">value</a>())
     } <b>else</b> {
         <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>()
     }

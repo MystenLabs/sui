@@ -25,20 +25,20 @@ pub async fn run_benchmark(
     print_sample_tx: bool,
     skip_signing: bool,
 ) {
-    let mut ctx = BenchmarkContext::new(
-        workload.clone(),
-        component,
-        checkpoint_size,
-        print_sample_tx,
-    )
-    .await;
+    let mut ctx = BenchmarkContext::new(workload.clone(), component, print_sample_tx).await;
     let tx_generator = workload.create_tx_generator(&mut ctx).await;
     let transactions = ctx.generate_transactions(tx_generator).await;
+    if matches!(component, Component::TxnSigning) {
+        ctx.benchmark_transaction_signing(transactions, print_sample_tx)
+            .await;
+        return;
+    }
+
+    let transactions = ctx.certify_transactions(transactions, skip_signing).await;
+    ctx.validator()
+        .assigned_shared_object_versions(&transactions)
+        .await;
     match component {
-        Component::TxnSigning => {
-            ctx.benchmark_transaction_signing(transactions, print_sample_tx)
-                .await;
-        }
         Component::CheckpointExecutor => {
             ctx.benchmark_checkpoint_executor(transactions, checkpoint_size)
                 .await;
@@ -48,7 +48,7 @@ pub async fn run_benchmark(
                 .await;
         }
         _ => {
-            ctx.benchmark_transaction_execution(transactions, print_sample_tx, skip_signing)
+            ctx.benchmark_transaction_execution(transactions, print_sample_tx)
                 .await;
         }
     }

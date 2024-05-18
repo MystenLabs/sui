@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::pay`
 ---
@@ -56,7 +55,7 @@ Transfer <code>c</code> to the sender of the current transaction
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_keep">keep</a>&lt;T&gt;(c: Coin&lt;T&gt;, ctx: &TxContext) {
-    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx))
+    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c, ctx.sender())
 }
 </code></pre>
 
@@ -72,7 +71,7 @@ Split coin <code>self</code> to two coins, one with balance <code>split_amount</
 and the remaining balance is left is <code>self</code>.
 
 
-<pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split">split</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
+<pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split">split</a>&lt;T&gt;(<a href="../sui-framework/coin.md#0x2_coin">coin</a>: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> <a href="../sui-framework/tx_context.md#0x2_tx_context_TxContext">tx_context::TxContext</a>)
 </code></pre>
 
 
@@ -82,9 +81,9 @@ and the remaining balance is left is <code>self</code>.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split">split</a>&lt;T&gt;(
-    self: &<b>mut</b> Coin&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext
+    <a href="../sui-framework/coin.md#0x2_coin">coin</a>: &<b>mut</b> Coin&lt;T&gt;, split_amount: u64, ctx: &<b>mut</b> TxContext
 ) {
-    <a href="../sui-framework/pay.md#0x2_pay_keep">keep</a>(<a href="../sui-framework/coin.md#0x2_coin_split">coin::split</a>(self, split_amount, ctx), ctx)
+    <a href="../sui-framework/pay.md#0x2_pay_keep">keep</a>(<a href="../sui-framework/coin.md#0x2_coin">coin</a>.<a href="../sui-framework/pay.md#0x2_pay_split">split</a>(split_amount, ctx), ctx)
 }
 </code></pre>
 
@@ -112,9 +111,9 @@ in <code>split_amounts</code>. Remaining balance is left in <code>self</code>.
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split_vec">split_vec</a>&lt;T&gt;(
     self: &<b>mut</b> Coin&lt;T&gt;, split_amounts: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> (<b>mut</b> i, len) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&split_amounts));
+    <b>let</b> (<b>mut</b> i, len) = (0, split_amounts.length());
     <b>while</b> (i &lt; len) {
-        <a href="../sui-framework/pay.md#0x2_pay_split">split</a>(self, *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&split_amounts, i), ctx);
+        <a href="../sui-framework/pay.md#0x2_pay_split">split</a>(self, split_amounts[i], ctx);
         i = i + 1;
     };
 }
@@ -144,7 +143,7 @@ Aborts with <code>EVALUE</code> if <code>amount</code> is greater than or equal 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_split_and_transfer">split_and_transfer</a>&lt;T&gt;(
     c: &<b>mut</b> Coin&lt;T&gt;, amount: u64, recipient: <b>address</b>, ctx: &<b>mut</b> TxContext
 ) {
-    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../sui-framework/coin.md#0x2_coin_split">coin::split</a>(c, amount, ctx), recipient)
+    <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(c.<a href="../sui-framework/pay.md#0x2_pay_split">split</a>(amount, ctx), recipient)
 }
 </code></pre>
 
@@ -172,13 +171,13 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_divide_and_keep">divide_and_keep</a>&lt;T&gt;(
     self: &<b>mut</b> Coin&lt;T&gt;, n: u64, ctx: &<b>mut</b> TxContext
 ) {
-    <b>let</b> <b>mut</b> vec: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Coin&lt;T&gt;&gt; = <a href="../sui-framework/coin.md#0x2_coin_divide_into_n">coin::divide_into_n</a>(self, n, ctx);
-    <b>let</b> (<b>mut</b> i, len) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&vec));
+    <b>let</b> <b>mut</b> vec: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Coin&lt;T&gt;&gt; = self.divide_into_n(n, ctx);
+    <b>let</b> (<b>mut</b> i, len) = (0, vec.length());
     <b>while</b> (i &lt; len) {
-        <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(<a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> vec), <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx));
+        <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(vec.pop_back(), ctx.sender());
         i = i + 1;
     };
-    <a href="../move-stdlib/vector.md#0x1_vector_destroy_empty">vector::destroy_empty</a>(vec);
+    vec.destroy_empty();
 }
 </code></pre>
 
@@ -191,6 +190,7 @@ not evenly divisible by <code>n</code>, the remainder is left in <code>self</cod
 ## Function `join`
 
 Join <code><a href="../sui-framework/coin.md#0x2_coin">coin</a></code> into <code>self</code>. Re-exports <code><a href="../sui-framework/coin.md#0x2_coin_join">coin::join</a></code> function.
+Deprecated: you should call <code><a href="../sui-framework/coin.md#0x2_coin">coin</a>.<a href="../sui-framework/pay.md#0x2_pay_join">join</a>(other)</code> directly.
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin">coin</a>: <a href="../sui-framework/coin.md#0x2_coin_Coin">coin::Coin</a>&lt;T&gt;)
@@ -203,7 +203,7 @@ Join <code><a href="../sui-framework/coin.md#0x2_coin">coin</a></code> into <cod
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_join">join</a>&lt;T&gt;(self: &<b>mut</b> Coin&lt;T&gt;, <a href="../sui-framework/coin.md#0x2_coin">coin</a>: Coin&lt;T&gt;) {
-    <a href="../sui-framework/coin.md#0x2_coin_join">coin::join</a>(self, <a href="../sui-framework/coin.md#0x2_coin">coin</a>)
+    self.<a href="../sui-framework/pay.md#0x2_pay_join">join</a>(<a href="../sui-framework/coin.md#0x2_coin">coin</a>)
 }
 </code></pre>
 
@@ -228,14 +228,14 @@ Join everything in <code>coins</code> with <code>self</code>
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_join_vec">join_vec</a>&lt;T&gt;(self: &<b>mut</b> Coin&lt;T&gt;, <b>mut</b> coins: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Coin&lt;T&gt;&gt;) {
-    <b>let</b> (<b>mut</b> i, len) = (0, <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&coins));
+    <b>let</b> (<b>mut</b> i, len) = (0, coins.length());
     <b>while</b> (i &lt; len) {
-        <b>let</b> <a href="../sui-framework/coin.md#0x2_coin">coin</a> = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
-        <a href="../sui-framework/coin.md#0x2_coin_join">coin::join</a>(self, <a href="../sui-framework/coin.md#0x2_coin">coin</a>);
+        <b>let</b> <a href="../sui-framework/coin.md#0x2_coin">coin</a> = coins.pop_back();
+        self.<a href="../sui-framework/pay.md#0x2_pay_join">join</a>(<a href="../sui-framework/coin.md#0x2_coin">coin</a>);
         i = i + 1
     };
     // safe because we've drained the <a href="../move-stdlib/vector.md#0x1_vector">vector</a>
-    <a href="../move-stdlib/vector.md#0x1_vector_destroy_empty">vector::destroy_empty</a>(coins)
+    coins.destroy_empty()
 }
 </code></pre>
 
@@ -260,9 +260,9 @@ Join a vector of <code>Coin</code> into a single object and transfer it to <code
 
 
 <pre><code><b>public</b> entry <b>fun</b> <a href="../sui-framework/pay.md#0x2_pay_join_vec_and_transfer">join_vec_and_transfer</a>&lt;T&gt;(<b>mut</b> coins: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Coin&lt;T&gt;&gt;, receiver: <b>address</b>) {
-    <b>assert</b>!(<a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&coins) &gt; 0, <a href="../sui-framework/pay.md#0x2_pay_ENoCoins">ENoCoins</a>);
+    <b>assert</b>!(coins.length() &gt; 0, <a href="../sui-framework/pay.md#0x2_pay_ENoCoins">ENoCoins</a>);
 
-    <b>let</b> <b>mut</b> self = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> coins);
+    <b>let</b> <b>mut</b> self = coins.pop_back();
     <a href="../sui-framework/pay.md#0x2_pay_join_vec">join_vec</a>(&<b>mut</b> self, coins);
     <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(self, receiver)
 }

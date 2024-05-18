@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::groth16 {
-    use std::vector;
 
     #[allow(unused_const)]
     // Error for input is not a valid Arkwork representation of a verifying key.
@@ -48,12 +47,12 @@ module sui::groth16 {
 
     /// Returns bytes of the four components of the `PreparedVerifyingKey`.
     public fun pvk_to_bytes(pvk: PreparedVerifyingKey): vector<vector<u8>> {
-        let mut res = vector::empty();
-        vector::push_back(&mut res, pvk.vk_gamma_abc_g1_bytes);
-        vector::push_back(&mut res, pvk.alpha_g1_beta_g2_bytes);
-        vector::push_back(&mut res, pvk.gamma_g2_neg_pc_bytes);
-        vector::push_back(&mut res, pvk.delta_g2_neg_pc_bytes);
-        res
+        vector[
+            pvk.vk_gamma_abc_g1_bytes,
+            pvk.alpha_g1_beta_g2_bytes,
+            pvk.gamma_g2_neg_pc_bytes,
+            pvk.delta_g2_neg_pc_bytes,
+        ]
     }
 
     /// A `PublicProofInputs` wrapper around its serialized bytes.

@@ -7,10 +7,8 @@ use super::cursor::Page;
 use super::dynamic_field::DynamicField;
 use super::dynamic_field::DynamicFieldName;
 use super::move_package::MovePackage;
-use super::object::ObjectLookupKey;
 use super::stake::StakedSui;
-use super::suins_registration::NameService;
-use super::suins_registration::SuinsRegistration;
+use super::suins_registration::{DomainFormat, NameService, SuinsRegistration};
 use crate::data::Db;
 use crate::types::balance::{self, Balance};
 use crate::types::coin::Coin;
@@ -28,17 +26,15 @@ use sui_types::gas_coin::GAS;
 #[derive(Clone, Debug)]
 pub(crate) struct Owner {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Type to implement GraphQL fields that are shared by all Owners.
 pub(crate) struct OwnerImpl {
     pub address: SuiAddress,
-    /// The checkpoint sequence number at which this was viewed at, or None if the data was
-    /// requested at the latest checkpoint.
-    pub checkpoint_viewed_at: Option<u64>,
+    /// The checkpoint sequence number at which this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 /// Interface implemented by GraphQL types representing entities that can own objects. Object owners
@@ -97,6 +93,7 @@ pub(crate) struct OwnerImpl {
     ),
     field(
         name = "default_suins_name",
+        arg(name = "format", ty = "Option<DomainFormat>"),
         ty = "Option<String>",
         desc = "The domain explicitly configured as the default domain pointing to this object or \
                 address."
@@ -204,8 +201,12 @@ impl Owner {
     }
 
     /// The domain explicitly configured as the default domain pointing to this object or address.
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
-        OwnerImpl::from(self).default_suins_name(ctx).await
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
+        OwnerImpl::from(self).default_suins_name(ctx, format).await
     }
 
     /// The SuinsRegistration NFTs owned by this object or address. These grant the owner the
@@ -233,12 +234,9 @@ impl Owner {
 
     async fn as_object(&self, ctx: &Context<'_>) -> Result<Option<Object>> {
         Object::query(
-            ctx.data_unchecked(),
+            ctx,
             self.address,
-            match self.checkpoint_viewed_at {
-                Some(checkpoint_viewed_at) => ObjectLookupKey::LatestAt(checkpoint_viewed_at),
-                None => ObjectLookupKey::Latest,
-            },
+            Object::latest_at(self.checkpoint_viewed_at),
         )
         .await
         .extend()
@@ -403,12 +401,16 @@ impl OwnerImpl {
         .extend()
     }
 
-    pub(crate) async fn default_suins_name(&self, ctx: &Context<'_>) -> Result<Option<String>> {
+    pub(crate) async fn default_suins_name(
+        &self,
+        ctx: &Context<'_>,
+        format: Option<DomainFormat>,
+    ) -> Result<Option<String>> {
         Ok(
             NameService::reverse_resolve_to_name(ctx, self.address, self.checkpoint_viewed_at)
                 .await
                 .extend()?
-                .map(|d| d.to_string()),
+                .map(|d| d.format(format.unwrap_or(DomainFormat::Dot).into())),
         )
     }
 
@@ -443,7 +445,7 @@ impl OwnerImpl {
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
         DynamicField::query(
-            ctx.data_unchecked(),
+            ctx,
             self.address,
             parent_version,
             name,
@@ -462,7 +464,7 @@ impl OwnerImpl {
     ) -> Result<Option<DynamicField>> {
         use DynamicFieldType as T;
         DynamicField::query(
-            ctx.data_unchecked(),
+            ctx,
             self.address,
             parent_version,
             name,

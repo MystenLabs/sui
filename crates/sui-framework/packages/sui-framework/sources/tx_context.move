@@ -4,9 +4,6 @@
 module sui::tx_context {
 
     #[test_only]
-    use std::vector;
-
-    #[test_only]
     /// Number of bytes in an tx hash (which will be the transaction digest)
     const TX_HASH_LENGTH: u64 = 32;
 
@@ -88,7 +85,7 @@ module sui::tx_context {
         epoch_timestamp_ms: u64,
         ids_created: u64,
     ): TxContext {
-        assert!(vector::length(&tx_hash) == TX_HASH_LENGTH, EBadTxHashLength);
+        assert!(tx_hash.length() == TX_HASH_LENGTH, EBadTxHashLength);
         TxContext { sender, tx_hash, epoch, epoch_timestamp_ms, ids_created }
     }
 
@@ -116,7 +113,7 @@ module sui::tx_context {
     /// These hashes are guaranteed to be unique given a unique `hint: u64`
     fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
         let mut tx_hash = std::bcs::to_bytes(&hint);
-        while (vector::length(&tx_hash) < TX_HASH_LENGTH) vector::push_back(&mut tx_hash, 0);
+        while (tx_hash.length() < TX_HASH_LENGTH) tx_hash.push_back(0);
         tx_hash
     }
 

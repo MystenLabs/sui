@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x3::genesis`
 ---
@@ -359,22 +358,19 @@ all the information we need in the system.
     ctx: &<b>mut</b> TxContext,
 ) {
     // Ensure this is only called at <a href="genesis.md#0x3_genesis">genesis</a>
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>);
+    <b>assert</b>!(ctx.epoch() == 0, <a href="genesis.md#0x3_genesis_ENotCalledAtGenesis">ENotCalledAtGenesis</a>);
 
     <b>let</b> <a href="genesis.md#0x3_genesis_TokenDistributionSchedule">TokenDistributionSchedule</a> {
         stake_subsidy_fund_mist,
         allocations,
     } = token_distribution_schedule;
 
-    <b>let</b> subsidy_fund = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(
-        &<b>mut</b> sui_supply,
-        stake_subsidy_fund_mist,
-    );
+    <b>let</b> subsidy_fund = sui_supply.split(stake_subsidy_fund_mist);
     <b>let</b> <a href="storage_fund.md#0x3_storage_fund">storage_fund</a> = <a href="../sui-framework/balance.md#0x2_balance_zero">balance::zero</a>();
 
     // Create all the `Validator` structs
-    <b>let</b> <b>mut</b> validators = <a href="../move-stdlib/vector.md#0x1_vector_empty">vector::empty</a>();
-    <b>let</b> count = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&genesis_validators);
+    <b>let</b> <b>mut</b> validators = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
+    <b>let</b> count = genesis_validators.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; count) {
         <b>let</b> <a href="genesis.md#0x3_genesis_GenesisValidatorMetadata">GenesisValidatorMetadata</a> {
@@ -393,7 +389,7 @@ all the information we need in the system.
             p2p_address,
             primary_address,
             worker_address,
-        } = *<a href="../move-stdlib/vector.md#0x1_vector_borrow">vector::borrow</a>(&genesis_validators, i);
+        } = genesis_validators[i];
 
         <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator.md#0x3_validator_new">validator::new</a>(
             sui_address,
@@ -420,7 +416,7 @@ all the information we need in the system.
             <a href="genesis.md#0x3_genesis_EDuplicateValidator">EDuplicateValidator</a>,
         );
 
-        <a href="../move-stdlib/vector.md#0x1_vector_push_back">vector::push_back</a>(&<b>mut</b> validators, <a href="validator.md#0x3_validator">validator</a>);
+        validators.push_back(<a href="validator.md#0x3_validator">validator</a>);
 
         i = i + 1;
     };
@@ -497,36 +493,35 @@ all the information we need in the system.
     ctx: &<b>mut</b> TxContext,
 ) {
 
-    <b>while</b> (!<a href="../move-stdlib/vector.md#0x1_vector_is_empty">vector::is_empty</a>(&allocations)) {
+    <b>while</b> (!allocations.is_empty()) {
         <b>let</b> <a href="genesis.md#0x3_genesis_TokenAllocation">TokenAllocation</a> {
             recipient_address,
             amount_mist,
             staked_with_validator,
-        } = <a href="../move-stdlib/vector.md#0x1_vector_pop_back">vector::pop_back</a>(&<b>mut</b> allocations);
+        } = allocations.pop_back();
 
-        <b>let</b> allocation_balance = <a href="../sui-framework/balance.md#0x2_balance_split">balance::split</a>(&<b>mut</b> sui_supply, amount_mist);
+        <b>let</b> allocation_balance = sui_supply.split(amount_mist);
 
-        <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(&staked_with_validator)) {
-            <b>let</b> validator_address = <a href="../move-stdlib/option.md#0x1_option_destroy_some">option::destroy_some</a>(staked_with_validator);
+        <b>if</b> (staked_with_validator.is_some()) {
+            <b>let</b> validator_address = staked_with_validator.destroy_some();
             <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="validator_set.md#0x3_validator_set_get_validator_mut">validator_set::get_validator_mut</a>(validators, validator_address);
-            <a href="validator.md#0x3_validator_request_add_stake_at_genesis">validator::request_add_stake_at_genesis</a>(
-                <a href="validator.md#0x3_validator">validator</a>,
+            <a href="validator.md#0x3_validator">validator</a>.request_add_stake_at_genesis(
                 allocation_balance,
                 recipient_address,
                 ctx
             );
         } <b>else</b> {
             <a href="../sui-framework/sui.md#0x2_sui_transfer">sui::transfer</a>(
-                <a href="../sui-framework/coin.md#0x2_coin_from_balance">coin::from_balance</a>(allocation_balance, ctx),
+                allocation_balance.into_coin(ctx),
                 recipient_address,
             );
         };
     };
-    <a href="../move-stdlib/vector.md#0x1_vector_destroy_empty">vector::destroy_empty</a>(allocations);
+    allocations.destroy_empty();
 
     // Provided allocations must fully allocate the sui_supply and there
     // should be none left at this point.
-    <a href="../sui-framework/balance.md#0x2_balance_destroy_zero">balance::destroy_zero</a>(sui_supply);
+    sui_supply.destroy_zero();
 }
 </code></pre>
 
@@ -551,11 +546,11 @@ all the information we need in the system.
 
 <pre><code><b>fun</b> <a href="genesis.md#0x3_genesis_activate_validators">activate_validators</a>(validators: &<b>mut</b> <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;Validator&gt;) {
     // Activate all <a href="genesis.md#0x3_genesis">genesis</a> validators
-    <b>let</b> count = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(validators);
+    <b>let</b> count = validators.length();
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; count) {
-        <b>let</b> <a href="validator.md#0x3_validator">validator</a> = <a href="../move-stdlib/vector.md#0x1_vector_borrow_mut">vector::borrow_mut</a>(validators, i);
-        <a href="validator.md#0x3_validator_activate">validator::activate</a>(<a href="validator.md#0x3_validator">validator</a>, 0);
+        <b>let</b> <a href="validator.md#0x3_validator">validator</a> = &<b>mut</b> validators[i];
+        <a href="validator.md#0x3_validator">validator</a>.activate(0);
 
         i = i + 1;
     };

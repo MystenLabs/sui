@@ -1,53 +1,74 @@
-processed 25 tasks
+processed 26 tasks
 
 init:
 validator_0: object(0,0)
 
-task 1 'publish'. lines 6-28:
+task 1 'publish'. lines 6-25:
 created: object(1,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 5570800,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 30-30:
+task 2 'run'. lines 27-27:
 created: object(2,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 32-32:
+task 3 'run'. lines 29-29:
 created: object(3,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 34-34:
+task 4 'view-object'. lines 31-31:
 Owner: Account Address ( validator_0 )
 Version: 1
-Contents: sui_system::validator_cap::UnverifiedValidatorOperationCap {id: sui::object::UID {id: sui::object::ID {bytes: fake(0,0)}}, authorizer_validator_address: validator_0}
+Contents: sui_system::validator_cap::UnverifiedValidatorOperationCap {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(0,0),
+        },
+    },
+    authorizer_validator_address: validator_0,
+}
 
-task 5 'view-object'. lines 36-36:
+task 5 'view-object'. lines 33-33:
 Owner: Account Address ( A )
 Version: 3
-Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}, value: 0u64}
+Contents: Test::M1::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+    value: 0u64,
+}
 
-task 6 'view-object'. lines 38-38:
+task 6 'view-object'. lines 35-35:
 Owner: Account Address ( validator_0 )
 Version: 4
-Contents: Test::M1::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}, value: 0u64}
+Contents: Test::M1::Object {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+    value: 0u64,
+}
 
-task 7 'create-checkpoint'. lines 40-40:
+task 7 'create-checkpoint'. lines 37-37:
 Checkpoint created: 4
 
-task 8 'view-checkpoint'. lines 42-42:
+task 8 'view-checkpoint'. lines 39-39:
 CheckpointSummary { epoch: 0, seq: 4, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 3000000, storage_cost: 10176400, storage_rebate: 1956240, non_refundable_storage_fee: 19760 }}
 
-task 9 'advance-epoch'. lines 44-44:
+task 9 'advance-epoch'. lines 41-41:
 Epoch advanced: 5
 
-task 10 'view-checkpoint'. lines 46-46:
+task 10 'view-checkpoint'. lines 43-43:
 CheckpointSummary { epoch: 5, seq: 10, content_digest: C61cKCJWb9sw7ntgsD6WSAXioh4ogmbNMty8v4oxsjhB,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 11 'run-graphql'. lines 48-53:
+task 11 'run-graphql'. lines 45-50:
 Response: {
   "data": {
     "checkpoint": {
@@ -56,14 +77,14 @@ Response: {
   }
 }
 
-task 12 'create-checkpoint'. lines 55-55:
+task 12 'create-checkpoint'. lines 52-52:
 Checkpoint created: 11
 
-task 13 'view-checkpoint'. lines 57-57:
+task 13 'view-checkpoint'. lines 54-54:
 CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 14 'run-graphql'. lines 59-64:
+task 14 'run-graphql'. lines 56-61:
 Response: {
   "data": {
     "checkpoint": {
@@ -72,17 +93,17 @@ Response: {
   }
 }
 
-task 15 'run-graphql'. lines 66-71:
+task 15 'run-graphql'. lines 63-68:
 Headers: {
     "content-type": "application/json",
     "content-length": "157",
-    "x-sui-rpc-version": "2024.2.0",
+    "x-sui-rpc-version": "2024.7.0-testing-no-sha",
     "access-control-allow-origin": "*",
     "vary": "origin",
     "vary": "access-control-request-method",
     "vary": "access-control-request-headers",
 }
-Service version: 2024.2.0
+Service version: 2024.7.0-testing-no-sha
 Response: {
   "data": {
     "checkpoint": {
@@ -101,14 +122,14 @@ Response: {
   }
 }
 
-task 16 'view-checkpoint'. lines 73-73:
+task 16 'view-checkpoint'. lines 70-70:
 CheckpointSummary { epoch: 6, seq: 11, content_digest: D3oWLCcqoa1D15gxzvMaDemNNY8YYVspAkYkcmtQKWRt,
             epoch_rolling_gas_cost_summary: GasCostSummary { computation_cost: 0, storage_cost: 0, storage_rebate: 0, non_refundable_storage_fee: 0 }}
 
-task 17 'advance-epoch'. lines 75-78:
+task 17 'advance-epoch'. lines 72-75:
 Epoch advanced: 6
 
-task 18 'run-graphql'. lines 80-95:
+task 18 'run-graphql'. lines 77-92:
 Response: {
   "data": {
     "address": {
@@ -129,7 +150,7 @@ Response: {
   }
 }
 
-task 19 'run-graphql'. lines 97-152:
+task 19 'run-graphql'. lines 94-149:
 Response: {
   "data": {
     "address": {
@@ -224,7 +245,7 @@ Response: {
   }
 }
 
-task 20 'run-graphql'. lines 154-170:
+task 20 'run-graphql'. lines 151-167:
 Response: {
   "data": {
     "epoch": {
@@ -246,7 +267,7 @@ Response: {
   }
 }
 
-task 21 'run-graphql'. lines 172-178:
+task 21 'run-graphql'. lines 169-175:
 Response: {
   "data": {
     "epoch": {
@@ -255,17 +276,28 @@ Response: {
   }
 }
 
-task 22 'run'. lines 180-180:
+task 22 'run'. lines 177-177:
 created: object(22,0)
 mutated: object(0,1)
 gas summary: computation_cost: 999000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 23 'run'. lines 182-182:
+task 23 'run'. lines 179-179:
 created: object(23,0)
 mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 24 'run'. lines 184-184:
+task 24 'run'. lines 181-181:
 created: object(24,0)
 mutated: object(0,1)
 gas summary: computation_cost: 235000, storage_cost: 2302800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
+
+task 25 'run-graphql'. lines 183-188:
+Response: {
+  "data": {
+    "serviceConfig": {
+      "availableVersions": [
+        "2024.7"
+      ]
+    }
+  }
+}

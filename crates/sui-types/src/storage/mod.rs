@@ -58,6 +58,13 @@ impl InputKey {
             InputKey::Package { .. } => None,
         }
     }
+
+    pub fn is_cancelled(&self) -> bool {
+        match self {
+            InputKey::VersionedObject { version, .. } => version.is_cancelled(),
+            InputKey::Package { .. } => false,
+        }
+    }
 }
 
 impl From<&Object> for InputKey {
@@ -286,8 +293,8 @@ pub fn get_package_objects<'a>(
     }
 }
 
-pub fn get_module<S: BackingPackageStore>(
-    store: S,
+pub fn get_module(
+    store: impl BackingPackageStore,
     module_id: &ModuleId,
 ) -> Result<Option<Vec<u8>>, SuiError> {
     Ok(store
@@ -302,7 +309,7 @@ pub fn get_module<S: BackingPackageStore>(
 }
 
 pub fn get_module_by_id<S: BackingPackageStore>(
-    store: S,
+    store: &S,
     id: &ModuleId,
 ) -> anyhow::Result<Option<CompiledModule>, SuiError> {
     Ok(get_module(store, id)?
@@ -470,7 +477,9 @@ impl From<Object> for ObjectOrTombstone {
 
 /// Fetch the `ObjectKey`s (IDs and versions) for non-shared input objects.  Includes owned,
 /// and immutable objects as well as the gas objects, but not move packages or shared objects.
-pub fn transaction_input_object_keys(tx: &SenderSignedData) -> SuiResult<Vec<ObjectKey>> {
+pub fn transaction_non_shared_input_object_keys(
+    tx: &SenderSignedData,
+) -> SuiResult<Vec<ObjectKey>> {
     use crate::transaction::InputObjectKind as I;
     Ok(tx
         .intent_message()

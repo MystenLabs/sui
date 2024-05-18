@@ -5,9 +5,6 @@
 
 //# publish --upgradeable --sender A
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct Foo has key, store {
         id: UID,
         xs: vector<u64>,
@@ -203,9 +200,6 @@ fragment ComprehensivePTB on ProgrammableTransactionBlock {
 
 //# upgrade --package P0 --upgrade-capability 1,1 --sender A
 module P0::m {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct Foo has key, store {
         id: UID,
         xs: vector<u64>,

@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::table_vec`
 ---
@@ -123,7 +122,7 @@ Return a TableVec of size one containing element <code>e</code>.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_singleton">singleton</a>&lt;Element: store&gt;(e: Element, ctx: &<b>mut</b> TxContext): <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt; {
     <b>let</b> <b>mut</b> t = <a href="../sui-framework/table_vec.md#0x2_table_vec_empty">empty</a>(ctx);
-    <a href="../sui-framework/table_vec.md#0x2_table_vec_push_back">push_back</a>(&<b>mut</b> t, e);
+    t.<a href="../sui-framework/table_vec.md#0x2_table_vec_push_back">push_back</a>(e);
     t
 }
 </code></pre>
@@ -149,7 +148,7 @@ Return the length of the TableVec.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;): u64 {
-    <a href="../sui-framework/table.md#0x2_table_length">table::length</a>(&t.contents)
+    t.contents.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>()
 }
 </code></pre>
 
@@ -174,7 +173,7 @@ Return if the TableVec is empty or not.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_is_empty">is_empty</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;): bool {
-    <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) == 0
+    t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() == 0
 }
 </code></pre>
 
@@ -200,8 +199,8 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow">borrow</a>&lt;Element: store&gt;(t: &<a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &Element {
-    <b>assert</b>!(<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
-    <a href="../sui-framework/table.md#0x2_table_borrow">table::borrow</a>(&t.contents, i)
+    <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
+    &t.contents[i]
 }
 </code></pre>
 
@@ -226,8 +225,8 @@ Add element <code>e</code> to the end of the TableVec <code>t</code>.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_push_back">push_back</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, e: Element) {
-    <b>let</b> key = <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t);
-    <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> t.contents, key, e);
+    <b>let</b> key = t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>();
+    t.contents.add(key, e);
 }
 </code></pre>
 
@@ -253,8 +252,8 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_borrow_mut">borrow_mut</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): &<b>mut</b> Element {
-    <b>assert</b>!(<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
-    <a href="../sui-framework/table.md#0x2_table_borrow_mut">table::borrow_mut</a>(&<b>mut</b> t.contents, i)
+    <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
+    &<b>mut</b> t.contents[i]
 }
 </code></pre>
 
@@ -282,7 +281,7 @@ Aborts if <code>t</code> is empty.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_pop_back">pop_back</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;): Element {
     <b>let</b> length = <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t);
     <b>assert</b>!(length &gt; 0, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
-    <a href="../sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> t.contents, length - 1)
+    t.contents.remove(length - 1)
 }
 </code></pre>
 
@@ -310,7 +309,7 @@ Aborts if <code>t</code> is not empty.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_destroy_empty">destroy_empty</a>&lt;Element: store&gt;(t: <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;) {
     <b>assert</b>!(<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(&t) == 0, <a href="../sui-framework/table_vec.md#0x2_table_vec_ETableNonEmpty">ETableNonEmpty</a>);
     <b>let</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a> { contents } = t;
-    <a href="../sui-framework/table.md#0x2_table_destroy_empty">table::destroy_empty</a>(contents);
+    contents.<a href="../sui-framework/table_vec.md#0x2_table_vec_destroy_empty">destroy_empty</a>();
 }
 </code></pre>
 
@@ -337,7 +336,7 @@ Usable only if the value type <code>Element</code> has the <code>drop</code> abi
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_drop">drop</a>&lt;Element: drop + store&gt;(t: <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;) {
     <b>let</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a> { contents } = t;
-    <a href="../sui-framework/table.md#0x2_table_drop">table::drop</a>(contents)
+    contents.<a href="../sui-framework/table_vec.md#0x2_table_vec_drop">drop</a>()
 }
 </code></pre>
 
@@ -363,13 +362,13 @@ Aborts if <code>i</code> or <code>j</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64, j: u64) {
-    <b>assert</b>!(<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
-    <b>assert</b>!(<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) &gt; j, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
+    <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
+    <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; j, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
     <b>if</b> (i == j) { <b>return</b> };
-    <b>let</b> element_i = <a href="../sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> t.contents, i);
-    <b>let</b> element_j = <a href="../sui-framework/table.md#0x2_table_remove">table::remove</a>(&<b>mut</b> t.contents, j);
-    <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> t.contents, j, element_i);
-    <a href="../sui-framework/table.md#0x2_table_add">table::add</a>(&<b>mut</b> t.contents, i, element_j);
+    <b>let</b> element_i = t.contents.remove(i);
+    <b>let</b> element_j = t.contents.remove(j);
+    t.contents.add(j, element_i);
+    t.contents.add(i, element_j);
 }
 </code></pre>
 
@@ -396,10 +395,10 @@ Aborts if <code>i</code> is out of bounds.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_swap_remove">swap_remove</a>&lt;Element: store&gt;(t: &<b>mut</b> <a href="../sui-framework/table_vec.md#0x2_table_vec_TableVec">TableVec</a>&lt;Element&gt;, i: u64): Element {
-    <b>assert</b>!(<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
-    <b>let</b> last_idx = <a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>(t) - 1;
-    <a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>(t, i, last_idx);
-    <a href="../sui-framework/table_vec.md#0x2_table_vec_pop_back">pop_back</a>(t)
+    <b>assert</b>!(t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() &gt; i, <a href="../sui-framework/table_vec.md#0x2_table_vec_EIndexOutOfBound">EIndexOutOfBound</a>);
+    <b>let</b> last_idx = t.<a href="../sui-framework/table_vec.md#0x2_table_vec_length">length</a>() - 1;
+    t.<a href="../sui-framework/table_vec.md#0x2_table_vec_swap">swap</a>(i, last_idx);
+    t.<a href="../sui-framework/table_vec.md#0x2_table_vec_pop_back">pop_back</a>()
 }
 </code></pre>
 

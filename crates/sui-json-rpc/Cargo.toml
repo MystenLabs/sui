@@ -8,6 +8,7 @@ edition = "2021"
 
 [dependencies]
 arc-swap.workspace = true
+chrono.workspace = true
 fastcrypto.workspace = true
 jsonrpsee.workspace = true
 hyper.workspace = true
@@ -27,6 +28,7 @@ async-trait.workspace = true
 serde.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["full"] }
+tokio-util = { workspace = true, features = ["rt"] }
 signature.workspace = true
 thiserror.workspace = true
 bcs.workspace = true
@@ -45,6 +47,7 @@ sui-open-rpc.workspace = true
 sui-open-rpc-macros.workspace = true
 sui-protocol-config.workspace = true
 sui-json-rpc-types.workspace = true
+sui-macros.workspace = true
 sui-transaction-builder.workspace = true
 mysten-metrics.workspace = true
 shared-crypto.workspace = true

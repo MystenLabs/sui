@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x3::validator_cap`
 ---
@@ -164,7 +163,7 @@ or rotating an existing validaotr's <code>operation_cap_id</code>.
     // This function needs <b>to</b> be called only by the <a href="validator.md#0x3_validator">validator</a> itself, <b>except</b>
     // 1. in <a href="genesis.md#0x3_genesis">genesis</a> <b>where</b> all valdiators are created by @0x0
     // 2. in tests <b>where</b> @0x0 could be used <b>to</b> simplify the setup
-    <b>let</b> sender_address = <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+    <b>let</b> sender_address = ctx.sender();
     <b>assert</b>!(sender_address == @0x0 || sender_address == validator_address, 0);
 
     <b>let</b> operation_cap = <a href="validator_cap.md#0x3_validator_cap_UnverifiedValidatorOperationCap">UnverifiedValidatorOperationCap</a> {

@@ -2,7 +2,7 @@ import { Callout } from 'nextra/components';
 
 # ZkLogin
 
-Utilities for working with zlLogin. Currently contains functionality to create and parse zkLogin
+Utilities for working with zkLogin. Currently contains functionality to create and parse zkLogin
 signatures and compute zkLogin addresses.
 
 <Callout type="info">
@@ -32,3 +32,6 @@ import { computeZkLoginAddressFromSeed } '@mysten/sui.js/zklogin';
 
 const address = await computeZkLoginAddressFromSeed(0n, 'https://accounts.google.com');
 ```
+
+To use zkLogin inside a multisig, see the [Multisig Guide](../typescript/cryptography/multisig.mdx)
+for more details.

@@ -6,12 +6,12 @@ use crate::{
     diagnostics::WarningFilters,
     expansion::ast::{
         ability_constraints_ast_debug, ability_modifiers_ast_debug, AbilitySet, Attributes,
-        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, Value,
-        Value_, Visibility,
+        DottedUsage, Fields, Friend, ImplicitUseFunCandidate, ModuleIdent, Mutability, TargetKind,
+        Value, Value_, Visibility,
     },
     parser::ast::{
-        self as P, Ability_, BinOp, ConstantName, Field, FunctionName, StructName, UnaryOp,
-        ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
+        self as P, Ability_, BinOp, ConstantName, DatatypeName, Field, FunctionName, UnaryOp,
+        VariantName, ENTRY_MODIFIER, MACRO_MODIFIER, NATIVE_MODIFIER,
     },
     shared::{
         ast_debug::*, known_attributes::SyntaxAttribute, program_info::NamingProgramInfo,
@@ -141,18 +141,25 @@ pub struct ModuleDefinition {
     // package name metadata from compiler arguments, not used for any language rules
     pub package_name: Option<Symbol>,
     pub attributes: Attributes,
-    pub is_source_module: bool,
+    pub target_kind: TargetKind,
     pub use_funs: UseFuns,
     pub syntax_methods: SyntaxMethods,
     pub friends: UniqueMap<ModuleIdent, Friend>,
-    pub structs: UniqueMap<StructName, StructDefinition>,
+    pub structs: UniqueMap<DatatypeName, StructDefinition>,
+    pub enums: UniqueMap<DatatypeName, EnumDefinition>,
     pub constants: UniqueMap<ConstantName, Constant>,
     pub functions: UniqueMap<FunctionName, Function>,
 }
 
 //**************************************************************************************************
-// Structs
+// Data Types
 //**************************************************************************************************
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct DatatypeTypeParameter {
+    pub param: TParam,
+    pub is_phantom: bool,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct StructDefinition {
@@ -161,20 +168,39 @@ pub struct StructDefinition {
     pub index: usize,
     pub attributes: Attributes,
     pub abilities: AbilitySet,
-    pub type_parameters: Vec<StructTypeParameter>,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
     pub fields: StructFields,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct StructTypeParameter {
-    pub param: TParam,
-    pub is_phantom: bool,
+pub enum StructFields {
+    Defined(/* positional */ bool, Fields<Type>),
+    Native(Loc),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum StructFields {
-    Defined(Fields<Type>),
-    Native(Loc),
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumDefinition {
+    pub warning_filter: WarningFilters,
+    // index in the original order as defined in the source file
+    pub index: usize,
+    pub attributes: Attributes,
+    pub abilities: AbilitySet,
+    pub type_parameters: Vec<DatatypeTypeParameter>,
+    pub variants: UniqueMap<VariantName, VariantDefinition>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct VariantDefinition {
+    // index in the original order as defined in the source file
+    pub index: usize,
+    pub loc: Loc,
+    pub fields: VariantFields,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum VariantFields {
+    Defined(/* positional */ bool, Fields<Type>),
+    Empty,
 }
 
 //**************************************************************************************************
@@ -258,7 +284,7 @@ pub enum TypeName_ {
     // exp-list/tuple type
     Multiple(usize),
     Builtin(BuiltinTypeName),
-    ModuleType(ModuleIdent, StructName),
+    ModuleType(ModuleIdent, DatatypeName),
 }
 pub type TypeName = Spanned<TypeName_>;
 
@@ -316,7 +342,7 @@ pub enum LValue_ {
         var: Var,
         unused_binding: bool,
     },
-    Unpack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<LValue>),
+    Unpack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<LValue>),
 }
 pub type LValue = Spanned<LValue_>;
 pub type LValueList_ = Vec<LValue>;
@@ -330,6 +356,7 @@ pub enum ExpDotted_ {
     Exp(Box<Exp>),
     Dot(Box<ExpDotted>, Field),
     Index(Box<ExpDotted>, Spanned<Vec<Exp>>),
+    DotAutocomplete(Loc, Box<ExpDotted>), // Dot (and its location) where Field could not be parsed
 }
 pub type ExpDotted = Spanned<ExpDotted_>;
 
@@ -396,6 +423,7 @@ pub enum Exp_ {
     Vector(Loc, Option<Type>, Spanned<Vec<Exp>>),
 
     IfElse(Box<Exp>, Box<Exp>, Box<Exp>),
+    Match(Box<Exp>, Spanned<Vec<MatchArm>>),
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
@@ -414,7 +442,14 @@ pub enum Exp_ {
     UnaryExp(UnaryOp, Box<Exp>),
     BinopExp(Box<Exp>, BinOp, Box<Exp>),
 
-    Pack(ModuleIdent, StructName, Option<Vec<Type>>, Fields<Exp>),
+    Pack(ModuleIdent, DatatypeName, Option<Vec<Type>>, Fields<Exp>),
+    PackVariant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Option<Vec<Type>>,
+        Fields<Exp>,
+    ),
     ExpList(Vec<Exp>),
     Unit {
         trailing: bool,
@@ -424,6 +459,10 @@ pub enum Exp_ {
 
     Cast(Box<Exp>, Type),
     Annotate(Box<Exp>, Type),
+
+    ErrorConstant {
+        line_number_loc: Loc,
+    },
 
     UnresolvedError,
 }
@@ -437,6 +476,44 @@ pub enum SequenceItem_ {
     Bind(LValueList, Box<Exp>),
 }
 pub type SequenceItem = Spanned<SequenceItem_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MatchArm_ {
+    pub pattern: MatchPattern,
+    pub binders: Vec<(Mutability, Var)>,
+    pub guard: Option<Box<Exp>>,
+    pub guard_binders: UniqueMap<Var, Var>, // pattern binder name -> guard var name
+    pub rhs_binders: BTreeSet<Var>,         // pattern binders used in the right-hand side
+    pub rhs: Box<Exp>,
+}
+
+pub type MatchArm = Spanned<MatchArm_>;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchPattern_ {
+    Variant(
+        ModuleIdent,
+        DatatypeName,
+        VariantName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Struct(
+        ModuleIdent,
+        DatatypeName,
+        Option<Vec<Type>>,
+        Fields<MatchPattern>,
+    ),
+    Constant(ModuleIdent, ConstantName),
+    Binder(Mutability, Var, /* unused binding */ bool),
+    Literal(Value),
+    Wildcard,
+    Or(Box<MatchPattern>, Box<MatchPattern>),
+    At(Var, /* unused binding */ bool, Box<MatchPattern>),
+    ErrorPat,
+}
+
+pub type MatchPattern = Spanned<MatchPattern_>;
 
 //**************************************************************************************************
 // traits
@@ -694,6 +771,13 @@ impl TypeName_ {
             TypeName_::Builtin(_) | TypeName_::ModuleType(_, _) => Some(self.clone()),
         }
     }
+
+    pub fn datatype_name(&self) -> Option<(ModuleIdent, DatatypeName)> {
+        match self {
+            TypeName_::Builtin(_) | TypeName_::Multiple(_) => None,
+            TypeName_::ModuleType(mident, n) => Some((*mident, *n)),
+        }
+    }
 }
 
 impl Type_ {
@@ -780,10 +864,26 @@ impl Type_ {
         }
     }
 
+    pub fn unfold_to_builtin_type_name(&self) -> Option<&BuiltinTypeName> {
+        match self {
+            Type_::Apply(_, sp!(_, TypeName_::Builtin(b)), _) => Some(b),
+            Type_::Ref(_, inner) => inner.value.unfold_to_builtin_type_name(),
+            _ => None,
+        }
+    }
+
     pub fn unfold_to_type_name(&self) -> Option<&TypeName> {
         match self {
             Type_::Apply(_, tn, _) => Some(tn),
-            Type_::Ref(_, inner) => return inner.value.unfold_to_type_name(),
+            Type_::Ref(_, inner) => inner.value.unfold_to_type_name(),
+            _ => None,
+        }
+    }
+
+    pub fn type_arguments(&self) -> Option<&Vec<Type>> {
+        match self {
+            Type_::Apply(_, _, tyargs) => Some(tyargs),
+            Type_::Ref(_, inner) => inner.value.type_arguments(),
             _ => None,
         }
     }
@@ -835,6 +935,20 @@ impl Type_ {
             | Type_::Var(_)
             | Type_::Anything
             | Type_::UnresolvedError => None,
+        }
+    }
+
+    // Unwraps refs
+    pub fn base_type_(&self) -> Self {
+        match self {
+            Type_::Ref(_, inner) => inner.value.clone(),
+            Type_::Unit
+            | Type_::Param(_)
+            | Type_::Apply(_, _, _)
+            | Type_::Fun(_, _)
+            | Type_::Var(_)
+            | Type_::Anything
+            | Type_::UnresolvedError => self.clone(),
         }
     }
 }
@@ -1081,11 +1195,12 @@ impl AstDebug for ModuleDefinition {
             warning_filter,
             package_name,
             attributes,
-            is_source_module,
+            target_kind,
             use_funs,
             syntax_methods,
             friends,
             structs,
+            enums,
             constants,
             functions,
         } = self;
@@ -1094,11 +1209,15 @@ impl AstDebug for ModuleDefinition {
             w.writeln(&format!("{}", n))
         }
         attributes.ast_debug(w);
-        if *is_source_module {
-            w.writeln("library module")
-        } else {
-            w.writeln("source module")
-        }
+        w.writeln(match target_kind {
+            TargetKind::Source {
+                is_root_package: true,
+            } => "root module",
+            TargetKind::Source {
+                is_root_package: false,
+            } => "dependency module",
+            TargetKind::External => "external module",
+        });
         use_funs.ast_debug(w);
         syntax_methods.ast_debug(w);
         for (mident, _loc) in friends.key_cloned_iter() {
@@ -1107,6 +1226,10 @@ impl AstDebug for ModuleDefinition {
         }
         for sdef in structs.key_cloned_iter() {
             sdef.ast_debug(w);
+            w.new_line();
+        }
+        for edef in enums.key_cloned_iter() {
+            edef.ast_debug(w);
             w.new_line();
         }
         for cdef in constants.key_cloned_iter() {
@@ -1120,7 +1243,7 @@ impl AstDebug for ModuleDefinition {
     }
 }
 
-impl AstDebug for (StructName, &StructDefinition) {
+impl AstDebug for (DatatypeName, &StructDefinition) {
     fn ast_debug(&self, w: &mut AstWriter) {
         let (
             name,
@@ -1141,7 +1264,10 @@ impl AstDebug for (StructName, &StructDefinition) {
         w.write(&format!("struct#{index} {name}"));
         type_parameters.ast_debug(w);
         ability_modifiers_ast_debug(w, abilities);
-        if let StructFields::Defined(fields) = fields {
+        if let StructFields::Defined(is_positional, fields) = fields {
+            if *is_positional {
+                w.write("#positional");
+            }
             w.block(|w| {
                 w.list(fields, ",", |w, (_, f, idx_st)| {
                     let (idx, st) = idx_st;
@@ -1150,6 +1276,64 @@ impl AstDebug for (StructName, &StructDefinition) {
                     true
                 })
             })
+        }
+    }
+}
+
+impl AstDebug for (DatatypeName, &EnumDefinition) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (
+            name,
+            EnumDefinition {
+                index,
+                attributes,
+                abilities,
+                type_parameters,
+                variants,
+                warning_filter,
+            },
+        ) = self;
+        warning_filter.ast_debug(w);
+        attributes.ast_debug(w);
+
+        w.write(&format!("enum#{index} {name}"));
+        type_parameters.ast_debug(w);
+        ability_modifiers_ast_debug(w, abilities);
+        w.block(|w| {
+            for variant in variants.key_cloned_iter() {
+                variant.ast_debug(w);
+            }
+        });
+    }
+}
+
+impl AstDebug for (VariantName, &VariantDefinition) {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let (
+            name,
+            VariantDefinition {
+                index,
+                fields,
+                loc: _,
+            },
+        ) = self;
+
+        w.write(&format!("variant#{index} {name}"));
+        match fields {
+            VariantFields::Defined(is_positional, fields) => {
+                if *is_positional {
+                    w.write("#positional");
+                }
+                w.block(|w| {
+                    w.list(fields, ",", |w, (_, f, idx_st)| {
+                        let (idx, st) = idx_st;
+                        w.write(&format!("{}#{}: ", idx, f));
+                        st.ast_debug(w);
+                        true
+                    });
+                })
+            }
+            VariantFields::Empty => (),
         }
     }
 }
@@ -1251,7 +1435,7 @@ impl AstDebug for Vec<TParam> {
     }
 }
 
-impl AstDebug for Vec<StructTypeParameter> {
+impl AstDebug for Vec<DatatypeTypeParameter> {
     fn ast_debug(&self, w: &mut AstWriter) {
         if !self.is_empty() {
             w.write("<");
@@ -1312,7 +1496,7 @@ impl AstDebug for TParam {
     }
 }
 
-impl AstDebug for StructTypeParameter {
+impl AstDebug for DatatypeTypeParameter {
     fn ast_debug(&self, w: &mut AstWriter) {
         let Self { is_phantom, param } = self;
         if *is_phantom {
@@ -1498,6 +1682,21 @@ impl AstDebug for Exp_ {
                 });
                 w.write("}");
             }
+            E::PackVariant(m, e, v, tys_opt, fields) => {
+                w.write(&format!("{}::{}::{}", m, e, v));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.write("{");
+                w.comma(fields, |w, (_, f, idx_e)| {
+                    let (idx, e) = idx_e;
+                    w.write(&format!("{}#{}: ", idx, f));
+                    e.ast_debug(w);
+                });
+                w.write("}");
+            }
             E::IfElse(b, t, f) => {
                 w.write("if (");
                 b.ast_debug(w);
@@ -1506,11 +1705,21 @@ impl AstDebug for Exp_ {
                 w.write(" else ");
                 f.ast_debug(w);
             }
+            E::Match(subject, arms) => {
+                w.write("match (");
+                subject.ast_debug(w);
+                w.write(") ");
+                w.block(|w| {
+                    w.list(&arms.value, ", ", |w, arm| {
+                        arm.ast_debug(w);
+                        true
+                    })
+                });
+            }
             E::While(name, b, e) => {
                 name.ast_debug(w);
                 w.write(": ");
-                w.write("while ");
-                w.write(" (");
+                w.write("while (");
                 b.ast_debug(w);
                 w.write(") ");
                 e.ast_debug(w);
@@ -1606,6 +1815,7 @@ impl AstDebug for Exp_ {
                 w.write(")");
             }
             E::UnresolvedError => w.write("_|_"),
+            E::ErrorConstant { .. } => w.write("ErrorConstant"),
         }
     }
 }
@@ -1680,6 +1890,90 @@ impl AstDebug for ExpDotted_ {
                 w.comma(args, |w, e| e.ast_debug(w));
                 w.write(")");
             }
+            D::DotAutocomplete(_, e) => {
+                e.ast_debug(w);
+                w.write(".")
+            }
+        }
+    }
+}
+
+impl AstDebug for MatchArm_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        let MatchArm_ {
+            pattern,
+            binders: _,
+            guard,
+            guard_binders: _,
+            rhs_binders: _,
+            rhs,
+        } = self;
+        pattern.ast_debug(w);
+        if let Some(exp) = guard.as_ref() {
+            w.write(" if (");
+            exp.ast_debug(w);
+        }
+        w.write(") => ");
+        rhs.ast_debug(w);
+    }
+}
+
+impl AstDebug for MatchPattern_ {
+    fn ast_debug(&self, w: &mut AstWriter) {
+        use MatchPattern_::*;
+        match self {
+            Variant(mident, enum_, variant, tys_opt, fields) => {
+                w.write(format!("{}::{}::{}", mident, enum_, variant));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Struct(mident, struct_, tys_opt, fields) => {
+                w.write(format!("{}::{}", mident, struct_,));
+                if let Some(ss) = tys_opt {
+                    w.write("<");
+                    ss.ast_debug(w);
+                    w.write(">");
+                }
+                w.comma(fields.key_cloned_iter(), |w, (field, (idx, pat))| {
+                    w.write(format!(" {}#{} : ", field, idx));
+                    pat.ast_debug(w);
+                });
+                w.write("} ");
+            }
+            Constant(mident, const_) => {
+                w.write(format!("const#{}::{}", mident, const_));
+            }
+            Binder(mut_, name, unused_binding) => {
+                mut_.ast_debug(w);
+                name.ast_debug(w);
+                if *unused_binding {
+                    w.write("#unused");
+                }
+            }
+            Literal(v) => v.ast_debug(w),
+            Wildcard => w.write("_"),
+            Or(lhs, rhs) => {
+                lhs.ast_debug(w);
+                w.write(" | ");
+                rhs.ast_debug(w);
+            }
+            At(x, unused_binding, pat) => {
+                x.ast_debug(w);
+                if *unused_binding {
+                    w.write("#unused");
+                }
+                w.write(" @ ");
+                pat.ast_debug(w);
+            }
+            ErrorPat => w.write("#err"),
         }
     }
 }

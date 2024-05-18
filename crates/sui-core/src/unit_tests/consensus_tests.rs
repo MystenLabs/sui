@@ -39,13 +39,15 @@ pub fn test_gas_objects() -> Vec<Object> {
 }
 
 /// Fixture: a few test certificates containing a shared object.
-pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
+pub async fn test_certificates(
+    authority: &AuthorityState,
+    shared_object: Object,
+) -> Vec<CertifiedTransaction> {
     let epoch_store = authority.load_epoch_store_one_call_per_task();
     let (sender, keypair) = deterministic_random_account_key();
     let rgp = epoch_store.reference_gas_price();
 
     let mut certificates = Vec::new();
-    let shared_object = Object::shared_for_testing();
     let shared_object_arg = ObjectArg::SharedObject {
         id: shared_object.id(),
         initial_shared_version: shared_object.version(),
@@ -108,9 +110,13 @@ async fn submit_transaction_to_consensus_adapter() {
     // Initialize an authority with a (owned) gas object and a shared object; then
     // make a test certificate.
     let mut objects = test_gas_objects();
-    objects.push(Object::shared_for_testing());
+    let shared_object = Object::shared_for_testing();
+    objects.push(shared_object.clone());
     let state = init_state_with_objects(objects).await;
-    let certificate = test_certificates(&state).await.pop().unwrap();
+    let certificate = test_certificates(&state, shared_object)
+        .await
+        .pop()
+        .unwrap();
     let epoch_store = state.epoch_store_for_testing();
 
     let metrics = ConsensusAdapterMetrics::new_test();
@@ -122,15 +128,20 @@ async fn submit_transaction_to_consensus_adapter() {
     impl SubmitToConsensus for SubmitDirectly {
         async fn submit_to_consensus(
             &self,
-            transaction: &ConsensusTransaction,
+            transactions: &[ConsensusTransaction],
             epoch_store: &Arc<AuthorityPerEpochStore>,
         ) -> SuiResult {
+            let sequenced_transactions = transactions
+                .iter()
+                .map(|txn| SequencedConsensusTransaction::new_test(txn.clone()))
+                .collect();
             epoch_store
                 .process_consensus_transactions_for_tests(
-                    vec![SequencedConsensusTransaction::new_test(transaction.clone())],
+                    sequenced_transactions,
                     &Arc::new(CheckpointServiceNoop {}),
-                    self.0.get_cache_reader().as_ref(),
-                    &self.0.metrics.skipped_consensus_txns,
+                    self.0.get_object_cache_reader().as_ref(),
+                    &self.0.metrics,
+                    true,
                 )
                 .await?;
             Ok(())

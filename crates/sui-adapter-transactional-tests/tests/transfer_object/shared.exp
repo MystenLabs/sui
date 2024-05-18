@@ -3,45 +3,69 @@ processed 10 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 8-28:
+task 1 'publish'. lines 8-25:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5525200,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 30-30:
+task 2 'run'. lines 27-27:
 created: object(2,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 3 'run'. lines 32-32:
+task 3 'run'. lines 29-29:
 created: object(3,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 2204000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
-task 4 'view-object'. lines 34-34:
+task 4 'view-object'. lines 31-31:
 Owner: Shared
 Version: 3
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 5 'view-object'. lines 36-36:
+task 5 'view-object'. lines 33-33:
 Owner: Shared
 Version: 4
-Contents: test::m::S2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}}
+Contents: test::m::S2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}
 
-task 6 'transfer-object'. lines 38-38:
+task 6 'transfer-object'. lines 35-35:
 Error: Transaction Effects Status: Invalid Transfer Object, object does not have public transfer.
 Debug of error: InvalidTransferObject at command Some(0)
 
-task 7 'transfer-object'. lines 40-40:
+task 7 'transfer-object'. lines 37-37:
 Error: Transaction Effects Status: The shared object operation is not allowed.
 Debug of error: SharedObjectOperationNotAllowed at command None
 
-task 8 'view-object'. lines 42-42:
+task 8 'view-object'. lines 39-39:
 Owner: Shared
 Version: 4
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 9 'view-object'. lines 44-44:
+task 9 'view-object'. lines 41-41:
 Owner: Shared
 Version: 5
-Contents: test::m::S2 {id: sui::object::UID {id: sui::object::ID {bytes: fake(3,0)}}}
+Contents: test::m::S2 {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(3,0),
+        },
+    },
+}

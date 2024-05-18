@@ -1,21 +1,24 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::de::DeserializeOwned;
 use std::collections::HashMap;
-use sui_json_rpc::coin_api::parse_to_struct_tag;
+use std::sync::Arc;
 
 use diesel::prelude::*;
-use move_bytecode_utils::module_cache::GetModule;
+use serde::de::DeserializeOwned;
+
+use move_core_types::annotated_value::MoveTypeLayout;
+use sui_json_rpc::coin_api::parse_to_struct_tag;
 use sui_json_rpc_types::{Balance, Coin as SuiCoin};
-use sui_types::base_types::{ObjectID, ObjectRef, SequenceNumber};
+use sui_package_resolver::{PackageStore, Resolver};
+use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::digests::ObjectDigest;
 use sui_types::dynamic_field::{DynamicFieldInfo, DynamicFieldName, DynamicFieldType, Field};
 use sui_types::object::Object;
 use sui_types::object::ObjectRead;
 
 use crate::errors::IndexerError;
-use crate::schema::{objects, objects_history};
+use crate::schema::{objects, objects_history, objects_snapshot};
 use crate::types::{IndexedDeletedObject, IndexedObject, ObjectStatus};
 
 #[derive(Queryable)]
@@ -48,8 +51,13 @@ pub struct StoredObject {
     pub checkpoint_sequence_number: i64,
     pub owner_type: i16,
     pub owner_id: Option<Vec<u8>>,
-    /// The type of this object. This will be None if the object is a Package
+    /// The full type of this object, including package id, module, name and type parameters.
+    /// This and following three fields will be None if the object is a Package
     pub object_type: Option<String>,
+    pub object_type_package: Option<Vec<u8>>,
+    pub object_type_module: Option<String>,
+    /// Name of the object type, e.g., "Coin", without type parameters.
+    pub object_type_name: Option<String>,
     pub serialized_object: Vec<u8>,
     pub coin_type: Option<String>,
     // TODO deal with overflow
@@ -58,6 +66,70 @@ pub struct StoredObject {
     pub df_name: Option<Vec<u8>>,
     pub df_object_type: Option<String>,
     pub df_object_id: Option<Vec<u8>>,
+}
+
+#[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
+#[diesel(table_name = objects_snapshot, primary_key(object_id))]
+pub struct StoredObjectSnapshot {
+    pub object_id: Vec<u8>,
+    pub object_version: i64,
+    pub object_status: i16,
+    pub object_digest: Option<Vec<u8>>,
+    pub checkpoint_sequence_number: i64,
+    pub owner_type: Option<i16>,
+    pub owner_id: Option<Vec<u8>>,
+    pub object_type: Option<String>,
+    pub serialized_object: Option<Vec<u8>>,
+    pub coin_type: Option<String>,
+    pub coin_balance: Option<i64>,
+    pub df_kind: Option<i16>,
+    pub df_name: Option<Vec<u8>>,
+    pub df_object_type: Option<String>,
+    pub df_object_id: Option<Vec<u8>>,
+}
+
+impl From<StoredObject> for StoredObjectSnapshot {
+    fn from(o: StoredObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::Active as i16,
+            object_digest: Some(o.object_digest),
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            owner_type: Some(o.owner_type),
+            owner_id: o.owner_id,
+            object_type: o.object_type,
+            serialized_object: Some(o.serialized_object),
+            coin_type: o.coin_type,
+            coin_balance: o.coin_balance,
+            df_kind: o.df_kind,
+            df_name: o.df_name,
+            df_object_type: o.df_object_type,
+            df_object_id: o.df_object_id,
+        }
+    }
+}
+
+impl From<StoredDeletedObject> for StoredObjectSnapshot {
+    fn from(o: StoredDeletedObject) -> Self {
+        Self {
+            object_id: o.object_id,
+            object_version: o.object_version,
+            object_status: ObjectStatus::WrappedOrDeleted as i16,
+            object_digest: None,
+            checkpoint_sequence_number: o.checkpoint_sequence_number,
+            owner_type: None,
+            owner_id: None,
+            object_type: None,
+            serialized_object: None,
+            coin_type: None,
+            coin_balance: None,
+            df_kind: None,
+            df_name: None,
+            df_object_type: None,
+            df_object_id: None,
+        }
+    }
 }
 
 #[derive(Queryable, Insertable, Debug, Identifiable, Clone, QueryableByName)]
@@ -71,6 +143,9 @@ pub struct StoredHistoryObject {
     pub owner_type: Option<i16>,
     pub owner_id: Option<Vec<u8>>,
     pub object_type: Option<String>,
+    pub object_type_package: Option<Vec<u8>>,
+    pub object_type_module: Option<String>,
+    pub object_type_name: Option<String>,
     pub serialized_object: Option<Vec<u8>>,
     pub coin_type: Option<String>,
     pub coin_balance: Option<i64>,
@@ -89,6 +164,9 @@ impl From<StoredObject> for StoredHistoryObject {
             object_digest: Some(o.object_digest),
             checkpoint_sequence_number: o.checkpoint_sequence_number,
             owner_type: Some(o.owner_type),
+            object_type_package: o.object_type_package,
+            object_type_module: o.object_type_module,
+            object_type_name: o.object_type_name,
             owner_id: o.owner_id,
             object_type: o.object_type,
             serialized_object: Some(o.serialized_object),
@@ -153,6 +231,9 @@ impl From<IndexedObject> for StoredObject {
                 .object
                 .type_()
                 .map(|t| t.to_canonical_string(/* with_prefix */ true)),
+            object_type_package: o.object.type_().map(|t| t.address().to_vec()),
+            object_type_module: o.object.type_().map(|t| t.module().to_string()),
+            object_type_name: o.object.type_().map(|t| t.name().to_string()),
             serialized_object: bcs::to_bytes(&o.object).unwrap(),
             coin_type: o.coin_type,
             coin_balance: o.coin_balance.map(|b| b as i64),
@@ -181,21 +262,49 @@ impl TryFrom<StoredObject> for Object {
 }
 
 impl StoredObject {
-    pub fn try_into_object_read(
+    pub async fn try_into_object_read(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<ObjectRead, IndexerError> {
         let oref = self.get_object_ref()?;
         let object: sui_types::object::Object = self.try_into()?;
-        let layout = object.get_layout(module_cache)?;
-        Ok(ObjectRead::Exists(oref, object, layout))
+        let Some(move_object) = object.data.try_as_move().cloned() else {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is not a Move object",
+                oref,
+            )));
+        };
+
+        let move_type_layout = package_resolver
+            .type_layout(move_object.type_().clone().into())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to convert into object read for obj {}:{}, type: {}. Error: {e}",
+                    object.id(),
+                    object.version(),
+                    move_object.type_(),
+                ))
+            })?;
+        let move_struct_layout = match move_type_layout {
+            MoveTypeLayout::Struct(s) => Ok(s),
+            _ => Err(IndexerError::ResolveMoveStructError(
+                "MoveTypeLayout is not Struct".to_string(),
+            )),
+        }?;
+
+        Ok(ObjectRead::Exists(oref, object, Some(move_struct_layout)))
     }
 
-    pub fn try_into_expectant_dynamic_field_info(
+    pub async fn try_into_expectant_dynamic_field_info(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<DynamicFieldInfo, IndexerError> {
-        match self.try_into_dynamic_field_info(module_cache).transpose() {
+        match self
+            .try_into_dynamic_field_info(package_resolver)
+            .await
+            .transpose()
+        {
             Some(Ok(info)) => Ok(info),
             Some(Err(e)) => Err(e),
             None => Err(IndexerError::PersistentStorageDataCorruptionError(
@@ -204,9 +313,9 @@ impl StoredObject {
         }
     }
 
-    pub fn try_into_dynamic_field_info(
+    pub async fn try_into_dynamic_field_info(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<Option<DynamicFieldInfo>, IndexerError> {
         if self.df_kind.is_none() {
             return Ok(None);
@@ -225,7 +334,7 @@ impl StoredObject {
                 object_id
             ))
         })?;
-        let df_object_id = if let Some(df_object_id) = self.df_object_id {
+        let df_object_id = if let Some(df_object_id) = self.df_object_id.clone() {
             ObjectID::from_bytes(df_object_id).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "object {} has incompatible dynamic field type: df_object_id. Error: {e}",
@@ -248,7 +357,7 @@ impl StoredObject {
                 )))
             }
         };
-        let name = if let Some(field_name) = self.df_name {
+        let name = if let Some(field_name) = self.df_name.clone() {
             let name: DynamicFieldName = bcs::from_bytes(&field_name).map_err(|e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "object {} has incompatible dynamic field type: df_name. Error: {e}",
@@ -262,20 +371,44 @@ impl StoredObject {
                 object_id
             )));
         };
-        let layout = move_bytecode_utils::layout::TypeLayoutBuilder::build_with_types(
-            &name.type_,
-            module_cache,
-        )?;
+
+        let oref = self.get_object_ref()?;
+        let object: sui_types::object::Object = self.clone().try_into()?;
+        let Some(move_object) = object.data.try_as_move().cloned() else {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is not a Move object",
+                oref,
+            )));
+        };
+        if !move_object.type_().is_dynamic_field() {
+            return Err(IndexerError::PostgresReadError(format!(
+                "Object {:?} is not a dynamic field",
+                oref,
+            )));
+        }
+
+        let layout = package_resolver
+            .type_layout(name.type_.clone())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to create dynamic field info for obj {}:{}, type: {}. Error: {e}",
+                    object.id(),
+                    object.version(),
+                    move_object.type_(),
+                ))
+            })?;
         let sui_json_value = sui_json::SuiJsonValue::new(name.value.clone())?;
         let bcs_name = sui_json_value.to_bcs_bytes(&layout)?;
-        let object_type =
-            self.df_object_type
-                .ok_or(IndexerError::PersistentStorageDataCorruptionError(format!(
-                    "object {} has incompatible dynamic field type: empty df_object_type",
-                    object_id
-                )))?;
+        let object_type = self.df_object_type.clone().ok_or(
+            IndexerError::PersistentStorageDataCorruptionError(format!(
+                "object {} has incompatible dynamic field type: empty df_object_type",
+                object_id
+            )),
+        )?;
+
         Ok(Some(DynamicFieldInfo {
-            version: SequenceNumber::from_u64(self.object_version as u64),
+            version: oref.1,
             digest: object_digest,
             type_,
             name,

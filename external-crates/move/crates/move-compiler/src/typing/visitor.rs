@@ -168,6 +168,21 @@ pub trait TypingVisitorContext {
                 self.visit_exp(e2);
                 self.visit_exp(e3);
             }
+            E::Match(esubject, arms) => {
+                self.visit_exp(esubject);
+                for sp!(_, arm) in arms.value.iter_mut() {
+                    if let Some(guard) = arm.guard.as_mut() {
+                        self.visit_exp(guard)
+                    }
+                    self.visit_exp(&mut arm.rhs);
+                }
+            }
+            E::VariantMatch(esubject, _, arms) => {
+                self.visit_exp(esubject);
+                for (_, earm) in arms.iter_mut() {
+                    self.visit_exp(earm);
+                }
+            }
             E::While(_, e1, e2) => {
                 self.visit_exp(e1);
                 self.visit_exp(e2);
@@ -192,6 +207,9 @@ pub trait TypingVisitorContext {
             E::Pack(_, _, _, fields) => fields
                 .iter_mut()
                 .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
+            E::PackVariant(_, _, _, _, fields) => fields
+                .iter_mut()
+                .for_each(|(_, _, (_, (_, e)))| self.visit_exp(e)),
             E::ExpList(list) => {
                 for l in list {
                     match l {
@@ -204,6 +222,11 @@ pub trait TypingVisitorContext {
             E::TempBorrow(_, e) => self.visit_exp(e),
             E::Cast(e, _) => self.visit_exp(e),
             E::Annotate(e, _) => self.visit_exp(e),
+            E::AutocompleteDotAccess {
+                base_exp,
+                methods: _,
+                fields: _,
+            } => self.visit_exp(base_exp),
             E::Unit { .. }
             | E::Value(_)
             | E::Move { .. }
@@ -212,6 +235,7 @@ pub trait TypingVisitorContext {
             | E::Constant(..)
             | E::Continue(_)
             | E::BorrowLocal(..)
+            | E::ErrorConstant { .. }
             | E::UnresolvedError => (),
         }
     }

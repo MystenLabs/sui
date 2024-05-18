@@ -3,26 +3,38 @@ processed 6 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 8-22:
+task 1 'publish'. lines 8-19:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 5365600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 24-24:
+task 2 'run'. lines 21-21:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'view-object'. lines 26-26:
+task 3 'view-object'. lines 23-23:
 Owner: Immutable
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}
 
-task 4 'transfer-object'. lines 28-28:
+task 4 'transfer-object'. lines 25-25:
 Error: Transaction Effects Status: Invalid command argument at 0. Immutable objects cannot be passed by-value.
 Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: CommandArgumentError { arg_idx: 0, kind: InvalidObjectByValue }, source: None, command: Some(0) } }
 
-task 5 'view-object'. lines 30-30:
+task 5 'view-object'. lines 27-27:
 Owner: Immutable
 Version: 2
-Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(2,0)}}}
+Contents: test::m::S {
+    id: sui::object::UID {
+        id: sui::object::ID {
+            bytes: fake(2,0),
+        },
+    },
+}

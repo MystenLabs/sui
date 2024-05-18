@@ -8,9 +8,7 @@
 
 //# publish
 module test::m {
-    use sui::transfer::{Self, Receiving};
-    use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, UID};
+    use sui::transfer::Receiving;
 
     public struct Parent has key { id: UID }
     public struct S has key { id: UID }
