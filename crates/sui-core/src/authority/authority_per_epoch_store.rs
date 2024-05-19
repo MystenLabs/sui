@@ -3153,7 +3153,6 @@ impl AuthorityPerEpochStore {
                             ConsensusCertificateResult::Deferred(deferral_key)
                         }
                         DeferralReason::SharedObjectCongestion(congested_objects) => {
-                            info!("ZZZZZ defer txn {:?}", certificate.digest());
                             authority_metrics
                                 .consensus_handler_congested_transactions
                                 .inc();

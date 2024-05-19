@@ -403,23 +403,24 @@ mod test {
         assert!(pruned > 0);
     }
 
+    // Tests cluster liveness when shared object congestion control is on.
     #[sim_test(config = "test_config()")]
     async fn test_simulated_load_shared_object_congestion_control() {
-        let checkpoint_budget_factor;
-        let max_deferral_round;
+        let checkpoint_budget_factor; // The checkpoint congestion control budget in respect to transaction budget.
+        let max_deferral_rounds;
         {
             let mut rng = thread_rng();
             checkpoint_budget_factor = rng.gen_range(1..20);
-            max_deferral_round = if rng.gen_bool(0.5) {
-                rng.gen_range(0..20)
+            max_deferral_rounds = if rng.gen_bool(0.5) {
+                rng.gen_range(0..20) // Short deferral round (testing cancellation)
             } else {
-                rng.gen_range(1000..10000)
+                rng.gen_range(1000..10000) // Large deferral round (testing liveness)
             }
         }
 
         info!(
-            "test_simulated_load_shared_object_congestion_control setup. checkpoint_budget_factor: {:?}, max_deferral_round: {:?}.",
-            checkpoint_budget_factor, max_deferral_round
+            "test_simulated_load_shared_object_congestion_control setup. checkpoint_budget_factor: {:?}, max_deferral_rounds: {:?}.",
+            checkpoint_budget_factor, max_deferral_rounds
         );
 
         let _guard = ProtocolConfig::apply_overrides_for_testing(move |_, mut config| {
@@ -431,7 +432,7 @@ mod test {
                     * DEFAULT_VALIDATOR_GAS_PRICE
                     * TEST_ONLY_GAS_UNIT_FOR_HEAVY_COMPUTATION_STORAGE,
             );
-            config.set_max_deferral_rounds_for_congestion_control(max_deferral_round);
+            config.set_max_deferral_rounds_for_congestion_control(max_deferral_rounds);
             config
         });
 
@@ -441,10 +442,12 @@ mod test {
             let mut rng = thread_rng();
             simulated_load_config.shared_counter_weight = if rng.gen_bool(0.5) { 5 } else { 50 };
             simulated_load_config.num_shared_counters = match rng.gen_range(0..=2) {
-                0 => None,
+                0 => None, // shared_counter_hotness_factor is in play in this case.
                 n => Some(n),
             };
             simulated_load_config.shared_counter_hotness_factor = rng.gen_range(50..=100);
+
+            // Use shared_counter_max_tip to make transactions to have different gas prices.
             simulated_load_config.use_shared_counter_max_tip = rng.gen_bool(0.25);
             simulated_load_config.shared_counter_max_tip = rng.gen_range(1..=1000);
             info!("Simulated load config: {:?}", simulated_load_config);

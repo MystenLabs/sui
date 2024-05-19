@@ -56,6 +56,7 @@ impl SharedObjectCongestionTracker {
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
         if shared_input_objects.len() == 0 {
+            // This is an owned object only transaction. No need to defer.
             return None;
         }
 
@@ -107,8 +108,6 @@ impl SharedObjectCongestionTracker {
     ) {
         let start_cost = self.compute_tx_start_at_cost(shared_input_objects);
         let end_cost = start_cost + tx_cost;
-
-        println!("ZZZZZZZ bump end_cost {:?}", end_cost);
 
         for obj in shared_input_objects {
             if obj.mutable {
