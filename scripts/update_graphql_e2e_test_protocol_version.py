@@ -5,6 +5,7 @@
 import os
 import re
 import argparse
+import difflib
 
 def replace_protocol_version_in_file(file_path, old_version, new_version, yes_to_all, dry_run):
     with open(file_path, 'r') as file:
@@ -18,6 +19,16 @@ def replace_protocol_version_in_file(file_path, old_version, new_version, yes_to
 
     if content != updated_content:
         print(f"Found 'init --protocol-version {old_version}' in {file_path}")
+
+        print(f"Proposed change")
+        diff = difflib.unified_diff(
+            content.splitlines(keepends=True),
+            updated_content.splitlines(keepends=True),
+            fromfile='original',
+            tofile='updated'
+        )
+        print(''.join(diff))
+
         if dry_run:
             return
         if yes_to_all :
@@ -42,7 +53,7 @@ def replace_protocol_version_in_repo(repo_path, old_version, new_version, yes_to
                     replace_protocol_version_in_file(file_path, old_version, new_version, yes_to_all, dry_run)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Replace protocol version in .move files.')
+    parser = argparse.ArgumentParser(description='Replace protocol version in sui-graphql-e2e-tests tests.')
     parser.add_argument('--yes-to-all', action='store_true', help='Automatically say "yes to all" for all changes')
     parser.add_argument('--dry-run', action='store_true', help='List all files that will be updated without making any changes')
     args = parser.parse_args()
