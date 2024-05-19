@@ -61,7 +61,7 @@ function App() {
 ## Using UI components to connect to a wallet
 
 The dApp Kit provides a set of flexible UI components that can be used to connect and manage wallet
-accounts from your dApp. The components are built on top of [Radix UI](radix-ui.com/primitives) and
+accounts from your dApp. The components are built on top of [Radix UI](https://www.radix-ui.com/primitives) and
 are customizable so you can quickly get your dApp up and running.
 
 To use our provided UI components, you will need to import the dApp Kit's CSS stylesheet into your
