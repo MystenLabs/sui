@@ -55,7 +55,7 @@ impl SharedObjectCongestionTracker {
         commit_round: Round,
     ) -> Option<(DeferralKey, Vec<ObjectID>)> {
         let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
-        if shared_input_objects.len() == 0 {
+        if shared_input_objects.is_empty() {
             // This is an owned object only transaction. No need to defer.
             return None;
         }
