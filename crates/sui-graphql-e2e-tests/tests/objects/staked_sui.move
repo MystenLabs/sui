@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-//# init --protocol-version 39 --simulator --accounts C
+//# init --protocol-version 45 --simulator --accounts C
 
 //# run-graphql
 { # init --protocol-version 39ial query yields only the validator's stake
