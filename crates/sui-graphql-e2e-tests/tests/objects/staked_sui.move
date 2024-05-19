@@ -4,7 +4,7 @@
 //# init --protocol-version 45 --simulator --accounts C
 
 //# run-graphql
-{ # init --protocol-version 39ial query yields only the validator's stake
+{ # Initial query yields only the validator's stake
   objects(filter: { type: "0x3::staking_pool::StakedSui" }) {
     edges {
       cursor
