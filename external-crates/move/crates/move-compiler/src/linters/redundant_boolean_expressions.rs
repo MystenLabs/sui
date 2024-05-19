@@ -46,21 +46,28 @@ impl TypingVisitorConstructor for RedundantBooleanExp {
 
 impl TypingVisitorContext for Context<'_> {
     fn visit_exp_custom(&mut self, exp: &mut T::Exp) -> bool {
-        if let UnannotatedExp_::BinopExp(e1, op, _, e2) = &exp.exp.value {
-            // Check if the operation is a logical OR
-            if let BinOp_::Or = &op.value {
-                match (&e1.exp.value, &e2.exp.value) {
-                    (UnannotatedExp_::Value(bool), UnannotatedExp_::Copy { var, .. })
-                    | (UnannotatedExp_::Copy { var, .. }, UnannotatedExp_::Value(bool)) => {
-                        if &Value_::Bool(true) == &bool.value {
-                            add_redundant_bool_expr_diag(self.env,exp.exp.loc, "true", "This expression always evaluates to true regardless of the other operand.");
-                            return true;
-                        }
-                        let Var_ { name, .. } = var.value;
-                        add_redundant_bool_expr_diag(self.env,exp.exp.loc, name.as_str(), "This expression always evaluates to true regardless of the other operand.");
+        if let UnannotatedExp_::BinopExp(
+            lhs,
+            BinOp_::Or | BinOp_::And | BinOp_::Eq | BinOp_::Neq,
+            _,
+            rhs,
+        ) = &exp.exp.value
+        {
+            match (&lhs.exp.value, &rhs.exp.value) {
+                (UnannotatedExp_::Value(bool), _) | (_, UnannotatedExp_::Value(bool)) => {
+                    if &Value_::Bool(true) == &bool.value {
+                        add_redundant_bool_expr_diag(self.env,exp.exp.loc, "true", "This expression always evaluates to true regardless of the other operand.");
+                        return true;
                     }
-                    _ => {}
+                    let Var_ { name, .. } = var.value;
+                    add_redundant_bool_expr_diag(
+                        self.env,
+                        exp.exp.loc,
+                        name.as_str(),
+                        "This expression always evaluates to true regardless of the other operand.",
+                    );
                 }
+                _ => {}
             }
         }
         false
