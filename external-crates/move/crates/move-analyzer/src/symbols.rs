@@ -2812,7 +2812,7 @@ impl<'a> TypingSymbolicator<'a> {
             E::Loop { body, .. } => {
                 self.exp_symbols(body, scope);
             }
-            E::NamedBlock(l, (use_funs, sequence)) => {
+            E::NamedBlock(_, (use_funs, sequence)) => {
                 let old_traverse_mode = self.traverse_only;
                 // start adding new use-defs etc. when processing an argument
                 if use_funs.color == 0 {
