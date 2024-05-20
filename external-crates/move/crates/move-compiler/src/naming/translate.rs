@@ -3785,6 +3785,7 @@ fn remove_unused_bindings_exp(
             from_macro_argument: _,
             seq,
         }) => remove_unused_bindings_seq(context, used, seq),
+        N::Exp_::IDEAnnotation(_, e) => remove_unused_bindings_exp(context, used, e),
         N::Exp_::Lambda(N::Lambda {
             parameters: sp!(_, parameters),
             return_label: _,
