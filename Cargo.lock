@@ -13075,6 +13075,7 @@ dependencies = [
  "move-package",
  "move-symbol-pool",
  "serde-reflection",
+ "sui-package-management",
  "sui-protocol-config",
  "sui-types",
  "sui-verifier-latest",
@@ -13321,6 +13322,7 @@ version = "1.26.0"
 dependencies = [
  "anyhow",
  "move-package",
+ "move-symbol-pool",
  "sui-json-rpc-types",
  "sui-sdk",
  "tracing",
