@@ -26,14 +26,12 @@ impl StateReader {
         &self.inner
     }
 
-    #[allow(unused)]
     pub fn get_object(&self, object_id: ObjectId) -> Result<Option<Object>> {
         self.inner
             .get_object(&object_id.into())
             .map(|maybe| maybe.map(Into::into))
     }
 
-    #[allow(unused)]
     pub fn get_object_with_version(
         &self,
         object_id: ObjectId,
