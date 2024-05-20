@@ -2847,7 +2847,7 @@ impl<'a> TypingSymbolicator<'a> {
             E::IDEAnnotation(info, exp) => {
                 match info {
                     IDEInfo::MacroCallInfo(MacroCallInfo {
-                        module,name,method_name, type_arguments, by_value_args
+                        module, name, method_name, type_arguments, by_value_args
                     }) => {
                         self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
                         by_value_args.iter().for_each(|a| self.seq_item_symbols(scope, a));
