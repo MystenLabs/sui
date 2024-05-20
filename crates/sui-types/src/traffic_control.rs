@@ -12,10 +12,11 @@ use std::{fmt::Debug, path::PathBuf};
 pub const DEFAULT_SKETCH_CAPACITY: usize = 50_000;
 pub const DEFAULT_SKETCH_PROBABILITY: f64 = 0.999;
 pub const DEFAULT_SKETCH_TOLERANCE: f64 = 0.2;
+use rand::distributions::Distribution;
 
 const TRAFFIC_SINK_TIMEOUT_SEC: u64 = 300;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Weight(f32);
 
 impl Weight {
@@ -37,6 +38,12 @@ impl Weight {
 
     pub fn value(&self) -> f32 {
         self.0
+    }
+
+    pub async fn is_sampled(&self) -> bool {
+        let mut rng = rand::thread_rng();
+        let sample = rand::distributions::Uniform::new(0.0, 1.0).sample(&mut rng);
+        sample <= self.value()
     }
 }
 
@@ -76,8 +83,10 @@ fn default_drain_timeout() -> u64 {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct FreqThresholdConfig {
-    #[serde(default = "default_threshold")]
-    pub threshold: u64,
+    #[serde(default = "default_connection_threshold")]
+    pub connection_threshold: u64,
+    #[serde(default = "default_proxy_threshold")]
+    pub proxy_threshold: u64,
     #[serde(default = "default_window_size_secs")]
     pub window_size_secs: u64,
     #[serde(default = "default_update_interval_secs")]
@@ -93,7 +102,8 @@ pub struct FreqThresholdConfig {
 impl Default for FreqThresholdConfig {
     fn default() -> Self {
         Self {
-            threshold: default_threshold(),
+            connection_threshold: default_connection_threshold(),
+            proxy_threshold: default_proxy_threshold(),
             window_size_secs: default_window_size_secs(),
             update_interval_secs: default_update_interval_secs(),
             sketch_capacity: default_sketch_capacity(),
@@ -103,7 +113,16 @@ impl Default for FreqThresholdConfig {
     }
 }
 
-fn default_threshold() -> u64 {
+fn default_connection_threshold() -> u64 {
+    // by default only block connection IPs with unreasonably
+    // high qps, as a single fullnode could be routing the vast
+    // majority of all traffic in normal operations. If used as a
+    // spam policy, all requests would count against this threshold
+    // within the window time. In practice this should always be set
+    1_000_000
+}
+
+fn default_proxy_threshold() -> u64 {
     10
 }
 
@@ -146,10 +165,6 @@ pub enum PolicyType {
     /// is encountered in tally N times. If used in an error policy, this would trigger
     /// after N errors
     TestNConnIP(u64),
-    /// Test policy that inspects the proxy_ip and connection_ip to ensure they are present
-    /// in the tally. Tests IP forwarding. To be used only in tests that submit transactions
-    /// through a client
-    TestInspectIp,
     /// Test policy that panics when invoked. To be used as an error policy in tests that do
     /// not expect request errors in order to verify that the error policy is not invoked
     TestPanicOnInvocation,
@@ -169,6 +184,8 @@ pub struct PolicyConfig {
     pub error_policy_type: PolicyType,
     #[serde(default = "default_channel_capacity")]
     pub channel_capacity: usize,
+    #[serde(default = "default_spam_sample_rate")]
+    pub spam_sample_rate: Weight,
     #[serde(default = "default_dry_run")]
     pub dry_run: bool,
 }
@@ -181,6 +198,7 @@ impl Default for PolicyConfig {
             spam_policy_type: PolicyType::NoOp,
             error_policy_type: PolicyType::NoOp,
             channel_capacity: 100,
+            spam_sample_rate: default_spam_sample_rate(),
             dry_run: default_dry_run(),
         }
     }
@@ -195,4 +213,8 @@ pub fn default_channel_capacity() -> usize {
 
 pub fn default_dry_run() -> bool {
     true
+}
+
+pub fn default_spam_sample_rate() -> Weight {
+    Weight::new(0.2).unwrap()
 }
