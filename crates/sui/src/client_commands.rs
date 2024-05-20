@@ -93,7 +93,7 @@ use tracing::info;
 #[cfg(test)]
 mod profiler_tests;
 
-/// Only to be used within CLI
+/// Only to be used within CLI, do not modify.
 pub const GAS_SAFE_OVERHEAD: u64 = 1000;
 
 #[derive(Parser)]
