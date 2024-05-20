@@ -19,7 +19,7 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 1976000,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 4 'view-object'. lines 66-66:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 3
 Contents: sui::coin::Coin<sui::sui::SUI> {
     id: sui::object::UID {
@@ -81,7 +81,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 }
 
 task 11 'view-object'. lines 86-86:
-Owner: Shared
+Owner: Shared( 6 )
 Version: 6
 Contents: sui::coin::Coin<sui::sui::SUI> {
     id: sui::object::UID {
@@ -95,7 +95,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 }
 
 task 12 'view-object'. lines 88-90:
-Owner: Shared
+Owner: Shared( 7 )
 Version: 7
 Contents: t2::o2::Obj2 {
     id: sui::object::UID {
@@ -126,7 +126,7 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2226800,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 17 'view-object'. lines 103-103:
-Owner: Shared
+Owner: Shared( 8 )
 Version: 8
 Contents: sui::coin::Coin<sui::sui::SUI> {
     id: sui::object::UID {
@@ -140,7 +140,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 }
 
 task 18 'view-object'. lines 105-105:
-Owner: Shared
+Owner: Shared( 9 )
 Version: 9
 Contents: sui::coin::Coin<sui::sui::SUI> {
     id: sui::object::UID {
@@ -154,7 +154,7 @@ Contents: sui::coin::Coin<sui::sui::SUI> {
 }
 
 task 19 'view-object'. lines 107-109:
-Owner: Shared
+Owner: Shared( 10 )
 Version: 10
 Contents: t2::o2::Obj2 {
     id: sui::object::UID {
