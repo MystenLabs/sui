@@ -79,6 +79,11 @@ const DB_COMMIT_LATENCY_SEC_BUCKETS: &[f64] = &[
     5.0, 10.0, 20.0, 40.0, 60.0, 80.0, 100.0, 200.0,
 ];
 
+const DB_QUERY_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0,
+    2000.0, 5000.0, 10000.0,
+];
+
 #[derive(Clone)]
 pub struct IndexerMetrics {
     pub total_checkpoint_received: IntCounter,
@@ -497,7 +502,7 @@ impl IndexerMetrics {
             update_object_snapshot_latency: register_histogram_with_registry!(
                 "update_object_snapshot_latency",
                 "Time spent in updating object snapshot",
-                LATENCY_SEC_BUCKETS.to_vec(),
+                DB_QUERY_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             ).unwrap(),
             tokio_blocking_task_wait_latency: register_histogram_with_registry!(
