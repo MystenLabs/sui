@@ -59,7 +59,6 @@ pub struct JsonRpcServerBuilder {
     registry: Registry,
     policy_config: Option<PolicyConfig>,
     firewall_config: Option<RemoteFirewallConfig>,
-    with_client_ip_injection: Option<bool>,
 }
 
 pub fn sui_rpc_doc(version: &str) -> Project {
@@ -86,7 +85,6 @@ impl JsonRpcServerBuilder {
         prometheus_registry: &Registry,
         policy_config: Option<PolicyConfig>,
         firewall_config: Option<RemoteFirewallConfig>,
-        with_client_ip_injection: Option<bool>,
     ) -> Self {
         Self {
             module: RpcModule::new(()),
@@ -94,7 +92,6 @@ impl JsonRpcServerBuilder {
             registry: prometheus_registry.clone(),
             policy_config,
             firewall_config,
-            with_client_ip_injection,
         }
     }
 
@@ -193,7 +190,6 @@ impl JsonRpcServerBuilder {
             self.firewall_config.clone(),
             self.policy_config.clone(),
             traffic_controller_metrics,
-            self.with_client_ip_injection.unwrap_or(false),
         );
 
         let mut router = axum::Router::new();
