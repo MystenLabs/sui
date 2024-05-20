@@ -11,7 +11,7 @@ import { isTransactionBlock, TransactionBlock } from '../TransactionBlock.js';
 import { CachingTransactionBlockExecutor } from './caching.js';
 import { SerialQueue } from './queue.js';
 
-export class SerialTransactionBlockExecutor {
+export class SerialTransactionExecutor {
 	#queue = new SerialQueue();
 	#signer: Signer;
 	#cache: CachingTransactionBlockExecutor;
@@ -47,14 +47,14 @@ export class SerialTransactionBlockExecutor {
 		}
 	};
 
-	#buildTransactionBlock = async (transactionBlock: TransactionBlock) => {
+	#buildTransaction = async (transaction: TransactionBlock) => {
 		const gasCoin = await this.#cache.cache.getCustom<{
 			objectId: string;
 			version: string;
 			digest: string;
 		}>('gasCoin');
 
-		const copy = TransactionBlock.from(transactionBlock);
+		const copy = TransactionBlock.from(transaction);
 		if (gasCoin) {
 			copy.setGasPayment([gasCoin]);
 		}
@@ -64,11 +64,11 @@ export class SerialTransactionBlockExecutor {
 		return this.#cache.buildTransactionBlock({ transactionBlock: copy });
 	};
 
-	executeTransactionBlock(transactionBlock: TransactionBlock | Uint8Array) {
+	executeTransaction(transaction: TransactionBlock | Uint8Array) {
 		return this.#queue.runTask(async () => {
-			const bytes = isTransactionBlock(transactionBlock)
-				? await this.#buildTransactionBlock(transactionBlock)
-				: transactionBlock;
+			const bytes = isTransactionBlock(transaction)
+				? await this.#buildTransaction(transaction)
+				: transaction;
 
 			const { signature } = await this.#signer.signTransactionBlock(bytes);
 			const results = await this.#cache

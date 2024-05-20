@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, Mock, vi } from 
 import { bcs } from '../../src/bcs';
 import { SuiClient } from '../../src/client';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
-import { ParallelExecutor, TransactionBlock } from '../../src/transactions';
+import { ParallelTransactionExecutor, TransactionBlock } from '../../src/transactions';
 import { setup, TestToolbox } from './utils/setup';
 
 let toolbox: TestToolbox;
@@ -22,13 +22,13 @@ afterAll(() => {
 	vi.restoreAllMocks();
 });
 
-describe('ParallelExecutor', () => {
+describe('ParallelTransactionExecutor', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 	});
 
 	it('Executes multiple transactions in parallel', async () => {
-		const executor = new ParallelExecutor({
+		const executor = new ParallelTransactionExecutor({
 			client: toolbox.client,
 			signer: toolbox.keypair,
 			maxPoolSize: 3,
@@ -59,7 +59,7 @@ describe('ParallelExecutor', () => {
 			return txb;
 		});
 
-		const results = await Promise.all(txbs.map((txb) => executor.executeTransactionBlock(txb)));
+		const results = await Promise.all(txbs.map((txb) => executor.executeTransaction(txb)));
 
 		expect(maxConcurrentRequests).toBe(3);
 		// 10 + initial coin split + 1 refill to reach concurrency limit
@@ -70,7 +70,7 @@ describe('ParallelExecutor', () => {
 	});
 
 	it('handles gas coin transfers', async () => {
-		const executor = new ParallelExecutor({
+		const executor = new ParallelTransactionExecutor({
 			client: toolbox.client,
 			signer: toolbox.keypair,
 			maxPoolSize: 3,
@@ -85,7 +85,7 @@ describe('ParallelExecutor', () => {
 			return txb;
 		});
 
-		const results = await Promise.all(txbs.map((txb) => executor.executeTransactionBlock(txb)));
+		const results = await Promise.all(txbs.map((txb) => executor.executeTransaction(txb)));
 
 		const digest = new Set(results.map((result) => result.digest));
 		expect(digest.size).toBe(results.length);
@@ -100,7 +100,7 @@ describe('ParallelExecutor', () => {
 	});
 
 	it('handles errors', async () => {
-		const executor = new ParallelExecutor({
+		const executor = new ParallelTransactionExecutor({
 			client: toolbox.client,
 			signer: toolbox.keypair,
 			maxPoolSize: 3,
@@ -122,9 +122,7 @@ describe('ParallelExecutor', () => {
 			return txb;
 		});
 
-		const results = await Promise.allSettled(
-			txbs.map((txb) => executor.executeTransactionBlock(txb)),
-		);
+		const results = await Promise.allSettled(txbs.map((txb) => executor.executeTransaction(txb)));
 
 		const failed = results.filter((result) => result.status === 'rejected');
 		const succeeded = new Set(
@@ -138,7 +136,7 @@ describe('ParallelExecutor', () => {
 	});
 
 	it('handles transactions that use the same objects', async () => {
-		const executor = new ParallelExecutor({
+		const executor = new ParallelTransactionExecutor({
 			client: toolbox.client,
 			signer: toolbox.keypair,
 			maxPoolSize: 3,
@@ -150,7 +148,7 @@ describe('ParallelExecutor', () => {
 				const txb = new TransactionBlock();
 				const [coin] = txb.splitCoins(txb.gas, [1]);
 				txb.transferObjects([coin], toolbox.address());
-				const result = await executor.executeTransactionBlock(txb);
+				const result = await executor.executeTransaction(txb);
 
 				const effects = bcs.TransactionEffects.fromBase64(result.effects);
 				const newCoinId = effects.V2?.changedObjects.find(
@@ -174,7 +172,7 @@ describe('ParallelExecutor', () => {
 			return [txb2, txb3, txb4];
 		});
 
-		const results = await Promise.all(txbs.map((txb) => executor.executeTransactionBlock(txb)));
+		const results = await Promise.all(txbs.map((txb) => executor.executeTransaction(txb)));
 
 		const digests = new Set(results.map((result) => result.digest));
 

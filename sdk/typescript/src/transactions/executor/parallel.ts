@@ -18,8 +18,8 @@ const PARALLEL_EXECUTOR_DEFAULTS = {
 	initialCoinBalance: 200_000_000n,
 	minimumCoinBalance: 50_000_000n,
 	maxPoolSize: 50,
-} satisfies Omit<ParallelExecutorOptions, 'signer' | 'client'>;
-export interface ParallelExecutorOptions extends Omit<ObjectCacheOptions, 'address'> {
+} satisfies Omit<ParallelTransactionExecutorOptions, 'signer' | 'client'>;
+export interface ParallelTransactionExecutorOptions extends Omit<ObjectCacheOptions, 'address'> {
 	client: SuiClient;
 	signer: Signer;
 	coinBatchSize?: number;
@@ -35,7 +35,7 @@ interface CoinWithBalance {
 	digest: string;
 	balance: bigint;
 }
-export class ParallelExecutor {
+export class ParallelTransactionExecutor {
 	#signer: Signer;
 	#client: SuiClient;
 	#coinBatchSize: number;
@@ -49,7 +49,7 @@ export class ParallelExecutor {
 	#buildQueue = new SerialQueue();
 	#executeQueue: ParallelQueue;
 
-	constructor(options: ParallelExecutorOptions) {
+	constructor(options: ParallelTransactionExecutorOptions) {
 		this.#signer = options.signer;
 		this.#client = options.client;
 		this.#coinBatchSize = options.coinBatchSize ?? PARALLEL_EXECUTOR_DEFAULTS.coinBatchSize;
@@ -68,16 +68,16 @@ export class ParallelExecutor {
 			: null;
 	}
 
-	async executeTransactionBlock(transactionBlock: TransactionBlock) {
+	async executeTransaction(transaction: TransactionBlock) {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			digest: string;
 			effects: string;
 		}>();
-		const usedObjects = await this.#getUsedObjects(transactionBlock);
+		const usedObjects = await this.#getUsedObjects(transaction);
 
 		const execute = () => {
 			this.#executeQueue.runTask(() => {
-				const promise = this.#execute(transactionBlock, usedObjects);
+				const promise = this.#execute(transaction, usedObjects);
 
 				return promise.then(resolve, reject);
 			});
@@ -107,11 +107,11 @@ export class ParallelExecutor {
 		return promise;
 	}
 
-	async #getUsedObjects(transactionBlock: TransactionBlock) {
+	async #getUsedObjects(transaction: TransactionBlock) {
 		const usedObjects = new Set<string>();
 		let serialized = false;
 
-		transactionBlock.addSerializationPlugin(async (blockData, _options, next) => {
+		transaction.addSerializationPlugin(async (blockData, _options, next) => {
 			await next();
 
 			if (serialized) {
@@ -133,26 +133,26 @@ export class ParallelExecutor {
 			});
 		});
 
-		await transactionBlock.prepareForSerialization({ client: this.#client });
+		await transaction.prepareForSerialization({ client: this.#client });
 
 		return usedObjects;
 	}
 
-	async #execute(transactionBlock: TransactionBlock, usedObjects: Set<string>) {
+	async #execute(transaction: TransactionBlock, usedObjects: Set<string>) {
 		let gasCoin!: CoinWithBalance;
 		try {
 			const bytes = await this.#buildQueue.runTask(async () => {
 				gasCoin = await this.#getGasCoin();
-				transactionBlock.setGasPayment([
+				transaction.setGasPayment([
 					{
 						objectId: gasCoin.id,
 						version: gasCoin.version,
 						digest: gasCoin.digest,
 					},
 				]);
-				transactionBlock.setSenderIfNotSet(this.#signer.toSuiAddress());
+				transaction.setSenderIfNotSet(this.#signer.toSuiAddress());
 
-				return this.#cache.buildTransactionBlock({ transactionBlock });
+				return this.#cache.buildTransactionBlock({ transactionBlock: transaction });
 			});
 
 			const { signature } = await this.#signer.signTransactionBlock(bytes);

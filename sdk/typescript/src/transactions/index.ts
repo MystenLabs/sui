@@ -35,7 +35,6 @@ export type {
 
 export { TransactionDataBuilder } from './TransactionData.js';
 export { ObjectCache, AsyncCache } from './ObjectCache.js';
-export { CachingTransactionBlockExecutor } from './executor/caching.js';
-export { SerialTransactionBlockExecutor } from './executor/serial.js';
-export { ParallelExecutor } from './executor/parallel.js';
-export type { ParallelExecutorOptions } from './executor/parallel.js';
+export { SerialTransactionExecutor } from './executor/serial.js';
+export { ParallelTransactionExecutor } from './executor/parallel.js';
+export type { ParallelTransactionExecutorOptions } from './executor/parallel.js';

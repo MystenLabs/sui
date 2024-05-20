@@ -6,10 +6,10 @@ import type { ExecuteTransactionBlockParams, SuiClient } from '../../client/inde
 import type { Signer } from '../../cryptography/keypair.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { ObjectCache } from '../ObjectCache.js';
-import type { TransactionBlock } from '../TransactionBlock.js';
-import { isTransactionBlock } from '../TransactionBlock.js';
+import type { Transaction } from '../Transaction.js';
+import { isTransaction } from '../Transaction.js';
 
-export class CachingTransactionBlockExecutor {
+export class CachingTransactionExecutor {
 	#client: SuiClient;
 	cache: ObjectCache;
 
@@ -32,23 +32,23 @@ export class CachingTransactionBlockExecutor {
 		await this.cache.clearCustom();
 	}
 
-	async buildTransactionBlock({ transactionBlock }: { transactionBlock: TransactionBlock }) {
-		transactionBlock.addBuildPlugin(this.cache.asPlugin());
-		return transactionBlock.build({
+	async buildTransaction({ transaction }: { transaction: Transaction }) {
+		transaction.addBuildPlugin(this.cache.asPlugin());
+		return transaction.build({
 			client: this.#client,
 		});
 	}
 
-	async executeTransactionBlock({
-		transactionBlock,
+	async executeTransaction({
+		transaction,
 		options,
 		...input
 	}: {
-		transactionBlock: TransactionBlock | Uint8Array;
+		transaction: Transaction | Uint8Array;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
-		const bytes = isTransactionBlock(transactionBlock)
-			? await this.buildTransactionBlock({ transactionBlock })
-			: transactionBlock;
+		const bytes = isTransaction(transaction)
+			? await this.buildTransaction({ transaction })
+			: transaction;
 
 		const results = await this.#client.executeTransactionBlock({
 			...input,
@@ -67,20 +67,20 @@ export class CachingTransactionBlockExecutor {
 		return results;
 	}
 
-	async signAndExecuteTransactionBlock({
+	async signAndExecuteTransaction({
 		options,
-		transactionBlock,
+		transaction,
 		...input
 	}: {
-		transactionBlock: TransactionBlock;
+		transaction: Transaction;
 
 		signer: Signer;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
-		transactionBlock.setSenderIfNotSet(input.signer.toSuiAddress());
-		const bytes = await this.buildTransactionBlock({ transactionBlock });
-		const { signature } = await input.signer.signTransactionBlock(bytes);
-		const results = await this.executeTransactionBlock({
-			transactionBlock: bytes,
+		transaction.setSenderIfNotSet(input.signer.toSuiAddress());
+		const bytes = await this.buildTransaction({ transaction });
+		const { signature } = await input.signer.signTransaction(bytes);
+		const results = await this.executeTransaction({
+			transaction: bytes,
 			signature,
 			options,
 		});
