@@ -7,150 +7,268 @@ sidebar_label: Smart Contracts
 
 :::note Multi-Page Guide
 
-This is the first in a [three-part guide](./intro.mdx) on how to build a trustless atomic swap on Sui.
+This is the first in a [three-part guide](./intro.mdx) on how to build an app for trustless atomic swaps on Sui.
 
 :::
 
-This particular protocol consists of three phases:
+In this part of the guide, you will write the Move contracts that perform the trustless swaps. The first step is to [set up a Move package](../../first-app/write-package.mdx) which you will use to store your Move modules in.
 
-1. One party `lock`s their object, obtaining a `Locked` object and its `Key`. This party can `unlock` their object to preserve liveness if the other party stalls before completing the second stage.
-2. The other party registers a publicly accessible, shared `Escrow` object. This effectively locks their object at a particular version as well, waiting for the first party to complete the swap. The second party is able to request their object is returned to them, to preserve liveness as well.
-3. The first party sends their locked object and its key to the shared `Escrow` object. This completes the swap, as long as all conditions are met: The sender of the swap transaction is the recipient of the `Escrow`, the key of the desired object (`exchange_key`) in the escrow matches the key supplied in the swap, and the key supplied in the swap unlocks the `Locked<U>`.
+## `Locked` and `Key`
 
-Let's create a Sui project using the terminal command `sui move new escrow`. Create a file in the sources directory named `shared.move`, and let's go through the code together.
+:::info Resources for this section
 
-## shared.move
+- [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/lock.move)
+- Concept: [Wrapped Objects](../../../../concepts/versioning.mdx#wrapped-objects)
+- Concept: [ID Pointer](../../../../concepts/sui-move-concepts/patterns/id-pointer.mdx)
 
-{@include: ../../../../snippets/app-examples-swap-source.mdx}
+:::
 
-Let's go through the code line by line:
+Once we initiate a trade, we don't want the other party to be able to modify the object they agreed to trade with us: imagine we're trading in-game items and we agree to trade a weapon with all its attachments, and its owner strips all its attachments just before the trade!
 
-### Structs
+Usually this is handled by having a third party hold the items in escrow to make sure they are not tampered with, but this requires trusting that the third party won't tamper with it themselves, and/or paying them to ensure that doesn't happen.
 
-#### `Escrow<T>`
+Instead, we can use the safety properties of Move to force an item's owner to prove that they have not tampered with the version of the object that we agreed to trade, without involving anyone else.
 
-This struct represents an object held in escrow. It contains the following fields:
+We do this by requiring that an object that is available for trading be **locked** with a **single-use key**, and asking the owner to supply the key when finalising the trade.
 
-- `id`: Unique identifier for the escrow object.
-- `sender`: Address of the owner of the `escrowed` object.
-- `recipient`: Intended recipient of the `escrowed` object.
-- `exchange_key`: ID of the key that opens the lock on the object sender wants from the recipient.
-- `escrowed`: The actual object held in escrow.
+To tamper with the object, they would have needed to unlock it, which would consume the key, meaning they would not be able to produce the key to finish the trade.
 
 ```move
+use sui::object::{ID, UID};
+
+struct Locked<T: store> has key, store {
+    id: UID,
+    key: ID,
+    obj: T,
+}
+
+struct Key has key, store {
+    id: UID
+}
+```
+
+- The `Locked<T>` type stores the locked `obj`, the `ID` of the key that unlocks it, and its own `id`.
+- The corresponding `Key` type only stores its own `id`.
+
+The lock and key are made single-use by the signatures of the `lock` and `unlock` functions. `lock` accepts any object of type `T: store` (the `store` ability is necessary for storing it inside a `Locked<T>`), and creates both the `Locked<T>` and its corresponding `Key`:
+
+```move
+use sui::object;
+use sui::tx_context::TxContext;
+
+public fun lock<T: store>(obj: T, ctx: &mut TxContext): (Locked<T>, Key) {
+    let key = Key { id: object::new(ctx) };
+    let locked = Locked {
+        id: object::new(ctx),
+        key: object::id(&key),
+        obj,
+    };
+
+    (locked, key)
+}
+```
+
+The `unlock` function accepts the `Locked<T>` and `Key` by value (which consumes them), and returns the underlying `T` as long as the correct key has been supplied for the lock:
+
+```move
+/// The key does not match this lock.
+const ELockKeyMismatch: u64 = 0;
+
+public fun unlock<T: store>(locked: Locked<T>, key: Key): T {
+    assert!(locked.key == object::id(&key), ELockKeyMismatch);
+    let Key { id } = key;
+    object::delete(id);
+
+    let Locked { id, key: _, obj } = locked;
+    object::delete(id);
+    obj
+}
+```
+
+Together, they ensure that a lock and key cannot have existed before the lock operation, and will not exist after a successful unlock – it is single use.
+
+## Testing `Locked` and `Key`
+
+:::info Resources for this section
+
+- [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/lock.move)
+- Concept: [Test Scenario](../../first-app/build-test.mdx#testing-a-package)
+
+:::
+
+Move's type system guarantees that a given `Key` cannot be re-used (because `unlock` accepts it by value), but there are some properties that we need to confirm with tests:
+
+- A locked object can be unlocked with its key.
+- Trying to lock an object with the wrong key will fail.
+
+The test starts with a helper function for creating an object, it doesn't matter what kind of object it is, as long as it has the `store` ability. We will use `Coin<SUI>`, because it comes with a `#[test_only]` function for minting:
+
+```move
+#[test_only] use sui::coin::{Self, Coin};
+#[test_only] use sui::sui::SUI;
+#[test_only] use sui::test_scenario::{Self as ts, Scenario};
+
+#[test_only]
+fun test_coin(ts: &mut Scenario): Coin<SUI> {
+    coin::mint_for_testing<SUI>(42, ts::ctx(ts))
+}
+```
+
+- We annotate all test-related functions and imports with `#[test_only]` to make sure they don't show up in the published package. This can also be done by separating tests into their own module – e.g. `lock_tests.move` – and marking that module as `#[test_only]`.
+- We are using the `test_scenario` module to provide access to a `&mut TxContext` in the test (necessary for creating new objects). Tests that don't need to simulate multiple transactions but still need access to a `TxContext` can use `sui::tx_context::dummy` to create a test context instead.
+
+The first test works by creating an object to test, locking it and unlocking it – this should finish executing without aborting.
+The last two lines exist to keep the Move compiler happy by cleaning up the test coin and test scenario objects, because values in Move will not be implicitly cleaned up unless they have the `drop` ability.
+
+```move
+#[test]
+fun test_lock_unlock() {
+    let ts = ts::begin(@0xA);
+    let coin = test_coin(&mut ts);
+
+    let (lock, key) = lock(coin, ts::ctx(&mut ts));
+    let coin = unlock(lock, key);
+
+    coin::burn_for_testing(coin);
+    ts::end(ts);
+}
+```
+
+The other test is testing a failure scenario – that an abort happens. It creates two locked objects (this time the values are just `u64`'s), and use the key from one to try and unlock the other, which should fail (specified using the `expected_failure` attribute).
+
+Unlike the previous test, we don't need to do the same clean-up, because we expect the code to abort. Instead, we add another abort after the code we expect to abort (making sure to use a different code for this second abort).
+
+```move
+#[test]
+#[expected_failure(abort_code = ELockKeyMismatch)]
+fun test_lock_key_mismatch() {
+    let ts = ts::begin(@0xA);
+    let (l, _k) = lock(42, ts::ctx(&mut ts));
+    let (_l, k) = lock(43, ts::ctx(&mut ts));
+
+    unlock(l, k);
+    abort 1337
+}
+```
+
+## The `Escrow` protocol
+
+:::info Resources for this section
+
+- [Full source code](https://github.com/MystenLabs/sui/blob/705ee1ed3ce8cfadc4597c6facb6769d7dfb5896/examples/trading/contracts/escrow/sources/shared.move)
+- Concept: [ID Pointer](../../../../concepts/sui-move-concepts/patterns/id-pointer)
+- Concept: [Shared Objects](../../../../concepts/object-ownership/shared)
+- Concept: [Shared Object Deletion](https://blog.sui.io/ephemeral-shared-objects/)
+- Concept: [PTBs](../../../../concepts/transactions/prog-txn-blocks)
+
+:::
+
+Trading proceeds in three steps:
+
+1. The first party locks the object they want to trade – this is already handled by the `lock` module we wrote earlier.
+1. The second party puts their object up for escrow and registers their interest in the first party's object. This will be handled by a new module – `escrow`.
+1. The first party completes the trade by providing their locked object and the key to unlock it. Assuming all checks pass, this transfers their object to the second party and makes the second party's object available to them.
+
+We start implementing steps two and three by defining a new type to hold the escrowed object. It holds the `escrowed` object and an `id: UID` (because it's an object in its own right), but it also records the `sender` and intended `recipient` (to confirm they match when the trade happens), and it registers interest in the first party's object by recording the `ID` of the key that unlocks the `Locked<U>` that contains the object.
+
+```move
+use sui::object::{ID, UID};
+
 struct Escrow<T: key + store> has key, store {
-   id: UID,
-   sender: address,
-   recipient: address,
-   exchange_key: ID,
-   escrowed: T,
+    id: UID,
+    sender: address,
+    recipient: address,
+    exchange_key: ID,
+    escrowed: T,
 }
 ```
 
-The ID of the key is used as the `exchange_key`, rather than the ID of the object, to ensure that the object is not modified after a trade has been initiated.
-
-### Error codes
-
-Two constants are defined to represent potential errors during the execution of the swap:
-
-- `EMismatchedSenderRecipient`: The `sender` and `recipient` of the two escrowed objects do not match.
-- `EMismatchedExchangeObject`: The `exchange_for` fields of the two escrowed objects do not match.
+We also provide a function for creating the `Escrow` object. The object is shared because it needs to be accessed by the address that created it (in case the object needs to be returned) and by the intended recipient (to complete the swap).
 
 ```move
-const EMismatchedSenderRecipient: u64 = 0;
-const EMismatchedExchangeObject: u64 = 1;
-```
+use sui::object;
+use sui::transfer;
+use sui::tx_context::{Self, TxContext};
 
-### Public functions
-
-#### `create`
-
-This function is used to create a new escrow object. It takes four arguments: the object to be escrowed, the ID of the key that opens the lock on the object the sender wants from the recipient, the intended recipient, and the transaction context.
-
-```move
 public fun create<T: key + store>(
-   escrowed: T,
-   exchange_key: ID,
-   recipient: address,
-   ctx: &mut TxContext
+    escrowed: T,
+    exchange_key: ID,
+    recipient: address,
+    ctx: &mut TxContext
 ) {
-   let mut escrow = Escrow<T> {
-      id: object::new(ctx),
-      sender: ctx.sender(),
-      recipient,
-      exchange_key,
-   };
+    let escrow = Escrow {
+        id: object::new(ctx),
+        sender: tx_context::sender(ctx),
+        recipient,
+        exchange_key,
+        escrowed,
+    };
 
-   dof::add(&mut escrow.id, EscrowedObjectKey {}, escrowed);
-
-   transfer::public_share_object(escrow);
+    transfer::public_share_object(escrow);
 }
 ```
 
-#### `swap`
+If the second party stops responding, the first party can unlock their object. We add a function so the second party can recover their object in the symmetric case as well.
 
-This function is used to perform the swap operation. It takes four arguments: the escrow object, the key, the locked object, and the transaction context.
-
-```move
-public fun swap<T: key + store, U: key + store>(
-   mut escrow: Escrow<T>,
-   key: Key,
-   locked: Locked<U>,
-   ctx: &TxContext,
-): T {
-   let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
-
-   let Escrow {
-      id,
-      sender,
-      recipient,
-      exchange_key,
-   } = escrow;
-
-   assert!(recipient == ctx.sender(), EMismatchedSenderRecipient);
-   assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
-
-   // Do the actual swap
-   transfer::public_transfer(locked.unlock(key), sender);
-   id.delete();
-
-   escrowed
-}
-```
-
-The `id.delete()` function call is used to delete the shared `Escrow` object. Previously, Move supported only the deletion of owned objects, but [shared-object deletion has since been enabled](https://github.com/MystenLabs/sui/pull/16008).
-
-#### `return_to_sender`
-
-This function is used to cancel the escrow and return the escrowed item to the sender. It takes two arguments: the escrow object and the transaction context.
+- It needs to check that the caller matches `sender`, because `Escrow` objects are shared and anybody can access them.
+- It accepts the `Escrow` by value so that it can clean it up after extracting the `escrowed` object, reclaiming the storage rebate for the sender and cleaning up an unused object on-chain.
 
 ```move
+/// The `sender` and `recipient` of the two escrowed objects do not match
+const EMismatchedSenderRecipient: u64 = 0;
+
 public fun return_to_sender<T: key + store>(
-   mut escrow: Escrow<T>,
-   ctx: &TxContext
+    escrow: Escrow<T>,
+    ctx: &TxContext
 ): T {
-   let escrowed = dof::remove<EscrowedObjectKey, T>(&mut escrow.id, EscrowedObjectKey {});
+    let Escrow {
+        id,
+        sender,
+        recipient: _,
+        exchange_key: _,
+        escrowed,
+    } = escrow;
 
-   let Escrow {
-      id,
-      sender,
-      recipient: _,
-      exchange_key: _,
-   } = escrow;
-
-   assert!(sender == ctx.sender(), EMismatchedSenderRecipient);
-   id.delete();
-   escrowed
+    assert!(sender == tx_context::sender(ctx), EMismatchedSenderRecipient);
+    object::delete(id);
+    escrowed
 }
 ```
 
-Once again, the shared `Escrow` object is deleted after the escrowed item is returned to the sender.
+Finally, we need to add a function to allow the first party to complete the trade.
 
-### Tests
+- This function also accepts the `Escrow` by value because it will consume it once the swap is complete.
+- It checks that the sender of the transaction is the intended recipient (the first party), and that the ID of the key they provided matches the key specified when the object was escrowed. This is what ensures no tampering occurs, because this key can only be provided if it had not been used to unlock the object, which proves the object has not left its `Locked<U>` between the call to `create` and to `swap`, and we can tell by inspecting the `lock` module that it cannot be modified while in there.
+- The call to `unlock` further checks that the key matches the locked object that was provided.
+- Instead of transferring the escrowed object to the recipient address, it is returned by the `swap` function. We can do this because we checked that the transaction sender is the recipient, and it makes this API more composable. Programmable Transaction Blocks give us the flexibility to decide whether to transfer the object as it is received or do something else with it.
 
-The code includes several tests to ensure the correct functioning of the atomic swap process. These tests cover successful swaps, mismatches in sender or recipient, mismatches in the exchange object, tampering with the object, and returning the object to the sender.
+```move
+/// The `exchange_for` fields of the two escrowed objects do not match
+const EMismatchedExchangeObject: u64 = 1;
 
-In conclusion, this code provides a robust and secure way to perform atomic swaps of objects in a decentralized system, without the need for a trusted third party. It uses shared objects and a series of checks to ensure that the swap only occurs if all conditions are met.
+public fun swap<T: key + store, U: key + store>(
+    escrow: Escrow<T>,
+    key: Key,
+    locked: Locked<U>,
+    ctx: &TxContext,
+): T {
+    let Escrow {
+        id,
+        sender,
+        recipient,
+        exchange_key,
+        escrowed: escrowed1,
+    } = escrow;
+
+    assert!(recipient == tx_context::sender(ctx), EMismatchedSenderRecipient);
+    assert!(exchange_key == object::id(&key), EMismatchedExchangeObject);
+    let escrowed2 = lock::unlock(locked, key);
+
+    transfer::public_transfer(escrowed2, sender);
+    object::delete(id);
+    escrowed1
+}
+```
 
 ## Deployment
 
