@@ -29,7 +29,7 @@ use mysten_network::callback::CallbackLayer;
 use reader::StateReader;
 use std::sync::Arc;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-use sui_types::storage::{ReadStore, RestStateReader};
+use sui_types::storage::RestStateReader;
 use tap::Pipe;
 pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
 
@@ -112,10 +112,10 @@ impl RestService {
     pub fn into_router(self) -> Router {
         let executor = self.executor.clone();
         let metrics = self.metrics.clone();
-        let store = self.reader.inner().clone();
 
         Router::new()
             .route("/", get(info::node_info))
+            .route(health::HEALTH_PATH, get(health::health))
             .route(
                 transactions::GET_TRANSACTION_PATH,
                 get(transactions::get_transaction),
@@ -154,8 +154,12 @@ impl RestService {
                 checkpoints::GET_FULL_CHECKPOINT_PATH,
                 get(checkpoints::get_full_checkpoint),
             )
+            .route(objects::GET_OBJECT_PATH, get(objects::get_object))
+            .route(
+                objects::GET_OBJECT_WITH_VERSION_PATH,
+                get(objects::get_object_with_version),
+            )
             .with_state(self.clone())
-            .merge(rest_router(store))
             .pipe(|router| {
                 if let Some(executor) = executor {
                     router.merge(execution_router(executor))
@@ -190,20 +194,6 @@ impl RestService {
             .await
             .unwrap();
     }
-}
-
-fn rest_router<S>(state: S) -> Router
-where
-    S: ReadStore + Clone + Send + Sync + 'static,
-{
-    Router::new()
-        .route(health::HEALTH_PATH, get(health::health::<S>))
-        .route(objects::GET_OBJECT_PATH, get(objects::get_object::<S>))
-        .route(
-            objects::GET_OBJECT_WITH_VERSION_PATH,
-            get(objects::get_object_with_version::<S>),
-        )
-        .with_state(state)
 }
 
 fn execution_router(executor: Arc<dyn TransactionExecutor>) -> Router {
