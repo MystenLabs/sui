@@ -23,7 +23,6 @@ use crate::{
     consensus_manager::{
         ConsensusManagerMetrics, ConsensusManagerTrait, Running, RunningLockGuard,
     },
-    consensus_validator::SuiTxValidator,
     mysticeti_adapter::LazyMysticetiClient,
 };
 
