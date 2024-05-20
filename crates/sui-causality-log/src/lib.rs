@@ -193,12 +193,20 @@ macro_rules! event {
         }
     };
 
-    // alternate match with no caused_by
     ($name:literal { $($tag_name:ident = $tag_value:expr),* $(,)? }) => {
         {
             let event = $crate::parse_event!($name { $($tag_name = $tag_value),* });
             $crate::process_event(event, None);
         }
+    };
+}
+
+#[macro_export]
+macro_rules! if_events_enabled {
+    // Just pass through any stream of tokens. Eventually this will allow us to enable/disable
+    // event-related code either at compile time or at runtime.
+    ({ $($tokens:tt)* }) => {
+        $($tokens)*
     };
 }
 

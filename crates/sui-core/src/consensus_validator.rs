@@ -70,17 +70,21 @@ impl SuiTxValidator {
                     // }
                 }
                 ConsensusTransactionKind::CheckpointSignature(signature) => {
-                    event!(
-                        "receive_checkpoint_sig" {
-                            seq = signature.summary.sequence_number,
-                        }
-                        caused_by "send_checkpoint_sig" {
-                            source = signature.summary.auth_sig().authority,
-                            seq = signature.summary.sequence_number,
-                        }
-                    );
-                    expect_remote!(signature.summary.auth_sig().authority,
-                        "receive_checkpoint_sig", seq = signature.summary.sequence_number)
+                    if_events_enabled!({
+                        let authority = signature.summary.auth_sig().authority;
+                        let stake = self.epoch_store.committee().stake_of_authority(authority);
+                        let seq = signature.summary.sequence_number;
+                        event!(
+                            "receive_checkpoint_sig" {
+                                stake = stake,
+                                seq = seq,
+                            }
+                            caused_by "send_checkpoint_sig" {
+                                source = authority,
+                                seq = seq,
+                            }
+                        );
+                    });
                     ckpt_messages.push(signature.clone());
                     ckpt_batch.push(signature.summary);
                 }

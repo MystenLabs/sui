@@ -1558,7 +1558,11 @@ impl CheckpointAggregator {
                 self.current.as_mut().unwrap()
             };
 
-            expect_local!(strong_quorum, "receive_checkp0oin"
+            expect_event!(
+                "receive_checkpoint_sig" {
+                    seq = current.summary.sequence_number,
+                }
+            );
 
             let epoch_tables = self
                 .epoch_store
