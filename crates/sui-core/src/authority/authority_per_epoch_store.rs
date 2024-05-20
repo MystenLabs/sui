@@ -1622,7 +1622,7 @@ impl AuthorityPerEpochStore {
             .should_defer_due_to_object_congestion(
                 cert,
                 self.protocol_config()
-                    .max_accumulated_txn_cost_per_object_in_checkpoint(),
+                    .max_accumulated_txn_cost_per_object_in_checkpoint_as_option(),
                 previously_deferred_tx_digests,
                 commit_round,
             )
