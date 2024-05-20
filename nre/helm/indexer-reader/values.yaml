@@ -1,8 +1,9 @@
 # Default values for indexer-reader.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
-#command: ["/bin/bash -c","/usr/local/bin/sui-indexer --db-url $DB_URL --rpc-client-url $RPC_URL --remote-store-url https://checkpoints.mainnet.sui.io --rpc-server-worker"]
-command: ["/usr/local/bin/sui-indexer", "--db-url", "$(DB_URL)", "--rpc-client-url", "https://public-rpc.mainnet.sui.io", "--remote-store-url", "https://checkpoints.mainnet.sui.io", "--rpc-server-worker"]
+
+command: ["/usr/local/bin/sui-indexer"]
+args: ["--db-url", "$(DB_URL)", "--rpc-client-url", "$(RPC_CLIENT)", "--remote-store-url", "https://checkpoints.mainnet.sui.io", "--rpc-server-worker"]
 
 replicaCount: 1
 
@@ -11,6 +12,7 @@ image:
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
   tag: "sui-v1.25.0-release"
+
 
 env:
   RUST_BACKTRACE:
@@ -25,6 +27,8 @@ env:
     value: "3600"
   CHECKPOINT_COMIT_BATCH_SIZE:
     value: "300"
+  RPC_CLIENT:
+    value: "https://public-rpc.mainnet.sui.io"
   DB_URL:
     valueFrom:
       secretKeyRef:

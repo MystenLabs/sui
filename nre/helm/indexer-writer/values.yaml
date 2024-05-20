@@ -2,6 +2,10 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
+command: ["/usr/local/bin/sui-indexer"]
+args: ["--db-url", "$(DB_URL)", "--rpc-client-url", "$(RPC_CLIENT)", "--remote-store-url", "https://checkpoints.mainnet.sui.io", "--fullnode-sync-worker"]
+
+
 # there is only a single indexer-writer deployment expected for normal operation
 replicaCount: 1
 
