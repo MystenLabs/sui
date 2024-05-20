@@ -17,3 +17,4 @@ sui-json-rpc-types.workspace = true
 sui-sdk.workspace = true
 
 move-package.workspace = true
+move-symbol-pool.workspace = true
