@@ -29,9 +29,9 @@ function optionEnum<T extends BcsType<any, any>>(type: T) {
 
 export const Address = bcs.bytes(SUI_ADDRESS_LENGTH).transform({
 	validate: (val) => {
-		const address = normalizeSuiAddress(typeof val === 'string' ? val : toHEX(val));
-		if (!val || !isValidSuiAddress(address)) {
-			throw new Error(`Invalid Sui address "${val}"`);
+		const address = typeof val === 'string' ? val : toHEX(val);
+		if (!address || !isValidSuiAddress(normalizeSuiAddress(address))) {
+			throw new Error(`Invalid Sui address ${address}`);
 		}
 	},
 	input: (val: string | Uint8Array) =>
@@ -43,11 +43,11 @@ export const ObjectDigest = bcs.vector(bcs.u8()).transform({
 	name: 'ObjectDigest',
 	input: (value: string) => fromB58(value),
 	output: (value) => toB58(new Uint8Array(value)),
-	// validate: (value) => {
-	// 	if (fromB58(value).length !== 32) {
-	// 		throw new Error('ObjectDigest must be 32 bytes');
-	// 	}
-	// },
+	validate: (value) => {
+		if (fromB58(value).length !== 32) {
+			throw new Error('ObjectDigest must be 32 bytes');
+		}
+	},
 });
 
 export const SuiObjectRef = bcs.struct('SuiObjectRef', {

@@ -33,7 +33,7 @@ export class CachingTransactionBlockExecutor {
 	}
 
 	async buildTransactionBlock({ transactionBlock }: { transactionBlock: TransactionBlock }) {
-		transactionBlock.addSerializationPlugin(this.cache.asPlugin());
+		transactionBlock.addBuildPlugin(this.cache.asPlugin());
 		return transactionBlock.build({
 			client: this.#client,
 		});
@@ -77,7 +77,6 @@ export class CachingTransactionBlockExecutor {
 		signer: Signer;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
 		transactionBlock.setSenderIfNotSet(input.signer.toSuiAddress());
-		transactionBlock.addBuildPlugin(this.cache.asPlugin());
 		const bytes = await this.buildTransactionBlock({ transactionBlock });
 		const { signature } = await input.signer.signTransactionBlock(bytes);
 		const results = await this.executeTransactionBlock({

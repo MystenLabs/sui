@@ -149,16 +149,13 @@ export class InMemoryCache extends AsyncCache {
 
 export interface ObjectCacheOptions {
 	cache?: AsyncCache;
-	address: string;
 }
 
 export class ObjectCache {
 	#cache: AsyncCache;
-	#address: string;
 
-	constructor({ cache = new InMemoryCache(), address }: ObjectCacheOptions) {
+	constructor({ cache = new InMemoryCache() }: ObjectCacheOptions) {
 		this.#cache = cache;
-		this.#address = normalizeSuiAddress(address);
 	}
 
 	asPlugin(): TransactionPlugin {
@@ -282,19 +279,13 @@ export class ObjectCache {
 			} else if (change.outputState.ObjectWrite) {
 				const [digest, owner] = change.outputState.ObjectWrite;
 
-				// Remove objects not owned by address after transaction
-				if (owner.ObjectOwner || (owner.AddressOwner && owner.AddressOwner !== this.#address)) {
-					deletedIds.push(id);
-					await this.#cache.deleteObject(id);
-				} else {
-					addedObjects.push({
-						objectId: id,
-						digest,
-						version: lamportVersion,
-						owner: owner.AddressOwner ?? owner.ObjectOwner ?? null,
-						initialSharedVersion: owner.Shared?.initialSharedVersion ?? null,
-					});
-				}
+				addedObjects.push({
+					objectId: id,
+					digest,
+					version: lamportVersion,
+					owner: owner.AddressOwner ?? owner.ObjectOwner ?? null,
+					initialSharedVersion: owner.Shared?.initialSharedVersion ?? null,
+				});
 			}
 		});
 

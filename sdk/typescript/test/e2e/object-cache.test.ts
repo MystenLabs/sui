@@ -24,7 +24,6 @@ describe('CachingTransactionExecutor', async () => {
 		toolbox = await setup();
 		executor = new CachingTransactionExecutor({
 			client: toolbox.client,
-			address: toolbox.address(),
 		});
 		const tx = new Transaction();
 		vi.spyOn(toolbox.client, 'getNormalizedMoveFunction');

@@ -59,7 +59,6 @@ export class ParallelExecutor {
 			options.minimumCoinBalance ?? PARALLEL_EXECUTOR_DEFAULTS.minimumCoinBalance;
 		this.#maxPoolSize = options.maxPoolSize ?? PARALLEL_EXECUTOR_DEFAULTS.maxPoolSize;
 		this.#cache = new CachingTransactionBlockExecutor({
-			address: this.#signer.toSuiAddress(),
 			client: options.client,
 			cache: options.cache,
 		});

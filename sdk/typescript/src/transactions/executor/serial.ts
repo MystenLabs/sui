@@ -25,7 +25,6 @@ export class SerialTransactionBlockExecutor {
 	}) {
 		this.#signer = signer;
 		this.#cache = new CachingTransactionBlockExecutor({
-			address: this.#signer.toSuiAddress(),
 			client: options.client,
 			cache: options.cache,
 		});
