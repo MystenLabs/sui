@@ -4,6 +4,7 @@
 use crate::authority::transaction_deferral::DeferralKey;
 use narwhal_types::Round;
 use std::collections::HashMap;
+use sui_protocol_config::PerObjectCongestionControlMode;
 use sui_types::base_types::{ObjectID, TransactionDigest};
 use sui_types::executable_transaction::VerifiedExecutableTransaction;
 use sui_types::transaction::SharedInputObject;
@@ -20,16 +21,28 @@ use sui_types::transaction::SharedInputObject;
 #[derive(Default, PartialEq, Eq, Clone, Debug)]
 pub struct SharedObjectCongestionTracker {
     object_execution_cost: HashMap<ObjectID, u64>,
+    mode: PerObjectCongestionControlMode,
 }
 
 impl SharedObjectCongestionTracker {
-    pub fn new_with_initial_value_for_test(init_values: &[(ObjectID, u64)]) -> Self {
+    pub fn new(mode: PerObjectCongestionControlMode) -> Self {
+        Self {
+            object_execution_cost: HashMap::new(),
+            mode,
+        }
+    }
+
+    pub fn new_with_initial_value_for_test(
+        init_values: &[(ObjectID, u64)],
+        mode: PerObjectCongestionControlMode,
+    ) -> Self {
         let mut object_execution_cost = HashMap::new();
         for (object_id, total_cost) in init_values {
             object_execution_cost.insert(*object_id, *total_cost);
         }
         Self {
             object_execution_cost,
+            mode,
         }
     }
 
@@ -61,7 +74,14 @@ impl SharedObjectCongestionTracker {
         }
 
         let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
-        if start_cost + cert.gas_budget() <= max_accumulated_txn_cost_per_object_in_checkpoint {
+
+        let tx_cost = match self.mode {
+            PerObjectCongestionControlMode::None => return None,
+            PerObjectCongestionControlMode::TotalGasBudget => cert.gas_budget(),
+            PerObjectCongestionControlMode::TotalTxCount => 1,
+        };
+
+        if start_cost + tx_cost <= max_accumulated_txn_cost_per_object_in_checkpoint {
             return None;
         }
 
@@ -101,12 +121,15 @@ impl SharedObjectCongestionTracker {
         Some((deferral_key, congested_objects))
     }
 
-    pub fn bump_object_execution_cost(
-        &mut self,
-        shared_input_objects: &[SharedInputObject],
-        tx_cost: u64,
-    ) {
-        let start_cost = self.compute_tx_start_at_cost(shared_input_objects);
+    pub fn bump_object_execution_cost(&mut self, cert: &VerifiedExecutableTransaction) {
+        let tx_cost = match self.mode {
+            PerObjectCongestionControlMode::None => return,
+            PerObjectCongestionControlMode::TotalGasBudget => cert.gas_budget(),
+            PerObjectCongestionControlMode::TotalTxCount => 1,
+        };
+
+        let shared_input_objects: Vec<_> = cert.shared_input_objects().collect();
+        let start_cost = self.compute_tx_start_at_cost(&shared_input_objects);
         let end_cost = start_cost + tx_cost;
 
         for obj in shared_input_objects {
@@ -145,10 +168,10 @@ mod object_cost_tests {
         let object_id_2 = ObjectID::random();
 
         let shared_object_congestion_tracker =
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
-                (object_id_0, 5),
-                (object_id_1, 10),
-            ]);
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(object_id_0, 5), (object_id_1, 10)],
+                PerObjectCongestionControlMode::TotalGasBudget,
+            );
 
         let shared_input_objects = construct_shared_input_objects(&[(object_id_0, false)]);
         assert_eq!(
@@ -232,10 +255,10 @@ mod object_cost_tests {
         // object 0:            |
         // object 1:      |
         let shared_object_congestion_tracker =
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
-                (shared_obj_0, 10),
-                (shared_obj_1, 1),
-            ]);
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(shared_obj_0, 10), (shared_obj_1, 1)],
+                PerObjectCongestionControlMode::TotalGasBudget,
+            );
 
         // Read/write to object 0 should be deferred.
         for mutable in [true, false].iter() {
@@ -390,49 +413,49 @@ mod object_cost_tests {
         let object_id_2 = ObjectID::random();
 
         let mut shared_object_congestion_tracker =
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
-                (object_id_0, 5),
-                (object_id_1, 10),
-            ]);
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(object_id_0, 5), (object_id_1, 10)],
+                PerObjectCongestionControlMode::TotalGasBudget,
+            );
 
         // Read two objects should not change the object execution cost.
+
         let shared_input_objects =
             construct_shared_input_objects(&[(object_id_0, false), (object_id_1, false)]);
-        shared_object_congestion_tracker.bump_object_execution_cost(&shared_input_objects, 10);
+        let cert = build_transaction(&[(object_id_0, false), (object_id_1, false)]);
+        shared_object_congestion_tracker.bump_object_execution_cost(&cert);
         assert_eq!(
             shared_object_congestion_tracker,
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
-                (object_id_0, 5),
-                (object_id_1, 10)
-            ])
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(object_id_0, 5), (object_id_1, 10)],
+                PerObjectCongestionControlMode::TotalGasBudget
+            )
         );
 
         // Write to object 0 should only bump object 0's execution cost. The start cost should be object 1's cost.
-        let shared_input_objects =
-            construct_shared_input_objects(&[(object_id_0, true), (object_id_1, false)]);
-        shared_object_congestion_tracker.bump_object_execution_cost(&shared_input_objects, 10);
+        let cert = build_transaction(&[(object_id_0, true), (object_id_1, false)]);
+        shared_object_congestion_tracker.bump_object_execution_cost(cert);
         assert_eq!(
             shared_object_congestion_tracker,
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
-                (object_id_0, 20),
-                (object_id_1, 10)
-            ])
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(object_id_0, 20), (object_id_1, 10)],
+                PerObjectCongestionControlMode::TotalGasBudget
+            )
         );
 
         // Write to all objects should bump all objects' execution cost, including objects that are seen for the first time.
-        let shared_input_objects = construct_shared_input_objects(&[
+        let cert = build_transaction(&[
             (object_id_0, true),
             (object_id_1, true),
             (object_id_2, true),
         ]);
-        shared_object_congestion_tracker.bump_object_execution_cost(&shared_input_objects, 10);
+        shared_object_congestion_tracker.bump_object_execution_cost(&cert);
         assert_eq!(
             shared_object_congestion_tracker,
-            SharedObjectCongestionTracker::new_with_initial_value_for_test(&[
-                (object_id_0, 30),
-                (object_id_1, 30),
-                (object_id_2, 30)
-            ])
+            SharedObjectCongestionTracker::new_with_initial_value_for_test(
+                &[(object_id_0, 30), (object_id_1, 30), (object_id_2, 30)],
+                PerObjectCongestionControlMode::TotalGasBudget
+            )
         );
     }
 }

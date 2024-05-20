@@ -83,7 +83,7 @@ use prometheus::IntCounter;
 use std::str::FromStr;
 use sui_execution::{self, Executor};
 use sui_macros::fail_point;
-use sui_protocol_config::{Chain, PerObjectCongestionControlMode, ProtocolConfig, ProtocolVersion};
+use sui_protocol_config::{Chain, ProtocolConfig, ProtocolVersion};
 use sui_storage::mutex_table::{MutexGuard, MutexTable};
 use sui_types::effects::TransactionEffects;
 use sui_types::executable_transaction::{
@@ -1618,44 +1618,21 @@ impl AuthorityPerEpochStore {
         }
 
         // Defer transaction if it uses shared objects that are congested.
-        match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => None,
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
-                    .should_defer_due_to_object_congestion(
-                        cert,
-                        self.protocol_config()
-                            .max_accumulated_txn_cost_per_object_in_checkpoint(),
-                        previously_deferred_tx_digests,
-                        commit_round,
-                    )
-                {
-                    Some((
-                        deferral_key,
-                        DeferralReason::SharedObjectCongestion(congested_objects),
-                    ))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    // Update shared objects' execution cost used in `cert` using `cert`'s execution cost.
-    // This is called when `cert` is scheduled for execution.
-    fn update_object_execution_cost(
-        &self,
-        cert: &VerifiedExecutableTransaction,
-        shared_object_congestion_tracker: &mut SharedObjectCongestionTracker,
-    ) {
-        match self.protocol_config().per_object_congestion_control_mode() {
-            PerObjectCongestionControlMode::None => {}
-            PerObjectCongestionControlMode::TotalGasBudget => {
-                shared_object_congestion_tracker.bump_object_execution_cost(
-                    &cert.shared_input_objects().collect::<Vec<_>>(),
-                    cert.gas_budget(),
-                );
-            }
+        if let Some((deferral_key, congested_objects)) = shared_object_congestion_tracker
+            .should_defer_due_to_object_congestion(
+                cert,
+                self.protocol_config()
+                    .max_accumulated_txn_cost_per_object_in_checkpoint(),
+                previously_deferred_tx_digests,
+                commit_round,
+            )
+        {
+            Some((
+                deferral_key,
+                DeferralReason::SharedObjectCongestion(congested_objects),
+            ))
+        } else {
+            None
         }
     }
 
@@ -2820,10 +2797,13 @@ impl AuthorityPerEpochStore {
 
         // We track transaction execution cost separately for regular transactions and transactions using randomness, since
         // they will be in different checkpoints.
-        let mut shared_object_congestion_tracker: SharedObjectCongestionTracker =
-            Default::default();
-        let mut shared_object_using_randomness_congestion_tracker: SharedObjectCongestionTracker =
-            Default::default();
+        let mut shared_object_congestion_tracker = SharedObjectCongestionTracker::new(
+            self.protocol_config().per_object_congestion_control_mode(),
+        );
+        let mut shared_object_using_randomness_congestion_tracker =
+            SharedObjectCongestionTracker::new(
+                self.protocol_config().per_object_congestion_control_mode(),
+            );
 
         fail_point_arg!(
             "initial_congestion_tracker",
@@ -3199,10 +3179,7 @@ impl AuthorityPerEpochStore {
 
                 // This certificate will be scheduled. Update object execution cost.
                 if certificate.contains_shared_object() {
-                    self.update_object_execution_cost(
-                        &certificate,
-                        shared_object_congestion_tracker,
-                    );
+                    shared_object_congestion_tracker.bump_object_execution_cost(&certificate);
                 }
 
                 Ok(ConsensusCertificateResult::SuiTransaction(certificate))
