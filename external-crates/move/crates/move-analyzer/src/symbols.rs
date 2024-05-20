@@ -2830,7 +2830,7 @@ impl<'a> TypingSymbolicator<'a> {
             }
             E::Block((use_funs, sequence)) => {
                 let old_traverse_mode = self.traverse_only;
-                // start adding new use-defs etc. when processing an arguments
+                // start adding new use-defs etc. when processing arguments
                 if use_funs.color == 0 {
                     self.traverse_only = false;
                 }
