@@ -49,7 +49,7 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 0, non_refundable_storage_fee: 0
 
 task 10 'view-object'. lines 89-89:
-Owner: Shared
+Owner: Shared( 2 )
 Version: 2
 Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
@@ -66,7 +66,7 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 12 'view-object'. lines 93-93:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 3
 Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
@@ -83,7 +83,7 @@ mutated: object(0,1)
 gas summary: computation_cost: 1000000, storage_cost: 2325600,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 14 'view-object'. lines 97-100:
-Owner: Shared
+Owner: Shared( 4 )
 Version: 4
 Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
@@ -100,7 +100,7 @@ mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 3663200,  storage_rebate: 978120, non_refundable_storage_fee: 9880
 
 task 16 'view-object'. lines 105-105:
-Owner: Shared
+Owner: Shared( 10 )
 Version: 10
 Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
@@ -112,7 +112,7 @@ Contents: Test_DepDepV1::DepDepM1::Obj {
 }
 
 task 17 'view-object'. lines 107-112:
-Owner: Shared
+Owner: Shared( 10 )
 Version: 10
 Contents: Test_DepDepV1::DepDepM1::Obj {
     id: sui::object::UID {
