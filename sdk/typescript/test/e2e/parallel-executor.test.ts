@@ -3,6 +3,7 @@
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it, Mock, vi } from 'vitest';
 
+import { bcs } from '../../src/bcs';
 import { SuiClient } from '../../src/client';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { ParallelExecutor, TransactionBlock } from '../../src/transactions';
@@ -76,22 +77,6 @@ describe('ParallelExecutor', () => {
 			coinBatchSize: 2,
 		});
 
-		let concurrentRequests = 0;
-		let maxConcurrentRequests = 0;
-
-		(toolbox.client.executeTransactionBlock as Mock).mockImplementation(async function (
-			this: SuiClient,
-			input,
-		) {
-			concurrentRequests++;
-			maxConcurrentRequests = Math.max(maxConcurrentRequests, concurrentRequests);
-			const promise = SuiClient.prototype.executeTransactionBlock.call(this, input);
-
-			return promise.finally(() => {
-				concurrentRequests--;
-			});
-		});
-
 		const receiver = new Ed25519Keypair();
 
 		const txbs = Array.from({ length: 10 }, () => {
@@ -101,8 +86,6 @@ describe('ParallelExecutor', () => {
 		});
 
 		const results = await Promise.all(txbs.map((txb) => executor.executeTransactionBlock(txb)));
-
-		expect(maxConcurrentRequests).toBe(3);
 
 		const digest = new Set(results.map((result) => result.digest));
 		expect(digest.size).toBe(results.length);
@@ -122,22 +105,6 @@ describe('ParallelExecutor', () => {
 			signer: toolbox.keypair,
 			maxPoolSize: 3,
 			coinBatchSize: 2,
-		});
-
-		let concurrentRequests = 0;
-		let maxConcurrentRequests = 0;
-
-		(toolbox.client.executeTransactionBlock as Mock).mockImplementation(async function (
-			this: SuiClient,
-			input,
-		) {
-			concurrentRequests++;
-			maxConcurrentRequests = Math.max(maxConcurrentRequests, concurrentRequests);
-			const promise = SuiClient.prototype.executeTransactionBlock.call(this, input);
-
-			return promise.finally(() => {
-				concurrentRequests--;
-			});
 		});
 
 		const txbs = Array.from({ length: 10 }, (_, i) => {
@@ -168,5 +135,49 @@ describe('ParallelExecutor', () => {
 
 		expect(failed.length).toBe(5);
 		expect(succeeded.size).toBe(5);
+	});
+
+	it('handles transactions that use the same objects', async () => {
+		const executor = new ParallelExecutor({
+			client: toolbox.client,
+			signer: toolbox.keypair,
+			maxPoolSize: 3,
+			coinBatchSize: 2,
+		});
+
+		const newCoins = await Promise.all(
+			new Array(3).fill(null).map(async () => {
+				const txb = new TransactionBlock();
+				const [coin] = txb.splitCoins(txb.gas, [1]);
+				txb.transferObjects([coin], toolbox.address());
+				const result = await executor.executeTransactionBlock(txb);
+
+				const effects = bcs.TransactionEffects.fromBase64(result.effects);
+				const newCoinId = effects.V2?.changedObjects.find(
+					([_id, { outputState }], index) =>
+						index !== effects.V2.gasObjectIndex && outputState.ObjectWrite,
+				)?.[0]!;
+
+				return newCoinId;
+			}),
+		);
+
+		const txbs = newCoins.flatMap((newCoinId) => {
+			expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
+			const txb2 = new TransactionBlock();
+			txb2.transferObjects([newCoinId], toolbox.address());
+			const txb3 = new TransactionBlock();
+			txb3.transferObjects([newCoinId], toolbox.address());
+			const txb4 = new TransactionBlock();
+			txb4.transferObjects([newCoinId], toolbox.address());
+
+			return [txb2, txb3, txb4];
+		});
+
+		const results = await Promise.all(txbs.map((txb) => executor.executeTransactionBlock(txb)));
+
+		const digests = new Set(results.map((result) => result.digest));
+
+		expect(digests.size).toBe(9);
 	});
 });

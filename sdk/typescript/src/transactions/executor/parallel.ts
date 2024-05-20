@@ -3,6 +3,7 @@
 
 import { toB64 } from '@mysten/bcs';
 
+import { bcs } from '../../bcs/index.js';
 import type { SuiObjectRef } from '../../bcs/types.js';
 import type { SuiClient } from '../../client/index.js';
 import type { Signer } from '../../cryptography/index.js';
@@ -10,6 +11,7 @@ import type { ObjectCacheOptions } from '../ObjectCache.js';
 import { TransactionBlock } from '../TransactionBlock.js';
 import { CachingTransactionBlockExecutor } from './caching.js';
 import { ParallelQueue, SerialQueue } from './queue.js';
+import { getGasCoinFromEffects } from './serial.js';
 
 const PARALLEL_EXECUTOR_DEFAULTS = {
 	coinBatchSize: 20,
@@ -41,7 +43,7 @@ export class ParallelExecutor {
 	#minimumCoinBalance: bigint;
 	#maxPoolSize: number;
 	#sourceCoins: Map<string, SuiObjectRef | null> | null;
-	#coinPool = new Set<CoinWithBalance>();
+	#coinPool: CoinWithBalance[] = [];
 	#cache: CachingTransactionBlockExecutor;
 	#objectIdQueues = new Map<string, (() => void)[]>();
 	#buildQueue = new SerialQueue();
@@ -72,117 +74,13 @@ export class ParallelExecutor {
 			digest: string;
 			effects: string;
 		}>();
-		const usedObjects = new Set<string>();
-		let serialized = false;
-		transactionBlock.addSerializationPlugin(async (blockData, _options, next) => {
-			await next();
+		const usedObjects = await this.#getUsedObjects(transactionBlock);
 
-			if (serialized) {
-				return;
-			}
-			serialized = true;
+		const execute = () => {
+			this.#executeQueue.runTask(() => {
+				const promise = this.#execute(transactionBlock, usedObjects);
 
-			blockData.inputs.forEach((input) => {
-				if (input.Object?.ImmOrOwnedObject?.objectId) {
-					usedObjects.add(input.Object.ImmOrOwnedObject.objectId);
-				} else if (input.Object?.Receiving?.objectId) {
-					usedObjects.add(input.Object.Receiving.objectId);
-				} else if (
-					input.UnresolvedObject?.objectId &&
-					!input.UnresolvedObject.initialSharedVersion
-				) {
-					usedObjects.add(input.UnresolvedObject.objectId);
-				}
-			});
-		});
-
-		await transactionBlock.prepareForSerialization({ client: this.#client });
-
-		const execute = async () => {
-			await this.#executeQueue.runTask(async () => {
-				let gasCoin!: CoinWithBalance;
-				try {
-					const bytes = await this.#buildQueue.runTask(async () => {
-						gasCoin = await this.#getGasCoin();
-						transactionBlock.setGasPayment([
-							{
-								objectId: gasCoin.id,
-								version: gasCoin.version,
-								digest: gasCoin.digest,
-							},
-						]);
-						transactionBlock.setSenderIfNotSet(this.#signer.toSuiAddress());
-
-						return this.#cache.buildTransactionBlock({ transactionBlock });
-					});
-
-					const { signature } = await this.#signer.signTransactionBlock(bytes);
-
-					const results = await this.#cache.executeTransactionBlock({
-						transactionBlock: bytes,
-						signature,
-						options: {
-							showEffects: true,
-						},
-					});
-
-					const effectsBytes = Uint8Array.from(results.rawEffects!);
-
-					const gasOwner = results.effects?.gasObject.owner;
-					const gasUsed = results.effects?.gasUsed;
-
-					if (
-						gasCoin &&
-						gasUsed &&
-						gasOwner &&
-						typeof gasOwner === 'object' &&
-						'AddressOwner' in gasOwner &&
-						gasOwner.AddressOwner === this.#signer.toSuiAddress()
-					) {
-						const totalUsed =
-							BigInt(gasUsed.computationCost) +
-							BigInt(gasUsed.storageCost) +
-							BigInt(gasUsed.storageCost) -
-							BigInt(gasUsed.storageRebate);
-
-						if (gasCoin.balance >= this.#minimumCoinBalance) {
-							this.#coinPool.add({
-								id: results.effects!.gasObject.reference.objectId,
-								version: results.effects!.gasObject.reference.version,
-								digest: results.effects!.gasObject.reference.digest,
-								balance: gasCoin.balance - totalUsed,
-							});
-						} else {
-							if (!this.#sourceCoins) {
-								this.#sourceCoins = new Map();
-							}
-							this.#sourceCoins.set(gasCoin.id, results.effects!.gasObject.reference!);
-						}
-					}
-
-					resolve({
-						digest: results.digest,
-						effects: toB64(effectsBytes),
-					});
-				} catch (error) {
-					if (gasCoin) {
-						if (!this.#sourceCoins) {
-							this.#sourceCoins = new Map();
-						}
-
-						this.#sourceCoins.set(gasCoin.id, null);
-					}
-					reject(error);
-				} finally {
-					usedObjects.forEach((objectId) => {
-						const queue = this.#objectIdQueues.get(objectId);
-						if (queue && queue.length > 0) {
-							queue.shift()!();
-						} else if (queue) {
-							this.#objectIdQueues.delete(objectId);
-						}
-					});
-				}
+				return promise.then(resolve, reject);
 			});
 		};
 
@@ -210,24 +108,136 @@ export class ParallelExecutor {
 		return promise;
 	}
 
+	async #getUsedObjects(transactionBlock: TransactionBlock) {
+		const usedObjects = new Set<string>();
+		let serialized = false;
+
+		transactionBlock.addSerializationPlugin(async (blockData, _options, next) => {
+			await next();
+
+			if (serialized) {
+				return;
+			}
+			serialized = true;
+
+			blockData.inputs.forEach((input) => {
+				if (input.Object?.ImmOrOwnedObject?.objectId) {
+					usedObjects.add(input.Object.ImmOrOwnedObject.objectId);
+				} else if (input.Object?.Receiving?.objectId) {
+					usedObjects.add(input.Object.Receiving.objectId);
+				} else if (
+					input.UnresolvedObject?.objectId &&
+					!input.UnresolvedObject.initialSharedVersion
+				) {
+					usedObjects.add(input.UnresolvedObject.objectId);
+				}
+			});
+		});
+
+		await transactionBlock.prepareForSerialization({ client: this.#client });
+
+		return usedObjects;
+	}
+
+	async #execute(transactionBlock: TransactionBlock, usedObjects: Set<string>) {
+		let gasCoin!: CoinWithBalance;
+		try {
+			const bytes = await this.#buildQueue.runTask(async () => {
+				gasCoin = await this.#getGasCoin();
+				transactionBlock.setGasPayment([
+					{
+						objectId: gasCoin.id,
+						version: gasCoin.version,
+						digest: gasCoin.digest,
+					},
+				]);
+				transactionBlock.setSenderIfNotSet(this.#signer.toSuiAddress());
+
+				return this.#cache.buildTransactionBlock({ transactionBlock });
+			});
+
+			const { signature } = await this.#signer.signTransactionBlock(bytes);
+
+			const results = await this.#cache.executeTransactionBlock({
+				transactionBlock: bytes,
+				signature,
+				options: {
+					showEffects: true,
+				},
+			});
+
+			const effectsBytes = Uint8Array.from(results.rawEffects!);
+			const effects = bcs.TransactionEffects.parse(effectsBytes);
+
+			const gasResult = getGasCoinFromEffects(effects);
+			const gasUsed = effects.V2?.gasUsed;
+
+			if (gasCoin && gasUsed && gasResult.owner === this.#signer.toSuiAddress()) {
+				const totalUsed =
+					BigInt(gasUsed.computationCost) +
+					BigInt(gasUsed.storageCost) +
+					BigInt(gasUsed.storageCost) -
+					BigInt(gasUsed.storageRebate);
+
+				if (gasCoin.balance >= this.#minimumCoinBalance) {
+					this.#coinPool.push({
+						id: gasResult.ref.objectId,
+						version: gasResult.ref.version,
+						digest: gasResult.ref.digest,
+						balance: gasCoin.balance - totalUsed,
+					});
+				} else {
+					if (!this.#sourceCoins) {
+						this.#sourceCoins = new Map();
+					}
+					this.#sourceCoins.set(gasResult.ref.objectId, gasResult.ref);
+				}
+			}
+
+			return {
+				digest: results.digest,
+				effects: toB64(effectsBytes),
+			};
+		} catch (error) {
+			if (gasCoin) {
+				if (!this.#sourceCoins) {
+					this.#sourceCoins = new Map();
+				}
+
+				this.#sourceCoins.set(gasCoin.id, null);
+			}
+
+			await this.#cache.cache.deleteObjects([...usedObjects]);
+			throw error;
+		} finally {
+			usedObjects.forEach((objectId) => {
+				const queue = this.#objectIdQueues.get(objectId);
+				if (queue && queue.length > 0) {
+					queue.shift()!();
+				} else if (queue) {
+					this.#objectIdQueues.delete(objectId);
+				}
+			});
+		}
+	}
+
 	async #getGasCoin() {
-		if (this.#coinPool.size === 0 && this.#executeQueue.activeTasks <= this.#maxPoolSize) {
+		if (this.#coinPool.length === 0 && this.#executeQueue.activeTasks <= this.#maxPoolSize) {
 			await this.#refillCoinPool();
 		}
 
-		if (this.#coinPool.size === 0) {
+		if (this.#coinPool.length === 0) {
 			throw new Error('No coins available');
 		}
 
-		const coin = this.#coinPool.values().next().value as CoinWithBalance;
-		this.#coinPool.delete(coin);
+		const coin = this.#coinPool.shift()!;
 		return coin;
 	}
 
 	async #refillCoinPool() {
 		const batchSize = Math.min(
 			this.#coinBatchSize,
-			this.#maxPoolSize - (this.#coinPool.size + this.#executeQueue.activeTasks) + 1,
+			this.#maxPoolSize - (this.#coinPool.length + this.#executeQueue.activeTasks) + 1,
 		);
 
 		if (batchSize === 0) {
@@ -280,33 +290,30 @@ export class ParallelExecutor {
 			transactionBlock: txb,
 			signer: this.#signer,
 			options: {
-				showEffects: true,
-				showObjectChanges: true,
+				showRawEffects: true,
 			},
 		});
 
-		result.objectChanges?.forEach((change) => {
-			if (
-				change.type === 'created' &&
-				change.objectId !== result.effects?.gasObject.reference.objectId
-			) {
-				this.#coinPool.add({
-					id: change.objectId,
-					version: change.version,
-					digest: change.digest,
-					balance: BigInt(this.#initialCoinBalance),
-				});
+		const effects = bcs.TransactionEffects.parse(Uint8Array.from(result.rawEffects!));
+		effects.V2?.changedObjects.forEach(([id, { outputState }], i) => {
+			if (i === effects.V2?.gasObjectIndex || !outputState.ObjectWrite) {
+				return;
 			}
+
+			this.#coinPool.push({
+				id,
+				version: effects.V2!.lamportVersion,
+				digest: outputState.ObjectWrite[0],
+				balance: BigInt(this.#initialCoinBalance),
+			});
 		});
 
 		if (!this.#sourceCoins) {
 			this.#sourceCoins = new Map();
 		}
 
-		this.#sourceCoins!.set(
-			result.effects!.gasObject.reference.objectId,
-			result.effects!.gasObject.reference,
-		);
+		const gasObject = getGasCoinFromEffects(effects).ref;
+		this.#sourceCoins!.set(gasObject.objectId, gasObject);
 
 		await this.#client.waitForTransactionBlock({ digest: result.digest });
 	}

@@ -242,6 +242,10 @@ export class ObjectCache {
 		return this.#cache.getObjects(ids);
 	}
 
+	async deleteObjects(ids: string[]) {
+		return this.#cache.deleteObjects(ids);
+	}
+
 	async clearOwnedObjects() {
 		await this.#cache.clear('OwnedObject');
 	}

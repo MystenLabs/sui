@@ -40,7 +40,7 @@ export class SerialTransactionBlockExecutor {
 			return;
 		}
 
-		const gasCoin = getGasCoinFromEffects(effects);
+		const gasCoin = getGasCoinFromEffects(effects).ref;
 		if (gasCoin) {
 			this.#cache.cache.setCustom('gasCoin', gasCoin);
 		} else {
@@ -96,26 +96,29 @@ export class SerialTransactionBlockExecutor {
 
 export function getGasCoinFromEffects(effects: typeof bcs.TransactionEffects.$inferType) {
 	if (!effects.V2) {
-		return null;
+		throw new Error('Unexpected effects version');
 	}
 
 	const gasObjectChange = effects.V2.changedObjects[effects.V2.gasObjectIndex!];
 
 	if (!gasObjectChange) {
-		return null;
+		throw new Error('Gas object not found in effects');
 	}
 
 	const [objectId, { outputState }] = gasObjectChange;
 
 	if (!outputState.ObjectWrite) {
-		return null;
+		throw new Error('Unexpected gas object state');
 	}
 
-	const [digest] = outputState.ObjectWrite;
+	const [digest, owner] = outputState.ObjectWrite;
 
 	return {
-		objectId,
-		digest,
-		version: effects.V2.lamportVersion,
+		ref: {
+			objectId,
+			digest,
+			version: effects.V2.lamportVersion,
+		},
+		owner: owner.AddressOwner || owner.ObjectOwner!,
 	};
 }
