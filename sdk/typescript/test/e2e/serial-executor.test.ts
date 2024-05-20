@@ -1,9 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { beforeEach } from 'node:test';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { bcs } from '../../src/bcs';
+import { Ed25519Keypair } from '../../src/keypairs/ed25519';
 import { SerialTransactionBlockExecutor, TransactionBlock } from '../../src/transactions';
 import { setup, TestToolbox } from './utils/setup';
 
@@ -16,13 +17,12 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
-	vi.clearAllMocks();
+	vi.restoreAllMocks();
 });
 
-describe('Caching executor', () => {
+describe('SerialExecutor', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.resetAllMocks();
 	});
 
 	it('Executes multiple transactions using the same objects', async () => {
@@ -33,55 +33,39 @@ describe('Caching executor', () => {
 		const txb = new TransactionBlock();
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
+		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(0);
 
-		const result = await executor.executeTransactionBlock({
-			transactionBlock: txb,
-			options: { showEffects: true },
-		});
+		const result = await executor.executeTransactionBlock(txb);
 
-		const newCoin = result.effects?.created?.find(
-			(ref) => result.effects?.gasObject.reference.objectId !== ref.reference.objectId,
-		);
+		const effects = bcs.TransactionEffects.fromBase64(result.effects);
+
+		const newCoinId = effects.V2?.changedObjects.find(
+			([_id, { outputState }], index) =>
+				index !== effects.V2.gasObjectIndex && outputState.ObjectWrite,
+		)?.[0]!;
 
 		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
 
 		const txb2 = new TransactionBlock();
-		txb2.transferObjects([newCoin!.reference.objectId], toolbox.address());
+		txb2.transferObjects([newCoinId], toolbox.address());
 		const txb3 = new TransactionBlock();
-		txb3.transferObjects([newCoin!.reference.objectId], toolbox.address());
+		txb3.transferObjects([newCoinId], toolbox.address());
 		const txb4 = new TransactionBlock();
-		txb4.transferObjects([newCoin!.reference.objectId], toolbox.address());
+		txb4.transferObjects([newCoinId], toolbox.address());
 
 		const results = await Promise.all([
-			executor.executeTransactionBlock({
-				transactionBlock: txb2,
-				options: { showEffects: true },
-			}),
-			executor.executeTransactionBlock({
-				transactionBlock: txb3,
-
-				options: { showEffects: true },
-			}),
-			executor.executeTransactionBlock({
-				transactionBlock: txb4,
-
-				options: { showEffects: true },
-			}),
+			executor.executeTransactionBlock(txb2),
+			executor.executeTransactionBlock(txb3),
+			executor.executeTransactionBlock(txb4),
 		]);
 
-		const coinVersions = results.map(
-			(result) =>
-				result.effects?.mutated?.find(
-					(ref) => ref.reference.objectId === newCoin!.reference.objectId,
-				)?.reference.version,
-		);
-
-		expect(coinVersions).toEqual([5, 6, 7]);
+		expect(results[0].digest).not.toEqual(results[1].digest);
+		expect(results[1].digest).not.toEqual(results[2].digest);
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
 	});
 
-	it('handles invalid version errors by clearing cache', async () => {
+	it('Resets cache on errors', async () => {
 		const executor = new SerialTransactionBlockExecutor({
 			client: toolbox.client,
 			signer: toolbox.keypair,
@@ -90,32 +74,32 @@ describe('Caching executor', () => {
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
 
-		const result = await executor.executeTransactionBlock({
-			transactionBlock: txb,
-			options: { showEffects: true },
-		});
+		const result = await executor.executeTransactionBlock(txb);
+		const effects = bcs.TransactionEffects.fromBase64(result.effects);
 
-		const newCoin = result.effects?.created?.find(
-			(ref) => result.effects?.gasObject.reference.objectId !== ref.reference.objectId,
-		);
+		const newCoinId = effects.V2?.changedObjects.find(
+			([_id, { outputState }], index) =>
+				index !== effects.V2.gasObjectIndex && outputState.ObjectWrite,
+		)?.[0]!;
 
 		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
 
 		const txb2 = new TransactionBlock();
-		txb2.transferObjects([newCoin!.reference.objectId], toolbox.address());
+		txb2.transferObjects([newCoinId], toolbox.address());
 		const txb3 = new TransactionBlock();
-		txb3.transferObjects([newCoin!.reference.objectId], toolbox.address());
+		txb3.transferObjects([newCoinId], new Ed25519Keypair().toSuiAddress());
 
 		await toolbox.client.signAndExecuteTransactionBlock({
 			signer: toolbox.keypair,
 			transactionBlock: txb2,
 		});
 
-		const result2 = await executor.executeTransactionBlock({
-			transactionBlock: txb3,
-			options: { showEffects: true },
-		});
+		await expect(() => executor.executeTransactionBlock(txb3)).rejects.toThrowError();
 
-		console.log(result2);
+		// // Transaction should succeed after cache reset/error
+		const result2 = await executor.executeTransactionBlock(txb3);
+
+		expect(result2.digest).not.toEqual(result.digest);
+		expect(bcs.TransactionEffects.fromBase64(result2.effects).V2?.status.Success).toEqual(true);
 	});
 });

@@ -7,15 +7,14 @@ export class SerialQueue {
 	async runTask<T>(task: () => Promise<T>): Promise<T> {
 		return new Promise((resolve, reject) => {
 			this.#queue.push(() => {
-				const promise = task();
-				promise.then(resolve, reject);
-
-				promise.finally(() => {
-					this.#queue.shift();
-					if (this.#queue.length > 0) {
-						this.#queue[0]();
-					}
-				});
+				task()
+					.finally(() => {
+						this.#queue.shift();
+						if (this.#queue.length > 0) {
+							this.#queue[0]();
+						}
+					})
+					.then(resolve, reject);
 			});
 
 			if (this.#queue.length === 1) {
@@ -39,28 +38,26 @@ export class ParallelQueue {
 			if (this.activeTasks < this.maxTasks) {
 				this.activeTasks++;
 
-				const promise = task();
-				promise.then(resolve, reject);
-
-				promise.finally(() => {
-					if (this.#queue.length > 0) {
-						this.#queue.shift()!();
-					} else {
-						this.activeTasks--;
-					}
-				});
-			} else {
-				this.#queue.push(() => {
-					const promise = task();
-					promise.then(resolve, reject);
-					promise.finally(() => {
-						this.#queue.shift();
+				task()
+					.finally(() => {
 						if (this.#queue.length > 0) {
 							this.#queue.shift()!();
 						} else {
 							this.activeTasks--;
 						}
-					});
+					})
+					.then(resolve, reject);
+			} else {
+				this.#queue.push(() => {
+					task()
+						.finally(() => {
+							if (this.#queue.length > 0) {
+								this.#queue.shift()!();
+							} else {
+								this.activeTasks--;
+							}
+						})
+						.then(resolve, reject);
 				});
 			}
 		});

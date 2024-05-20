@@ -46,11 +46,13 @@ export class CachingTransactionBlockExecutor {
 	}: {
 		transactionBlock: TransactionBlock | Uint8Array;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
+		const bytes = isTransactionBlock(transactionBlock)
+			? await this.buildTransactionBlock({ transactionBlock })
+			: transactionBlock;
+
 		const results = await this.#client.executeTransactionBlock({
 			...input,
-			transactionBlock: isTransactionBlock(transactionBlock)
-				? await this.buildTransactionBlock({ transactionBlock })
-				: transactionBlock,
+			transactionBlock: bytes,
 			options: {
 				...options,
 				showRawEffects: true,

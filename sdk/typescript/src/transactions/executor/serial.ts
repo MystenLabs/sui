@@ -1,12 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { toB64 } from '@mysten/bcs';
+
 import { bcs } from '../../bcs/index.js';
-import type { ExecuteTransactionBlockParams, SuiClient } from '../../client/index.js';
+import type { SuiClient } from '../../client/index.js';
 import type { Signer } from '../../cryptography/keypair.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
-import type { TransactionBlock } from '../TransactionBlock.js';
-import { isTransactionBlock } from '../TransactionBlock.js';
+import { isTransactionBlock, TransactionBlock } from '../TransactionBlock.js';
 import { CachingTransactionBlockExecutor } from './caching.js';
 import { SerialQueue } from './queue.js';
 
@@ -54,42 +55,46 @@ export class SerialTransactionBlockExecutor {
 			digest: string;
 		}>('gasCoin');
 
+		const copy = TransactionBlock.from(transactionBlock);
 		if (gasCoin) {
-			transactionBlock.setGasPayment([gasCoin]);
+			copy.setGasPayment([gasCoin]);
 		}
 
-		transactionBlock.setSenderIfNotSet(this.#signer.toSuiAddress());
+		copy.setSenderIfNotSet(this.#signer.toSuiAddress());
 
-		return this.#cache.buildTransactionBlock({ transactionBlock });
+		return this.#cache.buildTransactionBlock({ transactionBlock: copy });
 	};
 
-	executeTransactionBlock({
-		transactionBlock,
-		...input
-	}: {
-		transactionBlock: TransactionBlock | Uint8Array;
-	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
+	executeTransactionBlock(transactionBlock: TransactionBlock | Uint8Array) {
 		return this.#queue.runTask(async () => {
 			const bytes = isTransactionBlock(transactionBlock)
 				? await this.#buildTransactionBlock(transactionBlock)
 				: transactionBlock;
 
 			const { signature } = await this.#signer.signTransactionBlock(bytes);
-			const results = await this.#cache.executeTransactionBlock({
-				...input,
-				signature,
-				transactionBlock: bytes,
-			});
+			const results = await this.#cache
+				.executeTransactionBlock({
+					signature,
+					transactionBlock: bytes,
+				})
+				.catch(async (error) => {
+					await this.#cache.reset();
+					throw error;
+				});
 
-			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects!));
+			const effectsBytes = Uint8Array.from(results.rawEffects!);
+			const effects = bcs.TransactionEffects.parse(effectsBytes);
 			await this.applyEffects(effects);
 
-			return results;
+			return {
+				digest: results.digest,
+				effects: toB64(effectsBytes),
+			};
 		});
 	}
 }
 
-function getGasCoinFromEffects(effects: typeof bcs.TransactionEffects.$inferType) {
+export function getGasCoinFromEffects(effects: typeof bcs.TransactionEffects.$inferType) {
 	if (!effects.V2) {
 		return null;
 	}
