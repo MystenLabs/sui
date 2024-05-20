@@ -15,6 +15,9 @@ pub struct TrafficControllerMetrics {
     pub blocks_delegated_to_firewall: IntCounter,
     pub firewall_delegation_request_fail: IntCounter,
     pub tally_channel_overflow: IntCounter,
+    pub num_dry_run_blocked_requests: IntCounter,
+    pub tally_handled: IntCounter,
+    pub error_tally_handled: IntCounter,
 }
 
 impl TrafficControllerMetrics {
@@ -61,6 +64,24 @@ impl TrafficControllerMetrics {
             tally_channel_overflow: register_int_counter_with_registry!(
                 "tally_channel_overflow",
                 "Traffic controller tally channel overflow count",
+                registry
+            )
+            .unwrap(),
+            num_dry_run_blocked_requests: register_int_counter_with_registry!(
+                "traffic_control_num_dry_run_blocked_requests",
+                "Number of requests blocked in traffic controller dry run mode",
+                registry
+            )
+            .unwrap(),
+            tally_handled: register_int_counter_with_registry!(
+                "traffic_control_tally_handled",
+                "Number of tallies handled",
+                registry
+            )
+            .unwrap(),
+            error_tally_handled: register_int_counter_with_registry!(
+                "traffic_control_error_tally_handled",
+                "Number of error tallies handled",
                 registry
             )
             .unwrap(),

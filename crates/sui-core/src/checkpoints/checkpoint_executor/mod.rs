@@ -102,7 +102,7 @@ fn get_scheduling_timeout() -> CheckpointTimeoutConfig {
             std::env::var("NEW_CHECKPOINT_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse::<u64>().ok())
-                .unwrap_or(if panic_on_timeout { 30000 } else { 2000 }),
+                .unwrap_or(if panic_on_timeout { 45000 } else { 2000 }),
         );
 
         CheckpointTimeoutConfig {
