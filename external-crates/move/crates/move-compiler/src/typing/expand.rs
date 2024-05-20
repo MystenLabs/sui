@@ -10,7 +10,7 @@ use crate::{
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
     typing::{
-        ast as T,
+        ast::{self as T, IDEInfo},
         core::{self, Context},
     },
 };
@@ -258,10 +258,15 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
-        E::ExpandedMacro(i, er) => {
+        E::IDEAnnotation(info, er) => {
             exp(context, er);
-            for t in i.type_arguments.iter_mut() {
-                type_(context, t);
+            match info {
+                IDEInfo::MacroCallInfo(i) => {
+                    for t in i.type_arguments.iter_mut() {
+                        type_(context, t);
+                    }
+                }
+                IDEInfo::ExpandedLambda => (),
             }
         }
         E::Assign(assigns, tys, er) => {

@@ -96,14 +96,12 @@ use move_compiler::{
         Visibility,
     },
     linters::LintLevel,
-    naming::ast::{
-        BlockLabel, StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns,
-    },
+    naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, DatatypeName, FunctionName},
     shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
     typing::ast::{
-        BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
-        MacroCallInfo, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
+        BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, IDEInfo, LValue, LValueList,
+        LValue_, MacroCallInfo, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
@@ -695,7 +693,7 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
                     .join(", "),
             )
         }
-        UE::ExpandedMacro(_, exp) => ast_exp_to_ide_string(exp),
+        UE::IDEAnnotation(_, exp) => ast_exp_to_ide_string(exp),
         UE::ExpList(list) => {
             let items = list
                 .iter()
@@ -2816,8 +2814,8 @@ impl<'a> TypingSymbolicator<'a> {
             }
             E::NamedBlock(l, (use_funs, sequence)) => {
                 let old_traverse_mode = self.traverse_only;
-                // start adding new use-defs etc. when processing "regular" or lambda arguments
-                if use_funs.color == 0 || l.label.value.name == BlockLabel::LAMBDA_LABEL_SYMBOL {
+                // start adding new use-defs etc. when processing an argument
+                if use_funs.color == 0 {
                     self.traverse_only = false;
                 }
                 self.use_funs_symbols(use_funs);
@@ -2826,13 +2824,13 @@ impl<'a> TypingSymbolicator<'a> {
                 for seq_item in sequence {
                     self.seq_item_symbols(&mut new_scope, seq_item);
                 }
-                if use_funs.color == 0 || l.label.value.name == BlockLabel::LAMBDA_LABEL_SYMBOL {
+                if use_funs.color == 0 {
                     self.traverse_only = old_traverse_mode;
                 }
             }
             E::Block((use_funs, sequence)) => {
                 let old_traverse_mode = self.traverse_only;
-                // start adding new use-defs etc. when processing "regular" arguments
+                // start adding new use-defs etc. when processing an arguments
                 if use_funs.color == 0 {
                     self.traverse_only = false;
                 }
@@ -2846,17 +2844,27 @@ impl<'a> TypingSymbolicator<'a> {
                     self.traverse_only = old_traverse_mode;
                 }
             }
-            E::ExpandedMacro(MacroCallInfo {
-                module,name,method_name, type_arguments, by_value_args
-            }, exp) => {
-                self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
-                by_value_args.iter().for_each(|a| self.seq_item_symbols(scope, a));
-
-                let old_traverse_mode = self.traverse_only;
-                // stop adding new use-defs etc.
-                self.traverse_only = true;
-                self.exp_symbols(exp, scope);
-                self.traverse_only = old_traverse_mode;
+            E::IDEAnnotation(info, exp) => {
+                match info {
+                    IDEInfo::MacroCallInfo(MacroCallInfo {
+                        module,name,method_name, type_arguments, by_value_args
+                    }) => {
+                        self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
+                        by_value_args.iter().for_each(|a| self.seq_item_symbols(scope, a));
+                        let old_traverse_mode = self.traverse_only;
+                        // stop adding new use-defs etc.
+                        self.traverse_only = true;
+                        self.exp_symbols(exp, scope);
+                        self.traverse_only = old_traverse_mode;
+                    }
+                    IDEInfo::ExpandedLambda => {
+                        let old_traverse_mode = self.traverse_only;
+                        // start adding new use-defs etc. when processing a lambda argument
+                        self.traverse_only = false;
+                        self.exp_symbols(exp, scope);
+                        self.traverse_only = old_traverse_mode;
+                    },
+                }
             }
             E::Assign(lvalues, opt_types, e) => {
                 self.lvalue_list_symbols(false, lvalues, scope);

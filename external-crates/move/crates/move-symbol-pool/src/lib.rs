@@ -90,7 +90,6 @@ static_symbols!(
     "DenyList",
     "%implicit",
     "%macro",
-    "%lambda",
     "lint",
     "migration",
     "beta",

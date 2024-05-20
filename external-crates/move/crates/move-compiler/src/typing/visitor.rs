@@ -190,7 +190,7 @@ pub trait TypingVisitorContext {
             E::Loop { body, .. } => self.visit_exp(body),
             E::NamedBlock(_, seq) => self.visit_seq(seq),
             E::Block(seq) => self.visit_seq(seq),
-            E::ExpandedMacro(_, e) => self.visit_exp(e),
+            E::IDEAnnotation(_, e) => self.visit_exp(e),
             E::Assign(_, _, e) => self.visit_exp(e),
             E::Mutate(e1, e2) => {
                 self.visit_exp(e1);

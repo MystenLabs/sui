@@ -398,6 +398,11 @@ pub enum MacroArgument {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub enum IDEInfo {
+    ExpandedLambda,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 #[allow(clippy::large_enum_variant)]
 pub enum Exp_ {
     Value(Value),
@@ -427,6 +432,7 @@ pub enum Exp_ {
     While(BlockLabel, Box<Exp>, Box<Exp>),
     Loop(BlockLabel, Box<Exp>),
     Block(Block),
+    IDEAnnotation(IDEInfo, Box<Exp>),
     Lambda(Lambda),
 
     Assign(LValueList, Box<Exp>),
@@ -971,7 +977,6 @@ impl BlockLabel {
     // base symbol to used when making names for unnamed loops or lambdas
     pub const IMPLICIT_LABEL_SYMBOL: Symbol = symbol!("%implicit");
     pub const MACRO_RETURN_NAME_SYMBOL: Symbol = symbol!("%macro");
-    pub const LAMBDA_LABEL_SYMBOL: Symbol = symbol!("%lambda");
 }
 
 impl Value_ {
@@ -1732,6 +1737,12 @@ impl AstDebug for Exp_ {
                 e.ast_debug(w);
             }
             E::Block(seq) => seq.ast_debug(w),
+            E::IDEAnnotation(info, e) => match info {
+                IDEInfo::ExpandedLambda => {
+                    w.write("ExpandedLambda:");
+                    e.ast_debug(w);
+                }
+            },
             E::Lambda(l) => l.ast_debug(w),
             E::ExpList(es) => {
                 w.write("(");

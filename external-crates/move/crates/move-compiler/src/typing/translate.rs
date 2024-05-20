@@ -29,7 +29,7 @@ use crate::{
     },
     sui_mode,
     typing::{
-        ast::{self as T, MacroCallInfo},
+        ast::{self as T, IDEInfo, MacroCallInfo},
         core::{
             self, public_testing_visibility, Context, PublicForTesting, ResolvedFunctionType, Subst,
         },
@@ -490,7 +490,7 @@ mod check_valid_constant {
                 sequence(context, seq);
                 return;
             }
-            E::ExpandedMacro(_, er) => {
+            E::IDEAnnotation(_, er) => {
                 exp(context, er);
                 return;
             }
@@ -1633,7 +1633,13 @@ fn exp(context: &mut Context, ne: Box<N::Exp>) -> Box<T::Exp> {
             context.maybe_exit_macro_argument(eloc, from_macro_argument);
             res
         }
-
+        NE::IDEAnnotation(info, e) => {
+            let new_info = match info {
+                N::IDEInfo::ExpandedLambda => IDEInfo::ExpandedLambda,
+            };
+            let new_exp = exp(context, e);
+            (new_exp.ty.clone(), TE::IDEAnnotation(new_info, new_exp))
+        }
         NE::Lambda(_) => {
             if context
                 .env
@@ -4465,14 +4471,14 @@ fn expand_macro(
             let use_funs = N::UseFuns::new(context.current_call_color());
             let block = TE::Block((use_funs, seq));
             let e_ = if context.env.ide_mode() {
-                TE::ExpandedMacro(
-                    MacroCallInfo {
+                TE::IDEAnnotation(
+                    T::IDEInfo::MacroCallInfo(MacroCallInfo {
                         module: m,
                         name: f,
                         method_name,
                         type_arguments: type_args.clone(),
                         by_value_args,
-                    },
+                    }),
                     Box::new(T::Exp {
                         ty: ty.clone(),
                         exp: sp(call_loc, block),
