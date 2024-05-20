@@ -47,6 +47,7 @@ feature_flags:
   consensus_choice: SwapEachEpoch
   zklogin_max_epoch_upper_bound_delta: 30
   mysticeti_leader_scoring_and_schedule: true
+  reshare_at_same_initial_version: true
 max_tx_size_bytes: 131072
 max_input_objects: 2048
 max_size_written_objects: 5000000
