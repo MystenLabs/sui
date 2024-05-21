@@ -1,14 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '../bcs/index.js';
-import type { SuiClient } from '../client/client.js';
-import type { ExecuteTransactionBlockParams } from '../client/index.js';
-import type { Signer } from '../cryptography/keypair.js';
+import type { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature } from './data/internal.js';
 import type { TransactionPlugin } from './json-rpc-resolver.js';
-import type { Transaction } from './Transaction.js';
 
 export interface ObjectCacheEntry {
 	objectId: string;
@@ -29,6 +25,7 @@ export interface CacheEntryTypes {
 	OwnedObject: ObjectCacheEntry;
 	SharedOrImmutableObject: ObjectCacheEntry;
 	MoveFunction: MoveFunctionCacheEntry;
+	Custom: unknown;
 }
 export abstract class AsyncCache {
 	protected abstract get<T extends keyof CacheEntryTypes>(
@@ -66,11 +63,16 @@ export abstract class AsyncCache {
 		return object;
 	}
 
+	async addObjects(objects: ObjectCacheEntry[]) {
+		await Promise.all(objects.map(async (object) => this.addObject(object)));
+	}
+
 	async deleteObject(id: string) {
-		await Promise.all([
-			await this.delete('OwnedObject', id),
-			await this.delete('SharedOrImmutableObject', id),
-		]);
+		await Promise.all([this.delete('OwnedObject', id), this.delete('SharedOrImmutableObject', id)]);
+	}
+
+	async deleteObjects(ids: string[]) {
+		await Promise.all(ids.map((id) => this.deleteObject(id)));
 	}
 
 	async getMoveFunctionDefinition(ref: { package: string; module: string; function: string }) {
@@ -95,6 +97,18 @@ export abstract class AsyncCache {
 		const functionName = `${normalizeSuiAddress(ref.package)}::${ref.module}::${ref.function}`;
 		await this.delete('MoveFunction', functionName);
 	}
+
+	async getCustom<T>(key: string) {
+		return this.get('Custom', key) as Promise<T | null>;
+	}
+
+	async setCustom<T>(key: string, value: T) {
+		return this.set('Custom', key, value);
+	}
+
+	async deleteCustom(key: string) {
+		return this.delete('Custom', key);
+	}
 }
 
 export class InMemoryCache extends AsyncCache {
@@ -102,6 +116,7 @@ export class InMemoryCache extends AsyncCache {
 		OwnedObject: new Map<string, ObjectCacheEntry>(),
 		SharedOrImmutableObject: new Map<string, ObjectCacheEntry>(),
 		MoveFunction: new Map<string, MoveFunctionCacheEntry>(),
+		Custom: new Map<string, unknown>(),
 	};
 
 	protected async get<T extends keyof CacheEntryTypes>(type: T, key: string) {
@@ -131,18 +146,15 @@ export class InMemoryCache extends AsyncCache {
 	}
 }
 
-interface ObjectCacheOptions {
+export interface ObjectCacheOptions {
 	cache?: AsyncCache;
-	address: string;
 }
 
 export class ObjectCache {
 	#cache: AsyncCache;
-	#address: string;
 
-	constructor({ cache = new InMemoryCache(), address }: ObjectCacheOptions) {
+	constructor({ cache = new InMemoryCache() }: ObjectCacheOptions) {
 		this.#cache = cache;
-		this.#address = normalizeSuiAddress(address);
 	}
 
 	asPlugin(): TransactionPlugin {
@@ -226,8 +238,28 @@ export class ObjectCache {
 		return this.#cache.getObjects(ids);
 	}
 
+	async deleteObjects(ids: string[]) {
+		return this.#cache.deleteObjects(ids);
+	}
+
 	async clearOwnedObjects() {
 		await this.#cache.clear('OwnedObject');
+	}
+
+	async clearCustom() {
+		await this.#cache.clear('Custom');
+	}
+
+	async getCustom<T>(key: string) {
+		return this.#cache.getCustom<T>(key);
+	}
+
+	async setCustom<T>(key: string, value: T) {
+		return this.#cache.setCustom(key, value);
+	}
+
+	async deleteCustom(key: string) {
+		return this.#cache.deleteCustom(key);
 	}
 
 	async applyEffects(effects: typeof bcs.TransactionEffects.$inferType) {
@@ -237,112 +269,28 @@ export class ObjectCache {
 
 		const { lamportVersion, changedObjects } = effects.V2;
 
-		await Promise.all(
-			changedObjects.map(async ([id, change]) => {
-				if (change.outputState.NotExist) {
-					await this.#cache.deleteObject(id);
-				} else if (change.outputState.ObjectWrite) {
-					const [digest, owner] = change.outputState.ObjectWrite;
+		const deletedIds: string[] = [];
+		const addedObjects: ObjectCacheEntry[] = [];
 
-					// Remove objects not owned by address after transaction
-					if (owner.ObjectOwner || (owner.AddressOwner && owner.AddressOwner !== this.#address)) {
-						await this.#cache.deleteObject(id);
-					}
+		changedObjects.map(async ([id, change]) => {
+			if (change.outputState.NotExist) {
+				await this.#cache.deleteObject(id);
+			} else if (change.outputState.ObjectWrite) {
+				const [digest, owner] = change.outputState.ObjectWrite;
 
-					await this.#cache.addObject({
-						objectId: id,
-						digest,
-						version: lamportVersion,
-						owner: owner.AddressOwner ?? owner.ObjectOwner ?? null,
-						initialSharedVersion: owner.Shared?.initialSharedVersion ?? null,
-					});
-				}
-			}),
-		);
-	}
-}
-
-export class CachingTransactionExecutor {
-	#client: SuiClient;
-	cache: ObjectCache;
-
-	constructor({
-		client,
-		...options
-	}: ObjectCacheOptions & {
-		client: SuiClient;
-	}) {
-		this.#client = client;
-		this.cache = new ObjectCache(options);
-	}
-
-	/**
-	 * Clears all Owned objects
-	 * Immutable objects, Shared objects, and Move function definitions will be preserved
-	 */
-	async reset() {
-		await this.cache.clearOwnedObjects();
-	}
-
-	async buildTransaction({ transaction }: { transaction: Transaction }) {
-		return transaction.build({
-			client: this.#client,
-		});
-	}
-
-	async executeTransaction({
-		transaction,
-		options,
-		...input
-	}: {
-		transaction: Transaction;
-	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
-		transaction.addSerializationPlugin(this.cache.asPlugin());
-		const results = await this.#client.executeTransactionBlock({
-			...input,
-			transactionBlock: await transaction.build({
-				client: this.#client,
-			}),
-			options: {
-				...options,
-				showRawEffects: true,
-			},
+				addedObjects.push({
+					objectId: id,
+					digest,
+					version: lamportVersion,
+					owner: owner.AddressOwner ?? owner.ObjectOwner ?? null,
+					initialSharedVersion: owner.Shared?.initialSharedVersion ?? null,
+				});
+			}
 		});
 
-		if (results.rawEffects) {
-			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects));
-			await this.cache.applyEffects(effects);
-		}
-
-		return results;
-	}
-
-	async signAndExecuteTransaction({
-		options,
-		transaction,
-		...input
-	}: {
-		transaction: Transaction;
-
-		signer: Signer;
-	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
-		transaction.addBuildPlugin(this.cache.asPlugin());
-		const results = await this.#client.signAndExecuteTransaction({
-			...input,
-			transaction: await transaction.build({
-				client: this.#client,
-			}),
-			options: {
-				...options,
-				showRawEffects: true,
-			},
-		});
-
-		if (results.rawEffects) {
-			const effects = bcs.TransactionEffects.parse(Uint8Array.from(results.rawEffects));
-			await this.cache.applyEffects(effects);
-		}
-
-		return results;
+		await Promise.all([
+			this.#cache.addObjects(addedObjects),
+			this.#cache.deleteObjects(deletedIds),
+		]);
 	}
 }

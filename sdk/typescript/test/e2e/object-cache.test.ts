@@ -4,7 +4,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OwnedObjectRef } from '../../src/client';
-import { CachingTransactionExecutor, Transaction } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
+import { CachingTransactionExecutor } from '../../src/transactions/executor/caching';
 import { normalizeSuiAddress } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -24,7 +25,6 @@ describe('CachingTransactionExecutor', async () => {
 		toolbox = await setup();
 		executor = new CachingTransactionExecutor({
 			client: toolbox.client,
-			address: toolbox.address(),
 		});
 		const tx = new Transaction();
 		vi.spyOn(toolbox.client, 'getNormalizedMoveFunction');
