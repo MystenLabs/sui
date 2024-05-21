@@ -792,7 +792,7 @@ fn default_execution_queue_latency_hard_limit() -> Duration {
 }
 
 fn default_max_load_shedding_percentage() -> u32 {
-    95
+    0
 }
 
 fn default_min_load_shedding_percentage_above_hard_limit() -> u32 {
