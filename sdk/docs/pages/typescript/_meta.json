@@ -8,5 +8,6 @@
 	"cryptography": "Cryptography",
 	"utils": "Utils",
 	"bcs": "BCS",
-	"owned-object-pool": "Owned Object Pool"
+	"owned-object-pool": "Owned Object Pool",
+	"executors": "Transaction Executors"
 }
