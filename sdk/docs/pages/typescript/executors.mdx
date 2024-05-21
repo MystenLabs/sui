@@ -43,25 +43,37 @@ const tx2 = new Transaction();
 const [coin2] = tx1.splitCoins(txb.gas, [1]);
 tx1.transferObjects([coin2], address2);
 
-const { digest: digest1 } = await executor.execute(tx1);
-const { digest: digest2 } = await executor.execute(tx2);
+const [{ digest: digest1 }, { digest: digest2 }] = await Promise.all([
+	executor.execute(tx1),
+	executor.execute(tx2),
+]);
 ```
 
 ## `ParallelTransactionExecutor`
 
+<Callout type="warning">
+	`ParallelTransactionExecutor` is experimental and may change rapidly as it is being developed.
+</Callout>
+
 The `ParallelTransactionExecutor` class works similarly to the `SerialTransactionExecutor`, but
-allows for parallel execution of transactions blocks. To make this work, the
-`ParallelTransactionExecutor` will maintain a pool of gas coins, and automatically execute
-additional transactions to refill the gas pool as needed.
+allows for parallel execution of transactions. To make this work, the `ParallelTransactionExecutor`
+will maintain a pool of gas coins, and automatically execute additional transactions to refill the
+gas pool as needed.
 
 <Callout type="warning">
 	Using SuiClient or wallets to execute additional transactions while `ParallelTransactionExecutor`
-	is in use may consume/combine gas coins in the gasPool, causing transactions to fail.
+	is in use may consume/combine gas coins in the gasPool, causing transactions to fail. This may
+	also result in the coins becoming locked for the remainder of the current epoch, preventing them
+	from being used in future transactions.
+
+    Running multiple instances of `ParallelTransactionExecutor` using the same `sourceCoins` will
+    result in the same issues.
+
 </Callout>
 
 In addition to managing gas and caching object versions, the `ParallelTransactionExecutor` will
 automatically detect what objects are being used by transactions, and schedules transactions in a
-way way that avoids conflicts between transactions using the same object ids.
+way that avoids conflicts between transactions using the same object ids.
 
 `ParallelTransactionExecutor` can be configured with a number of options:
 
