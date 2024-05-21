@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::indexer::models::TokenTxn;
-use crate::indexer::postgres_writer::{get_connection_pool, write, PgPool};
+use crate::models::TokenTxn;
+use crate::postgres_writer::{get_connection_pool, write, PgPool};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::BTreeSet;

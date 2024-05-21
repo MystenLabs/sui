@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::indexer::{models::TokenTxn, schema::tokens};
+use crate::{models::TokenTxn, schema::tokens};
 use diesel::{
     pg::PgConnection,
     r2d2::{ConnectionManager, Pool},

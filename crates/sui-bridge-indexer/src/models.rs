@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::indexer::schema::tokens;
+use crate::schema::tokens;
 use diesel::prelude::*;
 
 #[derive(Queryable, Selectable, Insertable, AsChangeset, Debug)]

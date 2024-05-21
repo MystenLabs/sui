@@ -5,13 +5,16 @@ use anyhow::Result;
 use clap::Parser;
 use ethers::types::Address as EthAddress;
 use prometheus::Registry;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::{
+    abi::{EthBridgeCommittee, EthSuiBridge},
     eth_client::EthClient,
     eth_syncer::EthSyncer,
-    indexer::{config::BridgeIndexerConfig, worker::BridgeWorker},
 };
+use sui_bridge_indexer::{config::BridgeIndexerConfig, worker::BridgeWorker};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, WorkerPool,
 };
@@ -43,8 +46,13 @@ async fn main() -> Result<()> {
             exit_receiver,
         )
         .await?;
-
-    let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
+    let provider = Arc::new(
+        ethers::prelude::Provider::<ethers::providers::Http>::try_from(&config.eth_rpc_url)
+            .unwrap()
+            .interval(std::time::Duration::from_millis(2000)),
+    );
+    let bridge_address = EthAddress::from_str(&config.eth_sui_bridge_contract_address)?;
+    let sui_bridge = EthSuiBridge::new(bridge_address, provider.clone());
     let committee_address: EthAddress = sui_bridge.committee().call().await?;
     let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
     let vault_address: EthAddress = sui_bridge.vault().call().await?;
@@ -56,7 +64,7 @@ async fn main() -> Result<()> {
         EthClient::<ethers::providers::Http>::new(
             &config.eth_rpc_url,
             HashSet::from_iter(vec![
-                bridge_proxy_address,
+                bridge_address,
                 committee_address,
                 config_address,
                 limiter_address,
@@ -65,20 +73,22 @@ async fn main() -> Result<()> {
         )
         .await?,
     );
-    let contract_addresses = vec![
-        bridge_proxy_address,
-        committee_address,
-        config_address,
-        limiter_address,
-        vault_address,
-    ];
+    let contract_addresses = HashMap::from_iter(vec![
+        (bridge_address, config.start_block),
+        (committee_address, config.start_block),
+        (config_address, config.start_block),
+        (limiter_address, config.start_block),
+        (vault_address, config.start_block),
+    ]);
 
-    let mut all_handles = vec![];
-    let (task_handles, _eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
+    let (_task_handles, _eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
         .run()
         .await
         .expect("Failed to start eth syncer");
-    all_handles.extend(task_handles);
+
+    // eth_events_rx.recv().await {
+    //     println!("Received eth event");
+    // };
 
     Ok(())
 }

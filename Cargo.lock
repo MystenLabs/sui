@@ -12039,6 +12039,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-bridge-indexer"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bin-version",
+ "clap",
+ "diesel",
+ "ethers",
+ "hex-literal 0.3.4",
+ "prometheus",
+ "sui-bridge",
+ "sui-config",
+ "sui-data-ingestion-core",
+ "sui-test-transaction-builder",
+ "sui-types",
+ "test-cluster",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "sui-cluster-test"
 version = "0.1.0"
 dependencies = [
