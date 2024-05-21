@@ -161,7 +161,6 @@ move-proc-macros = { path = "crates/move-proc-macros"}
 move-prover = { path = "crates/move-prover" }
 move-prover-test-utils = { path = "crates/move-prover-test-utils" }
 move-stackless-bytecode = { path = "crates/move-stackless-bytecode" }
-move-stackless-bytecode-interpreter = { path = "crates/move-stackless-bytecode-interpreter" }
 move-stdlib = { path = "crates/move-stdlib" }
 move-stdlib-natives = { path = "crates/move-stdlib-natives" }
 move-symbol-pool = { path = "crates/move-symbol-pool" }

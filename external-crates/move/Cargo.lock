@@ -322,19 +322,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bytecode-interpreter-testsuite"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "datatest-stable",
- "move-command-line-common",
- "move-prover-test-utils",
- "move-stackless-bytecode-interpreter",
- "move-stdlib",
- "move-unit-test",
-]
-
-[[package]]
 name = "bytecode-verifier-libfuzzer"
 version = "0.0.0"
 dependencies = [
@@ -2085,24 +2072,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stackless-bytecode-interpreter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytecode-interpreter-crypto",
- "clap 4.5.4",
- "codespan-reporting",
- "datatest-stable",
- "itertools",
- "move-binary-format",
- "move-core-types",
- "move-model",
- "move-prover-test-utils",
- "move-stackless-bytecode",
- "num",
-]
-
-[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -2245,7 +2214,6 @@ dependencies = [
  "move-core-types",
  "move-ir-types",
  "move-model",
- "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",

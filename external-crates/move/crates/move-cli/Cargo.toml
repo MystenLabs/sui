@@ -56,10 +56,6 @@ name = "sandbox_testsuite"
 harness = false
 
 [[test]]
-name = "move_unit_tests_move_vm_and_stackless_vm"
-harness = false
-
-[[test]]
 name = "build_testsuite"
 harness = false
 

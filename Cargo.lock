@@ -2096,17 +2096,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3ac9f8b63eca6fd385229b3675f6cc0dc5c8a5c8a54a59d4f52ffd670d87b0c"
 
 [[package]]
-name = "bytecode-interpreter-crypto"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "curve25519-dalek-fiat",
- "ed25519-dalek-fiat",
- "sha2 0.9.9",
- "sha3 0.9.1",
-]
-
-[[package]]
 name = "bytecount"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3086,19 +3075,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "curve25519-dalek-fiat"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44339b9ecede7f72a0d3b012bf9bb5a616dc8bfde23ce544e42da075c87198f0"
-dependencies = [
- "byteorder",
- "digest 0.9.0",
- "rand_core 0.6.4",
- "subtle",
- "zeroize",
-]
-
-[[package]]
 name = "curve25519-dalek-ng"
 version = "4.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3782,7 +3758,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91cff35c70bba8a626e3185d8cd48cc11b5437e1a5bcd15b9b5fa3c64b6dfee7"
 dependencies = [
  "pkcs8 0.9.0",
- "serde",
  "signature 1.6.4",
  "zeroize",
 ]
@@ -3823,21 +3798,6 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "sha2 0.10.6",
- "zeroize",
-]
-
-[[package]]
-name = "ed25519-dalek-fiat"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97c6ac152eba578c1c53d2cefe8ad02e239e3d6f971b0f1ef3cb54cd66037fa0"
-dependencies = [
- "curve25519-dalek-fiat",
- "ed25519 1.5.3",
- "rand 0.8.5",
- "serde",
- "serde_bytes",
- "sha2 0.9.9",
  "zeroize",
 ]
 
@@ -7039,22 +6999,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "move-stackless-bytecode-interpreter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytecode-interpreter-crypto",
- "clap",
- "codespan-reporting",
- "itertools 0.10.5",
- "move-binary-format",
- "move-core-types",
- "move-model",
- "move-stackless-bytecode",
- "num",
-]
-
-[[package]]
 name = "move-stdlib"
 version = "0.1.1"
 dependencies = [
@@ -7186,7 +7130,6 @@ dependencies = [
  "move-core-types",
  "move-ir-types",
  "move-model",
- "move-stackless-bytecode-interpreter",
  "move-stdlib",
  "move-stdlib-natives",
  "move-symbol-pool",
