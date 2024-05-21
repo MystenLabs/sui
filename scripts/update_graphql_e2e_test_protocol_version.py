@@ -9,21 +9,23 @@ import difflib
 
 def replace_protocol_version_in_file(file_path, old_version, new_version, yes_to_all, dry_run):
     with open(file_path, 'r') as file:
-        content = file.read()
+        content = file.readlines()
 
-    updated_content = re.sub(
-        f"init --protocol-version {old_version} --",
-        f"init --protocol-version {new_version} --",
-        content
-    )
+    updated_content = []
+    for line in content:
+        if '//# init' in line and f'--protocol-version {old_version}' in line:
+            updated_line = line.replace(f'--protocol-version {old_version}', f'--protocol-version {new_version}')
+            updated_content.append(updated_line)
+        else:
+            updated_content.append(line)
 
     if content != updated_content:
         print(f"Found 'init --protocol-version {old_version}' in {file_path}")
 
         print(f"Proposed change")
         diff = difflib.unified_diff(
-            content.splitlines(keepends=True),
-            updated_content.splitlines(keepends=True),
+            content,
+            updated_content,
             fromfile='original',
             tofile='updated'
         )
@@ -33,13 +35,13 @@ def replace_protocol_version_in_file(file_path, old_version, new_version, yes_to
             return
         if yes_to_all :
            with open(file_path, 'w') as file:
-               file.write(updated_content)
+               file.writelines(updated_content)
            print(f"Updated {file_path}")
         else:
             confirm = input(f"Do you want to replace '--protocol-version {old_version}' with '--protocol-version {new_version}'? (yes/no): ").strip().lower()
             if confirm == 'yes' or confirm == 'y':
                 with open(file_path, 'w') as file:
-                    file.write(updated_content)
+                    file.writelines(updated_content)
                 print(f"Updated {file_path}")
             else:
                 print(f"Skipped {file_path}")
