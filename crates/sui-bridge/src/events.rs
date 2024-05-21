@@ -432,7 +432,7 @@ pub mod tests {
         (event, bridge_action)
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_bridge_events_conversion() {
         telemetry_subscribers::init_for_testing();
         init_all_struct_tags();

@@ -1302,6 +1302,10 @@ impl TestClusterBuilder {
                 .into_iter()
                 .collect::<Result<Vec<_>, _>>()
                 .unwrap();
+            info!(
+                "Waiting for token publish transactions took {:?} secs",
+                timer.elapsed().as_secs()
+            );
             for resp in &publish_tokens_responses {
                 assert_eq!(
                     resp.effects.as_ref().unwrap().status(),
