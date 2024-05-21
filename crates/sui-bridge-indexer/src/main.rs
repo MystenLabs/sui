@@ -14,6 +14,8 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
+use sui_bridge::abi::EthBridgeEvent;
+use sui_bridge::abi::EthSuiBridgeEvents;
 use sui_bridge::{
     abi::{EthBridgeCommittee, EthSuiBridge},
     eth_client::EthClient,
@@ -70,13 +72,7 @@ async fn main() -> Result<()> {
         )
         .await?,
     );
-    let contract_addresses = HashMap::from_iter(vec![
-        (bridge_address, config.start_block),
-        (committee_address, config.start_block),
-        (config_address, config.start_block),
-        (limiter_address, config.start_block),
-        (vault_address, config.start_block),
-    ]);
+    let contract_addresses = HashMap::from_iter(vec![(bridge_address, config.start_block)]);
 
     let (_task_handles, mut eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
         .run()
@@ -86,21 +82,37 @@ async fn main() -> Result<()> {
     let _task_handle = spawn_logged_monitored_task!(
         async move {
             while let Some(event) = eth_events_rx.recv().await {
-                let func_sig_hash = event
+                let bridge_events = event
                     .2
-                    .first()
-                    .and_then(|event_topic| event_topic.log.topics.first());
+                    .iter()
+                    .map(EthBridgeEvent::try_from_eth_log)
+                    .collect::<Vec<_>>();
 
-                let address = event.0;
+                for (log, opt_bridge_event) in event.2.iter().zip(bridge_events) {
+                    if opt_bridge_event.is_none() {
+                        // TODO: we probably should not miss any events, warn for now.
+                        // warn!("Eth event not recognized: {:?}", log);
+                        continue;
+                    }
+                    // Unwrap safe: checked above
+                    let bridge_event = opt_bridge_event.unwrap();
+                    // println!("Observed Eth bridge event: {:#?}", bridge_event);
 
-                if func_sig_hash.is_none() || address != bridge_address {
-                    continue;
+                    match bridge_event {
+                        EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
+                            EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
+                                println!("TokensDeposited: {:#?}", bridge_event)
+                            }
+                            EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
+                                println!("TokensClaimed: {:#?}", bridge_event)
+                            }
+                            EthSuiBridgeEvents::PausedFilter(_bridge_event)
+                            | EthSuiBridgeEvents::UnpausedFilter(_bridge_event)
+                            | EthSuiBridgeEvents::UpgradedFilter(_bridge_event)
+                            | EthSuiBridgeEvents::InitializedFilter(_bridge_event) => (),
+                        },
+                    }
                 }
-
-                // TODO: check if the func_sig_hash is the "TokensDeposited" or "TokensClaimed" events
-
-                println!("ETH: Received events: {:?}", func_sig_hash);
-                println!("Event received from: {:?}", address);
             }
         },
         "indexer handler"
