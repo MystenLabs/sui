@@ -5,6 +5,8 @@ use async_graphql::connection::{Connection, CursorType, Edge};
 use async_graphql::*;
 use move_binary_format::errors::PartialVMResult;
 use move_binary_format::CompiledModule;
+use sui_types::base_types::SequenceNumber;
+use sui_types::digests::ChainIdentifier as SuiChainIdentifier;
 use sui_types::{
     digests::TransactionDigest,
     object::Object as NativeObject,
@@ -40,6 +42,8 @@ pub(crate) enum EndOfEpochTransactionKind {
     AuthenticatorStateExpire(AuthenticatorStateExpireTransaction),
     RandomnessStateCreate(RandomnessStateCreateTransaction),
     CoinDenyListStateCreate(CoinDenyListStateCreateTransaction),
+    BridgeStateCreate(BridgeStateCreateTransaction),
+    BridgeCommitteeInit(BridgeCommitteeInitTransaction),
 }
 
 #[derive(Clone, PartialEq, Eq)]
@@ -76,6 +80,20 @@ pub(crate) struct CoinDenyListStateCreateTransaction {
     /// A workaround to define an empty variant of a GraphQL union.
     #[graphql(name = "_")]
     dummy: Option<bool>,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct BridgeStateCreateTransaction {
+    pub native: SuiChainIdentifier,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
+}
+
+#[derive(Clone, PartialEq, Eq)]
+pub(crate) struct BridgeCommitteeInitTransaction {
+    pub native: SequenceNumber,
+    /// The checkpoint sequence number this was viewed at.
+    pub checkpoint_viewed_at: u64,
 }
 
 pub(crate) type CTxn = JsonCursor<ConsistentIndexCursor>;
@@ -125,13 +143,9 @@ impl EndOfEpochTransaction {
 impl ChangeEpochTransaction {
     /// The next (to become) epoch.
     async fn epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(
-            ctx,
-            Some(self.native.epoch),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx, Some(self.native.epoch), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// The protocol version in effect in the new epoch.
@@ -207,8 +221,8 @@ impl ChangeEpochTransaction {
             );
 
             let runtime_id = native.id();
-            let object = Object::from_native(SuiAddress::from(runtime_id), native, Some(c.c));
-            let package = MovePackage::try_from(&object, self.checkpoint_viewed_at)
+            let object = Object::from_native(SuiAddress::from(runtime_id), native, c.c);
+            let package = MovePackage::try_from(&object)
                 .map_err(|_| Error::Internal("Failed to create system package".to_string()))
                 .extend()?;
 
@@ -223,18 +237,28 @@ impl ChangeEpochTransaction {
 impl AuthenticatorStateExpireTransaction {
     /// Expire JWKs that have a lower epoch than this.
     async fn min_epoch(&self, ctx: &Context<'_>) -> Result<Option<Epoch>> {
-        Epoch::query(
-            ctx,
-            Some(self.native.min_epoch),
-            Some(self.checkpoint_viewed_at),
-        )
-        .await
-        .extend()
+        Epoch::query(ctx, Some(self.native.min_epoch), self.checkpoint_viewed_at)
+            .await
+            .extend()
     }
 
     /// The initial version that the AuthenticatorStateUpdate was shared at.
     async fn authenticator_obj_initial_shared_version(&self) -> u64 {
         self.native.authenticator_obj_initial_shared_version.value()
+    }
+}
+
+#[Object]
+impl BridgeStateCreateTransaction {
+    async fn chain_id(&self) -> String {
+        self.native.to_string()
+    }
+}
+
+#[Object]
+impl BridgeCommitteeInitTransaction {
+    async fn bridge_obj_initial_shared_version(&self) -> u64 {
+        self.native.value()
     }
 }
 
@@ -262,6 +286,16 @@ impl EndOfEpochTransactionKind {
             }
             N::DenyListStateCreate => {
                 K::CoinDenyListStateCreate(CoinDenyListStateCreateTransaction { dummy: None })
+            }
+            N::BridgeStateCreate(chain_id) => K::BridgeStateCreate(BridgeStateCreateTransaction {
+                native: chain_id,
+                checkpoint_viewed_at,
+            }),
+            N::BridgeCommitteeInit(bridge_shared_version) => {
+                K::BridgeCommitteeInit(BridgeCommitteeInitTransaction {
+                    native: bridge_shared_version,
+                    checkpoint_viewed_at,
+                })
             }
         }
     }

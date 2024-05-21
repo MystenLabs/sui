@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::object_table`
 ---
@@ -316,7 +315,7 @@ Aborts with <code><a href="object_table.md#0x2_object_table_ETableNotEmpty">ETab
 <pre><code><b>public</b> <b>fun</b> <a href="object_table.md#0x2_object_table_destroy_empty">destroy_empty</a>&lt;K: <b>copy</b> + drop + store, V: key + store&gt;(<a href="table.md#0x2_table">table</a>: <a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a>&lt;K, V&gt;) {
     <b>let</b> <a href="object_table.md#0x2_object_table_ObjectTable">ObjectTable</a> { id, size } = <a href="table.md#0x2_table">table</a>;
     <b>assert</b>!(size == 0, <a href="object_table.md#0x2_object_table_ETableNotEmpty">ETableNotEmpty</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 

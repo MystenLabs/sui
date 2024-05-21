@@ -12,7 +12,6 @@ use std::{
 
 use fastcrypto::encoding::Base64;
 use move_binary_format::{
-    access::ModuleAccess,
     normalized::{self, Type},
     CompiledModule,
 };
@@ -20,6 +19,7 @@ use move_bytecode_utils::{layout::SerdeLayoutBuilder, module_cache::GetModule};
 use move_compiler::{
     compiled_unit::AnnotatedCompiledModule,
     diagnostics::{report_diagnostics_to_buffer, report_warnings, Diagnostics, FilesSourceText},
+    editions::Edition,
     linters::LINT_WARNING_PREFIX,
 };
 use move_core_types::{
@@ -46,9 +46,10 @@ use sui_types::{
     error::{SuiError, SuiResult},
     is_system_package,
     move_package::{FnInfo, FnInfoKey, FnInfoMap, MovePackage},
-    DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_ADDRESS,
+    BRIDGE_ADDRESS, DEEPBOOK_ADDRESS, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
+    SUI_SYSTEM_ADDRESS,
 };
-use sui_verifier::{default_verifier_config, verifier as sui_bytecode_verifier};
+use sui_verifier::verifier as sui_bytecode_verifier;
 
 #[cfg(test)]
 #[path = "unit_tests/build_tests.rs"]
@@ -157,23 +158,12 @@ impl BuildConfig {
         let print_diags_to_stderr = self.print_diags_to_stderr;
         let run_bytecode_verifier = self.run_bytecode_verifier;
         let resolution_graph = self.resolution_graph(&path)?;
-        let result = build_from_resolution_graph(
+        build_from_resolution_graph(
             path.clone(),
             resolution_graph,
             run_bytecode_verifier,
             print_diags_to_stderr,
-        );
-        if let Ok(ref compiled) = result {
-            compiled
-                .package
-                .compiled_package_info
-                .build_flags
-                .update_lock_file_toolchain_version(&path, env!("CARGO_PKG_VERSION").into())
-                .map_err(|e| SuiError::ModuleBuildFailure {
-                    error: format!("Failed to update Move.lock toolchain version: {e}"),
-                })?;
-        }
-        result
+        )
     }
 
     pub fn resolution_graph(mut self, path: &Path) -> SuiResult<ResolvedGraph> {
@@ -198,7 +188,7 @@ impl BuildConfig {
 /// (optionally report diagnostics themselves if files argument is provided).
 pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceText>) {
     let any_linter_warnings = warning_diags.any_with_prefix(LINT_WARNING_PREFIX);
-    let (filtered_diags_num, filtered_categories) =
+    let (filtered_diags_num, unique) =
         warning_diags.filtered_source_diags_with_prefix(LINT_WARNING_PREFIX);
     if let Some(f) = files {
         report_warnings(f, warning_diags);
@@ -207,7 +197,7 @@ pub fn decorate_warnings(warning_diags: Diagnostics, files: Option<&FilesSourceT
         eprintln!("Please report feedback on the linter warnings at https://forums.sui.io\n");
     }
     if filtered_diags_num > 0 {
-        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (filtered categories: {filtered_categories})");
+        eprintln!("Total number of linter warnings suppressed: {filtered_diags_num} (unique lints: {unique})");
     }
 }
 
@@ -252,20 +242,16 @@ pub fn build_from_resolution_graph(
     };
     let compiled_modules = package.root_modules_map();
     if run_bytecode_verifier {
+        let verifier_config = ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown)
+            .verifier_config(/* for_signing */ false);
+
         for m in compiled_modules.iter_modules() {
             move_bytecode_verifier::verify_module_unmetered(m).map_err(|err| {
                 SuiError::ModuleVerificationFailure {
                     error: err.to_string(),
                 }
             })?;
-            sui_bytecode_verifier::sui_verify_module_unmetered(
-                m,
-                &fn_info,
-                &default_verifier_config(
-                    &ProtocolConfig::get_for_version(ProtocolVersion::MAX, Chain::Unknown),
-                    false,
-                ),
-            )?;
+            sui_bytecode_verifier::sui_verify_module_unmetered(m, &fn_info, &verifier_config)?;
         }
         // TODO(https://github.com/MystenLabs/sui/issues/69): Run Move linker
     }
@@ -383,7 +369,7 @@ impl CompiledPackage {
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap(); // safe because package built successfully
+                m.serialize_with_version(m.version, &mut bytes).unwrap(); // safe because package built successfully
                 bytes
             })
             .collect()
@@ -409,6 +395,12 @@ impl CompiledPackage {
     pub fn get_deepbook_modules(&self) -> impl Iterator<Item = &CompiledModule> {
         self.get_modules_and_deps()
             .filter(|m| *m.self_id().address() == DEEPBOOK_ADDRESS)
+    }
+
+    /// Get bytecode modules from DeepBook that are used by this package
+    pub fn get_bridge_modules(&self) -> impl Iterator<Item = &CompiledModule> {
+        self.get_modules_and_deps()
+            .filter(|m| *m.self_id().address() == BRIDGE_ADDRESS)
     }
 
     /// Get bytecode modules from the Sui System that are used by this package
@@ -623,6 +615,9 @@ impl PackageHooks for SuiPackageHooks {
         &self,
         manifest: &SourceManifest,
     ) -> anyhow::Result<PackageIdentifier> {
+        if manifest.package.edition == Some(Edition::DEVELOPMENT) {
+            return Err(Edition::DEVELOPMENT.unknown_edition_error());
+        }
         Ok(manifest.package.name)
     }
 

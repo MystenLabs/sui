@@ -27,11 +27,11 @@ use tokio::sync::mpsc::UnboundedSender;
 use tokio::time::Instant;
 use tracing::{error, info, instrument, trace, warn};
 
-use crate::authority::AuthorityMetrics;
 use crate::{
-    authority::authority_per_epoch_store::AuthorityPerEpochStore,
-    execution_cache::ExecutionCacheRead,
+    authority::authority_per_epoch_store::AuthorityPerEpochStore, execution_cache::ObjectCacheRead,
 };
+use crate::{authority::AuthorityMetrics, execution_cache::TransactionCacheRead};
+use sui_config::node::AuthorityOverloadConfig;
 use sui_types::transaction::SenderSignedData;
 use tap::TapOptional;
 
@@ -42,14 +42,6 @@ mod transaction_manager_tests;
 /// Minimum capacity of HashMaps used in TransactionManager.
 const MIN_HASHMAP_CAPACITY: usize = 1000;
 
-// Reject a transaction if transaction manager queue length is above this threshold.
-// 100_000 = 10k TPS * 5s resident time in transaction manager (pending + executing) * 2.
-pub(crate) const MAX_TM_QUEUE_LENGTH: usize = 100_000;
-
-// Reject a transaction if the number of pending transactions depending on the object
-// is above the threshold.
-pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
-
 /// TransactionManager is responsible for managing object dependencies of pending transactions,
 /// and publishing a stream of certified transactions (certificates) ready to execute.
 /// It receives certificates from Narwhal, validator RPC handlers, and checkpoint executor.
@@ -58,10 +50,14 @@ pub(crate) const MAX_PER_OBJECT_QUEUE_LENGTH: usize = 200;
 /// The actual execution logic is inside AuthorityState. After a transaction commits and updates
 /// storage, committed objects and certificates are notified back to TransactionManager.
 pub struct TransactionManager {
-    cache_read: Arc<dyn ExecutionCacheRead>,
+    object_cache_read: Arc<dyn ObjectCacheRead>,
+    transaction_cache_read: Arc<dyn TransactionCacheRead>,
     tx_ready_certificates: UnboundedSender<PendingCertificate>,
     metrics: Arc<AuthorityMetrics>,
-    inner: RwLock<Inner>,
+    // inner is a doubly nested lock so that we can enforce that an outer lock (for read) is held
+    // before the inner lock (for read or write) can be acquired. During reconfiguration, we acquire
+    // the outer lock for write, to ensure that no other threads can be running while we reconfigure.
+    inner: RwLock<RwLock<Inner>>,
 }
 
 #[derive(Clone, Debug)]
@@ -338,19 +334,21 @@ impl Inner {
 
 impl TransactionManager {
     /// If a node restarts, transaction manager recovers in-memory data from pending_certificates,
-    /// which contains certificates not yet executed from Narwhal output and RPC.
+    /// which contains certified transactions from consensus output and RPC that are not executed.
     /// Transactions from other sources, e.g. checkpoint executor, have own persistent storage to
     /// retry transactions.
     pub(crate) fn new(
-        cache_read: Arc<dyn ExecutionCacheRead>,
+        object_cache_read: Arc<dyn ObjectCacheRead>,
+        transaction_cache_read: Arc<dyn TransactionCacheRead>,
         epoch_store: &AuthorityPerEpochStore,
         tx_ready_certificates: UnboundedSender<PendingCertificate>,
         metrics: Arc<AuthorityMetrics>,
     ) -> TransactionManager {
         let transaction_manager = TransactionManager {
-            cache_read,
+            object_cache_read,
+            transaction_cache_read,
             metrics: metrics.clone(),
-            inner: RwLock::new(Inner::new(epoch_store.epoch(), metrics)),
+            inner: RwLock::new(RwLock::new(Inner::new(epoch_store.epoch(), metrics))),
             tx_ready_certificates,
         };
         transaction_manager.enqueue(epoch_store.all_pending_execution().unwrap(), epoch_store);
@@ -406,6 +404,8 @@ impl TransactionManager {
         )>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        let reconfig_lock = self.inner.read();
+
         // filter out already executed certs
         let certs: Vec<_> = certs
             .into_iter()
@@ -413,18 +413,12 @@ impl TransactionManager {
                 let digest = *cert.digest();
                 // skip already executed txes
                 if self
-                    .cache_read
+                    .transaction_cache_read
                     .is_tx_already_executed(&digest)
                     .unwrap_or_else(|err| {
                         panic!("Failed to check if tx is already executed: {:?}", err)
                     })
                 {
-                    // also ensure the transaction will not be retried after restart.
-                    epoch_store
-                        .remove_pending_execution(&digest)
-                        .unwrap_or_else(|err| {
-                            panic!("remove_pending_execution should not fail: {:?}", err)
-                        });
                     self.metrics
                         .transaction_manager_num_enqueued_certificates
                         .with_label_values(&["already_executed"])
@@ -466,7 +460,13 @@ impl TransactionManager {
                 }
 
                 for key in input_object_keys.iter() {
-                    object_availability.insert(*key, None);
+                    if key.is_cancelled() {
+                        // Cancelled txn objects should always be available immediately.
+                        // Don't need to wait on these objects for execution.
+                        object_availability.insert(*key, Some(true));
+                    } else {
+                        object_availability.insert(*key, None);
+                    }
                 }
 
                 (cert, fx_digest, input_object_keys)
@@ -474,8 +474,11 @@ impl TransactionManager {
             .collect();
 
         {
-            let mut inner = self.inner.write();
+            let mut inner = reconfig_lock.write();
             for (key, value) in object_availability.iter_mut() {
+                if value.is_some_and(|available| available) {
+                    continue;
+                }
                 if let Some(available) = inner.available_objects_cache.is_object_available(key) {
                     *value = Some(available);
                 }
@@ -493,7 +496,7 @@ impl TransactionManager {
         // But input objects can become available before TM lock is acquired.
         // So missing objects' availability are checked again after acquiring TM lock.
         let cache_miss_availability = self
-            .cache_read
+            .object_cache_read
             .multi_input_objects_available(
                 &input_object_cache_misses,
                 receiving_objects,
@@ -508,7 +511,7 @@ impl TransactionManager {
         // executed.
 
         // Internal lock is held only for updating the internal state.
-        let mut inner = self.inner.write();
+        let mut inner = reconfig_lock.write();
 
         let _scope = monitored_scope("TransactionManager::enqueue::wlock");
 
@@ -566,12 +569,6 @@ impl TransactionManager {
                     "Ignoring enqueued certificate from wrong epoch. Expected={} Certificate={:?}",
                     inner.epoch, pending_cert.certificate
                 );
-                // also ensure the transaction will not be retried after restart.
-                epoch_store
-                    .remove_pending_execution(&digest)
-                    .unwrap_or_else(|err| {
-                        panic!("remove_pending_execution should not fail: {:?}", err)
-                    });
                 continue;
             }
 
@@ -593,14 +590,10 @@ impl TransactionManager {
             }
             // skip already executed txes
             let is_tx_already_executed = self
-                .cache_read
+                .transaction_cache_read
                 .is_tx_already_executed(&digest)
                 .expect("Check if tx is already executed should not fail");
             if is_tx_already_executed {
-                // also ensure the transaction will not be retried after restart.
-                epoch_store
-                    .remove_pending_execution(&digest)
-                    .expect("remove_pending_execution should not fail");
                 self.metrics
                     .transaction_manager_num_enqueued_certificates
                     .with_label_values(&["already_executed"])
@@ -672,7 +665,8 @@ impl TransactionManager {
         input_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
-        let mut inner = self.inner.write();
+        let reconfig_lock = self.inner.read();
+        let mut inner = reconfig_lock.write();
         let _scope = monitored_scope("TransactionManager::objects_available::wlock");
         self.objects_available_locked(&mut inner, epoch_store, input_keys, true, Instant::now());
         inner.maybe_shrink_capacity();
@@ -727,9 +721,10 @@ impl TransactionManager {
         output_object_keys: Vec<InputKey>,
         epoch_store: &AuthorityPerEpochStore,
     ) {
+        let reconfig_lock = self.inner.read();
         {
             let commit_time = Instant::now();
-            let mut inner = self.inner.write();
+            let mut inner = reconfig_lock.write();
             let _scope = monitored_scope("TransactionManager::notify_commit::wlock");
 
             if inner.epoch != epoch_store.epoch() {
@@ -756,8 +751,6 @@ impl TransactionManager {
 
             inner.maybe_shrink_capacity();
         }
-
-        let _ = epoch_store.remove_pending_execution(digest);
     }
 
     /// Sends the ready certificate for execution.
@@ -776,7 +769,8 @@ impl TransactionManager {
 
     /// Gets the missing input object keys for the given transaction.
     pub(crate) fn get_missing_input(&self, digest: &TransactionDigest) -> Option<Vec<InputKey>> {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         inner
             .pending_certificates
             .get(digest)
@@ -788,7 +782,8 @@ impl TransactionManager {
         &self,
         keys: Vec<ObjectID>,
     ) -> Vec<(ObjectID, usize, Option<Duration>)> {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         keys.into_iter()
             .map(|key| {
                 let default_map = IndexMap::new();
@@ -804,29 +799,31 @@ impl TransactionManager {
 
     // Returns the number of transactions pending or being executed right now.
     pub(crate) fn inflight_queue_len(&self) -> usize {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         inner.pending_certificates.len() + inner.executing_certificates.len()
     }
 
     // Reconfigures the TransactionManager for a new epoch. Existing transactions will be dropped
     // because they are no longer relevant and may be incorrect in the new epoch.
     pub(crate) fn reconfigure(&self, new_epoch: EpochId) {
-        let mut inner = self.inner.write();
+        let reconfig_lock = self.inner.write();
+        let mut inner = reconfig_lock.write();
         *inner = Inner::new(new_epoch, self.metrics.clone());
     }
 
     pub(crate) fn check_execution_overload(
         &self,
-        txn_age_threshold: Duration,
+        overload_config: &AuthorityOverloadConfig,
         tx_data: &SenderSignedData,
     ) -> SuiResult {
         // Too many transactions are pending execution.
         let inflight_queue_len = self.inflight_queue_len();
         fp_ensure!(
-            inflight_queue_len < MAX_TM_QUEUE_LENGTH,
+            inflight_queue_len < overload_config.max_transaction_manager_queue_length,
             SuiError::TooManyTransactionsPendingExecution {
                 queue_len: inflight_queue_len,
-                threshold: MAX_TM_QUEUE_LENGTH,
+                threshold: overload_config.max_transaction_manager_queue_length,
             }
         );
         tx_data.digest();
@@ -840,7 +837,7 @@ impl TransactionManager {
                 .collect(),
         ) {
             // When this occurs, most likely transactions piled up on a shared object.
-            if queue_len >= MAX_PER_OBJECT_QUEUE_LENGTH {
+            if queue_len >= overload_config.max_transaction_manager_per_object_queue_length {
                 info!(
                     "Overload detected on object {:?} with {} pending transactions",
                     object_id, queue_len
@@ -848,17 +845,17 @@ impl TransactionManager {
                 fp_bail!(SuiError::TooManyTransactionsPendingOnObject {
                     object_id,
                     queue_len,
-                    threshold: MAX_PER_OBJECT_QUEUE_LENGTH,
+                    threshold: overload_config.max_transaction_manager_per_object_queue_length,
                 });
             }
             if let Some(age) = txn_age {
                 // Check that we don't have a txn that has been waiting for a long time in the queue.
-                if age >= txn_age_threshold {
+                if age >= overload_config.max_txn_age_in_queue {
                     info!("Overload detected on object {:?} with oldest transaction pending for {} secs", object_id, age.as_secs());
                     fp_bail!(SuiError::TooOldTransactionPendingOnObject {
                         object_id,
                         txn_age_sec: age.as_secs(),
-                        threshold: txn_age_threshold.as_secs(),
+                        threshold: overload_config.max_txn_age_in_queue.as_secs(),
                     });
                 }
             }
@@ -869,7 +866,8 @@ impl TransactionManager {
     // Verify TM has no pending item for tests.
     #[cfg(test)]
     fn check_empty_for_testing(&self) {
-        let inner = self.inner.read();
+        let reconfig_lock = self.inner.read();
+        let inner = reconfig_lock.read();
         assert!(
             inner.missing_inputs.is_empty(),
             "Missing inputs: {:?}",

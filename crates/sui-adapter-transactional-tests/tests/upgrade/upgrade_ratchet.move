@@ -5,7 +5,6 @@
 
 //# publish --upgradeable --sender A
 module V0::M1 {
-    use sui::tx_context::TxContext;
     fun init(_ctx: &mut TxContext) { }
     public fun f1() { }
 }

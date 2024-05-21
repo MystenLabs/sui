@@ -671,6 +671,7 @@ pub fn get_all_uids(
     bcs_bytes: &[u8],
 ) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
     let mut ids = BTreeSet::new();
+    // TODO (annotated-visitor): Replace with a custom visitor
     let v = MoveValue::simple_deserialize(bcs_bytes, fully_annotated_layout)
         .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
     get_all_uids_in_value(&mut ids, &v)?;

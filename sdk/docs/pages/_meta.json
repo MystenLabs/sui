@@ -18,5 +18,10 @@
 	"bcs": {
 		"title": "BCS",
 		"type": "page"
+	},
+	"api": {
+		"title": "TypeDoc",
+		"href": "/typedoc/index.html",
+		"type": "page"
 	}
 }

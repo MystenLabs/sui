@@ -8,7 +8,7 @@ module base::ascii {
     use std::vector;
 
     /// An ASCII character.
-    struct Char has copy, drop, store {
+    public struct Char has copy, drop, store {
         byte: u8,
     }
 
@@ -21,7 +21,7 @@ module base::ascii {
     /// Returns `true` if all characters in `string` are printable characters
     /// Returns `false` otherwise. Not all `String`s are printable strings.
     public fun all_characters_printable(string: &String): bool {
-       let i = 0;
+       let mut i = 0;
        let len = vector::length(&string.bytes);
        while (i < len) {
            let byte = *vector::borrow(&string.bytes, i);
@@ -35,7 +35,7 @@ module base::ascii {
     /// `Some(<ascii_string>)` if the `bytes` contains all valid ASCII
     /// characters. Otherwise returns `None`.
     public fun try_string(bytes: vector<u8>): Option<String> {
-       let i = 0;
+       let mut i = 0;
        let len = vector::length(&bytes);
        while (i < len) {
            let possible_byte = *vector::borrow(&bytes, i);
@@ -54,7 +54,7 @@ module base::ascii {
     /// be printable. To determine if a `String` contains only "printable"
     /// characters you should use the `all_characters_printable` predicate
     /// defined in this module.
-    struct String has copy, drop, store {
+    public struct String has copy, drop, store {
         bytes: vector<u8>,
     }
 

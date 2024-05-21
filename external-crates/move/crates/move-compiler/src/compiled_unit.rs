@@ -124,10 +124,10 @@ impl NamedCompiledModule {
         &self.source_map
     }
 
-    pub fn serialize(&self, bytecode_version: Option<u32>) -> Vec<u8> {
+    pub fn serialize(&self) -> Vec<u8> {
         let mut serialized = Vec::<u8>::new();
         self.module
-            .serialize_for_version(bytecode_version, &mut serialized)
+            .serialize_with_version(self.module.version, &mut serialized)
             .unwrap();
         serialized
     }

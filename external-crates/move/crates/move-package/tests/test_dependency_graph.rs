@@ -96,7 +96,7 @@ fn lock_file_roundtrip() {
     .expect("Reading DependencyGraph");
 
     let lock = graph
-        .write_to_lock(tmp.path().to_path_buf())
+        .write_to_lock(tmp.path().to_path_buf(), None)
         .expect("Writing DependencyGraph");
 
     lock.commit(&commit).expect("Committing lock file");

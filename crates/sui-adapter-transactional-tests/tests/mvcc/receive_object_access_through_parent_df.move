@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
     use sui::dynamic_object_field as dof;
     use sui::dynamic_field as df;
 
@@ -20,7 +18,7 @@ module tto::M1 {
     }
 
     public struct Wrapper<T: key + store> has key, store {
-        id: UID, 
+        id: UID,
         value: T,
     }
 
@@ -72,7 +70,7 @@ module tto::M1 {
 }
 
 // receive, add, and then access through parent.
-// * A dynamic field 
+// * A dynamic field
 // * A dynamic field of a dynamic field
 // * A dynamic object field of a dynamic field
 // * A dynamic field of wrapped object that was received
@@ -96,7 +94,7 @@ module tto::M1 {
 //# view-object 2,7
 
 // E_OBJECT_TYPE_MISMATCH
-// Try to load an invalid type that will cause indexing to fail. 
+// Try to load an invalid type that will cause indexing to fail.
 //# run tto::M1::receive_b_parent --args object(2,4) receiving(2,7) --sender A
 
 //# run tto::M1::receive_b_parent --args object(2,4) receiving(2,6) --sender A

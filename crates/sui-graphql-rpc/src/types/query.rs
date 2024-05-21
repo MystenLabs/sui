@@ -26,7 +26,7 @@ use super::{
     epoch::Epoch,
     event::{self, Event, EventFilter},
     move_type::MoveType,
-    object::{self, Object, ObjectFilter, ObjectLookupKey},
+    object::{self, Object, ObjectFilter},
     owner::Owner,
     protocol_config::ProtocolConfigs,
     sui_address::SuiAddress,
@@ -35,10 +35,12 @@ use super::{
     transaction_metadata::TransactionMetadata,
     type_filter::ExactTypeFilter,
 };
-use crate::{
-    config::ServiceConfig, context_data::db_data_provider::PgManager, error::Error,
-    mutation::Mutation,
-};
+use crate::server::watermark_task::Watermark;
+use crate::types::base64::Base64 as GraphQLBase64;
+use crate::types::zklogin_verify_signature::verify_zklogin_signature;
+use crate::types::zklogin_verify_signature::ZkLoginIntentScope;
+use crate::types::zklogin_verify_signature::ZkLoginVerifyResult;
+use crate::{config::ServiceConfig, error::Error, mutation::Mutation};
 
 pub(crate) struct Query;
 pub(crate) type SuiGraphQLSchema = async_graphql::Schema<Query, Mutation, EmptySubscription>;
@@ -57,8 +59,10 @@ impl Query {
     /// Range of checkpoints that the RPC has data available for (for data
     /// that can be tied to a particular checkpoint).
     async fn available_range(&self, ctx: &Context<'_>) -> Result<AvailableRange> {
-        let (first, last) = ctx.data_unchecked::<PgManager>().available_range().await?;
-        Ok(AvailableRange { first, last })
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        AvailableRange::query(ctx.data_unchecked(), checkpoint)
+            .await
+            .extend()
     }
 
     /// Configuration for this RPC service
@@ -68,9 +72,6 @@ impl Query {
             .cloned()
             .extend()
     }
-
-    // availableRange - pending impl. on IndexerV2
-    // coinMetadata
 
     /// Simulate running a transaction to inspect its effects without
     /// committing to them on-chain.
@@ -174,11 +175,12 @@ impl Query {
         DryRunResult::try_from(res).extend()
     }
 
-    async fn owner(&self, address: SuiAddress) -> Option<Owner> {
-        Some(Owner {
+    async fn owner(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Owner>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        Ok(Some(Owner {
             address,
-            checkpoint_viewed_at: None,
-        })
+            checkpoint_viewed_at: checkpoint,
+        }))
     }
 
     /// The object corresponding to the given address at the (optionally) given version.
@@ -189,29 +191,26 @@ impl Query {
         address: SuiAddress,
         version: Option<u64>,
     ) -> Result<Option<Object>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
         match version {
-            Some(version) => Object::query(
-                ctx.data_unchecked(),
-                address,
-                ObjectLookupKey::VersionAt {
-                    version,
-                    checkpoint_viewed_at: None,
-                },
-            )
-            .await
-            .extend(),
-            None => Object::query(ctx.data_unchecked(), address, ObjectLookupKey::Latest)
+            Some(version) => Object::query(ctx, address, Object::at_version(version, checkpoint))
+                .await
+                .extend(),
+            None => Object::query(ctx, address, Object::latest_at(checkpoint))
                 .await
                 .extend(),
         }
     }
 
     /// Look-up an Account by its SuiAddress.
-    async fn address(&self, address: SuiAddress) -> Option<Address> {
-        Some(Address {
+    async fn address(&self, ctx: &Context<'_>, address: SuiAddress) -> Result<Option<Address>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
+        Ok(Some(Address {
             address,
-            checkpoint_viewed_at: None,
-        })
+            checkpoint_viewed_at: checkpoint,
+        }))
     }
 
     /// Fetch a structured representation of a concrete type, including its layout information.
@@ -226,7 +225,8 @@ impl Query {
 
     /// Fetch epoch information by ID (defaults to the latest epoch).
     async fn epoch(&self, ctx: &Context<'_>, id: Option<u64>) -> Result<Option<Epoch>> {
-        Epoch::query(ctx, id, None).await.extend()
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        Epoch::query(ctx, id, checkpoint).await.extend()
     }
 
     /// Fetch checkpoint information by sequence number or digest (defaults to the latest available
@@ -236,13 +236,10 @@ impl Query {
         ctx: &Context<'_>,
         id: Option<CheckpointId>,
     ) -> Result<Option<Checkpoint>> {
-        Checkpoint::query(
-            ctx.data_unchecked(),
-            id.unwrap_or_default(),
-            /* checkpoint_viewed_at */ None,
-        )
-        .await
-        .extend()
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        Checkpoint::query(ctx, id.unwrap_or_default(), checkpoint)
+            .await
+            .extend()
     }
 
     /// Fetch a transaction block by its transaction digest.
@@ -251,7 +248,8 @@ impl Query {
         ctx: &Context<'_>,
         digest: Digest,
     ) -> Result<Option<TransactionBlock>> {
-        TransactionBlock::query(ctx.data_unchecked(), digest, None)
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        TransactionBlock::query(ctx, digest, checkpoint)
             .await
             .extend()
     }
@@ -269,6 +267,8 @@ impl Query {
         before: Option<object::Cursor>,
         type_: Option<ExactTypeFilter>,
     ) -> Result<Connection<String, Coin>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         let coin = type_.map_or_else(GAS::type_tag, |t| t.0);
         Coin::paginate(
@@ -276,7 +276,7 @@ impl Query {
             page,
             coin,
             /* owner */ None,
-            /* checkpoint_sequence_number */ None,
+            checkpoint,
         )
         .await
         .extend()
@@ -291,12 +291,14 @@ impl Query {
         last: Option<u64>,
         before: Option<checkpoint::Cursor>,
     ) -> Result<Connection<String, Checkpoint>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
         Checkpoint::paginate(
             ctx.data_unchecked(),
             page,
             /* epoch */ None,
-            /* checkpoint_viewed_at */ None,
+            checkpoint,
         )
         .await
         .extend()
@@ -312,10 +314,17 @@ impl Query {
         before: Option<transaction_block::Cursor>,
         filter: Option<TransactionBlockFilter>,
     ) -> Result<Connection<String, TransactionBlock>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        TransactionBlock::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
-            .await
-            .extend()
+        TransactionBlock::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter.unwrap_or_default(),
+            checkpoint,
+        )
+        .await
+        .extend()
     }
 
     /// The events that exist in the network.
@@ -328,10 +337,17 @@ impl Query {
         before: Option<event::Cursor>,
         filter: Option<EventFilter>,
     ) -> Result<Connection<String, Event>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Event::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
-            .await
-            .extend()
+        Event::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter.unwrap_or_default(),
+            checkpoint,
+        )
+        .await
+        .extend()
     }
 
     /// The objects that exist in the network.
@@ -344,10 +360,17 @@ impl Query {
         before: Option<object::Cursor>,
         filter: Option<ObjectFilter>,
     ) -> Result<Connection<String, Object>> {
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+
         let page = Page::from_params(ctx.data_unchecked(), first, after, last, before)?;
-        Object::paginate(ctx.data_unchecked(), page, filter.unwrap_or_default(), None)
-            .await
-            .extend()
+        Object::paginate(
+            ctx.data_unchecked(),
+            page,
+            filter.unwrap_or_default(),
+            checkpoint,
+        )
+        .await
+        .extend()
     }
 
     /// Fetch the protocol config by protocol version (defaults to the latest protocol
@@ -368,16 +391,15 @@ impl Query {
         ctx: &Context<'_>,
         domain: Domain,
     ) -> Result<Option<Address>> {
-        Ok(
-            NameService::resolve_to_record(ctx, &domain, /* checkpoint_viewed_at */ None)
-                .await
-                .extend()?
-                .and_then(|r| r.target_address)
-                .map(|a| Address {
-                    address: a.into(),
-                    checkpoint_viewed_at: None,
-                }),
-        )
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        Ok(NameService::resolve_to_record(ctx, &domain, checkpoint)
+            .await
+            .extend()?
+            .and_then(|r| r.target_address)
+            .map(|a| Address {
+                address: a.into(),
+                checkpoint_viewed_at: checkpoint,
+            }))
     }
 
     /// The coin metadata associated with the given coin type.
@@ -386,7 +408,32 @@ impl Query {
         ctx: &Context<'_>,
         coin_type: ExactTypeFilter,
     ) -> Result<Option<CoinMetadata>> {
-        CoinMetadata::query(ctx.data_unchecked(), coin_type.0)
+        let Watermark { checkpoint, .. } = *ctx.data()?;
+        CoinMetadata::query(ctx.data_unchecked(), coin_type.0, checkpoint)
+            .await
+            .extend()
+    }
+
+    /// Verify a zkLogin signature based on the provided transaction or personal message
+    /// based on current epoch, chain id, and latest JWKs fetched on-chain. If the
+    /// signature is valid, the function returns a `ZkLoginVerifyResult` with success as
+    /// true and an empty list of errors. If the signature is invalid, the function returns
+    /// a `ZkLoginVerifyResult` with success as false with a list of errors.
+    ///
+    /// - `bytes` is either the personal message in raw bytes or transaction data bytes in
+    ///    BCS-encoded and then Base64-encoded.
+    /// - `signature` is a serialized zkLogin signature that is Base64-encoded.
+    /// - `intentScope` is an enum that specifies the intent scope to be used to parse bytes.
+    /// - `author` is the address of the signer of the transaction or personal msg.
+    async fn verify_zklogin_signature(
+        &self,
+        ctx: &Context<'_>,
+        bytes: GraphQLBase64,
+        signature: GraphQLBase64,
+        intent_scope: ZkLoginIntentScope,
+        author: SuiAddress,
+    ) -> Result<ZkLoginVerifyResult> {
+        verify_zklogin_signature(ctx, bytes, signature, intent_scope, author)
             .await
             .extend()
     }

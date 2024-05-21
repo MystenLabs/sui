@@ -89,6 +89,39 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
                 path.call(print, 'namedChildren', 2),
                 ';',
             ]
+        case 'function_definition':
+            let is_entry = false;
+            for (let i = 0; i < node.childCount; i++) {
+                if (node.child(i).type === 'entry') {
+                    is_entry = true;
+                }
+            }
+            // first named child may be a visibility modifier
+            return [
+                node.namedChild(0).type === 'visibility_modifier' ? [ path.call(print, 'namedChildren', 0), ' '] : '',
+                is_entry ? 'entry ' : '',
+                'fun ',
+                node.namedChild(0).type !== 'visibility_modifier' ? path.call(print, 'namedChildren', 0) : '',
+                path.call(print, 'namedChildren', 1),
+                path.call(print, 'namedChildren', 2),
+                path.call(print, 'namedChildren', 3),
+                path.call(print, 'namedChildren', 4),
+                path.call(print, 'namedChildren', 5),
+            ];
+        case 'native_function_definition':
+            // first named child may be a visibility modifier
+            return [
+                node.namedChild(0).type === 'visibility_modifier' ? [ path.call(print, 'namedChildren', 0), ' '] : '',
+                'native ',
+                'fun ',
+                node.namedChild(0).type !== 'visibility_modifier' ? path.call(print, 'namedChildren', 0) : '',
+                path.call(print, 'namedChildren', 1),
+                path.call(print, 'namedChildren', 2),
+                path.call(print, 'namedChildren', 3),
+                path.call(print, 'namedChildren', 4),
+                ';',
+            ];
+        // TODO: do macros
         case 'ability_decls':
             return [
                 ' has ',
@@ -104,10 +137,12 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
             return breakable_comma_separated_list(path, node, '<', '>', print);
         case 'type_parameter':
             let abilities = [];
-            for (let i = 1; i < node.namedChildren.length; i++) {
+            for (let i = 1; i < node.namedChildCount; i++) {
                 abilities.push(path.call(print, 'namedChildren', i));
             }
             return [
+                // '$' and 'phantom' are mutually exclusive (one for macros and the other for structs)
+                node.child(0).type === '$' ? '$' : (node.child(0).type === 'phantom' ? 'phantom ' : ''),
                 path.call(print, 'firstNamedChild'),
                 node.namedChildren.length > 1 ? ': ' : '' ,
                 join(' + ', abilities),
@@ -115,16 +150,7 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
         case 'datatype_fields':
             return path.call(print, 'firstNamedChild');
         case 'named_fields':
-            return node.namedChildren.length == 0
-                ? ' {}'
-                : [
-                    ' {',
-                    indent(hardline),
-                    indent(join([',', hardline], path.map(print, 'namedChildren'))),
-                    ',',
-                    hardline,
-                    '}',
-                ];
+            return block(path, node, print, ',');
         case 'field_annotation':
             return [
                 path.call(print, 'namedChildren', 0),
@@ -133,6 +159,24 @@ export function print(path: AstPath, options: ParserOptions, print: printFn) {
             ];
         case 'positional_fields':
             return breakable_comma_separated_list(path, node, '(', ')', print);
+        case 'block':
+            return block(path, node, print, '');
+        case 'function_parameters':
+            return breakable_comma_separated_list(path, node, '(', ')', print);
+        case 'function_parameter':
+            return [
+                path.call(print, 'namedChildren', 0),
+                ': ',
+                path.call(print, 'namedChildren', 1),
+            ];
+        case 'ret_type':
+            return [ ': ', path.call(print, 'namedChildren', 0) ];
+        case 'struct_identifier':
+        case 'ability':
+        case 'type_parameter_identifier':
+        case 'field_identifier':
+        case 'function_identifier':
+        case 'variable_identifier':
         default:
             return node.text;
     }
@@ -154,4 +198,17 @@ function breakable_comma_separated_list(path: AstPath,
         ifBreak([',', softline], '', {groupId: items}),
         end,
     ];
+}
+
+function block(path: AstPath, node: SyntaxNode, print: printFn, line_ending: string) {
+    return node.namedChildren.length == 0
+        ? ' {}'
+        : [
+            ' {',
+            indent(hardline),
+            indent(join([line_ending, hardline], path.map(print, 'namedChildren'))),
+            line_ending,
+            hardline,
+            '}',
+        ];
 }

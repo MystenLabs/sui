@@ -1,47 +1,50 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-    vec,
-};
+use std::{sync::Arc, time::Instant};
 
-use async_trait::async_trait;
-use bytes::Bytes;
 use consensus_config::{AuthorityIndex, Committee, NetworkKeyPair, Parameters, ProtocolKeyPair};
 use parking_lot::RwLock;
 use prometheus::Registry;
-use sui_protocol_config::ProtocolConfig;
-use tokio::time::sleep;
-use tracing::{info, warn};
+use sui_protocol_config::{ConsensusNetwork, ProtocolConfig};
+use tracing::info;
 
 use crate::{
-    block::{timestamp_utc_ms, BlockAPI, BlockRef, SignedBlock, VerifiedBlock},
+    authority_service::AuthorityService,
     block_manager::BlockManager,
-    block_verifier::{BlockVerifier, SignedBlockVerifier},
+    block_verifier::SignedBlockVerifier,
     broadcaster::Broadcaster,
     commit_observer::CommitObserver,
-    context::Context,
+    commit_syncer::{CommitSyncer, CommitVoteMonitor},
+    context::{Clock, Context},
     core::{Core, CoreSignals},
-    core_thread::{ChannelCoreThreadDispatcher, CoreThreadDispatcher, CoreThreadHandle},
+    core_thread::{ChannelCoreThreadDispatcher, CoreThreadHandle},
     dag_state::DagState,
-    error::{ConsensusError, ConsensusResult},
+    leader_schedule::{LeaderSchedule, LeaderSwapTable},
     leader_timeout::{LeaderTimeoutTask, LeaderTimeoutTaskHandle},
     metrics::initialise_metrics,
-    network::{anemo_network::AnemoManager, NetworkManager, NetworkService},
+    network::{
+        anemo_network::AnemoManager, tonic_network::TonicManager, NetworkClient as _,
+        NetworkManager,
+    },
     storage::rocksdb_store::RocksDBStore,
+    subscriber::Subscriber,
     synchronizer::{Synchronizer, SynchronizerHandle},
     transaction::{TransactionClient, TransactionConsumer, TransactionVerifier},
     CommitConsumer,
 };
 
-// This type is used by Sui as part of starting consensus via MysticetiManager.
-// It hides the details of the types.
-pub struct ConsensusAuthority(AuthorityNode<AnemoManager>);
+/// ConsensusAuthority is used by Sui to manage the lifetime of AuthorityNode.
+/// It hides the details of the implementation from the caller, MysticetiManager.
+#[allow(private_interfaces)]
+pub enum ConsensusAuthority {
+    WithAnemo(AuthorityNode<AnemoManager>),
+    WithTonic(AuthorityNode<TonicManager>),
+}
 
 impl ConsensusAuthority {
     pub async fn start(
+        network_type: ConsensusNetwork,
         own_index: AuthorityIndex,
         committee: Committee,
         parameters: Parameters,
@@ -52,27 +55,60 @@ impl ConsensusAuthority {
         commit_consumer: CommitConsumer,
         registry: Registry,
     ) -> Self {
-        let authority_node = AuthorityNode::start(
-            own_index,
-            committee,
-            parameters,
-            protocol_config,
-            protocol_keypair,
-            network_keypair,
-            transaction_verifier,
-            commit_consumer,
-            registry,
-        )
-        .await;
-        Self(authority_node)
+        match network_type {
+            ConsensusNetwork::Anemo => {
+                let authority = AuthorityNode::start(
+                    own_index,
+                    committee,
+                    parameters,
+                    protocol_config,
+                    protocol_keypair,
+                    network_keypair,
+                    transaction_verifier,
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                Self::WithAnemo(authority)
+            }
+            ConsensusNetwork::Tonic => {
+                let authority = AuthorityNode::start(
+                    own_index,
+                    committee,
+                    parameters,
+                    protocol_config,
+                    protocol_keypair,
+                    network_keypair,
+                    transaction_verifier,
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                Self::WithTonic(authority)
+            }
+        }
     }
 
     pub async fn stop(self) {
-        self.0.stop().await;
+        match self {
+            Self::WithAnemo(authority) => authority.stop().await,
+            Self::WithTonic(authority) => authority.stop().await,
+        }
     }
 
     pub fn transaction_client(&self) -> Arc<TransactionClient> {
-        self.0.transaction_client()
+        match self {
+            Self::WithAnemo(authority) => authority.transaction_client(),
+            Self::WithTonic(authority) => authority.transaction_client(),
+        }
+    }
+
+    #[cfg(test)]
+    fn context(&self) -> &Arc<Context> {
+        match self {
+            Self::WithAnemo(authority) => &authority.context,
+            Self::WithTonic(authority) => &authority.context,
+        }
     }
 }
 
@@ -84,9 +120,13 @@ where
     start_time: Instant,
     transaction_client: Arc<TransactionClient>,
     synchronizer: Arc<SynchronizerHandle>,
+    commit_syncer: CommitSyncer<N::Client>,
     leader_timeout_handle: LeaderTimeoutTaskHandle,
     core_thread_handle: CoreThreadHandle,
-    broadcaster: Broadcaster,
+    // Only one of broadcaster and subscriber gets created, depending on
+    // if streaming is supported.
+    broadcaster: Option<Broadcaster>,
+    subscriber: Option<Subscriber<N::Client, AuthorityService<ChannelCoreThreadDispatcher>>>,
     network_manager: N,
 }
 
@@ -118,22 +158,39 @@ where
             parameters,
             protocol_config,
             initialise_metrics(registry),
+            Arc::new(Clock::new()),
         ));
         let start_time = Instant::now();
 
         let (tx_client, tx_receiver) = TransactionClient::new(context.clone());
         let tx_consumer = TransactionConsumer::new(tx_receiver, context.clone(), None);
 
-        let (core_signals, signals_receivers) = CoreSignals::new();
+        let (core_signals, signals_receivers) = CoreSignals::new(context.clone());
 
-        let mut network_manager = N::new(context.clone());
+        let mut network_manager = N::new(context.clone(), network_keypair);
         let network_client = network_manager.client();
 
-        // REQUIRED: Broadcaster must be created before Core, to start listen on block broadcasts.
-        let broadcaster =
-            Broadcaster::new(context.clone(), network_client.clone(), &signals_receivers);
+        // REQUIRED: Broadcaster must be created before Core, to start listening on the
+        // broadcast channel in order to not miss blocks and cause test failures.
+        let broadcaster = if N::Client::SUPPORT_STREAMING {
+            None
+        } else {
+            Some(Broadcaster::new(
+                context.clone(),
+                network_client.clone(),
+                &signals_receivers,
+            ))
+        };
 
-        let store = Arc::new(RocksDBStore::new(&context.parameters.db_path_str_unsafe()));
+        let store_path = context
+            .parameters
+            .db_path
+            .as_ref()
+            .expect("DB path is not set")
+            .as_path()
+            .to_str()
+            .unwrap();
+        let store = Arc::new(RocksDBStore::new(store_path));
         let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
 
         let block_verifier = Arc::new(SignedBlockVerifier::new(
@@ -144,11 +201,32 @@ where
         let block_manager =
             BlockManager::new(context.clone(), dag_state.clone(), block_verifier.clone());
 
-        let commit_observer =
-            CommitObserver::new(context.clone(), commit_consumer, dag_state.clone(), store);
+        let leader_schedule = if context
+            .protocol_config
+            .mysticeti_leader_scoring_and_schedule()
+        {
+            Arc::new(LeaderSchedule::from_store(
+                context.clone(),
+                dag_state.clone(),
+            ))
+        } else {
+            Arc::new(LeaderSchedule::new(
+                context.clone(),
+                LeaderSwapTable::default(),
+            ))
+        };
+
+        let commit_observer = CommitObserver::new(
+            context.clone(),
+            commit_consumer,
+            dag_state.clone(),
+            store.clone(),
+            leader_schedule.clone(),
+        );
 
         let core = Core::new(
             context.clone(),
+            leader_schedule,
             tx_consumer,
             block_manager,
             commit_observer,
@@ -164,31 +242,63 @@ where
             LeaderTimeoutTask::start(core_dispatcher.clone(), &signals_receivers, context.clone());
 
         let synchronizer = Synchronizer::start(
-            network_client,
+            network_client.clone(),
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            dag_state.clone(),
         );
 
-        let network_service = Arc::new(AuthorityService {
-            context: context.clone(),
+        let commit_vote_monitor = Arc::new(CommitVoteMonitor::new(context.clone()));
+        let commit_syncer = CommitSyncer::new(
+            context.clone(),
+            core_dispatcher.clone(),
+            commit_vote_monitor.clone(),
+            network_client.clone(),
+            block_verifier.clone(),
+            dag_state.clone(),
+        );
+
+        let network_service = Arc::new(AuthorityService::new(
+            context.clone(),
             block_verifier,
+            commit_vote_monitor,
+            synchronizer.clone(),
             core_dispatcher,
-            synchronizer: synchronizer.clone(),
-            dag_state,
-        });
-        network_manager
-            .install_service(network_keypair, network_service)
-            .await;
+            signals_receivers.block_broadcast_receiver(),
+            dag_state.clone(),
+            store,
+        ));
+
+        let subscriber = if N::Client::SUPPORT_STREAMING {
+            let s = Subscriber::new(
+                context.clone(),
+                network_client,
+                network_service.clone(),
+                dag_state,
+            );
+            for (peer, _) in context.committee.authorities() {
+                if peer != context.own_index {
+                    s.subscribe(peer);
+                }
+            }
+            Some(s)
+        } else {
+            None
+        };
+
+        network_manager.install_service(network_service).await;
 
         Self {
             context,
             start_time,
             transaction_client: Arc::new(tx_client),
             synchronizer,
+            commit_syncer,
             leader_timeout_handle,
             core_thread_handle,
             broadcaster,
+            subscriber,
             network_manager,
         }
     }
@@ -199,11 +309,21 @@ where
             self.start_time.elapsed()
         );
 
-        self.network_manager.stop().await;
-        self.broadcaster.stop();
-        self.core_thread_handle.stop().await;
-        self.leader_timeout_handle.stop().await;
+        // First shutdown components calling into Core.
         self.synchronizer.stop().await;
+        self.commit_syncer.stop().await;
+        self.leader_timeout_handle.stop().await;
+        // Shutdown Core to stop block productions and broadcast.
+        // When using streaming, all subscribers to broadcasted blocks stop after this.
+        self.core_thread_handle.stop().await;
+        if let Some(mut broadcaster) = self.broadcaster.take() {
+            broadcaster.stop();
+        }
+        // Stop outgoing long lived streams before stopping network server.
+        if let Some(subscriber) = self.subscriber.take() {
+            subscriber.stop();
+        }
+        self.network_manager.stop().await;
 
         self.context
             .metrics
@@ -217,155 +337,35 @@ where
     }
 }
 
-/// Authority's network interface.
-pub(crate) struct AuthorityService<C: CoreThreadDispatcher> {
-    context: Arc<Context>,
-    block_verifier: Arc<dyn BlockVerifier>,
-    core_dispatcher: Arc<C>,
-    synchronizer: Arc<SynchronizerHandle>,
-    dag_state: Arc<RwLock<DagState>>,
-}
-
-#[async_trait]
-impl<C: CoreThreadDispatcher> NetworkService for AuthorityService<C> {
-    async fn handle_send_block(
-        &self,
-        peer: AuthorityIndex,
-        serialized_block: Bytes,
-    ) -> ConsensusResult<()> {
-        // TODO: dedup block verifications, here and with fetched blocks.
-        let signed_block: SignedBlock =
-            bcs::from_bytes(&serialized_block).map_err(ConsensusError::MalformedBlock)?;
-
-        // Reject blocks not produced by the peer.
-        if peer != signed_block.author() {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
-                .inc();
-            let e = ConsensusError::UnexpectedAuthority(signed_block.author(), peer);
-            info!("Block with wrong authority from {}: {}", peer, e);
-            return Err(e);
-        }
-
-        // Reject blocks failing validations.
-        if let Err(e) = self.block_verifier.verify(&signed_block) {
-            self.context
-                .metrics
-                .node_metrics
-                .invalid_blocks
-                .with_label_values(&[&peer.to_string(), "send_block"])
-                .inc();
-            info!("Invalid block from {}: {}", peer, e);
-            return Err(e);
-        }
-        let verified_block = VerifiedBlock::new_verified(signed_block, serialized_block);
-
-        // Reject block with timestamp too far in the future.
-        let forward_time_drift = Duration::from_millis(
-            verified_block
-                .timestamp_ms()
-                .saturating_sub(timestamp_utc_ms()),
-        );
-        if forward_time_drift > self.context.parameters.max_forward_time_drift {
-            return Err(ConsensusError::BlockTooFarInFuture {
-                block_timestamp: verified_block.timestamp_ms(),
-                forward_time_drift,
-            });
-        }
-
-        // Wait until the block's timestamp is current.
-        if forward_time_drift > Duration::ZERO {
-            self.context
-                .metrics
-                .node_metrics
-                .block_timestamp_drift_wait_ms
-                .with_label_values(&[&peer.to_string()])
-                .inc_by(forward_time_drift.as_millis() as u64);
-            sleep(forward_time_drift).await;
-        }
-
-        let missing_ancestors = self
-            .core_dispatcher
-            .add_blocks(vec![verified_block])
-            .await
-            .map_err(|_| ConsensusError::Shutdown)?;
-
-        if !missing_ancestors.is_empty() {
-            // schedule the fetching of them from this peer
-            if let Err(err) = self
-                .synchronizer
-                .fetch_blocks(missing_ancestors, peer)
-                .await
-            {
-                warn!("Errored while trying to fetch missing ancestors via synchronizer: {err}");
-            }
-        }
-
-        Ok(())
-    }
-
-    async fn handle_fetch_blocks(
-        &self,
-        peer: AuthorityIndex,
-        block_refs: Vec<BlockRef>,
-    ) -> ConsensusResult<Vec<Bytes>> {
-        const MAX_ALLOWED_FETCH_BLOCKS: usize = 200;
-
-        if block_refs.len() > MAX_ALLOWED_FETCH_BLOCKS {
-            return Err(ConsensusError::TooManyFetchBlocksRequested(peer));
-        }
-
-        // Some quick validation of the requested block refs
-        for block in &block_refs {
-            if !self.context.committee.is_valid_index(block.author) {
-                return Err(ConsensusError::InvalidAuthorityIndex {
-                    index: block.author,
-                    max: self.context.committee.size(),
-                });
-            }
-            if block.round == 0 {
-                return Err(ConsensusError::UnexpectedGenesisBlockRequested);
-            }
-        }
-
-        // For now ask dag state directly
-        let blocks = self.dag_state.read().get_blocks(&block_refs);
-
-        // Return the serialised blocks
-        let result = blocks
-            .into_iter()
-            .flatten()
-            .map(|block| block.serialized().clone())
-            .collect::<Vec<_>>();
-
-        Ok(result)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{collections::BTreeSet, sync::Arc};
+    #![allow(non_snake_case)]
+
+    use std::{collections::BTreeSet, sync::Arc, time::Duration};
 
     use async_trait::async_trait;
+    use bytes::Bytes;
     use consensus_config::{local_committee_and_keys, Parameters};
-    use fastcrypto::traits::KeyPair;
     use parking_lot::Mutex;
     use prometheus::Registry;
+    use rstest::rstest;
     use sui_protocol_config::ProtocolConfig;
     use tempfile::TempDir;
-    use tokio::{sync::mpsc::unbounded_channel, time::sleep};
+    use tokio::{
+        sync::{broadcast, mpsc::unbounded_channel},
+        time::sleep,
+    };
+    use typed_store::DBMetrics;
 
     use super::*;
     use crate::{
         authority_node::AuthorityService,
-        block::{timestamp_utc_ms, BlockRef, Round, TestBlock, VerifiedBlock},
+        block::{BlockAPI as _, BlockRef, Round, TestBlock, VerifiedBlock},
         block_verifier::NoopBlockVerifier,
         context::Context,
         core_thread::{CoreError, CoreThreadDispatcher},
-        network::NetworkClient,
+        error::ConsensusResult,
+        network::{BlockStream, NetworkClient, NetworkService as _},
         storage::mem_store::MemStore,
         transaction::NoopTransactionVerifier,
     };
@@ -397,12 +397,12 @@ mod tests {
             Ok(block_refs)
         }
 
-        async fn force_new_block(&self, _round: Round) -> Result<(), CoreError> {
-            unimplemented!()
+        async fn new_block(&self, _round: Round, _force: bool) -> Result<(), CoreError> {
+            Ok(())
         }
 
         async fn get_missing_blocks(&self) -> Result<BTreeSet<BlockRef>, CoreError> {
-            unimplemented!()
+            Ok(Default::default())
         }
     }
 
@@ -411,11 +411,23 @@ mod tests {
 
     #[async_trait]
     impl NetworkClient for FakeNetworkClient {
+        const SUPPORT_STREAMING: bool = false;
+
         async fn send_block(
             &self,
             _peer: AuthorityIndex,
-            _serialized_block: &Bytes,
+            _block: &VerifiedBlock,
+            _timeout: Duration,
         ) -> ConsensusResult<()> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn subscribe_blocks(
+            &self,
+            _peer: AuthorityIndex,
+            _last_received: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<BlockStream> {
             unimplemented!("Unimplemented")
         }
 
@@ -423,13 +435,28 @@ mod tests {
             &self,
             _peer: AuthorityIndex,
             _block_refs: Vec<BlockRef>,
+            _highest_accepted_rounds: Vec<Round>,
+            _timeout: Duration,
         ) -> ConsensusResult<Vec<Bytes>> {
+            unimplemented!("Unimplemented")
+        }
+
+        async fn fetch_commits(
+            &self,
+            _peer: AuthorityIndex,
+            _start: Round,
+            _end: Round,
+            _timeout: Duration,
+        ) -> ConsensusResult<(Vec<Bytes>, Vec<Bytes>)> {
             unimplemented!("Unimplemented")
         }
     }
 
+    #[rstest]
     #[tokio::test]
-    async fn test_authority_start_and_stop() {
+    async fn test_authority_start_and_stop(
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+    ) {
         let (committee, keypairs) = local_committee_and_keys(0, vec![1]);
         let registry = Registry::new();
 
@@ -441,13 +468,14 @@ mod tests {
         let txn_verifier = NoopTransactionVerifier {};
 
         let own_index = committee.to_authority_index(0).unwrap();
-        let protocol_keypair = keypairs[own_index].1.copy();
-        let network_keypair = keypairs[own_index].0.copy();
+        let protocol_keypair = keypairs[own_index].1.clone();
+        let network_keypair = keypairs[own_index].0.clone();
 
         let (sender, _receiver) = unbounded_channel();
         let commit_consumer = CommitConsumer::new(sender, 0, 0);
 
         let authority = ConsensusAuthority::start(
+            network_type,
             own_index,
             committee,
             parameters,
@@ -460,9 +488,9 @@ mod tests {
         )
         .await;
 
-        assert_eq!(authority.0.context.own_index, own_index);
-        assert_eq!(authority.0.context.committee.epoch(), 0);
-        assert_eq!(authority.0.context.committee.size(), 1);
+        assert_eq!(authority.context().own_index, own_index);
+        assert_eq!(authority.context().committee.epoch(), 0);
+        assert_eq!(authority.context().committee.size(), 1);
 
         authority.stop().await;
     }
@@ -473,25 +501,30 @@ mod tests {
         let context = Arc::new(context);
         let block_verifier = Arc::new(NoopBlockVerifier {});
         let core_dispatcher = Arc::new(FakeCoreThreadDispatcher::new());
+        let (_tx_block_broadcast, rx_block_broadcast) = broadcast::channel(100);
         let network_client = Arc::new(FakeNetworkClient::default());
         let store = Arc::new(MemStore::new());
-        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store)));
+        let dag_state = Arc::new(RwLock::new(DagState::new(context.clone(), store.clone())));
         let synchronizer = Synchronizer::start(
             network_client,
             context.clone(),
             core_dispatcher.clone(),
             block_verifier.clone(),
+            dag_state.clone(),
         );
-        let authority_service = Arc::new(AuthorityService {
-            context: context.clone(),
+        let authority_service = Arc::new(AuthorityService::new(
+            context.clone(),
             block_verifier,
-            core_dispatcher: core_dispatcher.clone(),
+            Arc::new(CommitVoteMonitor::new(context.clone())),
             synchronizer,
+            core_dispatcher.clone(),
+            rx_block_broadcast,
             dag_state,
-        });
+            store,
+        ));
 
         // Test delaying blocks with time drift.
-        let now = timestamp_utc_ms();
+        let now = context.clock.timestamp_utc_ms();
         let max_drift = context.parameters.max_forward_time_drift;
         let input_block = VerifiedBlock::new_for_test(
             TestBlock::new(9, 0)
@@ -518,40 +551,61 @@ mod tests {
     }
 
     // TODO: build AuthorityFixture.
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
-    async fn test_authority_committee() {
+    #[rstest]
+    #[tokio::test(flavor = "current_thread")]
+    async fn test_authority_committee(
+        #[values(ConsensusNetwork::Anemo, ConsensusNetwork::Tonic)] network_type: ConsensusNetwork,
+    ) {
+        let db_registry = Registry::new();
+        DBMetrics::init(&db_registry);
+
         let (committee, keypairs) = local_committee_and_keys(0, vec![1, 1, 1, 1]);
+        let temp_dirs = (0..4).map(|_| TempDir::new().unwrap()).collect::<Vec<_>>();
+
         let mut output_receivers = vec![];
         let mut authorities = vec![];
-        for (index, _authority_info) in committee.authorities() {
+
+        let make_authority = |index: AuthorityIndex| {
+            let committee = committee.clone();
             let registry = Registry::new();
 
-            let temp_dir = TempDir::new().unwrap();
+            // Cache less blocks to exercise commit sync.
             let parameters = Parameters {
-                db_path: Some(temp_dir.into_path()),
+                db_path: Some(temp_dirs[index.value()].path().to_path_buf()),
+                dag_state_cached_rounds: 5,
+                commit_sync_parallel_fetches: 3,
+                commit_sync_batch_size: 3,
                 ..Default::default()
             };
             let txn_verifier = NoopTransactionVerifier {};
 
-            let protocol_keypair = keypairs[index].1.copy();
-            let network_keypair = keypairs[index].0.copy();
+            let protocol_keypair = keypairs[index].1.clone();
+            let network_keypair = keypairs[index].0.clone();
 
             let (sender, receiver) = unbounded_channel();
             let commit_consumer = CommitConsumer::new(sender, 0, 0);
-            output_receivers.push(receiver);
 
-            let authority = ConsensusAuthority::start(
-                index,
-                committee.clone(),
-                parameters,
-                ProtocolConfig::get_for_max_version_UNSAFE(),
-                protocol_keypair,
-                network_keypair,
-                Arc::new(txn_verifier),
-                commit_consumer,
-                registry,
-            )
-            .await;
+            async move {
+                let authority = ConsensusAuthority::start(
+                    network_type,
+                    index,
+                    committee,
+                    parameters,
+                    ProtocolConfig::get_for_max_version_UNSAFE(),
+                    protocol_keypair,
+                    network_keypair,
+                    Arc::new(txn_verifier),
+                    commit_consumer,
+                    registry,
+                )
+                .await;
+                (authority, receiver)
+            }
+        };
+
+        for (index, _authority_info) in committee.authorities() {
+            let (authority, receiver) = make_authority(index).await;
+            output_receivers.push(receiver);
             authorities.push(authority);
         }
 
@@ -562,12 +616,12 @@ mod tests {
             submitted_transactions.insert(txn.clone());
             authorities[i as usize % authorities.len()]
                 .transaction_client()
-                .submit(txn)
+                .submit(vec![txn])
                 .await
                 .unwrap();
         }
 
-        for mut receiver in output_receivers {
+        for receiver in &mut output_receivers {
             let mut expected_transactions = submitted_transactions.clone();
             loop {
                 let committed_subdag =
@@ -584,12 +638,25 @@ mod tests {
                         );
                     }
                 }
+                assert_eq!(committed_subdag.reputation_scores_desc, vec![]);
                 if expected_transactions.is_empty() {
                     break;
                 }
             }
         }
 
+        // Stop authority 1.
+        let index = committee.to_authority_index(1).unwrap();
+        authorities.remove(index.value()).stop().await;
+        sleep(Duration::from_secs(15)).await;
+
+        // Restart authority 1 and let it run.
+        let (authority, receiver) = make_authority(index).await;
+        output_receivers[index] = receiver;
+        authorities.insert(index.value(), authority);
+        sleep(Duration::from_secs(15)).await;
+
+        // Stop all authorities and exit.
         for authority in authorities {
             authority.stop().await;
         }

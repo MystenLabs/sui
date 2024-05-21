@@ -6,7 +6,7 @@ Running Move unit tests
 [ PASS    ] 0x42::m::nop
 Test result: OK. Total tests: 2; passed: 2; failed: 0
 warning[W09002]: unused variable
-  ┌─ sources/m.move:2:16
+  ┌─ ./sources/m.move:2:16
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'
@@ -31,7 +31,7 @@ Command `test --warnings-are-errors`:
 INCLUDING DEPENDENCY MoveStdlib
 BUILDING Test
 error[E09002]: unused variable
-  ┌─ sources/m.move:2:16
+  ┌─ ./sources/m.move:2:16
   │
 2 │ public fun foo(x: u64): u64 {
   │                ^ Unused parameter 'x'. Consider removing or prefixing with an underscore: '_x'

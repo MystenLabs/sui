@@ -13,8 +13,6 @@ use std::{collections::BTreeMap, path::PathBuf};
 mod tests;
 pub mod utils;
 
-pub mod natives;
-
 const MODULES_DIR: &str = "sources";
 const NURSERY_DIR: &str = "nursery";
 const DOCS_DIR: &str = "docs";

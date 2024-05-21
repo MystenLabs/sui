@@ -32,8 +32,8 @@ module sui::math {
     }
 
     /// Return the value of a base raised to a power
-    public fun pow(base: u64, exponent: u8): u64 {
-        let res = 1;
+    public fun pow(mut base: u64, mut exponent: u8): u64 {
+        let mut res = 1;
         while (exponent >= 1) {
             if (exponent % 2 == 0) {
                 base = base * base;
@@ -73,9 +73,9 @@ module sui::math {
     /// math::sqrt(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
     /// ```
     public fun sqrt(x: u64): u64 {
-        let bit = 1u128 << 64;
-        let res = 0u128;
-        let x = (x as u128);
+        let mut bit = 1u128 << 64;
+        let mut res = 0u128;
+        let mut x = x as u128;
 
         while (bit != 0) {
             if (x >= res + bit) {
@@ -87,7 +87,7 @@ module sui::math {
             bit = bit >> 2;
         };
 
-        (res as u64)
+        res as u64
     }
 
     /// Similar to math::sqrt, but for u128 numbers. Get a nearest lower integer Square Root for `x`. Given that this
@@ -116,9 +116,9 @@ module sui::math {
     /// math::sqrt_u128(8 * 1000000) => 2828; // same as above, 2828 / 1000 (2.828)
     /// ```
     public fun sqrt_u128(x: u128): u128 {
-        let bit = 1u256 << 128;
-        let res = 0u256;
-        let x = (x as u256);
+        let mut bit = 1u256 << 128;
+        let mut res = 0u256;
+        let mut x = x as u256;
 
         while (bit != 0) {
             if (x >= res + bit) {
@@ -130,7 +130,7 @@ module sui::math {
             bit = bit >> 2;
         };
 
-        (res as u128)
+        res as u128
     }
 
     /// Calculate x / y, but round up the result.

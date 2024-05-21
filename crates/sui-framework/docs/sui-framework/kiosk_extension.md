@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::kiosk_extension`
 ---
@@ -258,9 +257,9 @@ permissions in the custom <code>add</code> call.
     permissions: u128,
     ctx: &<b>mut</b> TxContext
 ) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     df::add(
-        <a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">kiosk::uid_mut_as_owner</a>(self, cap),
+        self.uid_mut_as_owner(cap),
         <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {},
         <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
             storage: <a href="bag.md#0x2_bag_new">bag::new</a>(ctx),
@@ -297,7 +296,7 @@ The storage is still available to the extension (until it's removed).
     self: &<b>mut</b> Kiosk,
     cap: &KioskOwnerCap,
 ) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>false</b>;
 }
@@ -329,7 +328,7 @@ owner can disable them via <code>disable</code> call.
     self: &<b>mut</b> Kiosk,
     cap: &KioskOwnerCap,
 ) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext&gt;(self).is_enabled = <b>true</b>;
 }
@@ -359,16 +358,16 @@ the extension storage must be empty for the transaction to succeed.
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_remove">remove</a>&lt;Ext: drop&gt;(
     self: &<b>mut</b> Kiosk, cap: &KioskOwnerCap
 ) {
-    <b>assert</b>!(<a href="kiosk.md#0x2_kiosk_has_access">kiosk::has_access</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
+    <b>assert</b>!(self.has_access(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ENotOwner">ENotOwner</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
 
     <b>let</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
         storage,
         permissions: _,
         is_enabled: _,
-    } = df::remove(<a href="kiosk.md#0x2_kiosk_uid_mut_as_owner">kiosk::uid_mut_as_owner</a>(self, cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {});
+    } = df::remove(self.uid_mut_as_owner(cap), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {});
 
-    <a href="bag.md#0x2_bag_destroy_empty">bag::destroy_empty</a>(storage);
+    storage.destroy_empty();
 }
 </code></pre>
 
@@ -471,7 +470,7 @@ requires a <code>TransferPolicy</code> for the placed type to exist.
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_place">can_place</a>&lt;Ext&gt;(self) || <a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
 
-    <a href="kiosk.md#0x2_kiosk_place_internal">kiosk::place_internal</a>(self, item)
+    self.place_internal(item)
 }
 </code></pre>
 
@@ -502,7 +501,7 @@ authorized extension. The extension must have the <code>lock</code> permission.
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotInstalled">EExtensionNotInstalled</a>);
     <b>assert</b>!(<a href="kiosk_extension.md#0x2_kiosk_extension_can_lock">can_lock</a>&lt;Ext&gt;(self), <a href="kiosk_extension.md#0x2_kiosk_extension_EExtensionNotAllowed">EExtensionNotAllowed</a>);
 
-    <a href="kiosk.md#0x2_kiosk_lock_internal">kiosk::lock_internal</a>(self, item)
+    self.lock_internal(item)
 }
 </code></pre>
 
@@ -527,7 +526,7 @@ Check whether an extension of type <code>Ext</code> is installed.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_is_installed">is_installed</a>&lt;Ext: drop&gt;(self: &Kiosk): bool {
-    df::exists_(<a href="kiosk.md#0x2_kiosk_uid">kiosk::uid</a>(self), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+    df::exists_(self.uid(), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 
@@ -628,7 +627,7 @@ Internal: get a read-only access to the Extension.
 
 
 <pre><code><b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension">extension</a>&lt;Ext: drop&gt;(self: &Kiosk): &<a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
-    df::borrow(<a href="kiosk.md#0x2_kiosk_uid">kiosk::uid</a>(self), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+    df::borrow(self.uid(), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 
@@ -653,7 +652,7 @@ Internal: get a mutable access to the Extension.
 
 
 <pre><code><b>fun</b> <a href="kiosk_extension.md#0x2_kiosk_extension_extension_mut">extension_mut</a>&lt;Ext: drop&gt;(self: &<b>mut</b> Kiosk): &<b>mut</b> <a href="kiosk_extension.md#0x2_kiosk_extension_Extension">Extension</a> {
-    df::borrow_mut(<a href="kiosk.md#0x2_kiosk_uid_mut_internal">kiosk::uid_mut_internal</a>(self), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
+    df::borrow_mut(self.uid_mut_internal(), <a href="kiosk_extension.md#0x2_kiosk_extension_ExtensionKey">ExtensionKey</a>&lt;Ext&gt; {})
 }
 </code></pre>
 

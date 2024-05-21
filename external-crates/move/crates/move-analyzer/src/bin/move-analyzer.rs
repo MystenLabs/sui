@@ -25,6 +25,10 @@ use move_analyzer::{
 use url::Url;
 use vfs::{impls::memory::MemoryFS, VfsPath};
 
+const LINT_NONE: &str = "none";
+const LINT_DEFAULT: &str = "default";
+const LINT_ALL: &str = "all";
+
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Options {}
@@ -48,6 +52,9 @@ fn main() {
 
     let (connection, io_threads) = Connection::stdio();
     let symbols = Arc::new(Mutex::new(symbols::empty_symbols()));
+    let pkg_deps = Arc::new(Mutex::new(
+        BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
+    ));
     let ide_files_root: VfsPath = MemoryFS::new().into();
     let context = Context {
         connection,
@@ -93,7 +100,7 @@ fn main() {
             // characters, such as `::`. So when the language server encounters a completion
             // request, it checks whether completions are being requested for `foo:`, and returns no
             // completions in that case.)
-            trigger_characters: Some(vec![":".to_string(), ".".to_string()]),
+            trigger_characters: Some(vec![":".to_string(), ".".to_string(), "{".to_string()]),
             all_commit_characters: None,
             work_done_progress_options: WorkDoneProgressOptions {
                 work_done_progress: None,
@@ -118,22 +125,26 @@ fn main() {
 
         // determine if linting is on or off based on what the editor requested
         let lint = {
-            let lint_all = initialize_params
+            let lint_level = initialize_params
                 .initialization_options
                 .as_ref()
-                .and_then(|init_options| init_options.get("lintOpt"))
-                .and_then(serde_json::Value::as_bool)
-                .unwrap_or(false);
-            if lint_all {
+                .and_then(|init_options| init_options.get("lintLevel"))
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or(LINT_DEFAULT);
+            if lint_level == LINT_ALL {
                 LintLevel::All
-            } else {
+            } else if lint_level == LINT_NONE {
                 LintLevel::None
+            } else {
+                LintLevel::Default
             }
         };
+        eprintln!("linting level {:?}", lint);
 
         symbolicator_runner = symbols::SymbolicatorRunner::new(
             ide_files_root.clone(),
             symbols.clone(),
+            pkg_deps.clone(),
             diag_sender,
             lint,
         );
@@ -146,7 +157,7 @@ fn main() {
         if let Some(uri) = initialize_params.root_uri {
             if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
                 if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                    &mut BTreeMap::new(),
+                    Arc::new(Mutex::new(BTreeMap::new())),
                     ide_files_root.clone(),
                     p.as_path(),
                     lint,
@@ -205,8 +216,13 @@ fn main() {
                             },
                         }
                     },
-                    Err(error) =>
-                        eprintln!("symbolicator message error: {:?}", error),
+                    Err(error) => {
+                        eprintln!("symbolicator message error: {:?}", error);
+                        // if the analyzer crashes in a separate thread, this error will keep
+                        // getting generated for a while unless we explicitly end the process
+                        // obscuring the real logged reason for the crash
+                        std::process::exit(-1);
+                    }
                 }
             },
             recv(context.connection.receiver) -> message => {
@@ -216,7 +232,7 @@ fn main() {
                         // a chance of completing pending requests (but should not accept new requests
                         // either which is handled inside on_requst) - instead it quits after receiving
                         // the exit notification from the client, which is handled below
-                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), shutdown_req_received);
+                        shutdown_req_received = on_request(&context, &request, ide_files_root.clone(), pkg_deps.clone(), shutdown_req_received);
                     }
                     Ok(Message::Response(response)) => on_response(&context, &response),
                     Ok(Message::Notification(notification)) => {
@@ -249,6 +265,7 @@ fn on_request(
     context: &Context,
     request: &Request,
     ide_files_root: VfsPath,
+    pkg_dependencies: Arc<Mutex<BTreeMap<PathBuf, symbols::PrecompiledPkgDeps>>>,
     shutdown_request_received: bool,
 ) -> bool {
     if shutdown_request_received {
@@ -267,12 +284,9 @@ fn on_request(
         return true;
     }
     match request.method.as_str() {
-        lsp_types::request::Completion::METHOD => on_completion_request(
-            context,
-            request,
-            ide_files_root.clone(),
-            &context.symbols.lock().unwrap(),
-        ),
+        lsp_types::request::Completion::METHOD => {
+            on_completion_request(context, request, ide_files_root.clone(), pkg_dependencies)
+        }
         lsp_types::request::GotoDefinition::METHOD => {
             symbols::on_go_to_def_request(context, request, &context.symbols.lock().unwrap());
         }

@@ -7,8 +7,6 @@
 
 //# publish
 module Test::M {
-    use sui::tx_context::TxContext;
-
     public(package) fun t2(_: &mut TxContext) {
         abort 0
     }

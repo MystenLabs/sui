@@ -15,7 +15,7 @@ module std::fixed_point32 {
     /// floating-point has less than 16 decimal digits of precision, so
     /// be careful about using floating-point to convert these values to
     /// decimal.
-    struct FixedPoint32 has copy, drop, store { value: u64 }
+    public struct FixedPoint32 has copy, drop, store { value: u64 }
 
     ///> TODO: This is a basic constant and should be provided somewhere centrally in the framework.
     const MAX_U64: u128 = 18446744073709551615;
@@ -38,13 +38,13 @@ module std::fixed_point32 {
         // The product of two 64 bit values has 128 bits, so perform the
         // multiplication with u128 types and keep the full 128 bit product
         // to avoid losing accuracy.
-        let unscaled_product = (val as u128) * (multiplier.value as u128);
+        let unscaled_product = val as u128 * (multiplier.value as u128);
         // The unscaled product has 32 fractional bits (from the multiplier)
         // so rescale it by shifting away the low bits.
         let product = unscaled_product >> 32;
         // Check whether the value is too large.
         assert!(product <= MAX_U64, EMULTIPLICATION);
-        (product as u64)
+        product as u64
     }
 
     /// Divide a u64 integer by a fixed-point number, truncating any
@@ -55,13 +55,13 @@ module std::fixed_point32 {
         assert!(divisor.value != 0, EDIVISION_BY_ZERO);
         // First convert to 128 bits and then shift left to
         // add 32 fractional zero bits to the dividend.
-        let scaled_value = (val as u128) << 32;
+        let scaled_value = val as u128 << 32;
         let quotient = scaled_value / (divisor.value as u128);
         // Check whether the value is too large.
         assert!(quotient <= MAX_U64, EDIVISION);
         // the value may be too large, which will cause the cast to fail
         // with an arithmetic error.
-        (quotient as u64)
+        quotient as u64
     }
 
     /// Create a fixed-point value from a rational number specified by its
@@ -79,15 +79,15 @@ module std::fixed_point32 {
         // Scale the numerator to have 64 fractional bits and the denominator
         // to have 32 fractional bits, so that the quotient will have 32
         // fractional bits.
-        let scaled_numerator = (numerator as u128) << 64;
-        let scaled_denominator = (denominator as u128) << 32;
+        let scaled_numerator = numerator as u128 << 64;
+        let scaled_denominator = denominator as u128 << 32;
         assert!(scaled_denominator != 0, EDENOMINATOR);
         let quotient = scaled_numerator / scaled_denominator;
         assert!(quotient != 0 || numerator == 0, ERATIO_OUT_OF_RANGE);
         // Return the quotient as a fixed-point number. We first need to check whether the cast
         // can succeed.
         assert!(quotient <= MAX_U64, ERATIO_OUT_OF_RANGE);
-        FixedPoint32 { value: (quotient as u64) }
+        FixedPoint32 { value: quotient as u64 }
     }
 
     /// Create a fixedpoint value from a raw value.

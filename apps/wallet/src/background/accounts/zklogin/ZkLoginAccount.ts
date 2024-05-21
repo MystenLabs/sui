@@ -222,6 +222,7 @@ export class ZkLoginAccount
 				BigInt(randomness),
 				maxEpoch,
 				keyPair.getPublicKey(),
+				activeNetwork,
 			);
 			credentialsData.proofs = proofs;
 			// store the proofs to avoid creating them again
@@ -295,6 +296,7 @@ export class ZkLoginAccount
 		randomness: bigint,
 		maxEpoch: number,
 		ephemeralPublicKey: PublicKey,
+		network: NetworkEnvType,
 	) {
 		const { salt: obfuscatedSalt, claimName } = await this.getStoredData();
 		const salt = await deobfuscate<string>(obfuscatedSalt);
@@ -305,6 +307,7 @@ export class ZkLoginAccount
 			jwtRandomness: randomness,
 			keyClaimName: claimName,
 			maxEpoch,
+			network,
 		});
 	}
 }

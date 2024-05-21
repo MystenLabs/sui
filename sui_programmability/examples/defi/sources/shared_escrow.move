@@ -3,14 +3,8 @@
 
 /// An escrow for atomic swap of objects without a trusted third party
 module defi::shared_escrow {
-    use std::option::{Self, Option};
-
-    use sui::object::{Self, ID, UID};
-    use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
-
     /// An object held in escrow
-    struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
+    public struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
         id: UID,
         /// owner of the escrowed object
         creator: address,
@@ -39,7 +33,7 @@ module defi::shared_escrow {
         escrowed_item: T,
         ctx: &mut TxContext
     ) {
-        let creator = tx_context::sender(ctx);
+        let creator = ctx.sender();
         let id = object::new(ctx);
         let escrowed = option::some(escrowed_item);
         transfer::public_share_object(
@@ -57,10 +51,10 @@ module defi::shared_escrow {
     ) {
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         let escrowed_item = option::extract<T>(&mut escrow.escrowed);
-        assert!(&tx_context::sender(ctx) == &escrow.recipient, EWrongRecipient);
+        assert!(&ctx.sender() == &escrow.recipient, EWrongRecipient);
         assert!(object::borrow_id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
-        transfer::public_transfer(escrowed_item, tx_context::sender(ctx));
+        transfer::public_transfer(escrowed_item, ctx.sender());
         transfer::public_transfer(obj, escrow.creator);
     }
 
@@ -69,7 +63,7 @@ module defi::shared_escrow {
         escrow: &mut EscrowedObj<T, ExchangeForT>,
         ctx: &TxContext
     ) {
-        assert!(&tx_context::sender(ctx) == &escrow.creator, EWrongOwner);
+        assert!(&ctx.sender() == &escrow.creator, EWrongOwner);
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         transfer::public_transfer(option::extract<T>(&mut escrow.escrowed), escrow.creator);
     }

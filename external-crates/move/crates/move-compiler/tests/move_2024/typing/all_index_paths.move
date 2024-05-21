@@ -8,10 +8,12 @@ module std::vector {
 }
 
 module a::m {
-    use std::vector;
+
 
     fun id_w(w: W): W { w }
     fun id(x: X): X { x }
+    fun vec_id<T>(v: vector<T>): vector<T> { v }
+    use fun vec_id as vector.id;
 
     fun ref_unused(_x: &X) { }
 
@@ -62,6 +64,7 @@ module a::m {
         copy t.u.vs[n].w.xs[m+1].deref().id();
         copy VEC[n+1];
         copy VEC[n+1].id_u64();
+        copy VEC.id();
     }
 
     fun all_index_move(t: T, t2: T, n: u64, m: u64) {
@@ -84,6 +87,7 @@ module a::m {
         (move t2.u).vs[2].w.xs[m+1];
         (move t2.u).vs[2].w.xs[m+1].y;
         (move t2.u).vs[2].w.xs[m+1].y.z;
+        move VEC.id();
     }
 
     fun all_index_borrow(t: T, t2: T, n: u64, m: u64) {
@@ -103,6 +107,7 @@ module a::m {
         &(&t2.u.vs[2].w.xs[m+1]).deref();
         &VEC[n+1];
         &VEC[n+1].id();
+        &VEC.id();
     }
 
     fun all_index_borrow_mut(mut t: T, mut t2: T, n: u64, m: u64) {
@@ -122,6 +127,7 @@ module a::m {
         (&mut t2.u.vs[2].w).xs[m+1].deref();
         &mut VEC[n+1];
         &mut VEC[n+1].id();
+        &mut VEC.id();
     }
 
     fun all_index_use(t: T, t2: T, n: u64, m: u64) {
@@ -138,5 +144,6 @@ module a::m {
         t2.u.vs[2].w.xs[m+1].id();
         VEC[n+1];
         VEC[n+1].id();
+        VEC.id();
     }
 }

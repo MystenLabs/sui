@@ -127,7 +127,7 @@ async function buildImportDirectories({ exports, sideEffects }: PackageJSON) {
 	const ignoredWorkspaces = [];
 
 	for (const [exportName, exportMap] of Object.entries(exports)) {
-		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+$/)) {
+		if (typeof exportMap !== 'object' || !exportName.match(/^\.\/[\w\-_/]+/)) {
 			continue;
 		}
 

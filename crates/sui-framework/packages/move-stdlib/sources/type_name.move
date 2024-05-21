@@ -6,7 +6,6 @@
 module std::type_name {
     use std::ascii::{Self, String};
     use std::address;
-    use std::vector;
 
     /// ASCII Character code for the `:` (colon) symbol.
     const ASCII_COLON: u8 = 58;
@@ -27,7 +26,7 @@ module std::type_name {
     /// The type is not from a package/module. It is a primitive type.
     const ENonModuleType: u64 = 0;
 
-    struct TypeName has copy, drop, store {
+    public struct TypeName has copy, drop, store {
         /// String representation of the type. All types are represented
         /// using their source syntax:
         /// "u8", "u64", "bool", "address", "vector", and so on for primitive types.
@@ -54,7 +53,7 @@ module std::type_name {
     /// Returns true iff the TypeName represents a primitive type, i.e. one of
     /// u8, u16, u32, u64, u128, u256, bool, address, vector.
     public fun is_primitive(self: &TypeName): bool {
-        let bytes = ascii::as_bytes(&self.name);
+        let bytes = self.name.as_bytes();
         bytes == &b"bool" ||
         bytes == &b"u8" ||
         bytes == &b"u16" ||
@@ -63,13 +62,13 @@ module std::type_name {
         bytes == &b"u128" ||
         bytes == &b"u256" ||
         bytes == &b"address" ||
-        (vector::length(bytes) >= 6 &&
-        *vector::borrow(bytes, 0) == ASCII_V &&
-        *vector::borrow(bytes, 1) == ASCII_E &&
-        *vector::borrow(bytes, 2) == ASCII_C &&
-        *vector::borrow(bytes, 3) == ASCII_T &&
-        *vector::borrow(bytes, 4) == ASCII_O &&
-        *vector::borrow(bytes, 5) == ASCII_R)
+        (bytes.length() >= 6 &&
+         bytes[0] == ASCII_V &&
+         bytes[1] == ASCII_E &&
+         bytes[2] == ASCII_C &&
+         bytes[3] == ASCII_T &&
+         bytes[4] == ASCII_O &&
+         bytes[5] == ASCII_R)
 
     }
 
@@ -81,20 +80,17 @@ module std::type_name {
     /// Get Address string (Base16 encoded), first part of the TypeName.
     /// Aborts if given a primitive type.
     public fun get_address(self: &TypeName): String {
-        assert!(!is_primitive(self), ENonModuleType);
+        assert!(!self.is_primitive(), ENonModuleType);
 
         // Base16 (string) representation of an address has 2 symbols per byte.
         let len = address::length() * 2;
-        let str_bytes = ascii::as_bytes(&self.name);
-        let addr_bytes = vector[];
-        let i = 0;
+        let str_bytes = self.name.as_bytes();
+        let mut addr_bytes = vector[];
+        let mut i = 0;
 
         // Read `len` bytes from the type name and push them to addr_bytes.
         while (i < len) {
-            vector::push_back(
-                &mut addr_bytes,
-                *vector::borrow(str_bytes, i)
-            );
+            addr_bytes.push_back(str_bytes[i]);
             i = i + 1;
         };
 
@@ -104,17 +100,17 @@ module std::type_name {
     /// Get name of the module.
     /// Aborts if given a primitive type.
     public fun get_module(self: &TypeName): String {
-        assert!(!is_primitive(self), ENonModuleType);
+        assert!(!self.is_primitive(), ENonModuleType);
 
         // Starts after address and a double colon: `<addr as HEX>::`
-        let i = address::length() * 2 + 2;
-        let str_bytes = ascii::as_bytes(&self.name);
-        let module_name = vector[];
+        let mut i = address::length() * 2 + 2;
+        let str_bytes = self.name.as_bytes();
+        let mut module_name = vector[];
 
         loop {
-            let char = vector::borrow(str_bytes, i);
+            let char = &str_bytes[i];
             if (char != &ASCII_COLON) {
-                vector::push_back(&mut module_name, *char);
+                module_name.push_back(*char);
                 i = i + 1;
             } else {
                 break

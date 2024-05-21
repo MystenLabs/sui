@@ -26,7 +26,9 @@ const MIGRATION_EXT: &str = "migration";
 
 const LINTER_DIR: &str = "linter";
 const SUI_MODE_DIR: &str = "sui_mode";
+const IDE_MODE_DIR: &str = "ide_mode";
 const MOVE_2024_DIR: &str = "move_2024";
+const DEV_DIR: &str = "development";
 
 fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddress> {
     let mut mapping = vec![
@@ -50,14 +52,18 @@ fn default_testing_addresses(flavor: Flavor) -> BTreeMap<String, NumericalAddres
 }
 
 fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
-    let lint = path.components().any(|c| c.as_os_str() == LINTER_DIR);
-    let flavor = if path.components().any(|c| c.as_os_str() == SUI_MODE_DIR) {
+    let path_contains = |s| path.components().any(|c| c.as_os_str() == s);
+    let lint = path_contains(LINTER_DIR);
+    let ide_mode = path_contains(IDE_MODE_DIR);
+    let flavor = if path_contains(SUI_MODE_DIR) {
         Flavor::Sui
     } else {
         Flavor::default()
     };
-    let edition = if path.components().any(|c| c.as_os_str() == MOVE_2024_DIR) {
+    let edition = if path_contains(MOVE_2024_DIR) {
         Edition::E2024_ALPHA
+    } else if path_contains(DEV_DIR) {
+        Edition::DEVELOPMENT
     } else {
         Edition::default()
     };
@@ -66,10 +72,15 @@ fn move_check_testsuite(path: &Path) -> datatest_stable::Result<()> {
         edition,
         ..PackageConfig::default()
     };
-    testsuite(path, config, lint)
+    testsuite(path, config, lint, ide_mode)
 }
 
-fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_stable::Result<()> {
+fn testsuite(
+    path: &Path,
+    mut config: PackageConfig,
+    lint: bool,
+    ide_mode: bool,
+) -> datatest_stable::Result<()> {
     // A test is marked that it should also be compiled in test mode by having a `path.unit_test`
     // file.
     if path.with_extension(TEST_EXT).exists() {
@@ -152,7 +163,7 @@ fn testsuite(path: &Path, mut config: PackageConfig, lint: bool) -> datatest_sta
     let exp_path = path.with_extension(EXP_EXT);
     let out_path = path.with_extension(OUT_EXT);
 
-    let flags = Flags::empty();
+    let flags = Flags::empty().set_ide_mode(ide_mode);
 
     config
         .warning_filter
@@ -206,7 +217,7 @@ pub fn run_test_inner(
 
     let flags = flags.set_sources_shadow_deps(true);
 
-    let mut compiler = Compiler::from_package_paths(targets, deps)
+    let mut compiler = Compiler::from_package_paths(None, targets, deps)
         .unwrap()
         .set_flags(flags)
         .set_default_config(package_config);

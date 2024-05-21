@@ -11,6 +11,7 @@ edition = "2021"
 
 [dependencies]
 anyhow.workspace = true
+move-abstract-interpreter.workspace = true
 move-bytecode-verifier.workspace = true
 move-command-line-common.workspace = true
 move-ir-to-bytecode.workspace = true

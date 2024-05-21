@@ -30,6 +30,14 @@ const DEFAULT_TLD: &str = "sui";
 const ACCEPTED_SEPARATORS: [char; 2] = ['.', '*'];
 const SUI_NEW_FORMAT_SEPARATOR: char = '@';
 
+/// Two different view options for a domain.
+/// `At` -> `test@example` | `Dot` -> `test.example.sui`
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum DomainFormat {
+    At,
+    Dot,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Registry {
     /// The `registry` table maps `Domain` to `NameRecord`.
@@ -89,6 +97,25 @@ impl Domain {
     /// SAFETY: We can safely cast to a u8 as the max depth is 235.
     pub fn depth(&self) -> u8 {
         self.labels.len() as u8
+    }
+
+    /// Formats a domain into a string based on the available output formats.
+    /// The default separator is `.`
+    pub fn format(&self, format: DomainFormat) -> String {
+        let mut labels = self.labels.clone();
+        let sep = &ACCEPTED_SEPARATORS[0].to_string();
+        labels.reverse();
+
+        if format == DomainFormat::Dot {
+            return labels.join(sep);
+        };
+
+        // SAFETY: This is a safe operation because we only allow a
+        // domain's label vector size to be >= 2 (see `Domain::from_str`)
+        let _tld = labels.pop();
+        let sld = labels.pop().unwrap();
+
+        format!("{}{}{}", labels.join(sep), SUI_NEW_FORMAT_SEPARATOR, sld)
     }
 }
 
@@ -263,14 +290,11 @@ fn validate_label(label: &str) -> Result<&str, NameServiceError> {
 
 impl fmt::Display for Domain {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let len = self.labels.len();
-        for (i, label) in self.labels.iter().rev().enumerate() {
-            f.write_str(label)?;
+        // We use to_string() to check on-chain state and parse on-chain data
+        // so we should always default to DOT format.
+        let output = self.format(DomainFormat::Dot);
+        f.write_str(&output)?;
 
-            if i != len - 1 {
-                f.write_str(".")?;
-            }
-        }
         Ok(())
     }
 }

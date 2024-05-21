@@ -18,15 +18,15 @@ use crate::{
 };
 
 use super::{
-    LinterDiagCategory, LINTER_DEFAULT_DIAG_CODE, LINT_WARNING_PREFIX,
+    LinterDiagnosticCategory, LinterDiagnosticCode, LINT_WARNING_PREFIX,
     RANDOM_GENERATOR_STRUCT_NAME, RANDOM_MOD_NAME, RANDOM_STRUCT_NAME, SUI_PKG_NAME,
 };
 
 const PUBLIC_RANDOM_DIAG: DiagnosticInfo = custom(
     LINT_WARNING_PREFIX,
     Severity::Warning,
-    LinterDiagCategory::PublicRandom as u8,
-    LINTER_DEFAULT_DIAG_CODE,
+    LinterDiagnosticCategory::Sui as u8,
+    LinterDiagnosticCode::PublicRandom as u8,
     "Risky use of 'sui::random'",
 );
 
@@ -83,7 +83,6 @@ impl TypingVisitorContext for Context<'_> {
                 d.add_note(note);
                 d.add_note("Non-public functions are preferred");
                 self.env.add_diag(d);
-                return true;
             }
         }
         true

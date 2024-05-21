@@ -1,0 +1,556 @@
+{
+  "configuration" : { },
+  "description" : "Description",
+  "documentation" : { },
+  "id" : 1,
+  "lastModifiedAgent" : "structurizr-javascript",
+  "lastModifiedDate" : "2024-04-17T16:37:27Z",
+  "model" : {
+    "people" : [ {
+      "id" : "1",
+      "location" : "Unspecified",
+      "name" : "Renter",
+      "properties" : {
+        "structurizr.dsl.identifier" : "renter"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "3",
+        "id" : "4",
+        "properties" : {
+          "structurizr.dsl.identifier" : "6c56a38e-aa5e-437f-8aea-39dad1734a80"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses",
+        "destinationId" : "6",
+        "id" : "7",
+        "properties" : {
+          "structurizr.dsl.identifier" : "00977271-fd09-4548-82be-b5231dfdc439"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "12",
+        "id" : "25",
+        "properties" : {
+          "structurizr.dsl.identifier" : "9adb4cbd-dbf8-416c-b15c-a420d7a00c53"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "13",
+        "id" : "26",
+        "properties" : {
+          "structurizr.dsl.identifier" : "ab9c1bc3-ec36-4b6c-a483-d0128b2d5efa"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "14",
+        "id" : "27",
+        "properties" : {
+          "structurizr.dsl.identifier" : "44ea5070-c1f3-4105-ba8f-83b0a2f0c4bc"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "17",
+        "id" : "28",
+        "properties" : {
+          "structurizr.dsl.identifier" : "0a892b0a-928b-41e6-9736-a41ca28c743f"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Person"
+    }, {
+      "id" : "2",
+      "location" : "Unspecified",
+      "name" : "Borrower",
+      "properties" : {
+        "structurizr.dsl.identifier" : "borrower"
+      },
+      "relationships" : [ {
+        "description" : "Uses",
+        "destinationId" : "3",
+        "id" : "5",
+        "properties" : {
+          "structurizr.dsl.identifier" : "30cdaaea-8ecf-4bfa-a618-52de0e692e1a"
+        },
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Uses",
+        "destinationId" : "6",
+        "id" : "8",
+        "properties" : {
+          "structurizr.dsl.identifier" : "8d81ffbd-40b6-4989-b39c-4f95d0c7b011"
+        },
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "12",
+        "id" : "29",
+        "properties" : {
+          "structurizr.dsl.identifier" : "9876ae99-5ec7-41f0-aaff-88770ba2e67d"
+        },
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "15",
+        "id" : "30",
+        "properties" : {
+          "structurizr.dsl.identifier" : "15a12e2f-0269-4dbd-93fa-eb523641f53d"
+        },
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Invokes",
+        "destinationId" : "16",
+        "id" : "31",
+        "properties" : {
+          "structurizr.dsl.identifier" : "84143eda-6a48-49ee-90ed-25149ff14575"
+        },
+        "sourceId" : "2",
+        "tags" : "Relationship"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "containers" : [ {
+        "components" : [ {
+          "description" : "This is the bare item we want to rent. It is wrapped inside Rentable.",
+          "documentation" : { },
+          "id" : "9",
+          "name" : "Item",
+          "properties" : {
+            "structurizr.dsl.identifier" : "item"
+          },
+          "relationships" : [ {
+            "description" : "Is wrapped inside the",
+            "destinationId" : "10",
+            "id" : "18",
+            "properties" : {
+              "structurizr.dsl.identifier" : "563f3d0e-c4c9-460a-8ff1-444a5525ee50"
+            },
+            "sourceId" : "9",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "An object that wraps an item to be rented. Holds additional information of the rental policies.",
+          "documentation" : { },
+          "id" : "10",
+          "name" : "Rentable",
+          "properties" : {
+            "structurizr.dsl.identifier" : "rentable"
+          },
+          "relationships" : [ {
+            "description" : "Is transferred to borrower's Kiosk Extension",
+            "destinationId" : "15",
+            "id" : "24",
+            "properties" : {
+              "structurizr.dsl.identifier" : "b87949d5-d1a2-4afd-8ae0-2a7b117322a4"
+            },
+            "sourceId" : "10",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "A Promise object given to the borrower when they want to use the borrowed item. Acts as a hot potato, requiring that the rentable be returned after use.",
+          "documentation" : { },
+          "id" : "11",
+          "name" : "Promise",
+          "properties" : {
+            "structurizr.dsl.identifier" : "promise"
+          },
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Allows for a borrower or renter to install the Rentables Extension to their Kiosk.",
+          "documentation" : { },
+          "id" : "12",
+          "name" : "Install",
+          "properties" : {
+            "structurizr.dsl.identifier" : "install"
+          },
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Allows for a renter to list an item for renting.",
+          "documentation" : { },
+          "id" : "13",
+          "name" : "List",
+          "properties" : {
+            "structurizr.dsl.identifier" : "list"
+          },
+          "relationships" : [ {
+            "description" : "Creates a",
+            "destinationId" : "10",
+            "id" : "19",
+            "properties" : {
+              "structurizr.dsl.identifier" : "e7e4b6e8-f18a-417f-9fc6-48cbd0e7d211"
+            },
+            "sourceId" : "13",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Allows a renter to delist an item they are currenlty listing but not actively renting.",
+          "documentation" : { },
+          "id" : "14",
+          "name" : "Delist",
+          "properties" : {
+            "structurizr.dsl.identifier" : "delist"
+          },
+          "relationships" : [ {
+            "description" : "Releases the",
+            "destinationId" : "9",
+            "id" : "20",
+            "properties" : {
+              "structurizr.dsl.identifier" : "eee80c52-082c-455a-a299-98e1b93c275e"
+            },
+            "sourceId" : "14",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Allows a borrower to rent an item that is being listed in one's Rentables Extension.",
+          "documentation" : { },
+          "id" : "15",
+          "name" : "Rent",
+          "properties" : {
+            "structurizr.dsl.identifier" : "rent"
+          },
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Enables the borrower to borrow the item either by value of by reference. Depending on the configuration defined by the renter.",
+          "documentation" : { },
+          "id" : "16",
+          "name" : "Borrow",
+          "properties" : {
+            "structurizr.dsl.identifier" : "borrow"
+          },
+          "relationships" : [ {
+            "description" : "Grants access temporarily to",
+            "destinationId" : "9",
+            "id" : "21",
+            "properties" : {
+              "structurizr.dsl.identifier" : "0ed19bee-f93b-48c8-a915-bf2f969fd755"
+            },
+            "sourceId" : "16",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Produces a",
+            "destinationId" : "11",
+            "id" : "22",
+            "properties" : {
+              "structurizr.dsl.identifier" : "0c1bc15a-55bd-4d37-bfed-68e83d42fa8b"
+            },
+            "sourceId" : "16",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Allows the renter to claim their item after the rental period has expired.",
+          "documentation" : { },
+          "id" : "17",
+          "name" : "Reclaim",
+          "properties" : {
+            "structurizr.dsl.identifier" : "reclaim"
+          },
+          "relationships" : [ {
+            "description" : "Releases the",
+            "destinationId" : "9",
+            "id" : "23",
+            "properties" : {
+              "structurizr.dsl.identifier" : "778154a9-0286-4e81-ae97-ffcdfbb6c183"
+            },
+            "sourceId" : "17",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        } ],
+        "documentation" : { },
+        "id" : "6",
+        "name" : "Rentables Extension",
+        "properties" : {
+          "structurizr.dsl.identifier" : "rentables_ext"
+        },
+        "relationships" : [ {
+          "description" : "Uses",
+          "destinationId" : "32",
+          "id" : "33",
+          "properties" : {
+            "structurizr.dsl.identifier" : "18a94f06-9ac0-4356-b6b4-9266afdd4e64"
+          },
+          "sourceId" : "6",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container"
+      }, {
+        "documentation" : { },
+        "id" : "32",
+        "name" : "Kiosk Extension",
+        "properties" : {
+          "structurizr.dsl.identifier" : "kiosk_ext"
+        },
+        "relationships" : [ {
+          "description" : "Uses",
+          "destinationId" : "34",
+          "id" : "35",
+          "properties" : {
+            "structurizr.dsl.identifier" : "4e9c8b40-d24e-40d8-a27d-a68f522cbc59"
+          },
+          "sourceId" : "32",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container"
+      }, {
+        "documentation" : { },
+        "id" : "34",
+        "name" : "Kiosk",
+        "properties" : {
+          "structurizr.dsl.identifier" : "kiosk"
+        },
+        "tags" : "Element,Container"
+      }, {
+        "documentation" : { },
+        "id" : "36",
+        "name" : "Blockchain",
+        "properties" : {
+          "structurizr.dsl.identifier" : "blockchain"
+        },
+        "tags" : "Element,Container"
+      } ],
+      "documentation" : { },
+      "id" : "3",
+      "location" : "Unspecified",
+      "name" : "Blockchain Infrastructure",
+      "properties" : {
+        "structurizr.dsl.identifier" : "blockchain_infra"
+      },
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Name",
+  "properties" : {
+    "structurizr.dsl" : "d29ya3NwYWNlIHsKICAgIG1vZGVsIHsKICAgICAgICByZW50ZXIgPSBwZXJzb24gIlJlbnRlciIKICAgICAgICBib3Jyb3dlciA9IHBlcnNvbiAiQm9ycm93ZXIiCiAgICAgICAgYmxvY2tjaGFpbl9pbmZyYSA9IHNvZnR3YXJlU3lzdGVtICJCbG9ja2NoYWluIEluZnJhc3RydWN0dXJlIiB7CiAgICAgICAgICAgIHJlbnRlciAtPiB0aGlzICJVc2VzIgogICAgICAgICAgICBib3Jyb3dlciAtPiB0aGlzICJVc2VzIgogICAgICAgICAgICByZW50YWJsZXNfZXh0ID0gY29udGFpbmVyICJSZW50YWJsZXMgRXh0ZW5zaW9uIiB7CiAgICAgICAgICAgICAgICByZW50ZXIgLT4gdGhpcyAiVXNlcyIKICAgICAgICAgICAgICAgIGJvcnJvd2VyIC0+IHRoaXMgIlVzZXMiCiAgICAgICAgICAgICAgICBpdGVtID0gY29tcG9uZW50ICJJdGVtIiAiVGhpcyBpcyB0aGUgYmFyZSBpdGVtIHdlIHdhbnQgdG8gcmVudC4gSXQgaXMgd3JhcHBlZCBpbnNpZGUgUmVudGFibGUuIgogICAgICAgICAgICAgICAgcmVudGFibGUgPSBjb21wb25lbnQgIlJlbnRhYmxlIiAiQW4gb2JqZWN0IHRoYXQgd3JhcHMgYW4gaXRlbSB0byBiZSByZW50ZWQuIEhvbGRzIGFkZGl0aW9uYWwgaW5mb3JtYXRpb24gb2YgdGhlIHJlbnRhbCBwb2xpY2llcy4iCiAgICAgICAgICAgICAgICBwcm9taXNlID0gY29tcG9uZW50ICJQcm9taXNlIiAiQSBQcm9taXNlIG9iamVjdCBnaXZlbiB0byB0aGUgYm9ycm93ZXIgd2hlbiB0aGV5IHdhbnQgdG8gdXNlIHRoZSBib3Jyb3dlZCBpdGVtLiBBY3RzIGFzIGEgaG90IHBvdGF0bywgcmVxdWlyaW5nIHRoYXQgdGhlIHJlbnRhYmxlIGJlIHJldHVybmVkIGFmdGVyIHVzZS4iCiAgICAgICAgICAgICAgICBpbnN0YWxsID0gY29tcG9uZW50ICJJbnN0YWxsIiAiQWxsb3dzIGZvciBhIGJvcnJvd2VyIG9yIHJlbnRlciB0byBpbnN0YWxsIHRoZSBSZW50YWJsZXMgRXh0ZW5zaW9uIHRvIHRoZWlyIEtpb3NrLiIKICAgICAgICAgICAgICAgIGxpc3QgPSBjb21wb25lbnQgIkxpc3QiICJBbGxvd3MgZm9yIGEgcmVudGVyIHRvIGxpc3QgYW4gaXRlbSBmb3IgcmVudGluZy4iCiAgICAgICAgICAgICAgICBkZWxpc3QgPSBjb21wb25lbnQgIkRlbGlzdCIgIkFsbG93cyBhIHJlbnRlciB0byBkZWxpc3QgYW4gaXRlbSB0aGV5IGFyZSBjdXJyZW5sdHkgbGlzdGluZyBidXQgbm90IGFjdGl2ZWx5IHJlbnRpbmcuIgogICAgICAgICAgICAgICAgcmVudCA9IGNvbXBvbmVudCAiUmVudCIgIkFsbG93cyBhIGJvcnJvd2VyIHRvIHJlbnQgYW4gaXRlbSB0aGF0IGlzIGJlaW5nIGxpc3RlZCBpbiBvbmUncyBSZW50YWJsZXMgRXh0ZW5zaW9uLiIKICAgICAgICAgICAgICAgIGJvcnJvdyA9IGNvbXBvbmVudCAiQm9ycm93IiAiRW5hYmxlcyB0aGUgYm9ycm93ZXIgdG8gYm9ycm93IHRoZSBpdGVtIGVpdGhlciBieSB2YWx1ZSBvZiBieSByZWZlcmVuY2UuIERlcGVuZGluZyBvbiB0aGUgY29uZmlndXJhdGlvbiBkZWZpbmVkIGJ5IHRoZSByZW50ZXIuIgogICAgICAgICAgICAgICAgcmVjbGFpbSA9IGNvbXBvbmVudCAiUmVjbGFpbSIgIkFsbG93cyB0aGUgcmVudGVyIHRvIGNsYWltIHRoZWlyIGl0ZW0gYWZ0ZXIgdGhlIHJlbnRhbCBwZXJpb2QgaGFzIGV4cGlyZWQuIgogICAgICAgICAgICAgICAgCiAgICAgICAgICAgICAgICAjIGNvbXBvbmVudCByZWxhdGlvbnNoaXBzCiAgICAgICAgICAgICAgICBpdGVtIC0+IHJlbnRhYmxlICJJcyB3cmFwcGVkIGluc2lkZSB0aGUiCiAgICAgICAgICAgICAgICBsaXN0IC0+IHJlbnRhYmxlICJDcmVhdGVzIGEiCiAgICAgICAgICAgICAgICBkZWxpc3QgLT4gaXRlbSAiUmVsZWFzZXMgdGhlIgogICAgICAgICAgICAgICAgYm9ycm93IC0+IGl0ZW0gIkdyYW50cyBhY2Nlc3MgdGVtcG9yYXJpbHkgdG8iCiAgICAgICAgICAgICAgICBib3Jyb3cgLT4gcHJvbWlzZSAiUHJvZHVjZXMgYSIKICAgICAgICAgICAgICAgIHJlY2xhaW0gLT4gaXRlbSAiUmVsZWFzZXMgdGhlIgogICAgICAgICAgICAgICAgcmVudGFibGUgLT4gcmVudCAiSXMgdHJhbnNmZXJyZWQgdG8gYm9ycm93ZXIncyBLaW9zayBFeHRlbnNpb24iCgogICAgICAgICAgICAgICAgIyBwZXJzb24gcmVsYXRpb25zaGlwcwogICAgICAgICAgICAgICAgcmVudGVyIC0+IGluc3RhbGwgIkludm9rZXMiCiAgICAgICAgICAgICAgICByZW50ZXIgLT4gbGlzdCAiSW52b2tlcyIKICAgICAgICAgICAgICAgIHJlbnRlciAtPiBkZWxpc3QgIkludm9rZXMiCiAgICAgICAgICAgICAgICByZW50ZXIgLT4gcmVjbGFpbSAiSW52b2tlcyIKICAgICAgICAgICAgICAgIGJvcnJvd2VyIC0+IGluc3RhbGwgIkludm9rZXMiCiAgICAgICAgICAgICAgICBib3Jyb3dlciAtPiByZW50ICJJbnZva2VzIgogICAgICAgICAgICAgICAgIyByZW50IC0+IGJvcnJvd2VyICJSZWNlaXZlcyBpbiBLaW9zayBFeHRlbnNpb24iCiAgICAgICAgICAgICAgICBib3Jyb3dlciAgLT4gYm9ycm93ICJJbnZva2VzIgogICAgICAgICAgICB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAKICAgICAgICAgICAga2lvc2tfZXh0ID0gY29udGFpbmVyICJLaW9zayBFeHRlbnNpb24iIHsKICAgICAgICAgICAgICAgIHJlbnRhYmxlc19leHQgLT4gdGhpcyAiVXNlcyIKICAgICAgICAgICAgfQogICAgICAgICAgICBraW9zayA9IGNvbnRhaW5lciAiS2lvc2siIHsKICAgICAgICAgICAgICAgIGtpb3NrX2V4dCAtPiB0aGlzICJVc2VzIgogICAgICAgICAgICB9CiAgICAgICAgICAgIGJsb2NrY2hhaW4gPSBjb250YWluZXIgIkJsb2NrY2hhaW4iCiAgICAgICAgfQoKICAgIH0KICAgIHZpZXdzIHsKICAgICAgICBzeXN0ZW1Db250ZXh0IGJsb2NrY2hhaW5faW5mcmEgewogICAgICAgICAgICBpbmNsdWRlICoKICAgICAgICAgICAgYXV0b2xheW91dCBscgogICAgICAgIH0KICAgICAgICBjb250YWluZXIgYmxvY2tjaGFpbl9pbmZyYSB7CiAgICAgICAgICAgIGluY2x1ZGUgKgogICAgICAgICAgICBhdXRvbGF5b3V0IGxyCiAgICAgICAgfQogICAgICAgIGNvbXBvbmVudCByZW50YWJsZXNfZXh0IHsKICAgICAgICAgICAgaW5jbHVkZSAqCiAgICAgICAgICAgIGF1dG9sYXlvdXQgbHIKICAgICAgICB9CiAgICAgICAgdGhlbWUgZGVmYXVsdAogICAgfQp9Cg=="
+  },
+  "views" : {
+    "componentViews" : [ {
+      "automaticLayout" : {
+        "applied" : true,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "containerId" : "6",
+      "dimensions" : {
+        "height" : 2834,
+        "width" : 3870
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 199,
+        "y" : 667
+      }, {
+        "id" : "2",
+        "x" : 199,
+        "y" : 2167
+      }, {
+        "id" : "9",
+        "x" : 1699,
+        "y" : 967
+      }, {
+        "id" : "10",
+        "x" : 2449,
+        "y" : 967
+      }, {
+        "id" : "11",
+        "x" : 1699,
+        "y" : 2167
+      }, {
+        "id" : "12",
+        "x" : 949,
+        "y" : 1567
+      }, {
+        "id" : "13",
+        "x" : 1699,
+        "y" : 367
+      }, {
+        "id" : "14",
+        "x" : 949,
+        "y" : 367
+      }, {
+        "id" : "15",
+        "x" : 3199,
+        "y" : 1567
+      }, {
+        "id" : "16",
+        "x" : 949,
+        "y" : 2167
+      }, {
+        "id" : "17",
+        "x" : 949,
+        "y" : 967
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "generatedKey" : true,
+      "key" : "Component-001",
+      "order" : 3,
+      "relationships" : [ {
+        "id" : "18"
+      }, {
+        "id" : "19"
+      }, {
+        "id" : "20"
+      }, {
+        "id" : "21",
+        "vertices" : [ {
+          "x" : 1399,
+          "y" : 2017
+        } ]
+      }, {
+        "id" : "22"
+      }, {
+        "id" : "23"
+      }, {
+        "id" : "24"
+      }, {
+        "id" : "25",
+        "vertices" : [ {
+          "x" : 845,
+          "y" : 1417
+        } ]
+      }, {
+        "id" : "26",
+        "vertices" : [ {
+          "x" : 845,
+          "y" : 217
+        }, {
+          "x" : 1399,
+          "y" : 217
+        } ]
+      }, {
+        "id" : "27"
+      }, {
+        "id" : "28"
+      }, {
+        "id" : "29"
+      }, {
+        "id" : "30",
+        "vertices" : [ {
+          "x" : 845,
+          "y" : 2617
+        }, {
+          "x" : 2149,
+          "y" : 2617
+        } ]
+      }, {
+        "id" : "31"
+      } ]
+    } ],
+    "configuration" : {
+      "branding" : { },
+      "lastSavedView" : "Component-001",
+      "metadataSymbols" : "SquareBrackets",
+      "styles" : { },
+      "terminology" : { },
+      "themes" : [ "https://static.structurizr.com/themes/default/theme.json" ]
+    },
+    "containerViews" : [ {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "32",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "34",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "36",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "generatedKey" : true,
+      "key" : "Container-001",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "33"
+      }, {
+        "id" : "35"
+      }, {
+        "id" : "7"
+      }, {
+        "id" : "8"
+      } ],
+      "softwareSystemId" : "3"
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "applied" : false,
+        "edgeSeparation" : 0,
+        "implementation" : "Graphviz",
+        "nodeSeparation" : 300,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 300,
+        "vertices" : false
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "generatedKey" : true,
+      "key" : "SystemContext-001",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "4"
+      }, {
+        "id" : "5"
+      } ],
+      "softwareSystemId" : "3"
+    } ]
+  }
+}

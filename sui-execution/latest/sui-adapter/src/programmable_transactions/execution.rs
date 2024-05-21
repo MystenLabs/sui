@@ -7,10 +7,10 @@ pub use checked::*;
 mod checked {
     use crate::gas_charger::GasCharger;
     use move_binary_format::{
-        access::ModuleAccess,
         compatibility::{Compatibility, InclusionCheck},
         errors::{Location, PartialVMResult, VMResult},
         file_format::{AbilitySet, CodeOffset, FunctionDefinitionIndex, LocalIndex, Visibility},
+        file_format_common::VERSION_6,
         normalized, CompiledModule,
     };
     use move_core_types::{
@@ -59,7 +59,6 @@ mod checked {
         execution_status::{CommandArgumentError, PackageUpgradeError},
     };
     use sui_verifier::{
-        default_verifier_config,
         private_generics::{EVENT_MODULE, PRIVATE_TRANSFER_FUNCTIONS, TRANSFER_MODULE},
         INIT_FN_NAME,
     };
@@ -818,11 +817,17 @@ mod checked {
         modules: &[CompiledModule],
     ) -> Result<(), ExecutionError> {
         // TODO(https://github.com/MystenLabs/sui/issues/69): avoid this redundant serialization by exposing VM API that allows us to run the linker directly on `Vec<CompiledModule>`
+        let binary_version = context.protocol_config.move_binary_format_version();
         let new_module_bytes: Vec<_> = modules
             .iter()
             .map(|m| {
                 let mut bytes = Vec::new();
-                m.serialize(&mut bytes).unwrap();
+                let version = if binary_version > VERSION_6 {
+                    m.version
+                } else {
+                    VERSION_6
+                };
+                m.serialize_with_version(version, &mut bytes).unwrap();
                 bytes
             })
             .collect();
@@ -837,7 +842,9 @@ mod checked {
             sui_verifier::verifier::sui_verify_module_unmetered(
                 module,
                 &BTreeMap::new(),
-                &default_verifier_config(context.protocol_config, false),
+                &context
+                    .protocol_config
+                    .verifier_config(/* for_signing */ false),
             )?;
         }
 

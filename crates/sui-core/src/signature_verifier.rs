@@ -8,22 +8,23 @@ use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use futures::pin_mut;
 use im::hashmap::HashMap as ImHashMap;
 use itertools::izip;
-use lru::LruCache;
 use mysten_metrics::monitored_scope;
 use parking_lot::{Mutex, MutexGuard, RwLock};
 use prometheus::{register_int_counter_with_registry, IntCounter, Registry};
 use shared_crypto::intent::Intent;
-use std::hash::Hash;
 use std::sync::Arc;
 use sui_types::digests::SenderSignedDataDigest;
 use sui_types::digests::ZKLoginInputsDigest;
+use sui_types::signature_verification::{
+    verify_sender_signed_data_message_signatures, VerifiedDigestCache,
+};
 use sui_types::transaction::SenderSignedData;
 use sui_types::{
     committee::Committee,
     crypto::{AuthoritySignInfoTrait, VerificationObligation},
     digests::CertificateDigest,
     error::{SuiError, SuiResult},
-    message_envelope::{AuthenticatedMessage, Message},
+    message_envelope::Message,
     messages_checkpoint::SignedCheckpointSummary,
     signature::VerifyParams,
     transaction::{CertifiedTransaction, VerifiedCertificate},
@@ -93,7 +94,7 @@ pub struct SignatureVerifier {
     committee: Arc<Committee>,
     certificate_cache: VerifiedDigestCache<CertificateDigest>,
     signed_data_cache: VerifiedDigestCache<SenderSignedDataDigest>,
-    zklogin_inputs_cache: VerifiedDigestCache<ZKLoginInputsDigest>,
+    zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 
     /// Map from JwkId (iss, kid) to the fetched JWK for that key.
     /// We use an immutable data structure because verification of ZKLogins may be slow, so we
@@ -116,8 +117,12 @@ struct ZkLoginParams {
     pub supported_providers: Vec<OIDCProvider>,
     /// The environment (prod/test) the code runs in. It decides which verifying key to use in fastcrypto.
     pub env: ZkLoginEnv,
+    /// Flag to determine whether legacy address (derived from padded address seed) should be verified.
     pub verify_legacy_zklogin_address: bool,
+    // Flag to determine whether zkLogin inside multisig is accepted.
     pub accept_zklogin_in_multisig: bool,
+    /// Value that sets the upper bound for max_epoch in zkLogin signature.
+    pub zklogin_max_epoch_upper_bound_delta: Option<u64>,
 }
 
 impl SignatureVerifier {
@@ -129,6 +134,7 @@ impl SignatureVerifier {
         env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self {
             committee,
@@ -142,11 +148,11 @@ impl SignatureVerifier {
                 metrics.signed_data_cache_misses.clone(),
                 metrics.signed_data_cache_evictions.clone(),
             ),
-            zklogin_inputs_cache: VerifiedDigestCache::new(
+            zklogin_inputs_cache: Arc::new(VerifiedDigestCache::new(
                 metrics.zklogin_inputs_cache_hits.clone(),
                 metrics.zklogin_inputs_cache_misses.clone(),
                 metrics.zklogin_inputs_cache_evictions.clone(),
-            ),
+            )),
             jwks: Default::default(),
             queue: Mutex::new(CertBuffer::new(batch_size)),
             metrics,
@@ -155,6 +161,7 @@ impl SignatureVerifier {
                 env,
                 verify_legacy_zklogin_address,
                 accept_zklogin_in_multisig,
+                zklogin_max_epoch_upper_bound_delta,
             },
         }
     }
@@ -166,6 +173,7 @@ impl SignatureVerifier {
         zklogin_env: ZkLoginEnv,
         verify_legacy_zklogin_address: bool,
         accept_zklogin_in_multisig: bool,
+        zklogin_max_epoch_upper_bound_delta: Option<u64>,
     ) -> Self {
         Self::new_with_batch_size(
             committee,
@@ -175,6 +183,7 @@ impl SignatureVerifier {
             zklogin_env,
             verify_legacy_zklogin_address,
             accept_zklogin_in_multisig,
+            zklogin_max_epoch_upper_bound_delta,
         )
     }
 
@@ -290,8 +299,11 @@ impl SignatureVerifier {
     async fn process_queue(&self, buffer: CertBuffer) {
         let committee = self.committee.clone();
         let metrics = self.metrics.clone();
+        let zklogin_inputs_cache = self.zklogin_inputs_cache.clone();
         Handle::current()
-            .spawn_blocking(move || Self::process_queue_sync(committee, metrics, buffer))
+            .spawn_blocking(move || {
+                Self::process_queue_sync(committee, metrics, buffer, zklogin_inputs_cache)
+            })
             .await
             .expect("Spawn blocking should not fail");
     }
@@ -300,10 +312,11 @@ impl SignatureVerifier {
         committee: Arc<Committee>,
         metrics: Arc<SignatureVerifierMetrics>,
         buffer: CertBuffer,
+        zklogin_inputs_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
     ) {
         let _scope = monitored_scope("BatchCertificateVerifier::process_queue");
 
-        let results = batch_verify_certificates(&committee, &buffer.certs);
+        let results = batch_verify_certificates(&committee, &buffer.certs, zklogin_inputs_cache);
         izip!(
             results.into_iter(),
             buffer.certs.into_iter(),
@@ -352,16 +365,21 @@ impl SignatureVerifier {
         self.signed_data_cache.is_verified(
             signed_tx.full_message_digest(),
             || {
-                signed_tx.verify_epoch(self.committee.epoch())?;
                 let jwks = self.jwks.read().clone();
                 let verify_params = VerifyParams::new(
                     jwks,
                     self.zk_login_params.supported_providers.clone(),
-                    self.zk_login_params.env.clone(),
+                    self.zk_login_params.env,
                     self.zk_login_params.verify_legacy_zklogin_address,
                     self.zk_login_params.accept_zklogin_in_multisig,
+                    self.zk_login_params.zklogin_max_epoch_upper_bound_delta,
                 );
-                signed_tx.verify_message_signature(&verify_params)
+                verify_sender_signed_data_message_signatures(
+                    signed_tx,
+                    self.committee.epoch(),
+                    &verify_params,
+                    self.zklogin_inputs_cache.clone(),
+                )
             },
             || Ok(()),
         )
@@ -501,15 +519,10 @@ pub fn batch_verify_all_certificates_and_checkpoints(
 pub fn batch_verify_certificates(
     committee: &Committee,
     certs: &[CertifiedTransaction],
+    zk_login_cache: Arc<VerifiedDigestCache<ZKLoginInputsDigest>>,
 ) -> Vec<SuiResult> {
     // certs.data() is assumed to be verified already by the caller.
-    let verify_params = VerifyParams::new(
-        Default::default(),
-        Vec::new(),
-        Default::default(),
-        true,
-        true,
-    );
+    let verify_params = VerifyParams::default();
     match batch_verify(committee, certs, &[]) {
         Ok(_) => vec![Ok(()); certs.len()],
 
@@ -518,7 +531,9 @@ pub fn batch_verify_certificates(
             .iter()
             // TODO: verify_signature currently checks the tx sig as well, which might be cached
             // already.
-            .map(|c| c.verify_signatures_authenticated(committee, &verify_params))
+            .map(|c| {
+                c.verify_signatures_authenticated(committee, &verify_params, zk_login_cache.clone())
+            })
             .collect(),
 
         Err(e) => vec![Err(e)],
@@ -545,84 +560,4 @@ fn batch_verify(
     }
 
     obligation.verify_all()
-}
-
-// Cache up to 20000 verified certs. We will need to tune this number in the future - a decent
-// guess to start with is that it should be 10-20 times larger than peak transactions per second,
-// on the assumption that we should see most certs twice within about 10-20 seconds at most: Once via RPC, once via consensus.
-const VERIFIED_CERTIFICATE_CACHE_SIZE: usize = 20000;
-
-pub struct VerifiedDigestCache<D> {
-    inner: RwLock<LruCache<D, ()>>,
-    cache_hits_counter: IntCounter,
-    cache_misses_counter: IntCounter,
-    cache_evictions_counter: IntCounter,
-}
-
-impl<D: Hash + Eq + Copy> VerifiedDigestCache<D> {
-    pub fn new(
-        cache_hits_counter: IntCounter,
-        cache_misses_counter: IntCounter,
-        cache_evictions_counter: IntCounter,
-    ) -> Self {
-        Self {
-            inner: RwLock::new(LruCache::new(
-                std::num::NonZeroUsize::new(VERIFIED_CERTIFICATE_CACHE_SIZE).unwrap(),
-            )),
-            cache_hits_counter,
-            cache_misses_counter,
-            cache_evictions_counter,
-        }
-    }
-
-    pub fn is_cached(&self, digest: &D) -> bool {
-        let inner = self.inner.read();
-        if inner.contains(digest) {
-            self.cache_hits_counter.inc();
-            true
-        } else {
-            self.cache_misses_counter.inc();
-            false
-        }
-    }
-
-    pub fn cache_digest(&self, digest: D) {
-        let mut inner = self.inner.write();
-        if let Some(old) = inner.push(digest, ()) {
-            if old.0 != digest {
-                self.cache_evictions_counter.inc();
-            }
-        }
-    }
-
-    pub fn cache_digests(&self, digests: Vec<D>) {
-        let mut inner = self.inner.write();
-        digests.into_iter().for_each(|d| {
-            if let Some(old) = inner.push(d, ()) {
-                if old.0 != d {
-                    self.cache_evictions_counter.inc();
-                }
-            }
-        });
-    }
-
-    pub fn is_verified<F, G>(&self, digest: D, verify_callback: F, uncached_checks: G) -> SuiResult
-    where
-        F: FnOnce() -> SuiResult,
-        G: FnOnce() -> SuiResult,
-    {
-        if !self.is_cached(&digest) {
-            verify_callback()?;
-            self.cache_digest(digest);
-        } else {
-            // Checks that are required to be performed outside the cache.
-            uncached_checks()?;
-        }
-        Ok(())
-    }
-
-    pub fn clear(&self) {
-        let mut inner = self.inner.write();
-        inner.clear();
-    }
 }

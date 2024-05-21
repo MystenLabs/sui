@@ -28,3 +28,14 @@ fn generate_struct_layouts() {
         "0000000000000000000000000000000000000000000000000000000000000002::tx_context::TxContext"
     ));
 }
+
+#[test]
+fn development_mode_not_allowed() {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .to_path_buf()
+        .join("src")
+        .join("unit_tests")
+        .join("data")
+        .join("no_development_mode");
+    assert!(BuildConfig::new_for_testing().build(path).is_err());
+}

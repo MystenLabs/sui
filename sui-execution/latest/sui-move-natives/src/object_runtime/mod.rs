@@ -11,7 +11,8 @@ use indexmap::set::IndexSet;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
     account_address::AccountAddress,
-    annotated_value::{MoveStruct, MoveTypeLayout, MoveValue},
+    annotated_value::{MoveTypeLayout, MoveValue},
+    annotated_visitor as AV,
     effects::Op,
     language_storage::StructTag,
     runtime_value as R,
@@ -36,8 +37,8 @@ use sui_types::{
     metrics::LimitsMetrics,
     object::{MoveObject, Owner},
     storage::ChildObjectResolver,
-    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_CLOCK_OBJECT_ID, SUI_DENY_LIST_OBJECT_ID,
-    SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
+    SUI_AUTHENTICATOR_STATE_OBJECT_ID, SUI_BRIDGE_OBJECT_ID, SUI_CLOCK_OBJECT_ID,
+    SUI_DENY_LIST_OBJECT_ID, SUI_RANDOMNESS_STATE_OBJECT_ID, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 
 pub enum ObjectEvent {
@@ -60,6 +61,8 @@ pub(crate) struct TestInventories {
     pub(crate) taken_immutable_values: BTreeMap<Type, BTreeMap<ObjectID, Value>>,
     // object has been taken from the inventory
     pub(crate) taken: BTreeMap<ObjectID, Owner>,
+    // allocated receiving tickets
+    pub(crate) allocated_tickets: BTreeMap<ObjectID, (DynamicallyLoadedObjectMetadata, Value)>,
 }
 
 pub struct LoadedRuntimeObject {
@@ -253,6 +256,7 @@ impl<'a> ObjectRuntime<'a> {
             SUI_AUTHENTICATOR_STATE_OBJECT_ID,
             SUI_RANDOMNESS_STATE_OBJECT_ID,
             SUI_DENY_LIST_OBJECT_ID,
+            SUI_BRIDGE_OBJECT_ID,
         ]
         .contains(&id);
         let transfer_result = if self.state.new_ids.contains(&id) {
@@ -628,7 +632,6 @@ fn check_circular_ownership(
     Ok(())
 }
 
-// TODO use a custom DeserializerSeed and improve this performance
 /// WARNING! This function assumes that the bcs bytes have already been validated,
 /// and it will give an invariant violation otherwise.
 /// In short, we are relying on the invariant that the bytes are valid for objects
@@ -639,40 +642,35 @@ pub fn get_all_uids(
     bcs_bytes: &[u8],
 ) -> Result<BTreeSet<ObjectID>, /* invariant violation */ String> {
     let mut ids = BTreeSet::new();
-    let v = MoveValue::simple_deserialize(bcs_bytes, fully_annotated_layout)
-        .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
-    get_all_uids_in_value(&mut ids, &v)?;
-    Ok(ids)
-}
+    struct UIDTraversalV2<'i>(&'i mut BTreeSet<ObjectID>);
+    struct UIDCollectorV2<'i>(&'i mut BTreeSet<ObjectID>);
 
-fn get_all_uids_in_value(
-    acc: &mut BTreeSet<ObjectID>,
-    v: &MoveValue,
-) -> Result<(), /* invariant violation */ String> {
-    let mut stack = vec![v];
-    while let Some(cur) = stack.pop() {
-        let s = match cur {
-            MoveValue::Struct(s) => s,
-            MoveValue::Vector(vec) => {
-                stack.extend(vec);
-                continue;
+    impl<'i> AV::Traversal for UIDTraversalV2<'i> {
+        type Error = AV::Error;
+
+        fn traverse_struct(&mut self, driver: &mut AV::StructDriver) -> Result<(), Self::Error> {
+            if driver.struct_layout().type_ == UID::type_() {
+                while driver.next_field(&mut UIDCollectorV2(self.0))?.is_some() {}
+            } else {
+                while driver.next_field(self)?.is_some() {}
             }
-            _ => continue,
-        };
-
-        let MoveStruct { type_, fields } = s;
-        if type_ == &UID::type_() {
-            let inner = match &fields[0].1 {
-                MoveValue::Struct(MoveStruct { fields, .. }) => fields,
-                v => return Err(format!("Unexpected UID layout. {v:?}")),
-            };
-            match &inner[0].1 {
-                MoveValue::Address(id) => acc.insert((*id).into()),
-                v => return Err(format!("Unexpected ID layout. {v:?}")),
-            };
-        } else {
-            stack.extend(fields.iter().map(|(_, v)| v));
+            Ok(())
         }
     }
-    Ok(())
+
+    impl<'i> AV::Traversal for UIDCollectorV2<'i> {
+        type Error = AV::Error;
+        fn traverse_address(&mut self, value: AccountAddress) -> Result<(), Self::Error> {
+            self.0.insert(value.into());
+            Ok(())
+        }
+    }
+
+    MoveValue::visit_deserialize(
+        bcs_bytes,
+        fully_annotated_layout,
+        &mut UIDTraversalV2(&mut ids),
+    )
+    .map_err(|e| format!("Failed to deserialize. {e:?}"))?;
+    Ok(ids)
 }

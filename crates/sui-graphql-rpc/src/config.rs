@@ -1,14 +1,13 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::functional_group::FunctionalGroup;
 use crate::types::big_int::BigInt;
 use async_graphql::*;
+use fastcrypto_zkp::bn254::zk_login_api::ZkLoginEnv;
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, time::Duration};
+use std::{collections::BTreeSet, fmt::Display, time::Duration};
 use sui_json_rpc::name_service::NameServiceConfig;
-
-use crate::functional_group::FunctionalGroup;
-
 // TODO: calculate proper cost limits
 
 /// These values are set to support TS SDK shim layer queries for json-rpc compatibility.
@@ -29,6 +28,15 @@ const MAX_MOVE_VALUE_DEPTH: u32 = 128;
 
 pub(crate) const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 40_000;
 
+/// The time to wait for a transaction to be executed such that the effects can be returned to the
+/// GraphQL query. If the transaction takes longer than this time to execute, the query will return
+/// a timeout error, but the transaction will continue its execution.
+///
+/// It's the sum of pre+post quorum timeouts from [`sui_core::authority_aggregator::TimeoutConfig`]
+/// plus a small buffer of 10% rounded up: 60 + 7 => round_up(67 * 1.1) = 74
+/// <https://github.com/MystenLabs/sui/blob/eaf05fe5d293c06e3a2dfc22c87ba2aef419d8ea/crates/sui-core/src/authority_aggregator.rs#L84-L85>
+pub(crate) const DEFAULT_MUTATION_TIMEOUT_MS: u64 = 74_000;
+
 const DEFAULT_IDE_TITLE: &str = "Sui GraphQL IDE";
 
 pub(crate) const RPC_TIMEOUT_ERR_SLEEP_RETRY_PERIOD: Duration = Duration::from_millis(10_000);
@@ -39,9 +47,10 @@ pub(crate) const DEFAULT_SERVER_CONNECTION_PORT: u16 = 8000;
 pub(crate) const DEFAULT_SERVER_CONNECTION_HOST: &str = "127.0.0.1";
 pub(crate) const DEFAULT_SERVER_DB_URL: &str =
     "postgres://postgres:postgrespw@localhost:5432/sui_indexer";
-pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 3;
+pub(crate) const DEFAULT_SERVER_DB_POOL_SIZE: u32 = 10;
 pub(crate) const DEFAULT_SERVER_PROM_HOST: &str = "0.0.0.0";
 pub(crate) const DEFAULT_SERVER_PROM_PORT: u16 = 9184;
+pub(crate) const DEFAULT_WATERMARK_UPDATE_MS: u64 = 500;
 
 /// The combination of all configurations for the GraphQL service.
 #[derive(Serialize, Clone, Deserialize, Debug, Default)]
@@ -80,6 +89,9 @@ pub struct ConnectionConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ServiceConfig {
     #[serde(default)]
+    pub(crate) versions: Versions,
+
+    #[serde(default)]
     pub(crate) limits: Limits,
 
     #[serde(default)]
@@ -90,6 +102,19 @@ pub struct ServiceConfig {
 
     #[serde(default)]
     pub(crate) name_service: NameServiceConfig,
+
+    #[serde(default)]
+    pub(crate) background_tasks: BackgroundTasksConfig,
+
+    #[serde(default)]
+    pub(crate) zklogin: ZkLoginConfig,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub struct Versions {
+    #[serde(default)]
+    versions: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
@@ -110,6 +135,8 @@ pub struct Limits {
     #[serde(default)]
     pub max_page_size: u64,
     #[serde(default)]
+    pub mutation_timeout_ms: u64,
+    #[serde(default)]
     pub request_timeout_ms: u64,
     #[serde(default)]
     pub max_type_argument_depth: u32,
@@ -121,8 +148,58 @@ pub struct Limits {
     pub max_move_value_depth: u32,
 }
 
-#[derive(Debug)]
-pub struct Version(pub &'static str);
+#[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub struct BackgroundTasksConfig {
+    #[serde(default)]
+    pub watermark_update_ms: u64,
+}
+
+/// The Version of the service. `year.month` represents the major release.
+/// New `patch` versions represent backwards compatible fixes for their major release.
+/// The `full` version is `year.month.patch-sha`.
+#[derive(Copy, Clone, Debug)]
+pub struct Version {
+    /// The year of this release.
+    pub year: &'static str,
+    /// The month of this release.
+    pub month: &'static str,
+    /// The patch is a positive number incremented for every compatible release on top of the major.month release.
+    pub patch: &'static str,
+    /// The commit sha for this release.
+    pub sha: &'static str,
+    /// The full version string.
+    /// Note that this extra field is used only for the uptime_metric function which requries a
+    /// &'static str.
+    pub full: &'static str,
+}
+
+impl Version {
+    /// Use for testing when you need the Version obj and a year.month &str
+    pub fn for_testing() -> Self {
+        Self {
+            year: env!("CARGO_PKG_VERSION_MAJOR"),
+            month: env!("CARGO_PKG_VERSION_MINOR"),
+            patch: env!("CARGO_PKG_VERSION_PATCH"),
+            sha: "testing-no-sha",
+            // note that this full field is needed for metrics but not for testing
+            full: const_str::concat!(
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_MINOR"),
+                ".",
+                env!("CARGO_PKG_VERSION_PATCH"),
+                "-testing-no-sha"
+            ),
+        }
+    }
+}
+
+impl Display for Version {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.full)
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, Eq, PartialEq)]
 #[serde(rename_all = "kebab-case")]
@@ -166,12 +243,23 @@ pub struct TxExecFullNodeConfig {
     pub(crate) node_rpc_url: Option<String>,
 }
 
+#[derive(Serialize, Clone, Deserialize, Debug, Eq, PartialEq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub struct ZkLoginConfig {
+    pub env: ZkLoginEnv,
+}
+
 /// The enabled features and service limits configured by the server.
 #[Object]
 impl ServiceConfig {
     /// Check whether `feature` is enabled on this GraphQL service.
     async fn is_enabled(&self, feature: FunctionalGroup) -> bool {
         !self.disabled_features.contains(&feature)
+    }
+
+    /// List the available versions for this GraphQL service.
+    async fn available_versions(&self) -> Vec<String> {
+        self.versions.versions.clone()
     }
 
     /// List of all features that are enabled on this GraphQL service.
@@ -223,7 +311,15 @@ impl ServiceConfig {
         self.limits.max_page_size
     }
 
-    /// Maximum time in milliseconds that will be spent to serve one request.
+    /// Maximum time in milliseconds spent waiting for a response from fullnode after issuing a
+    /// a transaction to execute. Note that the transaction may still succeed even in the case of a
+    /// timeout. Transactions are idempotent, so a transaction that times out should be resubmitted
+    /// until the network returns a definite response (success or failure, not timeout).
+    async fn mutation_timeout_ms(&self) -> u64 {
+        self.limits.mutation_timeout_ms
+    }
+
+    /// Maximum time in milliseconds that will be spent to serve one query request.
     async fn request_timeout_ms(&self) -> u64 {
         self.limits.request_timeout_ms
     }
@@ -323,6 +419,16 @@ impl ServiceConfig {
     pub fn read(contents: &str) -> Result<Self, toml::de::Error> {
         toml::de::from_str::<Self>(contents)
     }
+
+    pub fn test_defaults() -> Self {
+        Self {
+            background_tasks: BackgroundTasksConfig::test_defaults(),
+            zklogin: ZkLoginConfig {
+                env: ZkLoginEnv::Test,
+            },
+            ..Default::default()
+        }
+    }
 }
 
 impl Limits {
@@ -341,6 +447,26 @@ impl Ide {
     pub fn new(ide_title: Option<String>) -> Self {
         Self {
             ide_title: ide_title.unwrap_or_else(|| DEFAULT_IDE_TITLE.to_string()),
+        }
+    }
+}
+
+impl BackgroundTasksConfig {
+    pub fn test_defaults() -> Self {
+        Self {
+            watermark_update_ms: 100, // Set to 100ms for testing
+        }
+    }
+}
+
+impl Default for Versions {
+    fn default() -> Self {
+        Self {
+            versions: vec![format!(
+                "{}.{}",
+                env!("CARGO_PKG_VERSION_MAJOR"),
+                env!("CARGO_PKG_VERSION_MINOR")
+            )],
         }
     }
 }
@@ -376,6 +502,7 @@ impl Default for Limits {
             max_db_query_cost: MAX_DB_QUERY_COST,
             default_page_size: DEFAULT_PAGE_SIZE,
             max_page_size: MAX_PAGE_SIZE,
+            mutation_timeout_ms: DEFAULT_MUTATION_TIMEOUT_MS,
             request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
             max_type_argument_depth: MAX_TYPE_ARGUMENT_DEPTH,
             max_type_argument_width: MAX_TYPE_ARGUMENT_WIDTH,
@@ -396,6 +523,14 @@ impl Default for InternalFeatureConfig {
             tracing: false,
             apollo_tracing: false,
             open_telemetry: false,
+        }
+    }
+}
+
+impl Default for BackgroundTasksConfig {
+    fn default() -> Self {
+        Self {
+            watermark_update_ms: DEFAULT_WATERMARK_UPDATE_MS,
         }
     }
 }
@@ -422,6 +557,7 @@ mod tests {
                 max-db-query-cost = 50
                 default-page-size = 20
                 max-page-size = 50
+                mutation-timeout-ms = 74000
                 request-timeout-ms = 27000
                 max-type-argument-depth = 32
                 max-type-argument-width = 64
@@ -440,6 +576,7 @@ mod tests {
                 max_db_query_cost: 50,
                 default_page_size: 20,
                 max_page_size: 50,
+                mutation_timeout_ms: 74_000,
                 request_timeout_ms: 27_000,
                 max_type_argument_depth: 32,
                 max_type_argument_width: 64,
@@ -502,6 +639,7 @@ mod tests {
                 max-db-query-cost = 20
                 default-page-size = 10
                 max-page-size = 20
+                mutation-timeout-ms = 74000
                 request-timeout-ms = 30000
                 max-type-argument-depth = 32
                 max-type-argument-width = 64
@@ -523,6 +661,7 @@ mod tests {
                 max_db_query_cost: 20,
                 default_page_size: 10,
                 max_page_size: 20,
+                mutation_timeout_ms: 74_000,
                 request_timeout_ms: 30_000,
                 max_type_argument_depth: 32,
                 max_type_argument_width: 64,

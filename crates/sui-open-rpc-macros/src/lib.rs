@@ -214,6 +214,7 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                 };
                 let mut attributes = parse::<Attributes>(token)?;
                 let method_name = attributes.get_value("name");
+
                 let deprecated = attributes.find("deprecated").is_some();
 
                 if let Some(version_attr) = attributes.find("version") {

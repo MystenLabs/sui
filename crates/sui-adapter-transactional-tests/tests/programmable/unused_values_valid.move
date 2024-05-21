@@ -7,9 +7,6 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct R has key, store { id: UID }
     public struct Droppable has drop {}
     public struct Cup<T> has copy, drop { t: T }

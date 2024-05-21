@@ -52,16 +52,13 @@ fn unbalanced_stack_crash() {
         .signatures
         .push(Signature(vec![Address, Bool, Address]));
 
-    module.identifiers.extend(
-        vec![
-            Identifier::from_str("zf_hello_world").unwrap(),
-            Identifier::from_str("awldFnU18mlDKQfh6qNfBGx8X").unwrap(),
-            Identifier::from_str("aQPwJNHyAHpvJ").unwrap(),
-            Identifier::from_str("aT7ZphKTrKcYCwCebJySrmrKlckmnL5").unwrap(),
-            Identifier::from_str("arYpsFa2fvrpPJ").unwrap(),
-        ]
-        .into_iter(),
-    );
+    module.identifiers.extend(vec![
+        Identifier::from_str("zf_hello_world").unwrap(),
+        Identifier::from_str("awldFnU18mlDKQfh6qNfBGx8X").unwrap(),
+        Identifier::from_str("aQPwJNHyAHpvJ").unwrap(),
+        Identifier::from_str("aT7ZphKTrKcYCwCebJySrmrKlckmnL5").unwrap(),
+        Identifier::from_str("arYpsFa2fvrpPJ").unwrap(),
+    ]);
     module.address_identifiers.push(AccountAddress::random());
 
     module.constant_pool.push(Constant {
@@ -314,7 +311,7 @@ fn indirect_code() {
         }],
     };
 
-    let res = crate::verify_module_with_config_unmetered(&VerifierConfig::unbounded(), &module)
+    let res = crate::verify_module_with_config_unmetered(&VerifierConfig::default(), &module)
         .unwrap_err();
     assert_eq!(
         res.major_status(),

@@ -5,19 +5,19 @@
 module d::m {
     use sui::object::UID;
 
-    struct O<T, phantom U> has key, store {
+    public struct O<T, phantom U> has key, store {
         id: UID,
         xs: vector<T>,
     }
 
 
-    struct T<U, V> has copy, drop, store {
+    public struct T<U, V> has copy, drop, store {
         u: U,
         v: V,
     }
 
-    struct P has key { id: UID }
-    struct Q { x: u32 }
-    struct R has copy, drop { x: u16 }
-    struct S has drop, store { x: u8 }
+    public struct P has key { id: UID }
+    public struct Q { x: u32 }
+    public struct R has copy, drop { x: u16 }
+    public struct S has drop, store { x: u8 }
 }

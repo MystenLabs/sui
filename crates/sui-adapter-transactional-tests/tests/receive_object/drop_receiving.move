@@ -5,9 +5,7 @@
 
 //# publish
 module tto::M1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::{Self, TxContext};
-    use sui::transfer::{Self, Receiving};
+    use sui::transfer::Receiving;
 
     public struct A has key, store {
         id: UID,
@@ -37,7 +35,7 @@ module tto::M1 {
 
 //# run tto::M1::start
 
-//# programmable --inputs object(2,0) receiving(2,1) 
+//# programmable --inputs object(2,0) receiving(2,1)
 //> tto::M1::send_back(Input(0), Input(1))
 
 // Include the receiving argument, but don't use it at the PTB level

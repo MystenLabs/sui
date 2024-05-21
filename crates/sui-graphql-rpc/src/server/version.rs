@@ -2,22 +2,22 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use axum::{
+    extract::{Path, State},
     headers,
     http::{HeaderName, HeaderValue, Request, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
-    TypedHeader,
 };
 
-use crate::error::{code, graphql_error_response};
-
-const RPC_VERSION_FULL: &str = env!("CARGO_PKG_VERSION");
-const RPC_VERSION_YEAR: &str = env!("CARGO_PKG_VERSION_MAJOR");
-const RPC_VERSION_MONTH: &str = env!("CARGO_PKG_VERSION_MINOR");
+use crate::{
+    config::Version,
+    error::{code, graphql_error_response},
+};
 
 pub(crate) static VERSION_HEADER: HeaderName = HeaderName::from_static("x-sui-rpc-version");
 
 pub(crate) struct SuiRpcVersion(Vec<u8>, Vec<Vec<u8>>);
+const NAMED_VERSIONS: [&str; 3] = ["beta", "legacy", "stable"];
 
 impl headers::Header for SuiRpcVersion {
     fn name() -> &'static HeaderName {
@@ -50,70 +50,57 @@ impl headers::Header for SuiRpcVersion {
 /// one version of the RPC software, and it is the responsibility of the load balancer to make sure
 /// version constraints are met.
 pub(crate) async fn check_version_middleware<B>(
-    version: Option<TypedHeader<SuiRpcVersion>>,
+    version: Option<Path<String>>,
+    State(service_version): State<Version>,
     request: Request<B>,
     next: Next<B>,
 ) -> Response {
-    if let Some(TypedHeader(SuiRpcVersion(req_version, rest))) = version {
-        if !rest.is_empty() {
-            return (
-                StatusCode::BAD_REQUEST,
-                graphql_error_response(
-                    code::BAD_REQUEST,
-                    format!("Failed to parse {VERSION_HEADER}: Multiple possible versions found."),
-                ),
-            )
-                .into_response();
-        }
+    let Some(Path(version)) = version else {
+        return next.run(request).await;
+    };
 
-        let Ok(req_version) = std::str::from_utf8(&req_version) else {
-            return (
-                StatusCode::BAD_REQUEST,
-                graphql_error_response(
-                    code::BAD_REQUEST,
-                    format!("Failed to parse {VERSION_HEADER}: Not a UTF8 string."),
-                ),
-            )
-                .into_response();
-        };
-
-        let Some((year, month)) = parse_version(req_version) else {
-            return (
+    if NAMED_VERSIONS.contains(&version.as_str()) || version.is_empty() {
+        return next.run(request).await;
+    }
+    let Some((year, month)) = parse_version(&version) else {
+        return (
                 StatusCode::BAD_REQUEST,
                 graphql_error_response(
                     code::BAD_REQUEST,
                     format!(
-                        "Failed to parse {VERSION_HEADER}: '{req_version}' not a valid \
-                         <YEAR>.<MONTH> version.",
+                        "Failed to parse version path: {version}. Expected either a `beta | legacy | stable` \
+                    version or <YEAR>.<MONTH> version.",
                     ),
                 ),
             )
                 .into_response();
-        };
-
-        if year != RPC_VERSION_YEAR || month != RPC_VERSION_MONTH {
-            return (
-                StatusCode::MISDIRECTED_REQUEST,
-                graphql_error_response(
-                    code::INTERNAL_SERVER_ERROR,
-                    format!("Version '{req_version}' not supported."),
-                ),
-            )
-                .into_response();
-        }
     };
 
+    if year != service_version.year || month != service_version.month {
+        return (
+            StatusCode::MISDIRECTED_REQUEST,
+            graphql_error_response(
+                code::INTERNAL_SERVER_ERROR,
+                format!("Version '{version}' not supported."),
+            ),
+        )
+            .into_response();
+    }
     next.run(request).await
 }
 
 /// Mark every outgoing response with a header indicating the precise version of the RPC that was
-/// used (including the patch version).
-pub(crate) async fn set_version_middleware<B>(request: Request<B>, next: Next<B>) -> Response {
+/// used (including the patch version and sha).
+pub(crate) async fn set_version_middleware<B>(
+    State(version): State<Version>,
+    request: Request<B>,
+    next: Next<B>,
+) -> Response {
     let mut response = next.run(request).await;
     let headers = response.headers_mut();
     headers.insert(
         VERSION_HEADER.clone(),
-        HeaderValue::from_static(RPC_VERSION_FULL),
+        HeaderValue::from_static(version.full),
     );
     response
 }
@@ -127,6 +114,10 @@ fn parse_version(version: &str) -> Option<(&str, &str)> {
     let year = parts.next()?;
     let month = parts.next()?;
 
+    if year.is_empty() || month.is_empty() {
+        return None;
+    }
+
     (parts.next().is_none()
         && year.chars().all(|c| c.is_ascii_digit())
         && month.chars().all(|c| c.is_ascii_digit()))
@@ -135,30 +126,73 @@ fn parse_version(version: &str) -> Option<(&str, &str)> {
 
 #[cfg(test)]
 mod tests {
-    use axum::{body::Body, middleware, routing::get, Router};
-    use expect_test::expect;
-    use tower::ServiceExt;
+    use std::net::SocketAddr;
 
     use super::*;
+    use crate::{
+        config::{ConnectionConfig, ServiceConfig, Version},
+        metrics::Metrics,
+        server::builder::AppState,
+    };
+    use axum::{body::Body, middleware, routing::get, Router};
+    use expect_test::expect;
+    use mysten_metrics;
+    use tokio_util::sync::CancellationToken;
+    use tower::ServiceExt;
 
+    fn metrics() -> Metrics {
+        let binding_address: SocketAddr = "0.0.0.0:9185".parse().unwrap();
+        let registry = mysten_metrics::start_prometheus_server(binding_address).default_registry();
+        Metrics::new(&registry)
+    }
     fn service() -> Router {
+        let version = Version::for_testing();
+        let metrics = metrics();
+        let cancellation_token = CancellationToken::new();
+        let connection_config = ConnectionConfig::ci_integration_test_cfg();
+        let service_config = ServiceConfig::default();
+        let state = AppState::new(
+            connection_config.clone(),
+            service_config.clone(),
+            metrics.clone(),
+            cancellation_token.clone(),
+            version,
+        );
+
         Router::new()
             .route("/", get(|| async { "Hello, Versioning!" }))
-            .layer(middleware::from_fn(check_version_middleware))
-            .layer(middleware::from_fn(set_version_middleware))
+            .route("/:version", get(|| async { "Hello, Versioning!" }))
+            .route("/graphql", get(|| async { "Hello, Versioning!" }))
+            .route("/graphql/:version", get(|| async { "Hello, Versioning!" }))
+            .layer(middleware::from_fn_with_state(
+                state.version,
+                check_version_middleware,
+            ))
+            .layer(middleware::from_fn_with_state(
+                state.version,
+                set_version_middleware,
+            ))
+    }
+
+    fn graphql_request() -> Request<Body> {
+        Request::builder()
+            .uri("/graphql")
+            .body(Body::empty())
+            .unwrap()
     }
 
     fn plain_request() -> Request<Body> {
         Request::builder().uri("/").body(Body::empty()).unwrap()
     }
 
-    fn header_request(kvps: &[(&HeaderName, &[u8])]) -> Request<Body> {
-        let mut request = plain_request();
-        let headers = request.headers_mut();
-        for (name, value) in kvps {
-            headers.append(*name, HeaderValue::from_bytes(value).unwrap());
+    fn version_request(version: &str) -> Request<Body> {
+        if version.is_empty() {
+            return plain_request();
         }
-        request
+        Request::builder()
+            .uri(format!("/graphql/{}", version))
+            .body(Body::empty())
+            .unwrap()
     }
 
     async fn response_body(response: Response) -> String {
@@ -169,63 +203,84 @@ mod tests {
 
     #[tokio::test]
     async fn successful() {
-        let version = format!("{RPC_VERSION_YEAR}.{RPC_VERSION_MONTH}");
+        let version = Version::for_testing();
+        let major_version = format!("{}.{}", version.year, version.month);
         let service = service();
         let response = service
-            .oneshot(header_request(&[(&VERSION_HEADER, version.as_bytes())]))
+            .oneshot(version_request(&major_version))
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_static(version.full))
         );
     }
 
     #[tokio::test]
-    async fn case_insensitive() {
-        let version = format!("{RPC_VERSION_YEAR}.{RPC_VERSION_MONTH}");
+    async fn default_graphql_route() {
+        let version = Version::for_testing();
         let service = service();
-        let response = service
-            .oneshot(header_request(&[(
-                &HeaderName::try_from("x-sUi-RpC-vERSION").unwrap(),
-                version.as_bytes(),
-            )]))
-            .await
-            .unwrap();
-
+        let response = service.oneshot(graphql_request()).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_static(version.full))
         );
+    }
+
+    #[tokio::test]
+    async fn named_version() {
+        let version = Version::for_testing();
+        let service = service();
+        for named_version in NAMED_VERSIONS {
+            let response = service
+                .clone()
+                .oneshot(version_request(named_version))
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response.headers().get(&VERSION_HEADER),
+                Some(&HeaderValue::from_static(version.full))
+            );
+        }
     }
 
     #[tokio::test]
     async fn default_version() {
+        let version = Version::for_testing();
         let service = service();
         let response = service.oneshot(plain_request()).await.unwrap();
-
         assert_eq!(response.status(), StatusCode::OK);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_static(version.full))
+        );
+    }
+
+    #[tokio::test]
+    async fn wrong_path() {
+        let version = Version::for_testing();
+        let service = service();
+        let response = service.oneshot(version_request("")).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(&VERSION_HEADER),
+            Some(&HeaderValue::from_static(version.full))
         );
     }
 
     #[tokio::test]
     async fn incompatible_version() {
+        let version = Version::for_testing();
         let service = service();
-        let response = service
-            .oneshot(header_request(&[(&VERSION_HEADER, "0.0".as_bytes())]))
-            .await
-            .unwrap();
+        let response = service.oneshot(version_request("0.0")).await.unwrap();
 
         assert_eq!(response.status(), StatusCode::MISDIRECTED_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_static(version.full))
         );
 
         let expect = expect![[r#"
@@ -244,49 +299,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn multiple_versions() {
-        let service = service();
-        let response = service
-            .oneshot(header_request(&[
-                (&VERSION_HEADER, "0.0".as_bytes()),
-                (&VERSION_HEADER, "1.0".as_bytes()),
-            ]))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
-        );
-
-        let expect = expect![[r#"
-            {
-              "data": null,
-              "errors": [
-                {
-                  "message": "Failed to parse x-sui-rpc-version: Multiple possible versions found.",
-                  "extensions": {
-                    "code": "BAD_REQUEST"
-                  }
-                }
-              ]
-            }"#]];
-        expect.assert_eq(&response_body(response).await);
-    }
-
-    #[tokio::test]
     async fn not_a_version() {
+        let version = Version::for_testing();
         let service = service();
         let response = service
-            .oneshot(header_request(&[(&VERSION_HEADER, b"not-a-version")]))
+            .oneshot(version_request("not-a-version"))
             .await
             .unwrap();
-
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
         assert_eq!(
             response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
+            Some(&HeaderValue::from_static(version.full))
         );
 
         let expect = expect![[r#"
@@ -294,39 +317,7 @@ mod tests {
               "data": null,
               "errors": [
                 {
-                  "message": "Failed to parse x-sui-rpc-version: 'not-a-version' not a valid <YEAR>.<MONTH> version.",
-                  "extensions": {
-                    "code": "BAD_REQUEST"
-                  }
-                }
-              ]
-            }"#]];
-        expect.assert_eq(&response_body(response).await);
-    }
-
-    #[tokio::test]
-    async fn not_a_string() {
-        let service = service();
-        let response = service
-            .oneshot(header_request(&[(
-                &VERSION_HEADER,
-                &[0xf1, 0xf2, 0xf3, 0xf4],
-            )]))
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-        assert_eq!(
-            response.headers().get(&VERSION_HEADER),
-            Some(&HeaderValue::from_static(RPC_VERSION_FULL)),
-        );
-
-        let expect = expect![[r#"
-            {
-              "data": null,
-              "errors": [
-                {
-                  "message": "Failed to parse x-sui-rpc-version: Not a UTF8 string.",
+                  "message": "Failed to parse version path: not-a-version. Expected either a `beta | legacy | stable` version or <YEAR>.<MONTH> version.",
                   "extensions": {
                     "code": "BAD_REQUEST"
                   }

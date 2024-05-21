@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x3::validator`
 ---
@@ -670,7 +669,7 @@ Max gas price a validator can set is 100K MIST.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_new_metadata">new_metadata</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_new_metadata">new_metadata</a>(
     sui_address: <b>address</b>,
     protocol_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     network_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
@@ -733,7 +732,7 @@ Max gas price a validator can set is 100K MIST.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_new">new</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_new">new</a>(
     sui_address: <b>address</b>,
     protocol_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
     network_pubkey_bytes: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;,
@@ -752,14 +751,14 @@ Max gas price a validator can set is 100K MIST.
     ctx: &<b>mut</b> TxContext
 ): <a href="validator.md#0x3_validator_Validator">Validator</a> {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&net_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&p2p_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&primary_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&worker_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&name) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&description) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&image_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
-            && <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&project_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        net_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && p2p_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && primary_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && worker_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && name.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && description.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && image_url.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>
+            && project_url.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
     <b>assert</b>!(<a href="validator.md#0x3_validator_commission_rate">commission_rate</a> &lt;= <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
@@ -771,14 +770,14 @@ Max gas price a validator can set is 100K MIST.
         network_pubkey_bytes,
         worker_pubkey_bytes,
         proof_of_possession,
-        <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(name)),
-        <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(description)),
+        name.to_ascii_string().to_string(),
+        description.to_ascii_string().to_string(),
         <a href="../sui-framework/url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url),
         <a href="../sui-framework/url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url),
-        <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(net_address)),
-        <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(p2p_address)),
-        <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(primary_address)),
-        <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(worker_address)),
+        net_address.to_ascii_string().to_string(),
+        p2p_address.to_ascii_string().to_string(),
+        primary_address.to_ascii_string().to_string(),
+        worker_address.to_ascii_string().to_string(),
         <a href="../sui-framework/bag.md#0x2_bag_new">bag::new</a>(ctx),
     );
 
@@ -814,8 +813,8 @@ Deactivate this validator's staking pool
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, deactivation_epoch: u64) {
-    <a href="staking_pool.md#0x3_staking_pool_deactivate_staking_pool">staking_pool::deactivate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, deactivation_epoch)
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_deactivate">deactivate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, deactivation_epoch: u64) {
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.deactivate_staking_pool(deactivation_epoch)
 }
 </code></pre>
 
@@ -838,8 +837,8 @@ Deactivate this validator's staking pool
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_activate">activate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, activation_epoch: u64) {
-    <a href="staking_pool.md#0x3_staking_pool_activate_staking_pool">staking_pool::activate_staking_pool</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, activation_epoch);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_activate">activate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, activation_epoch: u64) {
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.activate_staking_pool(activation_epoch);
 }
 </code></pre>
 
@@ -863,7 +862,7 @@ Process pending stake and pending withdraws, and update the gas price.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_adjust_stake_and_gas_price">adjust_stake_and_gas_price</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>) {
     self.gas_price = self.next_epoch_gas_price;
     self.commission_rate = self.next_epoch_commission_rate;
 }
@@ -889,21 +888,19 @@ Request to add stake to the validator's staking pool, processed at the end of th
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_request_add_stake">request_add_stake</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_request_add_stake">request_add_stake</a>(
     self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
     stake: Balance&lt;SUI&gt;,
     staker_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) : StakedSui {
-    <b>let</b> stake_amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&stake);
+    <b>let</b> stake_amount = stake.value();
     <b>assert</b>!(stake_amount &gt; 0, <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
-    <b>let</b> stake_epoch = <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) + 1;
-    <b>let</b> staked_sui = <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
-        &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, stake, stake_epoch, ctx
-    );
+    <b>let</b> stake_epoch = ctx.epoch() + 1;
+    <b>let</b> staked_sui = self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_request_add_stake">request_add_stake</a>(stake, stake_epoch, ctx);
     // Process stake right away <b>if</b> staking pool is preactive.
-    <b>if</b> (<a href="staking_pool.md#0x3_staking_pool_is_preactive">staking_pool::is_preactive</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)) {
-        <a href="staking_pool.md#0x3_staking_pool_process_pending_stake">staking_pool::process_pending_stake</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>);
+    <b>if</b> (self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>()) {
+        self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.process_pending_stake();
     };
     self.next_epoch_stake = self.next_epoch_stake + stake_amount;
     <a href="../sui-framework/event.md#0x2_event_emit">event::emit</a>(
@@ -911,7 +908,7 @@ Request to add stake to the validator's staking pool, processed at the end of th
             pool_id: <a href="validator.md#0x3_validator_staking_pool_id">staking_pool_id</a>(self),
             validator_address: self.metadata.sui_address,
             staker_address,
-            epoch: <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+            epoch: ctx.epoch(),
             amount: stake_amount,
         }
     );
@@ -939,18 +936,17 @@ Request to add stake to the validator's staking pool at genesis
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_request_add_stake_at_genesis">request_add_stake_at_genesis</a>(
     self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
     stake: Balance&lt;SUI&gt;,
     staker_address: <b>address</b>,
     ctx: &<b>mut</b> TxContext,
 ) {
-    <b>assert</b>!(<a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx) == 0, <a href="validator.md#0x3_validator_ECalledDuringNonGenesis">ECalledDuringNonGenesis</a>);
-    <b>let</b> stake_amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&stake);
+    <b>assert</b>!(ctx.epoch() == 0, <a href="validator.md#0x3_validator_ECalledDuringNonGenesis">ECalledDuringNonGenesis</a>);
+    <b>let</b> stake_amount = stake.value();
     <b>assert</b>!(stake_amount &gt; 0, <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
 
-    <b>let</b> staked_sui = <a href="staking_pool.md#0x3_staking_pool_request_add_stake">staking_pool::request_add_stake</a>(
-        &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>,
+    <b>let</b> staked_sui = self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_request_add_stake">request_add_stake</a>(
         stake,
         0, // epoch 0 -- <a href="genesis.md#0x3_genesis">genesis</a>
         ctx
@@ -959,7 +955,7 @@ Request to add stake to the validator's staking pool at genesis
     <a href="../sui-framework/transfer.md#0x2_transfer_public_transfer">transfer::public_transfer</a>(staked_sui, staker_address);
 
     // Process stake right away
-    <a href="staking_pool.md#0x3_staking_pool_process_pending_stake">staking_pool::process_pending_stake</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>);
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.process_pending_stake();
     self.next_epoch_stake = self.next_epoch_stake + stake_amount;
 }
 </code></pre>
@@ -984,25 +980,24 @@ Request to withdraw stake from the validator's staking pool, processed at the en
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_request_withdraw_stake">request_withdraw_stake</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_request_withdraw_stake">request_withdraw_stake</a>(
     self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
     staked_sui: StakedSui,
     ctx: &TxContext,
 ) : Balance&lt;SUI&gt; {
-    <b>let</b> principal_amount = <a href="staking_pool.md#0x3_staking_pool_staked_sui_amount">staking_pool::staked_sui_amount</a>(&staked_sui);
-    <b>let</b> stake_activation_epoch = <a href="staking_pool.md#0x3_staking_pool_stake_activation_epoch">staking_pool::stake_activation_epoch</a>(&staked_sui);
-    <b>let</b> withdrawn_stake = <a href="staking_pool.md#0x3_staking_pool_request_withdraw_stake">staking_pool::request_withdraw_stake</a>(
-            &<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, staked_sui, ctx);
-    <b>let</b> withdraw_amount = <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&withdrawn_stake);
+    <b>let</b> principal_amount = staked_sui.staked_sui_amount();
+    <b>let</b> stake_activation_epoch = staked_sui.stake_activation_epoch();
+    <b>let</b> withdrawn_stake = self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_request_withdraw_stake">request_withdraw_stake</a>(staked_sui, ctx);
+    <b>let</b> withdraw_amount = withdrawn_stake.value();
     <b>let</b> reward_amount = withdraw_amount - principal_amount;
     self.next_epoch_stake = self.next_epoch_stake - withdraw_amount;
     <a href="../sui-framework/event.md#0x2_event_emit">event::emit</a>(
         <a href="validator.md#0x3_validator_UnstakingRequestEvent">UnstakingRequestEvent</a> {
             pool_id: <a href="validator.md#0x3_validator_staking_pool_id">staking_pool_id</a>(self),
             validator_address: self.metadata.sui_address,
-            staker_address: <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx),
+            staker_address: ctx.sender(),
             stake_activation_epoch,
-            unstaking_epoch: <a href="../sui-framework/tx_context.md#0x2_tx_context_epoch">tx_context::epoch</a>(ctx),
+            unstaking_epoch: ctx.epoch(),
             principal_amount,
             reward_amount,
         }
@@ -1032,13 +1027,13 @@ Need to present a <code>ValidatorOperationCap</code>.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_request_set_gas_price">request_set_gas_price</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_request_set_gas_price">request_set_gas_price</a>(
     self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
     verified_cap: ValidatorOperationCap,
     new_price: u64,
 ) {
     <b>assert</b>!(new_price &lt; <a href="validator.md#0x3_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>, <a href="validator.md#0x3_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>);
-    <b>let</b> validator_address = *<a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(&verified_cap);
+    <b>let</b> validator_address = *verified_cap.verified_operation_cap_address();
     <b>assert</b>!(validator_address == self.metadata.sui_address, <a href="validator.md#0x3_validator_EInvalidCap">EInvalidCap</a>);
     self.next_epoch_gas_price = new_price;
 }
@@ -1064,14 +1059,14 @@ Set new gas price for the candidate validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_set_candidate_gas_price">set_candidate_gas_price</a>(
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_set_candidate_gas_price">set_candidate_gas_price</a>(
     self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>,
     verified_cap: ValidatorOperationCap,
     new_price: u64
 ) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(new_price &lt; <a href="validator.md#0x3_validator_MAX_VALIDATOR_GAS_PRICE">MAX_VALIDATOR_GAS_PRICE</a>, <a href="validator.md#0x3_validator_EGasPriceHigherThanThreshold">EGasPriceHigherThanThreshold</a>);
-    <b>let</b> validator_address = *<a href="validator_cap.md#0x3_validator_cap_verified_operation_cap_address">validator_cap::verified_operation_cap_address</a>(&verified_cap);
+    <b>let</b> validator_address = *verified_cap.verified_operation_cap_address();
     <b>assert</b>!(validator_address == self.metadata.sui_address, <a href="validator.md#0x3_validator_EInvalidCap">EInvalidCap</a>);
     self.next_epoch_gas_price = new_price;
     self.gas_price = new_price;
@@ -1098,7 +1093,7 @@ Request to set new commission rate for the next epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_request_set_commission_rate">request_set_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
     <b>assert</b>!(new_commission_rate &lt;= <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.next_epoch_commission_rate = new_commission_rate;
 }
@@ -1124,7 +1119,7 @@ Set new commission rate for the candidate validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_set_candidate_commission_rate">set_candidate_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_set_candidate_commission_rate">set_candidate_commission_rate</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, new_commission_rate: u64) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(new_commission_rate &lt;= <a href="validator.md#0x3_validator_MAX_COMMISSION_RATE">MAX_COMMISSION_RATE</a>, <a href="validator.md#0x3_validator_ECommissionRateTooHigh">ECommissionRateTooHigh</a>);
     self.commission_rate = new_commission_rate;
@@ -1151,9 +1146,9 @@ Deposit stakes rewards into the validator's staking pool, called at the end of t
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_deposit_stake_rewards">deposit_stake_rewards</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, reward: Balance&lt;SUI&gt;) {
-    self.next_epoch_stake = self.next_epoch_stake + <a href="../sui-framework/balance.md#0x2_balance_value">balance::value</a>(&reward);
-    <a href="staking_pool.md#0x3_staking_pool_deposit_rewards">staking_pool::deposit_rewards</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, reward);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_deposit_stake_rewards">deposit_stake_rewards</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, reward: Balance&lt;SUI&gt;) {
+    self.next_epoch_stake = self.next_epoch_stake + reward.value();
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.deposit_rewards(reward);
 }
 </code></pre>
 
@@ -1177,8 +1172,8 @@ Process pending stakes and withdraws, called at the end of the epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, ctx: &TxContext) {
-    <a href="staking_pool.md#0x3_staking_pool_process_pending_stakes_and_withdraws">staking_pool::process_pending_stakes_and_withdraws</a>(&<b>mut</b> self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, ctx);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, ctx: &TxContext) {
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_process_pending_stakes_and_withdraws">process_pending_stakes_and_withdraws</a>(ctx);
     <b>assert</b>!(<a href="validator.md#0x3_validator_stake_amount">stake_amount</a>(self) == self.next_epoch_stake, <a href="validator.md#0x3_validator_EInvalidStakeAmount">EInvalidStakeAmount</a>);
 }
 </code></pre>
@@ -1204,7 +1199,7 @@ Returns true if the validator is preactive.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>): bool {
-    <a href="staking_pool.md#0x3_staking_pool_is_preactive">staking_pool::is_preactive</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>()
 }
 </code></pre>
 
@@ -1804,7 +1799,7 @@ Returns true if the validator is preactive.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_total_stake_amount">total_stake_amount</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>): u64 {
-    <a href="staking_pool.md#0x3_staking_pool_sui_balance">staking_pool::sui_balance</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.sui_balance()
 }
 </code></pre>
 
@@ -1828,7 +1823,7 @@ Returns true if the validator is preactive.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_stake_amount">stake_amount</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>): u64 {
-    <a href="staking_pool.md#0x3_staking_pool_sui_balance">staking_pool::sui_balance</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.sui_balance()
 }
 </code></pre>
 
@@ -1902,7 +1897,7 @@ Set the voting power of this validator, called only from validator_set.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_set_voting_power">set_voting_power</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, new_voting_power: u64) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_set_voting_power">set_voting_power</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, new_voting_power: u64) {
     self.<a href="voting_power.md#0x3_voting_power">voting_power</a> = new_voting_power;
 }
 </code></pre>
@@ -1927,7 +1922,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_pending_stake_amount">pending_stake_amount</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>): u64 {
-    <a href="staking_pool.md#0x3_staking_pool_pending_stake_amount">staking_pool::pending_stake_amount</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_pending_stake_amount">pending_stake_amount</a>()
 }
 </code></pre>
 
@@ -1951,7 +1946,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>): u64 {
-    <a href="staking_pool.md#0x3_staking_pool_pending_stake_withdraw_amount">staking_pool::pending_stake_withdraw_amount</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>)
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_pending_stake_withdraw_amount">pending_stake_withdraw_amount</a>()
 }
 </code></pre>
 
@@ -2023,7 +2018,7 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="validator.md#0x3_validator_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>, epoch: u64): PoolTokenExchangeRate {
-    <a href="staking_pool.md#0x3_staking_pool_pool_token_exchange_rate_at_epoch">staking_pool::pool_token_exchange_rate_at_epoch</a>(&self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>, epoch)
+    self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>.<a href="validator.md#0x3_validator_pool_token_exchange_rate_at_epoch">pool_token_exchange_rate_at_epoch</a>(epoch)
 }
 </code></pre>
 
@@ -2127,10 +2122,10 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>fun</b> <a href="validator.md#0x3_validator_is_equal_some_and_value">is_equal_some_and_value</a>&lt;T&gt;(a: &Option&lt;T&gt;, b: &T): bool {
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(a)) {
+    <b>if</b> (a.is_none()) {
         <b>false</b>
     } <b>else</b> {
-        <a href="../move-stdlib/option.md#0x1_option_borrow">option::borrow</a>(a) == b
+        a.borrow() == b
     }
 }
 </code></pre>
@@ -2155,10 +2150,10 @@ Set the voting power of this validator, called only from validator_set.
 
 
 <pre><code><b>fun</b> <a href="validator.md#0x3_validator_is_equal_some">is_equal_some</a>&lt;T&gt;(a: &Option&lt;T&gt;, b: &Option&lt;T&gt;): bool {
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(a) || <a href="../move-stdlib/option.md#0x1_option_is_none">option::is_none</a>(b)) {
+    <b>if</b> (a.is_none() || b.is_none()) {
         <b>false</b>
     } <b>else</b> {
-        <a href="../move-stdlib/option.md#0x1_option_borrow">option::borrow</a>(a) == <a href="../move-stdlib/option.md#0x1_option_borrow">option::borrow</a>(b)
+        a.borrow() == b.borrow()
     }
 }
 </code></pre>
@@ -2184,8 +2179,8 @@ and registers it, thus revoking the previous cap's permission.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
-    <b>let</b> <b>address</b> = <a href="../sui-framework/tx_context.md#0x2_tx_context_sender">tx_context::sender</a>(ctx);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_new_unverified_validator_operation_cap_and_transfer">new_unverified_validator_operation_cap_and_transfer</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, ctx: &<b>mut</b> TxContext) {
+    <b>let</b> <b>address</b> = ctx.sender();
     <b>assert</b>!(<b>address</b> == self.metadata.sui_address, <a href="validator.md#0x3_validator_ENewCapNotCreatedByValidatorItself">ENewCapNotCreatedByValidatorItself</a>);
     <b>let</b> new_id = <a href="validator_cap.md#0x3_validator_cap_new_unverified_validator_operation_cap_and_transfer">validator_cap::new_unverified_validator_operation_cap_and_transfer</a>(<b>address</b>, ctx);
     self.operation_cap_id = new_id;
@@ -2212,12 +2207,12 @@ Update name of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_name">update_name</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, name: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&name) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        name.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    self.metadata.name = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(name));
+    self.metadata.name = name.to_ascii_string().to_string();
 }
 </code></pre>
 
@@ -2241,12 +2236,12 @@ Update description of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_description">update_description</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, description: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&description) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        description.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    self.metadata.description = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(description));
+    self.metadata.description = description.to_ascii_string().to_string();
 }
 </code></pre>
 
@@ -2270,9 +2265,9 @@ Update image url of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, image_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_image_url">update_image_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, image_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&image_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        image_url.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
     self.metadata.image_url = <a href="../sui-framework/url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(image_url);
@@ -2299,9 +2294,9 @@ Update project url of the validator.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, project_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_project_url">update_project_url</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, project_url: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&project_url) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        project_url.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
     self.metadata.project_url = <a href="../sui-framework/url.md#0x2_url_new_unsafe_from_bytes">url::new_unsafe_from_bytes</a>(project_url);
@@ -2328,12 +2323,12 @@ Update network address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_address">update_next_epoch_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&net_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        net_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> net_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(net_address));
+    <b>let</b> net_address = net_address.to_ascii_string().to_string();
     self.metadata.next_epoch_net_address = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(net_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2359,13 +2354,13 @@ Update network address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_address">update_candidate_network_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, net_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&net_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        net_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> net_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(net_address));
+    <b>let</b> net_address = net_address.to_ascii_string().to_string();
     self.metadata.net_address = net_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2391,12 +2386,12 @@ Update p2p address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_p2p_address">update_next_epoch_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&p2p_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        p2p_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> p2p_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(p2p_address));
+    <b>let</b> p2p_address = p2p_address.to_ascii_string().to_string();
     self.metadata.next_epoch_p2p_address = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(p2p_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2422,13 +2417,13 @@ Update p2p address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_p2p_address">update_candidate_p2p_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, p2p_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&p2p_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        p2p_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> p2p_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(p2p_address));
+    <b>let</b> p2p_address = p2p_address.to_ascii_string().to_string();
     self.metadata.p2p_address = p2p_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2454,12 +2449,12 @@ Update primary address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_primary_address">update_next_epoch_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&primary_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        primary_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> primary_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(primary_address));
+    <b>let</b> primary_address = primary_address.to_ascii_string().to_string();
     self.metadata.next_epoch_primary_address = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(primary_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2485,13 +2480,13 @@ Update primary address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_primary_address">update_candidate_primary_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, primary_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&primary_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        primary_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> primary_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(primary_address));
+    <b>let</b> primary_address = primary_address.to_ascii_string().to_string();
     self.metadata.primary_address = primary_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2517,12 +2512,12 @@ Update worker address of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_address">update_next_epoch_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&worker_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        worker_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> worker_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(worker_address));
+    <b>let</b> worker_address = worker_address.to_ascii_string().to_string();
     self.metadata.next_epoch_worker_address = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(worker_address);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2548,13 +2543,13 @@ Update worker address of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_address">update_candidate_worker_address</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_address: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     <b>assert</b>!(
-        <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&worker_address) &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
+        worker_address.length() &lt;= <a href="validator.md#0x3_validator_MAX_VALIDATOR_METADATA_LENGTH">MAX_VALIDATOR_METADATA_LENGTH</a>,
         <a href="validator.md#0x3_validator_EValidatorMetadataExceedingLengthLimit">EValidatorMetadataExceedingLengthLimit</a>
     );
-    <b>let</b> worker_address = <a href="../move-stdlib/string.md#0x1_string_from_ascii">string::from_ascii</a>(<a href="../move-stdlib/ascii.md#0x1_ascii_string">ascii::string</a>(worker_address));
+    <b>let</b> worker_address = worker_address.to_ascii_string().to_string();
     self.metadata.worker_address = worker_address;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2580,7 +2575,7 @@ Update protocol public key of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_protocol_pubkey">update_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_protocol_pubkey">update_next_epoch_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_protocol_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(protocol_pubkey);
     self.metadata.next_epoch_proof_of_possession = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(proof_of_possession);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2607,7 +2602,7 @@ Update protocol public key of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_protocol_pubkey">update_candidate_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_protocol_pubkey">update_candidate_protocol_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, protocol_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof_of_possession: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.protocol_pubkey_bytes = protocol_pubkey;
     self.metadata.proof_of_possession = proof_of_possession;
@@ -2635,7 +2630,7 @@ Update network public key of this validator, taking effects from next epoch
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_pubkey">update_next_epoch_network_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_network_pubkey">update_next_epoch_network_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_network_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(network_pubkey);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2661,7 +2656,7 @@ Update network public key of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_pubkey">update_candidate_network_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_network_pubkey">update_candidate_network_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, network_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.network_pubkey_bytes = network_pubkey;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2688,7 +2683,7 @@ Update Narwhal worker public key of this validator, taking effects from next epo
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_pubkey">update_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_next_epoch_worker_pubkey">update_next_epoch_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     self.metadata.next_epoch_worker_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(worker_pubkey);
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
 }
@@ -2714,7 +2709,7 @@ Update Narwhal worker public key of this candidate validator
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_pubkey">update_candidate_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_update_candidate_worker_pubkey">update_candidate_worker_pubkey</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>, worker_pubkey: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;) {
     <b>assert</b>!(<a href="validator.md#0x3_validator_is_preactive">is_preactive</a>(self), <a href="validator.md#0x3_validator_ENotValidatorCandidate">ENotValidatorCandidate</a>);
     self.metadata.worker_pubkey_bytes = worker_pubkey;
     <a href="validator.md#0x3_validator_validate_metadata">validate_metadata</a>(&self.metadata);
@@ -2743,41 +2738,41 @@ advancing an epoch.
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>) {
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_network_address">next_epoch_network_address</a>(self))) {
-        self.metadata.net_address = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_net_address);
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_effectuate_staged_metadata">effectuate_staged_metadata</a>(self: &<b>mut</b> <a href="validator.md#0x3_validator_Validator">Validator</a>) {
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_network_address">next_epoch_network_address</a>(self).is_some()) {
+        self.metadata.net_address = self.metadata.next_epoch_net_address.extract();
         self.metadata.next_epoch_net_address = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self))) {
-        self.metadata.p2p_address = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_p2p_address);
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_p2p_address">next_epoch_p2p_address</a>(self).is_some()) {
+        self.metadata.p2p_address = self.metadata.next_epoch_p2p_address.extract();
         self.metadata.next_epoch_p2p_address = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self))) {
-        self.metadata.primary_address = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_primary_address);
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_primary_address">next_epoch_primary_address</a>(self).is_some()) {
+        self.metadata.primary_address = self.metadata.next_epoch_primary_address.extract();
         self.metadata.next_epoch_primary_address = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self))) {
-        self.metadata.worker_address = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_worker_address);
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_worker_address">next_epoch_worker_address</a>(self).is_some()) {
+        self.metadata.worker_address = self.metadata.next_epoch_worker_address.extract();
         self.metadata.next_epoch_worker_address = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>(self))) {
-        self.metadata.protocol_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_protocol_pubkey_bytes);
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_protocol_pubkey_bytes">next_epoch_protocol_pubkey_bytes</a>(self).is_some()) {
+        self.metadata.protocol_pubkey_bytes = self.metadata.next_epoch_protocol_pubkey_bytes.extract();
         self.metadata.next_epoch_protocol_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
-        self.metadata.proof_of_possession = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_proof_of_possession);
+        self.metadata.proof_of_possession = self.metadata.next_epoch_proof_of_possession.extract();
         self.metadata.next_epoch_proof_of_possession = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>(self))) {
-        self.metadata.network_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_network_pubkey_bytes);
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_network_pubkey_bytes">next_epoch_network_pubkey_bytes</a>(self).is_some()) {
+        self.metadata.network_pubkey_bytes = self.metadata.next_epoch_network_pubkey_bytes.extract();
         self.metadata.next_epoch_network_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 
-    <b>if</b> (<a href="../move-stdlib/option.md#0x1_option_is_some">option::is_some</a>(<a href="validator.md#0x3_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>(self))) {
-        self.metadata.worker_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_extract">option::extract</a>(&<b>mut</b> self.metadata.next_epoch_worker_pubkey_bytes);
+    <b>if</b> (<a href="validator.md#0x3_validator_next_epoch_worker_pubkey_bytes">next_epoch_worker_pubkey_bytes</a>(self).is_some()) {
+        self.metadata.worker_pubkey_bytes = self.metadata.next_epoch_worker_pubkey_bytes.extract();
         self.metadata.next_epoch_worker_pubkey_bytes = <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
     };
 }
@@ -2849,7 +2844,7 @@ Aborts if validator metadata is valid
 <summary>Implementation</summary>
 
 
-<pre><code><b>public</b>(<b>friend</b>) <b>fun</b> <a href="validator.md#0x3_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>) : &StakingPool {
+<pre><code><b>public</b>(package) <b>fun</b> <a href="validator.md#0x3_validator_get_staking_pool_ref">get_staking_pool_ref</a>(self: &<a href="validator.md#0x3_validator_Validator">Validator</a>) : &StakingPool {
     &self.<a href="staking_pool.md#0x3_staking_pool">staking_pool</a>
 }
 </code></pre>

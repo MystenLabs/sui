@@ -102,7 +102,7 @@ query {
 This example finds all the transactions that touched (modified/transferred/deleted) a given object. This is useful for when we want to trace the flow of a Coin/StakeSui/NFT.
 
 :::info
-This example uses GraphQL [variables](../../../concepts/graphql-rpc/variables.mdx) and [pagination](../../../concepts/graphql-rpc/pagination.mdx). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
+This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination). When using the online IDE, copy the variables JSON to the "Variables" window, below the main editor.
 :::
 
 ```graphql
@@ -190,7 +190,7 @@ query ($address: SuiAddress!) {
 ## Fetching a dynamic field on an object
 
 :::info
-This example uses aliases and [fragments](../../../concepts/graphql-rpc/fragments.mdx).
+This example uses aliases and [fragments](../../../concepts/graphql-rpc.mdx#fragments).
 :::
 
 ```graphql
@@ -242,10 +242,10 @@ fragment MoveValueFields on MoveValue {
 
 ## Fetching all dynamic fields on an object
 
-This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the [owner](../../../references/sui-api/sui-graphql/reference/queries/owner.mdx) query, so can be used for iterating over the elements of on-chain data structures, like [Tables and Bags](../../../concepts/dynamic-fields/tables-bags.mdx).
+This query can be used to paginate over the dynamic fields of an object. This works even when the object in question is [wrapped](../../../concepts/object-ownership/wrapped.mdx), by using the <a href="/references/sui-api/sui-graphql/reference/queries/owner" data-noBrokenLinkCheck='true'>owner</a> query, so can be used for iterating over the elements of on-chain data structures, like [Tables and Bags](../../../concepts/dynamic-fields/tables-bags.mdx).
 
 :::info
-This example uses [fragments](../../../concepts/graphql-rpc/fragments.mdx) and [variables](../../../concepts/graphql-rpc/variables.mdx).
+This example uses [fragments](../../../concepts/graphql-rpc.mdx#fragments) and [variables](../../../concepts/graphql-rpc.mdx#variables).
 :::
 
 ```graphql
@@ -299,7 +299,7 @@ Sets up a paginated query, starting at the genesis checkpoint, reading five chec
 
 :::info
 
-This example uses GraphQL [variables](../../../concepts/graphql-rpc/variables.mdx) and [pagination](../../../concepts/graphql-rpc/pagination.mdx).
+This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
 
 :::
 
@@ -323,7 +323,7 @@ query ($before: String) {
 Sets up a paginated query, starting at the latest indexed checkpoint, reading five checkpoints at a time, in decreasing order of sequence number. The value of `pageInfo.hasPreviousPage` determines whether there is another page to be read, and the value of `pageInfo.startCursor` is fed back in as the cursor to read `$before`.
 
 :::info
-This example uses GraphQL [variables](../../../concepts/graphql-rpc/variables.mdx) and [pagination](../../../concepts/graphql-rpc/pagination.mdx).
+This example uses GraphQL [variables](../../../concepts/graphql-rpc.mdx#variables) and [pagination](../../../concepts/graphql-rpc.mdx#pagination).
 :::
 
 ## Executing a transaction

@@ -8,7 +8,6 @@
 
 // Bounds checks are implemented in the `vm` crate.
 pub mod ability_field_requirements;
-pub mod absint;
 pub mod check_duplication;
 pub mod code_unit_verifier;
 pub mod constants;
@@ -36,13 +35,11 @@ pub use signature::SignatureChecker;
 pub use struct_defs::RecursiveStructDefChecker;
 pub use verifier::{
     verify_module_unmetered, verify_module_with_config_for_test, verify_module_with_config_metered,
-    verify_module_with_config_unmetered, verify_script_unmetered,
-    verify_script_with_config_metered, verify_script_with_config_unmetered,
+    verify_module_with_config_unmetered,
 };
 
 mod acquires_list_verifier;
 mod locals_safety;
-pub mod meter;
 mod reference_safety;
 mod regression_tests;
 mod stack_usage_verifier;

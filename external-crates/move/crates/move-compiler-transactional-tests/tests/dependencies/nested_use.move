@@ -1,8 +1,7 @@
 //# init --edition 2024.alpha
 
 //# publish
-address 0x42 {
-module example {
+module 0x42::example {
     use std::{vector::{Self as vec, push_back}, string::{String, Self as str}};
 
     fun example(s: &mut String) {
@@ -11,5 +10,4 @@ module example {
         push_back(&mut v, 10);
         str::append_utf8(s, v);
     }
-}
 }

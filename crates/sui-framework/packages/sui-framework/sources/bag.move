@@ -22,14 +22,12 @@
 /// deleted, even if it has dynamic fields associated with it, but a bag, on the other hand, must be
 /// empty to be destroyed.
 module sui::bag {
-    use sui::object::{Self, UID};
     use sui::dynamic_field as field;
-    use sui::tx_context::TxContext;
 
     // Attempted to destroy a non-empty bag
     const EBagNotEmpty: u64 = 0;
 
-    struct Bag has key, store {
+    public struct Bag has key, store {
         /// the ID of this bag
         id: UID,
         /// the number of key-value pairs in the bag
@@ -52,6 +50,7 @@ module sui::bag {
         bag.size = bag.size + 1;
     }
 
+    #[syntax(index)]
     /// Immutable borrows the value associated with the key in the bag `bag: &Bag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.
@@ -61,6 +60,7 @@ module sui::bag {
         field::borrow(&bag.id, k)
     }
 
+    #[syntax(index)]
     /// Mutably borrows the value associated with the key in the bag `bag: &mut Bag`.
     /// Aborts with `sui::dynamic_field::EFieldDoesNotExist` if the bag does not have an entry with
     /// that key `k: K`.
@@ -107,6 +107,6 @@ module sui::bag {
     public fun destroy_empty(bag: Bag) {
         let Bag { id, size } = bag;
         assert!(size == 0, EBagNotEmpty);
-        object::delete(id)
+        id.delete()
     }
 }

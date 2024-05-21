@@ -1,10 +1,9 @@
-address 0x2 {
-module X {
+module 0x2::X {
     struct S {}
     public fun foo() {}
 }
 
-module M {
+module 0x2::M {
     use 0x2::X;
     use 0x2::X::Self;
 
@@ -12,5 +11,4 @@ module M {
     fun foo() {
         X::foo()
     }
-}
 }

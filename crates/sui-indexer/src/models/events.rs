@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::str::FromStr;
+use std::sync::Arc;
 
 use diesel::prelude::*;
-use move_bytecode_utils::module_cache::GetModule;
-use move_core_types::annotated_value::MoveStruct;
-use move_core_types::identifier::Identifier;
 
+use move_core_types::annotated_value::MoveTypeLayout;
+use move_core_types::identifier::Identifier;
 use sui_json_rpc_types::{SuiEvent, SuiMoveStruct};
+use sui_package_resolver::{PackageStore, Resolver};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::digests::TransactionDigest;
 use sui_types::event::EventID;
-use sui_types::object::MoveObject;
+use sui_types::object::bounded_visitor::BoundedVisitor;
 use sui_types::parse_sui_struct_tag;
 
 use crate::errors::IndexerError;
@@ -28,16 +29,22 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub event_sequence_number: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub transaction_digest: Vec<u8>,
 
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub checkpoint_sequence_number: i64,
 
+    #[cfg(feature = "postgres-feature")]
     #[diesel(sql_type = diesel::sql_types::Array<diesel::sql_types::Nullable<diesel::pg::sql_types::Bytea>>)]
     pub senders: Vec<Option<Vec<u8>>>,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[cfg(feature = "mysql-feature")]
+    #[cfg(not(feature = "postgres-feature"))]
+    #[diesel(sql_type = diesel::sql_types::Json)]
+    pub senders: serde_json::Value,
+
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub package: Vec<u8>,
 
     #[diesel(sql_type = diesel::sql_types::Text)]
@@ -46,12 +53,28 @@ pub struct StoredEvent {
     #[diesel(sql_type = diesel::sql_types::Text)]
     pub event_type: String,
 
+    #[diesel(sql_type = diesel::sql_types::Binary)]
+    pub event_type_package: Vec<u8>,
+
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub event_type_module: String,
+
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    pub event_type_name: String,
+
     #[diesel(sql_type = diesel::sql_types::BigInt)]
     pub timestamp_ms: i64,
 
-    #[diesel(sql_type = diesel::sql_types::Bytea)]
+    #[diesel(sql_type = diesel::sql_types::Binary)]
     pub bcs: Vec<u8>,
 }
+
+#[cfg(feature = "postgres-feature")]
+pub type SendersType = Vec<Option<Vec<u8>>>;
+
+#[cfg(feature = "postgres-feature")]
+#[cfg(not(feature = "postgres-feature"))]
+pub type SendersType = serde_json::Value;
 
 impl From<IndexedEvent> for StoredEvent {
     fn from(event: IndexedEvent) -> Self {
@@ -60,14 +83,21 @@ impl From<IndexedEvent> for StoredEvent {
             event_sequence_number: event.event_sequence_number as i64,
             transaction_digest: event.transaction_digest.into_inner().to_vec(),
             checkpoint_sequence_number: event.checkpoint_sequence_number as i64,
+            #[cfg(feature = "postgres-feature")]
             senders: event
                 .senders
                 .into_iter()
                 .map(|sender| Some(sender.to_vec()))
                 .collect(),
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            senders: serde_json::to_value(event.senders).unwrap(),
             package: event.package.to_vec(),
             module: event.module.clone(),
             event_type: event.event_type.clone(),
+            event_type_package: event.event_type_package.to_vec(),
+            event_type_module: event.event_type_module.clone(),
+            event_type_name: event.event_type_name.clone(),
             bcs: event.bcs.clone(),
             timestamp_ms: event.timestamp_ms as i64,
         }
@@ -75,9 +105,9 @@ impl From<IndexedEvent> for StoredEvent {
 }
 
 impl StoredEvent {
-    pub fn try_into_sui_event(
+    pub async fn try_into_sui_event(
         self,
-        module_cache: &impl GetModule,
+        package_resolver: Arc<Resolver<impl PackageStore>>,
     ) -> Result<SuiEvent, IndexerError> {
         let package_id = ObjectID::from_bytes(self.package.clone()).map_err(|_e| {
             IndexerError::PersistentStorageDataCorruptionError(format!(
@@ -86,13 +116,37 @@ impl StoredEvent {
             ))
         })?;
         // Note: SuiEvent only has one sender today, so we always use the first one.
-        let sender = self.senders.first().ok_or_else(|| {
-            IndexerError::PersistentStorageDataCorruptionError(
-                "Event senders should contain at least one address".to_string(),
-            )
-        })?;
+        let sender = {
+            #[cfg(feature = "postgres-feature")]
+            {
+                self.senders.first().ok_or_else(|| {
+                    IndexerError::PersistentStorageDataCorruptionError(
+                        "Event senders should contain at least one address".to_string(),
+                    )
+                })?
+            }
+            #[cfg(feature = "mysql-feature")]
+            #[cfg(not(feature = "postgres-feature"))]
+            {
+                self.senders
+                    .as_array()
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(
+                            "Failed to parse event senders as array".to_string(),
+                        )
+                    })?
+                    .first()
+                    .ok_or_else(|| {
+                        IndexerError::PersistentStorageDataCorruptionError(
+                            "Event senders should contain at least one address".to_string(),
+                        )
+                    })?
+                    .as_str()
+                    .map(|s| s.as_bytes().to_vec())
+            }
+        };
         let sender = match sender {
-            Some(s) => SuiAddress::from_bytes(s).map_err(|_e| {
+            Some(ref s) => SuiAddress::from_bytes(s).map_err(|_e| {
                 IndexerError::PersistentStorageDataCorruptionError(format!(
                     "Failed to parse event sender address: {:?}",
                     sender
@@ -106,9 +160,21 @@ impl StoredEvent {
         };
 
         let type_ = parse_sui_struct_tag(&self.event_type)?;
-
-        let layout = MoveObject::get_layout_from_struct_tag(type_.clone(), module_cache)?;
-        let move_object = MoveStruct::simple_deserialize(&self.bcs, &layout)
+        let move_type_layout = package_resolver
+            .type_layout(type_.clone().into())
+            .await
+            .map_err(|e| {
+                IndexerError::ResolveMoveStructError(format!(
+                    "Failed to convert to sui event with Error: {e}",
+                ))
+            })?;
+        let move_struct_layout = match move_type_layout {
+            MoveTypeLayout::Struct(s) => Ok(s),
+            _ => Err(IndexerError::ResolveMoveStructError(
+                "MoveTypeLayout is not Struct".to_string(),
+            )),
+        }?;
+        let move_object = BoundedVisitor::deserialize_struct(&self.bcs, &move_struct_layout)
             .map_err(|e| IndexerError::SerdeError(e.to_string()))?;
         let parsed_json = SuiMoveStruct::from(move_object).to_json_value();
         let tx_digest =

@@ -3,7 +3,7 @@ name = "name"
 license = "license"
 authors = ["some author"]
 edition = "legacy"
-flavor = "global-storage"
+flavor = "core"
 
 [addresses]
 std = "_"

@@ -1745,7 +1745,7 @@ async fn test_have_deleted_owned_object() {
 
         let (new_parent, new_child) = get_parent_and_child(effects.mutated());
 
-        let cache = runner.authority_state.get_cache_reader().clone();
+        let cache = runner.authority_state.get_object_cache_reader().clone();
 
         assert!(cache.get_object(&new_child.0.0).unwrap().is_some());
         // Should not show as deleted for either versions

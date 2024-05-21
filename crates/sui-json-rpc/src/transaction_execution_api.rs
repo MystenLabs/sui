@@ -146,12 +146,35 @@ impl TransactionExecutionApi {
             ExecuteTransactionRequest {
                 transaction: txn,
                 request_type,
-            }
+            },
+            None,
         ))
         .await?
         .map_err(Error::from)?;
         drop(orch_timer);
 
+        self.handle_post_orchestration(
+            response,
+            opts,
+            digest,
+            input_objs,
+            transaction,
+            raw_transaction,
+            sender,
+        )
+        .await
+    }
+
+    async fn handle_post_orchestration(
+        &self,
+        response: ExecuteTransactionResponse,
+        opts: SuiTransactionBlockResponseOptions,
+        digest: TransactionDigest,
+        input_objs: Vec<InputObjectKind>,
+        transaction: Option<SuiTransactionBlock>,
+        raw_transaction: Vec<u8>,
+        sender: SuiAddress,
+    ) -> Result<SuiTransactionBlockResponse, Error> {
         let _post_orch_timer = self.metrics.post_orchestrator_latency_ms.start_timer();
         let ExecuteTransactionResponse::EffectsCert(cert) = response;
         let (effects, transaction_events, is_executed_locally) = *cert;

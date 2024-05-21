@@ -20,15 +20,15 @@ module utils::immutable_external_resource_tests {
 
         let url = url::new_unsafe(url_str);
         let digest = sha3_256(hash);
-        let resource = immutable_external_resource::new(url, digest);
+        let mut resource = immutable_external_resource::new(url, digest);
 
-        assert!(immutable_external_resource::url(&resource) == url, EUrlStringMisMatch);
-        assert!(immutable_external_resource::digest(&resource) == digest, EHashStringMisMatch);
+        assert!(resource.url() == url, EUrlStringMisMatch);
+        assert!(resource.digest() == digest, EHashStringMisMatch);
 
         let new_url_str = ascii::string(x"37414243454647");
         let new_url = url::new_unsafe(new_url_str);
 
-        immutable_external_resource::update(&mut resource, new_url);
-        assert!(immutable_external_resource::url(&resource) == new_url, EUrlStringMisMatch);
+        resource.update(new_url);
+        assert!(resource.url() == new_url, EUrlStringMisMatch);
     }
 }

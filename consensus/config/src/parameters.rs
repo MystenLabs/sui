@@ -14,12 +14,9 @@ use serde::{Deserialize, Serialize};
 /// should not need to specify any field, except db_path.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
-    /// The number of rounds of blocks to be kept in the Dag state cache per authority. The larger
-    /// the number the more the blocks that will be kept in memory allowing minimising any potential
-    /// disk access. Should be careful when tuning this parameter as it could be quite memory expensive.
-    /// Value should be at minimum 50 rounds to ensure node performance and protocol advance.
-    #[serde(default = "Parameters::default_dag_state_cached_rounds")]
-    pub dag_state_cached_rounds: u32,
+    /// The database path.
+    /// Required.
+    pub db_path: Option<PathBuf>,
 
     /// Time to wait for parent round leader before sealing a block.
     #[serde(default = "Parameters::default_leader_timeout")]
@@ -36,52 +33,113 @@ pub struct Parameters {
     #[serde(default = "Parameters::default_max_forward_time_drift")]
     pub max_forward_time_drift: Duration,
 
-    /// The database path.
-    /// Required.
-    pub db_path: Option<PathBuf>,
+    /// Number of blocks to fetch per request.
+    #[serde(default = "Parameters::default_max_blocks_per_fetch")]
+    pub max_blocks_per_fetch: usize,
+
+    /// The number of rounds of blocks to be kept in the Dag state cache per authority. The larger
+    /// the number the more the blocks that will be kept in memory allowing minimising any potential
+    /// disk access.
+    /// Value should be at minimum 50 rounds to ensure node performance, but being too large can be
+    /// expensive in memory usage.
+    #[serde(default = "Parameters::default_dag_state_cached_rounds")]
+    pub dag_state_cached_rounds: u32,
+
+    // Number of authorities commit syncer fetches in parallel.
+    // Both commits in a range and blocks referenced by the commits are fetched per authority.
+    #[serde(default = "Parameters::default_commit_sync_parallel_fetches")]
+    pub commit_sync_parallel_fetches: usize,
+
+    // Number of commits to fetch in a batch, also the maximum number of commits returned per fetch.
+    // If this value is set too small, fetching becomes inefficient.
+    // If this value is set too large, it can result in load imbalance and stragglers.
+    #[serde(default = "Parameters::default_commit_sync_batch_size")]
+    pub commit_sync_batch_size: u32,
+
+    // Maximum number of commit batches being fetched, before throttling
+    // of outgoing commit fetches starts.
+    #[serde(default = "Parameters::default_commit_sync_batches_ahead")]
+    pub commit_sync_batches_ahead: usize,
 
     /// Anemo network settings.
     #[serde(default = "AnemoParameters::default")]
     pub anemo: AnemoParameters,
+
+    /// Tonic network settings.
+    #[serde(default = "TonicParameters::default")]
+    pub tonic: TonicParameters,
 }
 
 impl Parameters {
-    pub fn default_dag_state_cached_rounds() -> u32 {
-        100
-    }
-
-    pub fn default_leader_timeout() -> Duration {
+    pub(crate) fn default_leader_timeout() -> Duration {
         Duration::from_millis(250)
     }
 
-    pub fn default_min_round_delay() -> Duration {
-        Duration::from_millis(50)
+    pub(crate) fn default_min_round_delay() -> Duration {
+        if cfg!(msim) || std::env::var("__TEST_ONLY_CONSENSUS_USE_LONG_MIN_ROUND_DELAY").is_ok() {
+            // Checkpoint building and execution cannot keep up with high commit rate in simtests,
+            // leading to long reconfiguration delays. This is because simtest is single threaded,
+            // and spending too much time in consensus can lead to starvation elsewhere.
+            Duration::from_millis(400)
+        } else {
+            Duration::from_millis(50)
+        }
     }
 
-    pub fn default_max_forward_time_drift() -> Duration {
+    pub(crate) fn default_max_forward_time_drift() -> Duration {
         Duration::from_millis(500)
     }
 
-    pub fn db_path_str_unsafe(&self) -> String {
-        self.db_path
-            .clone()
-            .expect("DB path is not set")
-            .as_path()
-            .to_str()
-            .unwrap()
-            .to_string()
+    pub(crate) fn default_dag_state_cached_rounds() -> u32 {
+        if cfg!(msim) {
+            // Exercise reading blocks from store.
+            5
+        } else {
+            500
+        }
+    }
+
+    pub(crate) fn default_commit_sync_parallel_fetches() -> usize {
+        20
+    }
+
+    pub(crate) fn default_commit_sync_batch_size() -> u32 {
+        if cfg!(msim) {
+            // Exercise commit sync.
+            5
+        } else {
+            100
+        }
+    }
+
+    pub(crate) fn default_max_blocks_per_fetch() -> usize {
+        if cfg!(msim) {
+            // Exercise hitting blocks per fetch limit.
+            10
+        } else {
+            1000
+        }
+    }
+
+    pub(crate) fn default_commit_sync_batches_ahead() -> usize {
+        200
     }
 }
 
 impl Default for Parameters {
     fn default() -> Self {
         Self {
-            dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
+            db_path: None,
             leader_timeout: Parameters::default_leader_timeout(),
             min_round_delay: Parameters::default_min_round_delay(),
             max_forward_time_drift: Parameters::default_max_forward_time_drift(),
-            db_path: None,
+            dag_state_cached_rounds: Parameters::default_dag_state_cached_rounds(),
+            max_blocks_per_fetch: Parameters::default_max_blocks_per_fetch(),
+            commit_sync_parallel_fetches: Parameters::default_commit_sync_parallel_fetches(),
+            commit_sync_batch_size: Parameters::default_commit_sync_batch_size(),
+            commit_sync_batches_ahead: Parameters::default_commit_sync_batches_ahead(),
             anemo: AnemoParameters::default(),
+            tonic: TonicParameters::default(),
         }
     }
 }
@@ -93,7 +151,13 @@ pub struct AnemoParameters {
     ///
     /// If unspecified, this will default to 8 MiB.
     #[serde(default = "AnemoParameters::default_excessive_message_size")]
-    excessive_message_size: usize,
+    pub excessive_message_size: usize,
+}
+
+impl AnemoParameters {
+    fn default_excessive_message_size() -> usize {
+        8 << 20
+    }
 }
 
 impl Default for AnemoParameters {
@@ -104,12 +168,47 @@ impl Default for AnemoParameters {
     }
 }
 
-impl AnemoParameters {
-    pub fn excessive_message_size(&self) -> usize {
-        self.excessive_message_size
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TonicParameters {
+    /// Keepalive interval and timeouts for both client and server.
+    ///
+    /// If unspecified, this will default to 5s.
+    #[serde(default = "TonicParameters::default_keepalive_interval")]
+    pub keepalive_interval: Duration,
+
+    /// Size of various per-connection buffers.
+    ///
+    /// If unspecified, this will default to 32MiB.
+    #[serde(default = "TonicParameters::default_connection_buffer_size")]
+    pub connection_buffer_size: usize,
+
+    /// Message size limits for both requests and responses.
+    ///
+    /// If unspecified, this will default to 8MiB.
+    #[serde(default = "TonicParameters::default_message_size_limit")]
+    pub message_size_limit: usize,
+}
+
+impl TonicParameters {
+    fn default_keepalive_interval() -> Duration {
+        Duration::from_secs(5)
     }
 
-    fn default_excessive_message_size() -> usize {
+    fn default_connection_buffer_size() -> usize {
+        32 << 20
+    }
+
+    fn default_message_size_limit() -> usize {
         8 << 20
+    }
+}
+
+impl Default for TonicParameters {
+    fn default() -> Self {
+        Self {
+            keepalive_interval: TonicParameters::default_keepalive_interval(),
+            connection_buffer_size: TonicParameters::default_connection_buffer_size(),
+            message_size_limit: TonicParameters::default_message_size_limit(),
+        }
     }
 }

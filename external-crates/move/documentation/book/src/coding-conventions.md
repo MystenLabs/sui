@@ -1,1 +1,1 @@
-TODO link to sui conventions? Migrate them here and link out to them?
+See [Sui's Coding Conventions for Move](https://docs.sui.io/concepts/sui-move-concepts/conventions)

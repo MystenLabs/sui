@@ -656,6 +656,7 @@ fn find_all_wrapped_objects<'a>(
             }
         };
         let blob = value.borrow().simple_serialize(&layout).unwrap();
+        // TODO (annotated-visitor): Replace with a custom visitor.
         let move_value = MoveValue::simple_deserialize(&blob, &annotated_layout).unwrap();
         let uid = UID::type_();
         visit_structs(&move_value, |depth, tag, fields| {

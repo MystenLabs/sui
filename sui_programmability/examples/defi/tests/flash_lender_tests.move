@@ -15,38 +15,38 @@ module defi::flash_lender_tests {
         let borrower = @0x2;
 
         // admin creates a flash lender with 100 coins and a fee of 1 coin
-        let scenario_val = test_scenario::begin(admin);
+        let mut scenario_val = test_scenario::begin(admin);
         let scenario = &mut scenario_val;
         {
-            let ctx = test_scenario::ctx(scenario);
+            let ctx = scenario.ctx();
             let coin = coin::mint_for_testing<SUI>(100, ctx);
             flash_lender::create(coin, 1, ctx);
         };
         // borrower requests and repays a loan of 10 coins + the fee
         test_scenario::next_tx(scenario, borrower);
         {
-            let lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
+            let mut lender_val = scenario.take_shared<FlashLender<SUI>>();
             let lender = &mut lender_val;
-            let ctx = test_scenario::ctx(scenario);
+            let ctx = scenario.ctx();
 
             let (loan, receipt) = flash_lender::loan(lender, 10, ctx);
             // in practice, borrower does something (e.g., arbitrage) to make a profit from the loan.
             // simulate this by minting the borrower 5 coins.
-            let profit = coin::mint_for_testing<SUI>(5, ctx);
+            let mut profit = coin::mint_for_testing<SUI>(5, ctx);
             coin::join(&mut profit, loan);
-            let to_keep = coin::take(coin::balance_mut(&mut profit), 4, ctx);
+            let to_keep = coin::take(profit.balance_mut(), 4, ctx);
             pay::keep(to_keep, ctx);
             flash_lender::repay(lender, profit, receipt);
 
             test_scenario::return_shared(lender_val);
         };
         // admin withdraws the 1 coin profit from lending
-        test_scenario::next_tx(scenario, admin);
+        scenario.next_tx( admin);
         {
-            let lender_val = test_scenario::take_shared<FlashLender<SUI>>(scenario);
+            let mut lender_val = scenario.take_shared<FlashLender<SUI>>();
             let lender = &mut lender_val;
-            let admin_cap = test_scenario::take_from_sender<AdminCap>(scenario);
-            let ctx = test_scenario::ctx(scenario);
+            let admin_cap = scenario.take_from_sender<AdminCap>();
+            let ctx = scenario.ctx();
 
             // max loan size should have increased because of the fee payment
             assert!(flash_lender::max_loan(lender) == 101, 0);
@@ -57,8 +57,8 @@ module defi::flash_lender_tests {
             pay::keep(coin, ctx);
 
             test_scenario::return_shared(lender_val);
-            test_scenario::return_to_sender(scenario, admin_cap);
+            scenario.return_to_sender(admin_cap);
         };
-        test_scenario::end(scenario_val);
+        scenario_val.end();
     }
 }

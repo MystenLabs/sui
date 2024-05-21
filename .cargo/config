@@ -14,16 +14,29 @@ xtest = "run --package x --bin x -- external-crates-tests"
 # Configuration specifically for running clippy on `external-crates/move/`.
 # Some of these allows are to avoid code churn; others are filed as issues on the `sui` repo now.
 move-clippy = [
-    "clippy", "--",
+    "clippy",
+    "--all-targets",
+    "--",
     "-Wclippy::all",
     "-Wclippy::disallowed_methods",
     "-Aclippy::upper_case_acronyms",
     "-Aclippy::type_complexity",
-    # Remove after https://github.com/rust-lang/rust-clippy/pull/11792 is released.
-    "-Aclippy::map_identity",
     "-Aclippy::new_without_default",
-    "-Aclippy::box_default",
-    "-Aclippy::manual_slice_size_calculation",
+]
+
+mysql-clippy = [
+    "clippy",
+    "--package",
+    "sui-indexer",
+    "--features",
+    "mysql-feature",
+    "--no-default-features",
+    "--",
+    "-Wclippy::all",
+    "-Wclippy::disallowed_methods",
+    "-Aclippy::upper_case_acronyms",
+    "-Aclippy::type_complexity",
+    "-Aclippy::new_without_default",
 ]
 
 [build]

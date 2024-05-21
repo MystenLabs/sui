@@ -808,7 +808,7 @@ export const RPC_METHODS: {
 			stakeSubsidyDistributionCounter: String(systemState.systemStakeSubsidy?.distributionCounter),
 			stakeSubsidyPeriodLength: String(systemState.systemStakeSubsidy?.periodLength),
 			stakeSubsidyStartEpoch: String(systemState.systemParameters?.stakeSubsidyStartEpoch),
-			stakingPoolMappingsSize: String(systemState.validatorSet?.stakePoolMappingsSize),
+			stakingPoolMappingsSize: String(systemState.validatorSet?.stakingPoolMappingsSize),
 			storageFundNonRefundableBalance: String(systemState.storageFund?.nonRefundableBalance),
 			storageFundTotalObjectStorageRebates: String(
 				systemState.storageFund?.totalObjectStorageRebates,
@@ -965,7 +965,7 @@ export const RPC_METHODS: {
 					cursor,
 				},
 			},
-			(data) => data.object?.dynamicFields,
+			(data) => data.owner?.dynamicFields,
 		);
 
 		return {
@@ -1014,9 +1014,9 @@ export const RPC_METHODS: {
 				},
 			},
 			(data) => {
-				return data.object?.dynamicObjectField?.value?.__typename === 'MoveObject'
-					? data.object.dynamicObjectField.value.owner?.__typename === 'Parent'
-						? data.object.dynamicObjectField.value.owner.parent
+				return data.owner?.dynamicObjectField?.value?.__typename === 'MoveObject'
+					? data.owner.dynamicObjectField.value.owner?.__typename === 'Parent'
+						? data.owner.dynamicObjectField.value.owner.parent
 						: undefined
 					: undefined;
 			},
@@ -1326,6 +1326,7 @@ export const RPC_METHODS: {
 		const attributes: Record<string, ProtocolConfigValue | null> = {};
 
 		const configTypeMap: Record<string, string> = {
+			max_accumulated_txn_cost_per_object_in_checkpoint: 'u64',
 			max_arguments: 'u32',
 			max_gas_payment_objects: 'u32',
 			max_modules_in_publish: 'u32',
@@ -1334,6 +1335,7 @@ export const RPC_METHODS: {
 			max_type_argument_depth: 'u32',
 			max_type_arguments: 'u32',
 			move_binary_format_version: 'u32',
+			min_move_binary_format_version: 'u32',
 			random_beacon_reduction_allowed_delta: 'u16',
 			random_beacon_dkg_timeout_round: 'u32',
 			random_beacon_reduction_lower_bound: 'u32',
@@ -1358,9 +1360,12 @@ export const RPC_METHODS: {
 		};
 
 		for (const { key, value } of protocolConfig.configs) {
-			attributes[key] = {
-				[configTypeMap[key] ?? 'u64']: value,
-			} as ProtocolConfigValue;
+			attributes[key] =
+				value === null
+					? null
+					: ({
+							[configTypeMap[key] ?? 'u64']: value,
+					  } as ProtocolConfigValue);
 		}
 
 		for (const { key, value } of protocolConfig.featureFlags) {

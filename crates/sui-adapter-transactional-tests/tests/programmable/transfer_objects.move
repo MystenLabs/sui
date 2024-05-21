@@ -7,9 +7,6 @@
 
 //# publish
 module test::m1 {
-    use sui::object::{Self, UID};
-    use sui::tx_context::TxContext;
-
     public struct Pub has key, store {
         id: UID,
         value: u64,

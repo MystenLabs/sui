@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::dynamic_object_field`
 ---
@@ -80,7 +79,7 @@ Aborts with <code>EFieldAlreadyExists</code> if the object already has that fiel
     <b>let</b> id = <a href="../sui-framework/object.md#0x2_object_id">object::id</a>(&value);
     field::add(<a href="../sui-framework/object.md#0x2_object">object</a>, key, id);
     <b>let</b> (field, _) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    add_child_object(<a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(field), value);
+    add_child_object(field.to_address(), value);
 }
 </code></pre>
 
@@ -180,7 +179,7 @@ specified type.
 ): Value {
     <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    <b>let</b> value = remove_child_object&lt;Value&gt;(<a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(field), value_id);
+    <b>let</b> value = remove_child_object&lt;Value&gt;(field.to_address(), value_id);
     field::remove&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
     value
 }
@@ -244,7 +243,7 @@ Returns true if and only if the <code><a href="../sui-framework/object.md#0x2_ob
     <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>if</b> (!field::exists_with_type&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key)) <b>return</b> <b>false</b>;
     <b>let</b> (field, value_id) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    field::has_child_object_with_ty&lt;Value&gt;(<a href="../sui-framework/object.md#0x2_object_uid_to_address">object::uid_to_address</a>(field), value_id)
+    field::has_child_object_with_ty&lt;Value&gt;(field.to_address(), value_id)
 }
 </code></pre>
 
@@ -275,8 +274,8 @@ Returns none otherwise
 ): Option&lt;ID&gt; {
     <b>let</b> key = <a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a> { name };
     <b>if</b> (!field::exists_with_type&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;, ID&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key)) <b>return</b> <a href="../move-stdlib/option.md#0x1_option_none">option::none</a>();
-    <b>let</b> (_field, value_id) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
-    <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(<a href="../sui-framework/object.md#0x2_object_id_from_address">object::id_from_address</a>(value_id))
+    <b>let</b> (_field, value_addr) = field::field_info&lt;<a href="../sui-framework/dynamic_object_field.md#0x2_dynamic_object_field_Wrapper">Wrapper</a>&lt;Name&gt;&gt;(<a href="../sui-framework/object.md#0x2_object">object</a>, key);
+    <a href="../move-stdlib/option.md#0x1_option_some">option::some</a>(value_addr.to_id())
 }
 </code></pre>
 

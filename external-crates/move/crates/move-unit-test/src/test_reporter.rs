@@ -5,14 +5,11 @@
 use crate::format_module_id;
 use codespan_reporting::files::{Files, SimpleFiles};
 use colored::{control, Colorize};
-use move_binary_format::{
-    access::ModuleAccess,
-    errors::{ExecutionState, Location, VMError, VMResult},
-};
+use move_binary_format::errors::{ExecutionState, Location, VMError};
 use move_command_line_common::files::FileHash;
 use move_compiler::{
     diagnostics::{self, Diagnostic, Diagnostics},
-    unit_test::{ModuleTestPlan, TestName, TestPlan},
+    unit_test::{ModuleTestPlan, MoveErrorType, TestName, TestPlan},
 };
 use move_core_types::{language_storage::ModuleId, vm_status::StatusType};
 use move_ir_types::location::Loc;
@@ -33,16 +30,11 @@ pub enum FailureReason {
     // Aborted with the wrong code
     WrongError(String, MoveError, MoveError),
     // Aborted with the wrong code, without location specified
-    WrongAbortDEPRECATED(String, u64, MoveError),
+    WrongAbortDEPRECATED(String, MoveErrorType, MoveError),
     // Error wasn't expected, but it did
     UnexpectedError(String, MoveError),
     // Test timed out
     Timeout(String),
-    // The execution results of the Move VM and stackless VM does not match
-    Mismatch {
-        move_vm_return_values: Box<VMResult<Vec<Vec<u8>>>>,
-        stackless_vm_return_values: Box<VMResult<Vec<Vec<u8>>>>,
-    },
     // Property checking failed
     Property(String),
 }
@@ -97,7 +89,7 @@ impl FailureReason {
         )
     }
 
-    pub fn wrong_abort_deprecated(expected: u64, actual: MoveError) -> Self {
+    pub fn wrong_abort_deprecated(expected: MoveErrorType, actual: MoveError) -> Self {
         FailureReason::WrongAbortDEPRECATED(
             "Test did not abort with expected code".to_string(),
             expected,
@@ -111,16 +103,6 @@ impl FailureReason {
 
     pub fn timeout() -> Self {
         FailureReason::Timeout("Test timed out".to_string())
-    }
-
-    pub fn mismatch(
-        move_vm_return_values: VMResult<Vec<Vec<u8>>>,
-        stackless_vm_return_values: VMResult<Vec<Vec<u8>>>,
-    ) -> Self {
-        FailureReason::Mismatch {
-            move_vm_return_values: Box::new(move_vm_return_values),
-            stackless_vm_return_values: Box::new(stackless_vm_return_values),
-        }
     }
 
     pub fn property(details: String) -> Self {
@@ -186,18 +168,6 @@ impl TestFailure {
                     error.verbiage(/* is_past_tense */ true)
                 );
                 Self::report_error_with_location(test_plan, base_message, &self.vm_error)
-            }
-            FailureReason::Mismatch {
-                move_vm_return_values,
-                stackless_vm_return_values,
-            } => {
-                format!(
-                    "Executions via Move VM [M] and stackless VM [S] yield different results.\n\
-                    [M] - return values: {:?}\n\
-                    [S] - return values: {:?}\n\
-                    ",
-                    move_vm_return_values, stackless_vm_return_values,
-                )
             }
             FailureReason::Property(message) => message.clone(),
         }

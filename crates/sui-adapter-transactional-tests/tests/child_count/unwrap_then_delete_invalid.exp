@@ -3,22 +3,22 @@ processed 5 tasks
 init:
 A: object(0,0), B: object(0,1)
 
-task 1 'publish'. lines 9-45:
+task 1 'publish'. lines 9-44:
 created: object(1,0)
 mutated: object(0,2)
 gas summary: computation_cost: 1000000, storage_cost: 6688000,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 2 'run'. lines 47-47:
+task 2 'run'. lines 46-46:
 created: object(2,0)
 mutated: object(0,0)
 gas summary: computation_cost: 1000000, storage_cost: 2196400,  storage_rebate: 0, non_refundable_storage_fee: 0
 
-task 3 'run'. lines 49-49:
+task 3 'run'. lines 48-48:
 created: object(3,0), object(3,1)
 mutated: object(0,0), object(2,0)
 gas summary: computation_cost: 1000000, storage_cost: 5859600,  storage_rebate: 2174436, non_refundable_storage_fee: 21964
 
-task 4 'run'. lines 51-51:
+task 4 'run'. lines 50-50:
 created: object(4,0)
 mutated: object(0,0)
 wrapped: object(2,0)

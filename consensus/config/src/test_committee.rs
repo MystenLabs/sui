@@ -3,11 +3,12 @@
 
 use std::net::{TcpListener, TcpStream};
 
-use fastcrypto::traits::KeyPair;
 use mysten_network::Multiaddr;
 use rand::{rngs::StdRng, SeedableRng as _};
 
-use crate::{Authority, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake};
+use crate::{
+    Authority, AuthorityKeyPair, Committee, Epoch, NetworkKeyPair, ProtocolKeyPair, Stake,
+};
 
 /// Creates a committee for local testing, and the corresponding key pairs for the authorities.
 pub fn local_committee_and_keys(
@@ -18,14 +19,16 @@ pub fn local_committee_and_keys(
     let mut key_pairs = vec![];
     let mut rng = StdRng::from_seed([0; 32]);
     for (i, stake) in authorities_stake.into_iter().enumerate() {
-        let network_keypair = NetworkKeyPair::generate(&mut rng);
+        let authority_keypair = AuthorityKeyPair::generate(&mut rng);
         let protocol_keypair = ProtocolKeyPair::generate(&mut rng);
+        let network_keypair = NetworkKeyPair::generate(&mut rng);
         authorities.push(Authority {
             stake,
             address: get_available_local_address(),
             hostname: format!("test_host_{i}").to_string(),
-            network_key: network_keypair.public().clone(),
-            protocol_key: protocol_keypair.public().clone(),
+            authority_key: authority_keypair.public(),
+            protocol_key: protocol_keypair.public(),
+            network_key: network_keypair.public(),
         });
         key_pairs.push((network_keypair, protocol_keypair));
     }

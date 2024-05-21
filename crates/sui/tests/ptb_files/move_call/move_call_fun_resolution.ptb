@@ -1,4 +1,3 @@
---gas-budget 1000 
 # Try to use identifier/address that is not in scope
 --move-call zero_x_zero::option::is_none<u64> none
 --assign a none 

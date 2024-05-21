@@ -4,7 +4,7 @@
 
 import * as os from 'os';
 import * as vscode from 'vscode';
-import * as Path from 'path';
+import * as path from 'path';
 import { log } from './log';
 import { assert } from 'console';
 
@@ -49,7 +49,20 @@ export class Configuration {
         if (serverPath.startsWith('~/')) {
             return os.homedir() + serverPath.slice('~'.length);
         }
-        return Path.resolve(serverPath);
+        return path.resolve(serverPath);
+    }
+
+    /** The path to the Sui binary. */
+    get suiPath(): string {
+        const suiBin = 'sui';
+        const suiPath = this.configuration.get<string | null >('sui.path') ?? suiBin;
+        if (suiPath === suiBin) {
+            return suiPath;
+        }
+        if (suiPath.startsWith('~/')) {
+            return os.homedir() + suiPath.slice('~'.length);
+        }
+        return path.resolve(suiPath);
     }
 
     /**
@@ -140,6 +153,6 @@ export class Configuration {
 
 }
 
-export function lint(): boolean {
-    return vscode.workspace.getConfiguration('move').get('lint') ?? true;
+export function lint(): string {
+    return vscode.workspace.getConfiguration('move').get('lint') ?? 'default';
 }

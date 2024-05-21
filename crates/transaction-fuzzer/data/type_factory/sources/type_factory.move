@@ -2,58 +2,58 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module typer::type_factory {
-    struct A {}
-    struct B {}
-    struct C {}
-    struct D {}
-    struct E {}
-    struct F {}
-    struct G {}
-    struct H {}
-    struct I {}
-    struct J {}
-    struct K {}
-    struct L {}
-    struct M {}
-    struct N {}
-    struct O {}
-    struct P {}
-    struct Q {}
-    struct R {}
-    struct S {}
-    struct T {}
-    struct U {}
-    struct V {}
-    struct W {}
-    struct X {}
-    struct Y {}
-    struct Z {}
-    struct AA<phantom T> {}
-    struct BB<phantom T> {}
-    struct CC<phantom T> {}
-    struct DD<phantom T> {}
-    struct EE<phantom T> {}
-    struct FF<phantom T> {}
-    struct GG<phantom T> {}
-    struct HH<phantom T> {}
-    struct II<phantom T> {}
-    struct JJ<phantom T> {}
-    struct KK<phantom T> {}
-    struct LL<phantom T> {}
-    struct MM<phantom T> {}
-    struct NN<phantom T> {}
-    struct OO<phantom T> {}
-    struct PP<phantom T> {}
-    struct QQ<phantom T> {}
-    struct RR<phantom T> {}
-    struct SS<phantom T> {}
-    struct TT<phantom T> {}
-    struct UU<phantom T> {}
-    struct VV<phantom T> {}
-    struct WW<phantom T> {}
-    struct XX<phantom T> {}
-    struct YY<phantom T> {}
-    struct ZZ<phantom T> {}
+    public struct A {}
+    public struct B {}
+    public struct C {}
+    public struct D {}
+    public struct E {}
+    public struct F {}
+    public struct G {}
+    public struct H {}
+    public struct I {}
+    public struct J {}
+    public struct K {}
+    public struct L {}
+    public struct M {}
+    public struct N {}
+    public struct O {}
+    public struct P {}
+    public struct Q {}
+    public struct R {}
+    public struct S {}
+    public struct T {}
+    public struct U {}
+    public struct V {}
+    public struct W {}
+    public struct X {}
+    public struct Y {}
+    public struct Z {}
+    public struct AA<phantom T> {}
+    public struct BB<phantom T> {}
+    public struct CC<phantom T> {}
+    public struct DD<phantom T> {}
+    public struct EE<phantom T> {}
+    public struct FF<phantom T> {}
+    public struct GG<phantom T> {}
+    public struct HH<phantom T> {}
+    public struct II<phantom T> {}
+    public struct JJ<phantom T> {}
+    public struct KK<phantom T> {}
+    public struct LL<phantom T> {}
+    public struct MM<phantom T> {}
+    public struct NN<phantom T> {}
+    public struct OO<phantom T> {}
+    public struct PP<phantom T> {}
+    public struct QQ<phantom T> {}
+    public struct RR<phantom T> {}
+    public struct SS<phantom T> {}
+    public struct TT<phantom T> {}
+    public struct UU<phantom T> {}
+    public struct VV<phantom T> {}
+    public struct WW<phantom T> {}
+    public struct XX<phantom T> {}
+    public struct YY<phantom T> {}
+    public struct ZZ<phantom T> {}
 
     public fun type_tags0() { }
     public fun type_tags1<T1>() { }

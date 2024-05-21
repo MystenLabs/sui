@@ -1,4 +1,3 @@
-
 ---
 title: Module `0x2::object_bag`
 ---
@@ -345,7 +344,7 @@ Aborts with <code><a href="object_bag.md#0x2_object_bag_EBagNotEmpty">EBagNotEmp
 <pre><code><b>public</b> <b>fun</b> <a href="object_bag.md#0x2_object_bag_destroy_empty">destroy_empty</a>(<a href="bag.md#0x2_bag">bag</a>: <a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a>) {
     <b>let</b> <a href="object_bag.md#0x2_object_bag_ObjectBag">ObjectBag</a> { id, size } = <a href="bag.md#0x2_bag">bag</a>;
     <b>assert</b>!(size == 0, <a href="object_bag.md#0x2_object_bag_EBagNotEmpty">EBagNotEmpty</a>);
-    <a href="object.md#0x2_object_delete">object::delete</a>(id)
+    id.delete()
 }
 </code></pre>
 

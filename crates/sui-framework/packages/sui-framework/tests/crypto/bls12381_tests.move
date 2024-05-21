@@ -6,9 +6,9 @@
 module sui::bls12381_tests {
     use sui::bls12381;
     use sui::group_ops;
-    use std::hash::sha2_256;
-    use std::vector;
+    use sui::random;
     use sui::test_utils::assert_eq;
+    use std::hash::sha2_256;
 
     const ORDER_BYTES: vector<u8> = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
     const ORDER_MINUS_ONE_BYTES: vector<u8> = x"73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000000";
@@ -91,22 +91,22 @@ module sui::bls12381_tests {
         assert!(verify_drand_round(pk, sig, prev_sig, round) == false, 0);
     }
 
-    fun drand_message(prev_sig: vector<u8>, round: u64): vector<u8> {
+    fun drand_message(mut prev_sig: vector<u8>, mut round: u64): vector<u8> {
         // The signed message can be computed in Rust using:
         //  let mut sha = Sha256::new();
         //  sha.update(&prev_sig);
         //  sha.update(round.to_be_bytes());
         //  let digest = sha.finalize().digest;
-        let round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
-        let i = 7;
+        let mut round_bytes: vector<u8> = vector[0, 0, 0, 0, 0, 0, 0, 0];
+        let mut i = 7;
         while (i > 0) {
             let curr_byte = round % 0x100;
-            let curr_element = vector::borrow_mut(&mut round_bytes, i);
-            *curr_element = (curr_byte as u8);
+            let curr_element = &mut round_bytes[i];
+            *curr_element = curr_byte as u8;
             round = round >> 8;
             i = i - 1;
         };
-        vector::append(&mut prev_sig, round_bytes);
+        prev_sig.append(round_bytes);
         sha2_256(prev_sig)
     }
 
@@ -125,6 +125,8 @@ module sui::bls12381_tests {
         assert!(group_ops::equal(&zero, &bls12381::scalar_zero()), 0);
         assert!(group_ops::equal(&one, &bls12381::scalar_one()), 0);
         assert!(group_ops::equal(&zero, &bls12381::scalar_one()) == false, 0);
+        let zero0 = bls12381::scalar_mul(&zero, &one);
+        assert!(group_ops::equal(&zero0, &bls12381::scalar_zero()), 0);
 
         let two = bls12381::scalar_add(&one, &one);
         let four = bls12381::scalar_add(&two, &two);
@@ -161,6 +163,44 @@ module sui::bls12381_tests {
         let order_minus_one = bls12381::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
         let _ = bls12381::scalar_add(&order_minus_one, &order_minus_one);
         let _ = bls12381::scalar_mul(&order_minus_one, &order_minus_one);
+    }
+
+    #[test]
+    fun test_scalar_more_ops() {
+        let mut gen = random::new_generator_for_testing();
+        let x = gen.generate_u32() as u64;
+        let x_scalar = bls12381::scalar_from_u64(x);
+        let y = gen.generate_u32() as u64;
+        let y_scalar = bls12381::scalar_from_u64(y);
+
+        // Since x, y are u32 numbers, the following operations do not overflow as u64.
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(x + y), &bls12381::scalar_add(&x_scalar, &y_scalar)), 0);
+        let z_scalar = bls12381::scalar_sub(&x_scalar, &y_scalar);
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(x), &bls12381::scalar_add(&z_scalar, &y_scalar)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(x * y), &bls12381::scalar_mul(&x_scalar, &y_scalar)), 0);
+        let z_scalar = bls12381::scalar_div(&x_scalar, &y_scalar);
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(y), &bls12381::scalar_mul(&z_scalar, &x_scalar)), 0);
+        let z_scalar = bls12381::scalar_neg(&x_scalar);
+        assert!(group_ops::equal(&bls12381::scalar_zero(), &bls12381::scalar_add(&x_scalar, &z_scalar)), 0);
+        let z_scalar = bls12381::scalar_inv(&x_scalar);
+        assert!(group_ops::equal(&bls12381::scalar_one(), &bls12381::scalar_mul(&x_scalar, &z_scalar)), 0);
+
+        let mut i = 0;
+        let mut z = bls12381::scalar_add(&x_scalar, &y_scalar);
+        while (i < 20) {
+            let mut new_z = bls12381::scalar_mul(&z, &x_scalar);
+            new_z = bls12381::scalar_add(&new_z, &y_scalar);
+            // check back
+            let mut rev = bls12381::scalar_sub(&new_z, &y_scalar);
+            rev = bls12381::scalar_div(&x_scalar, &rev);
+            assert!(group_ops::equal(&z, &rev), 0);
+
+            let rev_as_bytes = *group_ops::bytes(&rev);
+            let rev_scalar2 = bls12381::scalar_from_bytes(&rev_as_bytes);
+            assert!(group_ops::equal(&rev_scalar2, &rev), 0);
+            z = new_z;
+            i = i + 1;
+        };
     }
 
     #[test]
@@ -512,35 +552,62 @@ module sui::bls12381_tests {
 
     #[test]
     fun test_msm_g1() {
-        let i = 1;
-        let expected_result = bls12381::g1_identity();
+        let mut expected_result = bls12381::g1_identity();
         let g = bls12381::g1_generator();
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
-        while (i < 20) {
-            let base_scalar = bls12381::scalar_from_u64(i);
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let mut elements: vector<group_ops::Element<bls12381::G1>> = vector[];
+        let mut gen = random::new_generator_for_testing();
+        let mut i = gen.generate_u8() % 32 + 1;
+        while (i > 0) {
+            let base_scalar = bls12381::scalar_from_u64(gen.generate_u64());
             let base = bls12381::g1_mul(&base_scalar, &g);
-            let exponent_scalar = bls12381::scalar_from_u64(i + 100);
+            let exponent_scalar = bls12381::scalar_from_u64(gen.generate_u64());
             let base_exp = bls12381::g1_mul(&exponent_scalar, &base);
-            vector::push_back(&mut elements, base);
-            vector::push_back(&mut scalars, exponent_scalar);
+            elements.push_back(base);
+            scalars.push_back(exponent_scalar);
             expected_result = bls12381::g1_add(&expected_result, &base_exp);
-            i = i + 1;
+            i = i - 1;
         };
         let result = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
         assert!(group_ops::equal(&result, &expected_result), 0);
     }
 
     #[test]
+    fun test_msm_g1_edge_cases() {
+        let zero = bls12381::scalar_zero();
+        let one = bls12381::scalar_one();
+        let g = bls12381::g1_generator();
+        let id = bls12381::g1_identity();
+        let mut gen = random::new_generator_for_testing();
+        let r = bls12381::scalar_from_u64(gen.generate_u32() as u64);
+        let g_r = bls12381::g1_mul(&r, &g);
+
+        let result = bls12381::g1_multi_scalar_multiplication(&vector[zero], &vector[g]);
+        assert!(group_ops::equal(&result, &id), 0);
+
+        let result = bls12381::g1_multi_scalar_multiplication(&vector[one], &vector[g]);
+        assert!(group_ops::equal(&result, &g), 0);
+
+        let result = bls12381::g1_multi_scalar_multiplication(&vector[one, one], &vector[g, id]);
+        assert!(group_ops::equal(&result, &g), 0);
+
+        let result = bls12381::g1_multi_scalar_multiplication(&vector[zero, one], &vector[g, id]);
+        assert!(group_ops::equal(&result, &id), 0);
+
+        let result = bls12381::g1_multi_scalar_multiplication(&vector[one, one], &vector[g_r, id]);
+        assert!(group_ops::equal(&result, &g_r), 0);
+    }
+
+    #[test]
     fun test_msm_g1_id() {
-        let i = 1;
+        let mut i = 1;
         let expected_result = bls12381::g1_identity();
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let mut elements: vector<group_ops::Element<bls12381::G1>> = vector[];
         while (i < 33) {
             let scalar = bls12381::scalar_from_u64(i);
-            vector::push_back(&mut scalars, scalar);
-            vector::push_back(&mut elements, bls12381::g1_identity());
+            scalars.push_back(scalar);
+            elements.push_back(bls12381::g1_identity());
             i = i + 1;
         };
         let result = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
@@ -550,38 +617,38 @@ module sui::bls12381_tests {
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_empty_g1_msm() {
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
+        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let elements: vector<group_ops::Element<bls12381::G1>> = vector[];
         let _ = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
     }
 
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_diff_length_g1_msm() {
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        vector::push_back(&mut scalars, bls12381::scalar_zero());
-        vector::push_back(&mut scalars, bls12381::scalar_one());
-        let elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
-        vector::push_back(&mut elements, bls12381::g1_generator());
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        scalars.push_back(bls12381::scalar_zero());
+        scalars.push_back(bls12381::scalar_one());
+        let mut elements: vector<group_ops::Element<bls12381::G1>> = vector[];
+        elements.push_back(bls12381::g1_generator());
         let _ = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
     }
 
     #[test]
     #[expected_failure(abort_code = group_ops::EInputTooLong)]
     fun test_msm_g1_too_long() {
-        let i = 1;
-        let expected_result = bls12381::g1_identity();
+        let mut i = 1;
+        let mut expected_result = bls12381::g1_identity();
         let g = bls12381::g1_generator();
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G1>> = vector::empty();
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let mut elements: vector<group_ops::Element<bls12381::G1>> = vector[];
         while (i < 34) {
             // this limit is defined in the protocol config
             let base_scalar = bls12381::scalar_from_u64(i);
             let base = bls12381::g1_mul(&base_scalar, &g);
             let exponent_scalar = bls12381::scalar_from_u64(i + 100);
             let base_exp = bls12381::g1_mul(&exponent_scalar, &base);
-            vector::push_back(&mut elements, base);
-            vector::push_back(&mut scalars, exponent_scalar);
+            elements.push_back(base);
+            scalars.push_back(exponent_scalar);
             expected_result = bls12381::g1_add(&expected_result, &base_exp);
             i = i + 1;
         };
@@ -591,35 +658,62 @@ module sui::bls12381_tests {
 
     #[test]
     fun test_msm_g2() {
-        let i = 1;
-        let expected_result = bls12381::g2_identity();
+        let mut expected_result = bls12381::g2_identity();
         let g = bls12381::g2_generator();
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G2>> = vector::empty();
-        while (i < 20) {
-            let base_scalar = bls12381::scalar_from_u64(i);
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let mut elements: vector<group_ops::Element<bls12381::G2>> = vector[];
+        let mut gen = random::new_generator_for_testing();
+        let mut i = gen.generate_u8() % 32 + 1;
+        while (i > 0) {
+            let base_scalar = bls12381::scalar_from_u64(gen.generate_u64());
             let base = bls12381::g2_mul(&base_scalar, &g);
-            let exponent_scalar = bls12381::scalar_from_u64(i + 100);
+            let exponent_scalar = bls12381::scalar_from_u64(gen.generate_u64());
             let base_exp = bls12381::g2_mul(&exponent_scalar, &base);
-            vector::push_back(&mut elements, base);
-            vector::push_back(&mut scalars, exponent_scalar);
+            elements.push_back(base);
+            scalars.push_back(exponent_scalar);
             expected_result = bls12381::g2_add(&expected_result, &base_exp);
-            i = i + 1;
+            i = i - 1;
         };
         let result = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
         assert!(group_ops::equal(&result, &expected_result), 0);
     }
 
     #[test]
+    fun test_msm_g2_edge_cases() {
+        let zero = bls12381::scalar_zero();
+        let one = bls12381::scalar_one();
+        let g = bls12381::g2_generator();
+        let id = bls12381::g2_identity();
+        let mut gen = random::new_generator_for_testing();
+        let r = bls12381::scalar_from_u64(gen.generate_u32() as u64);
+        let g_r = bls12381::g2_mul(&r, &g);
+
+        let result = bls12381::g2_multi_scalar_multiplication(&vector[zero], &vector[g]);
+        assert!(group_ops::equal(&result, &id), 0);
+
+        let result = bls12381::g2_multi_scalar_multiplication(&vector[one], &vector[g]);
+        assert!(group_ops::equal(&result, &g), 0);
+
+        let result = bls12381::g2_multi_scalar_multiplication(&vector[one, one], &vector[g, id]);
+        assert!(group_ops::equal(&result, &g), 0);
+
+        let result = bls12381::g2_multi_scalar_multiplication(&vector[zero, one], &vector[g, id]);
+        assert!(group_ops::equal(&result, &id), 0);
+
+        let result = bls12381::g2_multi_scalar_multiplication(&vector[one, one], &vector[g_r, id]);
+        assert!(group_ops::equal(&result, &g_r), 0);
+    }
+
+    #[test]
     fun test_msm_g2_id() {
-        let i = 1;
+        let mut i = 1;
         let expected_result = bls12381::g2_identity();
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G2>> = vector::empty();
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let mut elements: vector<group_ops::Element<bls12381::G2>> = vector[];
         while (i < 20) {
             let scalar = bls12381::scalar_from_u64(i);
-            vector::push_back(&mut scalars, scalar);
-            vector::push_back(&mut elements, bls12381::g2_identity());
+            scalars.push_back(scalar);
+            elements.push_back(bls12381::g2_identity());
             i = i + 1;
         };
         let result = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
@@ -629,19 +723,19 @@ module sui::bls12381_tests {
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_empty_g2_msm() {
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        let elements: vector<group_ops::Element<bls12381::G2>> = vector::empty();
+        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        let elements: vector<group_ops::Element<bls12381::G2>> = vector[];
         let _ = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
     }
 
     #[test]
     #[expected_failure(abort_code = group_ops::EInvalidInput)]
     fun test_diff_length_g2_msm() {
-        let scalars: vector<group_ops::Element<bls12381::Scalar>> = vector::empty();
-        vector::push_back(&mut scalars, bls12381::scalar_zero());
-        vector::push_back(&mut scalars, bls12381::scalar_one());
-        let elements: vector<group_ops::Element<bls12381::G2>> = vector::empty();
-        vector::push_back(&mut elements, bls12381::g2_generator());
+        let mut scalars: vector<group_ops::Element<bls12381::Scalar>> = vector[];
+        scalars.push_back(bls12381::scalar_zero());
+        scalars.push_back(bls12381::scalar_one());
+        let mut elements: vector<group_ops::Element<bls12381::G2>> = vector[];
+        elements.push_back(bls12381::g2_generator());
         let _ = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
     }
 

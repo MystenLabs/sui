@@ -49,7 +49,7 @@ mod tests {
     use protobuf::RepeatedField;
     use std::net::TcpListener;
     use std::time::Duration;
-    use sui_tls::{CertVerifier, TlsAcceptor};
+    use sui_tls::{ClientCertVerifier, TlsAcceptor};
 
     async fn run_dummy_remote_write(listener: TcpListener) {
         /// i accept everything, send me the trash
@@ -91,12 +91,15 @@ mod tests {
 
         // init the tls config and allower
         let mut allower = SuiNodeProvider::new("".into(), Duration::from_secs(30), vec![]);
-        let tls_config = CertVerifier::new(allower.clone())
-            .rustls_server_config(
-                vec![server_priv_cert.rustls_certificate()],
-                server_priv_cert.rustls_private_key(),
-            )
-            .unwrap();
+        let tls_config = ClientCertVerifier::new(
+            allower.clone(),
+            sui_tls::SUI_VALIDATOR_SERVER_NAME.to_string(),
+        )
+        .rustls_server_config(
+            vec![server_priv_cert.rustls_certificate()],
+            server_priv_cert.rustls_private_key(),
+        )
+        .unwrap();
 
         let client = admin::make_reqwest_client(
             RemoteWriteConfig {

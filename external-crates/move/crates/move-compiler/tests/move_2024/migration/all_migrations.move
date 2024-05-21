@@ -1,6 +1,23 @@
 module a::m {
 
-    friend a::n;
+    #[test_only]
+    friend a::b;
+
+    friend a::c;
+
+    #[ext(
+        some_thing
+        )
+    ]
+    friend a::d;
+
+    #[ext(
+        q =
+            10,
+        b
+        )
+    ]
+    friend a::e;
 
     struct S { f: u64 }
 
@@ -20,6 +37,19 @@ module a::m {
 
     public(friend) fun t1() {}
 
+    public(
+        friend) fun t2() {}
+
+    public(
+        friend
+        ) fun t3() {}
+
+    public(
+        friend
+    ) fun t4() {}
 }
 
-module a::n {}
+module a::b {}
+module a::c {}
+module a::d {}
+module a::e {}

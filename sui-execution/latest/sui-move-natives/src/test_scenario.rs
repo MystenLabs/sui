@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    get_nth_struct_field, legacy_test_cost,
+    get_nth_struct_field, get_tag_and_layouts, legacy_test_cost,
     object_runtime::{ObjectRuntime, RuntimeResults},
 };
+use better_any::{Tid, TidAble};
 use indexmap::{IndexMap, IndexSet};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{
@@ -25,18 +26,61 @@ use smallvec::smallvec;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, BTreeSet, VecDeque},
+    sync::RwLock,
 };
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
+    digests::{ObjectDigest, TransactionDigest},
+    execution::DynamicallyLoadedObjectMetadata,
     id::UID,
-    object::Owner,
+    in_memory_storage::InMemoryStorage,
+    object::{MoveObject, Object, Owner},
+    storage::ChildObjectResolver,
 };
 
 const E_COULD_NOT_GENERATE_EFFECTS: u64 = 0;
 const E_INVALID_SHARED_OR_IMMUTABLE_USAGE: u64 = 1;
 const E_OBJECT_NOT_FOUND_CODE: u64 = 4;
+const E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET: u64 = 5;
+const E_RECEIVING_TICKET_ALREADY_ALLOCATED: u64 = 6;
+const E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET: u64 = 7;
 
 type Set<K> = IndexSet<K>;
+
+/// An in-memory test store is a thin wrapper around the in-memory storage in a mutex. The mutex
+/// allows this to be used by both the object runtime (for reading) and the test scenario (for
+/// writing) while hiding mutability.
+#[derive(Tid)]
+pub struct InMemoryTestStore(pub &'static RwLock<InMemoryStorage>);
+
+impl ChildObjectResolver for InMemoryTestStore {
+    fn read_child_object(
+        &self,
+        parent: &ObjectID,
+        child: &ObjectID,
+        child_version_upper_bound: SequenceNumber,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        self.0
+            .read()
+            .unwrap()
+            .read_child_object(parent, child, child_version_upper_bound)
+    }
+
+    fn get_object_received_at_version(
+        &self,
+        owner: &ObjectID,
+        receiving_object_id: &ObjectID,
+        receive_object_at_version: SequenceNumber,
+        epoch_id: sui_types::committee::EpochId,
+    ) -> sui_types::error::SuiResult<Option<Object>> {
+        self.0.read().unwrap().get_object_received_at_version(
+            owner,
+            receiving_object_id,
+            receive_object_at_version,
+            epoch_id,
+        )
+    }
+}
 
 // This function updates the inventories based on the transfers and deletes that occurred in the
 // transaction
@@ -62,10 +106,18 @@ pub fn end_transaction(
     // if true, we will "abort"
     let mut incorrect_shared_or_imm_handling = false;
 
+    let received = object_runtime_ref
+        .test_inventories
+        .allocated_tickets
+        .iter()
+        .map(|(k, (metadata, _))| (*k, metadata.clone()))
+        .collect();
+
     let object_runtime_state = object_runtime_ref.take_state();
     // Determine writes and deletes
-    // We pass an empty map as we do not expose dynamic field objects in the system
-    let results = object_runtime_state.finish(BTreeMap::new(), BTreeMap::new());
+    // We pass the received objects since they should be viewed as "loaded" for the purposes of of
+    // calculating the effects of the transaction.
+    let results = object_runtime_state.finish(received, BTreeMap::new());
     let RuntimeResults {
         writes,
         user_events,
@@ -502,6 +554,122 @@ pub fn was_taken_shared(
     ))
 }
 
+pub fn allocate_receiving_ticket_for_object(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let ty = get_specified_ty(ty_args);
+    let id = pop_id(&mut args)?;
+
+    let Some((tag, layout, _)) = get_tag_and_layouts(context, &ty)? else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let object_version = SequenceNumber::new();
+    let inventories = &mut object_runtime.test_inventories;
+    if inventories.allocated_tickets.contains_key(&id) {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_RECEIVING_TICKET_ALREADY_ALLOCATED,
+        ));
+    }
+
+    let obj_value = inventories.objects.remove(&id).unwrap();
+    let Some(bytes) = obj_value.simple_serialize(&layout) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_ALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+    let move_object = unsafe {
+        MoveObject::new_from_execution_with_limit(
+            tag.into(),
+            false,
+            object_version,
+            bytes,
+            250 * 1024,
+        )
+    }
+    .unwrap();
+
+    let Some((owner, _)) = inventories
+        .address_inventories
+        .iter()
+        .find(|(_addr, objs)| objs.iter().any(|(_, ids)| ids.contains(&id)))
+    else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_OBJECT_NOT_FOUND_CODE,
+        ));
+    };
+
+    inventories.allocated_tickets.insert(
+        id,
+        (
+            DynamicallyLoadedObjectMetadata {
+                version: SequenceNumber::new(),
+                digest: ObjectDigest::MIN,
+                owner: Owner::AddressOwner(*owner),
+                storage_rebate: 0,
+                previous_transaction: TransactionDigest::default(),
+            },
+            obj_value,
+        ),
+    );
+
+    let object = Object::new_move(
+        move_object,
+        Owner::AddressOwner(*owner),
+        TransactionDigest::default(),
+    );
+
+    // NB: Must be a `&&` reference since the extension stores a static ref to the object storage.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    store.0.write().unwrap().insert_object(object);
+
+    Ok(NativeResult::ok(
+        legacy_test_cost(),
+        smallvec![Value::u64(object_version.value())],
+    ))
+}
+
+pub fn deallocate_receiving_ticket_for_object(
+    context: &mut NativeContext,
+    _ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    let id = pop_id(&mut args)?;
+
+    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
+    let inventories = &mut object_runtime.test_inventories;
+    // Deallocate the ticket -- we should never hit this scenario
+    let Some((_, value)) = inventories.allocated_tickets.remove(&id) else {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+
+    // Insert the object value that we saved from earlier and put it back into the object set.
+    // This is fine since it can't have been touched.
+    inventories.objects.insert(id, value);
+
+    // Remove the object from storage. We should never hit this scenario either.
+    let store: &&InMemoryTestStore = context.extensions().get();
+    if store.0.write().unwrap().remove_object(id).is_none() {
+        return Ok(NativeResult::err(
+            context.gas_used(),
+            E_UNABLE_TO_DEALLOCATE_RECEIVING_TICKET,
+        ));
+    };
+
+    Ok(NativeResult::ok(legacy_test_cost(), smallvec![]))
+}
+
 // impls
 
 fn take_from_inventory(
@@ -653,6 +821,7 @@ fn find_all_wrapped_objects<'a>(
             }
         };
         let blob = value.borrow().simple_serialize(&layout).unwrap();
+        // TODO (annotated-visitor): Replace with a custom visitor.
         let move_value = MoveValue::simple_deserialize(&blob, &annotated_layout).unwrap();
         let uid = UID::type_();
         visit_structs(&move_value, |depth, tag, fields| {

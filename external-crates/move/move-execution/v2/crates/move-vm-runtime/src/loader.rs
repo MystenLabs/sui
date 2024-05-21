@@ -8,8 +8,6 @@ use crate::{
     session::LoadedFunctionInstantiation,
 };
 use move_binary_format::{
-    access::ModuleAccess,
-    binary_views::BinaryIndexedView,
     errors::{verification_error, Location, PartialVMError, PartialVMResult, VMResult},
     file_format::{
         AbilitySet, Bytecode, CompiledModule, Constant, ConstantPoolIndex, FieldHandleIndex,
@@ -36,7 +34,7 @@ use move_vm_types::{
 };
 use parking_lot::RwLock;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, btree_map::Entry},
+    collections::{btree_map::Entry, BTreeMap, BTreeSet, HashMap},
     fmt::Debug,
     hash::Hash,
     sync::Arc,
@@ -217,7 +215,6 @@ impl ModuleCache {
     ) -> PartialVMResult<&Arc<LoadedModule>> {
         let link_context = data_store.link_context();
         let runtime_id = module.self_id();
-        let module_view = BinaryIndexedView::Module(module);
 
         // Add new structs and collect their field signatures
         let mut field_signatures = vec![];
@@ -269,7 +266,7 @@ impl ModuleCache {
         for signature in field_signatures {
             let tys: Vec<_> = signature
                 .iter()
-                .map(|tok| self.make_type(module_view, tok))
+                .map(|tok| self.make_type(module, tok))
                 .collect::<PartialVMResult<_>>()?;
             field_types.push(tys);
         }
@@ -332,7 +329,7 @@ impl ModuleCache {
     }
 
     // `make_type` is the entry point to "translate" a `SignatureToken` to a `Type`
-    fn make_type(&self, module: BinaryIndexedView, tok: &SignatureToken) -> PartialVMResult<Type> {
+    fn make_type(&self, module: &CompiledModule, tok: &SignatureToken) -> PartialVMResult<Type> {
         let res = match tok {
             SignatureToken::Bool => Type::Bool,
             SignatureToken::U8 => Type::U8,
@@ -610,7 +607,6 @@ impl Loader {
     )> {
         let link_context = data_store.link_context();
         let (compiled, loaded) = self.load_module(runtime_id, data_store)?;
-        let compiled_view = BinaryIndexedView::Module(compiled.as_ref());
         let idx = self
             .module_cache
             .read()
@@ -622,7 +618,7 @@ impl Loader {
             .signature_at(func.parameters)
             .0
             .iter()
-            .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
+            .map(|tok| self.module_cache.read().make_type(&compiled, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -630,7 +626,7 @@ impl Loader {
             .signature_at(func.return_)
             .0
             .iter()
-            .map(|tok| self.module_cache.read().make_type(compiled_view, tok))
+            .map(|tok| self.module_cache.read().make_type(&compiled, tok))
             .collect::<PartialVMResult<Vec<_>>>()
             .map_err(|err| err.finish(Location::Undefined))?;
 
@@ -918,17 +914,14 @@ impl Loader {
 
         // for bytes obtained from the data store, they should always deserialize and verify.
         // It is an invariant violation if they don't.
-        let module = CompiledModule::deserialize_with_config(
-            &bytes,
-            &self.vm_config.binary_config,
-        )
-        .map_err(|err| {
-            let msg = format!("Deserialization error: {:?}", err);
-            PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
-                .with_message(msg)
-                .finish(Location::Module(storage_id.clone()))
-        })
-        .map_err(expect_no_verification_errors)?;
+        let module = CompiledModule::deserialize_with_config(&bytes, &self.vm_config.binary_config)
+            .map_err(|err| {
+                let msg = format!("Deserialization error: {:?}", err);
+                PartialVMError::new(StatusCode::CODE_DESERIALIZATION_ERROR)
+                    .with_message(msg)
+                    .finish(Location::Module(storage_id.clone()))
+            })
+            .map_err(expect_no_verification_errors)?;
 
         fail::fail_point!("verifier-failpoint-2", |_| { Ok(module.clone()) });
 
@@ -1305,7 +1298,8 @@ impl<'a> Resolver<'a> {
     ) -> PartialVMResult<Type> {
         let loaded_module = &*self.binary.loaded;
         let struct_inst = loaded_module.struct_instantiation_at(idx.0);
-        let instantiation = loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
+        let instantiation =
+            loaded_module.instantiation_signature_at(struct_inst.instantiation_idx)?;
 
         // Before instantiating the type, count the # of nodes of all type arguments plus
         // existing type instantiation.
@@ -1456,12 +1450,11 @@ impl LoadedModule {
             cache: &ModuleCache,
         ) -> Result<(), PartialVMError> {
             if let Entry::Vacant(e) = instantiation_signatures.entry(instantiation_idx) {
-                let module_view = BinaryIndexedView::Module(module);
                 let instantiation = module
                     .signature_at(instantiation_idx)
                     .0
                     .iter()
-                    .map(|ty| cache.make_type(module_view, ty))
+                    .map(|ty| cache.make_type(module, ty))
                     .collect::<Result<Vec<_>, _>>()?;
                 e.insert(instantiation);
             }
@@ -1538,7 +1531,6 @@ impl LoadedModule {
             }
         }
 
-        let module_view = BinaryIndexedView::Module(module);
         for func_def in module.function_defs() {
             let idx = function_refs[func_def.function.0 as usize];
             let name = module.identifier_at(module.function_handle_at(func_def.function).name);
@@ -1570,7 +1562,7 @@ impl LoadedModule {
                                     Some(sig_token) => sig_token,
                                 };
                                 single_signature_token_map
-                                    .insert(*si, cache.make_type(module_view, ty)?);
+                                    .insert(*si, cache.make_type(module, ty)?);
                             }
                         }
                         _ => {}
@@ -1591,7 +1583,7 @@ impl LoadedModule {
             )?;
             function_instantiations.push(FunctionInstantiation {
                 handle,
-                instantiation_idx
+                instantiation_idx,
             });
         }
 
@@ -1661,14 +1653,14 @@ impl LoadedModule {
         self.single_signature_token_map.get(&idx).unwrap()
     }
 
-    fn instantiation_signature_at(&self, idx: SignatureIndex) -> Result<&Vec<Type>, PartialVMError> {
-        self
-            .instantiation_signatures
-            .get(&idx)
-            .ok_or_else(|| {
-                PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
-                    .with_message("Instantiation signature not found".to_string())
-            })
+    fn instantiation_signature_at(
+        &self,
+        idx: SignatureIndex,
+    ) -> Result<&Vec<Type>, PartialVMError> {
+        self.instantiation_signatures.get(&idx).ok_or_else(|| {
+            PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
+                .with_message("Instantiation signature not found".to_string())
+        })
     }
 }
 
@@ -1930,7 +1922,7 @@ impl TypeCache {
 /// Maximal depth of a value in terms of type depth.
 pub const VALUE_DEPTH_MAX: u64 = 128;
 
-/// Maximal nodes which are allowed when converting to layout. This includes the the types of
+/// Maximal nodes which are allowed when converting to layout. This includes the types of
 /// fields for struct types.
 const MAX_TYPE_TO_LAYOUT_NODES: u64 = 256;
 
@@ -2031,8 +2023,10 @@ impl Loader {
             )?)),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                TypeTag::Struct(Box::new(self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?))
-            },
+                TypeTag::Struct(Box::new(
+                    self.struct_gidx_to_type_tag(*gidx, ty_args, tag_type)?,
+                ))
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2144,8 +2138,10 @@ impl Loader {
             )?),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                R::MoveTypeLayout::Struct(self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?)
-            },
+                R::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_type_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)
@@ -2241,8 +2237,10 @@ impl Loader {
             ),
             Type::StructInstantiation(struct_inst) => {
                 let (gidx, ty_args) = &**struct_inst;
-                A::MoveTypeLayout::Struct(self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?)
-            },
+                A::MoveTypeLayout::Struct(
+                    self.struct_gidx_to_fully_annotated_layout(*gidx, ty_args, count, depth)?,
+                )
+            }
             Type::Reference(_) | Type::MutableReference(_) | Type::TyParam(_) => {
                 return Err(
                     PartialVMError::new(StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR)

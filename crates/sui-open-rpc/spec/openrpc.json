@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "1.22.0"
+    "version": "1.26.0"
   },
   "methods": [
     {
@@ -1359,7 +1359,7 @@
             "name": "Result",
             "value": {
               "minSupportedProtocolVersion": "1",
-              "maxSupportedProtocolVersion": "40",
+              "maxSupportedProtocolVersion": "46",
               "protocolVersion": "6",
               "featureFlags": {
                 "accept_zklogin_in_multisig": false,
@@ -1367,6 +1367,7 @@
                 "advance_to_highest_supported_protocol_version": false,
                 "allow_receiving_object_id": false,
                 "ban_entry_init": false,
+                "bridge": false,
                 "commit_root_state_digest": false,
                 "consensus_order_end_of_epoch_last": true,
                 "disable_invariant_violation_check_in_swap_loc": false,
@@ -1374,6 +1375,7 @@
                 "disallow_change_struct_type_params_on_upgrade": false,
                 "enable_coin_deny_list": false,
                 "enable_effects_v2": false,
+                "enable_group_ops_native_function_msm": false,
                 "enable_group_ops_native_functions": false,
                 "enable_jwk_consensus_updates": false,
                 "enable_poseidon": false,
@@ -1384,6 +1386,7 @@
                 "loaded_child_object_format_type": false,
                 "loaded_child_objects_fixed": true,
                 "missing_type_is_compatibility_error": true,
+                "mysticeti_leader_scoring_and_schedule": false,
                 "narwhal_certificate_v2": false,
                 "narwhal_new_leader_election_schedule": false,
                 "narwhal_versioned_metadata": false,
@@ -1394,6 +1397,7 @@
                 "receive_objects": false,
                 "recompute_has_public_transfer_in_execution": false,
                 "reject_mutable_random_on_entry_functions": false,
+                "reshare_at_same_initial_version": false,
                 "scoring_decision_with_validity_cutoff": true,
                 "shared_object_deletion": false,
                 "simple_conservation_checks": false,
@@ -1705,6 +1709,7 @@
                 "hmac_hmac_sha3_256_input_cost_per_byte": {
                   "u64": "2"
                 },
+                "max_accumulated_txn_cost_per_object_in_checkpoint": null,
                 "max_age_of_jwk_in_epochs": null,
                 "max_arguments": {
                   "u32": "512"
@@ -1721,6 +1726,7 @@
                 "max_checkpoint_size_bytes": {
                   "u64": "31457280"
                 },
+                "max_deferral_rounds_for_congestion_control": null,
                 "max_dependency_depth": {
                   "u64": "100"
                 },
@@ -1759,6 +1765,7 @@
                 "max_meter_ticks_per_module": {
                   "u64": "6000000"
                 },
+                "max_meter_ticks_per_package": null,
                 "max_modules_in_publish": {
                   "u32": "128"
                 },
@@ -1844,6 +1851,7 @@
                 "max_verifier_meter_ticks_per_function": {
                   "u64": "6000000"
                 },
+                "min_move_binary_format_version": null,
                 "move_binary_format_version": {
                   "u32": "6"
                 },
@@ -1895,6 +1903,7 @@
                 "poseidon_bn254_cost_base": null,
                 "poseidon_bn254_cost_per_block": null,
                 "random_beacon_dkg_timeout_round": null,
+                "random_beacon_min_round_interval_ms": null,
                 "random_beacon_reduction_allowed_delta": null,
                 "random_beacon_reduction_lower_bound": null,
                 "reward_slashing_rate": {
@@ -5316,6 +5325,14 @@
       "BigInt_for_uint64": {
         "type": "string"
       },
+      "Bn254FqElement": {
+        "description": "A struct that stores a Bn254 Fq field element as 32 bytes.",
+        "type": "string"
+      },
+      "Bn254FrElement": {
+        "description": "A struct that stores a Bn254 Fr field element as 32 bytes.",
+        "type": "string"
+      },
       "Checkpoint": {
         "type": "object",
         "required": [
@@ -8537,6 +8554,30 @@
               }
             },
             "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "BridgeStateCreate"
+            ],
+            "properties": {
+              "BridgeStateCreate": {
+                "$ref": "#/components/schemas/CheckpointDigest"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "BridgeCommitteeUpdate"
+            ],
+            "properties": {
+              "BridgeCommitteeUpdate": {
+                "$ref": "#/components/schemas/SequenceNumber"
+              }
+            },
+            "additionalProperties": false
           }
         ]
       },
@@ -10922,7 +10963,7 @@
         ],
         "properties": {
           "addressSeed": {
-            "type": "string"
+            "$ref": "#/components/schemas/Bn254FrElement"
           },
           "headerBase64": {
             "type": "string"
@@ -10947,7 +10988,7 @@
           "a": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           },
           "b": {
@@ -10955,14 +10996,14 @@
             "items": {
               "type": "array",
               "items": {
-                "type": "string"
+                "$ref": "#/components/schemas/Bn254FqElement"
               }
             }
           },
           "c": {
             "type": "array",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/Bn254FqElement"
             }
           }
         }

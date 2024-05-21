@@ -9,9 +9,9 @@ module move_test_code::regulated_coin {
     use sui::tx_context;
     use sui::tx_context::TxContext;
 
-    struct REGULATED_COIN has drop {}
+    public struct REGULATED_COIN has drop {}
 
-    struct Wallet has key {
+    public struct Wallet has key {
         id: UID,
     }
 

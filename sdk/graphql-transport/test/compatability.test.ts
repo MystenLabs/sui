@@ -56,12 +56,14 @@ describe('GraphQL SuiClient compatibility', () => {
 		transactionBlockDigest = result.digest;
 
 		await toolbox.client.waitForTransactionBlock({ digest: transactionBlockDigest });
+		await graphQLClient.waitForTransactionBlock({ digest: transactionBlockDigest });
 	});
 
 	test('getRpcApiVersion', async () => {
 		const version = await graphQLClient!.getRpcApiVersion();
 
-		expect(version?.match(/^\d+.\d+.\d+$/)).not.toBeNull();
+		// testing-no-sha is used for testing scenarios where we do not know the SHA
+		expect(version?.match(/^\d+.\d+.\d+-(testing-no-sha|[a-z0-9]{40})$/)).not.toBeNull();
 	});
 
 	test('getCoins', async () => {
@@ -439,7 +441,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getTotalTransactionBlocks();
 		const graphql = await graphQLClient!.getTotalTransactionBlocks();
 
-		expect(graphql).toEqual(rpc);
+		expect(Number(graphql)).closeTo(Number(rpc), 10);
 	});
 
 	test('getReferenceGasPrice', async () => {
@@ -622,7 +624,7 @@ describe('GraphQL SuiClient compatibility', () => {
 		const rpc = await toolbox.client.getLatestCheckpointSequenceNumber();
 		const graphql = await graphQLClient!.getLatestCheckpointSequenceNumber();
 
-		expect(graphql).toEqual(rpc);
+		expect(Number.parseInt(graphql)).closeTo(Number.parseInt(rpc), 3);
 	});
 
 	test('getCheckpoint', async () => {

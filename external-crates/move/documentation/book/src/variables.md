@@ -512,7 +512,7 @@ vector::push_back(&mut v, 100);
 assert!(*vector::borrow(&v, 0) == 100, 42);
 ```
 
-For more details, see [Move references](./references.md).
+For more details, see [Move references](./primitive-types/references.md).
 
 ## Scopes
 
