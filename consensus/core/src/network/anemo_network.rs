@@ -22,7 +22,6 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use cfg_if::cfg_if;
 use consensus_config::{AuthorityIndex, NetworkKeyPair};
-use prometheus::HistogramTimer;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, warn};
@@ -34,7 +33,7 @@ use super::{
     },
     connection_monitor::{AnemoConnectionMonitor, ConnectionMonitorHandle},
     epoch_filter::{AllowedEpoch, EPOCH_HEADER_KEY},
-    metrics::NetworkRouteMetrics,
+    metrics_layer::{MetricsCallbackMaker, MetricsResponseCallback, SizedRequest, SizedResponse},
     BlockStream, NetworkClient, NetworkManager, NetworkService,
 };
 use crate::{
@@ -428,7 +427,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
                 inbound_network_metrics,
                 self.context.parameters.anemo.excessive_message_size,
             )))
@@ -444,7 +443,7 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
                     .make_span_with(DefaultMakeSpan::new().level(tracing::Level::INFO))
                     .on_failure(DefaultOnFailure::new().level(tracing::Level::WARN)),
             )
-            .layer(CallbackLayer::new(MetricsMakeCallbackHandler::new(
+            .layer(CallbackLayer::new(MetricsCallbackMaker::new(
                 outbound_network_metrics,
                 self.context.parameters.anemo.excessive_message_size,
             )))
@@ -574,6 +573,50 @@ impl<S: NetworkService> NetworkManager<S> for AnemoManager {
     }
 }
 
+// Adapt MetricsCallbackMaker and MetricsResponseCallback to anemo.
+
+impl SizedRequest for anemo::Request<Bytes> {
+    fn size(&self) -> usize {
+        self.body().len()
+    }
+
+    fn route(&self) -> String {
+        self.route().to_string()
+    }
+}
+
+impl SizedResponse for anemo::Response<Bytes> {
+    fn size(&self) -> usize {
+        self.body().len()
+    }
+
+    fn error_type(&self) -> Option<String> {
+        if self.status().is_success() {
+            None
+        } else {
+            Some(self.status().to_string())
+        }
+    }
+}
+
+impl MakeCallbackHandler for MetricsCallbackMaker {
+    type Handler = MetricsResponseCallback;
+
+    fn make_handler(&self, request: &anemo::Request<bytes::Bytes>) -> Self::Handler {
+        self.handle_request(request)
+    }
+}
+
+impl ResponseHandler for MetricsResponseCallback {
+    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
+        self.on_response(response)
+    }
+
+    fn on_error<E>(self, err: &E) {
+        self.on_error(err)
+    }
+}
+
 /// Network message types.
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct SendBlockRequest {
@@ -608,116 +651,4 @@ pub(crate) struct FetchCommitsResponse {
     commits: Vec<Bytes>,
     // Serialized SignedBlock that certify the last commit from above.
     certifier_blocks: Vec<Bytes>,
-}
-
-#[derive(Clone)]
-pub(crate) struct MetricsMakeCallbackHandler {
-    metrics: Arc<NetworkRouteMetrics>,
-    /// Size in bytes above which a request or response message is considered excessively large
-    excessive_message_size: usize,
-}
-
-impl MetricsMakeCallbackHandler {
-    pub fn new(metrics: Arc<NetworkRouteMetrics>, excessive_message_size: usize) -> Self {
-        Self {
-            metrics,
-            excessive_message_size,
-        }
-    }
-}
-
-impl MakeCallbackHandler for MetricsMakeCallbackHandler {
-    type Handler = MetricsResponseHandler;
-
-    fn make_handler(&self, request: &anemo::Request<bytes::Bytes>) -> Self::Handler {
-        let route = request.route().to_owned();
-
-        self.metrics.requests.with_label_values(&[&route]).inc();
-        self.metrics
-            .inflight_requests
-            .with_label_values(&[&route])
-            .inc();
-        let body_len = request.body().len();
-        self.metrics
-            .request_size
-            .with_label_values(&[&route])
-            .observe(body_len as f64);
-        if body_len > self.excessive_message_size {
-            warn!(
-                "Saw excessively large request with size {body_len} for {route} with peer {:?}",
-                request.peer_id()
-            );
-            self.metrics
-                .excessive_size_requests
-                .with_label_values(&[&route])
-                .inc();
-        }
-
-        let timer = self
-            .metrics
-            .request_latency
-            .with_label_values(&[&route])
-            .start_timer();
-
-        MetricsResponseHandler {
-            metrics: self.metrics.clone(),
-            timer,
-            route,
-            excessive_message_size: self.excessive_message_size,
-        }
-    }
-}
-
-pub(crate) struct MetricsResponseHandler {
-    metrics: Arc<NetworkRouteMetrics>,
-    // The timer is held on to and "observed" once dropped
-    #[allow(unused)]
-    timer: HistogramTimer,
-    route: String,
-    excessive_message_size: usize,
-}
-
-impl ResponseHandler for MetricsResponseHandler {
-    fn on_response(self, response: &anemo::Response<bytes::Bytes>) {
-        let body_len = response.body().len();
-        self.metrics
-            .response_size
-            .with_label_values(&[&self.route])
-            .observe(body_len as f64);
-        if body_len > self.excessive_message_size {
-            warn!(
-                "Saw excessively large response with size {body_len} for {} with peer {:?}",
-                self.route,
-                response.peer_id()
-            );
-            self.metrics
-                .excessive_size_responses
-                .with_label_values(&[&self.route])
-                .inc();
-        }
-
-        if !response.status().is_success() {
-            let status = response.status().to_u16().to_string();
-            self.metrics
-                .errors
-                .with_label_values(&[&self.route, &status])
-                .inc();
-        }
-    }
-
-    fn on_error<E>(self, _error: &E) {
-        self.metrics
-            .errors
-            .with_label_values(&[&self.route, "unknown"])
-            .inc();
-    }
-}
-
-impl Drop for MetricsResponseHandler {
-    fn drop(&mut self) {
-        self.metrics
-            .inflight_requests
-            .with_label_values(&[&self.route])
-            .dec();
-    }
 }
