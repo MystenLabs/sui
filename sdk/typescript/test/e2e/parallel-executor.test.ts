@@ -6,7 +6,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, Mock, vi } from 
 import { bcs } from '../../src/bcs';
 import { SuiClient } from '../../src/client';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
-import { ParallelTransactionExecutor, TransactionBlock } from '../../src/transactions';
+import { ParallelTransactionExecutor, Transaction } from '../../src/transactions';
 import { setup, TestToolbox } from './utils/setup';
 
 let toolbox: TestToolbox;
@@ -54,7 +54,7 @@ describe('ParallelTransactionExecutor', () => {
 		});
 
 		const txbs = Array.from({ length: 10 }, () => {
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 			txb.transferObjects([txb.splitCoins(txb.gas, [1])[0]], toolbox.address());
 			return txb;
 		});
@@ -80,7 +80,7 @@ describe('ParallelTransactionExecutor', () => {
 		const receiver = new Ed25519Keypair();
 
 		const txbs = Array.from({ length: 10 }, () => {
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 			txb.transferObjects([txb.gas], receiver.toSuiAddress());
 			return txb;
 		});
@@ -90,11 +90,11 @@ describe('ParallelTransactionExecutor', () => {
 		const digest = new Set(results.map((result) => result.digest));
 		expect(digest.size).toBe(results.length);
 
-		const returnFunds = new TransactionBlock();
+		const returnFunds = new Transaction();
 		returnFunds.transferObjects([returnFunds.gas], toolbox.address());
 
-		await toolbox.client.signAndExecuteTransactionBlock({
-			transactionBlock: returnFunds,
+		await toolbox.client.signAndExecuteTransaction({
+			transaction: returnFunds,
 			signer: receiver,
 		});
 	});
@@ -108,7 +108,7 @@ describe('ParallelTransactionExecutor', () => {
 		});
 
 		const txbs = Array.from({ length: 10 }, (_, i) => {
-			const txb = new TransactionBlock();
+			const txb = new Transaction();
 
 			if (i % 2 === 0) {
 				txb.transferObjects([txb.splitCoins(txb.gas, [1])[0]], toolbox.address());
@@ -145,7 +145,7 @@ describe('ParallelTransactionExecutor', () => {
 
 		const newCoins = await Promise.all(
 			new Array(3).fill(null).map(async () => {
-				const txb = new TransactionBlock();
+				const txb = new Transaction();
 				const [coin] = txb.splitCoins(txb.gas, [1]);
 				txb.transferObjects([coin], toolbox.address());
 				const result = await executor.executeTransaction(txb);
@@ -162,11 +162,11 @@ describe('ParallelTransactionExecutor', () => {
 
 		const txbs = newCoins.flatMap((newCoinId) => {
 			expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
-			const txb2 = new TransactionBlock();
+			const txb2 = new Transaction();
 			txb2.transferObjects([newCoinId], toolbox.address());
-			const txb3 = new TransactionBlock();
+			const txb3 = new Transaction();
 			txb3.transferObjects([newCoinId], toolbox.address());
-			const txb4 = new TransactionBlock();
+			const txb4 = new Transaction();
 			txb4.transferObjects([newCoinId], toolbox.address());
 
 			return [txb2, txb3, txb4];

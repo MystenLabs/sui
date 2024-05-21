@@ -5,7 +5,6 @@ import type { bcs } from '../bcs/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type { OpenMoveTypeSignature } from './data/internal.js';
 import type { TransactionPlugin } from './json-rpc-resolver.js';
-import type { Transaction } from './Transaction.js';
 
 export interface ObjectCacheEntry {
 	objectId: string;

@@ -8,8 +8,8 @@ import type { SuiObjectRef } from '../../bcs/types.js';
 import type { SuiClient } from '../../client/index.js';
 import type { Signer } from '../../cryptography/index.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
-import { TransactionBlock } from '../TransactionBlock.js';
-import { CachingTransactionBlockExecutor } from './caching.js';
+import { Transaction } from '../Transaction.js';
+import { CachingTransactionExecutor } from './caching.js';
 import { ParallelQueue, SerialQueue } from './queue.js';
 import { getGasCoinFromEffects } from './serial.js';
 
@@ -44,7 +44,7 @@ export class ParallelTransactionExecutor {
 	#maxPoolSize: number;
 	#sourceCoins: Map<string, SuiObjectRef | null> | null;
 	#coinPool: CoinWithBalance[] = [];
-	#cache: CachingTransactionBlockExecutor;
+	#cache: CachingTransactionExecutor;
 	#objectIdQueues = new Map<string, (() => void)[]>();
 	#buildQueue = new SerialQueue();
 	#executeQueue: ParallelQueue;
@@ -58,7 +58,7 @@ export class ParallelTransactionExecutor {
 		this.#minimumCoinBalance =
 			options.minimumCoinBalance ?? PARALLEL_EXECUTOR_DEFAULTS.minimumCoinBalance;
 		this.#maxPoolSize = options.maxPoolSize ?? PARALLEL_EXECUTOR_DEFAULTS.maxPoolSize;
-		this.#cache = new CachingTransactionBlockExecutor({
+		this.#cache = new CachingTransactionExecutor({
 			client: options.client,
 			cache: options.cache,
 		});
@@ -68,7 +68,7 @@ export class ParallelTransactionExecutor {
 			: null;
 	}
 
-	async executeTransaction(transaction: TransactionBlock) {
+	async executeTransaction(transaction: Transaction) {
 		const { promise, resolve, reject } = promiseWithResolvers<{
 			digest: string;
 			effects: string;
@@ -107,7 +107,7 @@ export class ParallelTransactionExecutor {
 		return promise;
 	}
 
-	async #getUsedObjects(transaction: TransactionBlock) {
+	async #getUsedObjects(transaction: Transaction) {
 		const usedObjects = new Set<string>();
 		let serialized = false;
 
@@ -138,7 +138,7 @@ export class ParallelTransactionExecutor {
 		return usedObjects;
 	}
 
-	async #execute(transaction: TransactionBlock, usedObjects: Set<string>) {
+	async #execute(transaction: Transaction, usedObjects: Set<string>) {
 		let gasCoin!: CoinWithBalance;
 		try {
 			const bytes = await this.#buildQueue.runTask(async () => {
@@ -152,13 +152,13 @@ export class ParallelTransactionExecutor {
 				]);
 				transaction.setSenderIfNotSet(this.#signer.toSuiAddress());
 
-				return this.#cache.buildTransactionBlock({ transactionBlock: transaction });
+				return this.#cache.buildTransaction({ transaction: transaction });
 			});
 
-			const { signature } = await this.#signer.signTransactionBlock(bytes);
+			const { signature } = await this.#signer.signTransaction(bytes);
 
-			const results = await this.#cache.executeTransactionBlock({
-				transactionBlock: bytes,
+			const results = await this.#cache.executeTransaction({
+				transaction: bytes,
 				signature,
 				options: {
 					showEffects: true,
@@ -243,7 +243,7 @@ export class ParallelTransactionExecutor {
 			return;
 		}
 
-		const txb = new TransactionBlock();
+		const txb = new Transaction();
 		const address = this.#signer.toSuiAddress();
 		txb.setSender(address);
 
@@ -285,8 +285,8 @@ export class ParallelTransactionExecutor {
 		}
 		txb.transferObjects(coinResults, address);
 
-		const result = await this.#client.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		const result = await this.#client.signAndExecuteTransaction({
+			transaction: txb,
 			signer: this.#signer,
 			options: {
 				showRawEffects: true,
@@ -314,7 +314,7 @@ export class ParallelTransactionExecutor {
 		const gasObject = getGasCoinFromEffects(effects).ref;
 		this.#sourceCoins!.set(gasObject.objectId, gasObject);
 
-		await this.#client.waitForTransactionBlock({ digest: result.digest });
+		await this.#client.waitForTransaction({ digest: result.digest });
 	}
 }
 

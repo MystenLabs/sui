@@ -7,14 +7,14 @@ import { bcs } from '../../bcs/index.js';
 import type { SuiClient } from '../../client/index.js';
 import type { Signer } from '../../cryptography/keypair.js';
 import type { ObjectCacheOptions } from '../ObjectCache.js';
-import { isTransactionBlock, TransactionBlock } from '../TransactionBlock.js';
-import { CachingTransactionBlockExecutor } from './caching.js';
+import { isTransaction, Transaction } from '../Transaction.js';
+import { CachingTransactionExecutor } from './caching.js';
 import { SerialQueue } from './queue.js';
 
 export class SerialTransactionExecutor {
 	#queue = new SerialQueue();
 	#signer: Signer;
-	#cache: CachingTransactionBlockExecutor;
+	#cache: CachingTransactionExecutor;
 
 	constructor({
 		signer,
@@ -24,7 +24,7 @@ export class SerialTransactionExecutor {
 		signer: Signer;
 	}) {
 		this.#signer = signer;
-		this.#cache = new CachingTransactionBlockExecutor({
+		this.#cache = new CachingTransactionExecutor({
 			client: options.client,
 			cache: options.cache,
 		});
@@ -47,34 +47,34 @@ export class SerialTransactionExecutor {
 		}
 	};
 
-	#buildTransaction = async (transaction: TransactionBlock) => {
+	#buildTransaction = async (transaction: Transaction) => {
 		const gasCoin = await this.#cache.cache.getCustom<{
 			objectId: string;
 			version: string;
 			digest: string;
 		}>('gasCoin');
 
-		const copy = TransactionBlock.from(transaction);
+		const copy = Transaction.from(transaction);
 		if (gasCoin) {
 			copy.setGasPayment([gasCoin]);
 		}
 
 		copy.setSenderIfNotSet(this.#signer.toSuiAddress());
 
-		return this.#cache.buildTransactionBlock({ transactionBlock: copy });
+		return this.#cache.buildTransaction({ transaction: copy });
 	};
 
-	executeTransaction(transaction: TransactionBlock | Uint8Array) {
+	executeTransaction(transaction: Transaction | Uint8Array) {
 		return this.#queue.runTask(async () => {
-			const bytes = isTransactionBlock(transaction)
+			const bytes = isTransaction(transaction)
 				? await this.#buildTransaction(transaction)
 				: transaction;
 
-			const { signature } = await this.#signer.signTransactionBlock(bytes);
+			const { signature } = await this.#signer.signTransaction(bytes);
 			const results = await this.#cache
-				.executeTransactionBlock({
+				.executeTransaction({
 					signature,
-					transactionBlock: bytes,
+					transaction: bytes,
 				})
 				.catch(async (error) => {
 					await this.#cache.reset();

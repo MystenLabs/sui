@@ -5,7 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 
 import { bcs } from '../../src/bcs';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
-import { SerialTransactionExecutor, TransactionBlock } from '../../src/transactions';
+import { SerialTransactionExecutor, Transaction } from '../../src/transactions';
 import { setup, TestToolbox } from './utils/setup';
 
 let toolbox: TestToolbox;
@@ -30,7 +30,7 @@ describe('SerialExecutor', () => {
 			client: toolbox.client,
 			signer: toolbox.keypair,
 		});
-		const txb = new TransactionBlock();
+		const txb = new Transaction();
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
 		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(0);
@@ -46,11 +46,11 @@ describe('SerialExecutor', () => {
 
 		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
 
-		const txb2 = new TransactionBlock();
+		const txb2 = new Transaction();
 		txb2.transferObjects([newCoinId], toolbox.address());
-		const txb3 = new TransactionBlock();
+		const txb3 = new Transaction();
 		txb3.transferObjects([newCoinId], toolbox.address());
-		const txb4 = new TransactionBlock();
+		const txb4 = new Transaction();
 		txb4.transferObjects([newCoinId], toolbox.address());
 
 		const results = await Promise.all([
@@ -70,7 +70,7 @@ describe('SerialExecutor', () => {
 			client: toolbox.client,
 			signer: toolbox.keypair,
 		});
-		const txb = new TransactionBlock();
+		const txb = new Transaction();
 		const [coin] = txb.splitCoins(txb.gas, [1]);
 		txb.transferObjects([coin], toolbox.address());
 
@@ -84,14 +84,14 @@ describe('SerialExecutor', () => {
 
 		expect(toolbox.client.getCoins).toHaveBeenCalledTimes(1);
 
-		const txb2 = new TransactionBlock();
+		const txb2 = new Transaction();
 		txb2.transferObjects([newCoinId], toolbox.address());
-		const txb3 = new TransactionBlock();
+		const txb3 = new Transaction();
 		txb3.transferObjects([newCoinId], new Ed25519Keypair().toSuiAddress());
 
-		await toolbox.client.signAndExecuteTransactionBlock({
+		await toolbox.client.signAndExecuteTransaction({
 			signer: toolbox.keypair,
-			transactionBlock: txb2,
+			transaction: txb2,
 		});
 
 		await expect(() => executor.executeTransaction(txb3)).rejects.toThrowError();
