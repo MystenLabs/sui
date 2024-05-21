@@ -253,6 +253,20 @@ where
         Ok(self.inner.get_chain_identifier().await?)
     }
 
+    pub async fn get_reference_gas_price_until_success(&self) -> u64 {
+        loop {
+            let Ok(Ok(rgp)) = retry_with_max_elapsed_time!(
+                self.inner.get_reference_gas_price(),
+                Duration::from_secs(30)
+            ) else {
+                // TODO: add metrics and fire alert
+                error!("Failed to get reference gas price");
+                continue;
+            };
+            return rgp;
+        }
+    }
+
     pub async fn execute_transaction_block_with_effects(
         &self,
         tx: sui_types::transaction::Transaction,
@@ -356,6 +370,8 @@ pub trait SuiClientInner: Send + Sync {
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error>;
 
+    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error>;
+
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error>;
 
     async fn get_mutable_bridge_object_arg(&self) -> Result<ObjectArg, Self::Error>;
@@ -417,6 +433,10 @@ impl SuiClientInner for SuiSdkClient {
 
     async fn get_chain_identifier(&self) -> Result<String, Self::Error> {
         self.read_api().get_chain_identifier().await
+    }
+
+    async fn get_reference_gas_price(&self) -> Result<u64, Self::Error> {
+        self.governance_api().get_reference_gas_price().await
     }
 
     async fn get_latest_checkpoint_sequence_number(&self) -> Result<u64, Self::Error> {

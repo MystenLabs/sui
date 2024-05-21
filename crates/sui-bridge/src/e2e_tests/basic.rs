@@ -233,6 +233,7 @@ async fn test_add_new_coins_on_sui() {
             .unwrap(),
         certified_action,
         bridge_arg,
+        1000,
     )
     .unwrap();
 
