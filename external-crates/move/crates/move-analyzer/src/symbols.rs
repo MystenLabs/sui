@@ -97,11 +97,11 @@ use move_compiler::{
     },
     linters::LintLevel,
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
-    parser::ast::{self as P, DatatypeName},
+    parser::ast::{self as P, DatatypeName, FunctionName},
     shared::{unique_map::UniqueMap, Identifier, Name, NamedAddressMap, NamedAddressMaps},
     typing::ast::{
-        BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
-        ModuleCall, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
+        BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, IDEInfo, LValue, LValueList,
+        LValue_, MacroCallInfo, ModuleDefinition, SequenceItem, SequenceItem_, UnannotatedExp_,
     },
     unit_test::filter_test_members::UNIT_TEST_POISON_FUN_NAME,
     PASS_CFGIR, PASS_PARSER, PASS_TYPING,
@@ -373,6 +373,9 @@ pub struct TypingSymbolicator<'a> {
     /// Alias lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts)
     alias_lengths: &'a BTreeMap<Position, usize>,
+    /// In some cases (e.g., when processing bodies of macros) we want to keep traversing
+    /// the AST but without recording the actual metadata (uses, definitions, types, etc.)
+    traverse_only: bool,
 }
 
 /// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
@@ -673,7 +676,7 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
         UE::Constant(mod_ident, name) => Some(format!("{mod_ident}::{name}")),
         UE::Value(v) => Some(ast_value_to_ide_string(v)),
         UE::Vector(_, _, _, exp) => ast_exp_to_ide_string(exp).map(|s| format!("[{s}]")),
-        UE::Block((_, seq)) => {
+        UE::Block((_, seq)) | UE::NamedBlock(_, (_, seq)) => {
             let seq_items = seq
                 .iter()
                 .map(ast_seq_item_to_ide_string)
@@ -690,6 +693,7 @@ fn ast_exp_to_ide_string(exp: &Exp) -> Option<String> {
                     .join(", "),
             )
         }
+        UE::IDEAnnotation(_, exp) => ast_exp_to_ide_string(exp),
         UE::ExpList(list) => {
             let items = list
                 .iter()
@@ -1392,6 +1396,7 @@ pub fn get_symbols(
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
         alias_lengths: &BTreeMap::new(),
+        traverse_only: false,
     };
 
     process_typed_modules(
@@ -2010,6 +2015,15 @@ impl<'a> ParsingSymbolicator<'a> {
                         .iter()
                         .for_each(|(_, _, t)| self.type_symbols(t));
                     self.type_symbols(&fun.signature.return_type);
+                    if fun.macro_.is_some() {
+                        // we currently do not process macro function bodies
+                        // in the parsing symbolicator (and do very limited
+                        // processing in typing symbolicator)
+                        continue;
+                    }
+                    if let P::FunctionBody_::Defined(seq) = &fun.body.value {
+                        self.seq_symbols(seq);
+                    };
                 }
                 MM::Struct(sdef) => match &sdef.fields {
                     P::StructFields::Named(v) => v.iter().for_each(|(_, t)| self.type_symbols(t)),
@@ -2094,9 +2108,9 @@ impl<'a> ParsingSymbolicator<'a> {
     fn exp_symbols(&mut self, sp!(_, exp): &P::Exp) {
         use P::Exp_ as E;
         match exp {
-            E::Name(chain) => {
-                self.chain_symbols(chain);
-            }
+            E::Move(_, e) => self.exp_symbols(e),
+            E::Copy(_, e) => self.exp_symbols(e),
+            E::Name(chain) => self.chain_symbols(chain),
             E::Call(chain, v) => {
                 self.chain_symbols(chain);
                 v.value.iter().for_each(|e| self.exp_symbols(e));
@@ -2125,7 +2139,20 @@ impl<'a> ParsingSymbolicator<'a> {
             E::Loop(e) => self.exp_symbols(e),
             E::Labeled(_, e) => self.exp_symbols(e),
             E::Block(seq) => self.seq_symbols(seq),
+            E::Lambda(sp!(_, bindings), to, e) => {
+                for (sp!(_, v), bto) in bindings {
+                    if let Some(bt) = bto {
+                        self.type_symbols(bt);
+                    }
+                    v.iter().for_each(|bind| self.bind_symbols(bind));
+                }
+                if let Some(t) = to {
+                    self.type_symbols(t);
+                }
+                self.exp_symbols(e);
+            }
             E::ExpList(l) => l.iter().for_each(|e| self.exp_symbols(e)),
+            E::Parens(e) => self.exp_symbols(e),
             E::Assign(e1, e2) => {
                 self.exp_symbols(e1);
                 self.exp_symbols(e2);
@@ -2156,6 +2183,10 @@ impl<'a> ParsingSymbolicator<'a> {
                 }
                 v.value.iter().for_each(|e| self.exp_symbols(e));
             }
+            E::Index(e, v) => {
+                self.exp_symbols(e);
+                v.value.iter().for_each(|e| self.exp_symbols(e));
+            }
             E::Cast(e, t) => {
                 self.exp_symbols(e);
                 self.type_symbols(t);
@@ -2164,7 +2195,15 @@ impl<'a> ParsingSymbolicator<'a> {
                 self.exp_symbols(e);
                 self.type_symbols(t);
             }
-            _ => (),
+            E::DotUnresolved(_, e) => self.exp_symbols(e),
+            E::Value(_)
+            | E::Quant(..)
+            | E::Unit
+            | E::Continue(_)
+            | E::Spec(_)
+            | E::Match(_, _) // TODO support it
+            | E::UnresolvedError
+            => (),
         }
     }
 
@@ -2731,19 +2770,24 @@ impl<'a> TypingSymbolicator<'a> {
     fn exp_symbols(&mut self, exp: &Exp, scope: &mut OrdMap<Symbol, LocalDef>) {
         use UnannotatedExp_ as E;
         match &exp.exp.value {
-            E::Move {
-                from_user: _,
-                var: v,
-            } => self.add_local_use_def(&v.value.name, &v.loc, scope),
-            E::Copy {
-                from_user: _,
-                var: v,
-            } => self.add_local_use_def(&v.value.name, &v.loc, scope),
-            E::Use(v) => self.add_local_use_def(&v.value.name, &v.loc, scope),
+            E::Move { from_user: _, var } => {
+                self.add_local_use_def(&var.value.name, &var.loc, scope)
+            }
+            E::Copy { from_user: _, var } => {
+                self.add_local_use_def(&var.value.name, &var.loc, scope)
+            }
+            E::Use(var) => self.add_local_use_def(&var.value.name, &var.loc, scope),
             E::Constant(mod_ident, name) => {
                 self.add_const_use_def(mod_ident, &name.value(), &name.loc())
             }
-            E::ModuleCall(mod_call) => self.mod_call_symbols(mod_call, scope),
+            E::ModuleCall(mod_call) => self.mod_call_symbols(
+                &mod_call.module,
+                mod_call.name,
+                mod_call.method_name,
+                &mod_call.type_arguments,
+                Some(&mod_call.arguments),
+                scope,
+            ),
             E::Builtin(builtin_fun, exp) => {
                 use BuiltinFunction_ as BF;
                 match &builtin_fun.value {
@@ -2769,19 +2813,57 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(body, scope);
             }
             E::NamedBlock(_, (use_funs, sequence)) => {
+                let old_traverse_mode = self.traverse_only;
+                // start adding new use-defs etc. when processing an argument
+                if use_funs.color == 0 {
+                    self.traverse_only = false;
+                }
                 self.use_funs_symbols(use_funs);
                 // a named block is a new var scope
                 let mut new_scope = scope.clone();
                 for seq_item in sequence {
                     self.seq_item_symbols(&mut new_scope, seq_item);
                 }
+                if use_funs.color == 0 {
+                    self.traverse_only = old_traverse_mode;
+                }
             }
             E::Block((use_funs, sequence)) => {
+                let old_traverse_mode = self.traverse_only;
+                // start adding new use-defs etc. when processing arguments
+                if use_funs.color == 0 {
+                    self.traverse_only = false;
+                }
                 self.use_funs_symbols(use_funs);
                 // a block is a new var scope
                 let mut new_scope = scope.clone();
                 for seq_item in sequence {
                     self.seq_item_symbols(&mut new_scope, seq_item);
+                }
+                if use_funs.color == 0 {
+                    self.traverse_only = old_traverse_mode;
+                }
+            }
+            E::IDEAnnotation(info, exp) => {
+                match info {
+                    IDEInfo::MacroCallInfo(MacroCallInfo {
+                        module, name, method_name, type_arguments, by_value_args
+                    }) => {
+                        self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
+                        by_value_args.iter().for_each(|a| self.seq_item_symbols(scope, a));
+                        let old_traverse_mode = self.traverse_only;
+                        // stop adding new use-defs etc.
+                        self.traverse_only = true;
+                        self.exp_symbols(exp, scope);
+                        self.traverse_only = old_traverse_mode;
+                    }
+                    IDEInfo::ExpandedLambda => {
+                        let old_traverse_mode = self.traverse_only;
+                        // start adding new use-defs etc. when processing a lambda argument
+                        self.traverse_only = false;
+                        self.exp_symbols(exp, scope);
+                        self.traverse_only = old_traverse_mode;
+                    },
                 }
             }
             E::Assign(lvalues, opt_types, e) => {
@@ -2798,23 +2880,19 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(lhs, scope);
                 self.exp_symbols(rhs, scope);
             }
-            E::Return(exp) => {
-                self.exp_symbols(exp, scope);
-            }
-            E::Abort(exp) => {
-                self.exp_symbols(exp, scope);
-            }
-            E::Dereference(exp) => {
-                self.exp_symbols(exp, scope);
-            }
-            E::UnaryExp(_, exp) => {
-                self.exp_symbols(exp, scope);
-            }
+            E::Return(exp) => self.exp_symbols(exp, scope),
+            E::Abort(exp) => self.exp_symbols(exp, scope),
+            E::Give(_, exp) => self.exp_symbols(exp, scope),
+            E::Dereference(exp) => self.exp_symbols(exp, scope),
+            E::UnaryExp(_, exp) => self.exp_symbols(exp, scope),
             E::BinopExp(lhs, _, _, rhs) => {
                 self.exp_symbols(lhs, scope);
                 self.exp_symbols(rhs, scope);
             }
             E::Pack(ident, name, tparams, fields) => {
+                self.pack_symbols(ident, name, tparams, fields, scope);
+            }
+            E::PackVariant(ident, name, _, tparams, fields) => {
                 self.pack_symbols(ident, name, tparams, fields, scope);
             }
             E::ExpList(list_items) => {
@@ -2852,7 +2930,13 @@ impl<'a> TypingSymbolicator<'a> {
             } => {
                 self.exp_symbols(base_exp, scope);
             }
-            _ => (),
+            E::Unit { .. }
+            | E::Value(_)
+            | E::Continue(_)
+            | E::ErrorConstant { .. }
+            | E::UnresolvedError
+            | E::Match(_, _) // TODO: support it
+            | E::VariantMatch(_, _, _) => (), // TODO: support it
         }
     }
 
@@ -2893,8 +2977,15 @@ impl<'a> TypingSymbolicator<'a> {
         }
     }
 
-    fn mod_call_symbols(&mut self, mod_call: &ModuleCall, scope: &mut OrdMap<Symbol, LocalDef>) {
-        let mod_ident = mod_call.module;
+    fn mod_call_symbols(
+        &mut self,
+        mod_ident: &E::ModuleIdent,
+        name: FunctionName,
+        method_name: Option<Name>,
+        type_arguments: &[Type],
+        arguments: Option<&Exp>,
+        scope: &mut OrdMap<Symbol, LocalDef>,
+    ) {
         let Some(mod_def) = self
             .mod_outer_defs
             .get(&expansion_mod_ident_to_map_key(&mod_ident.value))
@@ -2903,29 +2994,29 @@ impl<'a> TypingSymbolicator<'a> {
             // but just in case - it's better to report it than to crash the analyzer due to
             // unchecked unwrap
             eprintln!(
-                "WARNING: could not locate module {:?} when processing a call to {:?}",
-                mod_ident, mod_call
+                "WARNING: could not locate module {:?} when processing a call to {}{}",
+                mod_ident, mod_ident, name
             );
             return;
         };
 
-        if mod_def.functions.get(&mod_call.name.value()).is_none() {
+        if mod_def.functions.get(&name.value()).is_none() {
             return;
         }
 
-        let fun_name = mod_call.name.value();
-        // a function name (same as fun_name) or  method name (different from fun_name)
-        let fun_use = mod_call
-            .method_name
-            .unwrap_or_else(|| sp(mod_call.name.loc(), mod_call.name.value()));
-        self.add_fun_use_def(&mod_call.module, &fun_name, &fun_use.value, &fun_use.loc);
+        let fun_name = name.value();
+        // a function name (same as fun_name) or method name (different from fun_name)
+        let fun_use = method_name.unwrap_or_else(|| sp(name.loc(), name.value()));
+        self.add_fun_use_def(mod_ident, &fun_name, &fun_use.value, &fun_use.loc);
         // handle type parameters
-        for t in &mod_call.type_arguments {
+        for t in type_arguments {
             self.add_type_id_use_def(t);
         }
 
         // handle arguments
-        self.exp_symbols(&mod_call.arguments, scope);
+        if let Some(args) = arguments {
+            self.exp_symbols(args, scope);
+        }
     }
 
     /// Get symbols for the pack expression
@@ -2955,6 +3046,9 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add type parameter to a scope holding type params
     fn add_type_param(&mut self, tp: &TParam, tp_scope: &mut BTreeMap<Symbol, DefLoc>) {
+        if self.traverse_only {
+            return;
+        }
         match get_start_loc(
             &tp.user_specified_name.loc,
             self.files,
@@ -2995,6 +3089,9 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a const identifier
     fn add_const_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
+        if self.traverse_only {
+            return;
+        }
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
@@ -3066,6 +3163,9 @@ impl<'a> TypingSymbolicator<'a> {
         use_name: &Symbol,
         use_pos: &Loc,
     ) {
+        if self.traverse_only {
+            return;
+        }
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
@@ -3115,6 +3215,9 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a struct identifier
     fn add_struct_use_def(&mut self, module_ident: &ModuleIdent, use_name: &Symbol, use_pos: &Loc) {
+        if self.traverse_only {
+            return;
+        }
         let mod_ident_str = expansion_mod_ident_to_map_key(&module_ident.value);
         let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
             return;
@@ -3169,6 +3272,9 @@ impl<'a> TypingSymbolicator<'a> {
         use_name: &Symbol,
         use_pos: &Loc,
     ) {
+        if self.traverse_only {
+            return;
+        }
         let mod_ident_str = expansion_mod_ident_to_map_key(module_ident);
         let Some(name_start) = get_start_loc(use_pos, self.files, self.file_id_mapping) else {
             debug_assert!(false);
@@ -3217,6 +3323,9 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Add use of a type identifier
     fn add_type_id_use_def(&mut self, id_type: &Type) {
+        if self.traverse_only {
+            return;
+        }
         let sp!(pos, typ) = id_type;
         match typ {
             Type_::Ref(_, t) => self.add_type_id_use_def(t),
@@ -3260,7 +3369,13 @@ impl<'a> TypingSymbolicator<'a> {
                     self.add_type_id_use_def(t);
                 }
             }
-            _ => (), // nothing to be done for the other types
+            Type_::Fun(v, t) => {
+                for t in v {
+                    self.add_type_id_use_def(t);
+                }
+                self.add_type_id_use_def(t);
+            }
+            Type_::Unit | Type_::Var(_) | Type_::Anything | Type_::UnresolvedError => (), // nothing to be done for the other types
         }
     }
 
@@ -3274,6 +3389,9 @@ impl<'a> TypingSymbolicator<'a> {
         with_let: bool,
         mutable: bool,
     ) {
+        if self.traverse_only {
+            return;
+        }
         match get_start_loc(pos, self.files, self.file_id_mapping) {
             Some(name_start) => {
                 let def_loc = DefLoc {
@@ -3329,6 +3447,9 @@ impl<'a> TypingSymbolicator<'a> {
         use_pos: &Loc,
         scope: &OrdMap<Symbol, LocalDef>,
     ) {
+        if self.traverse_only {
+            return;
+        }
         let name_start = match get_start_loc(use_pos, self.files, self.file_id_mapping) {
             Some(v) => v,
             None => {
@@ -3359,8 +3480,6 @@ impl<'a> TypingSymbolicator<'a> {
                     doc_string,
                 ),
             );
-        } else {
-            debug_assert!(false);
         }
     }
 }
@@ -3474,7 +3593,7 @@ fn def_info_to_type_def_loc(
 ) -> Option<DefLoc> {
     match def_info {
         DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Function(_, _, _, _, _, _, _, ret) => type_def_loc(mod_outer_defs, ret),
+        DefInfo::Function(..) => None,
         DefInfo::Struct(mod_ident, name, _, _, _, _, _) => {
             find_struct(mod_outer_defs, mod_ident, name)
         }
@@ -4232,7 +4351,7 @@ fn docstring_test() {
         8,
         "M6.move",
         "fun Symbols::M6::other_doc_struct(): Symbols::M7::OtherDocStruct",
-        Some((3, 11, "M7.move")),
+        None,
         Some("\nThis is a multiline docstring\n\nThis docstring has empty lines.\n\nIt uses the ** format instead of ///\n\n"),
     );
 
@@ -4282,7 +4401,7 @@ fn docstring_test() {
         15,
         "M7.move",
         "public fun Symbols::M7::create_other_struct(v: u64): Symbols::M7::OtherDocStruct",
-        Some((3, 11, "M7.move")),
+        None,
         Some("Documented initializer in another module\n"),
     );
 
@@ -4596,7 +4715,7 @@ fn symbols_test() {
         15,
         "M2.move",
         "public fun Symbols::M2::some_other_struct(v: u64): Symbols::M2::SomeOtherStruct",
-        Some((2, 11, "M2.move")),
+        None,
     );
     // const in param (other_mod_struct function)
     assert_use_def(
@@ -7159,6 +7278,7 @@ fn function_types_test() {
         "macro fun Macros::fun_type::macro_fun()",
         None,
     );
+
     // entry function call
     assert_use_def(
         mod_symbols,
@@ -7173,5 +7293,476 @@ fn function_types_test() {
         "entry fun Macros::fun_type::entry_fun()",
         None,
     );
-    // TODO: macro function call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        10,
+        8,
+        "fun_type.move",
+        5,
+        14,
+        "fun_type.move",
+        "macro fun Macros::fun_type::macro_fun()",
+        None,
+    );
+}
+
+#[test]
+/// Tests macro definitions and invocations
+fn macros_test() {
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+    path.push("tests/macros");
+
+    let ide_files_layer: VfsPath = MemoryFS::new().into();
+    let (symbols_opt, _) = get_symbols(
+        Arc::new(Mutex::new(BTreeMap::new())),
+        ide_files_layer,
+        path.as_path(),
+        LintLevel::None,
+    )
+    .unwrap();
+    let symbols = symbols_opt.unwrap();
+
+    let mut fpath = path.clone();
+    fpath.push("sources/macros.move");
+    let cpath = dunce::canonicalize(&fpath).unwrap();
+
+    symbols.file_use_defs.get(&cpath).unwrap();
+
+    let mod_symbols = symbols.file_use_defs.get(&cpath).unwrap();
+
+    // macro definitions - the signature should be symbolicated including lambda types etc.
+
+    // macro name
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        6,
+        14,
+        "macros.move",
+        6,
+        14,
+        "macros.move",
+        "macro fun Macros::macros::foo($i: u64, $body: |u64| -> u64): u64",
+        None,
+    );
+    // first non-lambda param (primitive type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        6,
+        18,
+        "macros.move",
+        6,
+        18,
+        "macros.move",
+        "$i: u64",
+        None,
+    );
+    // second lambda param (using primitive types)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        6,
+        27,
+        "macros.move",
+        6,
+        27,
+        "macros.move",
+        "$body: |u64| -> u64",
+        None,
+    );
+
+    // macro name
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        14,
+        14,
+        "macros.move",
+        14,
+        14,
+        "macros.move",
+        "macro fun Macros::macros::bar($i: Macros::macros::SomeStruct, $body: |Macros::macros::SomeStruct| -> Macros::macros::SomeStruct): Macros::macros::SomeStruct",
+        None,
+    );
+    // first non-lambda param (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        14,
+        18,
+        "macros.move",
+        14,
+        18,
+        "macros.move",
+        "$i: Macros::macros::SomeStruct",
+        Some((2, 18, "macros.move")),
+    );
+    // first non-lambda param type (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        14,
+        22,
+        "macros.move",
+        2,
+        18,
+        "macros.move",
+        "public struct Macros::macros::SomeStruct has drop {\n\tsome_field: u64\n}",
+        Some((2, 18, "macros.move")),
+    );
+    // second lambda param (using struct types)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        3,
+        14,
+        34,
+        "macros.move",
+        14,
+        34,
+        "macros.move",
+        "$body: |Macros::macros::SomeStruct| -> Macros::macros::SomeStruct",
+        None,
+    );
+    // lambda param type (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        4,
+        14,
+        42,
+        "macros.move",
+        2,
+        18,
+        "macros.move",
+        "public struct Macros::macros::SomeStruct has drop {\n\tsome_field: u64\n}",
+        Some((2, 18, "macros.move")),
+    );
+    // lambda param type (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        5,
+        14,
+        57,
+        "macros.move",
+        2,
+        18,
+        "macros.move",
+        "public struct Macros::macros::SomeStruct has drop {\n\tsome_field: u64\n}",
+        Some((2, 18, "macros.move")),
+    );
+    // macro ret type (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        6,
+        14,
+        70,
+        "macros.move",
+        2,
+        18,
+        "macros.move",
+        "public struct Macros::macros::SomeStruct has drop {\n\tsome_field: u64\n}",
+        Some((2, 18, "macros.move")),
+    );
+
+    // macro name
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        18,
+        14,
+        "macros.move",
+        18,
+        14,
+        "macros.move",
+        "macro fun Macros::macros::for_each<$T>($v: &vector<$T>, $body: |&$T| -> ())",
+        None,
+    );
+    // macro's generic type
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        18,
+        23,
+        "macros.move",
+        18,
+        23,
+        "macros.move",
+        "$T",
+        None,
+    );
+    // first non-lambda param (parameterized vec type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        18,
+        27,
+        "macros.move",
+        18,
+        27,
+        "macros.move",
+        "let $v: &vector<u64>",
+        None,
+    );
+    // first non-lambda param type's generic type
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        3,
+        18,
+        39,
+        "macros.move",
+        18,
+        23,
+        "macros.move",
+        "$T",
+        None,
+    );
+    // second lambda param (using generic types)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        4,
+        18,
+        44,
+        "macros.move",
+        18,
+        44,
+        "macros.move",
+        "$body: |&$T| -> ()",
+        None,
+    );
+    // lambda param type (struct type)
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        5,
+        18,
+        53,
+        "macros.move",
+        18,
+        23,
+        "macros.move",
+        "$T",
+        None,
+    );
+
+    // macro uses
+
+    // module in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        32,
+        16,
+        "macros.move",
+        0,
+        15,
+        "macros.move",
+        "module Macros::macros",
+        None,
+    );
+    // function name in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        32,
+        24,
+        "macros.move",
+        6,
+        14,
+        "macros.move",
+        "macro fun Macros::macros::foo($i: u64, $body: |u64| -> u64): u64",
+        None,
+    );
+    // first non-lambda argument in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        32,
+        29,
+        "macros.move",
+        31,
+        12,
+        "macros.move",
+        "let p: u64",
+        None,
+    );
+    // lambda param in second lambda argument in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        3,
+        32,
+        33,
+        "macros.move",
+        32,
+        33,
+        "macros.move",
+        "let x: u64",
+        None,
+    );
+    // lambda body (its param) in second lambda argument in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        4,
+        32,
+        36,
+        "macros.move",
+        32,
+        33,
+        "macros.move",
+        "let x: u64",
+        None,
+    );
+
+    // lambda in macro call containing another macro call
+
+    // lambda param
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        5,
+        37,
+        49,
+        "macros.move",
+        37,
+        49,
+        "macros.move",
+        "let y: u64",
+        None,
+    );
+    // macro name in macro call in lambda body
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        7,
+        37,
+        68,
+        "macros.move",
+        6,
+        14,
+        "macros.move",
+        "macro fun Macros::macros::foo($i: u64, $body: |u64| -> u64): u64",
+        None,
+    );
+    // non-lambda argument nested in macro call in lambda body
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        8,
+        37,
+        73,
+        "macros.move",
+        37,
+        49,
+        "macros.move",
+        "let y: u64",
+        None,
+    );
+    // lambda param of lambda argument nested in macro call in lambda body
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        9,
+        37,
+        77,
+        "macros.move",
+        37,
+        77,
+        "macros.move",
+        "let z: u64",
+        None,
+    );
+    // lambda body (its param) of lambda argument nested in macro call in lambda body
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        10,
+        37,
+        80,
+        "macros.move",
+        37,
+        77,
+        "macros.move",
+        "let z: u64",
+        None,
+    );
+
+    // part of lambda's body in macro call that represents captured variable
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        4,
+        43,
+        48,
+        "macros.move",
+        42,
+        16,
+        "macros.move",
+        "let mut sum: u64",
+        None,
+    );
+    // first macro argument in macro call, receiver-syntax style
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        0,
+        44,
+        8,
+        "macros.move",
+        41,
+        12,
+        "macros.move",
+        "let es: vector<u64>",
+        None,
+    );
+    // aliased macro name in macro call, receiver-syntax style
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        1,
+        44,
+        11,
+        "macros.move",
+        18,
+        14,
+        "macros.move",
+        "macro fun Macros::macros::for_each<$T>($v: &vector<$T>, $body: |&$T| -> ())",
+        None,
+    );
+
+    // type parameter in macro call
+    assert_use_def(
+        mod_symbols,
+        &symbols,
+        2,
+        51,
+        34,
+        "macros.move",
+        2,
+        18,
+        "macros.move",
+        "public struct Macros::macros::SomeStruct has drop {\n\tsome_field: u64\n}",
+        Some((2, 18, "macros.move")),
+    );
 }

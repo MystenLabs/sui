@@ -56,7 +56,3 @@ sui-config.workspace = true
 sui-test-transaction-builder.workspace = true
 test-cluster.workspace = true
 hex-literal = "0.3.4"
-
-[[bin]]
-name = "sui-bridge-cli"
-path = "src/tools/cli.rs"

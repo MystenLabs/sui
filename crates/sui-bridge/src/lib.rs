@@ -19,7 +19,6 @@ pub mod storage;
 pub mod sui_client;
 pub mod sui_syncer;
 pub mod sui_transaction_builder;
-pub mod tools;
 pub mod types;
 pub mod utils;
 

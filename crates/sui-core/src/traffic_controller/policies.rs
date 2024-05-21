@@ -174,7 +174,6 @@ pub enum TrafficControlPolicy {
     NoOp(NoOpPolicy),
     // Test policies below this point
     TestNConnIP(TestNConnIPPolicy),
-    TestInspectIp(TestInspectIpPolicy),
     TestPanicOnInvocation(TestPanicOnInvocationPolicy),
 }
 
@@ -184,7 +183,6 @@ impl Policy for TrafficControlPolicy {
             TrafficControlPolicy::NoOp(policy) => policy.handle_tally(tally),
             TrafficControlPolicy::FreqThreshold(policy) => policy.handle_tally(tally),
             TrafficControlPolicy::TestNConnIP(policy) => policy.handle_tally(tally),
-            TrafficControlPolicy::TestInspectIp(policy) => policy.handle_tally(tally),
             TrafficControlPolicy::TestPanicOnInvocation(policy) => policy.handle_tally(tally),
         }
     }
@@ -194,7 +192,6 @@ impl Policy for TrafficControlPolicy {
             TrafficControlPolicy::NoOp(policy) => policy.policy_config(),
             TrafficControlPolicy::FreqThreshold(policy) => policy.policy_config(),
             TrafficControlPolicy::TestNConnIP(policy) => policy.policy_config(),
-            TrafficControlPolicy::TestInspectIp(policy) => policy.policy_config(),
             TrafficControlPolicy::TestPanicOnInvocation(policy) => policy.policy_config(),
         }
     }
@@ -215,9 +212,6 @@ impl TrafficControlPolicy {
             ),
             PolicyType::TestNConnIP(n) => {
                 Self::TestNConnIP(TestNConnIPPolicy::new(policy_config, n).await)
-            }
-            PolicyType::TestInspectIp => {
-                Self::TestInspectIp(TestInspectIpPolicy::new(policy_config))
             }
             PolicyType::TestPanicOnInvocation => {
                 Self::TestPanicOnInvocation(TestPanicOnInvocationPolicy::new(policy_config))
@@ -370,29 +364,6 @@ async fn run_clear_frequencies(frequencies: Arc<RwLock<HashMap<IpAddr, u64>>>, w
     loop {
         tokio::time::sleep(tokio::time::Duration::from_secs(window_secs)).await;
         frequencies.write().clear();
-    }
-}
-
-#[derive(Clone)]
-pub struct TestInspectIpPolicy {
-    config: PolicyConfig,
-}
-
-impl TestInspectIpPolicy {
-    pub fn new(config: PolicyConfig) -> Self {
-        Self { config }
-    }
-
-    fn handle_tally(&mut self, tally: TrafficTally) -> PolicyResponse {
-        assert!(tally.proxy_ip.is_some(), "Expected proxy_ip to be present");
-        PolicyResponse {
-            block_connection_ip: None,
-            block_proxy_ip: None,
-        }
-    }
-
-    fn policy_config(&self) -> &PolicyConfig {
-        &self.config
     }
 }
 

@@ -1817,17 +1817,16 @@ dependencies = [
 
 [[package]]
 name = "bindgen"
-version = "0.65.1"
+version = "0.69.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfdf7b466f9a4903edc73f95d6d2bcd5baf8ae620638762244d3f60143643cc5"
+checksum = "a00dc851838a2120612785d195287475a3ac45514741da670b735818822129a0"
 dependencies = [
- "bitflags 1.3.2",
+ "bitflags 2.4.1",
  "cexpr",
  "clang-sys",
+ "itertools 0.12.0",
  "lazy_static",
  "lazycell",
- "peeking_take_while",
- "prettyplease 0.2.17",
  "proc-macro2 1.0.78",
  "quote 1.0.35",
  "regex",
@@ -5703,19 +5702,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
 
 [[package]]
-name = "internment"
-version = "0.5.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
-dependencies = [
- "ahash 0.7.6",
- "dashmap",
- "hashbrown 0.12.3",
- "once_cell",
- "parking_lot 0.12.1",
-]
-
-[[package]]
 name = "io-lifetimes"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6194,9 +6180,9 @@ checksum = "348108ab3fba42ec82ff6e9564fc4ca0247bdccdc68dd8af9764bbc79c3c8ffb"
 
 [[package]]
 name = "librocksdb-sys"
-version = "0.11.0+8.1.1"
+version = "0.16.0+8.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3386f101bcb4bd252d8e9d2fb41ec3b0862a15a62b478c355b2982efa469e3e"
+checksum = "ce3d60bc059831dc1c83903fb45c103f75db65c5a7bf22272764d9cc683e348c"
 dependencies = [
  "bindgen",
  "bzip2-sys",
@@ -6586,7 +6572,6 @@ name = "move-abstract-interpreter-v2"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
- "move-bytecode-verifier-meter",
 ]
 
 [[package]]
@@ -6954,7 +6939,6 @@ dependencies = [
  "anyhow",
  "codespan",
  "codespan-reporting",
- "internment",
  "itertools 0.10.5",
  "log",
  "move-binary-format",
@@ -7050,7 +7034,6 @@ dependencies = [
  "move-core-types",
  "move-model",
  "num",
- "paste",
  "petgraph 0.5.1",
  "serde",
 ]
@@ -7086,10 +7069,7 @@ dependencies = [
  "move-prover",
  "move-stdlib-natives",
  "move-vm-runtime",
- "move-vm-types",
  "sha2 0.9.9",
- "sha3 0.9.1",
- "smallvec",
  "walkdir",
 ]
 
@@ -7119,7 +7099,6 @@ dependencies = [
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
- "walkdir",
 ]
 
 [[package]]
@@ -7134,7 +7113,6 @@ dependencies = [
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
- "walkdir",
 ]
 
 [[package]]
@@ -7149,7 +7127,6 @@ dependencies = [
  "sha2 0.9.9",
  "sha3 0.9.1",
  "smallvec",
- "walkdir",
 ]
 
 [[package]]
@@ -7255,7 +7232,6 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
- "sha3 0.9.1",
  "smallvec",
  "tracing",
 ]
@@ -7274,7 +7250,6 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
- "sha3 0.9.1",
  "smallvec",
  "tracing",
 ]
@@ -7293,7 +7268,6 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
- "sha3 0.9.1",
  "smallvec",
  "tracing",
 ]
@@ -7312,7 +7286,6 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "parking_lot 0.11.2",
- "sha3 0.9.1",
  "smallvec",
  "tracing",
 ]
@@ -8894,12 +8867,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "peeking_take_while"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
-
-[[package]]
 name = "pem"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10194,9 +10161,9 @@ dependencies = [
 
 [[package]]
 name = "rocksdb"
-version = "0.21.0"
+version = "0.22.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb6f170a4041d50a0ce04b0d2e14916d6ca863ea2e422689a5b694395d299ffe"
+checksum = "6bd13e55d6d7b8cd0ea569161127567cd587676c99f4472f779a0279aa60a7a7"
 dependencies = [
  "libc",
  "librocksdb-sys",
@@ -12101,6 +12068,30 @@ dependencies = [
  "typed-store",
  "typed-store-derive",
  "url",
+]
+
+[[package]]
+name = "sui-bridge-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ethers",
+ "fastcrypto",
+ "move-core-types",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "shared-crypto",
+ "sui-bridge",
+ "sui-config",
+ "sui-json-rpc-types",
+ "sui-keys",
+ "sui-sdk",
+ "sui-types",
+ "telemetry-subscribers",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
