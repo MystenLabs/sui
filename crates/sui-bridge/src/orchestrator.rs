@@ -99,8 +99,6 @@ where
                 continue;
             }
 
-            // TODO: skip events that are already processed (in DB and on chain)
-
             let bridge_events = events
                 .iter()
                 .map(SuiBridgeEvent::try_from_sui_event)

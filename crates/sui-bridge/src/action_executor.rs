@@ -256,11 +256,7 @@ where
         {
             return;
         }
-        let threshold = action.approval_threshold();
-        match auth_agg
-            .request_committee_signatures(action.clone(), threshold)
-            .await
-        {
+        match auth_agg.request_committee_signatures(action.clone()).await {
             Ok(certificate) => {
                 execution_queue_sender
                     .send(CertifiedBridgeActionExecutionWrapper(certificate, 0))

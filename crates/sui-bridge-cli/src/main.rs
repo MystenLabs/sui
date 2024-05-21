@@ -86,9 +86,8 @@ async fn main() -> anyhow::Result<()> {
                 // Create BridgeAction
                 let sui_action = make_action(sui_chain_id, &cmd);
                 println!("Action to execute on Sui: {:?}", sui_action);
-                let threshold = sui_action.approval_threshold();
                 let certified_action = agg
-                    .request_committee_signatures(sui_action, threshold)
+                    .request_committee_signatures(sui_action)
                     .await
                     .expect("Failed to request committee signatures");
                 let bridge_arg = sui_client
@@ -130,9 +129,8 @@ async fn main() -> anyhow::Result<()> {
             let eth_action = make_action(chain_id, &cmd);
             println!("Action to execute on Eth: {:?}", eth_action);
             // Create Eth Signer Client
-            let threshold = eth_action.approval_threshold();
             let certified_action = agg
-                .request_committee_signatures(eth_action, threshold)
+                .request_committee_signatures(eth_action)
                 .await
                 .expect("Failed to request committee signatures");
             let contract_address = select_contract_address(&config, &cmd);
