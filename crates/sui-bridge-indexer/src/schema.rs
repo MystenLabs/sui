@@ -4,12 +4,27 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    tokens (message_key) {
-        message_key -> Bytea,
-        checkpoint -> Int8,
-        epoch -> Int8,
-        token_type -> Int4,
-        source_chain -> Int4,
-        destination_chain -> Int4,
+    token_transfer (chain_id, nonce) {
+        chain_id -> Int4,
+        nonce -> Int8,
+        block_height -> Int8,
+        timestamp_ms -> Int8,
+        txn_hash -> Bytea,
+        status -> Text,
+        gas_usage -> Int8,
     }
 }
+
+diesel::table! {
+    token_transfer_data (chain_id, nonce) {
+        chain_id -> Int4,
+        nonce -> Int8,
+        sender_address -> Bytea,
+        destination_chain -> Int4,
+        recipient_address -> Bytea,
+        token_id -> Int4,
+        amount -> Int8,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(token_transfer, token_transfer_data,);

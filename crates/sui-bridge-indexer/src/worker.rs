@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::models::TokenTxn;
 use crate::postgres_writer::{get_connection_pool, write, PgPool};
+use crate::{TokenTransfer, TokenTransferStatus};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::BTreeSet;
@@ -46,17 +46,20 @@ impl BridgeWorker {
     }
 
     // Process a transaction that has been identified as a bridge transaction.
-    fn process_transaction(&self, tx: &CheckpointTransaction, epoch: u64, checkpoint: u64) {
+    fn process_transaction(&self, _tx: &CheckpointTransaction, _epoch: u64, _checkpoint: u64) {
+        // todo create TokenTransfer from checkpoint data
         println!("SUI: Processing transaction");
-        let token_txn = TokenTxn {
-            message_key: tx.transaction.digest().inner().to_vec(),
-            checkpoint: checkpoint as i64,
-            epoch: epoch as i64,
-            token_type: 4,
-            source_chain: 2,
-            destination_chain: 3,
+        let transfer = TokenTransfer {
+            chain_id: 0,
+            nonce: 0,
+            block_height: 0,
+            timestamp_ms: Default::default(),
+            txn_hash: vec![],
+            status: TokenTransferStatus::Deposited,
+            gas_usage: 0,
+            data: None,
         };
-        write(&self.pg_pool, token_txn);
+        write(&self.pg_pool, transfer);
     }
 }
 

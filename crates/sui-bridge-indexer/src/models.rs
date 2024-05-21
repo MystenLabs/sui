@@ -1,17 +1,29 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::schema::tokens;
-use diesel::prelude::*;
+use crate::schema::{token_transfer, token_transfer_data};
+use diesel::{Identifiable, Insertable, Queryable, Selectable};
 
-#[derive(Queryable, Selectable, Insertable, AsChangeset, Debug)]
-#[diesel(table_name = tokens)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct TokenTxn {
-    pub message_key: Vec<u8>,
-    pub checkpoint: i64,
-    pub epoch: i64,
-    pub token_type: i32,
-    pub source_chain: i32,
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = token_transfer, primary_key(chain_id, nonce))]
+pub struct TokenTransfer {
+    pub chain_id: i32,
+    pub nonce: i64,
+    pub block_height: i64,
+    pub timestamp_ms: i64,
+    pub txn_hash: Vec<u8>,
+    pub status: String,
+    pub gas_usage: i64,
+}
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]
+#[diesel(table_name = token_transfer_data, primary_key(chain_id, nonce))]
+pub struct TokenTransferData {
+    pub chain_id: i32,
+    pub nonce: i64,
+    pub sender_address: Vec<u8>,
     pub destination_chain: i32,
+    pub recipient_address: Vec<u8>,
+    pub token_id: i32,
+    pub amount: i64,
 }
