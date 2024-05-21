@@ -72,9 +72,9 @@ macro_rules! chunk {
 // TODO: I think with the `per_db_tx` params, `PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX`
 // is now less relevant. We should do experiments and remove it if it's true.
 const PG_COMMIT_CHUNK_SIZE_INTRA_DB_TX: usize = 1000;
-// The amount of rows to update in one DB transcation
+// The amount of rows to update in one DB transaction
 const PG_COMMIT_PARALLEL_CHUNK_SIZE: usize = 100;
-// The amount of rows to update in one DB transcation, for objects particularly
+// The amount of rows to update in one DB transaction, for objects particularly
 // Having this number too high may cause many db deadlocks because of
 // optimistic locking.
 const PG_COMMIT_OBJECTS_PARALLEL_CHUNK_SIZE: usize = 500;

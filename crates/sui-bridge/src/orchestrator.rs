@@ -224,7 +224,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_sui_watcher_task() {
-        // Note: this test may fail beacuse of the following reasons:
+        // Note: this test may fail because of the following reasons:
         // the SuiEvent's struct tag does not match the ones in events.rs
 
         let (sui_events_tx, sui_events_rx, _eth_events_tx, eth_events_rx, sui_client, store) =

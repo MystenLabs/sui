@@ -631,7 +631,7 @@ mod tests {
             .is_none());
         assert_eq!(state.total_ok_stake, 2501);
 
-        // Collect signtuare from authority 2 - reach validity threshold
+        // Collect signature from authority 2 - reach validity threshold
         let sig_2 = sign_action_with_key(&action, &secrets[2]);
         // returns Ok(None)
         let certificate = state
