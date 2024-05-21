@@ -60,7 +60,15 @@ export abstract class Signer {
 	 * Signs provided personal message by calling `signWithIntent()` with a `PersonalMessage` provided as intent scope
 	 */
 	async signPersonalMessage(bytes: Uint8Array) {
-		return this.signWithIntent(bcs.vector(bcs.u8()).serialize(bytes).toBytes(), 'PersonalMessage');
+		const { signature } = await this.signWithIntent(
+			bcs.vector(bcs.u8()).serialize(bytes).toBytes(),
+			'PersonalMessage',
+		);
+
+		return {
+			bytes: toB64(bytes),
+			signature,
+		};
 	}
 
 	toSuiAddress(): string {
