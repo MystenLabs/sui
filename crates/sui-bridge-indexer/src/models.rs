@@ -9,10 +9,10 @@ use diesel::{Identifiable, Insertable, Queryable, Selectable};
 pub struct TokenTransfer {
     pub chain_id: i32,
     pub nonce: i64,
+    pub status: String,
     pub block_height: i64,
     pub timestamp_ms: i64,
     pub txn_hash: Vec<u8>,
-    pub status: String,
     pub gas_usage: i64,
 }
 

@@ -16,10 +16,10 @@ CREATE TABLE token_transfer
 (
     chain_id                    INT          NOT NULL,
     nonce                       BIGINT       NOT NULL,
+    status                      TEXT         NOT NULL,
     block_height                BIGINT       NOT NULL,
     timestamp_ms                BIGINT       NOT NULL,
     txn_hash                    bytea        NOT NULL,
-    status                      TEXT         NOT NULL,
     gas_usage                   BIGINT       NOT NULL,
-    PRIMARY KEY(chain_id, nonce)
+    PRIMARY KEY(chain_id, nonce, status)
 );

@@ -20,6 +20,7 @@ tracing.workspace = true
 bin-version.workspace = true
 anyhow.workspace = true
 mysten-metrics.workspace = true
+bcs.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

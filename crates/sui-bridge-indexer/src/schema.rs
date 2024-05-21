@@ -4,13 +4,13 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
-    token_transfer (chain_id, nonce) {
+    token_transfer (chain_id, nonce, status) {
         chain_id -> Int4,
         nonce -> Int8,
+        status -> Text,
         block_height -> Int8,
         timestamp_ms -> Int8,
         txn_hash -> Bytea,
-        status -> Text,
         gas_usage -> Int8,
     }
 }

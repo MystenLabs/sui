@@ -19,7 +19,7 @@ pub struct TokenTransfer {
     timestamp_ms: u64,
     txn_hash: Vec<u8>,
     status: TokenTransferStatus,
-    gas_usage: u64,
+    gas_usage: i64,
     data: Option<TokenTransferData>,
 }
 
@@ -40,7 +40,7 @@ impl From<TokenTransfer> for DBTokenTransfer {
             timestamp_ms: value.timestamp_ms as i64,
             txn_hash: value.txn_hash,
             status: value.status.to_string(),
-            gas_usage: value.gas_usage as i64,
+            gas_usage: value.gas_usage,
         }
     }
 }

@@ -2,16 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::postgres_writer::{get_connection_pool, write, PgPool};
-use crate::{TokenTransfer, TokenTransferStatus};
+use crate::{TokenTransfer, TokenTransferData, TokenTransferStatus};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::collections::BTreeSet;
+use sui_bridge::events::{
+    MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
+};
 use sui_data_ingestion_core::Worker;
+use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
     base_types::ObjectID,
     full_checkpoint_content::{CheckpointData, CheckpointTransaction},
     transaction::{TransactionDataAPI, TransactionKind},
-    SUI_BRIDGE_OBJECT_ID,
+    BRIDGE_ADDRESS, SUI_BRIDGE_OBJECT_ID,
 };
 use tracing::info;
 
@@ -46,20 +50,71 @@ impl BridgeWorker {
     }
 
     // Process a transaction that has been identified as a bridge transaction.
-    fn process_transaction(&self, _tx: &CheckpointTransaction, _epoch: u64, _checkpoint: u64) {
-        // todo create TokenTransfer from checkpoint data
-        println!("SUI: Processing transaction");
-        let transfer = TokenTransfer {
-            chain_id: 0,
-            nonce: 0,
-            block_height: 0,
-            timestamp_ms: Default::default(),
-            txn_hash: vec![],
-            status: TokenTransferStatus::Deposited,
-            gas_usage: 0,
-            data: None,
-        };
-        write(&self.pg_pool, transfer);
+    fn process_transaction(&self, tx: &CheckpointTransaction, checkpoint: u64, timestamp_ms: u64) {
+        if let Some(event) = &tx.events {
+            event.data.iter().for_each(|ev| {
+                if ev.type_.address == BRIDGE_ADDRESS {
+                    println!("SUI: Processing bridge event : {:?}", ev.type_);
+                    let token_transfer = match ev.type_.name.as_str() {
+                        "TokenDepositedEvent" => {
+                            // todo: handle deserialization error
+                            let event: MoveTokenDepositedEvent =
+                                bcs::from_bytes(&ev.contents).unwrap();
+                            Some(TokenTransfer {
+                                chain_id: event.source_chain,
+                                nonce: event.seq_num,
+                                block_height: checkpoint,
+                                timestamp_ms,
+                                txn_hash: tx.transaction.digest().inner().to_vec(),
+                                status: TokenTransferStatus::Deposited,
+                                gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                                data: Some(TokenTransferData {
+                                    sender_address: event.sender_address,
+                                    destination_chain: event.target_chain,
+                                    recipient_address: event.target_address,
+                                    token_id: event.token_type,
+                                    amount: event.amount_sui_adjusted,
+                                }),
+                            })
+                        }
+                        "TokenTransferApproved" => {
+                            let event: MoveTokenTransferApproved =
+                                bcs::from_bytes(&ev.contents).unwrap();
+                            Some(TokenTransfer {
+                                chain_id: event.message_key.source_chain,
+                                nonce: event.message_key.bridge_seq_num,
+                                block_height: checkpoint,
+                                timestamp_ms,
+                                txn_hash: tx.transaction.digest().inner().to_vec(),
+                                status: TokenTransferStatus::Approved,
+                                gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                                data: None,
+                            })
+                        }
+                        "TokenTransferClaimed" => {
+                            let event: MoveTokenTransferClaimed =
+                                bcs::from_bytes(&ev.contents).unwrap();
+                            Some(TokenTransfer {
+                                chain_id: event.message_key.source_chain,
+                                nonce: event.message_key.bridge_seq_num,
+                                block_height: checkpoint,
+                                timestamp_ms,
+                                txn_hash: tx.transaction.digest().inner().to_vec(),
+                                status: TokenTransferStatus::Claimed,
+                                gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                                data: None,
+                            })
+                        }
+                        _ => None,
+                    };
+
+                    if let Some(transfer) = token_transfer {
+                        println!("SUI: Storing bridge event : {:?}", ev.type_);
+                        write(&self.pg_pool, transfer);
+                    }
+                };
+            });
+        }
     }
 }
 
@@ -72,13 +127,13 @@ impl Worker for BridgeWorker {
             checkpoint.checkpoint_summary.sequence_number,
             checkpoint.transactions.len(),
         );
-        let epoch = checkpoint.checkpoint_summary.epoch;
         let checkpoint_num = checkpoint.checkpoint_summary.sequence_number;
+        let timestamp_ms = checkpoint.checkpoint_summary.timestamp_ms;
         checkpoint
             .transactions
             .iter()
             .filter(|txn| self.is_bridge_transaction(txn))
-            .for_each(|txn| self.process_transaction(txn, epoch, checkpoint_num));
+            .for_each(|txn| self.process_transaction(txn, checkpoint_num, timestamp_ms));
         Ok(())
     }
 }
