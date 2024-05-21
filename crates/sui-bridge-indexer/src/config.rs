@@ -39,9 +39,9 @@ pub struct BridgeIndexerConfig {
     #[clap(long, short = 't', default_value = "1", global = true)]
     pub concurrency: usize,
     /// Address of the SuiBridge contract
-    #[clap(long, required = true)]
+    #[clap(long, required = true, short = 'a')]
     pub eth_sui_bridge_contract_address: String,
     /// Block to start indexing from
-    #[clap(long, required = true)]
+    #[clap(long, required = true, short = 's')]
     pub start_block: u64,
 }

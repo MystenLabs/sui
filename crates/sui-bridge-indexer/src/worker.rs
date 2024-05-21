@@ -47,6 +47,7 @@ impl BridgeWorker {
 
     // Process a transaction that has been identified as a bridge transaction.
     fn process_transaction(&self, tx: &CheckpointTransaction, epoch: u64, checkpoint: u64) {
+        println!("SUI: Processing transaction");
         let token_txn = TokenTxn {
             message_key: tx.transaction.digest().inner().to_vec(),
             checkpoint: checkpoint as i64,

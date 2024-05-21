@@ -12049,6 +12049,7 @@ dependencies = [
  "diesel",
  "ethers",
  "hex-literal 0.3.4",
+ "mysten-metrics",
  "prometheus",
  "sui-bridge",
  "sui-config",

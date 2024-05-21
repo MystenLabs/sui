@@ -19,6 +19,7 @@ clap.workspace = true
 tracing.workspace = true
 bin-version.workspace = true
 anyhow.workspace = true
+mysten-metrics.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
