@@ -1,0 +1,14 @@
+# Default values for indexer-writer.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+args: ["--db-url", "$(DB_URL)", "--rpc-client-url", "$(RPC_CLIENT)", "--remote-store-url", "https://checkpoints.mainnet.sui.io", "--fullnode-sync-worker"]
+
+env:
+  RPC_CLIENT: 
+    value: "https://public-rpc.testnet.sui.io" # you will want to point this to a local fullnode instance like http://<servicename>.<namespace>.svc.cluster.local:900
+  DB_URL:
+    valueFrom:
+      secretKeyRef:
+        name: "indexer-writer-tnt-db-url-secret"
+        key: "db-url"

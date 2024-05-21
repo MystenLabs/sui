@@ -37,7 +37,8 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: {{ .Values.command }}
+          command: {{ .Values.command | toJson }}
+          args: {{ .Values.args | toJson }}
           {{ if $.Values.env }}
           env:
           {{- range $name, $item := .Values.env }}

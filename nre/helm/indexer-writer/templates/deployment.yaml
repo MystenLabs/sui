@@ -8,6 +8,19 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
+  {{- if .Values.strategy }}
+  strategy:
+    type: {{ .Values.strategy.type }} 
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+      rollingUpdate:
+        {{- if .Values.strategy.rollingupdate.maxSurge }}
+        maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+        {{- end }}
+        {{- if .Values.strategy.rollingupdate.maxUnavailable }}
+        maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavaialable }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "indexer-writer.selectorLabels" . | nindent 6 }}
@@ -32,6 +45,8 @@ spec:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: {{ .Chart.Name }}
+          command: {{ .Values.command | toJson }}
+          args: {{ .Values.args | toJson }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"

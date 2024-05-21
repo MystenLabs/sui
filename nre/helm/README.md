@@ -12,6 +12,8 @@ Example:
 kubectl create secret generic db-secret \
   --from-literal=db-url='postgres://username:password@host:port/dbname'
   ```
+# GraphQL
 
-## Multicluster Ingress
-Multicluster ingress chart is included but has some pre-requistes. Not included in this chart is the CloudArmour Security Policy, cert management, or an sslPolicy. 
+# Indexer-Reader
+
+# Indexer-Writer
