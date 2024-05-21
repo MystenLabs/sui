@@ -85,9 +85,22 @@ async fn main() -> Result<()> {
 
     let _task_handle = spawn_logged_monitored_task!(
         async move {
-            while let Some(events) = eth_events_rx.recv().await {
-                println!("ETH: Received events: {:?}", events);
-                // TODO: process Eth event
+            while let Some(event) = eth_events_rx.recv().await {
+                let func_sig_hash = event
+                    .2
+                    .first()
+                    .and_then(|event_topic| event_topic.log.topics.first());
+
+                let address = event.0;
+
+                if func_sig_hash.is_none() || address != bridge_address {
+                    continue;
+                }
+
+                // TODO: check if the func_sig_hash is the "TokensDeposited" or "TokensClaimed" events
+
+                println!("ETH: Received events: {:?}", func_sig_hash);
+                println!("Event received from: {:?}", address);
             }
         },
         "indexer handler"
