@@ -36,7 +36,7 @@ use crate::concrete::{
     runtime::{convert_move_type_tag, Runtime},
     settings::InterpreterSettings,
     ty::{BaseType, IntType, PrimitiveType},
-    value::{BaseValue, GlobalState, TypedValue},
+    value::{BaseValue, GlobalState},
 };
 
 /// Options passed into the interpreter generator.
@@ -91,12 +91,6 @@ fn parse_entrypoint(input: &str) -> Result<(ModuleId, Identifier)> {
     );
     let func_name = Identifier::new(tokens[2])?;
     Ok((module_id, func_name))
-}
-
-#[derive(Debug, Eq, PartialEq)]
-struct ExecutionResult {
-    vm_result: VMResult<Vec<TypedValue>>,
-    global_state: GlobalState,
 }
 
 //**************************************************************************************************
