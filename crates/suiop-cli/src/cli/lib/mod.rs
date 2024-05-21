@@ -1,8 +1,10 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod autocomplete;
 mod oauth;
 
+pub use autocomplete::FilePathCompleter;
 pub use oauth::get_oauth_token;
 
 pub fn get_api_server() -> String {
