@@ -9,13 +9,13 @@ import type {
 	WalletWithFeatures,
 } from '@wallet-standard/core';
 
-import type { SuiReportTransactionBlockEffectsFeature } from './suiReportTransactionBlockEffects.js';
+import type { SuiReportTransactionEffectsFeature } from './suiReportTransactionEffects.js';
+import type { SuiSignAndExecuteTransactionFeature } from './suiSignAndExecuteTransaction.js';
 import type { SuiSignAndExecuteTransactionBlockFeature } from './suiSignAndExecuteTransactionBlock.js';
-import type { SuiSignAndExecuteTransactionBlockV2Feature } from './suiSignAndExecuteTransactionBlockV2.js';
 import type { SuiSignMessageFeature } from './suiSignMessage.js';
 import type { SuiSignPersonalMessageFeature } from './suiSignPersonalMessage.js';
+import type { SuiSignTransactionFeature } from './suiSignTransaction.js';
 import type { SuiSignTransactionBlockFeature } from './suiSignTransactionBlock.js';
-import type { SuiSignTransactionBlockV2Feature } from './suiSignTransactionBlockV2.js';
 
 /**
  * Wallet Standard features that are unique to Sui, and that all Sui wallets are expected to implement.
@@ -23,11 +23,11 @@ import type { SuiSignTransactionBlockV2Feature } from './suiSignTransactionBlock
 export type SuiFeatures = Partial<SuiSignTransactionBlockFeature> &
 	Partial<SuiSignAndExecuteTransactionBlockFeature> &
 	SuiSignPersonalMessageFeature &
-	SuiSignAndExecuteTransactionBlockV2Feature &
-	SuiSignTransactionBlockV2Feature &
+	SuiSignAndExecuteTransactionFeature &
+	SuiSignTransactionFeature &
 	// This deprecated feature should be removed once wallets update to the new method:
 	Partial<SuiSignMessageFeature> &
-	Partial<SuiReportTransactionBlockEffectsFeature>;
+	Partial<SuiReportTransactionEffectsFeature>;
 
 export type SuiWalletFeatures = StandardConnectFeature &
 	StandardEventsFeature &
@@ -51,8 +51,8 @@ export type MinimallyRequiredFeatures = StandardConnectFeature & StandardEventsF
 
 export * from './suiSignMessage.js';
 export * from './suiSignTransactionBlock.js';
-export * from './suiSignTransactionBlockV2.js';
+export * from './suiSignTransaction.js';
 export * from './suiSignAndExecuteTransactionBlock.js';
-export * from './suiSignAndExecuteTransactionBlockV2.js';
+export * from './suiSignAndExecuteTransaction.js';
 export * from './suiSignPersonalMessage.js';
-export * from './suiReportTransactionBlockEffects.js';
+export * from './suiReportTransactionEffects.js';

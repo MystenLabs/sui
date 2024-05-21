@@ -1,7 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { Mock } from 'vitest';
 
@@ -9,21 +9,21 @@ import {
 	WalletFeatureNotSupportedError,
 	WalletNotConnectedError,
 } from '../../src/errors/walletErrors.js';
-import { useConnectWallet, useSignTransactionBlock } from '../../src/index.js';
+import { useConnectWallet, useSignTransaction } from '../../src/index.js';
 import { suiFeatures } from '../mocks/mockFeatures.js';
 import { createWalletProviderContextWrapper, registerMockWallet } from '../test-utils.js';
 
-describe('useSignTransactionBlock', () => {
-	test('throws an error when trying to sign a transaction block without a wallet connection', async () => {
+describe('useSignTransaction', () => {
+	test('throws an error when trying to sign a transaction without a wallet connection', async () => {
 		const wrapper = createWalletProviderContextWrapper();
-		const { result } = renderHook(() => useSignTransactionBlock(), { wrapper });
+		const { result } = renderHook(() => useSignTransaction(), { wrapper });
 
-		result.current.mutate({ transactionBlock: new TransactionBlock(), chain: 'sui:testnet' });
+		result.current.mutate({ transaction: new Transaction(), chain: 'sui:testnet' });
 
 		await waitFor(() => expect(result.current.error).toBeInstanceOf(WalletNotConnectedError));
 	});
 
-	test('throws an error when trying to sign a transaction block with a wallet that lacks feature support', async () => {
+	test('throws an error when trying to sign a transaction with a wallet that lacks feature support', async () => {
 		const { unregister, mockWallet } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
 		});
@@ -32,7 +32,7 @@ describe('useSignTransactionBlock', () => {
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
-				signTransactionBlock: useSignTransactionBlock(),
+				signTransaction: useSignTransaction(),
 			}),
 			{ wrapper },
 		);
@@ -40,20 +40,18 @@ describe('useSignTransactionBlock', () => {
 		result.current.connectWallet.mutate({ wallet: mockWallet });
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 
-		result.current.signTransactionBlock.mutate({
-			transactionBlock: new TransactionBlock(),
+		result.current.signTransaction.mutate({
+			transaction: new Transaction(),
 			chain: 'sui:testnet',
 		});
 		await waitFor(() =>
-			expect(result.current.signTransactionBlock.error).toBeInstanceOf(
-				WalletFeatureNotSupportedError,
-			),
+			expect(result.current.signTransaction.error).toBeInstanceOf(WalletFeatureNotSupportedError),
 		);
 
 		act(() => unregister());
 	});
 
-	test('signing a transaction block from the currently connected account works successfully', async () => {
+	test('signing a transaction from the currently connected account works successfully', async () => {
 		const { unregister, mockWallet } = registerMockWallet({
 			walletName: 'Mock Wallet 1',
 			features: suiFeatures,
@@ -63,7 +61,7 @@ describe('useSignTransactionBlock', () => {
 		const { result } = renderHook(
 			() => ({
 				connectWallet: useConnectWallet(),
-				signTransactionBlock: useSignTransactionBlock(),
+				signTransaction: useSignTransaction(),
 			}),
 			{ wrapper },
 		);
@@ -72,21 +70,21 @@ describe('useSignTransactionBlock', () => {
 
 		await waitFor(() => expect(result.current.connectWallet.isSuccess).toBe(true));
 
-		const signTransactionBlockFeature = mockWallet.features['sui:signTransactionBlock:v2'];
-		const signTransactionBlockMock = signTransactionBlockFeature!.signTransactionBlock as Mock;
+		const signTransactionFeature = mockWallet.features['sui:signTransaction'];
+		const signTransactionMock = signTransactionFeature!.signTransaction as Mock;
 
-		signTransactionBlockMock.mockReturnValueOnce({
+		signTransactionMock.mockReturnValueOnce({
 			bytes: 'abc',
 			signature: '123',
 		});
 
-		result.current.signTransactionBlock.mutate({
-			transactionBlock: new TransactionBlock(),
+		result.current.signTransaction.mutate({
+			transaction: new Transaction(),
 			chain: 'sui:testnet',
 		});
 
-		await waitFor(() => expect(result.current.signTransactionBlock.isSuccess).toBe(true));
-		expect(result.current.signTransactionBlock.data).toStrictEqual({
+		await waitFor(() => expect(result.current.signTransaction.isSuccess).toBe(true));
+		expect(result.current.signTransaction.data).toStrictEqual({
 			bytes: 'abc',
 			signature: '123',
 		});

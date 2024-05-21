@@ -42,19 +42,19 @@ export async function verifyPersonalMessageSignature(
 	return parsedSignature.publicKey;
 }
 
-export async function verifyTransactionBlockSignature(
-	transactionBlock: Uint8Array,
+export async function verifyTransactionSignature(
+	transaction: Uint8Array,
 	signature: string,
 ): Promise<PublicKey> {
 	const parsedSignature = parseSignature(signature);
 
 	if (
-		!(await parsedSignature.publicKey.verifyTransactionBlock(
-			transactionBlock,
+		!(await parsedSignature.publicKey.verifyTransaction(
+			transaction,
 			parsedSignature.serializedSignature,
 		))
 	) {
-		throw new Error(`Signature is not valid for the provided TransactionBlock`);
+		throw new Error(`Signature is not valid for the provided Transaction`);
 	}
 
 	return parsedSignature.publicKey;

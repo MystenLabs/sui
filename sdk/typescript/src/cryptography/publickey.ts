@@ -87,13 +87,10 @@ export abstract class PublicKey {
 	}
 
 	/**
-	 * Verifies that the signature is valid for for the provided TransactionBlock
+	 * Verifies that the signature is valid for for the provided Transaction
 	 */
-	verifyTransactionBlock(
-		transactionBlock: Uint8Array,
-		signature: Uint8Array | string,
-	): Promise<boolean> {
-		return this.verifyWithIntent(transactionBlock, signature, 'TransactionData');
+	verifyTransaction(transaction: Uint8Array, signature: Uint8Array | string): Promise<boolean> {
+		return this.verifyWithIntent(transaction, signature, 'TransactionData');
 	}
 
 	/**

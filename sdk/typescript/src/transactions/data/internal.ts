@@ -193,7 +193,7 @@ export const $Intent = object({
 });
 
 // https://github.com/MystenLabs/sui/blob/df41d5fa8127634ff4285671a01ead00e519f806/crates/sui-types/src/transaction.rs#L657-L685
-export const Transaction = safeEnum({
+export const Command = safeEnum({
 	MoveCall: ProgrammableMoveCall,
 	TransferObjects: object({
 		objects: array(Argument),
@@ -224,7 +224,7 @@ export const Transaction = safeEnum({
 	$Intent,
 });
 
-export type Transaction<Arg = Argument> = EnumOutputShape<{
+export type Command<Arg = Argument> = EnumOutputShape<{
 	MoveCall: {
 		package: string;
 		module: string;
@@ -310,12 +310,12 @@ export const TransactionExpiration = safeEnum({
 
 export type TransactionExpiration = Output<typeof TransactionExpiration>;
 
-export const TransactionBlockData = object({
+export const TransactionData = object({
 	version: literal(2),
 	sender: nullish(SuiAddress),
 	expiration: nullish(TransactionExpiration),
 	gasData: GasData,
 	inputs: array(CallArg),
-	transactions: array(Transaction),
+	commands: array(Command),
 });
-export type TransactionBlockData = Output<typeof TransactionBlockData>;
+export type TransactionData = Output<typeof TransactionData>;

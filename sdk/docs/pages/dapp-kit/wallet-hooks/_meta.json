@@ -8,6 +8,6 @@
 	"useDisconnectWallet": "useDisconnectWallet",
 	"useSwitchAccount": "useSwitchAccount",
 	"useSignPersonalMessage": "useSignPersonalMessage",
-	"useSignTransactionBlock": "useSignTransactionBlock",
-	"useSignAndExecuteTransactionBlock": "useSignAndExecuteTransactionBlock"
+	"useSignTransaction": "useSignTransaction",
+	"useSignAndExecuteTransaction": "useSignAndExecuteTransaction"
 }

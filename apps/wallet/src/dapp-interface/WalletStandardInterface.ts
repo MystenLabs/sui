@@ -29,7 +29,7 @@ import {
 import { type SignMessageRequest } from '_src/shared/messaging/messages/payloads/transactions/SignMessage';
 import { isWalletStatusChangePayload } from '_src/shared/messaging/messages/payloads/wallet-status-change';
 import { bcs } from '@mysten/sui/bcs';
-import { isTransactionBlock } from '@mysten/sui/transactions';
+import { isTransaction } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import {
 	ReadonlyWalletAccount,
@@ -45,11 +45,11 @@ import {
 	type StandardEventsOnMethod,
 	type SuiFeatures,
 	type SuiSignAndExecuteTransactionBlockMethod,
-	type SuiSignAndExecuteTransactionBlockV2Method,
+	type SuiSignAndExecuteTransactionMethod,
 	type SuiSignMessageMethod,
 	type SuiSignPersonalMessageMethod,
 	type SuiSignTransactionBlockMethod,
-	type SuiSignTransactionBlockV2Method,
+	type SuiSignTransactionMethod,
 	type Wallet,
 } from '@mysten/wallet-standard';
 import mitt, { type Emitter } from 'mitt';
@@ -134,17 +134,17 @@ export class SuiWallet implements Wallet {
 				version: '1.0.0',
 				signTransactionBlock: this.#signTransactionBlock,
 			},
-			'sui:signTransactionBlock:v2': {
+			'sui:signTransaction': {
 				version: '2.0.0',
-				signTransactionBlock: this.#signTransactionBlockV2,
+				signTransaction: this.#signTransaction,
 			},
 			'sui:signAndExecuteTransactionBlock': {
 				version: '1.0.0',
 				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
 			},
-			'sui:signAndExecuteTransactionBlock:v2': {
+			'sui:signAndExecuteTransaction': {
 				version: '2.0.0',
-				signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlockV2,
+				signAndExecuteTransaction: this.#signAndExecuteTransaction,
 			},
 			'sui:signMessage': {
 				version: '1.0.0',
@@ -249,7 +249,7 @@ export class SuiWallet implements Wallet {
 		account,
 		...input
 	}) => {
-		if (!isTransactionBlock(transactionBlock)) {
+		if (!isTransaction(transactionBlock)) {
 			throw new Error(
 				'Unexpected transaction format found. Ensure that you are using the `Transaction` class.',
 			);
@@ -270,11 +270,7 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
-	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
-		transactionBlock,
-		account,
-		...input
-	}) => {
+	#signTransaction: SuiSignTransactionMethod = async ({ transaction, account, ...input }) => {
 		return mapToPromise(
 			this.#send<SignTransactionRequest, SignTransactionResponse>({
 				type: 'sign-transaction-request',
@@ -283,7 +279,7 @@ export class SuiWallet implements Wallet {
 					// account might be undefined if previous version of adapters is used
 					// in that case use the first account address
 					account: account?.address || this.#accounts[0]?.address || '',
-					transaction: await transactionBlock.toJSON(),
+					transaction: await transaction.toJSON(),
 				},
 			}),
 			({ result: { signature, transactionBlockBytes: bytes } }) => ({
@@ -294,7 +290,7 @@ export class SuiWallet implements Wallet {
 	};
 
 	#signAndExecuteTransactionBlock: SuiSignAndExecuteTransactionBlockMethod = async (input) => {
-		if (!isTransactionBlock(input.transactionBlock)) {
+		if (!isTransaction(input.transactionBlock)) {
 			throw new Error(
 				'Unexpected transaction format found. Ensure that you are using the `Transaction` class.',
 			);
@@ -316,13 +312,13 @@ export class SuiWallet implements Wallet {
 		);
 	};
 
-	#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method = async (input) => {
+	#signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (input) => {
 		return mapToPromise(
 			this.#send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
 				type: 'execute-transaction-request',
 				transaction: {
 					type: 'transaction',
-					data: await input.transactionBlock.toJSON(),
+					data: await input.transaction.toJSON(),
 					options: {
 						showRawEffects: true,
 						showRawInput: true,

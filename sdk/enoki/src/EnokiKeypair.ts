@@ -76,9 +76,9 @@ export class EnokiKeypair extends Keypair {
 		};
 	}
 
-	async signTransactionBlock(bytes: Uint8Array): Promise<SignatureWithBytes> {
+	async signTransaction(bytes: Uint8Array): Promise<SignatureWithBytes> {
 		const { bytes: signedBytes, signature: userSignature } =
-			await this.#ephemeralKeypair.signTransactionBlock(bytes);
+			await this.#ephemeralKeypair.signTransaction(bytes);
 
 		const zkSignature = getZkLoginSignature({
 			inputs: this.#proof,

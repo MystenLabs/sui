@@ -12,7 +12,7 @@ import type {
 import type { Keypair } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import type { TransactionObjectArgument } from '@mysten/sui/transactions';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import {
 	fromB64,
 	normalizeStructTag,
@@ -26,7 +26,7 @@ import {
 import type { ZkSendLinkBuilderOptions } from './builder.js';
 import { ZkSendLinkBuilder } from './builder.js';
 import type { LinkAssets } from './utils.js';
-import { getAssetsFromTxnBlock, isOwner, ownedAfterChange } from './utils.js';
+import { getAssetsFromTransaction, isOwner, ownedAfterChange } from './utils.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
 import { MAINNET_CONTRACT_IDS, ZkBag } from './zk-bag.js';
 
@@ -174,7 +174,7 @@ export class ZkSendLink {
 
 	async loadAssets(
 		options: {
-			transactionBlock?: SuiTransactionBlockResponse;
+			transaction?: SuiTransactionBlockResponse;
 			loadClaimedAssets?: boolean;
 		} = {},
 	) {
@@ -194,7 +194,7 @@ export class ZkSendLink {
 			| { reclaim?: false; sign?: never }
 			| {
 					reclaim: true;
-					sign: (transactionBlock: Uint8Array) => Promise<string>;
+					sign: (transaction: Uint8Array) => Promise<string>;
 			  } = {},
 	) {
 		if (!this.keypair && !sign) {
@@ -211,7 +211,7 @@ export class ZkSendLink {
 			});
 			const signature = sign
 				? await sign(bytes)
-				: (await this.keypair!.signTransactionBlock(bytes)).signature;
+				: (await this.keypair!.signTransaction(bytes)).signature;
 
 			return this.#client.executeTransactionBlock({
 				transactionBlock: bytes,
@@ -223,10 +223,10 @@ export class ZkSendLink {
 			await this.#loadBag();
 		}
 
-		const txb = this.createClaimTransaction(address, { reclaim });
+		const tx = this.createClaimTransaction(address, { reclaim });
 
-		const sponsored = await this.#createSponsoredTransactionBlock(
-			txb,
+		const sponsored = await this.#createSponsoredTransaction(
+			tx,
 			address,
 			reclaim ? address : this.keypair!.toSuiAddress(),
 		);
@@ -234,11 +234,11 @@ export class ZkSendLink {
 		const bytes = fromB64(sponsored.bytes);
 		const signature = sign
 			? await sign(bytes)
-			: (await this.keypair!.signTransactionBlock(bytes)).signature;
+			: (await this.keypair!.signTransaction(bytes)).signature;
 
-		const { digest } = await this.#executeSponsoredTransactionBlock(sponsored, signature);
+		const { digest } = await this.#executeSponsoredTransaction(sponsored, signature);
 
-		return this.#client.waitForTransactionBlock({ digest });
+		return this.#client.waitForTransaction({ digest });
 	}
 
 	createClaimTransaction(
@@ -257,15 +257,15 @@ export class ZkSendLink {
 			throw new Error('Cannot claim assets without the links keypair');
 		}
 
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const sender = reclaim ? address : this.keypair!.toSuiAddress();
-		txb.setSender(sender);
+		tx.setSender(sender);
 
-		const store = txb.object(this.#contract.ids.bagStoreId);
+		const store = tx.object(this.#contract.ids.bagStoreId);
 
 		const [bag, proof] = reclaim
-			? this.#contract.reclaim(txb, { arguments: [store, this.address] })
-			: this.#contract.init_claim(txb, { arguments: [store] });
+			? this.#contract.reclaim(tx, { arguments: [store, this.address] })
+			: this.#contract.init_claim(tx, { arguments: [store] });
 
 		const objectsToTransfer: TransactionObjectArgument[] = [];
 
@@ -273,11 +273,11 @@ export class ZkSendLink {
 
 		for (const object of objects) {
 			objectsToTransfer.push(
-				this.#contract.claim(txb, {
+				this.#contract.claim(tx, {
 					arguments: [
 						bag,
 						proof,
-						txb.receivingRef({
+						tx.receivingRef({
 							objectId: object.objectId,
 							version: object.version,
 							digest: object.digest,
@@ -288,12 +288,12 @@ export class ZkSendLink {
 			);
 		}
 
-		this.#contract.finalize(txb, { arguments: [bag, proof] });
+		this.#contract.finalize(tx, { arguments: [bag, proof] });
 		if (objectsToTransfer.length > 0) {
-			txb.transferObjects(objectsToTransfer, address);
+			tx.transferObjects(objectsToTransfer, address);
 		}
 
-		return txb;
+		return tx;
 	}
 
 	async createRegenerateTransaction(
@@ -312,10 +312,10 @@ export class ZkSendLink {
 			throw new Error('Regenerating non-contract based links is not supported');
 		}
 
-		const txb = new TransactionBlock();
-		txb.setSender(sender);
+		const tx = new Transaction();
+		tx.setSender(sender);
 
-		const store = txb.object(this.#contract.ids.bagStoreId);
+		const store = tx.object(this.#contract.ids.bagStoreId);
 
 		const newLinkKp = Ed25519Keypair.generate();
 
@@ -329,13 +329,13 @@ export class ZkSendLink {
 			keypair: newLinkKp,
 		});
 
-		const to = txb.pure.address(newLinkKp.toSuiAddress());
+		const to = tx.pure.address(newLinkKp.toSuiAddress());
 
-		this.#contract.update_receiver(txb, { arguments: [store, this.address, to] });
+		this.#contract.update_receiver(tx, { arguments: [store, this.address, to] });
 
 		return {
 			url: newLink.getLink(),
-			transactionBlock: txb,
+			transaction: tx,
 		};
 	}
 
@@ -356,11 +356,11 @@ export class ZkSendLink {
 	}
 
 	async #loadBag({
-		transactionBlock,
+		transaction,
 		loadAssets = true,
 		loadClaimedAssets = loadAssets,
 	}: {
-		transactionBlock?: SuiTransactionBlockResponse;
+		transaction?: SuiTransactionBlockResponse;
 		loadAssets?: boolean;
 		loadClaimedAssets?: boolean;
 	} = {}) {
@@ -391,9 +391,9 @@ export class ZkSendLink {
 
 		const bagId = (this.bagObject as any).content.fields.value.fields?.id?.id;
 
-		if (bagId && transactionBlock?.balanceChanges && transactionBlock.objectChanges) {
-			this.assets = getAssetsFromTxnBlock({
-				transactionBlock,
+		if (bagId && transaction?.balanceChanges && transaction.objectChanges) {
+			this.assets = getAssetsFromTransaction({
+				transaction,
 				address: bagId,
 				isSent: false,
 			});
@@ -486,13 +486,13 @@ export class ZkSendLink {
 			return;
 		}
 
-		const [txb] = result.data;
+		const [tx] = result.data;
 
-		if (txb.transaction?.data.transaction.kind !== 'ProgrammableTransaction') {
+		if (tx.transaction?.data.transaction.kind !== 'ProgrammableTransaction') {
 			return;
 		}
 
-		const transfer = txb.transaction.data.transaction.transactions.findLast(
+		const transfer = tx.transaction.data.transaction.transactions.findLast(
 			(tx): tx is Extract<SuiTransaction, { TransferObjects: unknown }> => 'TransferObjects' in tx,
 		);
 
@@ -506,7 +506,7 @@ export class ZkSendLink {
 			return;
 		}
 
-		const input = txb.transaction.data.transaction.inputs[receiverArg.Input];
+		const input = tx.transaction.data.transaction.inputs[receiverArg.Input];
 
 		if (input.type !== 'pure') {
 			return;
@@ -517,22 +517,22 @@ export class ZkSendLink {
 				? input.value
 				: bcs.Address.parse(new Uint8Array((input.value as { Pure: number[] }).Pure));
 
-		this.assets = getAssetsFromTxnBlock({
-			transactionBlock: txb,
+		this.assets = getAssetsFromTransaction({
+			transaction: tx,
 			address: receiver,
 			isSent: false,
 		});
 	}
 
-	async #createSponsoredTransactionBlock(txb: TransactionBlock, claimer: string, sender: string) {
+	async #createSponsoredTransaction(tx: Transaction, claimer: string, sender: string) {
 		return this.#fetch<{ digest: string; bytes: string }>('transaction-blocks/sponsor', {
 			method: 'POST',
 			body: JSON.stringify({
 				network: this.#network,
 				sender,
 				claimer,
-				transactionBlockKindBytes: toB64(
-					await txb.build({
+				transactionKindBytes: toB64(
+					await tx.build({
 						onlyTransactionKind: true,
 						client: this.#client,
 					}),
@@ -541,10 +541,7 @@ export class ZkSendLink {
 		});
 	}
 
-	async #executeSponsoredTransactionBlock(
-		input: { digest: string; bytes: string },
-		signature: string,
-	) {
+	async #executeSponsoredTransaction(input: { digest: string; bytes: string }, signature: string) {
 		return this.#fetch<{ digest: string }>(`transaction-blocks/sponsor/${input.digest}`, {
 			method: 'POST',
 			body: JSON.stringify({
@@ -603,14 +600,14 @@ export class ZkSendLink {
 		const address = new Ed25519Keypair().toSuiAddress();
 		const normalizedAddress = normalizeSuiAddress(address);
 
-		const txb = this.createClaimTransaction(normalizedAddress);
+		const tx = this.createClaimTransaction(normalizedAddress);
 
 		if (this.#gasCoin || !this.#hasSui) {
-			txb.setGasPayment([]);
+			tx.setGasPayment([]);
 		}
 
 		const dryRun = await this.#client.dryRunTransactionBlock({
-			transactionBlock: await txb.build({ client: this.#client }),
+			transactionBlock: await tx.build({ client: this.#client }),
 		});
 
 		dryRun.balanceChanges.forEach((balanceChange) => {
@@ -655,8 +652,8 @@ export class ZkSendLink {
 			throw new Error('Cannot claim assets without the links keypair');
 		}
 
-		const txb = new TransactionBlock();
-		txb.setSender(this.keypair.toSuiAddress());
+		const tx = new Transaction();
+		tx.setSender(this.keypair.toSuiAddress());
 
 		const objectsToTransfer: TransactionObjectArgument[] = this.#ownedObjects
 			.filter((object) => {
@@ -670,19 +667,19 @@ export class ZkSendLink {
 
 				return true;
 			})
-			.map((object) => txb.object(object.objectId));
+			.map((object) => tx.object(object.objectId));
 
 		if (this.#gasCoin && this.creatorAddress) {
-			txb.transferObjects([txb.gas], this.creatorAddress);
+			tx.transferObjects([tx.gas], this.creatorAddress);
 		} else {
-			objectsToTransfer.push(txb.gas);
+			objectsToTransfer.push(tx.gas);
 		}
 
 		if (objectsToTransfer.length > 0) {
-			txb.transferObjects(objectsToTransfer, address);
+			tx.transferObjects(objectsToTransfer, address);
 		}
 
-		return txb;
+		return tx;
 	}
 
 	async #loadOwnedObjects({

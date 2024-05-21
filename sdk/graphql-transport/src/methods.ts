@@ -9,7 +9,7 @@ import type {
 	SuiClient,
 	SuiMoveNormalizedModule,
 } from '@mysten/sui/client';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { normalizeStructTag, normalizeSuiAddress, parseStructTag } from '@mysten/sui/utils';
 
 import type {
@@ -1076,8 +1076,8 @@ export const RPC_METHODS: {
 		);
 
 		if (!effects?.transactionBlock) {
-			const txb = TransactionBlock.from(fromB64(txBytes));
-			return { errors: errors ?? undefined, digest: await txb.getDigest() };
+			const tx = Transaction.from(fromB64(txBytes));
+			return { errors: errors ?? undefined, digest: await tx.getDigest() };
 		}
 
 		await paginateTransactionBlockLists(transport, effects.transactionBlock);
@@ -1089,7 +1089,7 @@ export const RPC_METHODS: {
 		);
 	},
 	async dryRunTransactionBlock(transport, [txBytes]) {
-		const txb = TransactionBlock.from(fromB64(txBytes));
+		const tx = Transaction.from(fromB64(txBytes));
 		const { transaction, error } = await transport.graphqlQuery(
 			{
 				query: DryRunTransactionBlockDocument,
@@ -1110,7 +1110,7 @@ export const RPC_METHODS: {
 		}
 
 		const result = mapGraphQLTransactionBlockToRpcTransactionBlock(
-			{ ...transaction, digest: await txb.getDigest() },
+			{ ...transaction, digest: await tx.getDigest() },
 			{
 				showBalanceChanges: true,
 				showEffects: true,

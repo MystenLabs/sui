@@ -1,20 +1,16 @@
-import { UseSignAndExecuteTransactionBlockExample } from '../../../examples/wallet-hooks';
+import { UseSignAndExecuteTransactionExample } from '../../../examples/wallet-hooks';
 
-# useSignAndExecuteTransactionBlock
+# useSignAndExecuteTransaction
 
-Use the `useSignAndExecuteTransactionBlock` hook to prompt the user to sign and execute a
-transaction block with their wallet.
+Use the `useSignAndExecuteTransaction` hook to prompt the user to sign and execute a transaction
+block with their wallet.
 
 ```ts
-import {
-	ConnectButton,
-	useCurrentAccount,
-	useSignAndExecuteTransactionBlock,
-} from '@mysten/dapp-kit';
+import { ConnectButton, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { useState } from 'react';
 
 function MyComponent() {
-	const { mutate: signAndExecuteTransactionBlock } = useSignAndExecuteTransactionBlock();
+	const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
 	const [digest, setDigest] = useState('');
 	const currentAccount = useCurrentAccount();
 
@@ -26,9 +22,9 @@ function MyComponent() {
 					<div>
 						<button
 							onClick={() => {
-								signAndExecuteTransactionBlock(
+								signAndExecuteTransaction(
 									{
-										transactionBlock: new TransactionBlock(),
+										transaction: new Transaction(),
 										chain: 'sui:devnet',
 									},
 									{
@@ -53,13 +49,13 @@ function MyComponent() {
 
 ## Example
 
-<UseSignAndExecuteTransactionBlockExample />
+<UseSignAndExecuteTransactionExample />
 
 ## Arguments
 
-- `transactionBlock`: The transaction block to sign and execute.
+- `transaction`: The transaction block to sign and execute.
 - `chain`: (optional) The chain identifier the transaction block should be signed for.
 
 In addition to these options, you can also pass any options that the
-[SuiClient.signAndExecuteTransactionBlock](http://localhost:3000/typescript/sui-client#signandexecutetransactionblock)
+[SuiClient.signAndExecuteTransaction](http://localhost:3000/typescript/sui-client#signandexecutetransaction)
 method accepts.

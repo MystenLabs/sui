@@ -4,11 +4,11 @@
 import ExplorerLink from '_src/ui/app/components/explorer-link';
 import { ExplorerLinkType } from '_src/ui/app/components/explorer-link/ExplorerLinkType';
 import { Text } from '_src/ui/app/shared/text';
-import { type TransactionBlockInput } from '@mysten/sui/transactions';
+import { type TransactionInput } from '@mysten/sui/transactions';
 import { formatAddress } from '@mysten/sui/utils';
 
 interface InputProps {
-	input: TransactionBlockInput;
+	input: TransactionInput;
 }
 
 export function Input({ input }: InputProps) {

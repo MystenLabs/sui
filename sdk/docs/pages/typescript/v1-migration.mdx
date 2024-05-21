@@ -35,14 +35,15 @@ Ad part of the 1.0 release the `@mysten/sui.js` package has been renamed to `@my
 - `TransactionResult` shape changed
 - `TransactionObjectInput` shape changed
 - `TransactionArgument` shape changed
-- `TransactionBlockInput` shape changed
+- `TransactionBlockInput` -> `TransactionInput` and shape changed
 
-### TransactionBlock
+### Transaction
 
+- renamed `TransactionBlock` to `Transaction`
 - `blockData` is deprecated\, returns snapshot of v1 blockData\, should this be removed?
 - added getBlockData that returns new v2 blockData
-- removed txb.pure(rawValue)
-- Added support for (txb) => input as transaction arguments
+- removed tx.pure(rawValue)
+- Added support for (tx) => input as transaction arguments
 - renamed packageId -> package in Upgrade command
 - makeMoveVec `objects` -> `elements`
 

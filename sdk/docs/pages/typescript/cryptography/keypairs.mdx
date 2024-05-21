@@ -85,30 +85,30 @@ if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 }
 ```
 
-## Verifying transaction blocks
+## Verifying transaction signatures
 
-Verifying transaction blocks is similar to signature verification, except you use
-`verifyTransactionBlockSignature`:
+Verifying transaction signatures is similar to personal message signature verification, except you
+use `verifyTransactionSignature`:
 
 ```typescript
 // import SuiClient to create a network client and the getFullnodeUrl helper function
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { verifyTransactionBlockSignature } from '@mysten/sui/verify';
+import { verifyTransactionSignature } from '@mysten/sui/verify';
 
 // see Network Interactions with SuiClient for more info on creating clients
 const client = new SuiClient({ url: getFullnodeUrl('testnet') });
-const txb = new TransactionBlock();
+const tx = new Transaction();
 // ... add some transactions...
-const bytes = await txb.build({ client });
+const bytes = await tx.build({ client });
 
 const keypair = new Ed25519Keypair();
-const { signature } = await keypair.signTransactionBlock(bytes);
+const { signature } = await keypair.signTransaction(bytes);
 
 // if you have a public key, you can verify it
-//   const isValid = await publicKey.verifyTransactionBlock(bytes, signature);
-// or get the public key from the transaction block
-const publicKey = await verifyTransactionBlockSignature(bytes, signature);
+//   const isValid = await publicKey.verifyTransaction(bytes, signature);
+// or get the public key from the transaction
+const publicKey = await verifyTransactionSignature(bytes, signature);
 
 if (publicKey.toSuiAddress() !== keypair.getPublicKey().toSuiAddress()) {
 	throw new Error('Signature was valid, but was signed by a different keyPair');
