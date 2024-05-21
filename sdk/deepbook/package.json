@@ -48,7 +48,7 @@
 		"ts-retry-promise": "^0.7.0",
 		"typescript": "^5.3.3",
 		"vite": "^4.4.4",
-		"vitest": "^0.33.0",
+		"vitest": "^1.6.0",
 		"wait-on": "^7.0.1"
 	}
 }
