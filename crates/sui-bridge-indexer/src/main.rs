@@ -44,22 +44,35 @@ async fn main() -> Result<()> {
         )
         .await?;
 
-    // start eth side
+    let sui_bridge = EthSuiBridge::new(bridge_proxy_address, provider.clone());
+    let committee_address: EthAddress = sui_bridge.committee().call().await?;
+    let limiter_address: EthAddress = sui_bridge.limiter().call().await?;
+    let vault_address: EthAddress = sui_bridge.vault().call().await?;
+    let committee = EthBridgeCommittee::new(committee_address, provider.clone());
+    let config_address: EthAddress = committee.config().call().await?;
+
+    // start eth client
     let eth_client = Arc::new(
         EthClient::<ethers::providers::Http>::new(
             &config.eth_rpc_url,
             HashSet::from_iter(vec![
-                // Define in config?
-                // bridge_proxy_address,
-                // committee_address,
-                // config_address,
-                // limiter_address,
-                // vault_address,
+                bridge_proxy_address,
+                committee_address,
+                config_address,
+                limiter_address,
+                vault_address,
             ]),
         )
         .await?,
     );
-    let contract_addresses: HashMap<EthAddress, u64> = HashMap::new();
+    let contract_addresses = vec![
+        bridge_proxy_address,
+        committee_address,
+        config_address,
+        limiter_address,
+        vault_address,
+    ];
+
     let mut all_handles = vec![];
     let (task_handles, _eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
         .run()
