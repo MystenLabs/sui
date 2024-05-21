@@ -336,7 +336,7 @@ mod tests {
         );
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -380,7 +380,7 @@ mod tests {
         res.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node_with_client() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;
@@ -439,7 +439,7 @@ mod tests {
         res.unwrap();
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_starting_bridge_node_with_client_and_separate_client_key() {
         telemetry_subscribers::init_for_testing();
         let bridge_test_cluster = setup().await;

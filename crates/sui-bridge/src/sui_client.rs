@@ -774,7 +774,7 @@ mod tests {
     // Test get_action_onchain_status.
     // Use validator secrets to bridge USDC from Ethereum initially.
     // TODO: we need an e2e test for this with published solidity contract and committee with BridgeNodes
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
     async fn test_get_action_onchain_status_for_sui_to_eth_transfer() {
         telemetry_subscribers::init_for_testing();
         let mut bridge_keys = vec![];
