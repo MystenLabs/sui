@@ -3,7 +3,7 @@
 
 import { parseAmount } from '_src/ui/app/helpers';
 import { type CoinStruct } from '@mysten/sui/client';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { SUI_TYPE_ARG } from '@mysten/sui/utils';
 
 interface Options {
@@ -23,7 +23,7 @@ export function createTokenTransferTransaction({
 	coinDecimals,
 	isPayAllSui,
 }: Options) {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	if (isPayAllSui && coinType === SUI_TYPE_ARG) {
 		tx.transferObjects([tx.gas], to);

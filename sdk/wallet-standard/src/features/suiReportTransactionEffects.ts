@@ -6,21 +6,21 @@
  * The feature allows wallets to updated their caches using the effects of the transaction
  * executed outside of the wallet
  */
-export type SuiReportTransactionBlockEffectsFeature = {
+export type SuiReportTransactionEffectsFeature = {
 	/** Namespace for the feature. */
-	'sui:reportTransactionBlockEffects': {
+	'sui:reportTransactionEffects': {
 		/** Version of the feature API. */
 		version: '1.0.0';
-		reportTransactionBlockEffects: SuiReportTransactionBlockEffectsMethod;
+		reportTransactionEffects: SuiReportTransactionEffectsMethod;
 	};
 };
 
-export type SuiReportTransactionBlockEffectsMethod = (
-	input: SuiReportTransactionBlockEffectsInput,
+export type SuiReportTransactionEffectsMethod = (
+	input: SuiReportTransactionEffectsInput,
 ) => Promise<void>;
 
 /** Input for signing transactions. */
-export interface SuiReportTransactionBlockEffectsInput {
+export interface SuiReportTransactionEffectsInput {
 	/** Transaction block effects as base64 encoded bcs. */
 	effects: string;
 }

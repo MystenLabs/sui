@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs } from '@mysten/sui/bcs';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
@@ -16,8 +16,8 @@ import type {
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockFeature,
 	SuiSignTransactionBlockMethod,
-	SuiSignTransactionBlockV2Feature,
-	SuiSignTransactionBlockV2Method,
+	SuiSignTransactionFeature,
+	SuiSignTransactionMethod,
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, ReadonlyWalletAccount, SUI_MAINNET_CHAIN } from '@mysten/wallet-standard';
@@ -64,7 +64,7 @@ export class StashedWallet implements Wallet {
 		StandardDisconnectFeature &
 		StandardEventsFeature &
 		SuiSignTransactionBlockFeature &
-		SuiSignTransactionBlockV2Feature &
+		SuiSignTransactionFeature &
 		SuiSignPersonalMessageFeature {
 		return {
 			'standard:connect': {
@@ -83,9 +83,9 @@ export class StashedWallet implements Wallet {
 				version: '1.0.0',
 				signTransactionBlock: this.#signTransactionBlock,
 			},
-			'sui:signTransactionBlock:v2': {
+			'sui:signTransaction': {
 				version: '2.0.0',
-				signTransactionBlock: this.#signTransactionBlockV2,
+				signTransaction: this.#signTransaction,
 			},
 			'sui:signPersonalMessage': {
 				version: '1.0.0',
@@ -135,19 +135,16 @@ export class StashedWallet implements Wallet {
 		};
 	};
 
-	#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async ({
-		transactionBlock,
-		account,
-	}) => {
+	#signTransaction: SuiSignTransactionMethod = async ({ transaction, account }) => {
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
 		});
 
-		const txb = TransactionBlock.from(await transactionBlock.toJSON());
-		txb.setSenderIfNotSet(account.address);
+		const tx = Transaction.from(await transaction.toJSON());
+		tx.setSenderIfNotSet(account.address);
 
-		const data = txb.serialize();
+		const data = tx.serialize();
 
 		const response = await popup.send({
 			type: 'sign-transaction-block',

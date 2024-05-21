@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { bcs } from '../../src/bcs';
 import { Ed25519Keypair } from '../../src/keypairs/ed25519';
-import { TransactionBlock } from '../../src/transactions';
+import { Transaction } from '../../src/transactions';
 import { coinWithBalance } from '../../src/transactions/intents/CoinWithBalance';
 import { normalizeSuiAddress } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
@@ -25,10 +25,10 @@ describe('coinWithBalance', () => {
 	});
 
 	it('works with sui', async () => {
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const receiver = new Ed25519Keypair();
 
-		txb.transferObjects(
+		tx.transferObjects(
 			[
 				coinWithBalance({
 					type: 'gas',
@@ -37,11 +37,11 @@ describe('coinWithBalance', () => {
 			],
 			receiver.toSuiAddress(),
 		);
-		txb.setSender(publishToolbox.keypair.toSuiAddress());
+		tx.setSender(publishToolbox.keypair.toSuiAddress());
 
 		expect(
 			JSON.parse(
-				await txb.toJSON({
+				await tx.toJSON({
 					supportedIntents: ['CoinWithBalance'],
 				}),
 			),
@@ -90,7 +90,7 @@ describe('coinWithBalance', () => {
 
 		expect(
 			JSON.parse(
-				await txb.toJSON({
+				await tx.toJSON({
 					supportedIntents: [],
 					client: toolbox.client,
 				}),
@@ -145,8 +145,8 @@ describe('coinWithBalance', () => {
 			version: 2,
 		});
 
-		const result = await toolbox.client.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		const result = await toolbox.client.signAndExecuteTransaction({
+			transaction: tx,
 			signer: publishToolbox.keypair,
 			options: {
 				showEffects: true,
@@ -172,10 +172,10 @@ describe('coinWithBalance', () => {
 	});
 
 	it('works with custom coin', async () => {
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const receiver = new Ed25519Keypair();
 
-		txb.transferObjects(
+		tx.transferObjects(
 			[
 				coinWithBalance({
 					type: testType,
@@ -184,11 +184,11 @@ describe('coinWithBalance', () => {
 			],
 			receiver.toSuiAddress(),
 		);
-		txb.setSender(publishToolbox.keypair.toSuiAddress());
+		tx.setSender(publishToolbox.keypair.toSuiAddress());
 
 		expect(
 			JSON.parse(
-				await txb.toJSON({
+				await tx.toJSON({
 					supportedIntents: ['CoinWithBalance'],
 				}),
 			),
@@ -237,7 +237,7 @@ describe('coinWithBalance', () => {
 
 		expect(
 			JSON.parse(
-				await txb.toJSON({
+				await tx.toJSON({
 					supportedIntents: [],
 					client: publishToolbox.client,
 				}),
@@ -293,8 +293,8 @@ describe('coinWithBalance', () => {
 			version: 2,
 		});
 
-		const result = await toolbox.client.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		const result = await toolbox.client.signAndExecuteTransaction({
+			transaction: tx,
 			signer: publishToolbox.keypair,
 			options: {
 				showEffects: true,
@@ -320,10 +320,10 @@ describe('coinWithBalance', () => {
 	});
 
 	it('works with multiple coins', async () => {
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		const receiver = new Ed25519Keypair();
 
-		txb.transferObjects(
+		tx.transferObjects(
 			[
 				coinWithBalance({ type: testType, balance: 1n }),
 				coinWithBalance({ type: testType, balance: 2n }),
@@ -333,11 +333,11 @@ describe('coinWithBalance', () => {
 			receiver.toSuiAddress(),
 		);
 
-		txb.setSender(publishToolbox.keypair.toSuiAddress());
+		tx.setSender(publishToolbox.keypair.toSuiAddress());
 
 		expect(
 			JSON.parse(
-				await txb.toJSON({
+				await tx.toJSON({
 					supportedIntents: ['CoinWithBalance'],
 				}),
 			),
@@ -425,7 +425,7 @@ describe('coinWithBalance', () => {
 
 		expect(
 			JSON.parse(
-				await txb.toJSON({
+				await tx.toJSON({
 					supportedIntents: [],
 					client: publishToolbox.client,
 				}),
@@ -537,8 +537,8 @@ describe('coinWithBalance', () => {
 			version: 2,
 		});
 
-		const result = await toolbox.client.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		const result = await toolbox.client.signAndExecuteTransaction({
+			transaction: tx,
 			signer: publishToolbox.keypair,
 			options: {
 				showEffects: true,

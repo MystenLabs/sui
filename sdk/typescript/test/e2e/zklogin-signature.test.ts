@@ -114,7 +114,7 @@ describe('zkLogin signature', () => {
 			});
 
 			// verifies ok bc max_epoch 5 is within upper bound.
-			let res = await pk.verifyTransactionBlock(fromB64(bytes), parsed.signature);
+			let res = await pk.verifyTransaction(fromB64(bytes), parsed.signature);
 			expect(res).toBe(true);
 
 			// fails to verify bc max_epoch 100 is too large.

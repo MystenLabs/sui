@@ -8,7 +8,7 @@ import { ZkSendLink } from './claim.js';
 import type { ZkBagContractOptions } from './zk-bag.js';
 import { MAINNET_CONTRACT_IDS } from './zk-bag.js';
 
-export async function getSentTransactionBlocksWithLinks({
+export async function getSentTransactionsWithLinks({
 	address,
 	cursor,
 	limit = 10,
@@ -48,14 +48,14 @@ export async function getSentTransactionBlocksWithLinks({
 	});
 
 	const data = await Promise.all(
-		page.data.map(async (block) => {
-			const transactionBlock = block.transaction?.data.transaction;
-			if (transactionBlock?.kind !== 'ProgrammableTransaction') {
-				throw new Error('Invalid transaction block');
+		page.data.map(async (res) => {
+			const transaction = res.transaction?.data.transaction;
+			if (transaction?.kind !== 'ProgrammableTransaction') {
+				throw new Error('Invalid transaction');
 			}
 
 			const newLinks = await Promise.all(
-				transactionBlock.transactions
+				transaction.transactions
 					.filter((tx) =>
 						'MoveCall' in tx
 							? tx.MoveCall.package === packageId &&
@@ -74,7 +74,7 @@ export async function getSentTransactionBlocksWithLinks({
 							throw new Error('Invalid address argument');
 						}
 
-						const input = transactionBlock.inputs[addressArg.Input];
+						const input = transaction.inputs[addressArg.Input];
 
 						if (input.type !== 'pure') {
 							throw new Error('Expected Address input to be a Pure value');
@@ -91,7 +91,7 @@ export async function getSentTransactionBlocksWithLinks({
 						});
 
 						await link.loadAssets({
-							transactionBlock: block,
+							transaction: res,
 							loadClaimedAssets,
 						});
 
@@ -100,7 +100,7 @@ export async function getSentTransactionBlocksWithLinks({
 			);
 
 			const regeneratedLinks = await Promise.all(
-				transactionBlock.transactions
+				transaction.transactions
 					.filter((tx) =>
 						'MoveCall' in tx
 							? tx.MoveCall.package === packageId &&
@@ -119,7 +119,7 @@ export async function getSentTransactionBlocksWithLinks({
 							throw new Error('Invalid address argument');
 						}
 
-						const input = transactionBlock.inputs[addressArg.Input];
+						const input = transaction.inputs[addressArg.Input];
 
 						if (input.type !== 'pure') {
 							throw new Error('Expected Address input to be a Pure value');
@@ -142,7 +142,7 @@ export async function getSentTransactionBlocksWithLinks({
 			);
 
 			return {
-				transactionBlock: block,
+				transaction: res,
 				links: [...newLinks, ...regeneratedLinks],
 			};
 		}),

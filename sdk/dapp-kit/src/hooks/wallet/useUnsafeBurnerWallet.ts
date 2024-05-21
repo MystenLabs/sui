@@ -3,7 +3,7 @@
 
 import type { SuiClient } from '@mysten/sui/client';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import type {
 	StandardConnectFeature,
@@ -12,10 +12,10 @@ import type {
 	StandardEventsOnMethod,
 	SuiFeatures,
 	SuiSignAndExecuteTransactionBlockMethod,
-	SuiSignAndExecuteTransactionBlockV2Method,
+	SuiSignAndExecuteTransactionMethod,
 	SuiSignPersonalMessageMethod,
 	SuiSignTransactionBlockMethod,
-	SuiSignTransactionBlockV2Method,
+	SuiSignTransactionMethod,
 	Wallet,
 } from '@mysten/wallet-standard';
 import { getWallets, ReadonlyWalletAccount, SUI_CHAINS } from '@mysten/wallet-standard';
@@ -57,7 +57,12 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 		address: keypair.getPublicKey().toSuiAddress(),
 		publicKey: keypair.getPublicKey().toSuiBytes(),
 		chains: ['sui:unknown'],
-		features: ['sui:signAndExecuteTransactionBlock', 'sui:signTransactionBlock'],
+		features: [
+			'sui:signAndExecuteTransactionBlock',
+			'sui:signTransactionBlock',
+			'sui:signTransaction',
+			'sui:signAndExecuteTransaction',
+		],
 	});
 
 	class UnsafeBurnerWallet implements Wallet {
@@ -104,13 +109,13 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 					version: '1.0.0',
 					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlock,
 				},
-				'sui:signTransactionBlock:v2': {
+				'sui:signTransaction': {
 					version: '2.0.0',
-					signTransactionBlock: this.#signTransactionBlockV2,
+					signTransaction: this.#signTransaction,
 				},
-				'sui:signAndExecuteTransactionBlock:v2': {
+				'sui:signAndExecuteTransaction': {
 					version: '2.0.0',
-					signAndExecuteTransactionBlock: this.#signAndExecuteTransactionBlockV2,
+					signAndExecuteTransaction: this.#signAndExecuteTransaction,
 				},
 			};
 		}
@@ -140,9 +145,9 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			};
 		};
 
-		#signTransactionBlockV2: SuiSignTransactionBlockV2Method = async (transactionInput) => {
-			const { bytes, signature } = await TransactionBlock.from(
-				await transactionInput.transactionBlock.toJSON(),
+		#signTransaction: SuiSignTransactionMethod = async (transactionInput) => {
+			const { bytes, signature } = await Transaction.from(
+				await transactionInput.transaction.toJSON(),
 			).sign({
 				client: suiClient,
 				signer: keypair,
@@ -171,11 +176,9 @@ function registerUnsafeBurnerWallet(suiClient: SuiClient) {
 			});
 		};
 
-		#signAndExecuteTransactionBlockV2: SuiSignAndExecuteTransactionBlockV2Method = async (
-			transactionInput,
-		) => {
-			const { bytes, signature } = await TransactionBlock.from(
-				await transactionInput.transactionBlock.toJSON(),
+		#signAndExecuteTransaction: SuiSignAndExecuteTransactionMethod = async (transactionInput) => {
+			const { bytes, signature } = await Transaction.from(
+				await transactionInput.transaction.toJSON(),
 			).sign({
 				client: suiClient,
 				signer: keypair,

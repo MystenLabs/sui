@@ -53,7 +53,7 @@ export abstract class Signer {
 	/**
 	 * Signs provided transaction block by calling `signWithIntent()` with a `TransactionData` provided as intent scope
 	 */
-	async signTransactionBlock(bytes: Uint8Array) {
+	async signTransaction(bytes: Uint8Array) {
 		return this.signWithIntent(bytes, 'TransactionData');
 	}
 	/**

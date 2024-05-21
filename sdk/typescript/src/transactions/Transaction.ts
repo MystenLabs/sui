@@ -9,31 +9,26 @@ import { is, parse } from 'valibot';
 import type { SuiClient } from '../client/index.js';
 import type { SignatureWithBytes, Signer } from '../cryptography/index.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { CallArg, Transaction } from './blockData/internal.js';
-import {
-	Argument,
-	NormalizedCallArg,
-	ObjectRef,
-	TransactionExpiration,
-} from './blockData/internal.js';
-import { serializeV1TransactionBlockData } from './blockData/v1.js';
-import { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
+import type { TransactionArgument } from './Commands.js';
+import { Commands } from './Commands.js';
+import type { CallArg, Command } from './data/internal.js';
+import { Argument, NormalizedCallArg, ObjectRef, TransactionExpiration } from './data/internal.js';
+import { serializeV1TransactionData } from './data/v1.js';
+import { SerializedTransactionDataV2 } from './data/v2.js';
 import { Inputs } from './Inputs.js';
 import type {
-	BuildTransactionBlockOptions,
-	SerializeTransactionBlockOptions,
-	TransactionBlockPlugin,
+	BuildTransactionOptions,
+	SerializeTransactionOptions,
+	TransactionPlugin,
 } from './json-rpc-resolver.js';
-import { resolveTransactionBlockData } from './json-rpc-resolver.js';
+import { resolveTransactionData } from './json-rpc-resolver.js';
 import { createPure } from './pure.js';
-import { TransactionBlockDataBuilder } from './TransactionBlockData.js';
-import type { TransactionArgument } from './Transactions.js';
-import { Transactions } from './Transactions.js';
+import { TransactionDataBuilder } from './TransactionData.js';
 import { getIdFromCallArg } from './utils.js';
 
 export type TransactionObjectArgument =
 	| Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>
-	| ((txb: TransactionBlock) => Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>);
+	| ((tx: Transaction) => Exclude<Input<typeof Argument>, { Input: unknown; type?: 'pure' }>);
 
 export type TransactionResult = Extract<Argument, { Result: unknown }> &
 	Extract<Argument, { NestedResult: unknown }>[];
@@ -93,11 +88,11 @@ function createTransactionResult(index: number) {
 
 const TRANSACTION_BRAND = Symbol.for('@mysten/transaction');
 
-interface SignOptions extends BuildTransactionBlockOptions {
+interface SignOptions extends BuildTransactionOptions {
 	signer: Signer;
 }
 
-export function isTransactionBlock(obj: unknown): obj is TransactionBlock {
+export function isTransaction(obj: unknown): obj is Transaction {
 	return !!obj && typeof obj === 'object' && (obj as any)[TRANSACTION_BRAND] === true;
 }
 
@@ -106,19 +101,19 @@ export type TransactionObjectInput = string | CallArg | TransactionObjectArgumen
 /**
  * Transaction Builder
  */
-export class TransactionBlock {
-	#serializationPlugins: TransactionBlockPlugin[] = [];
-	#buildPlugins: TransactionBlockPlugin[] = [];
-	#intentResolvers = new Map<string, TransactionBlockPlugin>();
+export class Transaction {
+	#serializationPlugins: TransactionPlugin[] = [];
+	#buildPlugins: TransactionPlugin[] = [];
+	#intentResolvers = new Map<string, TransactionPlugin>();
 
 	/**
 	 * Converts from a serialize transaction kind (built with `build({ onlyTransactionKind: true })`) to a `Transaction` class.
 	 * Supports either a byte array, or base64-encoded bytes.
 	 */
 	static fromKind(serialized: string | Uint8Array) {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 
-		tx.#blockData = TransactionBlockDataBuilder.fromKindBytes(
+		tx.#data = TransactionDataBuilder.fromKindBytes(
 			typeof serialized === 'string' ? fromB64(serialized) : serialized,
 		);
 
@@ -131,31 +126,31 @@ export class TransactionBlock {
 	 * - A string returned from `Transaction#serialize`. The serialized format must be compatible, or it will throw an error.
 	 * - A byte array (or base64-encoded bytes) containing BCS transaction data.
 	 */
-	static from(txb: string | Uint8Array | TransactionBlock) {
-		const tx = new TransactionBlock();
+	static from(transaction: string | Uint8Array | Transaction) {
+		const newTransaction = new Transaction();
 
-		if (isTransactionBlock(txb)) {
-			tx.#blockData = new TransactionBlockDataBuilder(txb.getBlockData());
-		} else if (typeof txb !== 'string' || !txb.startsWith('{')) {
-			tx.#blockData = TransactionBlockDataBuilder.fromBytes(
-				typeof txb === 'string' ? fromB64(txb) : txb,
+		if (isTransaction(transaction)) {
+			newTransaction.#data = new TransactionDataBuilder(transaction.getData());
+		} else if (typeof transaction !== 'string' || !transaction.startsWith('{')) {
+			newTransaction.#data = TransactionDataBuilder.fromBytes(
+				typeof transaction === 'string' ? fromB64(transaction) : transaction,
 			);
 		} else {
-			tx.#blockData = TransactionBlockDataBuilder.restore(JSON.parse(txb));
+			newTransaction.#data = TransactionDataBuilder.restore(JSON.parse(transaction));
 		}
 
-		return tx;
+		return newTransaction;
 	}
 
-	addSerializationPlugin(step: TransactionBlockPlugin) {
+	addSerializationPlugin(step: TransactionPlugin) {
 		this.#serializationPlugins.push(step);
 	}
 
-	addBuildPlugin(step: TransactionBlockPlugin) {
+	addBuildPlugin(step: TransactionPlugin) {
 		this.#buildPlugins.push(step);
 	}
 
-	addIntentResolver(intent: string, resolver: TransactionBlockPlugin) {
+	addIntentResolver(intent: string, resolver: TransactionPlugin) {
 		if (this.#intentResolvers.has(intent) && this.#intentResolvers.get(intent) !== resolver) {
 			throw new Error(`Intent resolver for ${intent} already exists`);
 		}
@@ -164,43 +159,43 @@ export class TransactionBlock {
 	}
 
 	setSender(sender: string) {
-		this.#blockData.sender = sender;
+		this.#data.sender = sender;
 	}
 	/**
 	 * Sets the sender only if it has not already been set.
 	 * This is useful for sponsored transaction flows where the sender may not be the same as the signer address.
 	 */
 	setSenderIfNotSet(sender: string) {
-		if (!this.#blockData.sender) {
-			this.#blockData.sender = sender;
+		if (!this.#data.sender) {
+			this.#data.sender = sender;
 		}
 	}
 	setExpiration(expiration?: Input<typeof TransactionExpiration> | null) {
-		this.#blockData.expiration = expiration ? parse(TransactionExpiration, expiration) : null;
+		this.#data.expiration = expiration ? parse(TransactionExpiration, expiration) : null;
 	}
 	setGasPrice(price: number | bigint) {
-		this.#blockData.gasConfig.price = String(price);
+		this.#data.gasConfig.price = String(price);
 	}
 	setGasBudget(budget: number | bigint) {
-		this.#blockData.gasConfig.budget = String(budget);
+		this.#data.gasConfig.budget = String(budget);
 	}
 	setGasOwner(owner: string) {
-		this.#blockData.gasConfig.owner = owner;
+		this.#data.gasConfig.owner = owner;
 	}
 	setGasPayment(payments: ObjectRef[]) {
-		this.#blockData.gasConfig.payment = payments.map((payment) => parse(ObjectRef, payment));
+		this.#data.gasConfig.payment = payments.map((payment) => parse(ObjectRef, payment));
 	}
 
-	#blockData: TransactionBlockDataBuilder;
-	/** @deprecated Use `getBlockData()` instead. */
+	#data: TransactionDataBuilder;
 
+	/** @deprecated Use `getData()` instead. */
 	get blockData() {
-		return serializeV1TransactionBlockData(this.#blockData.snapshot());
+		return serializeV1TransactionData(this.#data.snapshot());
 	}
 
 	/** Get a snapshot of the transaction data, in JSON form: */
-	getBlockData() {
-		return this.#blockData.snapshot();
+	getData() {
+		return this.#data.snapshot();
 	}
 
 	// Used to brand transaction classes so that they can be identified, even between multiple copies
@@ -209,13 +204,13 @@ export class TransactionBlock {
 		return true;
 	}
 
-	// Temporary workaround for the wallet interface accidentally serializing transaction blocks via postMessage
+	// Temporary workaround for the wallet interface accidentally serializing transactions via postMessage
 	get pure(): ReturnType<typeof createPure> {
 		Object.defineProperty(this, 'pure', {
 			enumerable: false,
 			value: createPure((value): Argument => {
 				if (isSerializedBcs(value)) {
-					return this.#blockData.addInput('pure', {
+					return this.#data.addInput('pure', {
 						$kind: 'Pure',
 						Pure: {
 							bytes: value.toBase64(),
@@ -224,7 +219,7 @@ export class TransactionBlock {
 				}
 
 				// TODO: we can also do some deduplication here
-				return this.#blockData.addInput(
+				return this.#data.addInput(
 					'pure',
 					is(NormalizedCallArg, value)
 						? parse(NormalizedCallArg, value)
@@ -239,7 +234,7 @@ export class TransactionBlock {
 	}
 
 	constructor() {
-		this.#blockData = new TransactionBlockDataBuilder();
+		this.#data = new TransactionDataBuilder();
 	}
 
 	/** Returns an argument for the gas coin, to be used in a transaction. */
@@ -261,7 +256,7 @@ export class TransactionBlock {
 
 		const id = getIdFromCallArg(value);
 
-		const inserted = this.#blockData.inputs.find((i) => id === getIdFromCallArg(i));
+		const inserted = this.#data.inputs.find((i) => id === getIdFromCallArg(i));
 
 		// Upgrade shared object inputs to mutable if needed:
 		if (inserted?.Object?.SharedObject && typeof value === 'object' && value.Object?.SharedObject) {
@@ -270,8 +265,8 @@ export class TransactionBlock {
 		}
 
 		return inserted
-			? { $kind: 'Input', Input: this.#blockData.inputs.indexOf(inserted), type: 'object' }
-			: this.#blockData.addInput(
+			? { $kind: 'Input', Input: this.#data.inputs.indexOf(inserted), type: 'object' }
+			: this.#data.addInput(
 					'object',
 					typeof value === 'string'
 						? {
@@ -306,9 +301,9 @@ export class TransactionBlock {
 		return this.object(Inputs.SharedObjectRef(...args));
 	}
 
-	/** Add a transaction to the transaction block. */
-	add(transaction: Transaction) {
-		const index = this.#blockData.transactions.push(transaction);
+	/** Add a transaction to the transaction */
+	add(command: Command) {
+		const index = this.#data.commands.push(command);
 		return createTransactionResult(index - 1);
 	}
 
@@ -335,7 +330,7 @@ export class TransactionBlock {
 		amounts: (TransactionArgument | SerializedBcs<any> | number | string | bigint)[],
 	) {
 		return this.add(
-			Transactions.SplitCoins(
+			Commands.SplitCoins(
 				typeof coin === 'string' ? this.object(coin) : this.#resolveArgument(coin),
 				amounts.map((amount) =>
 					typeof amount === 'number' || typeof amount === 'bigint' || typeof amount === 'string'
@@ -350,7 +345,7 @@ export class TransactionBlock {
 		sources: (TransactionObjectArgument | string)[],
 	) {
 		return this.add(
-			Transactions.MergeCoins(
+			Commands.MergeCoins(
 				this.object(destination),
 				sources.map((src) => this.object(src)),
 			),
@@ -358,7 +353,7 @@ export class TransactionBlock {
 	}
 	publish({ modules, dependencies }: { modules: number[][] | string[]; dependencies: string[] }) {
 		return this.add(
-			Transactions.Publish({
+			Commands.Publish({
 				modules,
 				dependencies,
 			}),
@@ -376,7 +371,7 @@ export class TransactionBlock {
 		ticket: TransactionObjectArgument | string;
 	}) {
 		return this.add(
-			Transactions.Upgrade({
+			Commands.Upgrade({
 				modules,
 				dependencies,
 				package: packageId,
@@ -401,10 +396,10 @@ export class TransactionBlock {
 				typeArguments?: string[];
 		  }) {
 		return this.add(
-			Transactions.MoveCall({
+			Commands.MoveCall({
 				...input,
 				arguments: args?.map((arg) => this.#normalizeTransactionArgument(arg)),
-			} as Parameters<typeof Transactions.MoveCall>[0]),
+			} as Parameters<typeof Commands.MoveCall>[0]),
 		);
 	}
 	transferObjects(
@@ -412,7 +407,7 @@ export class TransactionBlock {
 		address: TransactionArgument | SerializedBcs<any> | string,
 	) {
 		return this.add(
-			Transactions.TransferObjects(
+			Commands.TransferObjects(
 				objects.map((obj) => this.object(obj)),
 				typeof address === 'string'
 					? this.pure.address(address)
@@ -428,7 +423,7 @@ export class TransactionBlock {
 		type?: string;
 	}) {
 		return this.add(
-			Transactions.MakeMoveVec({
+			Commands.MakeMoveVec({
 				type,
 				elements: elements.map((obj) => this.object(obj)),
 			}),
@@ -449,19 +444,19 @@ export class TransactionBlock {
 	 */
 	serialize(format: 'v1' | 'v2' = 'v1') {
 		if (format === 'v1') {
-			return JSON.stringify(serializeV1TransactionBlockData(this.#blockData.snapshot()));
+			return JSON.stringify(serializeV1TransactionData(this.#data.snapshot()));
 		}
 
 		return JSON.stringify(
-			parse(SerializedTransactionBlockDataV2, this.#blockData.snapshot()),
+			parse(SerializedTransactionDataV2, this.#data.snapshot()),
 			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
 		);
 	}
 
-	async toJSON(options: SerializeTransactionBlockOptions = {}): Promise<string> {
+	async toJSON(options: SerializeTransactionOptions = {}): Promise<string> {
 		await this.prepareForSerialization(options);
 		return JSON.stringify(
-			parse(SerializedTransactionBlockDataV2, this.#blockData.snapshot()),
+			parse(SerializedTransactionDataV2, this.#data.snapshot()),
 			(_key, value) => (typeof value === 'bigint' ? value.toString() : value),
 			2,
 		);
@@ -471,14 +466,14 @@ export class TransactionBlock {
 	async sign(options: SignOptions): Promise<SignatureWithBytes> {
 		const { signer, ...buildOptions } = options;
 		const bytes = await this.build(buildOptions);
-		return signer.signTransactionBlock(bytes);
+		return signer.signTransaction(bytes);
 	}
 
 	/** Build the transaction to BCS bytes. */
-	async build(options: BuildTransactionBlockOptions = {}): Promise<Uint8Array> {
+	async build(options: BuildTransactionOptions = {}): Promise<Uint8Array> {
 		await this.prepareForSerialization(options);
 		await this.#prepareBuild(options);
-		return this.#blockData.build({
+		return this.#data.build({
 			onlyTransactionKind: options.onlyTransactionKind,
 		});
 	}
@@ -490,22 +485,22 @@ export class TransactionBlock {
 		} = {},
 	): Promise<string> {
 		await this.#prepareBuild(options);
-		return this.#blockData.getDigest();
+		return this.#data.getDigest();
 	}
 
 	/**
 	 * Prepare the transaction by validating the transaction data and resolving all inputs
 	 * so that it can be built into bytes.
 	 */
-	async #prepareBuild(options: BuildTransactionBlockOptions) {
-		if (!options.onlyTransactionKind && !this.#blockData.sender) {
+	async #prepareBuild(options: BuildTransactionOptions) {
+		if (!options.onlyTransactionKind && !this.#data.sender) {
 			throw new Error('Missing transaction sender');
 		}
 
-		await this.#runPlugins([...this.#buildPlugins, resolveTransactionBlockData], options);
+		await this.#runPlugins([...this.#buildPlugins, resolveTransactionData], options);
 	}
 
-	async #runPlugins(plugins: TransactionBlockPlugin[], options: SerializeTransactionBlockOptions) {
+	async #runPlugins(plugins: TransactionPlugin[], options: SerializeTransactionOptions) {
 		const createNext = (i: number) => {
 			if (i >= plugins.length) {
 				return () => {};
@@ -517,9 +512,9 @@ export class TransactionBlock {
 				let calledNext = false;
 				let nextResolved = false;
 
-				await plugin(this.#blockData, options, async () => {
+				await plugin(this.#data, options, async () => {
 					if (calledNext) {
-						throw new Error(`next() was call multiple times in TransactionBlockPlugin ${i}`);
+						throw new Error(`next() was call multiple times in TransactionPlugin ${i}`);
 					}
 
 					calledNext = true;
@@ -530,11 +525,11 @@ export class TransactionBlock {
 				});
 
 				if (!calledNext) {
-					throw new Error(`next() was not called in TransactionBlockPlugin ${i}`);
+					throw new Error(`next() was not called in TransactionPlugin ${i}`);
 				}
 
 				if (!nextResolved) {
-					throw new Error(`next() was not awaited in TransactionBlockPlugin ${i}`);
+					throw new Error(`next() was not awaited in TransactionPlugin ${i}`);
 				}
 			};
 		};
@@ -542,11 +537,11 @@ export class TransactionBlock {
 		await createNext(0)();
 	}
 
-	async prepareForSerialization(options: SerializeTransactionBlockOptions) {
+	async prepareForSerialization(options: SerializeTransactionOptions) {
 		const intents = new Set<string>();
-		for (const transaction of this.#blockData.transactions) {
-			if (transaction.$Intent && options.supportedIntents) {
-				intents.add(transaction.$Intent.name);
+		for (const command of this.#data.commands) {
+			if (command.$Intent && options.supportedIntents) {
+				intents.add(command.$Intent.name);
 			}
 		}
 

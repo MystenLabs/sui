@@ -8,7 +8,7 @@ import { useDeepBookContext } from '_shared/deepBook/context';
 import { useSuiClient } from '@mysten/dapp-kit';
 import { type DeepBookClient } from '@mysten/deepbook';
 import { type CoinStruct, type SuiClient } from '@mysten/sui/client';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import * as Sentry from '@sentry/react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import BigNumber from 'bignumber.js';
@@ -144,7 +144,7 @@ async function getPlaceMarketOrderTxn({
 	quoteConversionRate: number;
 	lotSize: string;
 }) {
-	const txb = new TransactionBlock();
+	const txb = new Transaction();
 	const accountCap = accountCapId || deepBookClient.createAccountCap(txb);
 
 	let walletFeeCoin;

@@ -4,7 +4,7 @@
 import type { SuiClient } from '@mysten/sui/client';
 import { decodeSuiPrivateKey } from '@mysten/sui/cryptography';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import type { TransactionBlock } from '@mysten/sui/transactions';
+import type { Transaction } from '@mysten/sui/transactions';
 import { fromB64, toB64 } from '@mysten/sui/utils';
 import type { ZkLoginSignatureInputs } from '@mysten/sui/zklogin';
 import { decodeJwt } from 'jose';
@@ -315,13 +315,13 @@ export class EnokiFlow {
 		});
 	}
 
-	async sponsorTransactionBlock({
+	async sponsorTransaction({
 		network,
-		transactionBlock,
+		transaction,
 		client,
 	}: {
 		network?: 'mainnet' | 'testnet';
-		transactionBlock: TransactionBlock;
+		transaction: Transaction;
 		client: SuiClient;
 	}) {
 		const session = await this.getSession();
@@ -330,19 +330,19 @@ export class EnokiFlow {
 			throw new Error('Missing required data for sponsorship.');
 		}
 
-		const transactionBlockKindBytes = await transactionBlock.build({
+		const transactionKindBytes = await transaction.build({
 			onlyTransactionKind: true,
 			client,
 		});
 
-		return await this.#enokiClient.createSponsoredTransactionBlock({
+		return await this.#enokiClient.createSponsoredTransaction({
 			jwt: session.jwt,
 			network,
-			transactionBlockKindBytes: toB64(transactionBlockKindBytes),
+			transactionKindBytes: toB64(transactionKindBytes),
 		});
 	}
 
-	async executeTransactionBlock({
+	async executeTransaction({
 		network,
 		bytes,
 		digest,
@@ -354,33 +354,33 @@ export class EnokiFlow {
 		client: SuiClient;
 	}) {
 		const keypair = await this.getKeypair({ network });
-		const userSignature = await keypair.signTransactionBlock(fromB64(bytes));
+		const userSignature = await keypair.signTransaction(fromB64(bytes));
 
-		await this.#enokiClient.executeSponsoredTransactionBlock({
+		await this.#enokiClient.executeSponsoredTransaction({
 			digest,
 			signature: userSignature.signature,
 		});
 
 		// TODO: Should the parent just do this?
-		await client.waitForTransactionBlock({ digest });
+		await client.waitForTransaction({ digest });
 
 		return { digest };
 	}
 
-	async sponsorAndExecuteTransactionBlock({
+	async sponsorAndExecuteTransaction({
 		network,
-		transactionBlock,
+		transaction,
 		client,
 	}: {
 		network?: 'mainnet' | 'testnet';
-		transactionBlock: TransactionBlock;
+		transaction: Transaction;
 		client: SuiClient;
 	}) {
-		const { bytes, digest } = await this.sponsorTransactionBlock({
+		const { bytes, digest } = await this.sponsorTransaction({
 			network,
-			transactionBlock,
+			transaction,
 			client,
 		});
-		return await this.executeTransactionBlock({ network, bytes, digest, client });
+		return await this.executeTransaction({ network, bytes, digest, client });
 	}
 }

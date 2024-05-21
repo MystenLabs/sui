@@ -6,9 +6,9 @@ import type { SuiClient } from '../client/client.js';
 import type { ExecuteTransactionBlockParams } from '../client/index.js';
 import type { Signer } from '../cryptography/keypair.js';
 import { normalizeSuiAddress } from '../utils/sui-types.js';
-import type { OpenMoveTypeSignature } from './blockData/internal.js';
-import type { TransactionBlockPlugin } from './json-rpc-resolver.js';
-import type { TransactionBlock } from './TransactionBlock.js';
+import type { OpenMoveTypeSignature } from './data/internal.js';
+import type { TransactionPlugin } from './json-rpc-resolver.js';
+import type { Transaction } from './Transaction.js';
 
 export interface ObjectCacheEntry {
 	objectId: string;
@@ -145,9 +145,9 @@ export class ObjectCache {
 		this.#address = normalizeSuiAddress(address);
 	}
 
-	asPlugin(): TransactionBlockPlugin {
-		return async (blockData, _options, next) => {
-			const unresolvedObjects = blockData.inputs
+	asPlugin(): TransactionPlugin {
+		return async (transactionData, _options, next) => {
+			const unresolvedObjects = transactionData.inputs
 				.filter((input) => input.UnresolvedObject)
 				.map((input) => input.UnresolvedObject!.objectId);
 
@@ -157,7 +157,7 @@ export class ObjectCache {
 
 			const byId = new Map(cached.map((obj) => [obj!.objectId, obj]));
 
-			for (const input of blockData.inputs) {
+			for (const input of transactionData.inputs) {
 				if (!input.UnresolvedObject) {
 					continue;
 				}
@@ -182,16 +182,16 @@ export class ObjectCache {
 			}
 
 			await Promise.all(
-				blockData.transactions.map(async (tx) => {
-					if (tx.MoveCall) {
+				transactionData.commands.map(async (commands) => {
+					if (commands.MoveCall) {
 						const def = await this.getMoveFunctionDefinition({
-							package: tx.MoveCall.package,
-							module: tx.MoveCall.module,
-							function: tx.MoveCall.function,
+							package: commands.MoveCall.package,
+							module: commands.MoveCall.module,
+							function: commands.MoveCall.function,
 						});
 
 						if (def) {
-							tx.MoveCall._argumentTypes = def.parameters;
+							commands.MoveCall._argumentTypes = def.parameters;
 						}
 					}
 				}),
@@ -200,13 +200,13 @@ export class ObjectCache {
 			await next();
 
 			await Promise.all(
-				blockData.transactions.map(async (tx) => {
-					if (tx.MoveCall?._argumentTypes) {
+				transactionData.commands.map(async (commands) => {
+					if (commands.MoveCall?._argumentTypes) {
 						await this.#cache.addMoveFunctionDefinition({
-							package: tx.MoveCall.package,
-							module: tx.MoveCall.module,
-							function: tx.MoveCall.function,
-							parameters: tx.MoveCall._argumentTypes,
+							package: commands.MoveCall.package,
+							module: commands.MoveCall.module,
+							function: commands.MoveCall.function,
+							parameters: commands.MoveCall._argumentTypes,
 						});
 					}
 				}),
@@ -262,7 +262,7 @@ export class ObjectCache {
 	}
 }
 
-export class CachingTransactionBlockExecutor {
+export class CachingTransactionExecutor {
 	#client: SuiClient;
 	cache: ObjectCache;
 
@@ -284,23 +284,23 @@ export class CachingTransactionBlockExecutor {
 		await this.cache.clearOwnedObjects();
 	}
 
-	async buildTransactionBlock({ transactionBlock }: { transactionBlock: TransactionBlock }) {
-		return transactionBlock.build({
+	async buildTransaction({ transaction }: { transaction: Transaction }) {
+		return transaction.build({
 			client: this.#client,
 		});
 	}
 
-	async executeTransactionBlock({
-		transactionBlock,
+	async executeTransaction({
+		transaction,
 		options,
 		...input
 	}: {
-		transactionBlock: TransactionBlock;
+		transaction: Transaction;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock'>) {
-		transactionBlock.addSerializationPlugin(this.cache.asPlugin());
+		transaction.addSerializationPlugin(this.cache.asPlugin());
 		const results = await this.#client.executeTransactionBlock({
 			...input,
-			transactionBlock: await transactionBlock.build({
+			transactionBlock: await transaction.build({
 				client: this.#client,
 			}),
 			options: {
@@ -317,19 +317,19 @@ export class CachingTransactionBlockExecutor {
 		return results;
 	}
 
-	async signAndExecuteTransactionBlock({
+	async signAndExecuteTransaction({
 		options,
-		transactionBlock,
+		transaction,
 		...input
 	}: {
-		transactionBlock: TransactionBlock;
+		transaction: Transaction;
 
 		signer: Signer;
 	} & Omit<ExecuteTransactionBlockParams, 'transactionBlock' | 'signature'>) {
-		transactionBlock.addBuildPlugin(this.cache.asPlugin());
-		const results = await this.#client.signAndExecuteTransactionBlock({
+		transaction.addBuildPlugin(this.cache.asPlugin());
+		const results = await this.#client.signAndExecuteTransaction({
 			...input,
-			transactionBlock: await transactionBlock.build({
+			transaction: await transaction.build({
 				client: this.#client,
 			}),
 			options: {

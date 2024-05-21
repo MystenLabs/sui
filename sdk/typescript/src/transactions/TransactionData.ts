@@ -10,21 +10,21 @@ import { normalizeSuiAddress } from '../utils/sui-types.js';
 import type {
 	Argument,
 	CallArg,
+	Command,
 	GasData,
-	Transaction,
 	TransactionExpiration,
-} from './blockData/internal.js';
-import { TransactionBlockData } from './blockData/internal.js';
-import { transactionBlockDataFromV1 } from './blockData/v1.js';
-import type { SerializedTransactionBlockDataV1 } from './blockData/v1.js';
-import type { SerializedTransactionBlockDataV2 } from './blockData/v2.js';
+} from './data/internal.js';
+import { TransactionData } from './data/internal.js';
+import { transactionDataFromV1 } from './data/v1.js';
+import type { SerializedTransactionDataV1 } from './data/v1.js';
+import type { SerializedTransactionDataV2 } from './data/v2.js';
 import { hashTypedData } from './hash.js';
 
 function prepareSuiAddress(address: string) {
 	return normalizeSuiAddress(address).replace('0x', '');
 }
 
-export class TransactionBlockDataBuilder implements TransactionBlockData {
+export class TransactionDataBuilder implements TransactionData {
 	static fromKindBytes(bytes: Uint8Array) {
 		const kind = bcs.TransactionKind.parse(bytes);
 
@@ -33,7 +33,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 			throw new Error('Unable to deserialize from bytes.');
 		}
 
-		return TransactionBlockDataBuilder.restore({
+		return TransactionDataBuilder.restore({
 			version: 2,
 			sender: null,
 			expiration: null,
@@ -44,7 +44,7 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 				price: null,
 			},
 			inputs: programmableTx.inputs,
-			transactions: programmableTx.transactions,
+			commands: programmableTx.transactions,
 		});
 	}
 
@@ -57,27 +57,23 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 			throw new Error('Unable to deserialize from bytes.');
 		}
 
-		return TransactionBlockDataBuilder.restore({
+		return TransactionDataBuilder.restore({
 			version: 2,
 			sender: data.sender,
 			expiration: data.expiration,
 			gasData: data.gasData,
 			inputs: programmableTx.inputs,
-			transactions: programmableTx.transactions,
+			commands: programmableTx.transactions,
 		});
 	}
 
 	static restore(
-		data:
-			| Input<typeof SerializedTransactionBlockDataV2>
-			| Input<typeof SerializedTransactionBlockDataV1>,
+		data: Input<typeof SerializedTransactionDataV2> | Input<typeof SerializedTransactionDataV1>,
 	) {
 		if (data.version === 2) {
-			return new TransactionBlockDataBuilder(parse(TransactionBlockData, data));
+			return new TransactionDataBuilder(parse(TransactionData, data));
 		} else {
-			return new TransactionBlockDataBuilder(
-				parse(TransactionBlockData, transactionBlockDataFromV1(data)),
-			);
+			return new TransactionDataBuilder(parse(TransactionData, transactionDataFromV1(data)));
 		}
 	}
 
@@ -106,13 +102,13 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 	expiration: TransactionExpiration | null;
 	gasData: GasData;
 	inputs: CallArg[];
-	transactions: Transaction[];
+	commands: Command[];
 
-	constructor(clone?: TransactionBlockData) {
+	constructor(clone?: TransactionData) {
 		this.sender = clone?.sender ?? null;
 		this.expiration = clone?.expiration ?? null;
 		this.inputs = clone?.inputs ?? [];
-		this.transactions = clone?.transactions ?? [];
+		this.commands = clone?.commands ?? [];
 		this.gasData = clone?.gasData ?? {
 			budget: null,
 			price: null,
@@ -138,8 +134,8 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 	} = {}) {
 		// TODO validate that inputs and intents are actually resolved
 		const inputs = this.inputs as (typeof bcs.CallArg.$inferInput)[];
-		const transactions = this.transactions as Extract<
-			Transaction<Exclude<Argument, { IntentResult: unknown } | { NestedIntentResult: unknown }>>,
+		const transactions = this.commands as Extract<
+			Command<Exclude<Argument, { IntentResult: unknown } | { NestedIntentResult: unknown }>>,
 			{ Upgrade: unknown }
 		>[];
 
@@ -203,67 +199,71 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 		return { Input: index, type, $kind: 'Input' as const };
 	}
 
-	getInputUses(index: number, fn: (arg: Argument, tx: Transaction) => void) {
-		this.mapArguments((arg, tx) => {
+	getInputUses(index: number, fn: (arg: Argument, command: Command) => void) {
+		this.mapArguments((arg, command) => {
 			if (arg.$kind === 'Input' && arg.Input === index) {
-				fn(arg, tx);
+				fn(arg, command);
 			}
 
 			return arg;
 		});
 	}
 
-	mapArguments(fn: (arg: Argument, tx: Transaction) => Argument) {
-		for (const tx of this.transactions) {
-			switch (tx.$kind) {
+	mapArguments(fn: (arg: Argument, command: Command) => Argument) {
+		for (const command of this.commands) {
+			switch (command.$kind) {
 				case 'MoveCall':
-					tx.MoveCall.arguments = tx.MoveCall.arguments.map((arg) => fn(arg, tx));
+					command.MoveCall.arguments = command.MoveCall.arguments.map((arg) => fn(arg, command));
 					break;
 				case 'TransferObjects':
-					tx.TransferObjects.objects = tx.TransferObjects.objects.map((arg) => fn(arg, tx));
-					tx.TransferObjects.address = fn(tx.TransferObjects.address, tx);
+					command.TransferObjects.objects = command.TransferObjects.objects.map((arg) =>
+						fn(arg, command),
+					);
+					command.TransferObjects.address = fn(command.TransferObjects.address, command);
 					break;
 				case 'SplitCoins':
-					tx.SplitCoins.coin = fn(tx.SplitCoins.coin, tx);
-					tx.SplitCoins.amounts = tx.SplitCoins.amounts.map((arg) => fn(arg, tx));
+					command.SplitCoins.coin = fn(command.SplitCoins.coin, command);
+					command.SplitCoins.amounts = command.SplitCoins.amounts.map((arg) => fn(arg, command));
 					break;
 				case 'MergeCoins':
-					tx.MergeCoins.destination = fn(tx.MergeCoins.destination, tx);
-					tx.MergeCoins.sources = tx.MergeCoins.sources.map((arg) => fn(arg, tx));
+					command.MergeCoins.destination = fn(command.MergeCoins.destination, command);
+					command.MergeCoins.sources = command.MergeCoins.sources.map((arg) => fn(arg, command));
 					break;
 				case 'MakeMoveVec':
-					tx.MakeMoveVec.elements = tx.MakeMoveVec.elements.map((arg) => fn(arg, tx));
+					command.MakeMoveVec.elements = command.MakeMoveVec.elements.map((arg) =>
+						fn(arg, command),
+					);
 					break;
 				case 'Upgrade':
-					tx.Upgrade.ticket = fn(tx.Upgrade.ticket, tx);
+					command.Upgrade.ticket = fn(command.Upgrade.ticket, command);
 					break;
 				case '$Intent':
-					const inputs = tx.$Intent.inputs;
-					tx.$Intent.inputs = {};
+					const inputs = command.$Intent.inputs;
+					command.$Intent.inputs = {};
 
 					for (const [key, value] of Object.entries(inputs)) {
-						tx.$Intent.inputs[key] = Array.isArray(value)
-							? value.map((arg) => fn(arg, tx))
-							: fn(value, tx);
+						command.$Intent.inputs[key] = Array.isArray(value)
+							? value.map((arg) => fn(arg, command))
+							: fn(value, command);
 					}
 
 					break;
 				case 'Publish':
 					break;
 				default:
-					throw new Error(`Unexpected transaction kind: ${(tx as { $kind: unknown }).$kind}`);
+					throw new Error(`Unexpected transaction kind: ${(command as { $kind: unknown }).$kind}`);
 			}
 		}
 	}
 
-	replaceTransaction(index: number, replacement: Transaction | Transaction[]) {
+	replaceCommand(index: number, replacement: Command | Command[]) {
 		if (!Array.isArray(replacement)) {
-			this.transactions[index] = replacement;
+			this.commands[index] = replacement;
 			return;
 		}
 
 		const sizeDiff = replacement.length - 1;
-		this.transactions.splice(index, 1, ...replacement);
+		this.commands.splice(index, 1, ...replacement);
 
 		if (sizeDiff !== 0) {
 			this.mapArguments((arg) => {
@@ -287,10 +287,10 @@ export class TransactionBlockDataBuilder implements TransactionBlockData {
 
 	getDigest() {
 		const bytes = this.build({ onlyTransactionKind: false });
-		return TransactionBlockDataBuilder.getDigestFromBytes(bytes);
+		return TransactionDataBuilder.getDigestFromBytes(bytes);
 	}
 
-	snapshot(): TransactionBlockData {
-		return parse(TransactionBlockData, this);
+	snapshot(): TransactionData {
+		return parse(TransactionData, this);
 	}
 }

@@ -14,7 +14,7 @@ export const DEFAULT_STORAGE =
 export const DEFAULT_STORAGE_KEY = 'sui-dapp-kit:wallet-connection-info';
 
 export const DEFAULT_REQUIRED_FEATURES: (keyof WalletWithRequiredFeatures['features'])[] = [
-	'sui:signTransactionBlock:v2',
+	'sui:signTransaction',
 ];
 
 export const DEFAULT_PREFERRED_WALLETS = [SUI_WALLET_NAME, STASHED_WALLET_NAME];

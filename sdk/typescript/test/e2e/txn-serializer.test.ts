@@ -5,8 +5,8 @@ import { bcs } from '@mysten/bcs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { SuiTransactionBlockResponse } from '../../src/client';
-import { TransactionBlock } from '../../src/transactions';
-import { TransactionBlockDataBuilder } from '../../src/transactions/TransactionBlockData';
+import { Transaction } from '../../src/transactions';
+import { TransactionDataBuilder } from '../../src/transactions/TransactionData';
 import { SUI_SYSTEM_STATE_OBJECT_ID } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
@@ -28,19 +28,19 @@ beforeAll(async () => {
 });
 
 describe('Transaction bcs Serialization and deserialization', () => {
-	async function serializeAndDeserialize(tx: TransactionBlock, mutable: boolean[]) {
+	async function serializeAndDeserialize(tx: Transaction, mutable: boolean[]) {
 		tx.setSender(await toolbox.address());
-		const transactionBlockBytes = await tx.build({
+		const transactionBytes = await tx.build({
 			client: toolbox.client,
 		});
-		const deserializedTxnBuilder = TransactionBlockDataBuilder.fromBytes(transactionBlockBytes);
+		const deserializedTxnBuilder = TransactionDataBuilder.fromBytes(transactionBytes);
 		expect(
 			deserializedTxnBuilder.inputs
 				.filter((i) => i.Object?.SharedObject)
 				.map((i) => i.Object?.SharedObject?.mutable),
 		).toStrictEqual(mutable);
 		const reserializedTxnBytes = await deserializedTxnBuilder.build();
-		expect(reserializedTxnBytes).toEqual(transactionBlockBytes);
+		expect(reserializedTxnBytes).toEqual(transactionBytes);
 	}
 
 	it('Move Shared Object Call with mutable reference', async () => {
@@ -48,7 +48,7 @@ describe('Transaction bcs Serialization and deserialization', () => {
 
 		const [{ suiAddress: validatorAddress }] = await toolbox.getActiveValidators();
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		const coin = coins.data[2];
 		tx.moveCall({
 			target: '0x3::sui_system::request_add_stake',
@@ -62,7 +62,7 @@ describe('Transaction bcs Serialization and deserialization', () => {
 	});
 
 	it('Move Shared Object Call with immutable reference', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::serializer_tests::value`,
 			arguments: [tx.object(sharedObjectId)],
@@ -71,7 +71,7 @@ describe('Transaction bcs Serialization and deserialization', () => {
 	});
 
 	it('Move Shared Object Call with mixed usage of mutable and immutable references', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.moveCall({
 			target: `${packageId}::serializer_tests::value`,
 			arguments: [tx.object(sharedObjectId)],
@@ -84,22 +84,22 @@ describe('Transaction bcs Serialization and deserialization', () => {
 	});
 
 	it('Transaction with expiration', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		tx.setExpiration({ Epoch: 100 });
 		await serializeAndDeserialize(tx, []);
 	});
 });
 
 describe('TXB v2 JSON serialization', () => {
-	async function serializeAndDeserialize(tx: TransactionBlock) {
+	async function serializeAndDeserialize(tx: Transaction) {
 		tx.setSender(await toolbox.address());
 		tx.setGasOwner(await toolbox.address());
 		tx.setExpiration({ None: true });
 		tx.setSender(await toolbox.address());
-		const transactionBlockJson = await tx.getBlockData();
-		const deserializedTxnBuilder = TransactionBlock.from(JSON.stringify(transactionBlockJson));
-		const reserializedTxnJson = await deserializedTxnBuilder.getBlockData();
-		expect(reserializedTxnJson).toEqual(transactionBlockJson);
+		const transactionJson = await tx.getData();
+		const deserializedTxnBuilder = Transaction.from(JSON.stringify(transactionJson));
+		const reserializedTxnJson = await deserializedTxnBuilder.getData();
+		expect(reserializedTxnJson).toEqual(transactionJson);
 		const reserializedTxnBytes = await deserializedTxnBuilder.build({
 			client: toolbox.client,
 		});
@@ -109,7 +109,7 @@ describe('TXB v2 JSON serialization', () => {
 			}),
 		);
 
-		expect(tx.getBlockData()).toMatchObject(deserializedTxnBuilder.getBlockData());
+		expect(tx.getData()).toMatchObject(deserializedTxnBuilder.getData());
 	}
 
 	it('Move Shared Object Call with mutable reference', async () => {
@@ -117,7 +117,7 @@ describe('TXB v2 JSON serialization', () => {
 
 		const [{ suiAddress: validatorAddress }] = await toolbox.getActiveValidators();
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		const coin = coins.data[2];
 		tx.moveCall({
 			target: '0x3::sui_system::request_add_stake',
@@ -133,7 +133,7 @@ describe('TXB v2 JSON serialization', () => {
 	it('serialized pure inputs', async () => {
 		const [{ suiAddress: validatorAddress }] = await toolbox.getActiveValidators();
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 
 		tx.moveCall({
 			target: `${packageId}::serializer_tests::addr`,
@@ -180,13 +180,13 @@ describe('TXB v2 JSON serialization', () => {
 });
 
 describe('TXB v1 JSON serialization', () => {
-	async function serializeAndDeserialize(tx: TransactionBlock, json?: string) {
+	async function serializeAndDeserialize(tx: Transaction, json?: string) {
 		tx.setSender(await toolbox.address());
 		tx.setGasOwner(await toolbox.address());
 		tx.setExpiration({ None: true });
 		tx.setSender(await toolbox.address());
-		const transactionBlockJson = json ?? (await tx.serialize());
-		const deserializedTxnBuilder = TransactionBlock.from(transactionBlockJson);
+		const transactionJson = json ?? (await tx.serialize());
+		const deserializedTxnBuilder = Transaction.from(transactionJson);
 		const reserializedTxnBytes = await deserializedTxnBuilder.build({
 			client: toolbox.client,
 		});
@@ -196,12 +196,12 @@ describe('TXB v1 JSON serialization', () => {
 			}),
 		);
 
-		const blockData = tx.getBlockData();
-		const blockDataFromJson = deserializedTxnBuilder.getBlockData();
+		const blockData = tx.getData();
+		const blockDataFromJson = deserializedTxnBuilder.getData();
 
 		if (json) {
 			// Argument types aren't in v1 JSON
-			blockDataFromJson.transactions.forEach((txn) => {
+			blockDataFromJson.commands.forEach((txn) => {
 				if (txn.MoveCall?._argumentTypes) {
 					delete txn.MoveCall._argumentTypes;
 				}
@@ -216,7 +216,7 @@ describe('TXB v1 JSON serialization', () => {
 
 		const [{ suiAddress: validatorAddress }] = await toolbox.getActiveValidators();
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		const coin = coins.data[2];
 		tx.moveCall({
 			target: '0x3::sui_system::request_add_stake',
@@ -232,7 +232,7 @@ describe('TXB v1 JSON serialization', () => {
 	it('serializes pure inputs', async () => {
 		const [{ suiAddress: validatorAddress }] = await toolbox.getActiveValidators();
 
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 
 		tx.moveCall({
 			target: `${packageId}::serializer_tests::addr`,
@@ -278,7 +278,7 @@ describe('TXB v1 JSON serialization', () => {
 	});
 
 	it('parses raw values in pure inputs', async () => {
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 
 		tx.moveCall({
 			target: `${packageId}::serializer_tests::addr`,

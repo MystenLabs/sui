@@ -16,7 +16,7 @@ import {
 	requestSuiFromFaucetV0,
 } from '../../../src/faucet/index.js';
 import { Ed25519Keypair } from '../../../src/keypairs/ed25519/index.js';
-import { TransactionBlock, UpgradePolicy } from '../../../src/transactions/index.js';
+import { Transaction, UpgradePolicy } from '../../../src/transactions/index.js';
 import { SUI_TYPE_ARG } from '../../../src/utils/index.js';
 
 const DEFAULT_FAUCET_URL = import.meta.env.VITE_FAUCET_URL ?? getFaucetHost('localnet');
@@ -120,7 +120,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 			{ encoding: 'utf-8' },
 		),
 	);
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 	const cap = tx.publish({
 		modules,
 		dependencies,
@@ -129,8 +129,8 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 	// Transfer the upgrade capability to the sender so they can upgrade the package later if they want.
 	tx.transferObjects([cap], tx.pure.address(await toolbox.address()));
 
-	const publishTxn = await toolbox.client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const publishTxn = await toolbox.client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: toolbox.keypair,
 		options: {
 			showEffects: true,
@@ -138,7 +138,7 @@ export async function publishPackage(packagePath: string, toolbox?: TestToolbox)
 		},
 	});
 
-	await toolbox.client.waitForTransactionBlock({ digest: publishTxn.digest });
+	await toolbox.client.waitForTransaction({ digest: publishTxn.digest });
 
 	expect(publishTxn.effects?.status.status).toEqual('success');
 
@@ -176,7 +176,7 @@ export async function upgradePackage(
 		),
 	);
 
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	const cap = tx.object(capId);
 	const ticket = tx.moveCall({
@@ -196,8 +196,8 @@ export async function upgradePackage(
 		arguments: [cap, receipt],
 	});
 
-	const result = await toolbox.client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const result = await toolbox.client.signAndExecuteTransaction({
+		transaction: tx,
 		signer: toolbox.keypair,
 		options: {
 			showEffects: true,
@@ -225,7 +225,7 @@ export async function paySui(
 	amounts?: number[],
 	coinId?: string,
 ) {
-	const tx = new TransactionBlock();
+	const tx = new Transaction();
 
 	recipients = recipients ?? getRandomAddresses(numRecipients);
 	amounts = amounts ?? Array(numRecipients).fill(DEFAULT_SEND_AMOUNT);
@@ -246,8 +246,8 @@ export async function paySui(
 		tx.transferObjects([coin], tx.pure.address(recipient));
 	});
 
-	const txn = await client.signAndExecuteTransactionBlock({
-		transactionBlock: tx,
+	const txn = await client.signAndExecuteTransaction({
+		transaction: tx,
 		signer,
 		options: {
 			showEffects: true,

@@ -11,11 +11,8 @@ import {
 	DEFAULT_SECP256R1_DERIVATION_PATH,
 	Secp256r1Keypair,
 } from '../../../src/keypairs/secp256r1';
-import { TransactionBlock } from '../../../src/transactions';
-import {
-	verifyPersonalMessageSignature,
-	verifyTransactionBlockSignature,
-} from '../../../src/verify';
+import { Transaction } from '../../../src/transactions';
+import { verifyPersonalMessageSignature, verifyTransactionSignature } from '../../../src/verify';
 
 const VALID_SECP256R1_SECRET_KEY = [
 	66, 37, 141, 205, 161, 76, 241, 17, 198, 2, 184, 151, 27, 140, 200, 67, 233, 30, 70, 202, 144, 81,
@@ -157,13 +154,13 @@ describe('secp256r1-keypair', () => {
 		}).toThrow('Invalid derivation path');
 	});
 
-	it('signs TransactionBlocks', async () => {
+	it('signs Transactions', async () => {
 		const keypair = new Secp256r1Keypair();
-		const txb = new TransactionBlock();
-		txb.setSender(keypair.getPublicKey().toSuiAddress());
-		txb.setGasPrice(5);
-		txb.setGasBudget(100);
-		txb.setGasPayment([
+		const tx = new Transaction();
+		tx.setSender(keypair.getPublicKey().toSuiAddress());
+		tx.setGasPrice(5);
+		tx.setGasBudget(100);
+		tx.setGasPayment([
 			{
 				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 				version: String((Math.random() * 10000).toFixed(0)),
@@ -171,14 +168,14 @@ describe('secp256r1-keypair', () => {
 			},
 		]);
 
-		const bytes = await txb.build();
+		const bytes = await tx.build();
 
-		const serializedSignature = (await keypair.signTransactionBlock(bytes)).signature;
+		const serializedSignature = (await keypair.signTransaction(bytes)).signature;
 
-		expect(await keypair.getPublicKey().verifyTransactionBlock(bytes, serializedSignature)).toEqual(
+		expect(await keypair.getPublicKey().verifyTransaction(bytes, serializedSignature)).toEqual(
 			true,
 		);
-		expect(!!(await verifyTransactionBlockSignature(bytes, serializedSignature))).toEqual(true);
+		expect(!!(await verifyTransactionSignature(bytes, serializedSignature))).toEqual(true);
 	});
 
 	it('signs PersonalMessages', async () => {

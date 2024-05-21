@@ -56,7 +56,7 @@ The Sui TypeScript SDK deprecates the following classes with version 0.38.0:
 - `SignerWithProver` and `RawSigner` - Key pairs now directly support signing transactions and
   messages without the need of a `Signer` class. See the
   [Key pairs](typescript/cryptography/keypairs) topic for more information.
-- `signAndExecuteTransactionBlock` - This method was not deprecated, but is now part of `SuiClient`.
+- `signAndExecuteTransaction` - This method was not deprecated, but is now part of `SuiClient`.
 - `Connection` classes - The `Connection` classes (`Connection`, `devnetConnection`, and so on) have
   been deprecated in favor of using `suiClient` for establishing the connection. See
   [Network Interactions with SuiClient](typescript/sui-client) for more information.
@@ -66,10 +66,10 @@ The Sui TypeScript SDK deprecates the following classes with version 0.38.0:
 - A more stable JSON-RPC API has reduced the need for many of the SDK "getter" methods, which are
   now deprecated.
 
-### Signing transaction blocks
+### Signing transactions
 
-Signing and sending transaction blocks changes slightly with the deprecation of the `Signer`
-pattern. For an example of transaction signing, see the
+Signing and sending transactions changes slightly with the deprecation of the `Signer` pattern. For
+an example of transaction signing, see the
 [Sui Programmable Transaction Blocks Basics](typescript/transaction-building/basics) topic.
 
 ### Faucet requests

@@ -4,14 +4,14 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OwnedObjectRef } from '../../src/client';
-import { CachingTransactionBlockExecutor, TransactionBlock } from '../../src/transactions';
+import { CachingTransactionExecutor, Transaction } from '../../src/transactions';
 import { normalizeSuiAddress } from '../../src/utils';
 import { publishPackage, setup, TestToolbox } from './utils/setup';
 
-describe('CachingTransactionBlockExecutor', async () => {
+describe('CachingTransactionExecutor', async () => {
 	let toolbox: TestToolbox;
 	let packageId: string;
-	let executor: CachingTransactionBlockExecutor;
+	let executor: CachingTransactionExecutor;
 	let parentObjectId: OwnedObjectRef;
 	let receiveObjectId: OwnedObjectRef;
 
@@ -22,21 +22,21 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 	beforeEach(async () => {
 		toolbox = await setup();
-		executor = new CachingTransactionBlockExecutor({
+		executor = new CachingTransactionExecutor({
 			client: toolbox.client,
 			address: toolbox.address(),
 		});
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 		vi.spyOn(toolbox.client, 'getNormalizedMoveFunction');
 		vi.spyOn(toolbox.client, 'multiGetObjects');
-		txb.moveCall({
+		tx.moveCall({
 			target: `${packageId}::tto::start`,
 			typeArguments: [],
 			arguments: [],
 		});
-		txb.setSender(toolbox.address());
-		const x = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		tx.setSender(toolbox.address());
+		const x = await executor.signAndExecuteTransaction({
+			transaction: tx,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,
@@ -57,21 +57,21 @@ describe('CachingTransactionBlockExecutor', async () => {
 	});
 
 	it('caches move function definitions', async () => {
-		const txb = new TransactionBlock();
+		const tx = new Transaction();
 
-		txb.moveCall({
+		tx.moveCall({
 			target: `${packageId}::tto::receiver`,
 			typeArguments: [],
 			arguments: [
-				txb.object(parentObjectId.reference.objectId),
-				txb.object(receiveObjectId.reference.objectId),
+				tx.object(parentObjectId.reference.objectId),
+				tx.object(receiveObjectId.reference.objectId),
 			],
 		});
 
-		txb.setSender(toolbox.address());
+		tx.setSender(toolbox.address());
 
-		const result = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		const result = await executor.signAndExecuteTransaction({
+			transaction: tx,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,
@@ -133,30 +133,30 @@ describe('CachingTransactionBlockExecutor', async () => {
 			],
 		});
 
-		await executor.buildTransactionBlock({
-			transactionBlock: txb,
+		await executor.buildTransaction({
+			transaction: tx,
 		});
 		expect(toolbox.client.getNormalizedMoveFunction).toHaveBeenCalledOnce();
 	});
 
 	it('caches objects', async () => {
-		const txb = new TransactionBlock();
-		const obj = txb.moveCall({
+		const tx = new Transaction();
+		const obj = tx.moveCall({
 			target: `${packageId}::tto::return_`,
 			typeArguments: [],
 			arguments: [
-				txb.object(parentObjectId.reference.objectId),
-				txb.object(receiveObjectId.reference.objectId),
+				tx.object(parentObjectId.reference.objectId),
+				tx.object(receiveObjectId.reference.objectId),
 			],
 		});
-		txb.transferObjects([obj], toolbox.address());
-		txb.setSender(toolbox.address());
+		tx.transferObjects([obj], toolbox.address());
+		tx.setSender(toolbox.address());
 		const loadedIds: string[] = [];
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
-		const result = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb,
+		const result = await executor.signAndExecuteTransaction({
+			transaction: tx,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,
@@ -167,14 +167,14 @@ describe('CachingTransactionBlockExecutor', async () => {
 		expect(result.effects?.status.status).toBe('success');
 		expect(loadedIds).toEqual([]);
 
-		const txb2 = new TransactionBlock();
+		const txb2 = new Transaction();
 		txb2.transferObjects([txb2.object(receiveObjectId.reference.objectId)], toolbox.address());
 		txb2.setSender(toolbox.address());
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
-		const result2 = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb2,
+		const result2 = await executor.signAndExecuteTransaction({
+			transaction: txb2,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,
@@ -185,14 +185,14 @@ describe('CachingTransactionBlockExecutor', async () => {
 
 		await executor.reset();
 
-		const txb3 = new TransactionBlock();
+		const txb3 = new Transaction();
 		txb3.transferObjects([txb3.object(receiveObjectId.reference.objectId)], toolbox.address());
 		txb3.setSender(toolbox.address());
 
 		expect(toolbox.client.multiGetObjects).toHaveBeenCalledTimes(0);
 
-		const result3 = await executor.signAndExecuteTransactionBlock({
-			transactionBlock: txb3,
+		const result3 = await executor.signAndExecuteTransaction({
+			transaction: txb3,
 			signer: toolbox.keypair,
 			options: {
 				showEffects: true,

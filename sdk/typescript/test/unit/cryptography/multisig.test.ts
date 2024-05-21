@@ -12,11 +12,8 @@ import { Ed25519Keypair, Ed25519PublicKey } from '../../../src/keypairs/ed25519'
 import { Secp256k1Keypair } from '../../../src/keypairs/secp256k1';
 import { Secp256r1Keypair } from '../../../src/keypairs/secp256r1';
 import { MultiSigPublicKey, MultiSigSigner, parsePartialSignatures } from '../../../src/multisig';
-import { TransactionBlock } from '../../../src/transactions';
-import {
-	verifyPersonalMessageSignature,
-	verifyTransactionBlockSignature,
-} from '../../../src/verify';
+import { Transaction } from '../../../src/transactions';
+import { verifyPersonalMessageSignature, verifyTransactionSignature } from '../../../src/verify';
 import { toZkLoginPublicIdentifier } from '../../../src/zklogin/publickey';
 
 describe('Multisig scenarios', () => {
@@ -45,20 +42,20 @@ describe('Multisig scenarios', () => {
 			},
 		];
 
-		const txb = new TransactionBlock();
-		txb.setSender(k3.getPublicKey().toSuiAddress());
-		txb.setGasPrice(5);
-		txb.setGasBudget(100);
-		txb.setGasPayment([
+		const tx = new Transaction();
+		tx.setSender(k3.getPublicKey().toSuiAddress());
+		tx.setGasPrice(5);
+		tx.setGasBudget(100);
+		tx.setGasPayment([
 			{
 				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 				version: String((Math.random() * 10000).toFixed(0)),
 				digest: toB58(new Uint8Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9])),
 			},
 		]);
-		const bytes = await txb.build();
+		const bytes = await tx.build();
 
-		const { signature } = await k3.signTransactionBlock(bytes);
+		const { signature } = await k3.signTransaction(bytes);
 
 		const publicKey = MultiSigPublicKey.fromPublicKeys({
 			threshold: 3,
@@ -67,7 +64,7 @@ describe('Multisig scenarios', () => {
 
 		const multisig = publicKey.combinePartialSignatures([signature]);
 
-		expect(await k3.getPublicKey().verifyTransactionBlock(bytes, signature)).toEqual(true);
+		expect(await k3.getPublicKey().verifyTransaction(bytes, signature)).toEqual(true);
 
 		const parsed = parseSerializedSignature(multisig);
 		if (parsed.signatureScheme !== 'MultiSig') {
@@ -76,7 +73,7 @@ describe('Multisig scenarios', () => {
 		const publicKey2 = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// multisig (sig3 weight 3 >= threshold ) verifies ok
-		expect(await publicKey2.verifyTransactionBlock(bytes, multisig)).toEqual(true);
+		expect(await publicKey2.verifyTransaction(bytes, multisig)).toEqual(true);
 	});
 
 	it('providing false number of signatures to combining via different methods', async () => {
@@ -322,8 +319,8 @@ describe('Multisig scenarios', () => {
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Invalid intentScope.
-		expect(await publicKey.verifyTransactionBlock(signData, multisig)).toEqual(false);
-		expect(await multiSigPublicKey.verifyTransactionBlock(signData, multisig)).toEqual(false);
+		expect(await publicKey.verifyTransaction(signData, multisig)).toEqual(false);
+		expect(await multiSigPublicKey.verifyTransaction(signData, multisig)).toEqual(false);
 	});
 
 	it('providing empty values', async () => {
@@ -361,8 +358,8 @@ describe('Multisig scenarios', () => {
 		const publicKey = new MultiSigPublicKey(parsed.multisig!.multisig_pk);
 
 		// Rejects verification.
-		expect(await publicKey.verifyTransactionBlock(signData, multisig)).toEqual(false);
-		expect(await multiSigPublicKey.verifyTransactionBlock(signData, multisig)).toEqual(false);
+		expect(await publicKey.verifyTransaction(signData, multisig)).toEqual(false);
+		expect(await multiSigPublicKey.verifyTransaction(signData, multisig)).toEqual(false);
 	});
 });
 
@@ -438,7 +435,7 @@ describe('Multisig address creation:', () => {
 				'AAABACACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgEBAQABAAC5wHgKOUPN4TokCb8abwauYLDf8rLzcyYM9ieqT0OliAGbB4FfBEl+LgXSLKw6oGFBCyCGjMYZFUxCocYb6ZAnFwEAAAAAAAAAIJZw7UpW1XHubORIOaY8d2+WyBNwoJ+FEAxlsa7h7JHrucB4CjlDzeE6JAm/Gm8GrmCw3/Ky83MmDPYnqk9DpYgBAAAAAAAAABAnAAAAAAAAAA==',
 			),
 		);
-		const sig1 = await k6.signTransactionBlock(data);
+		const sig1 = await k6.signTransaction(data);
 		const zklogin_sig =
 			'BQNNMTczMTgwODkxMjU5NTI0MjE3MzYzNDIyNjM3MTc5MzI3MTk0Mzc3MTc4NDQyODI0MTAxODc5NTc5ODQ3NTE5Mzk5NDI4OTgyNTEyNTBNMTEzNzM5NjY2NDU0NjkxMjI1ODIwNzQwODIyOTU5ODUzODgyNTg4NDA2ODE2MTgyNjg1OTM5NzY2OTczMjU4OTIyODA5MTU2ODEyMDcBMQMCTDU5Mzk4NzExNDczNDg4MzQ5OTczNjE3MjAxMjIyMzg5ODAxNzcxNTIzMDMyNzQzMTEwNDcyNDk5MDU5NDIzODQ5MTU3Njg2OTA4OTVMNDUzMzU2ODI3MTEzNDc4NTI3ODczMTIzNDU3MDM2MTQ4MjY1MTk5Njc0MDc5MTg4ODI4NTg2NDk2Njg4NDAzMjcxNzA0OTgxMTcwOAJNMTA1NjQzODcyODUwNzE1NTU0Njk3NTM5OTA2NjE0MTA4NDAxMTg2MzU5MjU0NjY1OTcwMzcwMTgwNTg3NzAwNDEzNDc1MTg0NjEzNjhNMTI1OTczMjM1NDcyNzc1NzkxNDQ2OTg0OTYzNzIyNDI2MTUzNjgwODU4MDEzMTMzNDMxNTU3MzU1MTEzMzAwMDM4ODQ3Njc5NTc4NTQCATEBMANNMTU3OTE1ODk0NzI1NTY4MjYyNjMyMzE2NDQ3Mjg4NzMzMzc2MjkwMTUyNjk5ODQ2OTk0MDQwNzM2MjM2MDMzNTI1Mzc2Nzg4MTMxNzFMNDU0Nzg2NjQ5OTI0ODg4MTQ0OTY3NjE2MTE1ODAyNDc0ODA2MDQ4NTM3MzI1MDAyOTQyMzkwNDExMzAxNzQyMjUzOTAzNzE2MjUyNwExMXdpYVhOeklqb2lhSFIwY0hNNkx5OXBaQzUwZDJsMFkyZ3VkSFl2YjJGMWRHZ3lJaXcCMmV5SmhiR2NpT2lKU1V6STFOaUlzSW5SNWNDSTZJa3BYVkNJc0ltdHBaQ0k2SWpFaWZRTTIwNzk0Nzg4NTU5NjIwNjY5NTk2MjA2NDU3MDIyOTY2MTc2OTg2Njg4NzI3ODc2MTI4MjIzNjI4MTEzOTE2MzgwOTI3NTAyNzM3OTExCgAAAAAAAABhABHpkQ5JvxqbqCKtqh9M0U5c3o3l62B6ALVOxMq6nsc0y3JlY8Gf1ZoPA976dom6y3JGBUTsry6axfqHcVrtRAy5xu4WMO8+cRFEpkjbBruyKE9ydM++5T/87lA8waSSAA==';
 		const parsed_zklogin_sig = parseSerializedSignature(zklogin_sig);
@@ -596,7 +593,7 @@ describe('Multisig address creation:', () => {
 });
 
 describe('MultisigKeypair', () => {
-	test('signTransactionBlock', async () => {
+	test('signTransaction', async () => {
 		const k1 = new Ed25519Keypair();
 		const pk1 = k1.getPublicKey();
 
@@ -621,11 +618,11 @@ describe('MultisigKeypair', () => {
 			},
 		];
 
-		const txb = new TransactionBlock();
-		txb.setSender(k3.getPublicKey().toSuiAddress());
-		txb.setGasPrice(5);
-		txb.setGasBudget(100);
-		txb.setGasPayment([
+		const tx = new Transaction();
+		tx.setSender(k3.getPublicKey().toSuiAddress());
+		tx.setGasPrice(5);
+		tx.setGasBudget(100);
+		tx.setGasPayment([
 			{
 				objectId: (Math.random() * 100000).toFixed(0).padEnd(64, '0'),
 				version: String((Math.random() * 10000).toFixed(0)),
@@ -633,7 +630,7 @@ describe('MultisigKeypair', () => {
 			},
 		]);
 
-		const bytes = await txb.build();
+		const bytes = await tx.build();
 
 		const publicKey = MultiSigPublicKey.fromPublicKeys({
 			threshold: 3,
@@ -643,20 +640,20 @@ describe('MultisigKeypair', () => {
 		const signer = publicKey.getSigner(k3);
 		const signer2 = new MultiSigSigner(publicKey, [k1, k2]);
 
-		const multisig = await signer.signTransactionBlock(bytes);
-		const multisig2 = await signer2.signTransactionBlock(bytes);
+		const multisig = await signer.signTransaction(bytes);
+		const multisig2 = await signer2.signTransaction(bytes);
 
 		const parsed = parseSerializedSignature(multisig.signature);
 		if (parsed.signatureScheme !== 'MultiSig') {
 			throw new Error('Expected signature scheme to be MultiSig');
 		}
 
-		const signerPubKey = await verifyTransactionBlockSignature(bytes, multisig.signature);
+		const signerPubKey = await verifyTransactionSignature(bytes, multisig.signature);
 		expect(signerPubKey.toSuiAddress()).toEqual(publicKey.toSuiAddress());
-		expect(await publicKey.verifyTransactionBlock(bytes, multisig.signature)).toEqual(true);
-		const signerPubKey2 = await verifyTransactionBlockSignature(bytes, multisig2.signature);
+		expect(await publicKey.verifyTransaction(bytes, multisig.signature)).toEqual(true);
+		const signerPubKey2 = await verifyTransactionSignature(bytes, multisig2.signature);
 		expect(signerPubKey2.toSuiAddress()).toEqual(publicKey.toSuiAddress());
-		expect(await publicKey.verifyTransactionBlock(bytes, multisig2.signature)).toEqual(true);
+		expect(await publicKey.verifyTransaction(bytes, multisig2.signature)).toEqual(true);
 	});
 
 	test('signPersonalMessage', async () => {

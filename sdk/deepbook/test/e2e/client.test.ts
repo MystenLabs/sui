@@ -8,7 +8,7 @@ import { Level2BookStatusPoint, PoolSummary } from '../../src/types';
 import {
 	DEFAULT_LOT_SIZE,
 	DEFAULT_TICK_SIZE,
-	executeTransactionBlock,
+	executeTransaction,
 	setupDeepbookAccount,
 	setupPool,
 	setupSuiClient,
@@ -46,8 +46,8 @@ describe('Interacting with the pool', () => {
 
 	it('test depositing quote asset with account 1', async () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
-		const txb = await deepbook.deposit(pool.poolId, undefined, DEPOSIT_AMOUNT);
-		await executeTransactionBlock(toolbox, txb);
+		const tx = await deepbook.deposit(pool.poolId, undefined, DEPOSIT_AMOUNT);
+		await executeTransaction(toolbox, tx);
 		const resp = await deepbook.getUserPosition(pool.poolId);
 		expect(resp.availableQuoteAmount).toBe(BigInt(DEPOSIT_AMOUNT));
 	});
@@ -60,15 +60,15 @@ describe('Interacting with the pool', () => {
 		const baseCoin = resp.data[0].coinObjectId;
 
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId2);
-		const txb = await deepbook.deposit(pool.poolId, baseCoin, 5n * DEPOSIT_AMOUNT);
-		await executeTransactionBlock(toolbox, txb);
+		const tx = await deepbook.deposit(pool.poolId, baseCoin, 5n * DEPOSIT_AMOUNT);
+		await executeTransaction(toolbox, tx);
 	});
 
 	it('test withdrawing quote asset with account 1', async () => {
 		expect(accountCapId).toBeDefined();
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId, toolbox.address());
-		const txb = await deepbook.withdraw(pool.poolId, DEPOSIT_AMOUNT, 'quote');
-		await executeTransactionBlock(toolbox, txb);
+		const tx = await deepbook.withdraw(pool.poolId, DEPOSIT_AMOUNT, 'quote');
+		await executeTransaction(toolbox, tx);
 		const resp = await deepbook.getUserPosition(pool.poolId);
 		expect(resp.availableQuoteAmount).toBe(0n);
 	});
@@ -76,19 +76,19 @@ describe('Interacting with the pool', () => {
 	it('test placing limit order with account 1', async () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
 		const depositAmount = DEPOSIT_AMOUNT;
-		const depositTxb = await deepbook.deposit(pool.poolId, undefined, DEPOSIT_AMOUNT);
-		await executeTransactionBlock(toolbox, depositTxb);
+		const deposittx = await deepbook.deposit(pool.poolId, undefined, DEPOSIT_AMOUNT);
+		await executeTransaction(toolbox, deposittx);
 		const position = await deepbook.getUserPosition(pool.poolId);
 		expect(position.availableQuoteAmount).toBe(BigInt(depositAmount));
 
 		const totalLocked = LIMIT_ORDER_PRICE * LIMIT_ORDER_QUANTITY;
-		const txb = await deepbook.placeLimitOrder(
+		const tx = await deepbook.placeLimitOrder(
 			pool.poolId,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			LIMIT_ORDER_QUANTITY,
 			'bid',
 		);
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 
 		const position2 = await deepbook.getUserPosition(pool.poolId);
 		expect(position2.availableQuoteAmount).toBe(depositAmount - totalLocked);
@@ -143,14 +143,14 @@ describe('Interacting with the pool', () => {
 			).totalBalance,
 		);
 
-		const txb = await deepbook.placeMarketOrder(
+		const tx = await deepbook.placeMarketOrder(
 			accountCapId2,
 			pool.poolId,
 			LIMIT_ORDER_QUANTITY,
 			'ask',
 			baseCoin,
 		);
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 
 		// the limit order should be cleared out after matching with the market order
 		const openOrders = await deepbook.listOpenOrders(pool.poolId);
@@ -169,20 +169,20 @@ describe('Interacting with the pool', () => {
 
 	it('test cancelling limit order with account 1', async () => {
 		const deepbook = new DeepBookClient(toolbox.client, accountCapId);
-		const txb = await deepbook.placeLimitOrder(
+		const tx = await deepbook.placeLimitOrder(
 			pool.poolId,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			LIMIT_ORDER_QUANTITY,
 			'bid',
 		);
-		await executeTransactionBlock(toolbox, txb);
+		await executeTransaction(toolbox, tx);
 
 		const openOrdersBefore = await deepbook.listOpenOrders(pool.poolId);
 		expect(openOrdersBefore.length).toBe(1);
 		const { orderId } = openOrdersBefore[0];
 
-		const txbForCancel = await deepbook.cancelOrder(pool.poolId, orderId);
-		await executeTransactionBlock(toolbox, txbForCancel);
+		const txForCancel = await deepbook.cancelOrder(pool.poolId, orderId);
+		await executeTransaction(toolbox, txForCancel);
 
 		const openOrdersAfter = await deepbook.listOpenOrders(pool.poolId);
 		expect(openOrdersAfter.length).toBe(0);
@@ -213,27 +213,27 @@ describe('Interacting with the pool', () => {
 	it('Test getting level 2 book status, both sides', async () => {
 		const deepbook1 = new DeepBookClient(toolbox.client, accountCapId);
 		const deepbook2 = new DeepBookClient(toolbox.client, accountCapId2);
-		const txb1 = await deepbook1.placeLimitOrder(
+		const tx1 = await deepbook1.placeLimitOrder(
 			pool.poolId,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			LIMIT_ORDER_QUANTITY,
 			'bid',
 		);
-		await executeTransactionBlock(toolbox, txb1);
-		const txb2 = await deepbook2.placeLimitOrder(
+		await executeTransaction(toolbox, tx1);
+		const tx2 = await deepbook2.placeLimitOrder(
 			pool.poolId,
 			2n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			LIMIT_ORDER_QUANTITY,
 			'ask',
 		);
-		await executeTransactionBlock(toolbox, txb2);
-		const txb3 = await deepbook2.placeLimitOrder(
+		await executeTransaction(toolbox, tx2);
+		const tx3 = await deepbook2.placeLimitOrder(
 			pool.poolId,
 			3n * LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,
 			LIMIT_ORDER_QUANTITY,
 			'ask',
 		);
-		await executeTransactionBlock(toolbox, txb3);
+		await executeTransaction(toolbox, tx3);
 		const status = (await deepbook2.getLevel2BookStatus(
 			pool.poolId,
 			LIMIT_ORDER_PRICE * DEFAULT_TICK_SIZE,

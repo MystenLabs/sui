@@ -4,11 +4,11 @@
 import {
 	ConnectButton,
 	useCurrentAccount,
-	useSignTransactionBlock,
+	useSignTransaction,
 	useSuiClient,
 } from '@mysten/dapp-kit';
 import { SuiTransactionBlockResponse } from '@mysten/sui/client';
-import { TransactionBlock } from '@mysten/sui/transactions';
+import { Transaction } from '@mysten/sui/transactions';
 import { ComponentProps, ReactNode, useMemo, useState } from 'react';
 
 import { sponsorTransaction } from './utils/sponsorTransaction';
@@ -41,19 +41,19 @@ const CodePanel = ({
 export function App() {
 	const client = useSuiClient();
 	const currentAccount = useCurrentAccount();
-	const { mutateAsync: signTransactionBlock } = useSignTransactionBlock();
+	const { mutateAsync: signTransaction } = useSignTransaction();
 	const [loading, setLoading] = useState(false);
 	const [sponsoredTx, setSponsoredTx] = useState<Awaited<
 		ReturnType<typeof sponsorTransaction>
 	> | null>(null);
-	const [signedTx, setSignedTx] = useState<Awaited<ReturnType<typeof signTransactionBlock>> | null>(
+	const [signedTx, setSignedTx] = useState<Awaited<ReturnType<typeof signTransaction>> | null>(
 		null,
 	);
 	const [executedTx, setExecutedTx] = useState<SuiTransactionBlockResponse | null>(null);
 
 	const tx = useMemo(() => {
 		if (!currentAccount) return null;
-		const tx = new TransactionBlock();
+		const tx = new Transaction();
 		const [coin] = tx.splitCoins(tx.gas, [1]);
 		tx.transferObjects([coin], currentAccount.address);
 		return tx;
@@ -64,7 +64,7 @@ export function App() {
 			<div className="grid grid-cols-4 gap-8">
 				<CodePanel
 					title="Transaction details"
-					json={tx?.blockData}
+					json={tx?.getData()}
 					action={<ConnectButton className="!bg-indigo-600 !text-white" />}
 				/>
 
@@ -102,8 +102,8 @@ export function App() {
 							onClick={async () => {
 								setLoading(true);
 								try {
-									const signed = await signTransactionBlock({
-										transactionBlock: TransactionBlock.from(sponsoredTx!.bytes),
+									const signed = await signTransaction({
+										transaction: Transaction.from(sponsoredTx!.bytes),
 									});
 									setSignedTx(signed);
 								} finally {
