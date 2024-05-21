@@ -3,7 +3,6 @@
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::e2e_tests::test_utils::publish_coins_return_add_coins_on_sui_action;
 use crate::e2e_tests::test_utils::{get_signatures, BridgeTestClusterBuilder};
 use crate::events::{
     SuiBridgeEvent, SuiToEthTokenBridgeV1, TokenTransferApproved, TokenTransferClaimed,
@@ -11,6 +10,7 @@ use crate::events::{
 use crate::sui_client::SuiBridgeClient;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
+use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use crate::utils::EthSigner;
 use eth_sui_bridge::EthSuiBridgeEvents;
 use ethers::prelude::*;
@@ -184,17 +184,11 @@ async fn test_add_new_coins_on_sui() {
     let token_id = 42;
     let token_price = 10000;
     let sender = bridge_test_cluster.sui_user_address();
-    let tx = bridge_test_cluster
-        .test_transaction_builder_with_sender(sender)
-        .await
-        .publish(Path::new("../../bridge/move/tokens/mock/ka").into())
-        .build();
-    let publish_token_response = bridge_test_cluster.sign_and_execute_transaction(&tx).await;
     info!("Published new token");
-    let action = publish_coins_return_add_coins_on_sui_action(
-        bridge_test_cluster.wallet_mut(),
+    let action = publish_and_register_coins_return_add_coins_on_sui_action(
+        bridge_test_cluster.wallet(),
         bridge_arg,
-        vec![publish_token_response],
+        vec![Path::new("../../bridge/move/tokens/mock/ka").into()],
         vec![token_id],
         vec![token_price],
         1, // seq num

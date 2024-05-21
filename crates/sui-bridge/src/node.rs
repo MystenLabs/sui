@@ -191,9 +191,9 @@ mod tests {
     use crate::config::BridgeNodeConfig;
     use crate::config::EthConfig;
     use crate::config::SuiConfig;
-    use crate::e2e_tests::test_utils::wait_for_server_to_be_up;
     use crate::e2e_tests::test_utils::BridgeTestCluster;
     use crate::e2e_tests::test_utils::BridgeTestClusterBuilder;
+    use crate::utils::wait_for_server_to_be_up;
     use fastcrypto::secp256k1::Secp256k1KeyPair;
     use sui_config::local_ip_utils::get_available_port;
     use sui_types::base_types::SuiAddress;

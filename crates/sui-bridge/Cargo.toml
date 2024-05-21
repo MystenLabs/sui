@@ -48,6 +48,7 @@ shared-crypto.workspace = true
 backoff.workspace = true
 enum_dispatch.workspace = true
 sui-json-rpc-api.workspace = true
+sui-test-transaction-builder.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }
