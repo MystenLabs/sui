@@ -13,8 +13,8 @@ pub async fn node_info(
     accept: AcceptFormat,
     State(state): State<RestService>,
 ) -> Result<ResponseContent<NodeInfo>> {
-    let latest_checkpoint = state.store.get_latest_checkpoint()?;
-    let oldest_checkpoint = state.store.get_lowest_available_checkpoint()?;
+    let latest_checkpoint = state.reader.inner().get_latest_checkpoint()?;
+    let oldest_checkpoint = state.reader.inner().get_lowest_available_checkpoint()?;
 
     let response = NodeInfo {
         checkpoint_height: latest_checkpoint.sequence_number,

@@ -27,7 +27,7 @@ use sui_types::base_types::{AuthorityName, ObjectID, VersionNumber};
 use sui_types::crypto::AuthoritySignature;
 use sui_types::digests::ConsensusCommitDigest;
 use sui_types::object::Object;
-use sui_types::storage::{ObjectStore, ReadStore};
+use sui_types::storage::{ObjectStore, ReadStore, RestStateReader};
 use sui_types::sui_system_state::epoch_start_sui_system_state::EpochStartSystemState;
 use sui_types::transaction::EndOfEpochTransactionKind;
 use sui_types::{
@@ -546,6 +546,29 @@ impl<T, V: store::SimulatorStore> ReadStore for Simulacrum<T, V> {
         Option<sui_types::messages_checkpoint::FullCheckpointContents>,
     > {
         todo!()
+    }
+}
+
+impl<T: Send + Sync, V: store::SimulatorStore + Send + Sync> RestStateReader for Simulacrum<T, V> {
+    fn get_transaction_checkpoint(
+        &self,
+        _digest: &sui_types::digests::TransactionDigest,
+    ) -> sui_types::storage::error::Result<
+        Option<sui_types::messages_checkpoint::CheckpointSequenceNumber>,
+    > {
+        todo!()
+    }
+
+    fn get_chain_identifier(
+        &self,
+    ) -> sui_types::storage::error::Result<sui_types::digests::ChainIdentifier> {
+        Ok(self
+            .store()
+            .get_checkpoint_by_sequence_number(0)
+            .unwrap()
+            .digest()
+            .to_owned()
+            .into())
     }
 }
 

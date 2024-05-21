@@ -20,7 +20,7 @@ use sui_indexer::test_utils::start_test_indexer;
 use sui_indexer::test_utils::start_test_indexer_impl;
 use sui_indexer::test_utils::ReaderWriterConfig;
 use sui_swarm_config::genesis_config::{AccountConfig, DEFAULT_GAS_AMOUNT};
-use sui_types::storage::ReadStore;
+use sui_types::storage::RestStateReader;
 use test_cluster::TestCluster;
 use test_cluster::TestClusterBuilder;
 use tokio::join;
@@ -107,7 +107,7 @@ pub async fn start_cluster(
 pub async fn serve_executor(
     graphql_connection_config: ConnectionConfig,
     internal_data_source_rpc_port: u16,
-    executor: Arc<dyn ReadStore + Send + Sync>,
+    executor: Arc<dyn RestStateReader + Send + Sync>,
     snapshot_config: Option<SnapshotLagConfig>,
     data_ingestion_path: PathBuf,
 ) -> ExecutorCluster {
@@ -121,14 +121,7 @@ pub async fn serve_executor(
         .unwrap();
 
     let executor_server_handle = tokio::spawn(async move {
-        let chain_id = (*executor
-            .get_checkpoint_by_sequence_number(0)
-            .unwrap()
-            .unwrap()
-            .digest())
-        .into();
-
-        sui_rest_api::RestService::new_without_version(executor, chain_id)
+        sui_rest_api::RestService::new_without_version(executor)
             .start_service(executor_server_url, Some("/rest".to_owned()))
             .await;
     });

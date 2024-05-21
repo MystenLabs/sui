@@ -128,8 +128,12 @@ pub async fn append_info_headers(
     State(state): State<RestService>,
     response: Response,
 ) -> impl IntoResponse {
-    let latest_checkpoint = state.store.get_latest_checkpoint().unwrap();
-    let oldest_checkpoint = state.store.get_lowest_available_checkpoint().unwrap();
+    let latest_checkpoint = state.reader.inner().get_latest_checkpoint().unwrap();
+    let oldest_checkpoint = state
+        .reader
+        .inner()
+        .get_lowest_available_checkpoint()
+        .unwrap();
 
     let mut headers = HeaderMap::new();
 

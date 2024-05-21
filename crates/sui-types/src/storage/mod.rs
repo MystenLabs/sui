@@ -23,6 +23,7 @@ use move_binary_format::CompiledModule;
 use move_core_types::language_storage::ModuleId;
 pub use object_store_trait::ObjectStore;
 pub use read_store::ReadStore;
+pub use read_store::RestStateReader;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 pub use shared_in_memory_store::SharedInMemoryStore;
