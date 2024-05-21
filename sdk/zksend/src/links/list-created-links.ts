@@ -27,35 +27,7 @@ const ListCreatedLinksQuery = graphql(`
 					timestamp
 				}
 				digest
-				kind {
-					__typename
-					... on ProgrammableTransactionBlock {
-						inputs(first: 10) {
-							nodes {
-								__typename
-								... on Pure {
-									bytes
-								}
-							}
-						}
-						transactions(first: 10) {
-							nodes {
-								__typename
-								... on MoveCallTransaction {
-									module
-									functionName
-									package
-									arguments {
-										__typename
-										... on Input {
-											ix
-										}
-									}
-								}
-							}
-						}
-					}
-				}
+				bcs
 			}
 		}
 	}
@@ -109,35 +81,41 @@ export async function listCreatedLinks({
 	const links = (
 		await Promise.all(
 			transactionBlocks.nodes.map(async (node) => {
-				if (node.kind?.__typename !== 'ProgrammableTransactionBlock') {
-					throw new Error('Invalid transaction block');
+				if (!node.bcs) {
+					return null;
 				}
 
-				const fn = node.kind.transactions.nodes.find(
-					(fn) =>
-						fn.__typename === 'MoveCallTransaction' &&
-						fn.package === packageId &&
-						fn.module === 'zk_bag' &&
-						fn.functionName === 'new',
+				const kind = bcs.SenderSignedData.parse(fromB64(node.bcs))?.[0]?.intentMessage.value.V1
+					.kind;
+
+				if (!kind || !('ProgrammableTransaction' in kind)) {
+					return null;
+				}
+
+				const { inputs, transactions: commands } = kind.ProgrammableTransaction;
+
+				const fn = commands.find(
+					(command) =>
+						command.kind === 'MoveCall' && command.target !== `${packageId}::zk_bag::new`,
 				);
 
-				if (fn?.__typename !== 'MoveCallTransaction') {
+				if (fn?.kind !== 'MoveCall') {
 					return null;
 				}
 
 				const addressArg = fn.arguments[1];
 
-				if (addressArg.__typename !== 'Input') {
+				if (addressArg.kind !== 'Input') {
 					throw new Error('Invalid address argument');
 				}
 
-				const input = node.kind.inputs.nodes[addressArg.ix];
+				const input = inputs[addressArg.index];
 
-				if (input.__typename !== 'Pure') {
+				if (!('Pure' in input)) {
 					throw new Error('Expected Address input to be a Pure value');
 				}
 
-				const address = bcs.Address.parse(fromB64(input.bytes as string));
+				const address = bcs.Address.parse(Uint8Array.from(input.Pure));
 
 				const link = new ZkSendLink({
 					network,
