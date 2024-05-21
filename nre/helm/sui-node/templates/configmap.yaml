@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.genesisBlobConfigMapName }}
+data: 
+  genesis.blob: | 
+{{- (.Files.Get .Values.genesisBlobPath) | nindent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.suiNodeYamlConfigMapName }}
+data: 
+  sui-node.yaml: | 
+{{- (.Files.Get .Values.suiNodeYamlPath ) | nindent 4 }}
+

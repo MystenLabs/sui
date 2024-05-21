@@ -1,0 +1,175 @@
+# Default values for indexer-writer.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+command: ["/usr/local/bin/sui-node"]
+args: []
+
+# there is only a single indexer-writer deployment expected for normal operation
+replicaCount: 1
+
+image:
+  repository: "mysten/sui-node"
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "sui-v1.25.0-release"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+env:
+  RUST_BACKTRACE:
+    value: "1"
+  RUST_LOG:
+    value: "info,sui_core=debug,sui_network=debug,narwhal=info,narwhal-primary::helper=info,jsonrpsee=error"
+ 
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: false
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: "default"
+
+pvc:
+  enabled: true
+  name: sui-node-pvc
+  storageClassName: pd-ssd
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 500Gi # this should be 4Tb
+
+podAnnotations:
+  prometheus.io/path: "/metrics"
+  prometheus.io/port: "9184"
+  prometheus.io/scrape: "true"
+
+podSecurityContext: {}
+  # fsGroup: 2000
+
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # runAsUser: 1000
+
+service:
+  type: ClusterIP
+  port: 9000
+  name: sui-node
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+
+#livenessProbe:
+#  httpGet:
+#    path: /
+#    port: http
+readinessProbe:
+  exec:
+    command: ["/bin/bash", "-c", "if [ $(( $(date +%s%3N) - $(curl -s localhost:9184/metrics | grep -v '#' | grep 'last_executed_checkpoint_timestamp_ms' | cut -d ' ' -f 2) )) -gt 300000 ]; then exit 1; else exit 0; fi"] 
+  initialDelaySeconds: 15
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+genesisBlobConfigMapName: genesis-blob-mainnet
+genesisBlobPath: "files/encoded-genesis.blob.mainnet"
+
+suiNodeYamlConfigMapName: sui-node-config-mainnet
+suiNodeYamlPath: "files/sui-node.mainnet.yaml"
+
+snapshotConfig:
+  snapshotEnabled: true
+  snapshotType: "formal"  # or "db"
+  snapshotEpoch: "400"
+  snapshotNetwork: "mainnet"
+  #imageOverride:
+  resources:
+    limits:
+      cpu: 100m
+      memory: 128Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+podLabels:
+  app: "sui-node"
+
+strategy:
+  enabled: true
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: "25%"
+
+volumes:
+ - name: sui-node-config-volume
+   configMap:
+    name: sui-node-config-mainnet
+    items:
+      - key: sui-node.yaml
+        path: sui-node.yaml
+ - name: sui-genesis-blob-volume
+   configMap:
+    name: genesis-blob-mainnet
+    items:
+      - key: genesis.blob
+        path: genesis.blob 
+
+
+volumeMounts:
+ - name: sui-node-config-volume
+   mountPath: "/opt/sui/config/sui-node.yaml"
+   subPath: "sui-node.yaml"
+   readOnly: true
+ - name: sui-genesis-blob-volume
+   mountPath: "/opt/sui/config/genesis.blob"
+   subPath: "gensis.blob"
+   readOnly: true
+ - name: ssd-storage
+   mountPath: "/opt/sui/db"
+ 
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  hosts:
+    - host: sui-indexer.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -65,8 +65,10 @@ revisionHistoryLimit: 5
 
 # rollout strategy
 strategy:
+  enabled: true
+  type: RollingUpdate
   rollingUpdate:
-    maxSurge: 25%
+    maxSurge: "25%"
 
 serviceAccount:
   # Specifies whether a service account should be created

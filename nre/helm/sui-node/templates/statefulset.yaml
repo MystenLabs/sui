@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "sui-node.fullname" . }}
+  labels:
+    {{- include "sui-node.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sui-node.labels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "sui-node.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sui-node.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        {{- if .Values.snapshotConfig.snapshotEnabled }}
+        - name: snapshot-download
+          image: {{ .Values.snapshotConfig.imageOverride | default "mysten/sui-tools:ci" }}
+          imagePullPolicy: Always
+          command:
+            - bash
+            - -c
+            - >
+              [ -e '/opt/sui/db/authorities_db/full_node_db/live/' ] && echo 'File exists, snapshot not required' || \
+              {{- if eq .Values.snapshotConfig.snapshotType "formal" }}
+              sui-tool download-formal-snapshot --epoch {{ .Values.snapshotConfig.snapshotEpoch }} --genesis /opt/sui/config/genesis.blob --network {{ .Values.snapshotConfig.snapshotNetwork }} --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --no-sign-request
+              {{- else if eq .Values.snapshotConfig.snapshotType "db" }}
+              (sui-tool download-db-snapshot --epoch {{ .Values.snapshotConfig.snapshotEpoch }} --network {{ .Values.snapshotConfig.snapshotNetwork }} --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --no-sign-request && mv /opt/sui/db/authorities_db/full_node_db/epoch_{{ .Values.snapshotConfig.snapshotEpoch }}/* /opt/sui/db/authorities_db/full_node_db/live/)
+              {{- else }}
+              echo "unknown snapshot type"
+              {{- end }}
+          env:
+            - name: RUST_BACKTRACE
+              value: "1"
+          resources:
+            requests:
+              memory: {{ .Values.snapshotConfig.resources.requests.memory }}
+              cpu: {{ .Values.snapshotConfig.resources.requests.cpu }}
+            limits:
+              memory: {{ .Values.snapshotConfig.resources.limits.memory }}
+              cpu: {{ .Values.snapshotConfig.resources.limits.cpu }}
+          volumeMounts:
+            - name: sui-genesis-volume
+              mountPath: /opt/sui/config/genesis.blob
+              subPath: genesis.blob
+        {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          command: {{ .Values.command | toJson }}
+          args: {{ .Values.args | toJson }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if $.Values.env }}
+          env:
+            {{- range $name, $item := .Values.env }}
+            - name: {{ $name }}
+              {{- $item | toYaml | nindent 14 }}
+            {{- end }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.port }}
+              protocol: TCP
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            exec:
+              command: {{ .Values.readinessProbe.exec.command | toJson }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.volumes }}
+      volumes:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  volumeClaimTemplates:
+    {{- if .Values.pvc.enabled }}
+    - metadata:
+        name: {{ .Values.pvc.name }}
+      spec:
+        accessModes:
+          {{- range .Values.pvc.accessModes }}
+          - {{ . | quote }}
+          {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.pvc.resources.requests.storage }}
+        storageClassName: {{ .Values.pvc.storageClassName }}
+    {{- end }}
+    

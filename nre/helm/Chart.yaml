@@ -1,7 +1,0 @@
-apiVersion: v2
-name: sui-multicluster-ingress
-description: A Helm chart for sui RPC 2.0 Kubernetes Deployments
-# This is the chart version. This version number should be incremented each time you make changes
-# to the chart and its templates, including the app version.
-# Versions are expected to follow Semantic Versioning (https://semver.org/)
-version: 0.1.0

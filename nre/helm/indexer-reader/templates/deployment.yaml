@@ -14,17 +14,17 @@ spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
-  {{- if .Values.strategy }}
+  {{- if .Values.strategy.enabled }}
   strategy:
     type: {{ .Values.strategy.type }} 
     {{- if eq .Values.strategy.type "RollingUpdate" }}
-      rollingUpdate:
-        {{- if .Values.strategy.rollingupdate.maxSurge }}
-        maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
-        {{- end }}
-        {{- if .Values.strategy.rollingupdate.maxUnavailable }}
-        maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavaialable }}
-        {{- end }}
+    rollingUpdate:
+      {{- if .Values.strategy.rollingUpdate.maxSurge }}
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      {{- end }}
+      {{- if .Values.strategy.rollingUpdate.maxUnavailable }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavaialable }}
+      {{- end }}
     {{- end }}
   {{- end }}
   selector:

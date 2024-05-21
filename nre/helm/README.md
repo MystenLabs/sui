@@ -17,3 +17,13 @@ kubectl create secret generic db-secret \
 # Indexer-Reader
 
 # Indexer-Writer
+
+# Sui-node [fullnode]
+### Files
+You need to place the correct genesis.blob file and sui-node.yaml files into the helm/sui-node/files directory.
+
+The genesis blob should be base64 encoded to be stored in the configmap.You can do that with the below command.
+
+`base64 -w 0 path/to/your/binary/file > encoded-file.txt`
+
+

@@ -68,7 +68,8 @@ podAnnotations:
   prometheus.io/port: "9184"
   prometheus.io/scrape: "true"
 
-podLabels: {}
+podLabels:
+  app: "graphql"
 
 podSecurityContext: {}
   # fsGroup: 2000
