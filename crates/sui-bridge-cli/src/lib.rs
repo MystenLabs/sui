@@ -57,6 +57,14 @@ pub enum BridgeValidatorCommand {
         #[clap(name = "use-ecdsa", long, default_value = "false")]
         use_ecdsa: bool,
     },
+    /// Read bridge key from a file and print related information
+    /// If `is-validator-key` is true, the key must be a secp256k1 key
+    #[clap(name = "examine-key")]
+    ExamineKey {
+        path: PathBuf,
+        #[clap(name = "is-validator-key", long)]
+        is_validator_key: bool,
+    },
     #[clap(name = "create-bridge-node-config-template")]
     CreateBridgeNodeConfigTemplate {
         path: PathBuf,
