@@ -64,8 +64,20 @@ export class EnokiKeypair extends Keypair {
 		return this.#ephemeralKeypair.sign(data);
 	}
 
-	signPersonalMessage(): never {
-		throw new Error('Signing personal messages is not supported');
+	async signPersonalMessage(bytes: Uint8Array): Promise<SignatureWithBytes> {
+		const { bytes: signedBytes, signature: userSignature } =
+			await this.#ephemeralKeypair.signPersonalMessage(bytes);
+
+		const zkSignature = getZkLoginSignature({
+			inputs: this.#proof,
+			maxEpoch: this.#maxEpoch,
+			userSignature,
+		});
+
+		return {
+			bytes: signedBytes,
+			signature: zkSignature,
+		};
 	}
 
 	async signTransactionBlock(bytes: Uint8Array): Promise<SignatureWithBytes> {
@@ -97,6 +109,6 @@ export class EnokiKeypair extends Keypair {
 	}
 
 	getSecretKey(): never {
-		throw new Error('EnokiKeypair does not support get secret key');
+		throw new Error('EnokiKeypair does not support getting the secret key');
 	}
 }
