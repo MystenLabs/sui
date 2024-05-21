@@ -23,14 +23,18 @@ module games::vdf_based_lottery {
     /// Error codes
     const EGameNotInProgress: u64 = 0;
     const EGameAlreadyCompleted: u64 = 1;
-    const EInvalidTicket: u64 = 3;
-    const ESubmissionPhaseInProgress: u64 = 4;
-    const EInvalidVdfProof: u64 = 5;
-    const ESubmissionPhaseFinished: u64 = 6;
+    const EInvalidTicket: u64 = 2;
+    const ESubmissionPhaseInProgress: u64 = 3;
+    const EInvalidVdfProof: u64 = 4;
+    const ESubmissionPhaseFinished: u64 = 5;
+    const EInvalidRandomness: u64 = 6;
 
     /// Game status
     const IN_PROGRESS: u8 = 0;
-    const COMPLETED: u8 = 2;
+    const COMPLETED: u8 = 1;
+
+    /// Other constants
+    const RANDOMNESS_LENGTH: u64 = 16;
 
     /// Game represents a set of parameters of a single game.
     /// This game can be extended to require ticket purchase, reward winners, etc.
@@ -76,32 +80,13 @@ module games::vdf_based_lottery {
         transfer::public_share_object(game);
     }
 
-    /// Complete this lottery by sending VDF output and proof for the seed created from the
-    /// contributed randomness. Anyone can call this.
-    public fun complete(self: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
-        assert!(self.status != COMPLETED, EGameAlreadyCompleted);
-        assert!(clock.timestamp_ms() - self.timestamp_start >= self.submission_phase_length, ESubmissionPhaseInProgress);
-
-        // Hash combined randomness to vdf input
-        let vdf_input = hash_to_input(&self.vdf_input_seed);
-        
-        // Verify output and proof
-        assert!(vdf_verify(&vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfProof);
-
-        // The randomness is derived from the VDF output by passing it through sha2_256 to make it uniform.
-        let randomness = sha2_256(vdf_output);
-
-        // Set winner and mark lottery completed
-        self.winner = option::some(safe_selection(self.participants, &randomness));
-        self.status = COMPLETED;
-    }
-
     /// Anyone can participate in the game and receive a ticket.
     public fun participate(self: &mut Game, my_randomness: vector<u8>, clock: &Clock, ctx: &mut TxContext): Ticket {
         assert!(self.status == IN_PROGRESS, EGameNotInProgress);
         assert!(clock.timestamp_ms() - self.timestamp_start < self.submission_phase_length, ESubmissionPhaseFinished);
 
-        // Update combined randomness
+        // Update combined randomness by concatenating the provided randomness and hashing it
+        assert!(my_randomness.length() == RANDOMNESS_LENGTH, EInvalidRandomness);
         self.vdf_input_seed.append(my_randomness);
         self.vdf_input_seed = sha2_256(self.vdf_input_seed);
 
@@ -114,6 +99,27 @@ module games::vdf_based_lottery {
             game_id: object::id(self),
             participant_index,
         }
+    }
+
+    /// Complete this lottery by sending VDF output and proof for the seed created from the
+    /// contributed randomness. Anyone can call this.
+    public fun complete(self: &mut Game, vdf_output: vector<u8>, vdf_proof: vector<u8>, clock: &Clock) {
+        assert!(self.status != COMPLETED, EGameAlreadyCompleted);
+        assert!(clock.timestamp_ms() - self.timestamp_start >= self.submission_phase_length, ESubmissionPhaseInProgress);
+
+        // Hash combined randomness to vdf input
+        let vdf_input = hash_to_input(&self.vdf_input_seed);
+        
+        // Verify output and proof
+        assert!(vdf_verify(&vdf_input, &vdf_output, &vdf_proof, self.iterations), EInvalidVdfProof);
+
+        // The randomness is derived from the VDF output by passing it through a hash function with uniformly distributed
+        // output to make it uniform. Any hash function with uniformly distributed output can be used.
+        let randomness = sha2_256(vdf_output);
+
+        // Set winner and mark lottery completed
+        self.winner = option::some(safe_selection(self.participants, &randomness));
+        self.status = COMPLETED;
     }
 
     /// The winner can redeem its ticket.

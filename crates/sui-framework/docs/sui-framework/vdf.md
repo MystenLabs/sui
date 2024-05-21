@@ -90,7 +90,9 @@ This uses Wesolowski's VDF construction over imaginary class groups as described
 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in
 fastcrypto.
 
-The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf crate.
+The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf
+crate. The final selection of the discriminant for Mainnet will be computed and announced under a nothing-up-my-sleeve
+process.
 
 
 <pre><code><b>public</b> <b>fun</b> <a href="vdf.md#0x2_vdf_vdf_verify">vdf_verify</a>(input: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, output: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, proof: &<a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u8&gt;, iterations: u64): bool

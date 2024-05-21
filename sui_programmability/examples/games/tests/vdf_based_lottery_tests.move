@@ -147,4 +147,27 @@ module games::vdf_based_lottery_tests {
         ts::return_shared(game);
         ts.end();
     }
+
+    #[test]
+    #[expected_failure(abort_code = games::vdf_based_lottery::EInvalidRandomness)]
+    fun test_empty_randomness() {
+        let user1 = @0x0;
+
+        let mut ts = ts::begin(user1);
+        let clock = clock::create_for_testing(ts.ctx());
+
+        vdf_based_lottery::create(1000, 1000, &clock, ts.ctx());
+        ts.next_tx(user1);
+        let mut game = ts.take_shared<Game>();
+
+        // User1 buys a ticket, but with wrong randomness length.
+        ts.next_tx(user1);
+        let t1 = game.participate(b"abcd", &clock, ts.ctx());
+
+        t1.delete();
+
+        sui::clock::destroy_for_testing(clock);
+        ts::return_shared(game);
+        ts.end();
+    }
 }

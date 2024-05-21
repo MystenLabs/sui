@@ -23,7 +23,9 @@ module sui::vdf {
     /// 'Efficient Verifiable Delay Functions.', J. Cryptol. 33, and is compatible with the VDF implementation in 
     /// fastcrypto.
     /// 
-    /// The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf crate.
+    /// The discriminant for the class group is pre-computed and fixed. See how this was generated in the fastcrypto-vdf
+    /// crate. The final selection of the discriminant for Mainnet will be computed and announced under a nothing-up-my-sleeve
+    /// process.
     public fun vdf_verify(input: &vector<u8>, output: &vector<u8>, proof: &vector<u8>, iterations: u64): bool {
         vdf_verify_internal(input, output, proof, iterations)
     }
