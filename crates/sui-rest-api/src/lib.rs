@@ -15,6 +15,7 @@ mod health;
 mod info;
 mod metrics;
 mod objects;
+mod reader;
 mod response;
 pub mod transactions;
 pub mod types;
@@ -23,9 +24,10 @@ pub use client::Client;
 pub use error::{RestError, Result};
 pub use metrics::RestMetrics;
 use mysten_network::callback::CallbackLayer;
+use reader::StateReader;
 use std::sync::Arc;
 pub use sui_types::full_checkpoint_content::{CheckpointData, CheckpointTransaction};
-use sui_types::storage::ReadStore;
+use sui_types::storage::{ReadStore, RestStateReader};
 use tap::Pipe;
 pub use transactions::{ExecuteTransactionQueryParameters, TransactionExecutor};
 
@@ -35,21 +37,24 @@ pub const APPLICATION_JSON: &str = "application/json";
 
 #[derive(Clone)]
 pub struct RestService {
-    store: Arc<dyn ReadStore + Send + Sync>,
+    reader: StateReader,
     executor: Option<Arc<dyn TransactionExecutor>>,
     chain_id: sui_types::digests::ChainIdentifier,
     software_version: &'static str,
     metrics: Option<Arc<RestMetrics>>,
 }
 
+impl axum::extract::FromRef<RestService> for StateReader {
+    fn from_ref(input: &RestService) -> Self {
+        input.reader.clone()
+    }
+}
+
 impl RestService {
-    pub fn new(
-        store: Arc<dyn ReadStore + Send + Sync>,
-        chain_id: sui_types::digests::ChainIdentifier,
-        software_version: &'static str,
-    ) -> Self {
+    pub fn new(reader: Arc<dyn RestStateReader>, software_version: &'static str) -> Self {
+        let chain_id = reader.get_chain_identifier().unwrap();
         Self {
-            store,
+            reader: StateReader::new(reader),
             executor: None,
             chain_id,
             software_version,
@@ -57,11 +62,8 @@ impl RestService {
         }
     }
 
-    pub fn new_without_version(
-        store: Arc<dyn ReadStore + Send + Sync>,
-        chain_id: sui_types::digests::ChainIdentifier,
-    ) -> Self {
-        Self::new(store, chain_id, "unknown")
+    pub fn new_without_version(reader: Arc<dyn RestStateReader>) -> Self {
+        Self::new(reader, "unknown")
     }
 
     pub fn with_executor(&mut self, executor: Arc<dyn TransactionExecutor + Send + Sync>) {
@@ -83,13 +85,12 @@ impl RestService {
     pub fn into_router(self) -> Router {
         let executor = self.executor.clone();
         let metrics = self.metrics.clone();
+        let store = self.reader.inner().clone();
 
-        rest_router(self.store.clone())
-            .merge(
-                Router::new()
-                    .route("/", get(info::node_info))
-                    .with_state(self.clone()),
-            )
+        Router::new()
+            .route("/", get(info::node_info))
+            .with_state(self.clone())
+            .merge(rest_router(store))
             .pipe(|router| {
                 if let Some(executor) = executor {
                     router.merge(execution_router(executor))

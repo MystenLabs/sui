@@ -143,6 +143,7 @@ impl Client {
         Ok(response)
     }
 
+    #[allow(unused)]
     async fn json<T: serde::de::DeserializeOwned>(&self, response: reqwest::Response) -> Result<T> {
         let response = self.check_response(response)?;
 
