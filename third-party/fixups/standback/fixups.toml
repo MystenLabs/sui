@@ -1,0 +1,19 @@
+omit_targets = []
+extra_srcs = []
+omit_srcs = []
+rustc_flags = []
+cfgs = []
+features = []
+omit_features = []
+extra_deps = []
+omit_deps = []
+cargo_env = false
+
+[env]
+
+[[buildscript]]
+unresolved = "Unresolved build script at vendor/standback-0.2.17/build.rs."
+
+[extra_mapped_srcs]
+
+[platform_fixup]

@@ -1,0 +1,4 @@
+# TODO add fixups for platform
+extra_deps = [":libc"]
+[[buildscript]]
+[buildscript.rustc_flags]

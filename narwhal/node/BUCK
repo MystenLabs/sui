@@ -1,0 +1,122 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/mysten-metrics:mysten-metrics",
+  "//crates/mysten-network:mysten-network",
+  "//crates/sui-keys:sui-keys",
+  "//crates/sui-protocol-config:sui-protocol-config",
+  "//crates/sui-types:sui-types",
+  "//crates/telemetry-subscribers:telemetry-subscribers",
+  "//third-party:anemo_0_0_0",
+  "//third-party:arc-swap_1_6_0",
+  "//third-party:async-trait_0_1_73",
+  "//third-party:axum_0_6_20",
+  "//third-party:bytes_1_5_0",
+  "//third-party:cfg-if_1_0_0",
+  "//third-party:clap_4_5_4",
+  "//third-party:eyre_0_6_8",
+  "//third-party:fastcrypto_0_1_8",
+  "//third-party:futures_0_3_29",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:rand_0_8_5",
+  "//third-party:reqwest_0_11_20",
+  "//third-party:thiserror_1_0_56",
+  "//third-party:tokio-stream_0_1_14",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tracing-subscriber_0_3_17",
+  "//third-party:tracing_0_1_40",
+  "//third-party:url_2_3_1"
+]
+# buckify!
+
+rust_library(
+    name = "narwhal-node",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "executor": "//narwhal/executor:narwhal-executor",
+        "network": "//narwhal/network:narwhal-network",
+        "primary": "//narwhal/primary:narwhal-primary",
+        "storage": "//narwhal/storage:narwhal-storage",
+        "types": "//narwhal/types:narwhal-types",
+        "worker": "//narwhal/worker:narwhal-worker",
+    },
+    env = {
+        "CARGO_PKG_NAME": "narwhal-node",
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+rust_binary(
+    name = "narwhal-node-bin",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "executor": "//narwhal/executor:narwhal-executor",
+        "narwhal-node": ":narwhal-node",
+        "network": "//narwhal/network:narwhal-network",
+        "primary": "//narwhal/primary:narwhal-primary",
+        "storage": "//narwhal/storage:narwhal-storage",
+        "types": "//narwhal/types:narwhal-types",
+        "worker": "//narwhal/worker:narwhal-worker",
+    },
+    env = {
+        "CARGO_BIN_NAME": "narwhal-node",
+        "CARGO_PKG_BIN": "narwhal-node",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_NAME": "narwhal-node",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+    },
+    crate_root = "src/main.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+rust_binary(
+    name = "narwhal-benchmark-client",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "executor": "//narwhal/executor:narwhal-executor",
+        "narwhal-benchmark-client": ":narwhal-benchmark-client",
+        "network": "//narwhal/network:narwhal-network",
+        "primary": "//narwhal/primary:narwhal-primary",
+        "storage": "//narwhal/storage:narwhal-storage",
+        "types": "//narwhal/types:narwhal-types",
+        "worker": "//narwhal/worker:narwhal-worker",
+    },
+    env = {
+        "CARGO_PKG_NAME": "narwhal-node",
+        "OUT_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_BIN": "narwhal-node",
+        "CARGO_BIN_NAME": "narwhal-node",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_MANIFEST_DIR": "",
+    },
+    crate_root = "src/benchmark_client.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

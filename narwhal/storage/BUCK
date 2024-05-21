@@ -1,0 +1,43 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/mysten-common:mysten-common",
+  "//crates/mysten-metrics:mysten-metrics",
+  "//crates/sui-macros:sui-macros",
+  "//third-party:fastcrypto-tbls_0_1_0",
+  "//third-party:fastcrypto_0_1_8",
+  "//third-party:futures_0_3_29",
+  "//third-party:lru_0_10_0",
+  "//third-party:parking_lot_0_12_1",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:tap_1_0_1",
+  "//third-party:tempfile_3_8_0",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "narwhal-storage",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "store": "//crates/typed-store:typed-store",
+        "types": "//narwhal/types:narwhal-types",
+    },
+    env = {
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_NAME": "narwhal-storage",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

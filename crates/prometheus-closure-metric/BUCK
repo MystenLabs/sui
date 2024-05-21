@@ -1,0 +1,28 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:anyhow_1_0_81",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:protobuf_2_28_0"
+]
+# buckify!
+
+rust_library(
+    name = "prometheus-closure-metric",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_AUTHORS": "[Andrew Schran <aschran@mystenlabs.com>]",
+        "CARGO_PKG_DESCRIPTION": "Library for a Prometheus metric that computes its value by given closure at collection time",
+        "CARGO_PKG_NAME": "prometheus-closure-metric",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

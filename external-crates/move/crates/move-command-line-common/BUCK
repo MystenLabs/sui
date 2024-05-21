@@ -1,0 +1,36 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-core-types:move-core-types",
+  "//third-party:anyhow_1_0_81",
+  "//third-party:difference_2_0_0",
+  "//third-party:dirs-next_2_0_0",
+  "//third-party:hex_0_4_3",
+  "//third-party:num-bigint_0_4_4",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:serde_1_0_190",
+  "//third-party:sha2_0_9_9",
+  "//third-party:vfs_0_10_0",
+  "//third-party:walkdir_2_3_2"
+]
+# buckify!
+
+rust_library(
+    name = "move-command-line-common",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "CARGO_PKG_NAME": "move-command-line-common",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "Move shared command line and file tools",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

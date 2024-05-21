@@ -1,0 +1,20 @@
+prelude = native
+
+prelude.python_binary(
+    name = "compile_kotlin",
+    main = "compile_kotlin.py",
+    visibility = ["PUBLIC"],
+    deps = [
+        ":compile_kotlin_lib",
+    ],
+)
+
+prelude.python_library(
+    name = "compile_kotlin_lib",
+    srcs = [
+        "compile_kotlin.py",
+    ],
+    deps = [
+        "prelude//java/tools:utils_lib",
+    ],
+)

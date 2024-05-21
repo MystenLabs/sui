@@ -1,0 +1,33 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-binary-format:move-binary-format",
+  "//external-crates/move/crates/move-core-types:move-core-types",
+  "//external-crates/move/crates/move-vm-profiler:move-vm-profiler",
+  "//external-crates/move/crates/move-vm-types:move-vm-types",
+  "//third-party:anyhow_1_0_81",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:serde_1_0_190"
+]
+# buckify!
+
+rust_library(
+    name = "move-vm-test-utils",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_NAME": "move-vm-test-utils",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "Move VM Test Utils",
+        "CARGO_PKG_AUTHORS": "[Diem Association <opensource@diem.com>]",
+        "OUT_DIR": "",
+    },
+    crate_root = "src/lib.rs",
+    features = ["tiered-gas"],
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

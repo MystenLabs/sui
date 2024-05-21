@@ -1,0 +1,29 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:proc-macro2_1_0_78",
+  "//third-party:syn_1_0_107",
+  "//third-party:synstructure_0_12_6"
+]
+# buckify!
+
+rust_library(
+    name = "mysten-util-mem-derive",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Parity Technologies <admin@parity.io>]",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "Crate for memory reporting",
+        "CARGO_PKG_NAME": "mysten-util-mem-derive",
+    },
+    crate_root = "lib.rs",
+    proc_macro = True,
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

@@ -1,0 +1,44 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/mysten-util-mem-derive:mysten-util-mem-derive",
+  "//third-party:cfg-if_1_0_0",
+  "//third-party:ed25519-consensus_2_1_0",
+  "//third-party:fastcrypto-tbls_0_1_0",
+  "//third-party:fastcrypto_0_1_8",
+  "//third-party:hashbrown_0_12_3",
+  "//third-party:impl-trait-for-tuples_0_2_2",
+  "//third-party:indexmap_2_1_0",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:parking_lot_0_12_1",
+  "//third-party:roaring_0_10_1",
+  "//third-party:smallvec_1_13_2"
+]
+# buckify!
+
+rust_library(
+    name = "mysten-util-mem",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_PKG_AUTHORS": "[Parity Technologies <admin@parity.io>,Andrew Schran <aschran@mystenlabs.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_VERSION": "0.11.0",
+        "CARGO_PKG_NAME": "mysten-util-mem",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "Collection of memory related utilities",
+    },
+    crate_root = "src/lib.rs",
+    features = [
+        "estimate-heapsize",
+        "hashbrown",
+        "parking_lot",
+        "smallvec",
+        "std",
+    ],
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

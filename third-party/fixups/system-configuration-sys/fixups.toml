@@ -1,0 +1,2 @@
+buildscript = []
+rustc_flags = ["-lframework=SystemConfiguration"]

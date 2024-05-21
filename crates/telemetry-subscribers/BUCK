@@ -1,0 +1,83 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//third-party:atomic_float_0_1_0",
+  "//third-party:bytes-varint_1_0_3",
+  "//third-party:bytes_1_5_0",
+  "//third-party:clap_4_5_4",
+  "//third-party:crossterm_0_25_0",
+  "//third-party:futures_0_3_29",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:opentelemetry-otlp_0_13_0",
+  "//third-party:opentelemetry-proto_0_3_0",
+  "//third-party:opentelemetry_0_20_0",
+  "//third-party:opentelemetry_api_0_20_0",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:prost_0_11_9",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tonic_0_9_2",
+  "//third-party:tracing-appender_0_2_2",
+  "//third-party:tracing-opentelemetry_0_21_0",
+  "//third-party:tracing-subscriber_0_3_17",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "telemetry-subscribers",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Evan Chan <echan@mystenlabs.com>]",
+        "OUT_DIR": "",
+        "CARGO_PKG_DESCRIPTION": "Library for common telemetry and observability functionality",
+        "CARGO_PKG_NAME": "telemetry-subscribers",
+        "CARGO_PKG_VERSION": "0.2.0",
+    },
+    crate_root = "src/lib.rs",
+    features = [
+        "opentelemetry",
+        "opentelemetry-otlp",
+        "opentelemetry-proto",
+        "opentelemetry_api",
+        "otlp",
+        "tracing-opentelemetry",
+    ],
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+
+
+rust_binary(
+    name = "import-trace",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "import-trace": ":import-trace",
+    },
+    env = {
+        "CARGO_PKG_BIN": "telemetry-subscribers",
+        "CARGO_PKG_DESCRIPTION": "Library for common telemetry and observability functionality",
+        "OUT_DIR": "",
+        "CARGO_PKG_NAME": "telemetry-subscribers",
+        "CARGO_PKG_AUTHORS": "[Evan Chan <echan@mystenlabs.com>]",
+        "CARGO_PKG_VERSION": "0.2.0",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_BIN_NAME": "telemetry-subscribers",
+    },
+    crate_root = "src/bin/import-trace.rs",
+    features = [
+        "opentelemetry",
+        "opentelemetry-otlp",
+        "opentelemetry-proto",
+        "opentelemetry_api",
+        "otlp",
+        "tracing-opentelemetry",
+    ],
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

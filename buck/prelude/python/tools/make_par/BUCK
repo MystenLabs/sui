@@ -1,0 +1,24 @@
+# META INTERNAL NOTES:
+# If this file is changed open source it will probably not import correctly,
+# as it is the only `TARGETS` (not `TARGETS.v2`) in the prelude.
+# Configuring the tools to do it right seemed more dangerous than just having a caveat on this one file.
+
+oncall("build_infra")
+
+export_file(
+    name = "__run_lpar_main__.py",
+    src = "__run_lpar_main__.py",
+    visibility = ["PUBLIC"],
+)
+
+export_file(
+    name = "sitecustomize.py",
+    src = "sitecustomize.py",
+    visibility = ["PUBLIC"],
+)
+
+export_file(
+    name = "_lpar_bootstrap.sh.template",
+    src = "_lpar_bootstrap.sh.template",
+    visibility = ["PUBLIC"],
+)

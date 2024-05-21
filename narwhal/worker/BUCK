@@ -1,0 +1,55 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/mysten-metrics:mysten-metrics",
+  "//crates/mysten-network:mysten-network",
+  "//crates/sui-protocol-config:sui-protocol-config",
+  "//third-party:anemo-tower_0_0_0",
+  "//third-party:anemo_0_0_0",
+  "//third-party:anyhow_1_0_81",
+  "//third-party:arc-swap_1_6_0",
+  "//third-party:async-trait_0_1_73",
+  "//third-party:byteorder_1_4_3",
+  "//third-party:bytes_1_5_0",
+  "//third-party:eyre_0_6_8",
+  "//third-party:fastcrypto_0_1_8",
+  "//third-party:futures_0_3_29",
+  "//third-party:governor_0_6_0",
+  "//third-party:itertools_0_10_5",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:rand_0_8_5",
+  "//third-party:tap_1_0_1",
+  "//third-party:thiserror_1_0_56",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tonic_0_11_0",
+  "//third-party:tower_0_4_13",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "narwhal-worker",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    named_deps = {
+        "config": "//narwhal/config:narwhal-config",
+        "crypto": "//narwhal/crypto:narwhal-crypto",
+        "network": "//narwhal/network:narwhal-network",
+        "store": "//crates/typed-store:typed-store",
+        "types": "//narwhal/types:narwhal-types",
+    },
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_NAME": "narwhal-worker",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_DESCRIPTION": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

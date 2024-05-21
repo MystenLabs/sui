@@ -1,0 +1,19 @@
+omit_targets = []
+extra_srcs = []
+omit_srcs = []
+rustc_flags = []
+cfgs = []
+features = []
+omit_features = []
+extra_deps = []
+omit_deps = []
+cargo_env = false
+
+[env]
+
+[[buildscript]]
+unresolved = "Unresolved build script at vendor/grpcio-sys-0.12.1+1.46.5-patched/build.rs."
+
+[extra_mapped_srcs]
+
+[platform_fixup]

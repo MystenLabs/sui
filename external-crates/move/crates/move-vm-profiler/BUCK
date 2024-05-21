@@ -1,0 +1,30 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//external-crates/move/crates/move-vm-config:move-vm-config",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:serde_1_0_190",
+  "//third-party:serde_json_1_0_95",
+  "//third-party:tracing_0_1_40"
+]
+# buckify!
+
+rust_library(
+    name = "move-vm-profiler",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "CARGO_MANIFEST_DIR": "",
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_VERSION": "0.1.0",
+        "CARGO_PKG_NAME": "move-vm-profiler",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

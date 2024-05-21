@@ -1,0 +1,38 @@
+
+# Generated on Tue, 21 May 2024 20:02:41 +0000
+# !buckify
+# code within the buckify block will be auto-replaced when buckify is run
+deps = [
+  "//crates/prometheus-closure-metric:prometheus-closure-metric",
+  "//third-party:async-trait_0_1_73",
+  "//third-party:axum_0_6_20",
+  "//third-party:dashmap_5_5_3",
+  "//third-party:futures_0_3_29",
+  "//third-party:once_cell_1_18_0",
+  "//third-party:parking_lot_0_12_1",
+  "//third-party:prometheus_0_13_3",
+  "//third-party:scopeguard_1_1_0",
+  "//third-party:tap_1_0_1",
+  "//third-party:tokio_1_36_0",
+  "//third-party:tracing_0_1_40",
+  "//third-party:uuid_1_2_2"
+]
+# buckify!
+
+rust_library(
+    name = "mysten-metrics",
+    srcs = glob(["**/*"]),
+    deps = deps,
+    env = {
+        "OUT_DIR": "",
+        "CARGO_PKG_AUTHORS": "[Mysten Labs <build@mystenlabs.com>]",
+        "CARGO_PKG_DESCRIPTION": "",
+        "CARGO_PKG_NAME": "mysten-metrics",
+        "CARGO_MANIFEST_DIR": "",
+        "CARGO_PKG_VERSION": "0.7.0",
+    },
+    crate_root = "src/lib.rs",
+    edition = "2021",
+    visibility = ["PUBLIC"],
+)
+

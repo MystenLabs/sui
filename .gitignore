@@ -7,7 +7,8 @@
 .DS_Store
 
 # Rust build directory
-**/target
+target/
+crates/**/target
 .pre-commit*
 
 # Move build directory
@@ -64,6 +65,11 @@ sui.log.*
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# BUCK
+buck-out/
+# disable this to include vendored sources. currently omitted to save on repo size
+third-party/vendor
 
 # misc
 *.key

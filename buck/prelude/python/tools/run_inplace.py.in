@@ -1,0 +1,165 @@
+#!<PYTHON> <PYTHON_INTERPRETER_FLAGS>
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+#
+# This source code is licensed under both the MIT license found in the
+# LICENSE-MIT file in the root directory of this source tree and the Apache
+# License, Version 2.0 found in the LICENSE-APACHE file in the root directory
+# of this source tree.
+
+# LINKTREEDIR=<MODULES_DIR>
+
+main_module = "<MAIN_MODULE>"
+main_function = "<MAIN_FUNCTION>"
+modules_dir = "<MODULES_DIR>"
+native_libs_env_var = "<NATIVE_LIBS_ENV_VAR>"
+native_libs_dir = <NATIVE_LIBS_DIR>
+native_libs_preload_env_var = "<NATIVE_LIBS_PRELOAD_ENV_VAR>"
+native_libs_preload = <NATIVE_LIBS_PRELOAD>
+interpreter_flags = "<PYTHON_INTERPRETER_FLAGS>"
+
+import os
+import platform
+import signal
+import subprocess
+import sys
+import time
+
+os.environ["PAR_LAUNCH_TIMESTAMP"] = str(time.time())
+
+dirpath = os.path.dirname(os.path.realpath(__file__))
+
+env_vals_to_restore = {}
+# Update the environment variable for the dynamic loader to the native
+# libraries location.
+if native_libs_dir is not None:
+    old_native_libs_dir = os.environ.get(native_libs_env_var)
+    os.environ[native_libs_env_var] = os.path.join(dirpath, native_libs_dir)
+    env_vals_to_restore[native_libs_env_var] = old_native_libs_dir
+
+# Update the environment variable for the dynamic loader to find libraries
+# to preload.
+if native_libs_preload is not None:
+    old_native_libs_preload = os.environ.get(native_libs_preload_env_var)
+    env_vals_to_restore[native_libs_preload_env_var] = old_native_libs_preload
+
+    # On macos, preloaded libs are found via paths.
+    os.environ[native_libs_preload_env_var] = ":".join(
+        os.path.join(dirpath, native_libs_dir, l)
+        for l in native_libs_preload.split(":")
+    )
+
+<ENV>
+
+# Note: this full block of code will be included as the argument to Python,
+# and will be the first thing that shows up in the process arguments as displayed
+# by programs like ps and top.
+#
+# We include sys.argv[0] at the start of this comment just to make it more visible what program
+# is being run in the ps and top output.
+STARTUP = f"""\
+# {sys.argv[0]}
+# Wrap everything in a private function to prevent globals being captured by
+# the `runpy._run_module_as_main` below.
+def __run():
+    import sys
+
+    # We set the paths beforehand to have a minimal amount of imports before
+    # nuking PWD from sys.path. Otherwise, there can be problems if someone runs
+    # from a directory with a similarly named file, even if their code is properly
+    # namespaced. e.g. if one has foo/bar/contextlib.py and while in foo/bar runs
+    # `buck run foo/bar:bin`, runpy will fail as it tries to import
+    # foo/bar/contextlib.py. You're just out of luck if you have sys.py
+
+    # Set `argv[0]` to the executing script.
+    assert sys.argv[0] == '-c'
+    sys.argv[0] = {sys.argv[0]!r}
+
+    # Remove the working directory.
+    assert sys.path[0] == ''
+    del sys.path[0]
+
+    import os
+    import runpy
+
+    def setenv(var, val):
+        if val is None:
+            os.environ.pop(var, None)
+        else:
+            os.environ[var] = val
+
+    def restoreenv(d):
+        for k, v in d.items():
+            setenv(k, v)
+
+    restoreenv({env_vals_to_restore!r})
+
+    from <MAIN_RUNNER_MODULE> import <MAIN_RUNNER_FUNCTION> as run_as_main
+    run_as_main({main_module!r}, {main_function!r})
+
+
+__run()
+"""
+
+args = [sys.executable]
+if interpreter_flags:
+    args.append(interpreter_flags)
+args.extend(["-c", STARTUP])
+
+# Default to 'd' warnings, but allow users to control this via PYTHONWARNINGS
+# The -E causes python to ignore all PYTHON* environment vars so we have to
+# pass this down using the command line.
+warnings = os.environ.get("PYTHONWARNINGS", "d").split(",")
+for item in reversed(warnings):
+    args.insert(1, f"-W{item.strip()}")
+
+# Allow users to disable byte code generation by setting the standard environment var.
+# Same as above, because of -E we have to pass this down using the command line.
+if "PYTHONDONTWRITEBYTECODE" in os.environ:
+    args.insert(1, "-B")
+
+# Python 3.7 allows benchmarking import time with this variable. Similar issues to
+# PYTHONDONTWRITEBYTECODE above. If using an earlier version of python... dont set this
+# Make sure we only run this on cpython where it's supported (python2 will fail
+# if given an unknown -X)
+if (
+    "PYTHONPROFILEIMPORTTIME" in os.environ
+    and platform.python_implementation() == "CPython"
+    and (sys.version_info[0], sys.version_info[1]) >= (3, 7)
+):
+    args[1:1] = ["-X", "importtime"]
+
+# Save the variables that will be restored back into the environment by
+# fbcode/buck2/prelude/python/tools/make_par/sitecustomize.py
+for env in ("PYTHONPATH", "LD_LIBRARY_PATH", "LD_PRELOAD",
+            "DYLD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"):
+    if env in os.environ:
+        os.environ["FB_SAVED_" + env] = os.environ[env]
+
+path = os.path.join(dirpath, modules_dir)
+os.environ["PYTHONPATH"] = path
+
+if platform.system() == "Windows":
+    # exec on Windows is not true exec - there is only 'spawn' ('CreateProcess').
+    # However, creating processes unnecessarily is painful, so we only do the spawn
+    # path if we have to, which is on Windows. That said, this complicates signal
+    # handling, so we need to set up some signal forwarding logic.
+
+    p = subprocess.Popen(args + sys.argv[1:])
+
+    def handler(signum, frame):
+        # If we're getting this, we need to forward signum to subprocesses
+        if signum == signal.SIGINT:
+            p.send_signal(signal.CTRL_C_EVENT)
+        elif signum == signal.SIGBREAK:
+            p.send_signal(signal.CTRL_BREAK_EVENT)
+        else:
+            # shouldn't happen, we should be killed instead
+            p.terminate()
+
+    signal.signal(signal.SIGINT, handler)
+    signal.signal(signal.SIGBREAK, handler)
+
+    p.wait()
+    sys.exit(p.returncode)
+else:
+    os.execv(sys.executable, args + sys.argv[1:])
