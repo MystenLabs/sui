@@ -102,22 +102,20 @@ describe('Keypair', () => {
 		const sig2 = await k2.signPersonalMessage(data);
 		const sig3 = await k3.signPersonalMessage(data);
 
-		const bytes = bcs.vector(bcs.U8).serialize(data).toBytes();
-
-		expect(sig1.bytes).toEqual(toB64(bytes));
-		expect(sig1.bytes).toEqual('CQAAAAVIZWxsbw==');
+		expect(sig1.bytes).toEqual(toB64(data));
+		expect(sig1.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig1.signature).toEqual(
 			'ADXvYCSZk+ZtVL6VfB4+5zson++q0uWYINW4u1QKbbPisLUnNgYPFieiwXxp2SroKzqrULJOXdkPiDESw+IWJgVa4iC0svZel3wS7eYVef9RcLbCLABhaMN7XnxhrwGAgw==',
 		);
 
-		expect(sig2.bytes).toEqual(toB64(bytes));
-		expect(sig2.bytes).toEqual('CQAAAAVIZWxsbw==');
+		expect(sig2.bytes).toEqual(toB64(data));
+		expect(sig2.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig2.signature).toEqual(
 			'AViWuVdzTX9lJ2DBIPd4YR2bqTHC07AC9NZ1vbA1k/YeeSCuH6Kd1g3izZB332JgLP7GxjppPmWk4GwNlvbH0vICHRUjB8a3Kw7QQYsOcM2A5/UpW42G9XItP1IT+9I5TzY=',
 		);
 
-		expect(sig3.bytes).toEqual(toB64(bytes));
-		expect(sig3.bytes).toEqual('CQAAAAVIZWxsbw==');
+		expect(sig3.bytes).toEqual(toB64(data));
+		expect(sig3.bytes).toEqual('AAAABUhlbGxv');
 		expect(sig3.signature).toEqual(
 			'Apd48/4qVHSja5u2i7ZxobPL6iTLulNIuCxbd5GhfWVvcd69k9BtIqpFGMYXYyn7zapyvnJbtUZsF2ILc7Rp/X0CJzIrOokaCigNa8H7LLsj0o9UkG/WQH9fdB9t71diYJo=',
 		);

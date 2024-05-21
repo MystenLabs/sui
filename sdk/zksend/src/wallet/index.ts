@@ -1,7 +1,6 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { bcs } from '@mysten/sui/bcs';
 import { Transaction } from '@mysten/sui/transactions';
 import { toB64 } from '@mysten/sui/utils';
 import type {
@@ -159,11 +158,11 @@ export class StashedWallet implements Wallet {
 	};
 
 	#signPersonalMessage: SuiSignPersonalMessageMethod = async ({ message, account }) => {
-		const bytes = toB64(bcs.vector(bcs.u8()).serialize(message).toBytes());
 		const popup = new StashedPopup({
 			name: this.#name,
 			origin: this.#origin,
 		});
+		const bytes = toB64(message);
 
 		const response = await popup.send({
 			type: 'sign-personal-message',
