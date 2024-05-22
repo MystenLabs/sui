@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use clap::*;
+use ethers::providers::Middleware;
 use shared_crypto::intent::Intent;
 use shared_crypto::intent::IntentMessage;
 use std::sync::Arc;
@@ -9,12 +10,13 @@ use sui_bridge::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
 use sui_bridge::eth_transaction_builder::build_eth_transaction;
 use sui_bridge::sui_client::SuiClient;
 use sui_bridge::sui_transaction_builder::build_sui_transaction;
+use sui_bridge::utils::get_eth_contract_addresses;
 use sui_bridge::utils::{
     examine_key, generate_bridge_authority_key_and_write_to_file,
     generate_bridge_client_key_and_write_to_file, generate_bridge_node_config_and_write_to_file,
 };
 use sui_bridge_cli::{
-    make_action, select_contract_address, Args, BridgeCliConfig, BridgeValidatorCommand,
+    make_action, select_contract_address, Args, BridgeCliConfig, BridgeCommand,
     LoadedBridgeCliConfig,
 };
 use sui_config::Config;
@@ -32,21 +34,21 @@ async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     match args.command {
-        BridgeValidatorCommand::CreateBridgeValidatorKey { path } => {
+        BridgeCommand::CreateBridgeValidatorKey { path } => {
             generate_bridge_authority_key_and_write_to_file(&path)?;
             println!("Bridge validator key generated at {}", path.display());
         }
-        BridgeValidatorCommand::CreateBridgeClientKey { path, use_ecdsa } => {
+        BridgeCommand::CreateBridgeClientKey { path, use_ecdsa } => {
             generate_bridge_client_key_and_write_to_file(&path, use_ecdsa)?;
             println!("Bridge client key generated at {}", path.display());
         }
-        BridgeValidatorCommand::ExamineKey {
+        BridgeCommand::ExamineKey {
             path,
             is_validator_key,
         } => {
             examine_key(&path, is_validator_key)?;
         }
-        BridgeValidatorCommand::CreateBridgeNodeConfigTemplate { path, run_client } => {
+        BridgeCommand::CreateBridgeNodeConfigTemplate { path, run_client } => {
             generate_bridge_node_config_and_write_to_file(&path, run_client)?;
             println!(
                 "Bridge node config template generated at {}",
@@ -54,7 +56,7 @@ async fn main() -> anyhow::Result<()> {
             );
         }
 
-        BridgeValidatorCommand::Governance {
+        BridgeCommand::Governance {
             config_path,
             chain_id,
             cmd,
@@ -165,7 +167,27 @@ async fn main() -> anyhow::Result<()> {
             return Ok(());
         }
 
-        BridgeValidatorCommand::Client { config_path, cmd } => {
+        BridgeCommand::PrintEthBridgeAddresses {
+            bridge_proxy,
+            eth_rpc_url,
+        } => {
+            let provider = Arc::new(
+                ethers::prelude::Provider::<ethers::providers::Http>::try_from(eth_rpc_url)
+                    .unwrap()
+                    .interval(std::time::Duration::from_millis(2000)),
+            );
+            let chain_id = provider.get_chainid().await?;
+            let (committee_address, limiter_address, vault_address, config_address) =
+                get_eth_contract_addresses(bridge_proxy, &provider).await?;
+            println!("Chain ID: {:?}", chain_id);
+            println!("Committee Proxy Address: {:?}", committee_address);
+            println!("Limiter Proxy Address: {:?}", limiter_address);
+            println!("Config Proxy Address: {:?}", config_address);
+            println!("Vault Address: {:?}", vault_address);
+            return Ok(());
+        }
+
+        BridgeCommand::Client { config_path, cmd } => {
             let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
             let config = LoadedBridgeCliConfig::load(config).await?;
             let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
