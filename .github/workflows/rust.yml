@@ -61,8 +61,14 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install Foundry
         run: |
-          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          curl -L https://foundry.paradigm.xyz | bash
           echo "$HOME/.foundry/bin" >> $GITHUB_PATH
+          echo "$HOME/.foundry/bin" >> $HOME/.bashrc
+          source $HOME/.bashrc
+          foundryup
+      - name: Set environment variables
+        run: |
+          echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
       - name: cargo test
         run: |
           sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 # Enable ipv6
