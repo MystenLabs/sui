@@ -9,8 +9,13 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
+    shared::{
+        ide::{self, IDEInfo},
+        string_utils::debug_print,
+        AstDebug,
+    },
     typing::{
-        ast::{self as T, IDEInfo},
+        ast::{self as T},
         core::{self, Context},
     },
 };
@@ -58,8 +63,10 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
         Anything | UnresolvedError | Param(_) | Unit => (),
         Ref(_, b) => type_(context, b),
         Var(tvar) => {
+            debug_print!(context.debug.type_elaboration, ("before" => Var(*tvar)));
             let ty_tvar = sp(ty.loc, Var(*tvar));
             let replacement = core::unfold_type(&context.subst, ty_tvar);
+            debug_print!(context.debug.type_elaboration, ("resolved" => replacement));
             let replacement = match replacement {
                 sp!(loc, Var(_)) => {
                     let diag = ice!((
@@ -85,6 +92,7 @@ pub fn type_(context: &mut Context, ty: &mut Type) {
             };
             *ty = replacement;
             type_(context, ty);
+            debug_print!(context.debug.type_elaboration, ("after" => ty));
         }
         Apply(Some(_), sp!(_, TypeName_::Builtin(_)), tys) => types(context, tys),
         aty @ Apply(Some(_), _, _) => {
@@ -258,17 +266,6 @@ pub fn exp(context: &mut Context, e: &mut T::Exp) {
         E::Loop { body: eloop, .. } => exp(context, eloop),
         E::NamedBlock(_, seq) => sequence(context, seq),
         E::Block(seq) => sequence(context, seq),
-        E::IDEAnnotation(info, er) => {
-            exp(context, er);
-            match info {
-                IDEInfo::MacroCallInfo(i) => {
-                    for t in i.type_arguments.iter_mut() {
-                        type_(context, t);
-                    }
-                }
-                IDEInfo::ExpandedLambda => (),
-            }
-        }
         E::Assign(assigns, tys, er) => {
             lvalues(context, assigns);
             expected_types(context, tys);
@@ -519,4 +516,28 @@ fn exp_list_item(context: &mut Context, item: &mut T::ExpListItem) {
             types(context, ss);
         }
     }
+}
+
+//**************************************************************************************************
+// IDE Information
+//**************************************************************************************************
+
+pub fn ide_info(context: &mut Context) {
+    let mut ide_info = std::mem::replace(&mut context.ide_info, IDEInfo::new());
+    for (_, info) in ide_info.exp_info.iter_mut() {
+        let ide::ExpEntry {
+            loc: _,
+            macro_call_info,
+            expanded_lambda: _,
+        } = info;
+        if let Some(info) = macro_call_info {
+            for t in info.type_arguments.iter_mut() {
+                type_(context, t);
+            }
+            for t in info.by_value_args.iter_mut() {
+                sequence_item(context, t);
+            }
+        }
+    }
+    let _ = std::mem::replace(&mut context.ide_info, ide_info);
 }

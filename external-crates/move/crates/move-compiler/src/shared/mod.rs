@@ -41,6 +41,7 @@ use std::{
 use vfs::{VfsError, VfsPath};
 
 pub mod ast_debug;
+pub mod ide;
 pub mod known_attributes;
 pub mod program_info;
 pub mod remembering_unique_map;
@@ -241,6 +242,10 @@ pub struct CompilationEnv {
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
+    // /// IDE Information for the Move Analyzer. This is awlays set, but is in an option to allow us
+    // /// to `take` it for updates, which also need the compilation env for reporting ICEs.
+    // pub ide_information: Option<ide::IDEInfo>,
+    pub ide_information: IDEInfo,
 }
 
 macro_rules! known_code_filter {
@@ -363,6 +368,7 @@ impl CompilationEnv {
             prim_definers: BTreeMap::new(),
             mapped_files: MappedFiles::empty(),
             save_hooks,
+            ide_information: IDEInfo::new(),
         }
     }
 
@@ -648,6 +654,20 @@ impl CompilationEnv {
         for hook in &self.save_hooks {
             hook.save_cfgir_ast(ast)
         }
+    }
+
+    pub fn append_ide_info(&mut self, info: &mut IDEInfo) {
+        self.ide_information.append(&mut self.diags, info);
+    }
+
+    /// Helper to call `add_exp_info` with the compilation enviornment diagnostics field.
+    pub fn add_to_ide_exp_info(&mut self, ide_info: &mut IDEInfo, loc: Loc, info: ide::ExpInfo) {
+        ide_info.add_exp_info(&mut self.diags, loc, info);
+    }
+
+    pub fn add_ide_exp_info(&mut self, loc: Loc, info: ide::ExpInfo) {
+        self.ide_information
+            .add_exp_info(&mut self.diags, loc, info);
     }
 }
 
@@ -1158,6 +1178,8 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
+
+use self::ide::IDEInfo;
 
 //**************************************************************************************************
 // Virtual file system support
