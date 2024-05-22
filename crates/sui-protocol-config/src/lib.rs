@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 46;
+const MAX_PROTOCOL_VERSION: u64 = 47;
 
 // Record history of protocol version allocations here:
 //
@@ -129,7 +129,7 @@ const MAX_PROTOCOL_VERSION: u64 = 46;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
-//             Enable random beacon in testnet.
+// Version 47: Enable random beacon in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2196,19 +2196,22 @@ impl ProtocolConfig {
                     }
                 }
                 46 => {
+                    // enable bridge in devnet and testnet
                     if chain != Chain::Mainnet {
-                        // enable bridge in devnet and testnet
                         cfg.feature_flags.bridge = true;
+                    }
 
-                        // Enable random beacon on testnet.
+                    // Enable resharing at same initial version
+                    cfg.feature_flags.reshare_at_same_initial_version = true;
+                }
+                47 => {
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
                         cfg.feature_flags.random_beacon = true;
                         cfg.random_beacon_reduction_lower_bound = Some(1600);
                         cfg.random_beacon_dkg_timeout_round = Some(3000);
                         cfg.random_beacon_min_round_interval_ms = Some(200);
                     }
-
-                    // Enable resharing at same initial version
-                    cfg.feature_flags.reshare_at_same_initial_version = true;
                 }
                 // Use this template when making changes:
                 //
