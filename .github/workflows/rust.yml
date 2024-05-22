@@ -65,7 +65,7 @@ jobs:
           echo "$HOME/.foundry/bin" >> $GITHUB_PATH
           echo "$HOME/.foundry/bin" >> $HOME/.bashrc
           source $HOME/.bashrc
-          foundryup
+          $HOME/.foundry/bin/foundryup
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
