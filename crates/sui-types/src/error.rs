@@ -140,6 +140,28 @@ pub enum UserInputError {
     #[error("The transaction inputs contain duplicated ObjectRef's")]
     DuplicateObjectRefInput,
 
+    // Soft Bundle related errors
+    #[error(
+        "Number of transactions exceeds the maximum allowed ({:?}) in a Soft Bundle",
+        limit
+    )]
+    TooManyTransactionsInSoftBundle { limit: u64 },
+    #[error("Transaction {:?} in Soft Bundle contains no shared objects", digest)]
+    NoSharedObjectError { digest: TransactionDigest },
+    #[error("Transaction {:?} in Soft Bundle has already been executed", digest)]
+    AlreadyExecutedError { digest: TransactionDigest },
+    #[error(
+        "Gas price for transaction {:?} mismatch: want {:?}, have {:?}",
+        digest,
+        expected,
+        actual
+    )]
+    GasPriceMismatchError {
+        digest: TransactionDigest,
+        expected: u64,
+        actual: u64,
+    },
+
     // Gas related errors
     #[error("Transaction gas payment missing")]
     MissingGasPayment,
@@ -396,6 +418,8 @@ pub enum SuiError {
     },
     #[error("Transaction is already finalized but with different user signatures")]
     TxAlreadyFinalizedWithDifferentUserSigs,
+    #[error("The request did not contain a certificate")]
+    NoCertificateProvided,
 
     // Account access
     #[error("Invalid authenticator")]

@@ -10,11 +10,11 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::node::{
-    default_enable_index_processing, default_end_of_epoch_broadcast_channel_capacity,
-    AuthorityKeyPairWithPath, AuthorityOverloadConfig, AuthorityStorePruningConfig,
-    CheckpointExecutorConfig, DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig,
-    Genesis, KeyPairWithPath, StateArchiveConfig, StateSnapshotConfig,
-    DEFAULT_GRPC_CONCURRENCY_LIMIT,
+    default_enable_index_processing, default_enable_soft_bundle,
+    default_end_of_epoch_broadcast_channel_capacity, AuthorityKeyPairWithPath,
+    AuthorityOverloadConfig, AuthorityStorePruningConfig, CheckpointExecutorConfig,
+    DBCheckpointConfig, ExecutionCacheConfig, ExpensiveSafetyCheckConfig, Genesis, KeyPairWithPath,
+    StateArchiveConfig, StateSnapshotConfig, DEFAULT_GRPC_CONCURRENCY_LIMIT,
 };
 use sui_config::node::{default_zklogin_oauth_providers, ConsensusProtocol, RunWithRange};
 use sui_config::p2p::{P2pConfig, SeedPeer, StateSyncConfig};
@@ -228,6 +228,7 @@ impl ValidatorConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.firewall_config,
             execution_cache: ExecutionCacheConfig::default(),
+            enable_soft_bundle: default_enable_soft_bundle(),
         }
     }
 
@@ -496,6 +497,7 @@ impl FullnodeConfigBuilder {
             policy_config: self.policy_config,
             firewall_config: self.fw_config,
             execution_cache: ExecutionCacheConfig::default(),
+            enable_soft_bundle: default_enable_soft_bundle(),
         }
     }
 }

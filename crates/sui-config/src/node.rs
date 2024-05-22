@@ -182,6 +182,9 @@ pub struct NodeConfig {
 
     #[serde(default)]
     pub execution_cache: ExecutionCacheConfig,
+
+    #[serde(default = "default_enable_soft_bundle")]
+    pub enable_soft_bundle: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
@@ -276,6 +279,10 @@ pub fn default_concurrency_limit() -> Option<usize> {
 
 pub fn default_end_of_epoch_broadcast_channel_capacity() -> usize {
     128
+}
+
+pub fn default_enable_soft_bundle() -> bool {
+    true
 }
 
 pub fn bool_true() -> bool {

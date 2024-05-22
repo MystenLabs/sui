@@ -436,6 +436,10 @@ struct FeatureFlags {
     // Enable resharing of shared objects using the same initial shared version
     #[serde(skip_serializing_if = "is_false")]
     reshare_at_same_initial_version: bool,
+
+    // Enable Soft Bundle (SIP-19).
+    #[serde(skip_serializing_if = "is_false")]
+    soft_bundle: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1067,6 +1071,9 @@ pub struct ProtocolConfig {
     /// The max number of consensus rounds a transaction can be deferred due to shared object congestion.
     /// Transactions will be cancelled after this many rounds.
     max_deferral_rounds_for_congestion_control: Option<u64>,
+
+    /// The max number of transactions that can be included in a single Soft Bundle.
+    max_soft_bundle_size: Option<u64>,
 }
 
 // feature flags
@@ -1320,6 +1327,10 @@ impl ProtocolConfig {
 
     pub fn reshare_at_same_initial_version(&self) -> bool {
         self.feature_flags.reshare_at_same_initial_version
+    }
+
+    pub fn soft_bundle(&self) -> bool {
+        self.feature_flags.soft_bundle
     }
 }
 
@@ -1765,6 +1776,8 @@ impl ProtocolConfig {
             max_accumulated_txn_cost_per_object_in_checkpoint: None,
 
             max_deferral_rounds_for_congestion_control: None,
+
+            max_soft_bundle_size: None,
             // When adding a new constant, set it to None in the earliest version, like this:
             // new_constant: None,
         };
