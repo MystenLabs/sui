@@ -150,7 +150,7 @@ pub fn handle_lint_results_exclude_external_crate_checks(
         if let LintKind::Content(path) = source.kind() {
             if ignore_funcs
                 .iter()
-                .fold(false, |acc, func| acc && func(source, path))
+                .any(|func| func(source, path))
             {
                 continue;
             }
