@@ -129,6 +129,7 @@ const MAX_PROTOCOL_VERSION: u64 = 46;
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
 //             Enable resharing at the same initial shared version.
+//             Enable random beacon in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2195,9 +2196,15 @@ impl ProtocolConfig {
                     }
                 }
                 46 => {
-                    // enable bridge in devnet and testnet
                     if chain != Chain::Mainnet {
+                        // enable bridge in devnet and testnet
                         cfg.feature_flags.bridge = true;
+
+                        // Enable random beacon on testnet.
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(200);
                     }
 
                     // Enable resharing at same initial version
