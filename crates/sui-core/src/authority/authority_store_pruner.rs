@@ -311,6 +311,7 @@ impl AuthorityStorePruner {
         indirect_objects_threshold: usize,
         epoch_duration_ms: u64,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("PruneObjectsForEligibleEpochs");
         let (mut max_eligible_checkpoint_number, epoch_id) = checkpoint_store
             .get_highest_executed_checkpoint()?
             .map(|c| (*c.sequence_number(), c.epoch))
@@ -351,6 +352,7 @@ impl AuthorityStorePruner {
         archive_readers: ArchiveReaderBalancer,
         epoch_duration_ms: u64,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("PruneCheckpointsForEligibleEpochs");
         let pruned_checkpoint_number =
             checkpoint_store.get_highest_pruned_checkpoint_seq_number()?;
         let (last_executed_checkpoint, epoch_id) = checkpoint_store
@@ -411,6 +413,8 @@ impl AuthorityStorePruner {
         metrics: Arc<AuthorityStorePruningMetrics>,
         indirect_objects_threshold: usize,
     ) -> anyhow::Result<()> {
+        let _scope = monitored_scope("PruneForEligibleEpochs");
+
         let mut checkpoint_number = starting_checkpoint_number;
         let current_epoch = checkpoint_store
             .get_highest_executed_checkpoint()?
