@@ -173,4 +173,9 @@ module sui::vec_map_tests {
         };
         vec_map::from_keys_values<u64, u64>(keys, values);
     }
+
+    #[test, expected_failure(abort_code = vec_map::EKeyAlreadyExists)]
+    fun from_keys_values_duplicate_key_abort() {
+        vec_map::from_keys_values<u64, address>(vector[1, 0, 1], vector[@0, @1, @2]);
+    }
 }

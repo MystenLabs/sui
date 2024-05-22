@@ -75,4 +75,9 @@ module sui::vec_set_tests {
             i = i + 1;
         };
     }
+
+    #[test, expected_failure(abort_code = vec_set::EKeyAlreadyExists)]
+    fun from_keys_values_duplicate_key_abort() {
+        vec_set::from_keys<u64>(vector[1, 0, 1]);
+    }
 }
