@@ -93,6 +93,14 @@ pub struct IndexerMetrics {
     pub latest_tx_checkpoint_sequence_number: IntGauge,
     pub latest_indexer_object_checkpoint_sequence_number: IntGauge,
     pub latest_object_snapshot_sequence_number: IntGauge,
+    // max checkpoint sequence numbers on various stages of indexer data ingestion
+    pub max_downloaded_checkpoint_sequence_number: IntGauge,
+    pub max_indexed_checkpoint_sequence_number: IntGauge,
+    pub max_committed_checkpoint_sequence_number: IntGauge,
+    // the related timestamps of max checkpoint ^ on various stages
+    pub downloaded_checkpoint_timestamp_ms: IntGauge,
+    pub indexed_checkpoint_timestamp_ms: IntGauge,
+    pub committed_checkpoint_timestamp_ms: IntGauge,
     // lag starting from the timestamp of the latest checkpoint to the current time
     pub download_lag_ms: IntGauge,
     pub index_lag_ms: IntGauge,
@@ -247,6 +255,36 @@ impl IndexerMetrics {
             latest_object_snapshot_sequence_number: register_int_gauge_with_registry!(
                 "latest_object_snapshot_sequence_number",
                 "Latest object snapshot sequence number from the Indexer",
+                registry,
+            ).unwrap(),
+            max_downloaded_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "max_downloaded_checkpoint_sequence_number",
+                "Max downloaded checkpoint sequence number",
+                registry,
+            ).unwrap(),
+            max_indexed_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "max_indexed_checkpoint_sequence_number",
+                "Max indexed checkpoint sequence number",
+                registry,
+            ).unwrap(),
+            max_committed_checkpoint_sequence_number: register_int_gauge_with_registry!(
+                "max_committed_checkpoint_sequence_number",
+                "Max committed checkpoint sequence number",
+                registry,
+            ).unwrap(),
+            downloaded_checkpoint_timestamp_ms: register_int_gauge_with_registry!(
+                "downloaded_checkpoint_timestamp_ms",
+                "Timestamp of the downloaded checkpoint",
+                registry,
+            ).unwrap(),
+            indexed_checkpoint_timestamp_ms: register_int_gauge_with_registry!(
+                "indexed_checkpoint_timestamp_ms",
+                "Timestamp of the indexed checkpoint",
+                registry,
+            ).unwrap(),
+            committed_checkpoint_timestamp_ms: register_int_gauge_with_registry!(
+                "committed_checkpoint_timestamp_ms",
+                "Timestamp of the committed checkpoint",
                 registry,
             ).unwrap(),
             download_lag_ms: register_int_gauge_with_registry!(

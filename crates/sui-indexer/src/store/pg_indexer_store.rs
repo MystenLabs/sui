@@ -538,7 +538,15 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
                         self.metrics
                             .db_commit_lag_ms
                             .set(time_now_ms - stored_checkpoint.timestamp_ms);
-                        info!("Indexer lag: persisted checkpoint {} with time now {} and checkpoint time {}", stored_checkpoint.id, time_now_ms, stored_checkpoint.timestamp_ms);
+                        self.metrics.max_committed_checkpoint_sequence_number.set(
+                            stored_checkpoint.sequence_number,
+                        );
+                        self.metrics.committed_checkpoint_timestamp_ms.set(
+                            stored_checkpoint.timestamp_ms,
+                        );
+                    }
+                    for stored_checkpoint in stored_checkpoint_chunk {
+                        info!("Indexer lag: persisted checkpoint {} with time now {} and checkpoint time {}", stored_checkpoint.sequence_number, time_now_ms, stored_checkpoint.timestamp_ms);
                     }
                 }
                 Ok::<(), IndexerError>(())

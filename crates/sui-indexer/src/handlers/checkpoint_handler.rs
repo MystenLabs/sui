@@ -130,6 +130,12 @@ where
             checkpoint.checkpoint_summary.sequence_number, cp_download_lag
         );
         self.metrics.download_lag_ms.set(cp_download_lag);
+        self.metrics
+            .max_downloaded_checkpoint_sequence_number
+            .set(checkpoint.checkpoint_summary.sequence_number as i64);
+        self.metrics
+            .downloaded_checkpoint_timestamp_ms
+            .set(checkpoint.checkpoint_summary.timestamp_ms as i64);
         info!(
             "Indexer lag: downloaded checkpoint {} with time now {} and checkpoint time {}",
             checkpoint.checkpoint_summary.sequence_number,
@@ -316,6 +322,12 @@ where
         metrics
             .index_lag_ms
             .set(time_now_ms - checkpoint.timestamp_ms as i64);
+        metrics
+            .max_indexed_checkpoint_sequence_number
+            .set(checkpoint.sequence_number as i64);
+        metrics
+            .indexed_checkpoint_timestamp_ms
+            .set(checkpoint.timestamp_ms as i64);
         info!(
             "Indexer lag: indexed checkpoint {} with time now {} and checkpoint time {}",
             checkpoint.sequence_number, time_now_ms, checkpoint.timestamp_ms
