@@ -1,11 +1,10 @@
 # Helm Charts
-This directory contains helm charts to deploy Sui RPC2.0 infra. These charts are intended to be starting points for RPC2.0 providers. Not everything here will necessarily work out of the box to fit each providers need. Some of this infra has some scope/setup needed outside of these charts. It's encouraged to clone these files and tweak to your infra needs.
+This directory contains helm charts to deploy Sui RPC2.0 infra. These charts are intended to be starting points for RPC2.0 providers. Not everything here will necessarily work out of the box to fit each provider's need. Some of this infra has some scope/setup needed outside of these charts. It's encouraged to clone these files and tweak to your infra needs.
 
 (Currently) Out of Scope of these Helm charts:
 - ingress setup
-- sui-node config file
 - db-url/pass secret creation
-- CloudSQL Database provisioning
+- Database provisioning
 
 # Note
 ### DB_URL Secret for indexers/graphql
@@ -36,41 +35,43 @@ More Documentation on this coming soon! The storage amount recommendations will 
 
 # GraphQL
 ### Containers
-*graphql* - container running sui-graphql rpc endpoint. Requires a Database updated by the indexer-writer.
+**graphql** - container running sui-graphql rpc endpoint. Requires a Database updated by the indexer-writer.
 
 ### Resource Recommendations
 
-*CpuRequest:* 24
+**CpuRequest:** 24
 
-*MemRequest:* 96G
+**MemRequest:** 96G
 
 # Indexer-Reader
 ### Containers
-*indexer-reader* - sui-indexer-reader jsonrpc endpoint. This offers backwards compatibility with current sui-node json rpc. This deployment is only needed as we transition to the graphql service. This is not needed if you do not want to support the jsonrpc.
+**indexer-reader** - sui-indexer-reader jsonrpc endpoint. This offers backwards compatibility with current sui-node json rpc. This deployment is only needed as we transition to the graphql service. This is not needed if you do not want to support the jsonrpc.
 
 ### Resource Recommendations
-*Cpu:* 4 cores / 8 vCPU
+**Cpu:** 4 cores / 8 vCPU
 
-*Memory:* 32Gi
+**Memory:** 32Gi
 
 # Indexer-Writer
 ### Containers
-*sui-indexer-writer* - Indexer writer syncs and indexes sui checkpoint data into a Postgres database. Checkpoint data can be pulled from sui-node or a cloud provider hosted bucket. More info and available buckets can be found in sui [doc site](https://docs.sui.io/guides/developer/advanced/custom-indexer#remote-reader).
+**sui-indexer-writer** - Indexer writer syncs and indexes sui checkpoint data into a Postgres database. Checkpoint data can be pulled from sui-node or a cloud provider hosted bucket. More info and available buckets can be found in sui [doc site](https://docs.sui.io/guides/developer/advanced/custom-indexer#remote-reader).
 
 ### Resource Recommendations
-*Cpu:* 16 cores / 32 vCPU
+**Cpu:** 16 cores / 32 vCPU
 
-*Memory:* 128Gi
+**Memory:** 128Gi
 
 # Sui-node
 This is a StatefulSet which runs the sui-node binary. The intended purpose is to run as an RPC Fullnode. For Sui RPC2.0 purposes, these nodes can serve checkpoint data or serve as a fallback for queries. 
+
+Please note the PersistentVolumeClaimTemplate used in this chart is geared towards deployments in GCP. This chart does not currently support other cloud providers at this time.
 
 ### Files
 You need to place a valid sui-node.yaml configuration file for your fullnode into the helm/sui-node/files directory. Documentation on full node configuration can be found in the sui [doc site](https://docs.sui.io/guides/operator/sui-full-node#configure-a-full-node).
 
 ### Containers
 
-*Init Containers*
+**Init Containers**
 
 
 Genesis-Download - This container downloads the appropriate genesis.blob and saves it to /opt/sui/config.
@@ -83,13 +84,27 @@ Sui-Node - Runs the sui-node software.
 
 ### Resource Recommendations
 
-*Cpu:* 16 cores / 32 vCPU
+**Cpu:** 16 cores / 32 vCPU
 
-*Memory:* 128Gi
+**Memory:** 128Gi
 
-*PVCSize*: 4000Gi
+***PVCSize*:** 4000Gi
 
-*StorageClass:* pd-ssd - A StorageClass that allows VolumeExpansion is recommended. More info on k8s storage classes [here](https://kubernetes.io/docs/concepts/storage/storage-classes/).
+**StorageClass:** pd-ssd - A StorageClass that allows VolumeExpansion is recommended. More info on k8s storage classes [here](https://kubernetes.io/docs/concepts/storage/storage-classes/).
+
+### Snapshot Restore
+If you are starting a fullnode from scratch it's a good idea to restore it to a recent snapshot if it makes sense for your deployment. There is a container published to [hub.docker.com/u/mysten](https://hub.docker.com/u/mysten) that contains the sui-tool binary which is used to download snapshots. That can be leveraged to restore a snapshot to the pvc used by the statefulset.
+
+Below are some commands that can be used at sui-tool container runtime.
+
+
+`"/bin/bash", "-c", "[ -e '/opt/sui/db/authorities_db/full_node_db/live/' ] && echo 'File exists, snapshot not required' || \
+      /usr/local/bin/sui-tool download-formal-snapshot --epoch 400 --genesis /opt/sui/config/genesis.blob --network mainnet --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --no-sign-request"]`
+
+
+`"/bin/bash", "-c", "[ -e '/opt/sui/db/authorities_db/full_node_db/live/' ] && echo 'File exists, snapshot not required' || \
+     (sui-tool download-db-snapshot --epoch 400 --network mainnet --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --snapshot-bucket-type=gcs && mv /opt/sui/db/authorities_db/full_node_db/epoch_400/ /opt/sui/db/authorities_db/full_node_db/live/)"`
+
 
 
 # How to run Helm for Deployments
@@ -104,9 +119,9 @@ Sui-Node - Runs the sui-node software.
 - Iterate on values/templates to fit any specific needs the run `helm upgrade <name> <chart-name>`
 
 ### Other Helm actions
-**review deployment history** - `helm history <name>`
+***review deployment history*** - `helm history <name>`
 
-**uninstall helm provisioned resources** - `helm uninstall <name>`
+***uninstall helm provisioned resources*** - `helm uninstall <name>`
 
 Review [Helm docs](https://helm.sh/docs/) for other actions.
 

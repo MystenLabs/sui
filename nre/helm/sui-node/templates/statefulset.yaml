@@ -42,26 +42,6 @@ spec:
           volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}
-        {{- if .Values.snapshotConfig.enabled }}
-        - name: snapshot-download
-          image: {{ .Values.snapshotConfig.imageOverride | default "mysten/sui-tools:ci" }}
-          imagePullPolicy: Always
-          {{- if eq .Values.snapshotConfig.snapshotType "formal" }}
-          command: {{ .Values.snapshotConfig.formalSnapshotCommand | toJson }}
-          {{- else }}
-          command: {{ .Values.snapshotConfig.dbSnapshotCommand | toJson }}
-          {{- end }}
-          securityContext:
-            runAsUser: 0 # Run as root
-            runAsGroup: 0
-          env:
-            - name: RUST_BACKTRACE
-              value: "1"
-          {{- with .Values.volumeMounts }}
-          volumeMounts:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
-        {{- end }}
       containers:
         - name: {{ .Chart.Name }}
           command: {{ .Values.command | toJson }}

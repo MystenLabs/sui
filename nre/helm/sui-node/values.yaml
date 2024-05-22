@@ -2,7 +2,7 @@
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-command: ["/usr/local/bin/sui-node", "--config-path", "/opt/bin/sui/config/sui-node.yaml"]
+command: ["/usr/local/bin/sui-node", "--config-path", "/opt/sui/config/sui-node.yaml"]
 args: []
 
 # there is only a single indexer-writer deployment expected for normal operation
@@ -38,7 +38,7 @@ serviceAccount:
 pvc:
   enabled: true
   name: sui-node-pvc
-  storageClassName: premium-rwo # pd-ssd preferred
+  storageClassName: premium-rwo # pd-ssd preferred. something with 
   accessModes:
     - ReadWriteOnce
   resources:
@@ -100,18 +100,6 @@ genesisDownload:
 
 suiNodeYamlConfigMapName: sui-node-config-mainnet
 suiNodeYamlPath: "files/sui-node.mainnet.yaml"
-
-# config used by the snapshot downloader init container
-snapshotConfig:
-  enabled: true
-  snapshotType: "formal"  # or "db"
-  epoch: "400"
-  network: "mainnet"
-  imageOverride: mysten/sui-tools:6579e0ed9e432bae47a407daaf01f08c298bcb14
-  formalSnapshotCommand: ["/bin/bash", "-c", "[ -e '/opt/sui/db/authorities_db/full_node_db/live/' ] && echo 'File exists, snapshot not required' || \
-      /usr/local/bin/sui-tool download-formal-snapshot --epoch 400 --genesis /opt/sui/config/genesis.blob --network mainnet --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --no-sign-request"]
-  dbSnapshotCommand: ["/bin/bash", "-c", "[ -e '/opt/sui/db/authorities_db/full_node_db/live/' ] && echo 'File exists, snapshot not required' || \
-     (sui-tool download-db-snapshot --epoch 400 --network mainnet --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --snapshot-bucket-type=gcs && mv /opt/sui/db/authorities_db/full_node_db/epoch_%s/ /opt/sui/db/authorities_db/full_node_db/live/)"]
 
 podLabels:
   app: "sui-node"
