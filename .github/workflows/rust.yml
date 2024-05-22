@@ -63,9 +63,9 @@ jobs:
         run: |
           curl -L https://foundry.paradigm.xyz | bash
           echo "$HOME/.foundry/bin" >> $GITHUB_PATH
-          echo "$HOME/.foundry/bin" >> $HOME/.bashrc
-          source $HOME/.bashrc
-          $HOME/.foundry/bin/foundryup
+          export PATH=$HOME/.foundry/bin:$PATH
+          # Run foundryup
+          foundryup
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
