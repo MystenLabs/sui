@@ -31,36 +31,36 @@ spec:
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       initContainers:
-        {{- if .Values.snapshotConfig.snapshotEnabled }}
+        - name: genesis-download
+          image: {{ .Values.genesisDownload.imageOverride | default "curlimages/curl" }}
+          imagePullPolicy: Always
+          command: ["curl","-fLJO","--output-dir","/opt/sui/config","https://github.com/MystenLabs/sui-genesis/raw/main/{{ .Values.genesisDownload.network }}/genesis.blob"]
+          securityContext:
+            runAsUser: 0 # Run as root
+            runAsGroup: 0
+          {{- with .Values.volumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- if .Values.snapshotConfig.enabled }}
         - name: snapshot-download
           image: {{ .Values.snapshotConfig.imageOverride | default "mysten/sui-tools:ci" }}
           imagePullPolicy: Always
-          command:
-            - bash
-            - -c
-            - >
-              [ -e '/opt/sui/db/authorities_db/full_node_db/live/' ] && echo 'File exists, snapshot not required' || \
-              {{- if eq .Values.snapshotConfig.snapshotType "formal" }}
-              sui-tool download-formal-snapshot --epoch {{ .Values.snapshotConfig.snapshotEpoch }} --genesis /opt/sui/config/genesis.blob --network {{ .Values.snapshotConfig.snapshotNetwork }} --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --no-sign-request
-              {{- else if eq .Values.snapshotConfig.snapshotType "db" }}
-              (sui-tool download-db-snapshot --epoch {{ .Values.snapshotConfig.snapshotEpoch }} --network {{ .Values.snapshotConfig.snapshotNetwork }} --path /opt/sui/db/authorities_db/full_node_db --num-parallel-downloads 100 --no-sign-request && mv /opt/sui/db/authorities_db/full_node_db/epoch_{{ .Values.snapshotConfig.snapshotEpoch }}/* /opt/sui/db/authorities_db/full_node_db/live/)
-              {{- else }}
-              echo "unknown snapshot type"
-              {{- end }}
+          {{- if eq .Values.snapshotConfig.snapshotType "formal" }}
+          command: {{ .Values.snapshotConfig.formalSnapshotCommand | toJson }}
+          {{- else }}
+          command: {{ .Values.snapshotConfig.dbSnapshotCommand | toJson }}
+          {{- end }}
+          securityContext:
+            runAsUser: 0 # Run as root
+            runAsGroup: 0
           env:
             - name: RUST_BACKTRACE
               value: "1"
-          resources:
-            requests:
-              memory: {{ .Values.snapshotConfig.resources.requests.memory }}
-              cpu: {{ .Values.snapshotConfig.resources.requests.cpu }}
-            limits:
-              memory: {{ .Values.snapshotConfig.resources.limits.memory }}
-              cpu: {{ .Values.snapshotConfig.resources.limits.cpu }}
+          {{- with .Values.volumeMounts }}
           volumeMounts:
-            - name: sui-genesis-volume
-              mountPath: /opt/sui/config/genesis.blob
-              subPath: genesis.blob
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
         {{- end }}
       containers:
         - name: {{ .Chart.Name }}
