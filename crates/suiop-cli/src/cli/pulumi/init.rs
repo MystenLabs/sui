@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cli::lib::FilePathCompleter;
+use crate::cli::utils::validate_project_name;
 use crate::{command::CommandOptions, run_cmd};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use inquire::Text;
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -29,7 +29,7 @@ impl ProjectType {
         // inquire params from user
         let project_name = project_name
             .unwrap_or_else(|| {
-                Text::new("project name (max 30 chars):")
+                Text::new("project name:")
                     .prompt()
                     .expect("couldn't get project name")
             })
@@ -37,12 +37,7 @@ impl ProjectType {
             .to_string();
 
         // Validate project name
-        let project_name_validation_regex = Regex::new(r"^[a-z][a-z0-9\-]{0,29}$").unwrap();
-        if !project_name_validation_regex.is_match(&project_name) {
-            return Err(anyhow::anyhow!(
-                "project_name should start with a letter and only contain alphanumeric chars or dashes."
-            ));
-        }
+        validate_project_name(&project_name).map_err(|e| anyhow!("{}", e))?;
 
         // create dir
         let project_subdir = match self {
