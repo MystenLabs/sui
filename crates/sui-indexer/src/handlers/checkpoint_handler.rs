@@ -123,13 +123,19 @@ where
     T: R2D2Connection + 'static,
 {
     async fn process_checkpoint(&self, checkpoint: CheckpointData) -> anyhow::Result<()> {
-        let cp_download_lag = chrono::Utc::now().timestamp_millis()
-            - checkpoint.checkpoint_summary.timestamp_ms as i64;
+        let time_now_ms = chrono::Utc::now().timestamp_millis();
+        let cp_download_lag = time_now_ms - checkpoint.checkpoint_summary.timestamp_ms as i64;
         info!(
             "checkpoint download lag for cp {}: {} ms",
             checkpoint.checkpoint_summary.sequence_number, cp_download_lag
         );
         self.metrics.download_lag_ms.set(cp_download_lag);
+        info!(
+            "Indexer lag: downloaded checkpoint {} with time now {} and checkpoint time {}",
+            checkpoint.checkpoint_summary.sequence_number,
+            time_now_ms,
+            checkpoint.checkpoint_summary.timestamp_ms
+        );
         let checkpoint_data = Self::index_checkpoint(
             self.state.clone().into(),
             checkpoint.clone(),
@@ -306,10 +312,14 @@ where
                 db_displays,
             )
         };
-        info!(checkpoint_seq, "Indexed one checkpoint.");
+        let time_now_ms = chrono::Utc::now().timestamp_millis();
         metrics
             .index_lag_ms
-            .set(chrono::Utc::now().timestamp_millis() - checkpoint.timestamp_ms as i64);
+            .set(time_now_ms - checkpoint.timestamp_ms as i64);
+        info!(
+            "Indexer lag: indexed checkpoint {} with time now {} and checkpoint time {}",
+            checkpoint.sequence_number, time_now_ms, checkpoint.timestamp_ms
+        );
 
         Ok(CheckpointDataToCommit {
             checkpoint,
