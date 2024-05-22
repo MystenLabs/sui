@@ -330,7 +330,7 @@ module deepbook::critbit {
     }
 
     public(package) fun destroy_empty<V: store>(tree: CritbitTree<V>) {
-        assert!(table::length(&tree.leaves) == 0);
+        assert!(table::length(&tree.leaves) == 0, 0);
 
         let CritbitTree<V> {
             root: _,

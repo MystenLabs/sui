@@ -894,7 +894,7 @@ title: Module `0xdee9::critbit`
 
 
 <pre><code><b>public</b>(package) <b>fun</b> <a href="critbit.md#0xdee9_critbit_destroy_empty">destroy_empty</a>&lt;V: store&gt;(tree: <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt;) {
-    <b>assert</b>!(<a href="../sui-framework/table.md#0x2_table_length">table::length</a>(&tree.leaves) == 0);
+    <b>assert</b>!(<a href="../sui-framework/table.md#0x2_table_length">table::length</a>(&tree.leaves) == 0, 0);
 
     <b>let</b> <a href="critbit.md#0xdee9_critbit_CritbitTree">CritbitTree</a>&lt;V&gt; {
         root: _,

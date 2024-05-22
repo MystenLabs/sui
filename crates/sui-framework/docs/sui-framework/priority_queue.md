@@ -235,7 +235,7 @@ Insert a new entry into the queue.
 
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/priority_queue.md#0x2_priority_queue_create_entries">create_entries</a>&lt;T: drop&gt;(<b>mut</b> p: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;u64&gt;, <b>mut</b> v: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;T&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;<a href="../sui-framework/priority_queue.md#0x2_priority_queue_Entry">Entry</a>&lt;T&gt;&gt; {
     <b>let</b> len = p.length();
-    <b>assert</b>!(v.length() == len);
+    <b>assert</b>!(v.length() == len, 0);
     <b>let</b> <b>mut</b> res = <a href="../move-stdlib/vector.md#0x1_vector">vector</a>[];
     <b>let</b> <b>mut</b> i = 0;
     <b>while</b> (i &lt; len) {
@@ -310,7 +310,7 @@ do satisfy the max heap property.
     <b>if</b> (len == 0) {
         <b>return</b>
     };
-    <b>assert</b>!(i &lt; len);
+    <b>assert</b>!(i &lt; len, 1);
     <b>let</b> left = i * 2 + 1;
     <b>let</b> right = left + 1;
     <b>let</b> <b>mut</b> max = i;

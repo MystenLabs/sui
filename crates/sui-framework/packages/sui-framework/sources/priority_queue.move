@@ -58,7 +58,7 @@ module sui::priority_queue {
 
     public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
         let len = p.length();
-        assert!(v.length() == len);
+        assert!(v.length() == len, 0);
         let mut res = vector[];
         let mut i = 0;
         while (i < len) {
@@ -94,7 +94,7 @@ module sui::priority_queue {
         if (len == 0) {
             return
         };
-        assert!(i < len);
+        assert!(i < len, 1);
         let left = i * 2 + 1;
         let right = left + 1;
         let mut max = i;

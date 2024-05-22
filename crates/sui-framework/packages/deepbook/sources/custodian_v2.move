@@ -201,9 +201,6 @@ module deepbook::custodian_v2 {
     use sui::test_utils::{assert_eq, destroy};
 
     #[test_only]
-    const ENull: u64 = 0;
-
-    #[test_only]
     public struct USD {}
 
     #[test_only]
@@ -214,8 +211,8 @@ module deepbook::custodian_v2 {
         locked_balance: u64,
     ) {
         let user_balance = borrow_account_balance<T>(custodian, owner);
-        assert!(balance::value(&user_balance.available_balance) == available_balance, ENull);
-        assert!(balance::value(&user_balance.locked_balance) == locked_balance, ENull)
+        assert!(balance::value(&user_balance.available_balance) == available_balance);
+        assert!(balance::value(&user_balance.locked_balance) == locked_balance)
     }
 
     #[test_only]

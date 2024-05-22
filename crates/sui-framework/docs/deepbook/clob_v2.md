@@ -3526,7 +3526,7 @@ Grouping order_ids like [0, 2, 1, 3] would make it the most gas efficient.
     // Iterate over the order ids that need <b>to</b> be canceled at that price level,
     // retrieve and remove the order from open orders of the PriceLevel.
     <b>let</b> owner = account_owner(account_cap);
-    <b>assert</b>!(contains(&pool.usr_open_orders, owner));
+    <b>assert</b>!(contains(&pool.usr_open_orders, owner), 0);
     <b>let</b> <b>mut</b> tick_index: u64 = 0;
     <b>let</b> <b>mut</b> tick_price: u64 = 0;
     <b>let</b> n_order = <a href="../move-stdlib/vector.md#0x1_vector_length">vector::length</a>(&order_ids);

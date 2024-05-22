@@ -407,7 +407,7 @@ available for use, the type can not be traded in kiosks.
 <pre><code><b>public</b> <b>fun</b> <a href="transfer_policy.md#0x2_transfer_policy_new">new</a>&lt;T&gt;(
     pub: &Publisher, ctx: &<b>mut</b> TxContext
 ): (<a href="transfer_policy.md#0x2_transfer_policy_TransferPolicy">TransferPolicy</a>&lt;T&gt;, <a href="transfer_policy.md#0x2_transfer_policy_TransferPolicyCap">TransferPolicyCap</a>&lt;T&gt;) {
-    <b>assert</b>!(<a href="package.md#0x2_package_from_package">package::from_package</a>&lt;T&gt;(pub));
+    <b>assert</b>!(<a href="package.md#0x2_package_from_package">package::from_package</a>&lt;T&gt;(pub), 0);
     <b>let</b> id = <a href="object.md#0x2_object_new">object::new</a>(ctx);
     <b>let</b> policy_id = id.to_inner();
 

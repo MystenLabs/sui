@@ -1144,7 +1144,7 @@ module deepbook::clob {
         // Iterate over the order ids that need to be canceled at that price level,
         // retrieve and remove the order from open orders of the PriceLevel.
         let user = object::id(account_cap);
-        assert!(contains(&pool.usr_open_orders, user));
+        assert!(contains(&pool.usr_open_orders, user), 0);
         let mut tick_index: u64 = 0;
         let mut tick_price: u64 = 0;
         let n_order = vector::length(&order_ids);
@@ -1341,8 +1341,6 @@ module deepbook::clob {
 
     #[test_only] use sui::test_scenario::{Self, Scenario};
 
-    #[test_only] const E_NULL: u64 = 0;
-
     #[test_only] public struct USD {}
 
     #[test_only]
@@ -1421,17 +1419,17 @@ module deepbook::clob {
         open_orders: &vector<Order>,
     ) {
         let (tick_exists, tick_index) = find_leaf(tree, price);
-        assert!(tick_exists, E_NULL);
+        assert!(tick_exists);
         let tick_level = borrow_leaf_by_index(tree, tick_index);
-        assert!(tick_level.price == price, E_NULL);
+        assert!(tick_level.price == price);
         let mut total_quote_amount: u64 = 0;
-        assert!(linked_table::length(&tick_level.open_orders) == vector::length(open_orders), E_NULL);
+        assert!(linked_table::length(&tick_level.open_orders) == vector::length(open_orders));
         let mut i_order = 0;
         while (i_order < vector::length(open_orders)) {
             let order = vector::borrow(open_orders, i_order);
             total_quote_amount = total_quote_amount + order.quantity;
-            assert!(order.price == price, E_NULL);
-            assert!(contains_order(&tick_level.open_orders, order), E_NULL);
+            assert!(order.price == price);
+            assert!(contains_order(&tick_level.open_orders, order));
             i_order = i_order + 1;
         };
     }
@@ -1442,7 +1440,7 @@ module deepbook::clob {
         price: u64,
     ) {
         let (tick_exists, _) = find_leaf(tree, price);
-        assert!(!tick_exists, E_NULL);
+        assert!(!tick_exists);
     }
 
 
@@ -1582,7 +1580,7 @@ module deepbook::clob {
         pool: &Pool<BaseAsset, QuoteAsset>,
         owner: ID
     ): &LinkedTable<u64, u64> {
-        assert!(contains(&pool.usr_open_orders, owner));
+        assert!(contains(&pool.usr_open_orders, owner), 0);
         table::borrow(&pool.usr_open_orders, owner)
     }
 

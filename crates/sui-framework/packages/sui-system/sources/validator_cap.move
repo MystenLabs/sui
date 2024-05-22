@@ -42,7 +42,7 @@ module sui_system::validator_cap {
         // 1. in genesis where all valdiators are created by @0x0
         // 2. in tests where @0x0 could be used to simplify the setup
         let sender_address = ctx.sender();
-        assert!(sender_address == @0x0 || sender_address == validator_address);
+        assert!(sender_address == @0x0 || sender_address == validator_address, 0);
 
         let operation_cap = UnverifiedValidatorOperationCap {
             id: object::new(ctx),
