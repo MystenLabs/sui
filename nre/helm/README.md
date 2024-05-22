@@ -38,10 +38,10 @@ More Documentation on this coming soon! The storage amount recommendations will 
 ### Containers
 *graphql* - container running sui-graphql rpc endpoint. Requires a Database updated by the indexer-writer.
 
-### GCP Recommendations
+### Resource Recommendations
 
-*Node type:* n2d-standard-32
 *CpuRequest:* 24
+
 *MemRequest:* 96G
 
 # Indexer-Reader
@@ -50,6 +50,7 @@ More Documentation on this coming soon! The storage amount recommendations will 
 
 ### Resource Recommendations
 *Cpu:* 4 cores / 8 vCPU
+
 *Memory:* 32Gi
 
 # Indexer-Writer
@@ -58,6 +59,7 @@ More Documentation on this coming soon! The storage amount recommendations will 
 
 ### Resource Recommendations
 *Cpu:* 16 cores / 32 vCPU
+
 *Memory:* 128Gi
 
 # Sui-node
@@ -82,8 +84,11 @@ Sui-Node - Runs the sui-node software.
 ### Resource Recommendations
 
 *Cpu:* 16 cores / 32 vCPU
+
 *Memory:* 128Gi
+
 *PVCSize*: 4000Gi
+
 *StorageClass:* pd-ssd - A StorageClass that allows VolumeExpansion is recommended. More info on k8s storage classes [here](https://kubernetes.io/docs/concepts/storage/storage-classes/).
 
 
@@ -99,9 +104,9 @@ Sui-Node - Runs the sui-node software.
 - Iterate on values/templates to fit any specific needs the run `helm upgrade <name> <chart-name>`
 
 ### Other Helm actions
-*review deployment history* - `helm history <name>`
+**review deployment history** - `helm history <name>`
 
-*uninstall helm provisioned resources* - `helm uninstall <name>`
+**uninstall helm provisioned resources** - `helm uninstall <name>`
 
 Review [Helm docs](https://helm.sh/docs/) for other actions.
 
