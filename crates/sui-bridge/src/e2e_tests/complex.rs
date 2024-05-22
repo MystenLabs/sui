@@ -70,9 +70,8 @@ async fn test_sui_bridge_paused() {
     // get pause bridge signatures from committee
     let bridge_committee = Arc::new(bridge_client.get_bridge_committee().await.unwrap());
     let agg = BridgeAuthorityAggregator::new(bridge_committee);
-    let threshold = pause_action.approval_threshold();
     let certified_action = agg
-        .request_committee_signatures(pause_action, threshold)
+        .request_committee_signatures(pause_action)
         .await
         .unwrap();
 
@@ -92,6 +91,7 @@ async fn test_sui_bridge_paused() {
             .get_mutable_bridge_object_arg_must_succeed()
             .await,
         &sui_token_type_tags,
+        1000,
     )
     .unwrap();
 

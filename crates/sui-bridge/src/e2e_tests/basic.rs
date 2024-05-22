@@ -3,10 +3,8 @@
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
+use crate::e2e_tests::test_utils::BridgeTestCluster;
 use crate::e2e_tests::test_utils::{get_signatures, BridgeTestClusterBuilder};
-use crate::e2e_tests::test_utils::{
-    publish_coins_return_add_coins_on_sui_action, BridgeTestCluster,
-};
 use crate::events::{
     SuiBridgeEvent, SuiToEthTokenBridgeV1, TokenTransferApproved, TokenTransferClaimed,
 };
