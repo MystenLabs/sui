@@ -114,10 +114,6 @@ use move_package::{
 };
 use move_symbol_pool::Symbol;
 
-/// Enabling/disabling the language server reporting readiness to support go-to-def and
-/// go-to-references to the IDE.
-pub const DEFS_AND_REFS_SUPPORT: bool = true;
-
 const MANIFEST_FILE_NAME: &str = "Move.toml";
 
 #[derive(Clone)]
@@ -320,6 +316,8 @@ pub struct ModuleDefs {
     constants: BTreeMap<Symbol, ConstDef>,
     /// Function definitions
     functions: BTreeMap<Symbol, FunctionDef>,
+    /// Definitions where the type is not explicitly specified
+    untyped_defs: BTreeSet<DefLoc>,
 }
 
 /// Data used during symbolication over parsed AST
@@ -327,7 +325,7 @@ pub struct ParsingSymbolicator<'a> {
     /// Outermost definitions in a module (structs, consts, functions), keyd on a ModuleIdent
     /// string so that we can access it regardless of the ModuleIdent representation
     /// (e.g., in the parsing AST or in the typing AST)
-    mod_outer_defs: &'a BTreeMap<String, ModuleDefs>,
+    mod_outer_defs: &'a mut BTreeMap<String, ModuleDefs>,
     /// A mapping from file names to file content (used to obtain source file locations)
     files: &'a SimpleFiles<Symbol, String>,
     /// A mapping from file hashes to file IDs (used to obtain source file locations)
@@ -341,6 +339,9 @@ pub struct ParsingSymbolicator<'a> {
     /// A UseDefMap for a given module (needs to be appropriately set before the module
     /// processing starts)
     use_defs: UseDefMap,
+    /// Current module identifier string (needs to be appropriately set before the module
+    /// processing starts)
+    current_mod_ident_str: Option<String>,
     /// Module name lengths in access paths for a given module (needs to be appropriately
     /// set before the module processing starts)
     alias_lengths: BTreeMap<Position, usize>,
@@ -420,6 +421,10 @@ impl ModuleDefs {
 
     pub fn fhash(&self) -> FileHash {
         self.fhash
+    }
+
+    pub fn untyped_defs(&self) -> &BTreeSet<DefLoc> {
+        &self.untyped_defs
     }
 }
 
@@ -597,7 +602,7 @@ fn typed_id_list_to_ide_string(names: &[Symbol], types: &[Type], separate_lines:
         .join(if separate_lines { ",\n" } else { ", " })
 }
 
-fn type_to_ide_string(sp!(_, t): &Type) -> String {
+pub fn type_to_ide_string(sp!(_, t): &Type) -> String {
     match t {
         Type_::Unit => "()".to_string(),
         Type_::Ref(m, r) => format!("&{}{}", if *m { "mut " } else { "" }, type_to_ide_string(r)),
@@ -1320,7 +1325,6 @@ pub fn get_symbols(
 
     let mut mod_outer_defs = BTreeMap::new();
     let mut mod_use_defs = BTreeMap::new();
-    let mut file_mods = BTreeMap::new();
     let mut references = BTreeMap::new();
     let mut def_info = BTreeMap::new();
 
@@ -1330,10 +1334,8 @@ pub fn get_symbols(
         &files,
         &file_id_mapping,
         &file_id_to_lines,
-        &file_name_mapping,
         &mut mod_outer_defs,
         &mut mod_use_defs,
-        &mut file_mods,
         &mut references,
         &mut def_info,
         &edition,
@@ -1346,29 +1348,28 @@ pub fn get_symbols(
             &files,
             &file_id_mapping,
             &file_id_to_lines,
-            &file_name_mapping,
             &mut mod_outer_defs,
             &mut mod_use_defs,
-            &mut file_mods,
             &mut references,
             &mut def_info,
             &edition,
         );
     }
 
-    eprintln!("get_symbols loaded file_mods length: {}", file_mods.len());
+    eprintln!("get_symbols loaded");
 
     let mut file_use_defs = BTreeMap::new();
     let mut mod_to_alias_lengths = BTreeMap::new();
 
     let mut parsing_symbolicator = ParsingSymbolicator {
-        mod_outer_defs: &mod_outer_defs,
+        mod_outer_defs: &mut mod_outer_defs,
         files: &files,
         file_id_mapping: &file_id_mapping,
         file_id_to_lines: &file_id_to_lines,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
+        current_mod_ident_str: None,
         alias_lengths: BTreeMap::new(),
         pkg_addresses: &NamedAddressMap::new(),
     };
@@ -1418,6 +1419,12 @@ pub fn get_symbols(
         );
     }
 
+    let mut file_mods: BTreeMap<PathBuf, BTreeSet<ModuleDefs>> = BTreeMap::new();
+    for d in mod_outer_defs.into_values() {
+        let path = file_name_mapping.get(&d.fhash.clone()).unwrap();
+        file_mods.entry(path.to_path_buf()).or_default().insert(d);
+    }
+
     let symbols = Symbols {
         references,
         file_use_defs,
@@ -1437,10 +1444,8 @@ fn pre_process_typed_modules(
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
     file_id_to_lines: &HashMap<usize, Vec<String>>,
-    file_name_mapping: &BTreeMap<FileHash, PathBuf>,
     mod_outer_defs: &mut BTreeMap<String, ModuleDefs>,
     mod_use_defs: &mut BTreeMap<String, UseDefMap>,
-    file_mods: &mut BTreeMap<PathBuf, BTreeSet<ModuleDefs>>,
     references: &mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     def_info: &mut BTreeMap<DefLoc, DefInfo>,
     edition: &Option<Edition>,
@@ -1459,14 +1464,6 @@ fn pre_process_typed_modules(
             edition,
         );
         mark_positional_struct(parsed_program, &mut defs, &mod_ident_str);
-
-        let cloned_defs = defs.clone();
-        let path = file_name_mapping.get(&cloned_defs.fhash.clone()).unwrap();
-        file_mods
-            .entry(path.to_path_buf())
-            .or_default()
-            .insert(cloned_defs);
-
         mod_outer_defs.insert(mod_ident_str.clone(), defs);
         mod_use_defs.insert(mod_ident_str, symbols);
     }
@@ -1887,6 +1884,7 @@ fn get_mod_outer_defs(
                     structs,
                     constants,
                     functions,
+                    untyped_defs: BTreeSet::new(),
                 },
                 use_def_map,
             );
@@ -1902,6 +1900,7 @@ fn get_mod_outer_defs(
         structs,
         constants,
         functions,
+        untyped_defs: BTreeSet::new(),
     };
 
     // insert use of the module name in the definition itself
@@ -1979,6 +1978,7 @@ impl<'a> ParsingSymbolicator<'a> {
             let pkg_addresses = pkg_address_maps.get(pkg_def.named_address_map);
             let old_addresses = std::mem::replace(&mut self.pkg_addresses, pkg_addresses);
             self.mod_symbols(mod_def, mod_use_defs, mod_to_alias_lengths);
+            self.current_mod_ident_str = None;
             let _ = std::mem::replace(&mut self.pkg_addresses, old_addresses);
         }
     }
@@ -1994,6 +1994,8 @@ impl<'a> ParsingSymbolicator<'a> {
         let Some(mod_ident_str) = parsing_mod_def_to_map_key(self.pkg_addresses, mod_def) else {
             return;
         };
+        assert!(self.current_mod_ident_str.is_none());
+        self.current_mod_ident_str = Some(mod_ident_str.clone());
 
         let use_defs = mod_use_defs.remove(&mod_ident_str).unwrap();
         let old_defs = std::mem::replace(&mut self.use_defs, use_defs);
@@ -2007,9 +2009,6 @@ impl<'a> ParsingSymbolicator<'a> {
                     if ignored_function(fun.name.value()) {
                         continue;
                     }
-                    if let P::FunctionBody_::Defined(seq) = &fun.body.value {
-                        self.seq_symbols(seq);
-                    };
                     fun.signature
                         .parameters
                         .iter()
@@ -2054,7 +2053,7 @@ impl<'a> ParsingSymbolicator<'a> {
                 MM::Spec(_) => (),
             }
         }
-
+        self.current_mod_ident_str = None;
         let processed_defs = std::mem::replace(&mut self.use_defs, old_defs);
         mod_use_defs.insert(mod_ident_str.clone(), processed_defs);
         let processed_alias_lengths = std::mem::replace(&mut self.alias_lengths, old_alias_lengths);
@@ -2067,13 +2066,17 @@ impl<'a> ParsingSymbolicator<'a> {
         match &seq_item.value {
             I::Seq(e) => self.exp_symbols(e),
             I::Declare(v, to) => {
-                v.value.iter().for_each(|bind| self.bind_symbols(bind));
+                v.value
+                    .iter()
+                    .for_each(|bind| self.bind_symbols(bind, to.is_some()));
                 if let Some(t) = to {
                     self.type_symbols(t);
                 }
             }
             I::Bind(v, to, e) => {
-                v.value.iter().for_each(|bind| self.bind_symbols(bind));
+                v.value
+                    .iter()
+                    .for_each(|bind| self.bind_symbols(bind, to.is_some()));
                 if let Some(t) = to {
                     self.type_symbols(t);
                 }
@@ -2144,7 +2147,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     if let Some(bt) = bto {
                         self.type_symbols(bt);
                     }
-                    v.iter().for_each(|bind| self.bind_symbols(bind));
+                    v.iter().for_each(|bind| self.bind_symbols(bind, to.is_some()));
                 }
                 if let Some(t) = to {
                     self.type_symbols(t);
@@ -2227,11 +2230,8 @@ impl<'a> ParsingSymbolicator<'a> {
             P::Use::ModuleUse(mod_ident, mod_use) => {
                 let mod_ident_str =
                     parsing_mod_ident_to_map_key(self.pkg_addresses, &mod_ident.value);
-                let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-                    return;
-                };
-                self.mod_name_symbol(&mod_ident.value.module, mod_defs);
-                self.mod_use_symbols(mod_use, mod_defs, mod_ident_str);
+                self.mod_name_symbol(&mod_ident.value.module, &mod_ident_str);
+                self.mod_use_symbols(mod_use, &mod_ident_str);
             }
             P::Use::NestedModuleUses(leading_name, uses) => {
                 for (mod_name, mod_use) in uses {
@@ -2241,11 +2241,8 @@ impl<'a> ParsingSymbolicator<'a> {
                         *mod_name,
                     );
 
-                    let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
-                        continue;
-                    };
-                    self.mod_name_symbol(mod_name, mod_defs);
-                    self.mod_use_symbols(mod_use, mod_defs, mod_ident_str);
+                    self.mod_name_symbol(mod_name, &mod_ident_str);
+                    self.mod_use_symbols(mod_use, &mod_ident_str);
                 }
             }
             P::Use::Fun {
@@ -2261,7 +2258,10 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get module name symbol
-    fn mod_name_symbol(&mut self, mod_name: &P::ModuleName, mod_defs: &ModuleDefs) {
+    fn mod_name_symbol(&mut self, mod_name: &P::ModuleName, mod_ident_str: &String) {
+        let Some(mod_defs) = self.mod_outer_defs.get_mut(mod_ident_str) else {
+            return;
+        };
         let Some(mod_name_start) = get_start_loc(&mod_name.loc(), self.files, self.file_id_mapping)
         else {
             debug_assert!(false);
@@ -2284,20 +2284,15 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get symbols for a module use
-    fn mod_use_symbols(
-        &mut self,
-        mod_use: &P::ModuleUse,
-        mod_defs: &ModuleDefs,
-        mod_ident_str: String,
-    ) {
+    fn mod_use_symbols(&mut self, mod_use: &P::ModuleUse, mod_ident_str: &String) {
         match mod_use {
             P::ModuleUse::Module(Some(alias_name)) => {
-                self.mod_name_symbol(alias_name, mod_defs);
+                self.mod_name_symbol(alias_name, mod_ident_str);
             }
             P::ModuleUse::Module(None) => (), // nothing more to do
             P::ModuleUse::Members(v) => {
                 for (name, alias_opt) in v {
-                    self.use_decl_member_symbols(mod_defs, mod_ident_str.clone(), name, alias_opt);
+                    self.use_decl_member_symbols(mod_ident_str.clone(), name, alias_opt);
                 }
             }
         }
@@ -2306,11 +2301,13 @@ impl<'a> ParsingSymbolicator<'a> {
     /// Get symbols for a module member in the use declaration (can be a struct or a function)
     fn use_decl_member_symbols(
         &mut self,
-        mod_defs: &ModuleDefs,
         mod_ident_str: String,
         name: &Name,
         alias_opt: &Option<Name>,
     ) {
+        let Some(mod_defs) = self.mod_outer_defs.get(&mod_ident_str) else {
+            return;
+        };
         if let Some(mut ud) = add_struct_use_def(
             self.mod_outer_defs,
             self.files,
@@ -2394,7 +2391,7 @@ impl<'a> ParsingSymbolicator<'a> {
     }
 
     /// Get symbols for a bind statement
-    fn bind_symbols(&mut self, sp!(_, bind): &P::Bind) {
+    fn bind_symbols(&mut self, sp!(_, bind): &P::Bind, explicitly_typed: bool) {
         use P::Bind_ as B;
         match bind {
             B::Unpack(chain, bindings) => {
@@ -2403,7 +2400,7 @@ impl<'a> ParsingSymbolicator<'a> {
                     P::FieldBindings::Named(v) => {
                         for symbol in v {
                             match symbol {
-                                P::Ellipsis::Binder((_, x)) => self.bind_symbols(x),
+                                P::Ellipsis::Binder((_, x)) => self.bind_symbols(x, false),
                                 P::Ellipsis::Ellipsis(_) => (),
                             }
                         }
@@ -2411,14 +2408,33 @@ impl<'a> ParsingSymbolicator<'a> {
                     P::FieldBindings::Positional(v) => {
                         for symbol in v.iter() {
                             match symbol {
-                                P::Ellipsis::Binder(x) => self.bind_symbols(x),
+                                P::Ellipsis::Binder(x) => self.bind_symbols(x, false),
                                 P::Ellipsis::Ellipsis(_) => (),
                             }
                         }
                     }
                 }
             }
-            B::Var(..) => (),
+            B::Var(_, var) => {
+                if !explicitly_typed {
+                    assert!(self.current_mod_ident_str.is_some());
+                    let Some(mod_defs) = self
+                        .mod_outer_defs
+                        .get_mut(&self.current_mod_ident_str.clone().unwrap())
+                    else {
+                        return;
+                    };
+                    let Some(def_start) =
+                        get_start_loc(&var.loc(), self.files, self.file_id_mapping)
+                    else {
+                        return;
+                    };
+                    mod_defs.untyped_defs.insert(DefLoc {
+                        fhash: var.loc().file_hash(),
+                        start: def_start,
+                    });
+                }
+            }
         }
     }
 
@@ -2847,10 +2863,23 @@ impl<'a> TypingSymbolicator<'a> {
             E::IDEAnnotation(info, exp) => {
                 match info {
                     IDEInfo::MacroCallInfo(MacroCallInfo {
-                        module, name, method_name, type_arguments, by_value_args
+                        module,
+                        name,
+                        method_name,
+                        type_arguments,
+                        by_value_args,
                     }) => {
-                        self.mod_call_symbols(module, *name, *method_name, type_arguments, None, scope);
-                        by_value_args.iter().for_each(|a| self.seq_item_symbols(scope, a));
+                        self.mod_call_symbols(
+                            module,
+                            *name,
+                            *method_name,
+                            type_arguments,
+                            None,
+                            scope,
+                        );
+                        by_value_args
+                            .iter()
+                            .for_each(|a| self.seq_item_symbols(scope, a));
                         let old_traverse_mode = self.traverse_only;
                         // stop adding new use-defs etc.
                         self.traverse_only = true;
@@ -2863,7 +2892,7 @@ impl<'a> TypingSymbolicator<'a> {
                         self.traverse_only = false;
                         self.exp_symbols(exp, scope);
                         self.traverse_only = old_traverse_mode;
-                    },
+                    }
                 }
             }
             E::Assign(lvalues, opt_types, e) => {
@@ -2923,11 +2952,7 @@ impl<'a> TypingSymbolicator<'a> {
                 self.exp_symbols(exp, scope);
                 self.add_type_id_use_def(t);
             }
-            E::AutocompleteDotAccess {
-                base_exp,
-                methods: _,
-                fields: _,
-            } => {
+            E::AutocompleteDotAccess { base_exp, .. } => {
                 self.exp_symbols(base_exp, scope);
             }
             E::Unit { .. }
@@ -3940,7 +3965,7 @@ pub fn on_document_symbol_request(context: &Context, request: &Request, symbols:
     for mod_def in mods {
         let name = mod_def.ident.module.clone().to_string();
         let detail = Some(mod_def.ident.clone().to_string());
-        let kind = SymbolKind::Module;
+        let kind = SymbolKind::MODULE;
         let range = Range {
             start: mod_def.start,
             end: mod_def.start,
@@ -3959,7 +3984,7 @@ pub fn on_document_symbol_request(context: &Context, request: &Request, symbols:
             children.push(DocumentSymbol {
                 name: sym.clone().to_string(),
                 detail: None,
-                kind: SymbolKind::Constant,
+                kind: SymbolKind::CONSTANT,
                 range: const_range,
                 selection_range: const_range,
                 children: None,
@@ -3982,7 +4007,7 @@ pub fn on_document_symbol_request(context: &Context, request: &Request, symbols:
             children.push(DocumentSymbol {
                 name: sym.clone().to_string(),
                 detail: None,
-                kind: SymbolKind::Struct,
+                kind: SymbolKind::STRUCT,
                 range: struct_range,
                 selection_range: struct_range,
                 children: Some(fields),
@@ -4007,7 +4032,7 @@ pub fn on_document_symbol_request(context: &Context, request: &Request, symbols:
             children.push(DocumentSymbol {
                 name: sym.clone().to_string(),
                 detail,
-                kind: SymbolKind::Function,
+                kind: SymbolKind::FUNCTION,
                 range: func_range,
                 selection_range: func_range,
                 children: None,
@@ -4053,7 +4078,7 @@ fn handle_struct_fields(struct_def: StructDef, fields: &mut Vec<DocumentSymbol>)
         fields.push(DocumentSymbol {
             name: field_def.name.clone().to_string(),
             detail: None,
-            kind: SymbolKind::Field,
+            kind: SymbolKind::FIELD,
             range: field_range,
             selection_range: field_range,
             children: None,
@@ -7293,6 +7318,7 @@ fn function_types_test() {
         "entry fun Macros::fun_type::entry_fun()",
         None,
     );
+    // macro function call
     assert_use_def(
         mod_symbols,
         &symbols,

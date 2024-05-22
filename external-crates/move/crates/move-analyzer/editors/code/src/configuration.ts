@@ -156,3 +156,7 @@ export class Configuration {
 export function lint(): string {
     return vscode.workspace.getConfiguration('move').get('lint') ?? 'default';
 }
+
+export function inlayHintsForType(): boolean {
+    return vscode.workspace.getConfiguration('move').get('inlay-hints.type') ?? false;
+}
