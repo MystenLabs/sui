@@ -60,16 +60,7 @@ jobs:
       - uses: ./.github/actions/rust-setup
       - uses: taiki-e/install-action@nextest
       - name: Install Foundry
-        continue-on-error: true
-        run: |
-          # Install Foundry
-          curl -L https://foundry.paradigm.xyz | bash &> /dev/null
-          # Manually add Foundry to PATH for this session and globally
-          echo "$HOME/.foundry/bin" >> $GITHUB_PATH
-          echo "export PATH=$HOME/.foundry/bin:\$PATH" >> $HOME/.profile
-          export PATH=$HOME/.foundry/bin:$PATH
-          # Run foundryup
-          $HOME/.foundry/bin/foundryup
+        uses: foundry-rs/foundry-toolchain@v1
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
