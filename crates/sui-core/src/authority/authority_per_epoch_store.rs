@@ -147,7 +147,7 @@ pub enum ConsensusCertificateResult {
     ConsensusMessage,
     /// A system message in consensus was ignored (e.g. because of end of epoch).
     IgnoredSystem,
-    /// A will-be-cancelled tranasction. It'll still go through execution engine (but not be executed),
+    /// A will-be-cancelled transaction. It'll still go through execution engine (but not be executed),
     /// unlock any owned objects, and return corresponding cancellation error according to
     /// `CancelConsensusCertificateReason`.
     Cancelled(
@@ -3617,7 +3617,7 @@ impl AuthorityPerEpochStore {
 
     pub(crate) fn record_epoch_first_checkpoint_creation_time_metric(&self) {
         self.metrics
-            .epoch_first_checkpoint_ready_time_since_epoch_begin_ms
+            .epoch_first_checkpoint_created_time_since_epoch_begin_ms
             .set(self.epoch_open_time.elapsed().as_millis() as i64);
     }
 
