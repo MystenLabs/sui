@@ -9,6 +9,7 @@ use axum::{
 pub mod accept;
 mod checkpoints;
 pub mod client;
+mod committee;
 pub mod content_type;
 mod error;
 mod health;
@@ -89,6 +90,11 @@ impl RestService {
 
         Router::new()
             .route("/", get(info::node_info))
+            .route(
+                committee::GET_LATEST_COMMITTEE_PATH,
+                get(committee::get_latest_committee),
+            )
+            .route(committee::GET_COMMITTEE_PATH, get(committee::get_committee))
             .with_state(self.clone())
             .merge(rest_router(store))
             .pipe(|router| {
