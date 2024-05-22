@@ -14,15 +14,15 @@ use std::net::Ipv4Addr;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::Arc;
-use sui_bridge::abi::EthBridgeEvent;
-use sui_bridge::abi::EthSuiBridgeEvents;
 use sui_bridge::{
     abi::{EthBridgeCommittee, EthSuiBridge},
     eth_client::EthClient,
     eth_syncer::EthSyncer,
 };
-
-use sui_bridge_indexer::{config::BridgeIndexerConfig, worker::BridgeWorker};
+use sui_bridge_indexer::postgres_writer::get_connection_pool;
+use sui_bridge_indexer::{
+    config::BridgeIndexerConfig, worker::process_eth_transaction, worker::BridgeWorker,
+};
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, WorkerPool,
 };
@@ -72,6 +72,7 @@ async fn main() -> Result<()> {
         )
         .await?,
     );
+
     let contract_addresses = HashMap::from_iter(vec![(bridge_address, config.start_block)]);
 
     let (_task_handles, mut eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
@@ -79,42 +80,10 @@ async fn main() -> Result<()> {
         .await
         .expect("Failed to start eth syncer");
 
+    let pg_pool = get_connection_pool(config.db_url.clone());
+
     let _task_handle = spawn_logged_monitored_task!(
-        async move {
-            while let Some(event) = eth_events_rx.recv().await {
-                let bridge_events = event
-                    .2
-                    .iter()
-                    .map(EthBridgeEvent::try_from_eth_log)
-                    .collect::<Vec<_>>();
-
-                for (log, opt_bridge_event) in event.2.iter().zip(bridge_events) {
-                    if opt_bridge_event.is_none() {
-                        // TODO: we probably should not miss any events, warn for now.
-                        // warn!("Eth event not recognized: {:?}", log);
-                        continue;
-                    }
-                    // Unwrap safe: checked above
-                    let bridge_event = opt_bridge_event.unwrap();
-                    // println!("Observed Eth bridge event: {:#?}", bridge_event);
-
-                    match bridge_event {
-                        EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
-                            EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
-                                println!("TokensDeposited: {:#?}", bridge_event)
-                            }
-                            EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
-                                println!("TokensClaimed: {:#?}", bridge_event)
-                            }
-                            EthSuiBridgeEvents::PausedFilter(_bridge_event)
-                            | EthSuiBridgeEvents::UnpausedFilter(_bridge_event)
-                            | EthSuiBridgeEvents::UpgradedFilter(_bridge_event)
-                            | EthSuiBridgeEvents::InitializedFilter(_bridge_event) => (),
-                        },
-                    }
-                }
-            }
-        },
+        process_eth_transaction(eth_events_rx, provider.clone(), pg_pool),
         "indexer handler"
     );
 
@@ -122,7 +91,7 @@ async fn main() -> Result<()> {
     let progress_store = FileProgressStore::new(config.progress_store_file);
     let mut executor = IndexerExecutor::new(progress_store, 1 /* workflow types */, metrics);
     let worker_pool = WorkerPool::new(
-        BridgeWorker::new(vec![], config.db_url),
+        BridgeWorker::new(vec![], config.db_url.clone()),
         "bridge worker".into(),
         config.concurrency,
     );

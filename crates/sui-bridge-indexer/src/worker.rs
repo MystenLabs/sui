@@ -5,10 +5,16 @@ use crate::postgres_writer::{get_connection_pool, write, PgPool};
 use crate::{TokenTransfer, TokenTransferData, TokenTransferStatus};
 use anyhow::Result;
 use async_trait::async_trait;
+use ethers::providers::Provider;
+use ethers::providers::{Http, Middleware};
+use ethers::types::Address as EthAddress;
 use std::collections::BTreeSet;
+use std::sync::Arc;
+use sui_bridge::abi::{EthBridgeEvent, EthSuiBridgeEvents};
 use sui_bridge::events::{
     MoveTokenDepositedEvent, MoveTokenTransferApproved, MoveTokenTransferClaimed,
 };
+use sui_bridge::types::EthLog;
 use sui_data_ingestion_core::Worker;
 use sui_types::effects::TransactionEffectsAPI;
 use sui_types::{
@@ -54,9 +60,9 @@ impl BridgeWorker {
         if let Some(event) = &tx.events {
             event.data.iter().for_each(|ev| {
                 if ev.type_.address == BRIDGE_ADDRESS {
-                    println!("SUI: Processing bridge event : {:?}", ev.type_);
                     let token_transfer = match ev.type_.name.as_str() {
                         "TokenDepositedEvent" => {
+                            println!("Observed Sui Deposit");
                             // todo: handle deserialization error
                             let event: MoveTokenDepositedEvent =
                                 bcs::from_bytes(&ev.contents).unwrap();
@@ -78,6 +84,7 @@ impl BridgeWorker {
                             })
                         }
                         "TokenTransferApproved" => {
+                            println!("Observed Sui Approval");
                             let event: MoveTokenTransferApproved =
                                 bcs::from_bytes(&ev.contents).unwrap();
                             Some(TokenTransfer {
@@ -92,6 +99,7 @@ impl BridgeWorker {
                             })
                         }
                         "TokenTransferClaimed" => {
+                            println!("Observed Sui Claim");
                             let event: MoveTokenTransferClaimed =
                                 bcs::from_bytes(&ev.contents).unwrap();
                             Some(TokenTransfer {
@@ -114,6 +122,79 @@ impl BridgeWorker {
                     }
                 };
             });
+        }
+    }
+}
+
+pub async fn process_eth_transaction(
+    mut eth_events_rx: mysten_metrics::metered_channel::Receiver<(EthAddress, u64, Vec<EthLog>)>,
+    provider: Arc<Provider<Http>>,
+    pool: PgPool,
+) {
+    while let Some(event) = eth_events_rx.recv().await {
+        for log in event.2.iter() {
+            let eth_bridge_event = EthBridgeEvent::try_from_eth_log(log);
+            if eth_bridge_event.is_none() {
+                continue;
+            }
+            let bridge_event = eth_bridge_event.unwrap();
+            let block_number = log.block_number;
+            let block = provider.get_block(log.block_number).await.unwrap().unwrap();
+            let timestamp = block.timestamp.as_u64() * 1000;
+            let transaction = provider
+                .get_transaction(log.tx_hash)
+                .await
+                .unwrap()
+                .unwrap();
+            let gas = transaction.gas;
+            let tx_hash = log.tx_hash;
+
+            println!("Observed Eth bridge event: {:#?}", bridge_event);
+
+            match bridge_event {
+                EthBridgeEvent::EthSuiBridgeEvents(bridge_event) => match bridge_event {
+                    EthSuiBridgeEvents::TokensDepositedFilter(bridge_event) => {
+                        println!("Observed Eth Deposit");
+                        let transfer = TokenTransfer {
+                            chain_id: bridge_event.source_chain_id,
+                            nonce: bridge_event.nonce,
+                            block_height: block_number,
+                            timestamp_ms: timestamp,
+                            txn_hash: tx_hash.as_bytes().to_vec(),
+                            status: TokenTransferStatus::Deposited,
+                            gas_usage: gas.as_u64() as i64,
+                            data: Some(TokenTransferData {
+                                sender_address: bridge_event.sender_address.as_bytes().to_vec(),
+                                destination_chain: bridge_event.destination_chain_id,
+                                recipient_address: bridge_event.recipient_address.to_vec(),
+                                token_id: bridge_event.token_id,
+                                amount: bridge_event.sui_adjusted_amount,
+                            }),
+                        };
+
+                        write(&pool, transfer);
+                    }
+                    EthSuiBridgeEvents::TokensClaimedFilter(bridge_event) => {
+                        println!("Observed Eth Claim");
+                        let transfer = TokenTransfer {
+                            chain_id: bridge_event.source_chain_id,
+                            nonce: bridge_event.nonce,
+                            block_height: block_number,
+                            timestamp_ms: timestamp,
+                            txn_hash: tx_hash.as_bytes().to_vec(),
+                            status: TokenTransferStatus::Claimed,
+                            gas_usage: gas.as_u64() as i64,
+                            data: None,
+                        };
+
+                        write(&pool, transfer);
+                    }
+                    EthSuiBridgeEvents::PausedFilter(_bridge_event) => (),
+                    EthSuiBridgeEvents::UnpausedFilter(_bridge_event) => (),
+                    EthSuiBridgeEvents::UpgradedFilter(_bridge_event) => (),
+                    EthSuiBridgeEvents::InitializedFilter(_bridge_event) => (),
+                },
+            }
         }
     }
 }

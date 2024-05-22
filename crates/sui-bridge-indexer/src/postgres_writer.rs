@@ -13,7 +13,7 @@ use diesel::{
 
 pub(crate) type PgPool = Pool<ConnectionManager<PgConnection>>;
 
-pub(crate) fn get_connection_pool(database_url: String) -> PgPool {
+pub fn get_connection_pool(database_url: String) -> PgPool {
     let manager = ConnectionManager::<PgConnection>::new(database_url);
     Pool::builder()
         .test_on_check_out(true)
@@ -21,7 +21,7 @@ pub(crate) fn get_connection_pool(database_url: String) -> PgPool {
         .expect("Could not build Postgres DB connection pool")
 }
 
-pub(crate) fn write(pool: &PgPool, token: TokenTransfer) {
+pub fn write(pool: &PgPool, token: TokenTransfer) {
     let connection = &mut pool.get().unwrap();
     connection
         .transaction(|conn| {

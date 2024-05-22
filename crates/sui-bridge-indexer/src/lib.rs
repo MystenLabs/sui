@@ -70,7 +70,7 @@ impl TryFrom<&TokenTransfer> for DBTokenTransferData {
     }
 }
 
-enum TokenTransferStatus {
+pub(crate) enum TokenTransferStatus {
     Deposited,
     Approved,
     Claimed,
