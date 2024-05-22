@@ -764,7 +764,15 @@ impl RandomnessEventLoop {
     }
 
     fn update_rounds_pending_metric(&self) {
-        self.metrics
-            .set_num_rounds_pending(self.pending_tasks.len() + self.send_tasks.len());
+        let num_rounds_pending = (self.pending_tasks.len() + self.send_tasks.len()) as i64;
+        let prev_value = self.metrics.num_rounds_pending().unwrap_or_default();
+        if num_rounds_pending / 100 > prev_value / 100 {
+            warn!(
+                // Recording multiples of 100 so tests can match on the log message.
+                "RandomnessEventLoop randomness generation backlog: over {} rounds are pending",
+                (num_rounds_pending / 100) * 100
+            );
+        }
+        self.metrics.set_num_rounds_pending(num_rounds_pending);
     }
 }
