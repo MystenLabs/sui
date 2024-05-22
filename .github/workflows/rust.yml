@@ -65,7 +65,7 @@ jobs:
         continue-on-error: true
         run: |
           # Install Foundry
-          curl -L https://foundry.paradigm.xyz | bash
+          curl -L https://foundry.paradigm.xyz | bash &> /dev/null
           # Manually add Foundry to PATH for this session and globally
           echo "$HOME/.foundry/bin" >> $GITHUB_PATH
           echo "export PATH=$HOME/.foundry/bin:\$PATH" >> $HOME/.profile
