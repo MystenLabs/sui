@@ -1,3 +1,6 @@
+// Copyright (c) Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::io::ErrorKind;
 
 use inquire::{
@@ -12,14 +15,6 @@ pub struct FilePathCompleter {
 }
 
 impl FilePathCompleter {
-    pub fn new(input: String) -> Self {
-        Self {
-            input,
-            paths: Vec::new(),
-            lcp: String::new(),
-        }
-    }
-
     fn update_input(&mut self, input: &str) -> Result<(), CustomUserError> {
         if input == self.input {
             return Ok(());
