@@ -72,8 +72,8 @@ module sui_system::validator_tests {
             let ctx = scenario.ctx();
 
             let validator = get_test_validator(ctx);
-            assert!(validator.total_stake_amount() == 10_000_000_000, 0);
-            assert!(validator.sui_address() == sender, 0);
+            assert!(validator.total_stake_amount() == 10_000_000_000);
+            assert!(validator.sui_address() == sender);
 
             test_utils::destroy(validator);
         };
@@ -82,7 +82,7 @@ module sui_system::validator_tests {
          scenario.next_tx(sender);
          {
              let stake = scenario.take_from_sender<StakedSui>();
-             assert!(stake.amount() == 10_000_000_000, 0);
+             assert!(stake.amount() == 10_000_000_000);
              scenario.return_to_sender(stake);
          };
         scenario_val.end();
@@ -103,8 +103,8 @@ module sui_system::validator_tests {
             let stake = validator.request_add_stake(new_stake, sender, ctx);
             transfer::public_transfer(stake, sender);
 
-            assert!(validator.total_stake() == 10_000_000_000, 0);
-            assert!(validator.pending_stake_amount() == 30_000_000_000, 0);
+            assert!(validator.total_stake() == 10_000_000_000);
+            assert!(validator.pending_stake_amount() == 30_000_000_000);
         };
 
         scenario.next_tx(sender);
@@ -115,25 +115,25 @@ module sui_system::validator_tests {
             let withdrawn_balance = validator.request_withdraw_stake(stake, ctx);
             transfer::public_transfer(withdrawn_balance.into_coin(ctx), sender);
 
-            assert!(validator.total_stake() == 10_000_000_000, 0);
-            assert!(validator.pending_stake_amount() == 30_000_000_000, 0);
-            assert!(validator.pending_stake_withdraw_amount() == 10_000_000_000, 0);
+            assert!(validator.total_stake() == 10_000_000_000);
+            assert!(validator.pending_stake_amount() == 30_000_000_000);
+            assert!(validator.pending_stake_withdraw_amount() == 10_000_000_000);
 
             validator.deposit_stake_rewards(balance::zero());
 
             // Calling `process_pending_stakes_and_withdraws` will withdraw the coin and transfer to sender.
             validator.process_pending_stakes_and_withdraws(ctx);
 
-            assert!(validator.total_stake() == 30_000_000_000, 0);
-            assert!(validator.pending_stake_amount() == 0, 0);
-            assert!(validator.pending_stake_withdraw_amount() == 0, 0);
+            assert!(validator.total_stake() == 30_000_000_000);
+            assert!(validator.pending_stake_amount() == 0);
+            assert!(validator.pending_stake_withdraw_amount() == 0);
         };
 
         scenario.next_tx(sender);
         {
             let coin_ids = scenario.ids_for_sender<Coin<SUI>>();
             let withdraw = scenario.take_from_sender_by_id<Coin<SUI>>(coin_ids[0]);
-            assert!(withdraw.value() == 10_000_000_000, 0);
+            assert!(withdraw.value() == 10_000_000_000);
             scenario.return_to_sender(withdraw);
         };
 
@@ -388,24 +388,24 @@ module sui_system::validator_tests {
         scenario.next_tx(sender);
         {
             // Current epoch
-            assert!(validator.name() == &b"new_name".to_string(), 0);
-            assert!(validator.description() == &b"new_desc".to_string(), 0);
-            assert!(validator.image_url() == &url::new_unsafe_from_bytes(b"new_image_url"), 0);
-            assert!(validator.project_url() == &url::new_unsafe_from_bytes(b"new_proj_url"), 0);
-            assert!(validator.network_address() == &VALID_NET_ADDR.to_string(), 0);
-            assert!(validator.p2p_address() == &VALID_P2P_ADDR.to_string(), 0);
-            assert!(validator.primary_address() == &VALID_CONSENSUS_ADDR.to_string(), 0);
-            assert!(validator.worker_address() == &VALID_WORKER_ADDR.to_string(), 0);
-            assert!(validator.protocol_pubkey_bytes() == &VALID_PUBKEY, 0);
-            assert!(validator.proof_of_possession() == &PROOF_OF_POSSESSION, 0);
-            assert!(validator.network_pubkey_bytes() == &VALID_NET_PUBKEY, 0);
-            assert!(validator.worker_pubkey_bytes() == &VALID_WORKER_PUBKEY, 0);
+            assert!(validator.name() == &b"new_name".to_string());
+            assert!(validator.description() == &b"new_desc".to_string());
+            assert!(validator.image_url() == &url::new_unsafe_from_bytes(b"new_image_url"));
+            assert!(validator.project_url() == &url::new_unsafe_from_bytes(b"new_proj_url"));
+            assert!(validator.network_address() == &VALID_NET_ADDR.to_string());
+            assert!(validator.p2p_address() == &VALID_P2P_ADDR.to_string());
+            assert!(validator.primary_address() == &VALID_CONSENSUS_ADDR.to_string());
+            assert!(validator.worker_address() == &VALID_WORKER_ADDR.to_string());
+            assert!(validator.protocol_pubkey_bytes() == &VALID_PUBKEY);
+            assert!(validator.proof_of_possession() == &PROOF_OF_POSSESSION);
+            assert!(validator.network_pubkey_bytes() == &VALID_NET_PUBKEY);
+            assert!(validator.worker_pubkey_bytes() == &VALID_WORKER_PUBKEY);
 
             // Next epoch
-            assert!(validator.next_epoch_network_address() == &option::some(b"/ip4/192.168.1.1/tcp/80".to_string()), 0);
-            assert!(validator.next_epoch_p2p_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()), 0);
-            assert!(validator.next_epoch_primary_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()), 0);
-            assert!(validator.next_epoch_worker_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()), 0);
+            assert!(validator.next_epoch_network_address() == &option::some(b"/ip4/192.168.1.1/tcp/80".to_string()));
+            assert!(validator.next_epoch_p2p_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()));
+            assert!(validator.next_epoch_primary_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()));
+            assert!(validator.next_epoch_worker_address() == &option::some(b"/ip4/192.168.1.1/udp/80".to_string()));
             assert!(
                 validator.next_epoch_protocol_pubkey_bytes() == &option::some(new_protocol_pub_key),
                 0

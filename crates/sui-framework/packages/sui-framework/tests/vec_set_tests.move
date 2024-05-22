@@ -31,13 +31,13 @@ module sui::vec_set_tests {
             m.insert(k);
             i = i + 1;
         };
-        assert!(!m.is_empty(), 0);
-        assert!(m.size() == 10, 1);
+        assert!(!m.is_empty());
+        assert!(m.size() == 10);
         let mut i = 0;
         // make sure the elements are as expected in all of the getter APIs we expose
         while (i < 10) {
             let k = i + 2;
-            assert!(m.contains(&k), 2);
+            assert!(m.contains(&k));
             i = i + 1;
         };
         // remove all the elements
@@ -46,7 +46,7 @@ module sui::vec_set_tests {
         while (i < 10) {
             let k = i + 2;
             m.remove(&k);
-            assert!(keys[i] == k, 9);
+            assert!(keys[i] == k);
             i = i + 1;
         }
     }
@@ -58,7 +58,7 @@ module sui::vec_set_tests {
         m.insert(2);
         m.insert(3);
 
-        assert!(m.size() == 3, 0);
-        assert!(m.keys() == &vector[1, 2, 3], 1);
+        assert!(m.size() == 3);
+        assert!(m.keys() == &vector[1, 2, 3]);
     }
 }

@@ -96,7 +96,7 @@ module bridge::chain_ids {
         assert_valid_chain_id(SuiCustom);
         assert_valid_chain_id(EthMainnet);
         assert_valid_chain_id(EthSepolia);
-        assert_valid_chain_id(EthCustom);        
+        assert_valid_chain_id(EthCustom);
     }
 
     #[test]
@@ -109,14 +109,14 @@ module bridge::chain_ids {
     #[expected_failure(abort_code = EInvalidBridgeRoute)]
     fun test_sui_chains_error() {
         // this will break if we add one more sui chain id and should be corrected
-        assert_valid_chain_id(4); 
+        assert_valid_chain_id(4);
     }
 
     #[test]
     #[expected_failure(abort_code = EInvalidBridgeRoute)]
     fun test_eth_chains_error() {
         // this will break if we add one more eth chain id and should be corrected
-        assert_valid_chain_id(13); 
+        assert_valid_chain_id(13);
     }
 
     #[test]
@@ -138,7 +138,7 @@ module bridge::chain_ids {
         while (size > 0) {
             size = size - 1;
             let route = valid_routes[size];
-            assert!(is_valid_route(route.source, route.destination), 100); // sould not assert
+            assert!(is_valid_route(route.source, route.destination)); // sould not assert
         }
     }
 
