@@ -34,6 +34,7 @@ const LINT_ALL: &str = "all";
 #[clap(author, version, about)]
 struct Options {}
 
+#[allow(deprecated)]
 fn main() {
     // For now, move-analyzer only responds to options built-in to clap,
     // such as `--help` or `--version`.
