@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use mysten_metrics::monitored_scope;
 use std::cmp::{max, min};
 use std::hash::Hasher;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -76,6 +77,7 @@ fn check_authority_overload(
     authority_state: &Weak<AuthorityState>,
     config: &AuthorityOverloadConfig,
 ) -> bool {
+    let _scope = monitored_scope("OverloadMonitor::check_authority_overload");
     let authority_arc = authority_state.upgrade();
     if authority_arc.is_none() {
         // `authority_state` doesn't exist anymore.
