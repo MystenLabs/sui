@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     let processor = make_analytics_processor(config, metrics)
         .await
         .map_err(|e| AnalyticsIndexerError::GenericError(e.to_string()))?;
-    let watermark = processor.last_committed_checkpoint().unwrap_or_default();
+    let watermark = processor.last_committed_checkpoint().unwrap_or_default() + 1;
 
     let (executor, exit_sender) =
         setup_single_workflow(processor, remote_store_url, watermark, 1, None).await?;
