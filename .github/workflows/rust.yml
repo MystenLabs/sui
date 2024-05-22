@@ -59,8 +59,6 @@ jobs:
             ${{ secrets.VALIDATION_CHAIN_KEY }}
       - uses: ./.github/actions/rust-setup
       - uses: taiki-e/install-action@nextest
-      #- name: Setup tmate session
-      #  uses: mxschmitt/action-tmate@v3
       - name: Install Foundry
         continue-on-error: true
         run: |
@@ -71,10 +69,12 @@ jobs:
           echo "export PATH=$HOME/.foundry/bin:\$PATH" >> $HOME/.profile
           export PATH=$HOME/.foundry/bin:$PATH
           # Run foundryup
-          #$HOME/.foundry/bin/foundryup
+          $HOME/.foundry/bin/foundryup
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - name: cargo test
         run: |
           sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 # Enable ipv6
