@@ -52,6 +52,11 @@
 			"type": "object",
 			"title": "Move",
 			"properties": {
+				"move.inlay-hints.type": {
+                    "type": "boolean",
+                    "default": true,
+                    "markdownDescription": "Enable/disable type inlay hints"
+                },
                 "move.lint": {
                     "type": "string",
                     "enum": [
@@ -144,7 +149,7 @@
 	"dependencies": {
 		"command-exists": "^1.2.9",
 		"lru-cache": "^4.1.3",
-		"vscode-languageclient": "6.1.4"
+		"vscode-languageclient": "^9.0.1"
 	},
 	"devDependencies": {
 		"@types/command-exists": "^1.2.0",

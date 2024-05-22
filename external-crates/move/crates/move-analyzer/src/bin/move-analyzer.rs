@@ -8,8 +8,9 @@ use crossbeam::channel::{bounded, select};
 use lsp_server::{Connection, Message, Notification, Request, Response};
 use lsp_types::{
     notification::Notification as _, request::Request as _, CompletionOptions, Diagnostic,
-    HoverProviderCapability, OneOf, SaveOptions, TextDocumentSyncCapability, TextDocumentSyncKind,
-    TextDocumentSyncOptions, TypeDefinitionProviderCapability, WorkDoneProgressOptions,
+    HoverProviderCapability, InlayHintOptions, InlayHintServerCapabilities, OneOf, SaveOptions,
+    TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions,
+    TypeDefinitionProviderCapability, WorkDoneProgressOptions,
 };
 use move_compiler::linters::LintLevel;
 use std::{
@@ -19,7 +20,7 @@ use std::{
 };
 
 use move_analyzer::{
-    completion::on_completion_request, context::Context, symbols,
+    completion::on_completion_request, context::Context, inlay_hints, symbols,
     vfs::on_text_document_sync_notification,
 };
 use url::Url;
@@ -56,13 +57,8 @@ fn main() {
         BTreeMap::<PathBuf, symbols::PrecompiledPkgDeps>::new(),
     ));
     let ide_files_root: VfsPath = MemoryFS::new().into();
-    let context = Context {
-        connection,
-        symbols: symbols.clone(),
-    };
 
-    let (id, client_response) = context
-        .connection
+    let (id, client_response) = connection
         .initialize_start()
         .expect("could not start connection initialization");
 
@@ -78,7 +74,7 @@ fn main() {
                 // data be sent "over the wire." However, to do so, our language server would need
                 // to be capable of applying deltas to its view of the client's open files. See the
                 // 'move_analyzer::vfs' module for details.
-                change: Some(TextDocumentSyncKind::Full),
+                change: Some(TextDocumentSyncKind::FULL),
                 will_save: None,
                 will_save_wait_until: None,
                 save: Some(
@@ -105,69 +101,85 @@ fn main() {
             work_done_progress_options: WorkDoneProgressOptions {
                 work_done_progress: None,
             },
+            completion_item: None,
         }),
-        definition_provider: Some(OneOf::Left(symbols::DEFS_AND_REFS_SUPPORT)),
-        type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(
-            symbols::DEFS_AND_REFS_SUPPORT,
-        )),
-        references_provider: Some(OneOf::Left(symbols::DEFS_AND_REFS_SUPPORT)),
+        definition_provider: Some(OneOf::Left(true)),
+        type_definition_provider: Some(TypeDefinitionProviderCapability::Simple(true)),
+        references_provider: Some(OneOf::Left(true)),
         document_symbol_provider: Some(OneOf::Left(true)),
+        inlay_hint_provider: Some(OneOf::Right(InlayHintServerCapabilities::Options(
+            InlayHintOptions {
+                work_done_progress_options: WorkDoneProgressOptions {
+                    work_done_progress: None,
+                },
+                resolve_provider: None,
+            },
+        ))),
         ..Default::default()
     })
     .expect("could not serialize server capabilities");
 
     let (diag_sender, diag_receiver) = bounded::<Result<BTreeMap<PathBuf, Vec<Diagnostic>>>>(0);
-    let mut symbolicator_runner = symbols::SymbolicatorRunner::idle();
-    if symbols::DEFS_AND_REFS_SUPPORT {
-        let initialize_params: lsp_types::InitializeParams =
-            serde_json::from_value(client_response)
-                .expect("could not deserialize client capabilities");
+    let initialize_params: lsp_types::InitializeParams =
+        serde_json::from_value(client_response).expect("could not deserialize client capabilities");
 
-        // determine if linting is on or off based on what the editor requested
-        let lint = {
-            let lint_level = initialize_params
-                .initialization_options
-                .as_ref()
-                .and_then(|init_options| init_options.get("lintLevel"))
-                .and_then(serde_json::Value::as_str)
-                .unwrap_or(LINT_DEFAULT);
-            if lint_level == LINT_ALL {
-                LintLevel::All
-            } else if lint_level == LINT_NONE {
-                LintLevel::None
-            } else {
-                LintLevel::Default
-            }
-        };
-        eprintln!("linting level {:?}", lint);
-
-        symbolicator_runner = symbols::SymbolicatorRunner::new(
-            ide_files_root.clone(),
-            symbols.clone(),
-            pkg_deps.clone(),
-            diag_sender,
-            lint,
-        );
-
-        // If initialization information from the client contains a path to the directory being
-        // opened, try to initialize symbols before sending response to the client. Do not bother
-        // with diagnostics as they will be recomputed whenever the first source file is opened. The
-        // main reason for this is to enable unit tests that rely on the symbolication information
-        // to be available right after the client is initialized.
-        if let Some(uri) = initialize_params.root_uri {
-            if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
-                if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
-                    Arc::new(Mutex::new(BTreeMap::new())),
-                    ide_files_root.clone(),
-                    p.as_path(),
-                    lint,
-                ) {
-                    let mut old_symbols = symbols.lock().unwrap();
-                    (*old_symbols).merge(new_symbols);
-                }
-            }
+    // determine if linting is on or off based on what the editor requested
+    let lint = {
+        let lint_level = initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("lintLevel"))
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(LINT_DEFAULT);
+        if lint_level == LINT_ALL {
+            LintLevel::All
+        } else if lint_level == LINT_NONE {
+            LintLevel::None
+        } else {
+            LintLevel::Default
         }
     };
+    eprintln!("linting level {:?}", lint);
+
+    let symbolicator_runner = symbols::SymbolicatorRunner::new(
+        ide_files_root.clone(),
+        symbols.clone(),
+        pkg_deps.clone(),
+        diag_sender,
+        lint,
+    );
+
+    // If initialization information from the client contains a path to the directory being
+    // opened, try to initialize symbols before sending response to the client. Do not bother
+    // with diagnostics as they will be recomputed whenever the first source file is opened. The
+    // main reason for this is to enable unit tests that rely on the symbolication information
+    // to be available right after the client is initialized.
+    if let Some(uri) = initialize_params.root_uri {
+        if let Some(p) = symbols::SymbolicatorRunner::root_dir(&uri.to_file_path().unwrap()) {
+            if let Ok((Some(new_symbols), _)) = symbols::get_symbols(
+                Arc::new(Mutex::new(BTreeMap::new())),
+                ide_files_root.clone(),
+                p.as_path(),
+                lint,
+            ) {
+                let mut old_symbols = symbols.lock().unwrap();
+                (*old_symbols).merge(new_symbols);
+            }
+        }
+    }
+
+    let context = Context {
+        connection,
+        symbols: symbols.clone(),
+        inlay_type_hints: initialize_params
+            .initialization_options
+            .as_ref()
+            .and_then(|init_options| init_options.get("inlayHintsType"))
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or_default(),
+    };
+
+    eprintln!("inlay type hints enabled: {}", context.inlay_type_hints);
 
     context
         .connection
@@ -200,7 +212,7 @@ fn main() {
                                 }
                             },
                             Err(err) => {
-                                let typ = lsp_types::MessageType::Error;
+                                let typ = lsp_types::MessageType::ERROR;
                                 let message = format!("{err}");
                                     // report missing manifest only once to avoid re-generating
                                     // user-visible error in cases when the developer decides to
@@ -301,6 +313,9 @@ fn on_request(
         }
         lsp_types::request::DocumentSymbolRequest::METHOD => {
             symbols::on_document_symbol_request(context, request, &context.symbols.lock().unwrap());
+        }
+        lsp_types::request::InlayHintRequest::METHOD => {
+            inlay_hints::on_inlay_hint_request(context, request, &context.symbols.lock().unwrap());
         }
         lsp_types::request::Shutdown::METHOD => {
             eprintln!("Shutdown request received");

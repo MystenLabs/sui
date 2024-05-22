@@ -150,9 +150,19 @@ version = "0.1.80"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6fa2087f2753a7da8cc1c0dbfcf89579dd57458e36769de5ac750b4671737ca"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -218,8 +228,16 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3deeecb812ca5300b7d3f66f730cc2ebd3511c3d36c691dd79c165d5b19a26e3"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "syn 1.0.109",
 ]
 
@@ -533,8 +551,16 @@ checksum = "ae6371b8bdc8b7d3959e9cf7b22d4435ef3e79e138688421ec654acf8c81b008"
 dependencies = [
  "heck 0.4.1",
  "proc-macro-error",
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "syn 1.0.109",
 ]
 
@@ -544,10 +570,22 @@ version = "4.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "528131438037fd55894f62d6e9f068b8f45ac57ffa77517819645d10aed04f64"
 dependencies = [
+<<<<<<< HEAD
  "heck 0.5.0",
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "heck 0.4.1",
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "heck 0.4.1",
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -694,9 +732,21 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-channel"
+<<<<<<< HEAD
 version = "0.5.12"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+version = "0.5.7"
+=======
+version = "0.5.13"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "ab3db02a9c5b5121e1e42fbdb1aeb65f5e02624cc58c43f2884c6ccac0b82f95"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+checksum = "cf2b3e8478797446514c91ef04bafcb59faba183e621ad488df88983cc14128c"
+=======
+checksum = "33480d6946193aa8033910124896ca395333cae7e2d1113d1fef6c3272217df2"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 dependencies = [
  "crossbeam-utils",
 ]
@@ -731,9 +781,24 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
+<<<<<<< HEAD
 version = "0.8.19"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+version = "0.8.15"
+=======
+version = "0.8.20"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "248e3bacc7dc6baa3b21e405ee045c3047101a49145e7e9eca583ab4c2ca5345"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+checksum = "3c063cd8cc95f5c377ed0d4b49a4b21f632396ff690e8470c29b3359b346984b"
+dependencies = [
+ "cfg-if",
+]
+=======
+checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 
 [[package]]
 name = "crossterm"
@@ -801,6 +866,124 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+name = "cxx"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f61f1b6389c3fe1c316bf8a4dccc90a38208354b330925bce1f74a6c4756eb93"
+dependencies = [
+ "cc",
+ "cxxbridge-flags",
+ "cxxbridge-macro",
+ "link-cplusplus",
+]
+
+[[package]]
+name = "cxx-build"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12cee708e8962df2aeb38f594aae5d827c022b6460ac71a7a3e2c3c2aae5a07b"
+dependencies = [
+ "cc",
+ "codespan-reporting",
+ "once_cell",
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "scratch",
+ "syn 2.0.22",
+]
+
+[[package]]
+name = "cxxbridge-flags"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7944172ae7e4068c533afbb984114a56c46e9ccddda550499caa222902c7f7bb"
+
+[[package]]
+name = "cxxbridge-macro"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2345488264226bf682893e25de0769f3360aac9957980ec49361b083ddaa5bc5"
+dependencies = [
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+]
+
+[[package]]
+name = "dashmap"
+version = "5.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
+dependencies = [
+ "cfg-if",
+ "hashbrown",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.7",
+]
+
+[[package]]
+=======
+name = "cxx"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f61f1b6389c3fe1c316bf8a4dccc90a38208354b330925bce1f74a6c4756eb93"
+dependencies = [
+ "cc",
+ "cxxbridge-flags",
+ "cxxbridge-macro",
+ "link-cplusplus",
+]
+
+[[package]]
+name = "cxx-build"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "12cee708e8962df2aeb38f594aae5d827c022b6460ac71a7a3e2c3c2aae5a07b"
+dependencies = [
+ "cc",
+ "codespan-reporting",
+ "once_cell",
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "scratch",
+ "syn 2.0.65",
+]
+
+[[package]]
+name = "cxxbridge-flags"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7944172ae7e4068c533afbb984114a56c46e9ccddda550499caa222902c7f7bb"
+
+[[package]]
+name = "cxxbridge-macro"
+version = "1.0.94"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2345488264226bf682893e25de0769f3360aac9957980ec49361b083ddaa5bc5"
+dependencies = [
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+]
+
+[[package]]
+name = "dashmap"
+version = "5.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
+dependencies = [
+ "cfg-if",
+ "hashbrown",
+ "lock_api",
+ "once_cell",
+ "parking_lot_core 0.9.7",
+]
+
+[[package]]
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 name = "datatest-stable"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -817,8 +1000,16 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "syn 1.0.109",
 ]
 
@@ -828,9 +1019,19 @@ version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 1.0.109",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 1.0.109",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -1216,8 +1417,16 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "11d7a9f6330b71fea57921c9b61c47ee6e84f72d394754eff6163ae67e7395eb"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "syn 1.0.109",
 ]
 
@@ -1413,9 +1622,9 @@ dependencies = [
 
 [[package]]
 name = "lsp-server"
-version = "0.5.2"
+version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c351c75989da23b355226dc188dc2b52538a7f4f218d70fd7393c6b62b110444"
+checksum = "248f65b78f6db5d8e1b1604b4098a28b43d21a8eb1deeca22b1c421b276c7095"
 dependencies = [
  "crossbeam-channel",
  "log",
@@ -1425,9 +1634,9 @@ dependencies = [
 
 [[package]]
 name = "lsp-types"
-version = "0.90.1"
+version = "0.95.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f3734ab1d7d157fc0c45110e06b587c31cd82bea2ccfd6b563cbff0aaeeb1d3"
+checksum = "8e34d33a8e9b006cd3fc4fe69a921affa097bae4bb65f76271f4644f9a334365"
 dependencies = [
  "bitflags 1.3.2",
  "serde",
@@ -2007,8 +2216,16 @@ name = "move-proc-macros"
 version = "0.1.0"
 dependencies = [
  "enum-compat-util",
+<<<<<<< HEAD
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -2552,9 +2769,19 @@ checksum = "ec4c6225c69b4ca778c0aea097321a64c421cf4577b331c61b229267edabb6f8"
 dependencies = [
  "heck 0.4.1",
  "proc-macro-error",
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -2584,8 +2811,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1557010476e0595c9b568d16dcfb81b93cdeb157612726f5170d31aa707bed27"
 dependencies = [
  "proc-macro-crate",
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "syn 1.0.109",
 ]
 
@@ -2681,9 +2916,19 @@ checksum = "3444646e286606587e49f3bcf1679b8cef1dc2c5ecc29ddacaffc305180d464b"
 dependencies = [
  "phf_generator",
  "phf_shared",
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 1.0.109",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 1.0.109",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -2789,8 +3034,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
 dependencies = [
  "proc-macro-error-attr",
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "syn 1.0.109",
  "version_check",
 ]
@@ -2801,8 +3054,16 @@ version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "version_check",
 ]
 
@@ -2817,9 +3078,21 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
+<<<<<<< HEAD
 version = "1.0.82"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+version = "1.0.63"
+=======
+version = "1.0.83"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "8ad3d49ab951a01fbaafe34f2ec74122942fe18a3f9814c3268f1bb72042131b"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+checksum = "7b368fba921b0dce7e60f5e04ec15e565b3303972b42bcfde1d0713b881959eb"
+=======
+checksum = "0b33eb56c327dec362a9e55b3ad14f9d2f0904fb5a5b03b513ab5465399e9f43"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 dependencies = [
  "unicode-ident",
 ]
@@ -2885,7 +3158,13 @@ version = "1.0.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+=======
+ "proc-macro2 1.0.83",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3073,9 +3352,19 @@ version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcc303e793d3734489387d205e9b186fac9c6cfacedd98cbb2e8a5943595f3e6"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3237,9 +3526,19 @@ version = "1.0.202"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6048858004bcff69094cd972ed40a32500f153bd3be9f716b2eed2e8217c4838"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3259,9 +3558,19 @@ version = "0.1.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c64451ba24fc7a6a2d60fc75dd9c83c90903b19028d4eff35e88fc1e86564e9"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3492,19 +3801,47 @@ version = "1.0.109"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b64191b275b66ffe2469e8af2c1cfe3bafa67b529ead792a6d0160888b4237"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "unicode-ident",
 ]
 
 [[package]]
 name = "syn"
+<<<<<<< HEAD
 version = "2.0.63"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+version = "2.0.22"
+=======
+version = "2.0.65"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 source = "registry+https://github.com/rust-lang/crates.io-index"
+<<<<<<< HEAD
 checksum = "bf5be731623ca1a1fb7d8be6f261a3be6d3e2337b8a1f97be944d020c8fcb704"
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+checksum = "2efbeae7acf4eabd6bcdcbd11c92f45231ddda7539edc7806bd1a04a03b24616"
+=======
+checksum = "d2863d96a84c6439701d7a38f9de935ec562c8832cc55d1dde0f513b52fad106"
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "unicode-ident",
 ]
 
@@ -3602,9 +3939,19 @@ version = "1.0.60"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2470041c06ec3ac1ab38d0356a6119054dedaea53e12fbefc0de730a1c08524"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3676,9 +4023,19 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3736,9 +4093,19 @@ version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34704c8d6ebcbc939824180af020566b01a7c01f80641264eba0999f6c2b6be7"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 1.0.109",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 1.0.109",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
 
 [[package]]
@@ -3970,9 +4337,19 @@ dependencies = [
  "bumpalo",
  "log",
  "once_cell",
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 1.0.109",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 1.0.109",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "wasm-bindgen-shared",
 ]
 
@@ -3992,9 +4369,19 @@ version = "0.2.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e94f17b526d0a461a191c78ea52bbce64071ed5c04c9ffe424dcb38f74171bb7"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 1.0.109",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 1.0.109",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -4250,7 +4637,17 @@ version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69"
 dependencies = [
+<<<<<<< HEAD
  "proc-macro2 1.0.82",
  "quote 1.0.36",
  "syn 2.0.63",
+||||||| parent of c52057eda5 ([move-ide] Added support for inline type hints)
+ "proc-macro2 1.0.63",
+ "quote 1.0.28",
+ "syn 2.0.22",
+=======
+ "proc-macro2 1.0.83",
+ "quote 1.0.36",
+ "syn 2.0.65",
+>>>>>>> c52057eda5 ([move-ide] Added support for inline type hints)
 ]
