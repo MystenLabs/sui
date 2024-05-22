@@ -256,11 +256,7 @@ where
         {
             return;
         }
-        let threshold = action.approval_threshold();
-        match auth_agg
-            .request_committee_signatures(action.clone(), threshold)
-            .await
-        {
+        match auth_agg.request_committee_signatures(action.clone()).await {
             Ok(certificate) => {
                 execution_queue_sender
                     .send(CertifiedBridgeActionExecutionWrapper(certificate, 0))
@@ -328,12 +324,14 @@ where
                 Self::get_gas_data_assert_ownership(sui_address, gas_object_id, &sui_client).await;
             let ceriticate_clone = certificate.clone();
             info!("Building Sui transaction for action: {:?}", action);
+            let rgp = sui_client.get_reference_gas_price_until_success().await;
             let tx_data = match build_sui_transaction(
                 sui_address,
                 &gas_object_ref,
                 ceriticate_clone,
                 bridge_object_arg,
                 &sui_token_type_tags,
+                rgp,
             ) {
                 Ok(tx_data) => tx_data,
                 Err(err) => {
@@ -534,6 +532,7 @@ mod tests {
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
             &id_token_map,
+            1000,
         )
         .unwrap();
 
@@ -590,6 +589,7 @@ mod tests {
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
             &id_token_map,
+            1000,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -641,6 +641,7 @@ mod tests {
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
             &id_token_map,
+            1000,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -788,6 +789,7 @@ mod tests {
             action_certificate,
             DUMMY_MUTALBE_BRIDGE_OBJECT_ARG,
             &id_token_map,
+            1000,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);
@@ -911,6 +913,7 @@ mod tests {
             action_certificate.clone(),
             arg,
             &id_token_map,
+            1000,
         )
         .unwrap();
         let tx_digest = get_tx_digest(tx_data, &dummy_sui_key);

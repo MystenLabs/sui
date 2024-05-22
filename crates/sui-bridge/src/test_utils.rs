@@ -356,6 +356,7 @@ pub async fn approve_action_with_validator_secrets(
     id_token_map: &HashMap<u8, TypeTag>,
 ) -> Option<ObjectRef> {
     let action_certificate = get_certified_action_with_validator_secrets(action, validator_secrets);
+    let rgp = wallet_context.get_reference_gas_price().await.unwrap();
     let sui_address = wallet_context.active_address().unwrap();
     let gas_obj_ref = wallet_context
         .get_one_gas_object()
@@ -369,6 +370,7 @@ pub async fn approve_action_with_validator_secrets(
         action_certificate,
         bridge_obj_org,
         id_token_map,
+        rgp,
     )
     .unwrap();
     let signed_tx = wallet_context.sign_transaction(&tx_data);

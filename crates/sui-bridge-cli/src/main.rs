@@ -57,18 +57,18 @@ async fn main() -> anyhow::Result<()> {
             println!("Chain ID: {:?}", chain_id);
             let config = BridgeCliConfig::load(config_path).expect("Couldn't load BridgeCliConfig");
             let config = LoadedBridgeCliConfig::load(config).await?;
-            let sui_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
+            let sui_bridge_client = SuiClient::<SuiSdkClient>::new(&config.sui_rpc_url).await?;
 
             let (sui_key, sui_address, gas_object_ref) = config
                 .get_sui_account_info()
                 .await
                 .expect("Failed to get sui account info");
-            let bridge_summary = sui_client
+            let bridge_summary = sui_bridge_client
                 .get_bridge_summary()
                 .await
                 .expect("Failed to get bridge summary");
             let bridge_committee = Arc::new(
-                sui_client
+                sui_bridge_client
                     .get_bridge_committee()
                     .await
                     .expect("Failed to get bridge committee"),
@@ -86,21 +86,24 @@ async fn main() -> anyhow::Result<()> {
                 // Create BridgeAction
                 let sui_action = make_action(sui_chain_id, &cmd);
                 println!("Action to execute on Sui: {:?}", sui_action);
-                let threshold = sui_action.approval_threshold();
                 let certified_action = agg
-                    .request_committee_signatures(sui_action, threshold)
+                    .request_committee_signatures(sui_action)
                     .await
                     .expect("Failed to request committee signatures");
-                let bridge_arg = sui_client
+                let bridge_arg = sui_bridge_client
                     .get_mutable_bridge_object_arg_must_succeed()
                     .await;
-                let id_token_map = sui_client.get_token_id_map().await.unwrap();
+                let rgp = sui_bridge_client
+                    .get_reference_gas_price_until_success()
+                    .await;
+                let id_token_map = sui_bridge_client.get_token_id_map().await.unwrap();
                 let tx = build_sui_transaction(
                     sui_address,
                     &gas_object_ref,
                     certified_action,
                     bridge_arg,
                     &id_token_map,
+                    rgp,
                 )
                 .expect("Failed to build sui transaction");
                 let sui_sig = Signature::new_secure(
@@ -108,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
                     &sui_key,
                 );
                 let tx = Transaction::from_data(tx, vec![sui_sig]);
-                let resp = sui_client
+                let resp = sui_bridge_client
                     .execute_transaction_block_with_effects(tx)
                     .await
                     .expect("Failed to execute transaction block with effects");
@@ -130,9 +133,8 @@ async fn main() -> anyhow::Result<()> {
             let eth_action = make_action(chain_id, &cmd);
             println!("Action to execute on Eth: {:?}", eth_action);
             // Create Eth Signer Client
-            let threshold = eth_action.approval_threshold();
             let certified_action = agg
-                .request_committee_signatures(eth_action, threshold)
+                .request_committee_signatures(eth_action)
                 .await
                 .expect("Failed to request committee signatures");
             let contract_address = select_contract_address(&config, &cmd);

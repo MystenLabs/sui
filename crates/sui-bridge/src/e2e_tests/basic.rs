@@ -218,9 +218,8 @@ async fn test_add_new_coins_on_sui() {
             .expect("Failed to get bridge committee"),
     );
     let agg = BridgeAuthorityAggregator::new(bridge_committee);
-    let threshold = action.approval_threshold();
     let certified_action = agg
-        .request_committee_signatures(action, threshold)
+        .request_committee_signatures(action)
         .await
         .expect("Failed to request committee signatures");
 
@@ -234,6 +233,7 @@ async fn test_add_new_coins_on_sui() {
             .unwrap(),
         certified_action,
         bridge_arg,
+        1000,
     )
     .unwrap();
 

@@ -1298,6 +1298,7 @@ impl TestClusterBuilder {
                     .unwrap(),
                 verifired_action_cert,
                 bridge_arg,
+                ref_gas_price,
             )
             .unwrap();
 
