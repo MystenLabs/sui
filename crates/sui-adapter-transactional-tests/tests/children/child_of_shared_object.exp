@@ -40,7 +40,7 @@ Contents: t3::o3::Obj3 {
 }
 
 task 7 'view-object'. lines 80-82:
-Owner: Shared
+Owner: Shared( 3 )
 Version: 3
 Contents: t2::o2::Obj2 {
     id: sui::object::UID {
