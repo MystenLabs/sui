@@ -130,11 +130,7 @@ pub fn handle_lint_results_exclude_external_crate_checks(
 ) -> crate::Result<()> {
     // ignore_funcs is a slice of funcs to execute against lint sources and their path
     // if a func returns true, it means it will be ignored and not throw a lint error
-<<<<<<< HEAD
     let ignore_funcs = [
-=======
-    let ignore_funcs = vec![
->>>>>>> 58630f99c5 (patch in x_ignore for testing)
         // legacy ignore checks
         |source: &LintSource, path: &Utf8Path| -> bool {
             (path.starts_with(EXTERNAL_CRATE_DIR)
