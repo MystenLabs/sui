@@ -14,6 +14,7 @@ pub struct TokenTransfer {
     pub timestamp_ms: i64,
     pub txn_hash: Vec<u8>,
     pub gas_usage: i64,
+    pub data_source: String,
 }
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Debug)]

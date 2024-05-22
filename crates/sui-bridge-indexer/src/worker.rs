@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::postgres_writer::{get_connection_pool, write, PgPool};
-use crate::{TokenTransfer, TokenTransferData, TokenTransferStatus};
+use crate::{BridgeDataSource, TokenTransfer, TokenTransferData, TokenTransferStatus};
 use anyhow::Result;
 use async_trait::async_trait;
 use ethers::providers::Provider;
@@ -74,6 +74,7 @@ impl BridgeWorker {
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
                                 status: TokenTransferStatus::Deposited,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                                data_source: BridgeDataSource::SUI,
                                 data: Some(TokenTransferData {
                                     sender_address: event.sender_address,
                                     destination_chain: event.target_chain,
@@ -95,6 +96,7 @@ impl BridgeWorker {
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
                                 status: TokenTransferStatus::Approved,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                                data_source: BridgeDataSource::SUI,
                                 data: None,
                             })
                         }
@@ -110,6 +112,7 @@ impl BridgeWorker {
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
                                 status: TokenTransferStatus::Claimed,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
+                                data_source: BridgeDataSource::SUI,
                                 data: None,
                             })
                         }
@@ -163,6 +166,7 @@ pub async fn process_eth_transaction(
                             txn_hash: tx_hash.as_bytes().to_vec(),
                             status: TokenTransferStatus::Deposited,
                             gas_usage: gas.as_u64() as i64,
+                            data_source: BridgeDataSource::ETH,
                             data: Some(TokenTransferData {
                                 sender_address: bridge_event.sender_address.as_bytes().to_vec(),
                                 destination_chain: bridge_event.destination_chain_id,
@@ -184,15 +188,16 @@ pub async fn process_eth_transaction(
                             txn_hash: tx_hash.as_bytes().to_vec(),
                             status: TokenTransferStatus::Claimed,
                             gas_usage: gas.as_u64() as i64,
+                            data_source: BridgeDataSource::ETH,
                             data: None,
                         };
 
                         write(&pool, transfer);
                     }
-                    EthSuiBridgeEvents::PausedFilter(_bridge_event) => (),
-                    EthSuiBridgeEvents::UnpausedFilter(_bridge_event) => (),
-                    EthSuiBridgeEvents::UpgradedFilter(_bridge_event) => (),
-                    EthSuiBridgeEvents::InitializedFilter(_bridge_event) => (),
+                    EthSuiBridgeEvents::PausedFilter(_)
+                    | EthSuiBridgeEvents::UnpausedFilter(_)
+                    | EthSuiBridgeEvents::UpgradedFilter(_)
+                    | EthSuiBridgeEvents::InitializedFilter(_) => (),
                 },
             }
         }

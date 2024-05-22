@@ -21,5 +21,6 @@ CREATE TABLE token_transfer
     timestamp_ms                BIGINT       NOT NULL,
     txn_hash                    bytea        NOT NULL,
     gas_usage                   BIGINT       NOT NULL,
+    data_source                 TEXT         NOT NULL,
     PRIMARY KEY(chain_id, nonce, status)
 );

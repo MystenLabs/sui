@@ -20,6 +20,7 @@ pub struct TokenTransfer {
     txn_hash: Vec<u8>,
     status: TokenTransferStatus,
     gas_usage: i64,
+    data_source: BridgeDataSource,
     data: Option<TokenTransferData>,
 }
 
@@ -41,6 +42,7 @@ impl From<TokenTransfer> for DBTokenTransfer {
             txn_hash: value.txn_hash,
             status: value.status.to_string(),
             gas_usage: value.gas_usage,
+            data_source: value.data_source.to_string(),
         }
     }
 }
@@ -82,6 +84,21 @@ impl Display for TokenTransferStatus {
             TokenTransferStatus::Deposited => "Deposited",
             TokenTransferStatus::Approved => "Approved",
             TokenTransferStatus::Claimed => "Claimed",
+        };
+        write!(f, "{str}")
+    }
+}
+
+enum BridgeDataSource {
+    SUI,
+    ETH,
+}
+
+impl Display for BridgeDataSource {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let str = match self {
+            BridgeDataSource::ETH => "ETH",
+            BridgeDataSource::SUI => "SUI",
         };
         write!(f, "{str}")
     }

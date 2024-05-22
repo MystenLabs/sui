@@ -75,7 +75,7 @@ async fn main() -> Result<()> {
 
     let contract_addresses = HashMap::from_iter(vec![(bridge_address, config.start_block)]);
 
-    let (_task_handles, mut eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
+    let (_task_handles, eth_events_rx, _) = EthSyncer::new(eth_client, contract_addresses)
         .run()
         .await
         .expect("Failed to start eth syncer");

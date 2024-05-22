@@ -12,6 +12,7 @@ diesel::table! {
         timestamp_ms -> Int8,
         txn_hash -> Bytea,
         gas_usage -> Int8,
+        data_source -> Text,
     }
 }
 
