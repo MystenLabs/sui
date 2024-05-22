@@ -55,6 +55,7 @@
 #![allow(clippy::non_canonical_partial_ord_impl)]
 
 use crate::{
+    compiler_info::CompilerInfo,
     context::Context,
     diagnostics::{lsp_diagnostics, lsp_empty_diagnostics},
     utils::get_loc,
@@ -99,9 +100,8 @@ use move_compiler::{
     naming::ast::{StructDefinition, StructFields, TParam, Type, TypeName_, Type_, UseFuns},
     parser::ast::{self as P, DatatypeName, FunctionName},
     shared::{
-        ide::{self, IDEInfo, MacroCallInfo},
-        unique_map::UniqueMap,
-        Identifier, Name, NamedAddressMap, NamedAddressMaps,
+        ide::MacroCallInfo, unique_map::UniqueMap, Identifier, Name, NamedAddressMap,
+        NamedAddressMaps,
     },
     typing::ast::{
         BuiltinFunction_, Exp, ExpListItem, Function, FunctionBody_, LValue, LValueList, LValue_,
@@ -395,7 +395,7 @@ pub struct TypingSymbolicator<'a> {
     /// the AST but without recording the actual metadata (uses, definitions, types, etc.)
     traverse_only: bool,
     /// IDE Annotation Information from the Compiler
-    ide_info: IDEInfo,
+    compiler_info: CompilerInfo,
 }
 
 /// Maps a line number to a list of use-def-s on a given line (use-def set is sorted by col_start)
@@ -1199,7 +1199,7 @@ pub fn get_symbols(
         BuildPlan::create(resolution_graph)?.set_compiler_vfs_root(overlay_fs_root.clone());
     let mut parsed_ast = None;
     let mut typed_ast = None;
-    let mut ide_info = None;
+    let mut compiler_info = None;
     let mut diagnostics = None;
 
     let mut dependencies = build_plan.compute_dependencies();
@@ -1299,7 +1299,9 @@ pub fn get_symbols(
         eprintln!("compiled to typed AST");
         let (mut compiler, typed_program) = compiler.into_ast();
         typed_ast = Some(typed_program.clone());
-        ide_info = Some(compiler.compilation_env().ide_information.clone());
+        compiler_info = Some(CompilerInfo::from(
+            compiler.compilation_env().ide_information.clone(),
+        ));
         edition = Some(compiler.compilation_env().edition(Some(root_pkg_name)));
 
         // compile to CFGIR for accurate diags
@@ -1417,7 +1419,7 @@ pub fn get_symbols(
         use_defs: UseDefMap::new(),
         alias_lengths: &BTreeMap::new(),
         traverse_only: false,
-        ide_info: ide_info.unwrap(),
+        compiler_info: compiler_info.unwrap(),
     };
 
     process_typed_modules(
@@ -2772,37 +2774,31 @@ impl<'a> TypingSymbolicator<'a> {
 
     /// Get symbols for an expression
     fn exp_symbols(&mut self, exp: &Exp, scope: &mut OrdMap<Symbol, LocalDef>) {
-        if let Some(ide_info) = self.ide_info.get_exp_info(&exp.exp.loc) {
-            let ide::ExpEntry {
-                loc: _,
-                macro_call_info,
-                expanded_lambda,
-            } = ide_info.clone();
-            if let Some(minfo) = macro_call_info {
-                debug_assert!(!expanded_lambda, "Analyzer issue");
-                let MacroCallInfo {
-                    module,
-                    name,
-                    method_name,
-                    type_arguments,
-                    by_value_args,
-                } = *minfo;
-                self.mod_call_symbols(&module, name, method_name, &type_arguments, None, scope);
-                by_value_args
-                    .iter()
-                    .for_each(|a| self.seq_item_symbols(scope, a));
-                let old_traverse_mode = self.traverse_only;
-                // stop adding new use-defs etc.
-                self.traverse_only = true;
-                self.exp_symbols_inner(exp, scope);
-                self.traverse_only = old_traverse_mode;
-            } else if expanded_lambda {
-                let old_traverse_mode = self.traverse_only;
-                // start adding new use-defs etc. when processing a lambda argument
-                self.traverse_only = false;
-                self.exp_symbols_inner(exp, scope);
-                self.traverse_only = old_traverse_mode;
-            }
+        let expanded_lambda = self.compiler_info.is_expanded_lambda(&exp.exp.loc);
+        if let Some(macro_call_info) = self.compiler_info.get_macro_info(&exp.exp.loc) {
+            debug_assert!(!expanded_lambda, "Compiler info issue");
+            let MacroCallInfo {
+                module,
+                name,
+                method_name,
+                type_arguments,
+                by_value_args,
+            } = macro_call_info.clone();
+            self.mod_call_symbols(&module, name, method_name, &type_arguments, None, scope);
+            by_value_args
+                .iter()
+                .for_each(|a| self.seq_item_symbols(scope, a));
+            let old_traverse_mode = self.traverse_only;
+            // stop adding new use-defs etc.
+            self.traverse_only = true;
+            self.exp_symbols_inner(exp, scope);
+            self.traverse_only = old_traverse_mode;
+        } else if expanded_lambda {
+            let old_traverse_mode = self.traverse_only;
+            // start adding new use-defs etc. when processing a lambda argument
+            self.traverse_only = false;
+            self.exp_symbols_inner(exp, scope);
+            self.traverse_only = old_traverse_mode;
         } else {
             self.exp_symbols_inner(exp, scope);
         }

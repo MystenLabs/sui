@@ -21,7 +21,7 @@ use crate::{
         Ability_, ConstantName, DatatypeName, Field, FunctionName, VariantName, ENTRY_MODIFIER,
     },
     shared::{
-        ide::{ExpInfo, IDEInfo},
+        ide::{IDEAnnotation, IDEInfo},
         known_attributes::TestingAttribute,
         program_info::*,
         string_utils::debug_print,
@@ -495,7 +495,11 @@ impl<'env> Context<'env> {
         self.max_variable_color = RefCell::new(0);
         self.macro_expansion = vec![];
         self.lambda_expansion = vec![];
-        self.ide_info = IDEInfo::new();
+
+        if !self.ide_info.is_empty() {
+            eprintln!("IDE info should be cleared after each item");
+            self.ide_info = IDEInfo::new();
+        }
     }
 
     pub fn error_type(&mut self, loc: Loc) -> Type {
@@ -875,7 +879,7 @@ impl<'env> Context<'env> {
     }
 
     //********************************************
-    // IDE Helpers
+    // IDE Information
     //********************************************
 
     /// Find all valid methods in scope for a given `TypeName`. This is used for autocomplete.
@@ -935,8 +939,8 @@ impl<'env> Context<'env> {
         fields
     }
 
-    pub fn add_ide_exp_info(&mut self, loc: Loc, info: ExpInfo) {
-        self.env.add_to_ide_exp_info(&mut self.ide_info, loc, info);
+    pub fn add_ide_info(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.ide_info.add_ide_annotation(loc, info);
     }
 }
 

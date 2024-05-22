@@ -20,7 +20,7 @@ use crate::{
         VariantName,
     },
     shared::{
-        ide::{ExpInfo, MacroCallInfo},
+        ide::{IDEAnnotation, MacroCallInfo},
         known_attributes::{SyntaxAttribute, TestingAttribute},
         process_binops,
         program_info::{ConstantInfo, DatatypeKind, TypingProgramInfo},
@@ -240,8 +240,15 @@ fn module(
 }
 
 fn finalize_ide_info(context: &mut Context) {
-    expand::ide_info(context);
-    context.env.append_ide_info(&mut context.ide_info);
+    if !context.env.ide_mode() {
+        assert!(context.ide_info.is_empty());
+        return;
+    }
+    let mut info = std::mem::take(&mut context.ide_info);
+    for (_loc, ann) in info.iter_mut() {
+        expand::ide_annotation(context, ann);
+    }
+    context.env.extend_ide_info(info);
 }
 
 //**************************************************************************************************
@@ -277,9 +284,7 @@ fn function(context: &mut Context, name: FunctionName, f: N::Function) -> T::Fun
     } else {
         function_body(context, n_body)
     };
-    if context.env.ide_mode() {
-        finalize_ide_info(context);
-    }
+    finalize_ide_info(context);
     context.current_function = None;
     context.in_macro_function = false;
     context.env.pop_warning_filter_scope();
@@ -4494,8 +4499,8 @@ fn expand_macro(
                     type_arguments: type_args.clone(),
                     by_value_args,
                 };
-                let info = ExpInfo::MacroCallInfo(Box::new(macro_call_info));
-                context.add_ide_exp_info(call_loc, info);
+                let info = IDEAnnotation::MacroCallInfo(Box::new(macro_call_info));
+                context.add_ide_info(call_loc, info);
             }
             (ty, block)
         }

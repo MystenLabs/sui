@@ -77,7 +77,7 @@ impl Loc {
 
     /// Indicates this this location overlaps the provided location
     pub fn overlaps(&self, other: &Loc) -> bool {
-        self.file_hash == other.file_hash && (self.end < other.start || other.end < self.start)
+        self.file_hash == other.file_hash && !(self.end < other.start || other.end < self.start)
     }
 }
 

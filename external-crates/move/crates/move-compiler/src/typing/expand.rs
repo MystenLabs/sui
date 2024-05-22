@@ -9,11 +9,7 @@ use crate::{
     ice,
     naming::ast::{BuiltinTypeName_, FunctionSignature, Type, TypeName_, Type_},
     parser::ast::Ability_,
-    shared::{
-        ide::{self, IDEInfo},
-        string_utils::debug_print,
-        AstDebug,
-    },
+    shared::{ide::IDEAnnotation, string_utils::debug_print, AstDebug},
     typing::{
         ast::{self as T},
         core::{self, Context},
@@ -522,15 +518,9 @@ fn exp_list_item(context: &mut Context, item: &mut T::ExpListItem) {
 // IDE Information
 //**************************************************************************************************
 
-pub fn ide_info(context: &mut Context) {
-    let mut ide_info = std::mem::replace(&mut context.ide_info, IDEInfo::new());
-    for (_, info) in ide_info.exp_info.iter_mut() {
-        let ide::ExpEntry {
-            loc: _,
-            macro_call_info,
-            expanded_lambda: _,
-        } = info;
-        if let Some(info) = macro_call_info {
+pub fn ide_annotation(context: &mut Context, annotation: &mut IDEAnnotation) {
+    match annotation {
+        IDEAnnotation::MacroCallInfo(info) => {
             for t in info.type_arguments.iter_mut() {
                 type_(context, t);
             }
@@ -538,6 +528,6 @@ pub fn ide_info(context: &mut Context) {
                 sequence_item(context, t);
             }
         }
+        IDEAnnotation::ExpandedLambda => (),
     }
-    let _ = std::mem::replace(&mut context.ide_info, ide_info);
 }

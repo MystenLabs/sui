@@ -18,6 +18,7 @@ use crate::{
     hlir::ast as H,
     naming::ast as N,
     parser::ast as P,
+    shared::ide::{IDEAnnotation, IDEInfo},
     sui_mode,
     typing::ast as T,
     typing::visitor::{TypingVisitor, TypingVisitorObj},
@@ -242,9 +243,6 @@ pub struct CompilationEnv {
     // pub counter: u64,
     mapped_files: MappedFiles,
     save_hooks: Vec<SaveHook>,
-    // /// IDE Information for the Move Analyzer. This is awlays set, but is in an option to allow us
-    // /// to `take` it for updates, which also need the compilation env for reporting ICEs.
-    // pub ide_information: Option<ide::IDEInfo>,
     pub ide_information: IDEInfo,
 }
 
@@ -610,10 +608,6 @@ impl CompilationEnv {
         self.prim_definers.get(&t)
     }
 
-    pub fn ide_mode(&self) -> bool {
-        self.flags.ide_mode()
-    }
-
     pub fn save_parser_ast(&self, ast: &P::Program) {
         for hook in &self.save_hooks {
             hook.save_parser_ast(ast)
@@ -656,18 +650,18 @@ impl CompilationEnv {
         }
     }
 
-    pub fn append_ide_info(&mut self, info: &mut IDEInfo) {
-        self.ide_information.append(&mut self.diags, info);
+    // -- IDE Information --
+
+    pub fn ide_mode(&self) -> bool {
+        self.flags.ide_mode()
     }
 
-    /// Helper to call `add_exp_info` with the compilation enviornment diagnostics field.
-    pub fn add_to_ide_exp_info(&mut self, ide_info: &mut IDEInfo, loc: Loc, info: ide::ExpInfo) {
-        ide_info.add_exp_info(&mut self.diags, loc, info);
+    pub fn extend_ide_info(&mut self, info: IDEInfo) {
+        self.ide_information.extend(info);
     }
 
-    pub fn add_ide_exp_info(&mut self, loc: Loc, info: ide::ExpInfo) {
-        self.ide_information
-            .add_exp_info(&mut self.diags, loc, info);
+    pub fn add_ide_annotation(&mut self, loc: Loc, info: IDEAnnotation) {
+        self.ide_information.add_ide_annotation(loc, info);
     }
 }
 
@@ -1178,8 +1172,6 @@ macro_rules! process_binops {
 }
 
 pub(crate) use process_binops;
-
-use self::ide::IDEInfo;
 
 //**************************************************************************************************
 // Virtual file system support
