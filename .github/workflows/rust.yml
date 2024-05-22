@@ -59,9 +59,10 @@ jobs:
             ${{ secrets.VALIDATION_CHAIN_KEY }}
       - uses: ./.github/actions/rust-setup
       - uses: taiki-e/install-action@nextest
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      #- name: Setup tmate session
+      #  uses: mxschmitt/action-tmate@v3
       - name: Install Foundry
+        continue-on-error: true
         run: |
           # Install Foundry
           curl -L https://foundry.paradigm.xyz | bash
