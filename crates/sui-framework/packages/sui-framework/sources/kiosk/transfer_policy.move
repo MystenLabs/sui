@@ -116,7 +116,7 @@ module sui::transfer_policy {
     public fun new<T>(
         pub: &Publisher, ctx: &mut TxContext
     ): (TransferPolicy<T>, TransferPolicyCap<T>) {
-        assert!(package::from_package<T>(pub), 0);
+        assert!(package::from_package<T>(pub));
         let id = object::new(ctx);
         let policy_id = id.to_inner();
 

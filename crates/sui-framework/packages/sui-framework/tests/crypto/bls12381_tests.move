@@ -26,7 +26,7 @@ module sui::bls12381_tests {
         let sig = x"908e345f2e2803cd941ae88c218c96194233c9053fa1bca52124787d3cca141c36429d7652435a820c72992d5eee6317";
 
         let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
-        assert!(verify == true, 0)
+        assert!(verify == true)
     }
 
     #[test]
@@ -36,7 +36,7 @@ module sui::bls12381_tests {
         let sig = x"908e345f2e2803cd941ae88c218c96194233c9053fa1bca52124787d3cca141c36429d7652435a820c72992d5eee6317";
 
         let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
-        assert!(verify == false, 0)
+        assert!(verify == false)
     }
 
     #[test]
@@ -46,7 +46,7 @@ module sui::bls12381_tests {
         let sig = x"908e34002e2803cd941ae88c218c96194233c9053fa1bca52124787d3cca141c36429d7652435a820c72992d5eee6317";
 
         let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
-        assert!(verify == false, 0)
+        assert!(verify == false)
     }
 
     #[test]
@@ -56,7 +56,7 @@ module sui::bls12381_tests {
         let sig = x"908e345f2e2803cd941ae88c218c96194233c9053fa1bca52124787d3cca141c36429d7652435a820c72992d5eee6317";
 
         let verify = bls12381::bls12381_min_sig_verify(&sig, &pk, &msg);
-        assert!(verify == false, 0)
+        assert!(verify == false)
     }
 
     #[test]
@@ -66,11 +66,11 @@ module sui::bls12381_tests {
         let sig = x"a2cd8577944b84484ef557a7f92f0d5092779497cc470b1b97680b8f7c807d97250d310b801c7c2185c7c8a21032d45403b97530ca87bd8f05d0cf4ffceb4bcb9bf7184fb604967db7e9e6ea555bc51b25a9e41fbd51181f712aa73aaec749fe";
         let prev_sig = x"a96aace596906562dc525dba4dff734642d71b334d51324f9c9bcb5a3d6caf14b05cde91d6507bf4615cb4285e5b4efd1358ebc46b80b51e338f9dc46cca17cf2e046765ba857c04101a560887fa81aef101a5bb3b2350884558bd3adc72be37";
         let round: u64 = 2373935;
-        assert!(verify_drand_round(pk, sig, prev_sig, round) == true, 0);
+        assert!(verify_drand_round(pk, sig, prev_sig, round) == true);
         // Check invalid signatures.
         let invalid_sig = x"11118577944b84484ef557a7f92f0d5092779497cc470b1b97680b8f7c807d97250d310b801c7c2185c7c8a21032d45403b97530ca87bd8f05d0cf4ffceb4bcb9bf7184fb604967db7e9e6ea555bc51b25a9e41fbd51181f712aa73aaec749fe";
-        assert!(verify_drand_round(pk, invalid_sig, prev_sig, round) == false, 0);
-        assert!(verify_drand_round(pk, sig, prev_sig, round + 1) == false, 0);
+        assert!(verify_drand_round(pk, invalid_sig, prev_sig, round) == false);
+        assert!(verify_drand_round(pk, sig, prev_sig, round + 1) == false);
     }
 
     #[test]
@@ -79,7 +79,7 @@ module sui::bls12381_tests {
         let sig = x"cd8577944b84484ef557a7f92f0d5092779497cc470b1b97680b8f7c807d97250d310b801c7c2185c7c8a21032d45403b97530ca87bd8f05d0cf4ffceb4bcb9bf7184fb604967db7e9e6ea555bc51b25a9e41fbd51181f712aa73aaec749fe";
         let prev_sig = x"a96aace596906562dc525dba4dff734642d71b334d51324f9c9bcb5a3d6caf14b05cde91d6507bf4615cb4285e5b4efd1358ebc46b80b51e338f9dc46cca17cf2e046765ba857c04101a560887fa81aef101a5bb3b2350884558bd3adc72be37";
         let round: u64 = 2373935;
-        assert!(verify_drand_round(pk, sig, prev_sig, round) == false, 0);
+        assert!(verify_drand_round(pk, sig, prev_sig, round) == false);
     }
 
     #[test]
@@ -88,7 +88,7 @@ module sui::bls12381_tests {
         let sig = x"a2cd8577944b84484ef557a7f92f0d5092779497cc470b1b97680b8f7c807d97250d310b801c7c2185c7c8a21032d45403b97530ca87bd8f05d0cf4ffceb4bcb9bf7184fb604967db7e9e6ea555bc51b25a9e41fbd51181f712aa73aaec749fe";
         let prev_sig = x"a96aace596906562dc525dba4dff734642d71b334d51324f9c9bcb5a3d6caf14b05cde91d6507bf4615cb4285e5b4efd1358ebc46b80b51e338f9dc46cca17cf2e046765ba857c04101a560887fa81aef101a5bb3b2350884558bd3adc72be37";
         let round: u64 = 2373935;
-        assert!(verify_drand_round(pk, sig, prev_sig, round) == false, 0);
+        assert!(verify_drand_round(pk, sig, prev_sig, round) == false);
     }
 
     fun drand_message(mut prev_sig: vector<u8>, mut round: u64): vector<u8> {
@@ -122,43 +122,43 @@ module sui::bls12381_tests {
     fun test_scalar_ops() {
         let zero = bls12381::scalar_from_u64(0);
         let one = bls12381::scalar_from_u64(1);
-        assert!(group_ops::equal(&zero, &bls12381::scalar_zero()), 0);
-        assert!(group_ops::equal(&one, &bls12381::scalar_one()), 0);
-        assert!(group_ops::equal(&zero, &bls12381::scalar_one()) == false, 0);
+        assert!(group_ops::equal(&zero, &bls12381::scalar_zero()));
+        assert!(group_ops::equal(&one, &bls12381::scalar_one()));
+        assert!(group_ops::equal(&zero, &bls12381::scalar_one()) == false);
         let zero0 = bls12381::scalar_mul(&zero, &one);
-        assert!(group_ops::equal(&zero0, &bls12381::scalar_zero()), 0);
+        assert!(group_ops::equal(&zero0, &bls12381::scalar_zero()));
 
         let two = bls12381::scalar_add(&one, &one);
         let four = bls12381::scalar_add(&two, &two);
-        assert!(group_ops::equal(&four, &bls12381::scalar_from_u64(4)), 0);
+        assert!(group_ops::equal(&four, &bls12381::scalar_from_u64(4)));
 
         let eight = bls12381::scalar_mul(&four, &two);
-        assert!(group_ops::equal(&eight, &bls12381::scalar_from_u64(8)), 0);
+        assert!(group_ops::equal(&eight, &bls12381::scalar_from_u64(8)));
 
         let zero0 = bls12381::scalar_mul(&zero, &eight);
-        assert!(group_ops::equal(&zero0, &bls12381::scalar_zero()), 0);
+        assert!(group_ops::equal(&zero0, &bls12381::scalar_zero()));
 
         let eight2 = bls12381::scalar_mul(&eight, &one);
-        assert!(group_ops::equal(&eight2, &bls12381::scalar_from_u64(8)), 0);
+        assert!(group_ops::equal(&eight2, &bls12381::scalar_from_u64(8)));
 
         let six = bls12381::scalar_sub(&eight, &two);
-        assert!(group_ops::equal(&six, &bls12381::scalar_from_u64(6)), 0);
+        assert!(group_ops::equal(&six, &bls12381::scalar_from_u64(6)));
 
         let minus_six = bls12381::scalar_sub(&two, &eight);
         let three = bls12381::scalar_add(&minus_six, &bls12381::scalar_from_u64(9));
-        assert!(group_ops::equal(&three, &bls12381::scalar_from_u64(3)), 0);
+        assert!(group_ops::equal(&three, &bls12381::scalar_from_u64(3)));
 
         let three = bls12381::scalar_div(&two, &six);
-        assert!(group_ops::equal(&three, &bls12381::scalar_from_u64(3)), 0);
+        assert!(group_ops::equal(&three, &bls12381::scalar_from_u64(3)));
 
         let minus_three = bls12381::scalar_neg(&three);
-        assert!(group_ops::equal(&bls12381::scalar_add(&minus_three, &six), &bls12381::scalar_from_u64(3)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_add(&minus_three, &six), &bls12381::scalar_from_u64(3)));
 
         let minus_zero = bls12381::scalar_neg(&zero);
-        assert!(group_ops::equal(&minus_zero, &zero), 0);
+        assert!(group_ops::equal(&minus_zero, &zero));
 
         let inv_three = bls12381::scalar_inv(&three);
-        assert!(group_ops::equal(&bls12381::scalar_mul(&six, &inv_three), &bls12381::scalar_from_u64(2)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_mul(&six, &inv_three), &bls12381::scalar_from_u64(2)));
 
         let order_minus_one = bls12381::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
         let _ = bls12381::scalar_add(&order_minus_one, &order_minus_one);
@@ -174,16 +174,16 @@ module sui::bls12381_tests {
         let y_scalar = bls12381::scalar_from_u64(y);
 
         // Since x, y are u32 numbers, the following operations do not overflow as u64.
-        assert!(group_ops::equal(&bls12381::scalar_from_u64(x + y), &bls12381::scalar_add(&x_scalar, &y_scalar)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(x + y), &bls12381::scalar_add(&x_scalar, &y_scalar)));
         let z_scalar = bls12381::scalar_sub(&x_scalar, &y_scalar);
-        assert!(group_ops::equal(&bls12381::scalar_from_u64(x), &bls12381::scalar_add(&z_scalar, &y_scalar)), 0);
-        assert!(group_ops::equal(&bls12381::scalar_from_u64(x * y), &bls12381::scalar_mul(&x_scalar, &y_scalar)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(x), &bls12381::scalar_add(&z_scalar, &y_scalar)));
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(x * y), &bls12381::scalar_mul(&x_scalar, &y_scalar)));
         let z_scalar = bls12381::scalar_div(&x_scalar, &y_scalar);
-        assert!(group_ops::equal(&bls12381::scalar_from_u64(y), &bls12381::scalar_mul(&z_scalar, &x_scalar)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_from_u64(y), &bls12381::scalar_mul(&z_scalar, &x_scalar)));
         let z_scalar = bls12381::scalar_neg(&x_scalar);
-        assert!(group_ops::equal(&bls12381::scalar_zero(), &bls12381::scalar_add(&x_scalar, &z_scalar)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_zero(), &bls12381::scalar_add(&x_scalar, &z_scalar)));
         let z_scalar = bls12381::scalar_inv(&x_scalar);
-        assert!(group_ops::equal(&bls12381::scalar_one(), &bls12381::scalar_mul(&x_scalar, &z_scalar)), 0);
+        assert!(group_ops::equal(&bls12381::scalar_one(), &bls12381::scalar_mul(&x_scalar, &z_scalar)));
 
         let mut i = 0;
         let mut z = bls12381::scalar_add(&x_scalar, &y_scalar);
@@ -193,11 +193,11 @@ module sui::bls12381_tests {
             // check back
             let mut rev = bls12381::scalar_sub(&new_z, &y_scalar);
             rev = bls12381::scalar_div(&x_scalar, &rev);
-            assert!(group_ops::equal(&z, &rev), 0);
+            assert!(group_ops::equal(&z, &rev));
 
             let rev_as_bytes = *group_ops::bytes(&rev);
             let rev_scalar2 = bls12381::scalar_from_bytes(&rev_as_bytes);
-            assert!(group_ops::equal(&rev_scalar2, &rev), 0);
+            assert!(group_ops::equal(&rev_scalar2, &rev));
             z = new_z;
             i = i + 1;
         };
@@ -230,11 +230,11 @@ module sui::bls12381_tests {
     fun test_valid_scalar_from_bytes() {
         let eight = bls12381::scalar_from_u64(8);
         let eight_from_bytes = bls12381::scalar_from_bytes(group_ops::bytes(&eight));
-        assert!(group_ops::equal(&eight, &eight_from_bytes), 0);
+        assert!(group_ops::equal(&eight, &eight_from_bytes));
 
         let zero = bls12381::scalar_zero();
         let zero_from_bytes = bls12381::scalar_from_bytes(group_ops::bytes(&zero));
-        assert!(group_ops::equal(&zero, &zero_from_bytes), 0);
+        assert!(group_ops::equal(&zero, &zero_from_bytes));
     }
 
     #[test]
@@ -282,32 +282,32 @@ module sui::bls12381_tests {
         let id = bls12381::g1_identity();
         let g = bls12381::g1_generator();
 
-        assert!(group_ops::equal(&id, &bls12381::g1_sub(&g, &g)), 0);
-        assert!(group_ops::equal(&id, &bls12381::g1_sub(&id, &id)), 0);
-        assert!(group_ops::equal(&g, &bls12381::g1_add(&id, &g)), 0);
-        assert!(group_ops::equal(&g, &bls12381::g1_add(&g, &id)), 0);
+        assert!(group_ops::equal(&id, &bls12381::g1_sub(&g, &g)));
+        assert!(group_ops::equal(&id, &bls12381::g1_sub(&id, &id)));
+        assert!(group_ops::equal(&g, &bls12381::g1_add(&id, &g)));
+        assert!(group_ops::equal(&g, &bls12381::g1_add(&g, &id)));
 
         let two_g = bls12381::g1_add(&g, &g);
         let four_g = bls12381::g1_add(&two_g, &two_g);
 
         let another_four_g = bls12381::g1_add(&id, &four_g);
-        assert!(group_ops::equal(&four_g, &another_four_g), 0);
+        assert!(group_ops::equal(&four_g, &another_four_g));
 
         let another_four_g = bls12381::g1_mul(&bls12381::scalar_from_u64(4), &g);
-        assert!(group_ops::equal(&four_g, &another_four_g), 0);
+        assert!(group_ops::equal(&four_g, &another_four_g));
 
         let another_id = bls12381::g1_mul(&bls12381::scalar_from_u64(0), &g);
-        assert!(group_ops::equal(&id, &another_id), 0);
+        assert!(group_ops::equal(&id, &another_id));
 
         let another_two_g = bls12381::g1_sub(&four_g, &two_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let another_two_g = bls12381::g1_div(&bls12381::scalar_from_u64(2), &four_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let minus_two_g = bls12381::g1_neg(&two_g);
         let another_two_g = bls12381::g1_add(&minus_two_g, &four_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let order_minus_one = bls12381::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
         let _ = bls12381::g1_mul(&order_minus_one, &g);
@@ -317,8 +317,8 @@ module sui::bls12381_tests {
         let hash1 = bls12381::hash_to_g1(&msg1);
         let hash2 = bls12381::hash_to_g1(&msg2);
         let hash3 = bls12381::hash_to_g1(&msg1);
-        assert!(group_ops::equal(&hash1, &hash2) == false, 0);
-        assert!(group_ops::equal(&hash1, &hash3), 0);
+        assert!(group_ops::equal(&hash1, &hash2) == false);
+        assert!(group_ops::equal(&hash1, &hash3));
     }
 
     #[test]
@@ -343,11 +343,11 @@ module sui::bls12381_tests {
     fun test_valid_g1_from_bytes() {
         let g = bls12381::g1_generator();
         let g_from_bytes = bls12381::g1_from_bytes(group_ops::bytes(&g));
-        assert!(group_ops::equal(&g, &g_from_bytes), 0);
+        assert!(group_ops::equal(&g, &g_from_bytes));
 
         let id = bls12381::g1_identity();
         let id_from_bytes = bls12381::g1_from_bytes(group_ops::bytes(&id));
-        assert!(group_ops::equal(&id, &id_from_bytes), 0);
+        assert!(group_ops::equal(&id, &id_from_bytes));
     }
 
     #[test]
@@ -387,32 +387,32 @@ module sui::bls12381_tests {
         let id = bls12381::g2_identity();
         let g = bls12381::g2_generator();
 
-        assert!(group_ops::equal(&id, &bls12381::g2_sub(&g, &g)), 0);
-        assert!(group_ops::equal(&id, &bls12381::g2_sub(&id, &id)), 0);
-        assert!(group_ops::equal(&g, &bls12381::g2_add(&id, &g)), 0);
-        assert!(group_ops::equal(&g, &bls12381::g2_add(&g, &id)), 0);
+        assert!(group_ops::equal(&id, &bls12381::g2_sub(&g, &g)));
+        assert!(group_ops::equal(&id, &bls12381::g2_sub(&id, &id)));
+        assert!(group_ops::equal(&g, &bls12381::g2_add(&id, &g)));
+        assert!(group_ops::equal(&g, &bls12381::g2_add(&g, &id)));
 
         let two_g = bls12381::g2_add(&g, &g);
         let four_g = bls12381::g2_add(&two_g, &two_g);
 
         let another_four_g = bls12381::g2_add(&id, &four_g);
-        assert!(group_ops::equal(&four_g, &another_four_g), 0);
+        assert!(group_ops::equal(&four_g, &another_four_g));
 
         let another_four_g = bls12381::g2_mul(&bls12381::scalar_from_u64(4), &g);
-        assert!(group_ops::equal(&four_g, &another_four_g), 0);
+        assert!(group_ops::equal(&four_g, &another_four_g));
 
         let another_id = bls12381::g2_mul(&bls12381::scalar_from_u64(0), &g);
-        assert!(group_ops::equal(&id, &another_id), 0);
+        assert!(group_ops::equal(&id, &another_id));
 
         let another_two_g = bls12381::g2_sub(&four_g, &two_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let another_two_g = bls12381::g2_div(&bls12381::scalar_from_u64(2), &four_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let minus_two_g = bls12381::g2_neg(&two_g);
         let another_two_g = bls12381::g2_add(&minus_two_g, &four_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let order_minus_one = bls12381::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
         let _ = bls12381::g2_mul(&order_minus_one, &g);
@@ -422,8 +422,8 @@ module sui::bls12381_tests {
         let hash1 = bls12381::hash_to_g2(&msg1);
         let hash2 = bls12381::hash_to_g2(&msg2);
         let hash3 = bls12381::hash_to_g2(&msg1);
-        assert!(group_ops::equal(&hash1, &hash2) == false, 0);
-        assert!(group_ops::equal(&hash1, &hash3), 0);
+        assert!(group_ops::equal(&hash1, &hash2) == false);
+        assert!(group_ops::equal(&hash1, &hash3));
     }
 
     #[test]
@@ -448,11 +448,11 @@ module sui::bls12381_tests {
     fun test_valid_g2_from_bytes() {
         let g = bls12381::g2_generator();
         let g_from_bytes = bls12381::g2_from_bytes(group_ops::bytes(&g));
-        assert!(group_ops::equal(&g, &g_from_bytes), 0);
+        assert!(group_ops::equal(&g, &g_from_bytes));
 
         let id = bls12381::g2_identity();
         let id_from_bytes = bls12381::g2_from_bytes(group_ops::bytes(&id));
-        assert!(group_ops::equal(&id, &id_from_bytes), 0);
+        assert!(group_ops::equal(&id, &id_from_bytes));
     }
 
     #[test]
@@ -493,32 +493,32 @@ module sui::bls12381_tests {
         let id = bls12381::gt_identity();
         let g = bls12381::gt_generator();
 
-        assert!(group_ops::equal(&id, &bls12381::gt_sub(&g, &g)), 0);
-        assert!(group_ops::equal(&id, &bls12381::gt_sub(&id, &id)), 0);
-        assert!(group_ops::equal(&g, &bls12381::gt_add(&id, &g)), 0);
-        assert!(group_ops::equal(&g, &bls12381::gt_add(&g, &id)), 0);
+        assert!(group_ops::equal(&id, &bls12381::gt_sub(&g, &g)));
+        assert!(group_ops::equal(&id, &bls12381::gt_sub(&id, &id)));
+        assert!(group_ops::equal(&g, &bls12381::gt_add(&id, &g)));
+        assert!(group_ops::equal(&g, &bls12381::gt_add(&g, &id)));
 
         let two_g = bls12381::gt_add(&g, &g);
         let four_g = bls12381::gt_add(&two_g, &two_g);
 
         let another_four_g = bls12381::gt_add(&id, &four_g);
-        assert!(group_ops::equal(&four_g, &another_four_g), 0);
+        assert!(group_ops::equal(&four_g, &another_four_g));
 
         let another_four_g = bls12381::gt_mul(&bls12381::scalar_from_u64(4), &g);
-        assert!(group_ops::equal(&four_g, &another_four_g), 0);
+        assert!(group_ops::equal(&four_g, &another_four_g));
 
         let another_id = bls12381::gt_mul(&bls12381::scalar_from_u64(0), &g);
-        assert!(group_ops::equal(&id, &another_id), 0);
+        assert!(group_ops::equal(&id, &another_id));
 
         let another_two_g = bls12381::gt_sub(&four_g, &two_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let another_two_g = bls12381::gt_div(&bls12381::scalar_from_u64(2), &four_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let minus_two_g = bls12381::gt_neg(&two_g);
         let another_two_g = bls12381::gt_add(&minus_two_g, &four_g);
-        assert!(group_ops::equal(&two_g, &another_two_g), 0);
+        assert!(group_ops::equal(&two_g, &another_two_g));
 
         let order_minus_one = bls12381::scalar_from_bytes(&ORDER_MINUS_ONE_BYTES);
         let _ = bls12381::gt_mul(&order_minus_one, &g);
@@ -569,7 +569,7 @@ module sui::bls12381_tests {
             i = i - 1;
         };
         let result = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
-        assert!(group_ops::equal(&result, &expected_result), 0);
+        assert!(group_ops::equal(&result, &expected_result));
     }
 
     #[test]
@@ -583,19 +583,19 @@ module sui::bls12381_tests {
         let g_r = bls12381::g1_mul(&r, &g);
 
         let result = bls12381::g1_multi_scalar_multiplication(&vector[zero], &vector[g]);
-        assert!(group_ops::equal(&result, &id), 0);
+        assert!(group_ops::equal(&result, &id));
 
         let result = bls12381::g1_multi_scalar_multiplication(&vector[one], &vector[g]);
-        assert!(group_ops::equal(&result, &g), 0);
+        assert!(group_ops::equal(&result, &g));
 
         let result = bls12381::g1_multi_scalar_multiplication(&vector[one, one], &vector[g, id]);
-        assert!(group_ops::equal(&result, &g), 0);
+        assert!(group_ops::equal(&result, &g));
 
         let result = bls12381::g1_multi_scalar_multiplication(&vector[zero, one], &vector[g, id]);
-        assert!(group_ops::equal(&result, &id), 0);
+        assert!(group_ops::equal(&result, &id));
 
         let result = bls12381::g1_multi_scalar_multiplication(&vector[one, one], &vector[g_r, id]);
-        assert!(group_ops::equal(&result, &g_r), 0);
+        assert!(group_ops::equal(&result, &g_r));
     }
 
     #[test]
@@ -611,7 +611,7 @@ module sui::bls12381_tests {
             i = i + 1;
         };
         let result = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
-        assert!(group_ops::equal(&result, &expected_result), 0);
+        assert!(group_ops::equal(&result, &expected_result));
     }
 
     #[test]
@@ -653,7 +653,7 @@ module sui::bls12381_tests {
             i = i + 1;
         };
         let result = bls12381::g1_multi_scalar_multiplication(&scalars, &elements);
-        assert!(group_ops::equal(&result, &expected_result), 0);
+        assert!(group_ops::equal(&result, &expected_result));
     }
 
     #[test]
@@ -675,7 +675,7 @@ module sui::bls12381_tests {
             i = i - 1;
         };
         let result = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
-        assert!(group_ops::equal(&result, &expected_result), 0);
+        assert!(group_ops::equal(&result, &expected_result));
     }
 
     #[test]
@@ -689,19 +689,19 @@ module sui::bls12381_tests {
         let g_r = bls12381::g2_mul(&r, &g);
 
         let result = bls12381::g2_multi_scalar_multiplication(&vector[zero], &vector[g]);
-        assert!(group_ops::equal(&result, &id), 0);
+        assert!(group_ops::equal(&result, &id));
 
         let result = bls12381::g2_multi_scalar_multiplication(&vector[one], &vector[g]);
-        assert!(group_ops::equal(&result, &g), 0);
+        assert!(group_ops::equal(&result, &g));
 
         let result = bls12381::g2_multi_scalar_multiplication(&vector[one, one], &vector[g, id]);
-        assert!(group_ops::equal(&result, &g), 0);
+        assert!(group_ops::equal(&result, &g));
 
         let result = bls12381::g2_multi_scalar_multiplication(&vector[zero, one], &vector[g, id]);
-        assert!(group_ops::equal(&result, &id), 0);
+        assert!(group_ops::equal(&result, &id));
 
         let result = bls12381::g2_multi_scalar_multiplication(&vector[one, one], &vector[g_r, id]);
-        assert!(group_ops::equal(&result, &g_r), 0);
+        assert!(group_ops::equal(&result, &g_r));
     }
 
     #[test]
@@ -717,7 +717,7 @@ module sui::bls12381_tests {
             i = i + 1;
         };
         let result = bls12381::g2_multi_scalar_multiplication(&scalars, &elements);
-        assert!(group_ops::equal(&result, &expected_result), 0);
+        assert!(group_ops::equal(&result, &expected_result));
     }
 
     #[test]

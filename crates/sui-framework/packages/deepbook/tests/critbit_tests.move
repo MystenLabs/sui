@@ -92,44 +92,44 @@ module deepbook::critbit_test {
                 0,
                 3,
             );
-            assert!(is_equal, 0);
+            assert!(is_equal);
             let (res, index) = critbit::find_leaf(&t1 , 48);
-            assert!(res == true, 0);
-            assert!(index == 3, 0);
+            assert!(res == true);
+            assert!(index == 3);
 
             let (min_leaf_key, min_leaf_index) = critbit::min_leaf(&t1);
-            assert!(min_leaf_key == 1, 0);
-            assert!(min_leaf_index == 0, 0);
+            assert!(min_leaf_key == 1);
+            assert!(min_leaf_index == 0);
 
             let (max_leaf_key, max_leaf_index) = critbit::max_leaf(&t1);
-            assert!(max_leaf_key == 48, 0);
-            assert!(max_leaf_index == 3, 1);
+            assert!(max_leaf_key == 48);
+            assert!(max_leaf_index == 3);
 
             let (mut key, mut index) = critbit::next_leaf(&t1, 1);
-            assert!(key == 3, 0);
-            assert!(index == 1, 0);
+            assert!(key == 3);
+            assert!(index == 1);
             (key, index) = critbit::next_leaf(&t1, 3);
-            assert!(key == 16, 0);
-            assert!(index == 2, 0);
+            assert!(key == 16);
+            assert!(index == 2);
             (key, index) = critbit::next_leaf(&t1, 16);
-            assert!(key == 48, 0);
-            assert!(index == 3, 0);
+            assert!(key == 48);
+            assert!(index == 3);
             (key, index) = critbit::next_leaf(&t1, 48);
-            assert!(key == 0, 0);
-            assert!(index == PARTITION_INDEX, 0);
+            assert!(key == 0);
+            assert!(index == PARTITION_INDEX);
 
             (key, index) = critbit::previous_leaf(&t1, 1);
-            assert!(key == 0, 0);
-            assert!(index == PARTITION_INDEX, 0);
+            assert!(key == 0);
+            assert!(index == PARTITION_INDEX);
             (key, index) = critbit::previous_leaf(&t1, 3);
-            assert!(key == 1, 0);
-            assert!(index == 0, 0);
+            assert!(key == 1);
+            assert!(index == 0);
             (key, index) = critbit::previous_leaf(&t1, 16);
-            assert!(key == 3, 0);
-            assert!(index == 1, 0);
+            assert!(key == 3);
+            assert!(index == 1);
             (key, index) = critbit::previous_leaf(&t1, 48);
-            assert!(key == 16, 0);
-            assert!(index == 2, 0);
+            assert!(key == 16);
+            assert!(index == 2);
             critbit::drop(t1)
         };
 
@@ -166,7 +166,7 @@ module deepbook::critbit_test {
                 0,
                 2,
             );
-            assert!(is_equal, 0);
+            assert!(is_equal);
 
             critbit::drop(t1)
         };

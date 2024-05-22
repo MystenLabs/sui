@@ -1805,7 +1805,7 @@ module deepbook::clob_v2 {
         // Iterate over the order ids that need to be canceled at that price level,
         // retrieve and remove the order from open orders of the PriceLevel.
         let owner = account_owner(account_cap);
-        assert!(contains(&pool.usr_open_orders, owner), 0);
+        assert!(contains(&pool.usr_open_orders, owner));
         let mut tick_index: u64 = 0;
         let mut tick_price: u64 = 0;
         let n_order = vector::length(&order_ids);
@@ -2569,7 +2569,7 @@ module deepbook::clob_v2 {
         pool: &Pool<BaseAsset, QuoteAsset>,
         owner: address
     ): &LinkedTable<u64, u64> {
-        assert!(contains(&pool.usr_open_orders, owner), 0);
+        assert!(contains(&pool.usr_open_orders, owner));
         table::borrow(&pool.usr_open_orders, owner)
     }
 
@@ -2617,12 +2617,12 @@ module deepbook::clob_v2 {
         usr_open_orders: &LinkedTable<u64, u64>,
         usr_open_orders_cmp: &vector<u64>,
     ) {
-        assert!(2 * linked_table::length(usr_open_orders) == vector::length(usr_open_orders_cmp), 0);
+        assert!(2 * linked_table::length(usr_open_orders) == vector::length(usr_open_orders_cmp));
         let mut i_order = 0;
         while (i_order < vector::length(usr_open_orders_cmp)) {
             let order_id = *vector::borrow(usr_open_orders_cmp, i_order);
             i_order = i_order + 1;
-            assert!(linked_table::contains(usr_open_orders, order_id), 0);
+            assert!(linked_table::contains(usr_open_orders, order_id));
             let price_cmp = *vector::borrow(usr_open_orders_cmp, i_order);
             let price = *linked_table::borrow(usr_open_orders, order_id);
             assert!(price_cmp == price, ENotEqual);
@@ -2807,8 +2807,8 @@ module deepbook::clob_v2 {
                 test_scenario::ctx(&mut test)
             );
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
-            assert!(next_bid_order_id == order_id_for_test(3, true), 0);
-            assert!(next_ask_order_id == order_id_for_test(1, false), 0);
+            assert!(next_bid_order_id == order_id_for_test(3, true));
+            assert!(next_ask_order_id == order_id_for_test(1, false));
             custodian::assert_user_balance<USD>(
                 &pool.quote_custodian,
                 account_cap_user,
@@ -2948,8 +2948,8 @@ module deepbook::clob_v2 {
                 test_scenario::ctx(&mut test)
             );
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
-            assert!(next_bid_order_id == order_id_for_test(3, true), 0);
-            assert!(next_ask_order_id == order_id_for_test(1, false), 0);
+            assert!(next_bid_order_id == order_id_for_test(3, true));
+            assert!(next_ask_order_id == order_id_for_test(1, false));
             custodian::assert_user_balance<USD>(
                 &pool.quote_custodian,
                 account_cap_user,
@@ -3094,8 +3094,8 @@ module deepbook::clob_v2 {
             assert!(maker_order_id == order_id_for_test(0, false), E_NULL);
 
             let (next_bid_order_id, next_ask_order_id, _, _) = get_pool_stat(&pool);
-            assert!(next_bid_order_id == order_id_for_test(3, true), 0);
-            assert!(next_ask_order_id == order_id_for_test(1, false), 0);
+            assert!(next_bid_order_id == order_id_for_test(3, true));
+            assert!(next_ask_order_id == order_id_for_test(1, false));
             custodian::assert_user_balance<USD>(
                 &pool.quote_custodian,
                 account_cap_user,
@@ -3228,7 +3228,7 @@ module deepbook::clob_v2 {
             };
             curr = linked_table::next(usr_open_order_ids, order_id);
         };
-        assert!(quote_asset_amount == quote_account_locked_balance, 0);
-        assert!(base_asset_amount == base_account_locked_balance, 0);
+        assert!(quote_asset_amount == quote_account_locked_balance);
+        assert!(base_asset_amount == base_account_locked_balance);
     }
 }

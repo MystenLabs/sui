@@ -36,6 +36,6 @@ module bridge::crypto {
         let validator_pub_key = hex::decode(b"029bef8d556d80e43ae7e0becb3a7e6838b95defe45896ed6075bb9035d06c9964");
         let expected_address = hex::decode(b"b14d3c4f5fbfbcfb98af2d330000d49c95b93aa7");
 
-        assert!(ecdsa_pub_key_to_eth_address(&validator_pub_key) == expected_address, 0);
+        assert!(ecdsa_pub_key_to_eth_address(&validator_pub_key) == expected_address);
     }
 }

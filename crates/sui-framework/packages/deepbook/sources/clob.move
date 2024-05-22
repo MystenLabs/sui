@@ -1144,7 +1144,7 @@ module deepbook::clob {
         // Iterate over the order ids that need to be canceled at that price level,
         // retrieve and remove the order from open orders of the PriceLevel.
         let user = object::id(account_cap);
-        assert!(contains(&pool.usr_open_orders, user), 0);
+        assert!(contains(&pool.usr_open_orders, user));
         let mut tick_index: u64 = 0;
         let mut tick_price: u64 = 0;
         let n_order = vector::length(&order_ids);
@@ -1582,7 +1582,7 @@ module deepbook::clob {
         pool: &Pool<BaseAsset, QuoteAsset>,
         owner: ID
     ): &LinkedTable<u64, u64> {
-        assert!(contains(&pool.usr_open_orders, owner), 0);
+        assert!(contains(&pool.usr_open_orders, owner));
         table::borrow(&pool.usr_open_orders, owner)
     }
 
@@ -1622,12 +1622,12 @@ module deepbook::clob {
         usr_open_orders: &LinkedTable<u64, u64>,
         usr_open_orders_cmp: &vector<u64>,
     ) {
-        assert!(2 * linked_table::length(usr_open_orders) == vector::length(usr_open_orders_cmp), 0);
+        assert!(2 * linked_table::length(usr_open_orders) == vector::length(usr_open_orders_cmp));
         let mut i_order = 0;
         while (i_order < vector::length(usr_open_orders_cmp)) {
             let order_id = *vector::borrow(usr_open_orders_cmp, i_order);
             i_order = i_order + 1;
-            assert!(linked_table::contains(usr_open_orders, order_id), 0);
+            assert!(linked_table::contains(usr_open_orders, order_id));
             let price_cmp = *vector::borrow(usr_open_orders_cmp, i_order);
             let price = *linked_table::borrow(usr_open_orders, order_id);
             assert!(price_cmp == price, ENotEqual);

@@ -58,7 +58,7 @@ module sui::priority_queue {
 
     public fun create_entries<T: drop>(mut p: vector<u64>, mut v: vector<T>): vector<Entry<T>> {
         let len = p.length();
-        assert!(v.length() == len, 0);
+        assert!(v.length() == len);
         let mut res = vector[];
         let mut i = 0;
         while (i < len) {
@@ -94,7 +94,7 @@ module sui::priority_queue {
         if (len == 0) {
             return
         };
-        assert!(i < len, 1);
+        assert!(i < len);
         let left = i * 2 + 1;
         let right = left + 1;
         let mut max = i;
@@ -173,7 +173,7 @@ module sui::priority_queue {
     #[test_only]
     fun check_pop_max(h: &mut PriorityQueue<u64>, expected_priority: u64, expected_value: u64) {
         let (priority, value) = pop_max(h);
-        assert!(priority == expected_priority, 0);
-        assert!(value == expected_value, 0);
+        assert!(priority == expected_priority);
+        assert!(value == expected_value);
     }
 }

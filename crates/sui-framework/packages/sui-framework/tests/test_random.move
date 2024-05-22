@@ -67,7 +67,7 @@ module sui::test_random {
     /// random `u256` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u256_in_range(random: &mut Random, upper_bound: u256): u256 {
-        assert!(upper_bound > 0, 0);
+        assert!(upper_bound > 0);
         next_u256(random) % upper_bound
     }
 
@@ -80,7 +80,7 @@ module sui::test_random {
     /// random `u128` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u128_in_range(random: &mut Random, upper_bound: u128): u128 {
-        assert!(upper_bound > 0, 0);
+        assert!(upper_bound > 0);
         next_u128(random) % upper_bound
     }
 
@@ -93,7 +93,7 @@ module sui::test_random {
     /// random `u64` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u64_in_range(random: &mut Random, upper_bound: u64): u64 {
-        assert!(upper_bound > 0, 0);
+        assert!(upper_bound > 0);
         next_u64(random) % upper_bound
     }
 
@@ -106,7 +106,7 @@ module sui::test_random {
     /// random `u32` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u32_in_range(random: &mut Random, upper_bound: u32): u32 {
-        assert!(upper_bound > 0, 0);
+        assert!(upper_bound > 0);
         next_u32(random) % upper_bound
     }
 
@@ -119,7 +119,7 @@ module sui::test_random {
     /// random `u16` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u16_in_range(random: &mut Random, upper_bound: u16): u16 {
-        assert!(upper_bound > 0, 0);
+        assert!(upper_bound > 0);
         next_u16(random) % upper_bound
     }
 
@@ -132,7 +132,7 @@ module sui::test_random {
     /// random `u8` integer in the range [0, ..., upper_bound - 1]. Note that if the upper
     /// bound is not a power of two, the distribution will not be completely uniform.
     public fun next_u8_in_range(random: &mut Random, upper_bound: u8): u8 {
-        assert!(upper_bound > 0, 0);
+        assert!(upper_bound > 0);
         next_u8(random) % upper_bound
     }
 
