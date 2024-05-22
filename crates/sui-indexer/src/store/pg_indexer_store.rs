@@ -486,6 +486,18 @@ impl<T: R2D2Connection + 'static> PgIndexerStore<T> {
     }
 
     fn update_objects_snapshot(&self, start_cp: u64, end_cp: u64) -> Result<(), IndexerError> {
+        let work_mem_gb = std::env::var("INDEXER_PG_WORK_MEM")
+            .unwrap_or_else(|_e| "16".to_string())
+            .parse::<i64>()
+            .unwrap();
+        let pg_work_mem_query_string = format!("SET work_mem = '{}GB'", work_mem_gb);
+        let pg_work_mem_query = pg_work_mem_query_string.as_str();
+        transactional_blocking_with_retry!(
+            &self.blocking_cp,
+            |conn| { RunQueryDsl::execute(diesel::sql_query(pg_work_mem_query), conn,) },
+            PG_DB_COMMIT_SLEEP_DURATION
+        )?;
+
         transactional_blocking_with_retry!(
             &self.blocking_cp,
             |conn| {
