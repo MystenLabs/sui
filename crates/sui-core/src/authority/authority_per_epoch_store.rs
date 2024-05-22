@@ -1822,6 +1822,26 @@ impl AuthorityPerEpochStore {
         ))
     }
 
+    /// Check whether certificates were processed by consensus.
+    /// This handles multiple certificates at once.
+    pub fn is_all_tx_certs_consensus_message_processed(
+        &self,
+        certificates: &[VerifiedCertificate],
+    ) -> SuiResult<bool> {
+        let keys: Vec<_> = certificates
+            .iter()
+            .map(|cert| {
+                SequencedConsensusTransactionKey::External(ConsensusTransactionKey::Certificate(
+                    *cert.digest(),
+                ))
+            })
+            .collect();
+        Ok(self
+            .check_consensus_messages_processed(keys.iter())?
+            .into_iter()
+            .all(|processed| processed))
+    }
+
     pub fn is_consensus_message_processed(
         &self,
         key: &SequencedConsensusTransactionKey,
