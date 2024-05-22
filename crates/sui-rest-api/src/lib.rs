@@ -18,6 +18,7 @@ mod metrics;
 mod objects;
 mod reader;
 mod response;
+mod system;
 pub mod transactions;
 pub mod types;
 
@@ -95,6 +96,10 @@ impl RestService {
                 get(committee::get_latest_committee),
             )
             .route(committee::GET_COMMITTEE_PATH, get(committee::get_committee))
+            .route(
+                system::GET_SYSTEM_STATE_SUMMARY_PATH,
+                get(system::get_system_state_summary),
+            )
             .with_state(self.clone())
             .merge(rest_router(store))
             .pipe(|router| {
