@@ -6,6 +6,7 @@ use crate::{command::CommandOptions, run_cmd};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;
 use inquire::Text;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,12 +29,21 @@ impl ProjectType {
         // inquire params from user
         let project_name = project_name
             .unwrap_or_else(|| {
-                Text::new("project name:")
+                Text::new("project name (max 30 chars):")
                     .prompt()
                     .expect("couldn't get project name")
             })
             .trim()
             .to_string();
+
+        // Validate project name
+        let project_name_validation_regex = Regex::new(r"^[a-z][a-z0-9\-]{0,29}$").unwrap();
+        if !project_name_validation_regex.is_match(&project_name) {
+            return Err(anyhow::anyhow!(
+                "project_name should start with a letter and only contain alphanumeric chars or dashes."
+            ));
+        }
+
         // create dir
         let project_subdir = match self {
             Self::App | Self::CronJob => "apps".to_owned(),
