@@ -59,6 +59,8 @@ jobs:
             ${{ secrets.VALIDATION_CHAIN_KEY }}
       - uses: ./.github/actions/rust-setup
       - uses: taiki-e/install-action@nextest
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
       - name: Install Foundry
         run: |
           # Install Foundry
@@ -69,8 +71,6 @@ jobs:
           export PATH=$HOME/.foundry/bin:$PATH
           # Run foundryup
           #$HOME/.foundry/bin/foundryup
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
