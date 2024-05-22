@@ -477,6 +477,8 @@ impl AuthorityStorePruner {
                 checkpoints_to_prune = vec![];
                 checkpoint_content_to_prune = vec![];
                 effects_to_prune = vec![];
+                // yield back to the tokio runtime. Prevent potential halt of other tasks
+                tokio::task::yield_now().await;
             }
         }
 
