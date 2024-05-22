@@ -35,6 +35,7 @@ arrow-array.workspace = true
 fastcrypto = { workspace = true, features = ["copy_key"] }
 mysten-metrics.workspace = true
 sui-analytics-indexer-derive.workspace = true
+sui-data-ingestion-core.workspace = true
 sui-indexer.workspace = true
 eyre.workspace = true
 rocksdb.workspace = true
