@@ -73,10 +73,11 @@ jobs:
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      #- name: Setup tmate session
+      #  uses: mxschmitt/action-tmate@v3
       - name: cargo test
         run: |
+          export PATH=$HOME/.foundry/bin:$PATH
           sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 # Enable ipv6
           cargo nextest run --profile ci --no-fail-fast
       - name: External crates tests
