@@ -190,7 +190,7 @@ fn context_specific_lbrace(
         let Some(def_info) = symbols.def_info(&def_loc) else {
             continue;
         };
-        let DefInfo::Struct(_, _, _, _, abilities, _, _) = def_info else {
+        let DefInfo::Struct(.., abilities, _, _, _) = def_info else {
             continue;
         };
         if abilities.has_ability_(Ability_::Key) {
@@ -253,7 +253,7 @@ fn context_specific_no_trigger(
             let Some(def_info) = symbols.def_info(&def_loc) else {
                 break;
             };
-            let DefInfo::Function(mod_ident, v, _, _, _, _, _, _) = def_info else {
+            let DefInfo::Function(mod_ident, v, ..) = def_info else {
                 // not a function
                 break;
             };
