@@ -59,6 +59,10 @@ jobs:
             ${{ secrets.VALIDATION_CHAIN_KEY }}
       - uses: ./.github/actions/rust-setup
       - uses: taiki-e/install-action@nextest
+      - name: Install Foundry
+        run: |
+          curl -L https://foundry.paradigm.xyz | { cat; echo '$FOUNDRY_BIN_DIR/foundryup'; } | bash
+          echo "$HOME/.config/.foundry/bin" >> $GITHUB_PATH
       - name: cargo test
         run: |
           sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0 # Enable ipv6
