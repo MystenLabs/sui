@@ -61,11 +61,14 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: Install Foundry
         run: |
+          # Install Foundry
           curl -L https://foundry.paradigm.xyz | bash
+          # Manually add Foundry to PATH for this session and globally
           echo "$HOME/.foundry/bin" >> $GITHUB_PATH
+          echo "export PATH=$HOME/.foundry/bin:\$PATH" >> $HOME/.profile
           export PATH=$HOME/.foundry/bin:$PATH
           # Run foundryup
-          foundryup
+          $HOME/.foundry/bin/foundryup
       - name: Set environment variables
         run: |
           echo "CARGO_PROFILE_TEST_BUILD_OVERRIDE_DEBUG=true" >> $GITHUB_ENV
