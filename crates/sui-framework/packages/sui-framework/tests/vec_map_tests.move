@@ -131,4 +131,46 @@ module sui::vec_map_tests {
 
         assert!(m.keys() == vector[1, 5], 1);
     }
+
+    #[test, allow(lint(collection_equality))]
+    fun round_trip() {
+        let mut m = vec_map::empty();
+        assert!(m == vec_map::from_keys_values(vector[], vector[]));
+        let mut i = 0;
+        let mut s = b"";
+        while (i < 50) {
+            let k = i + 2;
+            s.append(b"x");
+            m.insert(k, s);
+            let (keys, values) = m.into_keys_values();
+            let m2 = vec_map::from_keys_values(keys, values);
+            assert!(m == m2);
+            i = i + 1;
+        };
+    }
+
+    #[test, expected_failure(abort_code = vec_map::EUnequalLengths)]
+    fun mismatched_key_values_1() {
+        let keys = vector[1];
+        let values = vector[];
+        vec_map::from_keys_values<u64, u64>(keys, values);
+    }
+
+    #[test, expected_failure(abort_code = vec_map::EUnequalLengths)]
+    fun mismatched_key_values_2() {
+        let keys = vector[];
+        let values = vector[1];
+        vec_map::from_keys_values<u64, u64>(keys, values);
+    }
+
+    #[test, expected_failure(abort_code = vec_map::EUnequalLengths)]
+    fun mismatched_key_values_3() {
+        let keys = vector[1, 2, 3, 4, 5, 6];
+        let values = {
+            let mut v = keys;
+            v.pop_back();
+            v
+        };
+        vec_map::from_keys_values<u64, u64>(keys, values);
+    }
 }

@@ -61,4 +61,18 @@ module sui::vec_set_tests {
         assert!(m.size() == 3, 0);
         assert!(m.keys() == &vector[1, 2, 3], 1);
     }
+
+    #[test, allow(lint(collection_equality))]
+    fun round_trip() {
+        let mut s = vec_set::empty();
+        assert!(s == vec_set::from_keys(vector[]));
+        let mut i = 0;
+        while (i < 50) {
+            let k = i + 2;
+            s.insert(k);
+            let s2 = vec_set::from_keys(s.into_keys());
+            assert!(s == s2);
+            i = i + 1;
+        };
+    }
 }
