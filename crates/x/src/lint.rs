@@ -148,10 +148,7 @@ pub fn handle_lint_results_exclude_external_crate_checks(
     let mut errs = false;
     for (source, message) in &results.messages {
         if let LintKind::Content(path) = source.kind() {
-            if ignore_funcs
-                .iter()
-                .any(|func| func(source, path))
-            {
+            if ignore_funcs.iter().any(|func| func(source, path)) {
                 continue;
             }
         }
