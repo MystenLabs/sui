@@ -187,6 +187,8 @@ pub enum DefInfo {
         Vec<Type>,
         /// Ret type
         Type,
+        /// Doc string
+        Option<String>,
     ),
     Struct(
         /// Defining module
@@ -203,6 +205,8 @@ pub enum DefInfo {
         Vec<Symbol>,
         /// Field types
         Vec<Type>,
+        /// Doc string
+        Option<String>,
     ),
     Field(
         /// Defining module of the containing struct
@@ -213,6 +217,8 @@ pub enum DefInfo {
         Symbol,
         /// Field type
         Type,
+        /// Doc string
+        Option<String>,
     ),
     Local(
         /// Name
@@ -233,10 +239,14 @@ pub enum DefInfo {
         Type,
         /// Value
         Option<String>,
+        /// Doc string
+        Option<String>,
     ),
     Module(
         /// pkg::mod
         String,
+        /// Doc string
+        Option<String>,
     ),
 }
 
@@ -253,8 +263,6 @@ pub struct UseDef {
     def_loc: DefLoc,
     /// Location of the type definition
     type_def_loc: Option<DefLoc>,
-    /// Doc string for the relevant identifier/function
-    doc_string: Option<String>,
 }
 
 /// Definition of a struct field
@@ -308,8 +316,6 @@ pub struct ModuleDefs {
     start: Position,
     /// Module name
     ident: ModuleIdent_,
-    /// Optional doc comment
-    doc_comment: Option<String>,
     /// Struct definitions
     structs: BTreeMap<Symbol, StructDef>,
     /// Const definitions
@@ -330,8 +336,6 @@ pub struct ParsingSymbolicator<'a> {
     files: &'a SimpleFiles<Symbol, String>,
     /// A mapping from file hashes to file IDs (used to obtain source file locations)
     file_id_mapping: &'a HashMap<FileHash, usize>,
-    // A mapping from file IDs to a split vector of the lines in each file (used to build docstrings)
-    file_id_to_lines: &'a HashMap<usize, Vec<String>>,
     /// Associates uses for a given definition to allow displaying all references
     references: &'a mut BTreeMap<DefLoc, BTreeSet<UseLoc>>,
     /// Additional information about definitions
@@ -361,7 +365,6 @@ pub struct TypingSymbolicator<'a> {
     /// A mapping from file hashes to file IDs (used to obtain source file locations)
     file_id_mapping: &'a HashMap<FileHash, usize>,
     // A mapping from file IDs to a split vector of the lines in each file (used to build docstrings)
-    file_id_to_lines: &'a HashMap<usize, Vec<String>>,
     /// Contains type params where relevant (e.g. when processing function definition)
     type_params: BTreeMap<Symbol, DefLoc>,
     /// Associates uses for a given definition to allow displaying all references
@@ -450,6 +453,7 @@ impl fmt::Display for DefInfo {
                 arg_names,
                 arg_types,
                 ret,
+                _,
             ) => {
                 let type_args_str = type_args_to_ide_string(type_args);
                 let ret_str = match ret {
@@ -476,6 +480,7 @@ impl fmt::Display for DefInfo {
                 abilities,
                 field_names,
                 field_types,
+                _,
             ) => {
                 let type_args_str = struct_type_args_to_ide_string(type_args);
                 let abilities_str = if abilities.is_empty() {
@@ -515,7 +520,7 @@ impl fmt::Display for DefInfo {
                     )
                 }
             }
-            Self::Field(mod_ident, struct_name, name, t) => {
+            Self::Field(mod_ident, struct_name, name, t, _) => {
                 write!(
                     f,
                     "{}::{}\n{}: {}",
@@ -533,7 +538,7 @@ impl fmt::Display for DefInfo {
                     write!(f, "{}{}: {}", mut_str, name, type_to_ide_string(t))
                 }
             }
-            Self::Const(mod_ident, name, t, value) => {
+            Self::Const(mod_ident, name, t, value, _) => {
                 if let Some(v) = value {
                     write!(
                         f,
@@ -553,7 +558,7 @@ impl fmt::Display for DefInfo {
                     )
                 }
             }
-            Self::Module(mod_ident_str) => write!(f, "module {mod_ident_str}"),
+            Self::Module(mod_ident_str, _) => write!(f, "module {mod_ident_str}"),
         }
     }
 }
@@ -936,7 +941,6 @@ impl UseDef {
         def_start: Position,
         use_name: &Symbol,
         type_def_loc: Option<DefLoc>,
-        doc_string: Option<String>,
     ) -> Self {
         let def_loc = DefLoc {
             fhash: def_fhash,
@@ -993,7 +997,6 @@ impl UseDef {
             col_end,
             def_loc,
             type_def_loc,
-            doc_string,
         }
     }
 
@@ -1365,7 +1368,6 @@ pub fn get_symbols(
         mod_outer_defs: &mut mod_outer_defs,
         files: &files,
         file_id_mapping: &file_id_mapping,
-        file_id_to_lines: &file_id_to_lines,
         references: &mut references,
         def_info: &mut def_info,
         use_defs: UseDefMap::new(),
@@ -1391,7 +1393,6 @@ pub fn get_symbols(
         mod_outer_defs: &mod_outer_defs,
         files: &files,
         file_id_mapping: &file_id_mapping,
-        file_id_to_lines: &file_id_to_lines,
         type_params: BTreeMap::new(),
         references: &mut references,
         def_info: &mut def_info,
@@ -1717,9 +1718,15 @@ fn get_mod_outer_defs(
                     name: *fname,
                     start,
                 });
+                let doc_string = extract_doc_string(
+                    file_id_mapping,
+                    file_id_to_lines,
+                    &start,
+                    &fpos.file_hash(),
+                );
                 def_info.insert(
                     DefLoc { fhash, start },
-                    DefInfo::Field(mod_ident.value, *name, *fname, t.clone()),
+                    DefInfo::Field(mod_ident.value, *name, *fname, t.clone(), doc_string),
                 );
                 field_types.push(t.clone());
             }
@@ -1752,6 +1759,12 @@ fn get_mod_outer_defs(
         } else {
             Visibility::Internal
         };
+        let doc_string = extract_doc_string(
+            file_id_mapping,
+            file_id_to_lines,
+            &name_start,
+            &pos.file_hash(),
+        );
         def_info.insert(
             DefLoc {
                 fhash,
@@ -1776,6 +1789,7 @@ fn get_mod_outer_defs(
                 def.abilities.clone(),
                 field_names,
                 field_types,
+                doc_string,
             ),
         );
     }
@@ -1789,6 +1803,12 @@ fn get_mod_outer_defs(
             }
         };
         constants.insert(*name, ConstDef { name_start });
+        let doc_string = extract_doc_string(
+            file_id_mapping,
+            file_id_to_lines,
+            &name_start,
+            &pos.file_hash(),
+        );
         def_info.insert(
             DefLoc {
                 fhash,
@@ -1799,6 +1819,7 @@ fn get_mod_outer_defs(
                 *name,
                 c.signature.clone(),
                 const_val_to_ide_string(&c.value),
+                doc_string,
             ),
         );
     }
@@ -1821,6 +1842,12 @@ fn get_mod_outer_defs(
         } else {
             FunType::Regular
         };
+        let doc_string = extract_doc_string(
+            file_id_mapping,
+            file_id_to_lines,
+            &name_start,
+            &pos.file_hash(),
+        );
         let fun_info = DefInfo::Function(
             mod_ident.value,
             fun.visibility,
@@ -1842,6 +1869,7 @@ fn get_mod_outer_defs(
                 .map(|(_, _, t)| t.clone())
                 .collect(),
             fun.signature.return_type.clone(),
+            doc_string,
         );
         functions.insert(
             *name,
@@ -1880,7 +1908,6 @@ fn get_mod_outer_defs(
                         character: 0,
                     },
                     ident,
-                    doc_comment: None,
                     structs,
                     constants,
                     functions,
@@ -1896,7 +1923,6 @@ fn get_mod_outer_defs(
         fhash,
         ident,
         start,
-        doc_comment,
         structs,
         constants,
         functions,
@@ -1917,7 +1943,6 @@ fn get_mod_outer_defs(
                 mod_defs.start,
                 &mod_name.value(),
                 None,
-                mod_defs.doc_comment.clone(),
             ),
         );
         def_info.insert(
@@ -1925,7 +1950,7 @@ fn get_mod_outer_defs(
                 fhash: mod_defs.fhash,
                 start: mod_defs.start,
             },
-            DefInfo::Module(mod_ident_to_ide_string(&ident)),
+            DefInfo::Module(mod_ident_to_ide_string(&ident), doc_comment),
         );
     }
 
@@ -2278,7 +2303,6 @@ impl<'a> ParsingSymbolicator<'a> {
                 mod_defs.start,
                 &mod_name.value(),
                 None,
-                mod_defs.doc_comment.clone(),
             ),
         );
     }
@@ -2312,7 +2336,6 @@ impl<'a> ParsingSymbolicator<'a> {
             self.mod_outer_defs,
             self.files,
             self.file_id_mapping,
-            self.file_id_to_lines,
             mod_ident_str.clone(),
             mod_defs,
             &name.value,
@@ -2344,7 +2367,6 @@ impl<'a> ParsingSymbolicator<'a> {
             self.mod_outer_defs,
             self.files,
             self.file_id_mapping,
-            self.file_id_to_lines,
             mod_ident_str.clone(),
             mod_defs,
             &name.value,
@@ -2486,12 +2508,6 @@ impl<'a> TypingSymbolicator<'a> {
             }
             // enter self-definition for function name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
-            let doc_string = extract_doc_string(
-                self.file_id_mapping,
-                self.file_id_to_lines,
-                &name_start,
-                &pos.file_hash(),
-            );
             let fun_info = self
                 .def_info
                 .get(&DefLoc {
@@ -2509,7 +2525,6 @@ impl<'a> TypingSymbolicator<'a> {
                 name_start,
                 name,
                 fun_type_def,
-                doc_string,
             );
 
             self.use_defs.insert(name_start.line, use_def);
@@ -2519,12 +2534,6 @@ impl<'a> TypingSymbolicator<'a> {
         for (pos, name, c) in &mod_def.constants {
             // enter self-definition for const name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
-            let doc_string = extract_doc_string(
-                self.file_id_mapping,
-                self.file_id_to_lines,
-                &name_start,
-                &pos.file_hash(),
-            );
             let const_info = self
                 .def_info
                 .get(&DefLoc {
@@ -2544,7 +2553,6 @@ impl<'a> TypingSymbolicator<'a> {
                     name_start,
                     name,
                     ident_type_def_loc,
-                    doc_string,
                 ),
             );
             // scope must be passed here but it's not expected to be populated
@@ -2555,12 +2563,6 @@ impl<'a> TypingSymbolicator<'a> {
         for (pos, name, s) in &mod_def.structs {
             // enter self-definition for struct name (unwrap safe - done when inserting def)
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
-            let doc_string = extract_doc_string(
-                self.file_id_mapping,
-                self.file_id_to_lines,
-                &name_start,
-                &pos.file_hash(),
-            );
             let struct_info = self
                 .def_info
                 .get(&DefLoc {
@@ -2580,7 +2582,6 @@ impl<'a> TypingSymbolicator<'a> {
                     name_start,
                     name,
                     struct_type_def,
-                    doc_string,
                 ),
             );
 
@@ -2617,12 +2618,6 @@ impl<'a> TypingSymbolicator<'a> {
                     let field_info = DefInfo::Type(t.clone());
                     let ident_type_def_loc =
                         def_info_to_type_def_loc(self.mod_outer_defs, &field_info);
-                    let doc_string = extract_doc_string(
-                        self.file_id_mapping,
-                        self.file_id_to_lines,
-                        &start,
-                        &fpos.file_hash(),
-                    );
                     self.use_defs.insert(
                         start.line,
                         UseDef::new(
@@ -2634,7 +2629,6 @@ impl<'a> TypingSymbolicator<'a> {
                             start,
                             fname,
                             ident_type_def_loc,
-                            doc_string,
                         ),
                     );
                 }
@@ -3099,7 +3093,6 @@ impl<'a> TypingSymbolicator<'a> {
                         start,
                         &tname,
                         ident_type_def_loc,
-                        None, // no doc string for type params
                     ),
                 );
                 self.def_info.insert(DefLoc { fhash, start }, type_def_info);
@@ -3138,7 +3131,6 @@ impl<'a> TypingSymbolicator<'a> {
                     mod_defs.start,
                     &mod_name.value(),
                     None,
-                    mod_defs.doc_comment.clone(),
                 ),
             );
         }
@@ -3149,12 +3141,6 @@ impl<'a> TypingSymbolicator<'a> {
         };
         if let Some(const_def) = mod_defs.constants.get(use_name) {
             let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
-            let doc_string = extract_doc_string(
-                self.file_id_mapping,
-                self.file_id_to_lines,
-                &const_def.name_start,
-                &def_fhash,
-            );
             let const_info = self
                 .def_info
                 .get(&DefLoc {
@@ -3174,7 +3160,6 @@ impl<'a> TypingSymbolicator<'a> {
                     const_def.name_start,
                     use_name,
                     ident_type_def_loc,
-                    doc_string,
                 ),
             );
         }
@@ -3212,7 +3197,6 @@ impl<'a> TypingSymbolicator<'a> {
                     mod_defs.start,
                     &mod_name.value(),
                     None,
-                    mod_defs.doc_comment.clone(),
                 ),
             );
         }
@@ -3222,7 +3206,6 @@ impl<'a> TypingSymbolicator<'a> {
             self.mod_outer_defs,
             self.files,
             self.file_id_mapping,
-            self.file_id_to_lines,
             mod_ident_str,
             mod_defs,
             use_name,
@@ -3264,7 +3247,6 @@ impl<'a> TypingSymbolicator<'a> {
                     mod_defs.start,
                     &mod_name.value(),
                     None,
-                    mod_defs.doc_comment.clone(),
                 ),
             );
         }
@@ -3273,7 +3255,6 @@ impl<'a> TypingSymbolicator<'a> {
             self.mod_outer_defs,
             self.files,
             self.file_id_mapping,
-            self.file_id_to_lines,
             mod_ident_str,
             mod_defs,
             use_name,
@@ -3312,7 +3293,7 @@ impl<'a> TypingSymbolicator<'a> {
             for fdef in &def.field_defs {
                 if fdef.name == *use_name {
                     let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
-                    let struct_info = self
+                    let field_info = self
                         .def_info
                         .get(&DefLoc {
                             fhash: def_fhash,
@@ -3320,13 +3301,7 @@ impl<'a> TypingSymbolicator<'a> {
                         })
                         .unwrap();
                     let ident_type_def_loc =
-                        def_info_to_type_def_loc(self.mod_outer_defs, struct_info);
-                    let doc_string = extract_doc_string(
-                        self.file_id_mapping,
-                        self.file_id_to_lines,
-                        &fdef.start,
-                        &def_fhash,
-                    );
+                        def_info_to_type_def_loc(self.mod_outer_defs, field_info);
                     self.use_defs.insert(
                         name_start.line,
                         UseDef::new(
@@ -3338,7 +3313,6 @@ impl<'a> TypingSymbolicator<'a> {
                             fdef.start,
                             use_name,
                             ident_type_def_loc,
-                            doc_string,
                         ),
                     );
                 }
@@ -3360,12 +3334,6 @@ impl<'a> TypingSymbolicator<'a> {
                     Some(name_start) => match self.type_params.get(&use_name) {
                         Some(def_loc) => {
                             let ident_type_def_loc = type_def_loc(self.mod_outer_defs, id_type);
-                            let doc_string = extract_doc_string(
-                                self.file_id_mapping,
-                                self.file_id_to_lines,
-                                &def_loc.start,
-                                &def_loc.fhash,
-                            );
                             self.use_defs.insert(
                                 name_start.line,
                                 UseDef::new(
@@ -3377,7 +3345,6 @@ impl<'a> TypingSymbolicator<'a> {
                                     def_loc.start,
                                     &use_name,
                                     ident_type_def_loc,
-                                    doc_string,
                                 ),
                             );
                         }
@@ -3447,7 +3414,6 @@ impl<'a> TypingSymbolicator<'a> {
                         name_start,
                         name,
                         ident_type_def_loc,
-                        None, // no doc string for locals or function params
                     ),
                 );
                 self.def_info.insert(
@@ -3484,12 +3450,6 @@ impl<'a> TypingSymbolicator<'a> {
         };
 
         if let Some(local_def) = scope.get(use_name) {
-            let doc_string = extract_doc_string(
-                self.file_id_mapping,
-                self.file_id_to_lines,
-                &local_def.def_loc.start,
-                &local_def.def_loc.fhash,
-            );
             let ident_type_def_loc = type_def_loc(self.mod_outer_defs, &local_def.def_type);
             self.use_defs.insert(
                 name_start.line,
@@ -3502,7 +3462,6 @@ impl<'a> TypingSymbolicator<'a> {
                     local_def.def_loc.start,
                     use_name,
                     ident_type_def_loc,
-                    doc_string,
                 ),
             );
         }
@@ -3515,7 +3474,6 @@ fn add_fun_use_def(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
-    file_id_to_lines: &HashMap<usize, Vec<String>>,
     mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -3537,12 +3495,6 @@ fn add_fun_use_def(
                 start: func_def.start,
             })
             .unwrap();
-        let doc_string = extract_doc_string(
-            file_id_mapping,
-            file_id_to_lines,
-            &func_def.start,
-            &def_fhash,
-        );
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, fun_info);
         let ud = UseDef::new(
             references,
@@ -3553,7 +3505,6 @@ fn add_fun_use_def(
             func_def.start,
             use_name,
             ident_type_def_loc,
-            doc_string,
         );
         use_defs.insert(name_start.line, ud.clone());
         return Some(ud);
@@ -3566,7 +3517,6 @@ fn add_struct_use_def(
     mod_outer_defs: &BTreeMap<String, ModuleDefs>,
     files: &SimpleFiles<Symbol, String>,
     file_id_mapping: &HashMap<FileHash, usize>,
-    file_id_to_lines: &HashMap<usize, Vec<String>>,
     mod_ident_str: String,
     mod_defs: &ModuleDefs,
     use_name: &Symbol,
@@ -3589,12 +3539,6 @@ fn add_struct_use_def(
             })
             .unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, struct_info);
-        let doc_string = extract_doc_string(
-            file_id_mapping,
-            file_id_to_lines,
-            &def.name_start,
-            &def_fhash,
-        );
         let ud = UseDef::new(
             references,
             alias_lengths,
@@ -3604,7 +3548,6 @@ fn add_struct_use_def(
             def.name_start,
             use_name,
             ident_type_def_loc,
-            doc_string,
         );
         use_defs.insert(name_start.line, ud.clone());
         return Some(ud);
@@ -3619,13 +3562,23 @@ fn def_info_to_type_def_loc(
     match def_info {
         DefInfo::Type(t) => type_def_loc(mod_outer_defs, t),
         DefInfo::Function(..) => None,
-        DefInfo::Struct(mod_ident, name, _, _, _, _, _) => {
-            find_struct(mod_outer_defs, mod_ident, name)
-        }
-        DefInfo::Field(_, _, _, t) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Struct(mod_ident, name, ..) => find_struct(mod_outer_defs, mod_ident, name),
+        DefInfo::Field(.., t, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Local(_, t, _, _) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Const(_, _, t, _) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Module(_) => None,
+        DefInfo::Const(_, _, t, _, _) => type_def_loc(mod_outer_defs, t),
+        DefInfo::Module(..) => None,
+    }
+}
+
+fn def_info_doc_string(def_info: &DefInfo) -> Option<String> {
+    match def_info {
+        DefInfo::Type(_) => None,
+        DefInfo::Function(.., s) => s.clone(),
+        DefInfo::Struct(.., s) => s.clone(),
+        DefInfo::Field(.., s) => s.clone(),
+        DefInfo::Local(..) => None,
+        DefInfo::Const(.., s) => s.clone(),
+        DefInfo::Module(_, s) => s.clone(),
     }
 }
 
@@ -3897,7 +3850,7 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
             // use rust for highlighting in Markdown until there is support for Move
             let contents = HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: if let Some(s) = &u.doc_string {
+                value: if let Some(s) = &def_info_doc_string(info) {
                     format!("```rust\n{}\n```\n{}", info, s)
                 } else {
                     format!("```rust\n{}\n```", info)
@@ -4147,11 +4100,12 @@ fn assert_use_def_with_doc_string(
     );
 
     if doc_string.is_some() {
+        let expected_doc_string = def_info_doc_string(info);
         assert!(
-            doc_string.map(|s| s.to_string()) == use_def.doc_string,
+            doc_string.map(|s| s.to_string()) == expected_doc_string,
             "'{:?}' != '{:?}' for use in column {use_col} of line {use_line} in file {use_file}",
             doc_string.map(|s| s.to_string()),
-            use_def.doc_string
+            expected_doc_string
         );
     }
     match use_def.type_def_loc {
@@ -4361,7 +4315,7 @@ fn docstring_test() {
         "M6.move",
         "s: Symbols::M6::DocumentedStruct",
         Some((4, 11, "M6.move")),
-        Some("A documented function that unpacks a DocumentedStruct\n"),
+        None,
     );
 
     // docstring construction for multi-line /** .. */ based strings
