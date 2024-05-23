@@ -74,7 +74,7 @@ impl BridgeWorker {
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
                                 status: TokenTransferStatus::Deposited,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
-                                data_source: BridgeDataSource::SUI,
+                                data_source: BridgeDataSource::Sui,
                                 data: Some(TokenTransferData {
                                     sender_address: event.sender_address,
                                     destination_chain: event.target_chain,
@@ -96,7 +96,7 @@ impl BridgeWorker {
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
                                 status: TokenTransferStatus::Approved,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
-                                data_source: BridgeDataSource::SUI,
+                                data_source: BridgeDataSource::Sui,
                                 data: None,
                             })
                         }
@@ -112,7 +112,7 @@ impl BridgeWorker {
                                 txn_hash: tx.transaction.digest().inner().to_vec(),
                                 status: TokenTransferStatus::Claimed,
                                 gas_usage: tx.effects.gas_cost_summary().net_gas_usage(),
-                                data_source: BridgeDataSource::SUI,
+                                data_source: BridgeDataSource::Sui,
                                 data: None,
                             })
                         }
@@ -166,7 +166,7 @@ pub async fn process_eth_transaction(
                             txn_hash: tx_hash.as_bytes().to_vec(),
                             status: TokenTransferStatus::Deposited,
                             gas_usage: gas.as_u64() as i64,
-                            data_source: BridgeDataSource::ETH,
+                            data_source: BridgeDataSource::Eth,
                             data: Some(TokenTransferData {
                                 sender_address: bridge_event.sender_address.as_bytes().to_vec(),
                                 destination_chain: bridge_event.destination_chain_id,
@@ -188,7 +188,7 @@ pub async fn process_eth_transaction(
                             txn_hash: tx_hash.as_bytes().to_vec(),
                             status: TokenTransferStatus::Claimed,
                             gas_usage: gas.as_u64() as i64,
-                            data_source: BridgeDataSource::ETH,
+                            data_source: BridgeDataSource::Eth,
                             data: None,
                         };
 
@@ -199,6 +199,10 @@ pub async fn process_eth_transaction(
                     | EthSuiBridgeEvents::UpgradedFilter(_)
                     | EthSuiBridgeEvents::InitializedFilter(_) => (),
                 },
+                EthBridgeEvent::EthBridgeCommitteeEvents(_)
+                | EthBridgeEvent::EthBridgeLimiterEvents(_)
+                | EthBridgeEvent::EthBridgeConfigEvents(_)
+                | EthBridgeEvent::EthCommitteeUpgradeableContractEvents(_) => (),
             }
         }
     }

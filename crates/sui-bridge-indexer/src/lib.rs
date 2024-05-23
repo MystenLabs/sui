@@ -90,15 +90,15 @@ impl Display for TokenTransferStatus {
 }
 
 enum BridgeDataSource {
-    SUI,
-    ETH,
+    Sui,
+    Eth,
 }
 
 impl Display for BridgeDataSource {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            BridgeDataSource::ETH => "ETH",
-            BridgeDataSource::SUI => "SUI",
+            BridgeDataSource::Eth => "ETH",
+            BridgeDataSource::Sui => "SUI",
         };
         write!(f, "{str}")
     }

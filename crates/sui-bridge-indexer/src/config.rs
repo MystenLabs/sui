@@ -1,9 +1,9 @@
-use anyhow::Result;
-use std::{fs, path::Path};
-
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use anyhow::Result;
 use serde::Deserialize;
+use std::{fs, path::Path};
 
 /// config as loaded from `config.yaml`.
 #[derive(Debug, Deserialize)]
