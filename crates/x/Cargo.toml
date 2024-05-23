@@ -10,4 +10,3 @@ anyhow.workspace = true
 nexlint.workspace = true
 nexlint-lints.workspace = true
 clap.workspace = true
-camino.workspace = true
