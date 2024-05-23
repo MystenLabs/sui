@@ -32,10 +32,9 @@ use tokio::sync::oneshot;
 use tracing::info;
 
 #[derive(Parser, Clone, Debug)]
-#[clap(group(ArgGroup::new("input").required(true).args(&["config_path"])))]
 struct Args {
     /// Path to a yaml config
-    #[clap(long, short, default_value = "config.yaml")]
+    #[clap(long, short)]
     config_path: Option<PathBuf>,
 }
 
