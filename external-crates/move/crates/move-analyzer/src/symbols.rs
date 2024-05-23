@@ -136,6 +136,10 @@ pub struct DefLoc {
 }
 
 impl DefLoc {
+    pub fn new(fhash: FileHash, start: Position) -> Self {
+        Self { fhash, start }
+    }
+
     pub fn fhash(&self) -> FileHash {
         self.fhash
     }
@@ -279,6 +283,12 @@ pub struct StructDef {
     field_defs: Vec<FieldDef>,
     /// Does this struct have positional fields?
     positional: bool,
+}
+
+impl StructDef {
+    pub fn name_start(&self) -> Position {
+        self.name_start.clone()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -428,6 +438,10 @@ impl ModuleDefs {
 
     pub fn untyped_defs(&self) -> &BTreeSet<DefLoc> {
         &self.untyped_defs
+    }
+
+    pub fn ident(&self) -> &ModuleIdent_ {
+        &self.ident
     }
 }
 
@@ -942,10 +956,7 @@ impl UseDef {
         use_name: &Symbol,
         type_def_loc: Option<DefLoc>,
     ) -> Self {
-        let def_loc = DefLoc {
-            fhash: def_fhash,
-            start: def_start,
-        };
+        let def_loc = DefLoc::new(def_fhash, def_start);
         // Normally, we compute the length of the identifier as the length
         // of the string that represents it as this string is the same
         // in the source file and in the AST. However, for aliased module
@@ -1725,7 +1736,7 @@ fn get_mod_outer_defs(
                     &fpos.file_hash(),
                 );
                 def_info.insert(
-                    DefLoc { fhash, start },
+                    DefLoc::new(fhash, start),
                     DefInfo::Field(mod_ident.value, *name, *fname, t.clone(), doc_string),
                 );
                 field_types.push(t.clone());
@@ -1766,10 +1777,7 @@ fn get_mod_outer_defs(
             &pos.file_hash(),
         );
         def_info.insert(
-            DefLoc {
-                fhash,
-                start: name_start,
-            },
+            DefLoc::new(fhash, name_start),
             DefInfo::Struct(
                 mod_ident.value,
                 *name,
@@ -1810,10 +1818,7 @@ fn get_mod_outer_defs(
             &pos.file_hash(),
         );
         def_info.insert(
-            DefLoc {
-                fhash,
-                start: name_start,
-            },
+            DefLoc::new(fhash, name_start),
             DefInfo::Const(
                 mod_ident.value,
                 *name,
@@ -1884,13 +1889,7 @@ fn get_mod_outer_defs(
                     .collect(),
             },
         );
-        def_info.insert(
-            DefLoc {
-                fhash: loc.file_hash(),
-                start: name_start,
-            },
-            fun_info,
-        );
+        def_info.insert(DefLoc::new(loc.file_hash(), name_start), fun_info);
     }
 
     let mut use_def_map = UseDefMap::new();
@@ -1946,10 +1945,7 @@ fn get_mod_outer_defs(
             ),
         );
         def_info.insert(
-            DefLoc {
-                fhash: mod_defs.fhash,
-                start: mod_defs.start,
-            },
+            DefLoc::new(mod_defs.fhash, mod_defs.start),
             DefInfo::Module(mod_ident_to_ide_string(&ident), doc_comment),
         );
     }
@@ -2451,10 +2447,9 @@ impl<'a> ParsingSymbolicator<'a> {
                     else {
                         return;
                     };
-                    mod_defs.untyped_defs.insert(DefLoc {
-                        fhash: var.loc().file_hash(),
-                        start: def_start,
-                    });
+                    mod_defs
+                        .untyped_defs
+                        .insert(DefLoc::new(var.loc().file_hash(), def_start));
                 }
             }
         }
@@ -2510,10 +2505,7 @@ impl<'a> TypingSymbolicator<'a> {
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let fun_info = self
                 .def_info
-                .get(&DefLoc {
-                    fhash: pos.file_hash(),
-                    start: name_start,
-                })
+                .get(&DefLoc::new(pos.file_hash(), name_start))
                 .unwrap();
             let fun_type_def = def_info_to_type_def_loc(self.mod_outer_defs, fun_info);
             let use_def = UseDef::new(
@@ -2536,10 +2528,7 @@ impl<'a> TypingSymbolicator<'a> {
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let const_info = self
                 .def_info
-                .get(&DefLoc {
-                    fhash: pos.file_hash(),
-                    start: name_start,
-                })
+                .get(&DefLoc::new(pos.file_hash(), name_start))
                 .unwrap();
             let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
@@ -2565,10 +2554,7 @@ impl<'a> TypingSymbolicator<'a> {
             let name_start = get_start_loc(&pos, self.files, self.file_id_mapping).unwrap();
             let struct_info = self
                 .def_info
-                .get(&DefLoc {
-                    fhash: pos.file_hash(),
-                    start: name_start,
-                })
+                .get(&DefLoc::new(pos.file_hash(), name_start))
                 .unwrap();
             let struct_type_def = def_info_to_type_def_loc(self.mod_outer_defs, struct_info);
             self.use_defs.insert(
@@ -3095,8 +3081,9 @@ impl<'a> TypingSymbolicator<'a> {
                         ident_type_def_loc,
                     ),
                 );
-                self.def_info.insert(DefLoc { fhash, start }, type_def_info);
-                let exists = tp_scope.insert(tname, DefLoc { fhash, start });
+                self.def_info
+                    .insert(DefLoc::new(fhash, start), type_def_info);
+                let exists = tp_scope.insert(tname, DefLoc::new(fhash, start));
                 debug_assert!(exists.is_none());
             }
             None => {
@@ -3143,10 +3130,7 @@ impl<'a> TypingSymbolicator<'a> {
             let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
             let const_info = self
                 .def_info
-                .get(&DefLoc {
-                    fhash: def_fhash,
-                    start: const_def.name_start,
-                })
+                .get(&DefLoc::new(def_fhash, const_def.name_start))
                 .unwrap();
             let ident_type_def_loc = def_info_to_type_def_loc(self.mod_outer_defs, const_info);
             self.use_defs.insert(
@@ -3295,10 +3279,7 @@ impl<'a> TypingSymbolicator<'a> {
                     let def_fhash = self.mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
                     let field_info = self
                         .def_info
-                        .get(&DefLoc {
-                            fhash: def_fhash,
-                            start: fdef.start,
-                        })
+                        .get(&DefLoc::new(def_fhash, fdef.start))
                         .unwrap();
                     let ident_type_def_loc =
                         def_info_to_type_def_loc(self.mod_outer_defs, field_info);
@@ -3386,10 +3367,7 @@ impl<'a> TypingSymbolicator<'a> {
         }
         match get_start_loc(pos, self.files, self.file_id_mapping) {
             Some(name_start) => {
-                let def_loc = DefLoc {
-                    fhash: pos.file_hash(),
-                    start: name_start,
-                };
+                let def_loc = DefLoc::new(pos.file_hash(), name_start);
                 scope.insert(
                     *name,
                     LocalDef {
@@ -3417,10 +3395,7 @@ impl<'a> TypingSymbolicator<'a> {
                     ),
                 );
                 self.def_info.insert(
-                    DefLoc {
-                        fhash: pos.file_hash(),
-                        start: name_start,
-                    },
+                    DefLoc::new(pos.file_hash(), name_start),
                     DefInfo::Local(*name, def_type, with_let, mutable),
                 );
             }
@@ -3490,10 +3465,7 @@ fn add_fun_use_def(
     if let Some(func_def) = mod_defs.functions.get(fun_def_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let fun_info = def_info
-            .get(&DefLoc {
-                fhash: def_fhash,
-                start: func_def.start,
-            })
+            .get(&DefLoc::new(def_fhash, func_def.start))
             .unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, fun_info);
         let ud = UseDef::new(
@@ -3533,10 +3505,7 @@ fn add_struct_use_def(
     if let Some(def) = mod_defs.structs.get(use_name) {
         let def_fhash = mod_outer_defs.get(&mod_ident_str).unwrap().fhash;
         let struct_info = def_info
-            .get(&DefLoc {
-                fhash: def_fhash,
-                start: def.name_start,
-            })
+            .get(&DefLoc::new(def_fhash, def.name_start))
             .unwrap();
         let ident_type_def_loc = def_info_to_type_def_loc(mod_outer_defs, struct_info);
         let ud = UseDef::new(
@@ -3605,7 +3574,7 @@ fn find_struct(
     mod_defs.structs.get(struct_name).map(|struct_def| {
         let fhash = mod_defs.fhash;
         let start = struct_def.name_start;
-        DefLoc { fhash, start }
+        DefLoc::new(fhash, start)
     })
 }
 
@@ -3708,21 +3677,25 @@ pub fn on_go_to_def_request(context: &Context, request: &Request, symbols: &Symb
         col,
         request.id.clone(),
         |u| {
-            // TODO: Do we need beginning and end of the definition? Does not seem to make a
-            // difference from the IDE perspective as the cursor goes to the beginning anyway (at
-            // least in VSCode).
-            let range = Range {
-                start: u.def_loc.start,
-                end: u.def_loc.start,
-            };
-            let path = symbols.file_name_mapping.get(&u.def_loc.fhash).unwrap();
-            let loc = Location {
-                uri: Url::from_file_path(path).unwrap(),
-                range,
-            };
+            let loc = def_ide_location(&u.def_loc, symbols);
             Some(serde_json::to_value(loc).unwrap())
         },
     );
+}
+
+pub fn def_ide_location(def_loc: &DefLoc, symbols: &Symbols) -> Location {
+    // TODO: Do we need beginning and end of the definition? Does not seem to make a
+    // difference from the IDE perspective as the cursor goes to the beginning anyway (at
+    // least in VSCode).
+    let range = Range {
+        start: def_loc.start,
+        end: def_loc.start,
+    };
+    let path = symbols.file_name_mapping.get(&def_loc.fhash).unwrap();
+    Location {
+        uri: Url::from_file_path(path).unwrap(),
+        range,
+    }
 }
 
 /// Handles go-to-type-def request of the language server
@@ -3848,18 +3821,23 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
                 return Some(serde_json::to_value(Option::<lsp_types::Location>::None).unwrap());
             };
             // use rust for highlighting in Markdown until there is support for Move
-            let contents = HoverContents::Markup(MarkupContent {
-                kind: MarkupKind::Markdown,
-                value: if let Some(s) = &def_info_doc_string(info) {
-                    format!("```rust\n{}\n```\n{}", info, s)
-                } else {
-                    format!("```rust\n{}\n```", info)
-                },
-            });
+            let contents = HoverContents::Markup(on_hover_markup(info));
             let range = None;
             Some(serde_json::to_value(Hover { contents, range }).unwrap())
         },
     );
+}
+
+pub fn on_hover_markup(info: &DefInfo) -> MarkupContent {
+    let value = if let Some(s) = &def_info_doc_string(info) {
+        format!("```rust\n{}\n```\n{}", info, s)
+    } else {
+        format!("```rust\n{}\n```", info)
+    };
+    MarkupContent {
+        kind: MarkupKind::Markdown,
+        value,
+    }
 }
 
 /// Helper function to handle language server queries related to identifier uses

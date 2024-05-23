@@ -3,12 +3,15 @@
 
 use crate::{
     context::Context,
-    symbols::{type_to_ide_string, DefInfo, Symbols},
+    symbols::{on_hover_markup, type_to_ide_string, DefInfo, DefLoc, Symbols},
 };
 use lsp_server::Request;
 use lsp_types::{
-    InlayHint, InlayHintKind, InlayHintLabel, InlayHintLabelPart, InlayHintParams, Position,
+    InlayHint, InlayHintKind, InlayHintLabel, InlayHintLabelPart, InlayHintParams,
+    InlayHintTooltip, Position,
 };
+
+use move_compiler::{naming::ast as N, shared::Identifier};
 
 /// Handles inlay hints request of the language server
 pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Symbols) {
@@ -48,7 +51,7 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
                             label: InlayHintLabel::LabelParts(vec![colon_label, type_label]),
                             kind: Some(InlayHintKind::TYPE),
                             text_edits: None,
-                            tooltip: None,
+                            tooltip: additional_hint_info(t, symbols),
                             padding_left: None,
                             padding_right: None,
                             data: None,
@@ -68,4 +71,47 @@ pub fn on_inlay_hint_request(context: &Context, request: &Request, symbols: &Sym
     {
         eprintln!("could not send inlay thing response: {:?}", err);
     }
+}
+
+/// Helper function to compute additional optional info for the hint.
+/// At this point it's just the on-hover information as support
+/// for adding location of type definition does not seem to quite
+/// work in the current version of VSCode
+///
+/// TODO: revisit adding location of type definition once current problems
+/// are resolved (the main problem is that adding it enables a drop-down menu
+/// containing options that are not supported for the type definition, such
+/// as go-to-declaration, and which jump to weird locations in the file).
+fn additional_hint_info(sp!(_, t): &N::Type, symbols: &Symbols) -> Option<InlayHintTooltip> {
+    if let N::Type_::Ref(_, t) = t {
+        return additional_hint_info(t, symbols);
+    }
+    let N::Type_::Apply(_, sp!(_, type_name), _) = t else {
+        return None;
+    };
+    let N::TypeName_::ModuleType(mod_ident, struct_name) = type_name else {
+        return None;
+    };
+
+    let Some(mod_defs) = symbols
+        .file_mods()
+        .values()
+        .flatten()
+        .find(|m| m.ident() == &mod_ident.value)
+    else {
+        return None;
+    };
+
+    let Some(struct_def) = mod_defs.structs().get(&struct_name.value()) else {
+        return None;
+    };
+
+    let struct_def_loc = DefLoc::new(mod_defs.fhash(), struct_def.name_start());
+    let Some(struct_def_info) = symbols.def_info(&struct_def_loc) else {
+        return None;
+    };
+
+    Some(InlayHintTooltip::MarkupContent(on_hover_markup(
+        struct_def_info,
+    )))
 }
