@@ -12052,6 +12052,8 @@ dependencies = [
  "hex-literal 0.3.4",
  "mysten-metrics",
  "prometheus",
+ "serde",
+ "serde_yaml 0.8.26",
  "sui-bridge",
  "sui-config",
  "sui-data-ingestion-core",

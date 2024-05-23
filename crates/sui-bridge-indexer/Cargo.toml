@@ -7,6 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
+serde.workspace = true
 diesel = { version = "2.1.4", features = ["postgres", "r2d2", "serde_json"] }
 ethers = "2.0"
 tokio = { workspace = true, features = ["full"] }
@@ -21,6 +22,7 @@ bin-version.workspace = true
 anyhow.workspace = true
 mysten-metrics.workspace = true
 bcs.workspace = true
+serde_yaml.workspace = true
 
 [dev-dependencies]
 sui-types = { workspace = true, features = ["test-utils"] }

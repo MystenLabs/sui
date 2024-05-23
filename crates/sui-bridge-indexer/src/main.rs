@@ -2,16 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use clap::Parser;
+use clap::*;
 use ethers::types::Address as EthAddress;
 use mysten_metrics::spawn_logged_monitored_task;
 use mysten_metrics::start_prometheus_server;
 use prometheus::Registry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::env;
 use std::net::IpAddr;
 use std::net::Ipv4Addr;
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_bridge::{
@@ -21,7 +23,7 @@ use sui_bridge::{
 };
 use sui_bridge_indexer::postgres_writer::get_connection_pool;
 use sui_bridge_indexer::{
-    config::BridgeIndexerConfig, worker::process_eth_transaction, worker::BridgeWorker,
+    config::load_config, worker::process_eth_transaction, worker::BridgeWorker,
 };
 use sui_data_ingestion_core::{
     DataIngestionMetrics, FileProgressStore, IndexerExecutor, ReaderOptions, WorkerPool,
@@ -29,10 +31,26 @@ use sui_data_ingestion_core::{
 use tokio::sync::oneshot;
 use tracing::info;
 
+#[derive(Parser, Clone, Debug)]
+#[clap(group(ArgGroup::new("input").required(true).args(&["config_path"])))]
+struct Args {
+    /// Path to a yaml config
+    #[clap(long, short, default_value = "config.yaml")]
+    config_path: Option<PathBuf>,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = BridgeIndexerConfig::parse();
-    info!("Parsed config: {:#?}", config);
+    let args = Args::parse();
+
+    // load config
+    let config_path = if let Some(path) = args.config_path {
+        path.join("config.yaml")
+    } else {
+        env::current_dir().unwrap().join("config.yaml")
+    };
+
+    let config = load_config(&config_path).unwrap();
 
     // start metrics server
     let (_exit_sender, exit_receiver) = oneshot::channel();
@@ -88,18 +106,18 @@ async fn main() -> Result<()> {
     );
 
     // start sui side
-    let progress_store = FileProgressStore::new(config.progress_store_file);
+    let progress_store = FileProgressStore::new(config.progress_store_file.into());
     let mut executor = IndexerExecutor::new(progress_store, 1 /* workflow types */, metrics);
     let worker_pool = WorkerPool::new(
         BridgeWorker::new(vec![], config.db_url.clone()),
         "bridge worker".into(),
-        config.concurrency,
+        config.concurrency as usize,
     );
     executor.register(worker_pool).await?;
     executor
         .run(
-            config.checkpoints_path,
-            config.remote_store_url,
+            config.checkpoints_path.into(),
+            Some(config.remote_store_url),
             vec![], // optional remote store access options
             ReaderOptions::default(),
             exit_receiver,
