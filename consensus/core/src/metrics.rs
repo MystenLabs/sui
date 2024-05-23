@@ -10,7 +10,7 @@ use prometheus::{
     HistogramVec, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 
-use crate::network::metrics::{NetworkRouteMetrics, QuinnConnectionMetrics};
+use crate::network::metrics::{NetworkMetrics, QuinnConnectionMetrics};
 
 // starts from 1μs, 50μs, 100μs...
 const FINE_GRAINED_LATENCY_SEC_BUCKETS: &[f64] = &[
@@ -483,29 +483,6 @@ impl ChannelMetrics {
                 "total received on the `CoreThread` commands channel",
                 registry
             ).unwrap(),
-        }
-    }
-}
-
-// Fields for network-agnostic metrics can be added here
-pub(crate) struct NetworkMetrics {
-    pub(crate) network_type: IntGaugeVec,
-    pub(crate) inbound: NetworkRouteMetrics,
-    pub(crate) outbound: NetworkRouteMetrics,
-}
-
-impl NetworkMetrics {
-    pub(crate) fn new(registry: &Registry) -> Self {
-        Self {
-            network_type: register_int_gauge_vec_with_registry!(
-                "network_type",
-                "Type of the network used: anemo or tonic",
-                &["type"],
-                registry
-            )
-            .unwrap(),
-            inbound: NetworkRouteMetrics::new("inbound", registry),
-            outbound: NetworkRouteMetrics::new("outbound", registry),
         }
     }
 }
