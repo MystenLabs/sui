@@ -1,8 +1,8 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cli::lib::utils::validate_project_name;
 use crate::cli::lib::FilePathCompleter;
-use crate::cli::utils::validate_project_name;
 use crate::{command::CommandOptions, run_cmd};
 use anyhow::{anyhow, Context, Result};
 use colored::Colorize;

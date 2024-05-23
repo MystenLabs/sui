@@ -5,10 +5,9 @@ mod ci;
 pub mod docker;
 mod iam;
 mod incidents;
-mod lib;
+pub mod lib;
 pub mod pulumi;
 pub mod service;
-pub mod utils;
 
 pub use ci::{ci_cmd, CIArgs};
 pub use docker::{docker_cmd, DockerArgs};
