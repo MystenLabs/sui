@@ -245,6 +245,8 @@ pub enum DefInfo {
     Module(
         /// pkg::mod
         String,
+        /// Doc string
+        Option<String>,
     ),
 }
 
@@ -261,8 +263,6 @@ pub struct UseDef {
     def_loc: DefLoc,
     /// Location of the type definition
     type_def_loc: Option<DefLoc>,
-    /// Doc string for the relevant identifier/function
-    doc_string: Option<String>,
 }
 
 /// Definition of a struct field
@@ -316,8 +316,6 @@ pub struct ModuleDefs {
     start: Position,
     /// Module name
     ident: ModuleIdent_,
-    /// Optional doc comment
-    doc_comment: Option<String>,
     /// Struct definitions
     structs: BTreeMap<Symbol, StructDef>,
     /// Const definitions
@@ -560,7 +558,7 @@ impl fmt::Display for DefInfo {
                     )
                 }
             }
-            Self::Module(mod_ident_str) => write!(f, "module {mod_ident_str}"),
+            Self::Module(mod_ident_str, _) => write!(f, "module {mod_ident_str}"),
         }
     }
 }
@@ -943,7 +941,6 @@ impl UseDef {
         def_start: Position,
         use_name: &Symbol,
         type_def_loc: Option<DefLoc>,
-        doc_string: Option<String>,
     ) -> Self {
         let def_loc = DefLoc {
             fhash: def_fhash,
@@ -1000,7 +997,6 @@ impl UseDef {
             col_end,
             def_loc,
             type_def_loc,
-            doc_string,
         }
     }
 
@@ -1912,7 +1908,6 @@ fn get_mod_outer_defs(
                         character: 0,
                     },
                     ident,
-                    doc_comment: None,
                     structs,
                     constants,
                     functions,
@@ -1928,7 +1923,6 @@ fn get_mod_outer_defs(
         fhash,
         ident,
         start,
-        doc_comment,
         structs,
         constants,
         functions,
@@ -1949,7 +1943,6 @@ fn get_mod_outer_defs(
                 mod_defs.start,
                 &mod_name.value(),
                 None,
-                mod_defs.doc_comment.clone(),
             ),
         );
         def_info.insert(
@@ -1957,7 +1950,7 @@ fn get_mod_outer_defs(
                 fhash: mod_defs.fhash,
                 start: mod_defs.start,
             },
-            DefInfo::Module(mod_ident_to_ide_string(&ident)),
+            DefInfo::Module(mod_ident_to_ide_string(&ident), doc_comment),
         );
     }
 
@@ -2310,7 +2303,6 @@ impl<'a> ParsingSymbolicator<'a> {
                 mod_defs.start,
                 &mod_name.value(),
                 None,
-                mod_defs.doc_comment.clone(),
             ),
         );
     }
@@ -2533,7 +2525,6 @@ impl<'a> TypingSymbolicator<'a> {
                 name_start,
                 name,
                 fun_type_def,
-                def_info_doc_string(fun_info),
             );
 
             self.use_defs.insert(name_start.line, use_def);
@@ -2562,7 +2553,6 @@ impl<'a> TypingSymbolicator<'a> {
                     name_start,
                     name,
                     ident_type_def_loc,
-                    def_info_doc_string(const_info),
                 ),
             );
             // scope must be passed here but it's not expected to be populated
@@ -2592,7 +2582,6 @@ impl<'a> TypingSymbolicator<'a> {
                     name_start,
                     name,
                     struct_type_def,
-                    def_info_doc_string(struct_info),
                 ),
             );
 
@@ -2640,7 +2629,6 @@ impl<'a> TypingSymbolicator<'a> {
                             start,
                             fname,
                             ident_type_def_loc,
-                            def_info_doc_string(&field_info),
                         ),
                     );
                 }
@@ -3105,7 +3093,6 @@ impl<'a> TypingSymbolicator<'a> {
                         start,
                         &tname,
                         ident_type_def_loc,
-                        None, // no doc string for type params
                     ),
                 );
                 self.def_info.insert(DefLoc { fhash, start }, type_def_info);
@@ -3144,7 +3131,6 @@ impl<'a> TypingSymbolicator<'a> {
                     mod_defs.start,
                     &mod_name.value(),
                     None,
-                    mod_defs.doc_comment.clone(),
                 ),
             );
         }
@@ -3174,7 +3160,6 @@ impl<'a> TypingSymbolicator<'a> {
                     const_def.name_start,
                     use_name,
                     ident_type_def_loc,
-                    def_info_doc_string(const_info),
                 ),
             );
         }
@@ -3212,7 +3197,6 @@ impl<'a> TypingSymbolicator<'a> {
                     mod_defs.start,
                     &mod_name.value(),
                     None,
-                    mod_defs.doc_comment.clone(),
                 ),
             );
         }
@@ -3263,7 +3247,6 @@ impl<'a> TypingSymbolicator<'a> {
                     mod_defs.start,
                     &mod_name.value(),
                     None,
-                    mod_defs.doc_comment.clone(),
                 ),
             );
         }
@@ -3330,7 +3313,6 @@ impl<'a> TypingSymbolicator<'a> {
                             fdef.start,
                             use_name,
                             ident_type_def_loc,
-                            def_info_doc_string(field_info),
                         ),
                     );
                 }
@@ -3363,7 +3345,6 @@ impl<'a> TypingSymbolicator<'a> {
                                     def_loc.start,
                                     &use_name,
                                     ident_type_def_loc,
-                                    None, // no doc comments for type params
                                 ),
                             );
                         }
@@ -3433,7 +3414,6 @@ impl<'a> TypingSymbolicator<'a> {
                         name_start,
                         name,
                         ident_type_def_loc,
-                        None, // no doc string for locals or function params
                     ),
                 );
                 self.def_info.insert(
@@ -3482,7 +3462,6 @@ impl<'a> TypingSymbolicator<'a> {
                     local_def.def_loc.start,
                     use_name,
                     ident_type_def_loc,
-                    None, // no doc string for locals or function params
                 ),
             );
         }
@@ -3526,7 +3505,6 @@ fn add_fun_use_def(
             func_def.start,
             use_name,
             ident_type_def_loc,
-            def_info_doc_string(fun_info),
         );
         use_defs.insert(name_start.line, ud.clone());
         return Some(ud);
@@ -3570,7 +3548,6 @@ fn add_struct_use_def(
             def.name_start,
             use_name,
             ident_type_def_loc,
-            def_info_doc_string(struct_info),
         );
         use_defs.insert(name_start.line, ud.clone());
         return Some(ud);
@@ -3589,7 +3566,7 @@ fn def_info_to_type_def_loc(
         DefInfo::Field(.., t, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Local(_, t, _, _) => type_def_loc(mod_outer_defs, t),
         DefInfo::Const(_, _, t, _, _) => type_def_loc(mod_outer_defs, t),
-        DefInfo::Module(_) => None,
+        DefInfo::Module(..) => None,
     }
 }
 
@@ -3601,7 +3578,7 @@ fn def_info_doc_string(def_info: &DefInfo) -> Option<String> {
         DefInfo::Field(.., s) => s.clone(),
         DefInfo::Local(..) => None,
         DefInfo::Const(.., s) => s.clone(),
-        DefInfo::Module(_) => None,
+        DefInfo::Module(_, s) => s.clone(),
     }
 }
 
@@ -3873,7 +3850,7 @@ pub fn on_hover_request(context: &Context, request: &Request, symbols: &Symbols)
             // use rust for highlighting in Markdown until there is support for Move
             let contents = HoverContents::Markup(MarkupContent {
                 kind: MarkupKind::Markdown,
-                value: if let Some(s) = &u.doc_string {
+                value: if let Some(s) = &def_info_doc_string(info) {
                     format!("```rust\n{}\n```\n{}", info, s)
                 } else {
                     format!("```rust\n{}\n```", info)
@@ -4123,11 +4100,12 @@ fn assert_use_def_with_doc_string(
     );
 
     if doc_string.is_some() {
+        let expected_doc_string = def_info_doc_string(info);
         assert!(
-            doc_string.map(|s| s.to_string()) == use_def.doc_string,
+            doc_string.map(|s| s.to_string()) == expected_doc_string,
             "'{:?}' != '{:?}' for use in column {use_col} of line {use_line} in file {use_file}",
             doc_string.map(|s| s.to_string()),
-            use_def.doc_string
+            expected_doc_string
         );
     }
     match use_def.type_def_loc {
