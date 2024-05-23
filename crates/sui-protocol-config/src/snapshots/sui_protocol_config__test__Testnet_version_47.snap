@@ -32,6 +32,7 @@ feature_flags:
   simple_conservation_checks: true
   loaded_child_object_format_type: true
   receive_objects: true
+  random_beacon: true
   bridge: true
   enable_effects_v2: true
   narwhal_certificate_v2: true
@@ -268,6 +269,9 @@ consensus_bad_nodes_stake_threshold: 20
 max_jwk_votes_per_validator_per_epoch: 240
 max_age_of_jwk_in_epochs: 1
 random_beacon_reduction_allowed_delta: 800
+random_beacon_reduction_lower_bound: 1600
+random_beacon_dkg_timeout_round: 3000
+random_beacon_min_round_interval_ms: 200
 consensus_max_transaction_size_bytes: 262144
 consensus_max_transactions_in_block_bytes: 6291456
 

@@ -131,6 +131,7 @@ const MAX_PROTOCOL_VERSION: u64 = 47;
 //             Enable resharing at the same initial shared version.
 // Version 47: Use tonic networking for Mysticeti.
 //             Resolve Move abort locations to the package id instead of the runtime module ID.
+//             Enable random beacon in testnet.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -2219,6 +2220,14 @@ impl ProtocolConfig {
 
                     // Enable resolving abort code IDs to package ID instead of runtime module ID
                     cfg.feature_flags.resolve_abort_locations_to_package_id = true;
+
+                    // Enable random beacon on testnet.
+                    if chain != Chain::Mainnet {
+                        cfg.feature_flags.random_beacon = true;
+                        cfg.random_beacon_reduction_lower_bound = Some(1600);
+                        cfg.random_beacon_dkg_timeout_round = Some(3000);
+                        cfg.random_beacon_min_round_interval_ms = Some(200);
+                    }
                 }
                 // Use this template when making changes:
                 //
