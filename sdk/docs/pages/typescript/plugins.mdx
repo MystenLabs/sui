@@ -25,7 +25,7 @@ eventually resolved to one or more commands in the transaction.
 
 When a `Transaction` is created (e.g., `new Transaction()`), it is initialized with an empty
 [TransactionDataBuilder](/typedoc/classes/_mysten_sui.transactions.TransactionDataBuilder.html)
-instance. This class stores the state of a partially built transaction. The full API of the
+instance which stores the state of the partially built transaction. The full API of the
 `TransactionDataBuilder` won't be covered here, but you can find the available methods and
 properties in the
 [typedoc definition](/typedoc/classes/_mysten_sui.transactions.TransactionDataBuilder.html).
@@ -101,6 +101,12 @@ missing object versions and digest from a cache. Updating the cache (which could
 at transaction effects of previous transactions) is not covered in this example.
 
 ```typescript
+import {
+	BuildTransactionOptions,
+	Transaction,
+	TransactionDataBuilder,
+} from '@mysten/sui/transactions';
+
 const objectCache = new Map<string, { objectId: string; version: string; digest: string }>();
 
 function simpleObjectCachePlugin(

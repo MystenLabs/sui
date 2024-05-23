@@ -377,7 +377,7 @@ instead instead.
 
 # @mysten/wallet-standard
 
-## New wallet-standard features
+### New wallet-standard features
 
 We have added 3 new features to the wallet standard designed to allow efficient execution of
 Transactions in wallets without waiting for previous transactions to be indexed in the wallets RPC
@@ -393,7 +393,7 @@ deprecated in favor of the new `sui:signTransaction` and `sui:signAndExecuteTran
 but wallets should continue to implement these deprecated methods until the new methods have been
 broadly adopted by dapps.
 
-## helpers
+### helpers
 
 2 new helpers have been added to make it easier for dapps to handle wallets that have implemented
 either the new or old wallet-standard methods: `signTransaction` and `signAndExecuteTransaction`.
@@ -404,5 +404,3 @@ import { signAndExecuteTransaction, signTransaction } from '@mysten/wallet-stand
 const { signature, bytes } = await signTransaction(wallet, { transaction });
 const { digest, effects } = await signAndExecuteTransaction(wallet, { transaction });
 ```
-
-## `isWalletWithSuiFeatures`
