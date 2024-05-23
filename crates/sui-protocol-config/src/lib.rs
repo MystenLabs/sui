@@ -13,7 +13,7 @@ use tracing::{info, warn};
 
 /// The minimum and maximum protocol versions supported by this build.
 const MIN_PROTOCOL_VERSION: u64 = 1;
-const MAX_PROTOCOL_VERSION: u64 = 46;
+const MAX_PROTOCOL_VERSION: u64 = 47;
 
 // Record history of protocol version allocations here:
 //
@@ -128,6 +128,8 @@ const MAX_PROTOCOL_VERSION: u64 = 46;
 //             Enable native bridge in devnet
 //             Enable Leader Scoring & Schedule Change for Mysticeti consensus.
 // Version 46: Enable native bridge in testnet
+//             Enable resharing at the same initial shared version.
+// Version 47: Use tonic networking for Mysticeti.
 
 #[derive(Copy, Clone, Debug, Hash, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ProtocolVersion(u64);
@@ -431,6 +433,10 @@ struct FeatureFlags {
     // Controls leader scoring & schedule change in Mysticeti consensus.
     #[serde(skip_serializing_if = "is_false")]
     mysticeti_leader_scoring_and_schedule: bool,
+
+    // Enable resharing of shared objects using the same initial shared version
+    #[serde(skip_serializing_if = "is_false")]
+    reshare_at_same_initial_version: bool,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -1312,6 +1318,10 @@ impl ProtocolConfig {
     pub fn mysticeti_leader_scoring_and_schedule(&self) -> bool {
         self.feature_flags.mysticeti_leader_scoring_and_schedule
     }
+
+    pub fn reshare_at_same_initial_version(&self) -> bool {
+        self.feature_flags.reshare_at_same_initial_version
+    }
 }
 
 #[cfg(not(msim))]
@@ -2190,6 +2200,13 @@ impl ProtocolConfig {
                     if chain != Chain::Mainnet {
                         cfg.feature_flags.bridge = true;
                     }
+
+                    // Enable resharing at same initial version
+                    cfg.feature_flags.reshare_at_same_initial_version = true;
+                }
+                47 => {
+                    // Use tonic networking for Mysticeti.
+                    cfg.feature_flags.consensus_network = ConsensusNetwork::Tonic;
                 }
                 // Use this template when making changes:
                 //

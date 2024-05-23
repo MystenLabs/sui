@@ -42,10 +42,14 @@ impl Metrics {
         }
     }
 
-    pub fn set_num_rounds_pending(&self, num_rounds_pending: usize) {
+    pub fn set_num_rounds_pending(&self, num_rounds_pending: i64) {
         if let Some(inner) = &self.0 {
-            inner.num_rounds_pending.set(num_rounds_pending as i64);
+            inner.num_rounds_pending.set(num_rounds_pending);
         }
+    }
+
+    pub fn num_rounds_pending(&self) -> Option<i64> {
+        self.0.as_ref().map(|inner| inner.num_rounds_pending.get())
     }
 
     pub fn round_generation_latency_metric(&self) -> Option<&Histogram> {

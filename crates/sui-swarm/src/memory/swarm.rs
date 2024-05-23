@@ -41,7 +41,6 @@ pub struct SwarmBuilder<R = OsRng> {
     additional_objects: Vec<Object>,
     fullnode_count: usize,
     fullnode_rpc_port: Option<u16>,
-    with_fullnode_client_ip_injection: Option<bool>,
     fullnode_rpc_addr: Option<SocketAddr>,
     supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to supported_protocol_versions_config, but can be overridden.
@@ -70,7 +69,6 @@ impl SwarmBuilder {
             additional_objects: vec![],
             fullnode_count: 0,
             fullnode_rpc_port: None,
-            with_fullnode_client_ip_injection: None,
             fullnode_rpc_addr: None,
             supported_protocol_versions_config: ProtocolVersionsConfig::Default,
             fullnode_supported_protocol_versions_config: None,
@@ -99,7 +97,6 @@ impl<R> SwarmBuilder<R> {
             additional_objects: self.additional_objects,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_port: self.fullnode_rpc_port,
-            with_fullnode_client_ip_injection: self.with_fullnode_client_ip_injection,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
             supported_protocol_versions_config: self.supported_protocol_versions_config,
             fullnode_supported_protocol_versions_config: self
@@ -181,11 +178,6 @@ impl<R> SwarmBuilder<R> {
     pub fn with_fullnode_rpc_port(mut self, fullnode_rpc_port: u16) -> Self {
         assert!(self.fullnode_rpc_addr.is_none());
         self.fullnode_rpc_port = Some(fullnode_rpc_port);
-        self
-    }
-
-    pub fn with_fullnode_client_ip_injection(mut self, with_ip_injection: Option<bool>) -> Self {
-        self.with_fullnode_client_ip_injection = with_ip_injection;
         self
     }
 
@@ -386,9 +378,6 @@ impl<R: rand::RngCore + rand::CryptoRng> SwarmBuilder<R> {
                     }
                     if let Some(rpc_port) = self.fullnode_rpc_port {
                         builder = builder.with_rpc_port(rpc_port);
-                    }
-                    if let Some(with_ip_injection) = self.with_fullnode_client_ip_injection {
-                        builder = builder.with_client_ip_injection(Some(with_ip_injection));
                     }
                 }
                 let config = builder.build(&mut OsRng, &network_config);

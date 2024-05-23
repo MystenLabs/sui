@@ -1,5 +1,11 @@
 # @mysten/enoki
 
+## 0.2.8
+
+### Patch Changes
+
+- 7e88f74d66: Add support for signing personal messages
+
 ## 0.2.7
 
 ### Patch Changes

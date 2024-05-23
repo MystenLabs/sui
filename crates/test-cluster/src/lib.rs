@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use futures::Future;
 use futures::{future::join_all, StreamExt};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -20,7 +21,7 @@ use sui_bridge::sui_transaction_builder::build_committee_register_transaction;
 use sui_bridge::types::BridgeCommitteeValiditySignInfo;
 use sui_bridge::types::CertifiedBridgeAction;
 use sui_bridge::types::VerifiedCertifiedBridgeAction;
-use sui_bridge::utils::publish_coins_return_add_coins_on_sui_action;
+use sui_bridge::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use sui_bridge::utils::wait_for_server_to_be_up;
 use sui_config::local_ip_utils::get_available_port;
 use sui_config::node::{AuthorityOverloadConfig, DBCheckpointConfig, RunWithRange};
@@ -136,6 +137,10 @@ impl TestCluster {
 
     pub fn rpc_url(&self) -> &str {
         &self.fullnode_handle.rpc_url
+    }
+
+    pub fn wallet(&mut self) -> &WalletContext {
+        &self.wallet
     }
 
     pub fn wallet_mut(&mut self) -> &mut WalletContext {
@@ -775,7 +780,6 @@ impl TestCluster {
         receiver: SuiAddress,
         amount: u64,
     ) -> ObjectID {
-        // let sender = self.get_address_0();
         let tx = self
             .test_transaction_builder_with_sender(sender)
             .await
@@ -870,7 +874,6 @@ pub struct TestClusterBuilder {
     additional_objects: Vec<Object>,
     num_validators: Option<usize>,
     fullnode_rpc_port: Option<u16>,
-    with_fullnode_client_ip_injection: Option<bool>,
     enable_fullnode_events: bool,
     validator_supported_protocol_versions_config: ProtocolVersionsConfig,
     // Default to validator_supported_protocol_versions_config, but can be overridden.
@@ -898,7 +901,6 @@ impl TestClusterBuilder {
             network_config: None,
             additional_objects: vec![],
             fullnode_rpc_port: None,
-            with_fullnode_client_ip_injection: None,
             num_validators: None,
             enable_fullnode_events: false,
             validator_supported_protocol_versions_config: ProtocolVersionsConfig::Default,
@@ -938,11 +940,6 @@ impl TestClusterBuilder {
 
     pub fn with_fullnode_rpc_port(mut self, rpc_port: u16) -> Self {
         self.fullnode_rpc_port = Some(rpc_port);
-        self
-    }
-
-    pub fn with_fullnode_client_ip_injection(mut self, with_ip_injection: Option<bool>) -> Self {
-        self.with_fullnode_client_ip_injection = with_ip_injection;
         self
     }
 
@@ -1177,7 +1174,17 @@ impl TestClusterBuilder {
         deploy_tokens: bool,
     ) -> TestCluster {
         let timer = Instant::now();
-        let mut test_cluster = self.build().await;
+        let gas_objects_for_authority_keys = bridge_authority_keys
+            .iter()
+            .map(|k| {
+                let address = SuiAddress::from(k.public());
+                Object::with_id_owner_for_testing(ObjectID::random(), address)
+            })
+            .collect::<Vec<_>>();
+        let mut test_cluster = self
+            .with_objects(gas_objects_for_authority_keys)
+            .build()
+            .await;
         info!(
             "TestCluster build took {:?} secs",
             timer.elapsed().as_secs()
@@ -1189,66 +1196,17 @@ impl TestClusterBuilder {
             test_cluster.swarm.active_validators().count()
         );
 
-        let publish_tokens_tasks = if deploy_tokens {
-            let quorum_driver_api = Arc::new(test_cluster.quorum_driver_api().clone());
-            // Register tokens
-            let token_packages_dir = [
-                Path::new("../../bridge/move/tokens/btc"),
-                Path::new("../../bridge/move/tokens/eth"),
-                Path::new("../../bridge/move/tokens/usdc"),
-                Path::new("../../bridge/move/tokens/usdt"),
-            ];
-
-            // publish coin packages
-            let mut publish_tokens_tasks = vec![];
-            let sender = test_cluster.get_address_0();
-            let gases = test_cluster
-                .wallet
-                .get_gas_objects_owned_by_address(sender, None)
-                .await
-                .unwrap();
-            assert!(gases.len() >= token_packages_dir.len());
-            for (token_package_dir, gas) in token_packages_dir.iter().zip(gases) {
-                let tx = test_cluster
-                    .test_transaction_builder_with_gas_object(sender, gas)
-                    .await
-                    .publish(token_package_dir.to_path_buf())
-                    .build();
-                let tx = test_cluster.wallet.sign_transaction(&tx);
-                let api_clone = quorum_driver_api.clone();
-                publish_tokens_tasks.push(tokio::spawn(async move {
-                    api_clone.execute_transaction_block(
-                        tx,
-                        SuiTransactionBlockResponseOptions::new()
-                            .with_effects()
-                            .with_input()
-                            .with_events()
-                            .with_object_changes()
-                            .with_balance_changes(),
-                        Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
-                    ).await
-                }));
-            }
-            Some(publish_tokens_tasks)
-        } else {
-            None
-        };
-
+        // Committee registers themselves
         let mut server_ports = vec![];
         let mut tasks = vec![];
-        // use a different sender address than the coin publish to avoid object locks
-        let sender_address = test_cluster.get_address_1();
+        let quorum_driver_api = test_cluster.quorum_driver_api().clone();
         for (node, kp) in test_cluster
             .swarm
             .active_validators()
             .zip(bridge_authority_keys.iter())
         {
             let validator_address = node.config().sui_address();
-            // 1, send some gas to validator
-            test_cluster
-                .transfer_sui_must_exceed(sender_address, validator_address, 1000000000)
-                .await;
-            // 2, create committee registration tx
+            // create committee registration tx
             let gas = test_cluster
                 .wallet
                 .get_one_gas_object_owned_by_address(validator_address)
@@ -1273,60 +1231,36 @@ impl TestClusterBuilder {
                 data,
                 vec![node.config().account_key_pair.keypair()],
             );
-            tasks.push(
-                test_cluster
-                    .sui_client()
-                    .quorum_driver_api()
+            let api_clone = quorum_driver_api.clone();
+            tasks.push(async move {
+                api_clone
                     .execute_transaction_block(
                         tx,
                         SuiTransactionBlockResponseOptions::new().with_effects(),
                         None,
-                    ),
-            );
-        }
-        // The tx may fail if a member tries to register when the committee is already finalized.
-        // In that case, we just need to check the committee members is not empty since once
-        // the committee is finalized, it should not be empty.
-        let responses = join_all(tasks).await;
-        let mut has_failure = false;
-        for response in responses {
-            if response.unwrap().effects.unwrap().status() != &SuiExecutionStatus::Success {
-                has_failure = true;
-            }
-        }
-        if has_failure {
-            let bridge_summary = test_cluster.get_bridge_summary().await.unwrap();
-            assert_ne!(bridge_summary.committee.members.len(), 0);
+                    )
+                    .await
+            });
         }
 
         if deploy_tokens {
             let timer = Instant::now();
-            let publish_tokens_responses = join_all(publish_tokens_tasks.unwrap())
-                .await
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap()
-                .into_iter()
-                .collect::<Result<Vec<_>, _>>()
-                .unwrap();
-            for resp in &publish_tokens_responses {
-                assert_eq!(
-                    resp.effects.as_ref().unwrap().status(),
-                    &SuiExecutionStatus::Success
-                );
-            }
             let token_ids = vec![TOKEN_ID_BTC, TOKEN_ID_ETH, TOKEN_ID_USDC, TOKEN_ID_USDT];
             let token_prices = vec![500_000_000u64, 30_000_000u64, 1_000u64, 1_000u64];
-
-            let action = publish_coins_return_add_coins_on_sui_action(
-                test_cluster.wallet_mut(),
+            let action = publish_and_register_coins_return_add_coins_on_sui_action(
+                test_cluster.wallet(),
                 bridge_arg,
-                publish_tokens_responses,
+                vec![
+                    Path::new("../../bridge/move/tokens/btc").into(),
+                    Path::new("../../bridge/move/tokens/eth").into(),
+                    Path::new("../../bridge/move/tokens/usdc").into(),
+                    Path::new("../../bridge/move/tokens/usdt").into(),
+                ],
                 token_ids,
                 token_prices,
                 0,
-            )
-            .await;
+            );
+            let action = action.await;
             info!("register tokens took {:?} secs", timer.elapsed().as_secs());
             let sig_map = bridge_authority_keys
                 .iter()
@@ -1347,6 +1281,8 @@ impl TestClusterBuilder {
                 VerifiedCertifiedBridgeAction::new_from_verified(certified_action);
             let sender_address = test_cluster.get_address_0();
 
+            await_committee_register_tasks(&test_cluster, tasks).await;
+
             // Wait until committee is set up
             test_cluster
                 .trigger_reconfiguration_if_not_yet_and_assert_bridge_committee_initialized()
@@ -1362,6 +1298,7 @@ impl TestClusterBuilder {
                     .unwrap(),
                 verifired_action_cert,
                 bridge_arg,
+                ref_gas_price,
             )
             .unwrap();
 
@@ -1371,7 +1308,32 @@ impl TestClusterBuilder {
                 &SuiExecutionStatus::Success
             );
             info!("Deploy tokens took {:?} secs", timer.elapsed().as_secs());
+        } else {
+            await_committee_register_tasks(&test_cluster, tasks).await;
         }
+
+        async fn await_committee_register_tasks(
+            test_cluster: &TestCluster,
+            tasks: Vec<
+                impl Future<Output = Result<SuiTransactionBlockResponse, sui_sdk::error::Error>>,
+            >,
+        ) {
+            // The tx may fail if a member tries to register when the committee is already finalized.
+            // In that case, we just need to check the committee members is not empty since once
+            // the committee is finalized, it should not be empty.
+            let responses = join_all(tasks).await;
+            let mut has_failure = false;
+            for response in responses {
+                if response.unwrap().effects.unwrap().status() != &SuiExecutionStatus::Success {
+                    has_failure = true;
+                }
+            }
+            if has_failure {
+                let bridge_summary = test_cluster.get_bridge_summary().await.unwrap();
+                assert_ne!(bridge_summary.committee.members.len(), 0);
+            }
+        }
+
         info!(
             "TestCluster build_with_bridge took {:?} secs",
             timer.elapsed().as_secs()
@@ -1401,8 +1363,7 @@ impl TestClusterBuilder {
             .with_db_checkpoint_config(self.db_checkpoint_config_fullnodes.clone())
             .with_fullnode_run_with_range(self.fullnode_run_with_range)
             .with_fullnode_policy_config(self.fullnode_policy_config.clone())
-            .with_fullnode_fw_config(self.fullnode_fw_config.clone())
-            .with_fullnode_client_ip_injection(self.with_fullnode_client_ip_injection);
+            .with_fullnode_fw_config(self.fullnode_fw_config.clone());
 
         if let Some(genesis_config) = self.genesis_config.take() {
             builder = builder.with_genesis_config(genesis_config);

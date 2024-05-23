@@ -29,12 +29,12 @@ module sui::token_config_tests {
 
         // make sure rule can read config without Policy Owner
         let config_ref: &Config1 = token::rule_config(Rule1 {}, &policy);
-        assert!(config_ref.value == 1000, 0);
-        assert!(token::has_rule_config<TEST, Rule1>(&policy), 1);
-        assert!(token::has_rule_config_with_type<TEST, Rule1, Config1>(&policy), 2);
+        assert!(config_ref.value == 1000);
+        assert!(token::has_rule_config<TEST, Rule1>(&policy));
+        assert!(token::has_rule_config_with_type<TEST, Rule1, Config1>(&policy));
 
         let config = token::remove_rule_config<TEST, Rule1, Config1>(&mut policy, &cap, ctx);
-        assert!(config.value == 1000, 3);
+        assert!(config.value == 1000);
 
         test::return_policy(policy, cap);
     }

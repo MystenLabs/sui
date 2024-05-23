@@ -3,7 +3,6 @@
 
 use crate::abi::{eth_sui_bridge, EthBridgeEvent, EthSuiBridge};
 use crate::client::bridge_authority_aggregator::BridgeAuthorityAggregator;
-use crate::e2e_tests::test_utils::publish_coins_return_add_coins_on_sui_action;
 use crate::e2e_tests::test_utils::{get_signatures, BridgeTestClusterBuilder};
 use crate::events::{
     SuiBridgeEvent, SuiToEthTokenBridgeV1, TokenTransferApproved, TokenTransferClaimed,
@@ -11,6 +10,7 @@ use crate::events::{
 use crate::sui_client::SuiBridgeClient;
 use crate::sui_transaction_builder::build_add_tokens_on_sui_transaction;
 use crate::types::{BridgeAction, BridgeActionStatus, SuiToEthBridgeAction};
+use crate::utils::publish_and_register_coins_return_add_coins_on_sui_action;
 use crate::utils::EthSigner;
 use eth_sui_bridge::EthSuiBridgeEvents;
 use ethers::prelude::*;
@@ -33,7 +33,7 @@ use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::{TypeTag, BRIDGE_PACKAGE_ID};
 use tracing::info;
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_bridge_from_eth_to_sui_to_eth() {
     telemetry_subscribers::init_for_testing();
 
@@ -169,7 +169,7 @@ async fn test_bridge_from_eth_to_sui_to_eth() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 8)]
 async fn test_add_new_coins_on_sui() {
     telemetry_subscribers::init_for_testing();
     let mut bridge_test_cluster = BridgeTestClusterBuilder::new()
@@ -184,17 +184,11 @@ async fn test_add_new_coins_on_sui() {
     let token_id = 42;
     let token_price = 10000;
     let sender = bridge_test_cluster.sui_user_address();
-    let tx = bridge_test_cluster
-        .test_transaction_builder_with_sender(sender)
-        .await
-        .publish(Path::new("../../bridge/move/tokens/mock/ka").into())
-        .build();
-    let publish_token_response = bridge_test_cluster.sign_and_execute_transaction(&tx).await;
     info!("Published new token");
-    let action = publish_coins_return_add_coins_on_sui_action(
-        bridge_test_cluster.wallet_mut(),
+    let action = publish_and_register_coins_return_add_coins_on_sui_action(
+        bridge_test_cluster.wallet(),
         bridge_arg,
-        vec![publish_token_response],
+        vec![Path::new("../../bridge/move/tokens/mock/ka").into()],
         vec![token_id],
         vec![token_price],
         1, // seq num
@@ -224,9 +218,8 @@ async fn test_add_new_coins_on_sui() {
             .expect("Failed to get bridge committee"),
     );
     let agg = BridgeAuthorityAggregator::new(bridge_committee);
-    let threshold = action.approval_threshold();
     let certified_action = agg
-        .request_committee_signatures(action, threshold)
+        .request_committee_signatures(action)
         .await
         .expect("Failed to request committee signatures");
 
@@ -240,6 +233,7 @@ async fn test_add_new_coins_on_sui() {
             .unwrap(),
         certified_action,
         bridge_arg,
+        1000,
     )
     .unwrap();
 
@@ -347,6 +341,7 @@ async fn initiate_bridge_eth_to_sui(
     token_id: u8,
     nonce: u64,
 ) {
+    info!("Depositing Eth to Solidity contract");
     let eth_tx = deposit_native_eth_to_sol_contract(
         eth_signer,
         sui_bridge_contract_address,
@@ -376,7 +371,7 @@ async fn initiate_bridge_eth_to_sui(
     assert_eq!(eth_bridge_event.sui_adjusted_amount, sui_amount);
     assert_eq!(eth_bridge_event.sender_address, eth_address);
     assert_eq!(eth_bridge_event.recipient_address, sui_address.to_vec());
-    info!("Deposited Eth to Sol contract");
+    info!("Deposited Eth to Solidity contract");
 
     wait_for_transfer_action_status(
         sui_bridge_client,

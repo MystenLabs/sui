@@ -14,6 +14,7 @@ title: Module `0x2::vec_set`
 -  [Function `size`](#0x2_vec_set_size)
 -  [Function `is_empty`](#0x2_vec_set_is_empty)
 -  [Function `into_keys`](#0x2_vec_set_into_keys)
+-  [Function `from_keys`](#0x2_vec_set_from_keys)
 -  [Function `keys`](#0x2_vec_set_keys)
 -  [Function `get_idx_opt`](#0x2_vec_set_get_idx_opt)
 -  [Function `get_idx`](#0x2_vec_set_get_idx)
@@ -280,6 +281,36 @@ The output keys are stored in insertion order, *not* sorted.
 <pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_into_keys">into_keys</a>&lt;K: <b>copy</b> + drop&gt;(self: <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt;): <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt; {
     <b>let</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a> { contents } = self;
     contents
+}
+</code></pre>
+
+
+
+</details>
+
+<a name="0x2_vec_set_from_keys"></a>
+
+## Function `from_keys`
+
+Construct a new <code><a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a></code> from a vector of keys.
+The keys are stored in insertion order (the original <code>keys</code> ordering)
+and are *not* sorted.
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b>, drop&gt;(keys: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">vec_set::VecSet</a>&lt;K&gt;
+</code></pre>
+
+
+
+<details>
+<summary>Implementation</summary>
+
+
+<pre><code><b>public</b> <b>fun</b> <a href="../sui-framework/vec_set.md#0x2_vec_set_from_keys">from_keys</a>&lt;K: <b>copy</b> + drop&gt;(<b>mut</b> keys: <a href="../move-stdlib/vector.md#0x1_vector">vector</a>&lt;K&gt;): <a href="../sui-framework/vec_set.md#0x2_vec_set_VecSet">VecSet</a>&lt;K&gt; {
+    keys.reverse();
+    <b>let</b> <b>mut</b> set = <a href="../sui-framework/vec_set.md#0x2_vec_set_empty">empty</a>();
+    <b>while</b> (!keys.<a href="../sui-framework/vec_set.md#0x2_vec_set_is_empty">is_empty</a>()) set.<a href="../sui-framework/vec_set.md#0x2_vec_set_insert">insert</a>(keys.pop_back());
+    set
 }
 </code></pre>
 

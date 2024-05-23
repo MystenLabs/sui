@@ -38,7 +38,7 @@ module sui::deny_list_tests {
         let mut i = 0;
         let n = reserved.length();
         while (i < n) {
-            assert!(!dl.contains(1, ty, reserved[i]), 0);
+            assert!(!dl.contains(1, ty, reserved[i]));
             i = i + 1;
         };
         test_scenario::return_shared(dl);

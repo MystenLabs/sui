@@ -92,11 +92,6 @@ pub struct UnitTestingConfig {
     )]
     pub source_files: Vec<String>,
 
-    /// Use the stackless bytecode interpreter to run the tests and cross check its results with
-    /// the execution result from Move VM.
-    #[clap(long = "stackless")]
-    pub check_stackless_vm: bool,
-
     /// Verbose mode
     #[clap(short = 'v', long = "verbose")]
     pub verbose: bool,
@@ -121,7 +116,6 @@ impl UnitTestingConfig {
             report_stacktrace_on_abort: false,
             source_files: vec![],
             dep_files: vec![],
-            check_stackless_vm: false,
             verbose: false,
             list: false,
             named_address_values: vec![],
@@ -208,13 +202,10 @@ impl UnitTestingConfig {
         let mut test_runner = TestRunner::new(
             self.gas_limit.unwrap_or(DEFAULT_EXECUTION_BOUND),
             self.num_threads,
-            self.check_stackless_vm,
-            self.verbose,
             self.report_stacktrace_on_abort,
             test_plan,
             native_function_table,
             cost_table,
-            verify_and_create_named_address_mapping(self.named_address_values.clone()).unwrap(),
         )
         .unwrap();
 

@@ -137,6 +137,10 @@ impl ArchivalWorker {
             .await?;
         Ok(Bytes::from(compressed_buffer))
     }
+
+    pub async fn initial_checkpoint_number(&self) -> CheckpointSequenceNumber {
+        self.state.lock().await.checkpoint_range.start
+    }
 }
 
 #[async_trait]

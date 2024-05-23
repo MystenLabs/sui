@@ -299,6 +299,7 @@ async fn handle_error_tally(
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
+    metrics.error_tally_handled.inc();
     if let Some(fw_config) = fw_config {
         if fw_config.delegate_error_blocking && !mem_drainfile_present {
             let client = nodefw_client
@@ -332,6 +333,7 @@ async fn handle_spam_tally(
         return Ok(());
     }
     let resp = policy.handle_tally(tally.clone());
+    metrics.tally_handled.inc();
     if let Some(fw_config) = fw_config {
         if fw_config.delegate_spam_blocking && !mem_drainfile_present {
             let client = nodefw_client

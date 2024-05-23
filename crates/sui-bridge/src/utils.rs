@@ -6,6 +6,8 @@ use crate::config::EthConfig;
 use crate::config::SuiConfig;
 use crate::crypto::BridgeAuthorityKeyPair;
 use crate::crypto::BridgeAuthorityPublicKeyBytes;
+use crate::server::APPLICATION_JSON;
+use crate::types::{AddTokensOnSuiAction, BridgeAction};
 use anyhow::anyhow;
 use ethers::core::k256::ecdsa::SigningKey;
 use ethers::middleware::SignerMiddleware;
@@ -15,20 +17,21 @@ use ethers::signers::Wallet;
 use fastcrypto::ed25519::Ed25519KeyPair;
 use fastcrypto::secp256k1::Secp256k1KeyPair;
 use fastcrypto::traits::EncodeDecodeBase64;
+use futures::future::join_all;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::Arc;
 use sui_config::Config;
+use sui_json_rpc_types::SuiExecutionStatus;
+use sui_json_rpc_types::SuiTransactionBlockEffectsAPI;
+use sui_json_rpc_types::SuiTransactionBlockResponseOptions;
+use sui_sdk::wallet_context::WalletContext;
+use sui_test_transaction_builder::TestTransactionBuilder;
 use sui_types::base_types::SuiAddress;
 use sui_types::bridge::BridgeChainId;
+use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
 use sui_types::crypto::get_key_pair;
 use sui_types::crypto::SuiKeyPair;
-
-use crate::server::APPLICATION_JSON;
-use crate::types::{AddTokensOnSuiAction, BridgeAction};
-
-use sui_json_rpc_types::SuiTransactionBlockResponse;
-use sui_sdk::wallet_context::WalletContext;
-use sui_types::bridge::{BRIDGE_MODULE_NAME, BRIDGE_REGISTER_FOREIGN_TOKEN_FUNCTION_NAME};
 use sui_types::programmable_transaction_builder::ProgrammableTransactionBuilder;
 use sui_types::transaction::{ObjectArg, TransactionData};
 use sui_types::BRIDGE_PACKAGE_ID;
@@ -125,20 +128,65 @@ pub async fn get_eth_signer_client(url: &str, private_key_hex: &str) -> anyhow::
     Ok(SignerMiddleware::new(provider, wallet))
 }
 
-pub async fn publish_coins_return_add_coins_on_sui_action(
-    wallet_context: &mut WalletContext,
+pub async fn publish_and_register_coins_return_add_coins_on_sui_action(
+    wallet_context: &WalletContext,
     bridge_arg: ObjectArg,
-    publish_coin_responses: Vec<SuiTransactionBlockResponse>,
+    token_packages_dir: Vec<PathBuf>,
     token_ids: Vec<u8>,
     token_prices: Vec<u64>,
     nonce: u64,
 ) -> BridgeAction {
-    assert!(token_ids.len() == publish_coin_responses.len());
-    assert!(token_prices.len() == publish_coin_responses.len());
-    let sender = wallet_context.active_address().unwrap();
-    let rgp = wallet_context.get_reference_gas_price().await.unwrap();
+    assert!(token_ids.len() == token_packages_dir.len());
+    assert!(token_prices.len() == token_packages_dir.len());
+    let sui_client = wallet_context.get_client().await.unwrap();
+    let quorum_driver_api = Arc::new(sui_client.quorum_driver_api().clone());
+    let rgp = sui_client
+        .governance_api()
+        .get_reference_gas_price()
+        .await
+        .unwrap();
+
+    let senders = wallet_context.get_addresses();
+    // We want each sender to deal with one coin
+    assert!(senders.len() >= token_packages_dir.len());
+
+    // publish coin packages
+    let mut publish_tokens_tasks = vec![];
+
+    for (token_package_dir, sender) in token_packages_dir.iter().zip(senders.clone()) {
+        let gas = wallet_context
+            .get_one_gas_object_owned_by_address(sender)
+            .await
+            .unwrap()
+            .unwrap();
+        let tx = TestTransactionBuilder::new(sender, gas, rgp)
+            .publish(token_package_dir.to_path_buf())
+            .build();
+        let tx = wallet_context.sign_transaction(&tx);
+        let api_clone = quorum_driver_api.clone();
+        publish_tokens_tasks.push(tokio::spawn(async move {
+            api_clone.execute_transaction_block(
+                tx,
+                SuiTransactionBlockResponseOptions::new()
+                    .with_effects()
+                    .with_input()
+                    .with_events()
+                    .with_object_changes()
+                    .with_balance_changes(),
+                Some(sui_types::quorum_driver_types::ExecuteTransactionRequestType::WaitForLocalExecution),
+            ).await
+        }));
+    }
+    let publish_coin_responses = join_all(publish_tokens_tasks).await;
+
     let mut token_type_names = vec![];
-    for response in publish_coin_responses {
+    let mut register_tasks = vec![];
+    for (response, sender) in publish_coin_responses.into_iter().zip(senders.clone()) {
+        let response = response.unwrap().unwrap();
+        assert_eq!(
+            response.effects.unwrap().status(),
+            &SuiExecutionStatus::Success
+        );
         let object_changes = response.object_changes.unwrap();
         let mut tc = None;
         let mut type_ = None;
@@ -190,11 +238,23 @@ pub async fn publish_coins_return_add_coins_on_sui_action(
             .unwrap();
         let tx = TransactionData::new_programmable(sender, vec![gas], pt, 1_000_000_000, rgp);
         let signed_tx = wallet_context.sign_transaction(&tx);
-        let _ = wallet_context
-            .execute_transaction_must_succeed(signed_tx)
-            .await;
-
+        let api_clone = quorum_driver_api.clone();
+        register_tasks.push(async move {
+            api_clone
+                .execute_transaction_block(
+                    signed_tx,
+                    SuiTransactionBlockResponseOptions::new().with_effects(),
+                    None,
+                )
+                .await
+        });
         token_type_names.push(type_);
+    }
+    for response in join_all(register_tasks).await {
+        assert_eq!(
+            response.unwrap().effects.unwrap().status(),
+            &SuiExecutionStatus::Success
+        );
     }
 
     BridgeAction::AddTokensOnSuiAction(AddTokensOnSuiAction {

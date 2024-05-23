@@ -3,7 +3,6 @@ resolver = "2"
 
 exclude = [
   "external-crates/move/crates/bytecode-interpreter-crypto",
-  "external-crates/move/crates/bytecode-interpreter-testsuite",
   "external-crates/move/crates/bytecode-verifier-libfuzzer",
   "external-crates/move/crates/bytecode-verifier-tests",
   "external-crates/move/crates/bytecode-verifier-prop-tests",
@@ -43,7 +42,6 @@ exclude = [
   "external-crates/move/crates/move-prover",
   "external-crates/move/crates/move-prover-test-utils",
   "external-crates/move/crates/move-stackless-bytecode",
-  "external-crates/move/crates/move-stackless-bytecode-interpreter",
   "external-crates/move/crates/move-stdlib",
   "external-crates/move/crates/move-stdlib-natives",
   "external-crates/move/crates/move-symbol-pool",
@@ -377,8 +375,8 @@ moka = { version = "0.12", default-features = false, features = [
   "atomic64",
 ] }
 more-asserts = "0.3.1"
-msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim" }
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "6f88ec84644cb1a6809c010f1f534d0d09e0cd89", package = "msim-macros" }
+msim = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "077b735b484cf33e79f9d621db1d0c3a5827b81e", package = "msim-macros" }
 multiaddr = "0.17.0"
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "94da5c787636dad779c340affa65219134d127f5" }
@@ -421,7 +419,7 @@ reqwest = { version = "0.11.20", default_features = false, features = [
   "rustls-tls",
 ] }
 roaring = "0.10.1"
-rocksdb = { version = "0.21.0", features = [
+rocksdb = { version = "0.22.0", features = [
   "snappy",
   "lz4",
   "zstd",

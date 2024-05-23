@@ -360,6 +360,7 @@ fn tail(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
         }
         E::Block((_, seq)) => tail_block(context, seq),
+        E::IDEAnnotation(_, e) => tail(context, e),
 
         // -----------------------------------------------------------------------------------------
         //  statements
@@ -479,6 +480,7 @@ fn value(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
             }
         }
         E::Block((_, seq)) => value_block(context, seq),
+        E::IDEAnnotation(_, e) => value(context, e),
 
         // -----------------------------------------------------------------------------------------
         //  calls and nested expressions
@@ -681,6 +683,7 @@ fn statement(context: &mut Context, e: &T::Exp) -> Option<ControlFlow> {
         E::Block((_, seq)) => statement_block(
             context, seq, /* stmt_pos */ true, /* skip_last */ false,
         ),
+        E::IDEAnnotation(_, e) => statement(context, e),
         E::Return(rhs) => {
             if let Some(rhs_control_flow) = value(context, rhs) {
                 context.report_value_error(rhs_control_flow);

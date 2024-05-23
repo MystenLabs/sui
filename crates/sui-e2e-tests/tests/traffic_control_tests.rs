@@ -28,12 +28,11 @@ use sui_types::{
 use test_cluster::{TestCluster, TestClusterBuilder};
 
 #[tokio::test]
-async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
+async fn test_validator_traffic_control_noop() -> Result<(), anyhow::Error> {
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
-        // Test that IP forwarding works through this policy
-        spam_policy_type: PolicyType::TestInspectIp,
+        spam_policy_type: PolicyType::NoOp,
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
@@ -46,7 +45,50 @@ async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
         .build();
     let test_cluster = TestClusterBuilder::new()
         .set_network_config(network_config)
-        .with_fullnode_client_ip_injection(Some(true))
+        .build()
+        .await;
+
+    assert_traffic_control_ok(test_cluster).await
+}
+
+#[tokio::test]
+async fn test_fullnode_traffic_control_noop() -> Result<(), anyhow::Error> {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::NoOp,
+        // This should never be invoked when set as an error policy
+        // as we are not sending requests that error
+        error_policy_type: PolicyType::TestPanicOnInvocation,
+        channel_capacity: 100,
+        spam_sample_rate: Weight::one(),
+        dry_run: false,
+    };
+    let test_cluster = TestClusterBuilder::new()
+        .with_fullnode_policy_config(Some(policy_config))
+        .build()
+        .await;
+    assert_traffic_control_ok(test_cluster).await
+}
+
+#[tokio::test]
+async fn test_validator_traffic_control_ok() -> Result<(), anyhow::Error> {
+    let policy_config = PolicyConfig {
+        connection_blocklist_ttl_sec: 1,
+        proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(5),
+        // This should never be invoked when set as an error policy
+        // as we are not sending requests that error
+        error_policy_type: PolicyType::TestPanicOnInvocation,
+        channel_capacity: 100,
+        dry_run: false,
+        spam_sample_rate: Weight::one(),
+    };
+    let network_config = ConfigBuilder::new_with_temp_dir()
+        .with_policy_config(Some(policy_config))
+        .build();
+    let test_cluster = TestClusterBuilder::new()
+        .set_network_config(network_config)
         .build()
         .await;
 
@@ -58,13 +100,13 @@ async fn test_fullnode_traffic_control_ok() -> Result<(), anyhow::Error> {
     let policy_config = PolicyConfig {
         connection_blocklist_ttl_sec: 1,
         proxy_blocklist_ttl_sec: 5,
+        spam_policy_type: PolicyType::TestNConnIP(10),
         // This should never be invoked when set as an error policy
         // as we are not sending requests that error
         error_policy_type: PolicyType::TestPanicOnInvocation,
         channel_capacity: 100,
         spam_sample_rate: Weight::one(),
         dry_run: false,
-        ..Default::default()
     };
     let test_cluster = TestClusterBuilder::new()
         .with_fullnode_policy_config(Some(policy_config))
