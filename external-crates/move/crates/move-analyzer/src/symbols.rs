@@ -287,7 +287,7 @@ pub struct StructDef {
 
 impl StructDef {
     pub fn name_start(&self) -> Position {
-        self.name_start.clone()
+        self.name_start
     }
 }
 
