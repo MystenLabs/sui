@@ -11675,6 +11675,7 @@ dependencies = [
  "move-vm-profiler",
  "move-vm-runtime",
  "move-vm-types",
+ "mysten-metrics",
  "parking_lot 0.12.1",
  "serde",
  "sui-macros",
