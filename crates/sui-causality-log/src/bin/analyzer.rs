@@ -13,12 +13,12 @@ fn main() {
     event!("test_event" {
         source = "local",
         tag = 42
-    });
-
-    event!("test_event" {
-        source = "local",
-        tag = 42
-    });
+    }
+        caused_by "no_such_event" {
+            source = "local",
+            tag = 42,
+        }
+    );
 
     event!(
         "recieved_test_event" {

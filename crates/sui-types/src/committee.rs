@@ -226,8 +226,8 @@ impl Committee {
 
     pub fn stake_of_authority(&self, name: &AuthorityName) -> Option<StakeUnit> {
         let index = self.authority_index(name)?;
-        let entry = self.voting_rights[index];
-        debug_assert_eq!(name, entry.0);
+        let entry = self.voting_rights[index as usize];
+        debug_assert_eq!(*name, entry.0);
         Some(entry.1)
     }
 

@@ -17,10 +17,26 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     time::{Instant, SystemTime},
 };
+use sui_types::base_types::ConciseableName;
+use sui_types::committee::StakeUnit;
 use tempfile::tempfile;
 use tracing::error;
 
 use sui_types::base_types::AuthorityName;
+
+// An event with an associated stake
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct StakedEvent {
+    /// How much stake is required to cause this event
+    pub required_stake: Option<StakeUnit>,
+
+    /// How much stake does this event provide (usually the voting stake of the
+    /// validator that emmitted the event)
+    pub provided_stake: Option<StakeUnit>,
+
+    /// The event itself
+    pub event: Event,
+}
 
 #[derive(Serialize, Deserialize, Hash, Eq, PartialEq, Debug, Clone)]
 pub struct Event {
@@ -29,9 +45,45 @@ pub struct Event {
     id: u64,
 }
 
+impl std::fmt::Display for Event {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let tags = self
+            .tags
+            .iter()
+            .map(|(k, v)| format!("{}={}", k, v))
+            .collect::<Vec<_>>()
+            .join(", ");
+        write!(f, "{}({})", self.name, tags)
+    }
+}
+
 impl Event {
     pub fn new(name: Str, tags: BTreeMap<Str, TagValue>) -> Self {
         Self { name, tags, id: 0 }
+    }
+
+    pub fn into_staked(mut self) -> (Option<StakeUnit>, Option<StakeUnit>, Self) {
+        let provided_stake = self.tags.remove(&"stake".into());
+        let required_stake = self.tags.remove(&"required_stake".into());
+        (
+            provided_stake.map(|s| s.try_into().unwrap()),
+            required_stake.map(|s| s.try_into().unwrap()),
+            self,
+        )
+    }
+
+    pub fn maybe_set_source(&mut self, source: Source) {
+        self.tags
+            .entry("source".into())
+            .or_insert_with(|| source.into());
+    }
+
+    pub fn canonicalize(&mut self) {
+        let mut tags = BTreeMap::new();
+        for (k, v) in self.tags.iter() {
+            tags.insert(k.canonicalize(), v.clone());
+        }
+        self.tags = tags;
     }
 }
 
@@ -40,6 +92,20 @@ impl Event {
 pub enum Str {
     Dynamic(String),
     Static(&'static str),
+}
+
+impl Str {
+    fn canonicalize(&self) -> Str {
+        match self {
+            Str::Dynamic(value) => match value.as_str() {
+                "source" => Str::Static("source"),
+                "stake" => Str::Static("stake"),
+                "required_stake" => Str::Static("required_stake"),
+                _ => Str::Dynamic(value.clone()),
+            },
+            Str::Static(value) => Str::Static(value),
+        }
+    }
 }
 
 impl std::fmt::Display for Str {
@@ -103,6 +169,16 @@ pub enum TagValue {
     Source(Source),
 }
 
+impl std::fmt::Display for TagValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TagValue::NumU64(value) => write!(f, "{}", value),
+            TagValue::Str(value) => write!(f, "{}", value),
+            TagValue::Source(value) => write!(f, "{}", value),
+        }
+    }
+}
+
 impl From<u64> for TagValue {
     fn from(value: u64) -> Self {
         TagValue::NumU64(value)
@@ -121,10 +197,30 @@ impl From<Source> for TagValue {
     }
 }
 
+impl TryFrom<TagValue> for StakeUnit {
+    type Error = &'static str;
+
+    fn try_from(value: TagValue) -> Result<Self, Self::Error> {
+        match value {
+            TagValue::NumU64(value) => Ok(value),
+            _ => Err("expected NumU64"),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, Hash, Eq, PartialEq)]
 pub enum Source {
     Remote(AuthorityName),
     Local,
+}
+
+impl std::fmt::Display for Source {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Source::Remote(value) => write!(f, "{:?}", value.concise()),
+            Source::Local => write!(f, "<local>"),
+        }
+    }
 }
 
 impl From<AuthorityName> for Source {
@@ -182,6 +278,11 @@ pub fn process_event(event: Event, cause: Option<Event>) {
     );
 }
 
+pub fn process_expect_event(event: Event) {
+    let event_json = serde_json::to_string(&event).unwrap();
+    tracing::debug!("expecting event {}", event_json);
+}
+
 #[macro_export]
 macro_rules! event {
     ($name:literal { $($tag_name:ident = $tag_value:expr),* $(,)? } caused_by $cause:literal { $($cause_tag_name:ident = $cause_tag_value:expr),* $(,)? }) => {
@@ -202,6 +303,16 @@ macro_rules! event {
 }
 
 #[macro_export]
+macro_rules! expect_event {
+    ($name:literal { $($tag_name:ident = $tag_value:expr),* $(,)? }) => {
+        {
+            let event = $crate::parse_event!($name { $($tag_name = $tag_value),* });
+            $crate::process_expect_event(event);
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! if_events_enabled {
     // Just pass through any stream of tokens. Eventually this will allow us to enable/disable
     // event-related code either at compile time or at runtime.
@@ -210,28 +321,37 @@ macro_rules! if_events_enabled {
     };
 }
 
+struct EventMetadata {}
+
 #[derive(Default, Debug)]
 struct AnalysisState {
     // causes that are waiting for events
-    future_causes: HashSet<Event>,
+    future_causes: HashMap<Event, EventMetadata>,
 
     // map from cause to future event
     waiting_causes: HashMap<Event, Event>,
 
-    // events that are waiting for causes
-    events: HashSet<Event>,
-
     graph: HashSet<(Event, Event)>,
+
+    seen: HashSet<Event>,
 }
 
 impl AnalysisState {
-    fn process_event(&mut self, event: Event, cause: Option<Event>) {
-        // This is very confusing, because `event` can be a cause of other events,
+    fn process_event(&mut self, source: Source, event: Event, cause: Option<Event>) {
+        let (stake, required_stake, mut event) = event.into_staked();
+        event.maybe_set_source(source);
 
+        // events can be emitted multiple times, but we only want to process them once
+        if !self.seen.insert(event.clone()) {
+            return;
+        }
+
+        // This is very confusing, because `event` can be a cause of other events,
         if let Some(cause) = cause {
-            if let Some(c) = self.future_causes.get(&cause) {
+            dbg!(&cause);
+            if self.future_causes.remove(&cause) {
                 // the cause happened in the past
-                self.graph.insert((c.clone(), event.clone()));
+                self.graph.insert((cause.clone(), event.clone()));
             } else {
                 // we are expecting the cause to happen at some point,
                 // but it hasn't happened yet. When it does happen, a graph
@@ -240,13 +360,27 @@ impl AnalysisState {
             }
         }
 
-        if let Some(e) = self.waiting_causes.get(&event) {
+        if let Some(e) = self.waiting_causes.remove(&event) {
             // some other event was waiting for this event to happen
             self.graph.insert((event.clone(), e.clone()));
         }
 
         // this event may cause other things to happen later
         self.future_causes.insert(event);
+    }
+
+    // Dump any causes that have never been consumed, and any expected events
+    // that have never been caused.
+    fn dump_waiting(&self) {
+        println!("Events that never caused anything:");
+        for e in &self.future_causes {
+            println!("-- {}", e);
+        }
+
+        println!("Expected causes that never happened:");
+        for e in &self.waiting_causes {
+            println!("-- {}", &e.0);
+        }
     }
 
     fn dump_graph(&self) {
@@ -317,11 +451,15 @@ impl AnalysisState {
 }
 
 fn parse_event(json_data: &str) -> Option<Event> {
-    if json_data == "None" {
+    let event = if json_data == "None" {
         None
     } else {
         Some(serde_json::from_str::<Event>(json_data).unwrap())
-    }
+    };
+    event.map(|mut e| {
+        e.canonicalize();
+        e
+    })
 }
 
 pub fn analyze_log(
@@ -360,9 +498,10 @@ pub fn analyze_log(
         let event = parse_event(&event_json).unwrap();
         let cause = parse_event(&cause_json);
 
-        state.process_event(event, cause);
+        state.process_event(Source::Local, event, cause);
     }
 
-    dbg!(&state);
-    state.dump_graph();
+    //dbg!(&state);
+    //state.dump_graph();
+    state.dump_waiting();
 }
